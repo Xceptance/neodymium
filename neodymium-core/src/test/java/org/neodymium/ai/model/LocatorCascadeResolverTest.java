@@ -281,7 +281,7 @@ public class LocatorCascadeResolverTest
         Assertions.assertTrue(v.toDetailString().contains("attrs={id=btn1}"));
         Assertions.assertTrue(v.toDetailString().contains("bounds=(100, 200, 150x40)"));
         Assertions.assertEquals("<button> \"Checkout\" parent=<form>#0 (100, 200, 150x40)", v.toSummaryString());
-        final java.util.List<String> lines = v.toFormattedLines("   │ Vector: ", "   │         ");
+        final List<String> lines = v.toFormattedLines("   │ Vector: ", "   │         ");
         Assertions.assertFalse(lines.isEmpty());
         Assertions.assertTrue(lines.get(0).startsWith("   │ Vector: tag=<button>"));
     }
@@ -364,5 +364,63 @@ public class LocatorCascadeResolverTest
         final DomFeatureVector best = LocatorCascadeResolver.findBestMatch(recordedIcon, List.of(liveDifferent, liveMatch), 0.85);
         Assertions.assertNotNull(best);
         Assertions.assertEquals(liveMatch, best);
+    }
+
+    @Test
+    public void testIconOnlyDisambiguationViaGraphicSignature()
+    {
+        final DomFeatureVector recordedEditIcon = new DomFeatureVector(
+            "button",
+            "",
+            Set.of("icon-btn"),
+            Map.of("type", "button", "data-graphic-sig", "svg:0 0 24 24|p:M3 17.25V21h3.75"),
+            "button",
+            "",
+            "div",
+            0,
+            100,
+            100,
+            32,
+            32
+        );
+
+        final DomFeatureVector liveDeleteIcon = new DomFeatureVector(
+            "button",
+            "",
+            Set.of("icon-btn"),
+            Map.of("type", "button", "data-graphic-sig", "svg:0 0 24 24|p:M6 19c0 1.1.9 2"),
+            "button",
+            "",
+            "div",
+            0,
+            100,
+            100,
+            32,
+            32
+        );
+
+        final DomFeatureVector liveEditIcon = new DomFeatureVector(
+            "button",
+            "",
+            Set.of("icon-btn"),
+            Map.of("type", "button", "data-graphic-sig", "svg:0 0 24 24|p:M3 17.25V21h3.75"),
+            "button",
+            "",
+            "div",
+            1,
+            140,
+            100,
+            32,
+            32
+        );
+
+        final double editScore = LocatorCascadeResolver.computeSimilarity(recordedEditIcon, liveEditIcon);
+        final double deleteScore = LocatorCascadeResolver.computeSimilarity(recordedEditIcon, liveDeleteIcon);
+
+        Assertions.assertTrue(editScore > deleteScore + 0.15,
+                "Matching SVG graphic signature must score significantly higher than mismatched icon (" + editScore + " vs " + deleteScore + ")");
+
+        final DomFeatureVector best = LocatorCascadeResolver.findBestMatch(recordedEditIcon, List.of(liveDeleteIcon, liveEditIcon), 0.70);
+        Assertions.assertEquals(liveEditIcon, best);
     }
 }

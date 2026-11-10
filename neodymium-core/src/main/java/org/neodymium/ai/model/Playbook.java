@@ -34,9 +34,19 @@ import java.util.Map;
 public final class Playbook
 {
     /**
+     * The unmodifiable sequential list of setup/before playbook steps.
+     */
+    private final List<PlaybookStep> beforeSteps;
+
+    /**
      * The unmodifiable sequential list of primary playbook steps.
      */
     private final List<PlaybookStep> steps;
+
+    /**
+     * The unmodifiable sequential list of teardown/after playbook steps.
+     */
+    private final List<PlaybookStep> afterSteps;
 
     /**
      * The unmodifiable list of dataset maps containing test parameters.
@@ -61,7 +71,7 @@ public final class Playbook
      */
     public Playbook(final List<PlaybookStep> steps, final List<Map<String, SessionData.DataEntry>> dataSets)
     {
-        this(steps, dataSets, Collections.emptyMap(), null);
+        this(Collections.emptyList(), steps, Collections.emptyList(), dataSets, Collections.emptyMap(), null);
     }
 
     /**
@@ -73,7 +83,7 @@ public final class Playbook
      */
     public Playbook(final List<PlaybookStep> steps, final List<Map<String, SessionData.DataEntry>> dataSets, final Map<String, String> promptAddons)
     {
-        this(steps, dataSets, promptAddons, null);
+        this(Collections.emptyList(), steps, Collections.emptyList(), dataSets, promptAddons, null);
     }
 
     /**
@@ -86,8 +96,31 @@ public final class Playbook
      */
     public Playbook(final List<PlaybookStep> steps, final List<Map<String, SessionData.DataEntry>> dataSets, final Map<String, String> promptAddons, final String description)
     {
-        // Defensive copy of steps
-        this.steps = steps != null ? new ArrayList<>(steps) : new ArrayList<>();
+        this(Collections.emptyList(), steps, Collections.emptyList(), dataSets, promptAddons, description);
+    }
+
+    /**
+     * Constructs an immutable Playbook with defensive copies of before steps, core steps, after steps, datasets,
+     * custom prompt add-ons, and scenario description.
+     *
+     * @param beforeSteps the list of setup/before playbook steps
+     * @param steps the list of core playbook steps
+     * @param afterSteps the list of teardown/after playbook steps
+     * @param dataSets the list of dataset parameters maps
+     * @param promptAddons the map of custom prompt add-ons by type
+     * @param description optional scenario description
+     */
+    public Playbook(
+        final List<PlaybookStep> beforeSteps,
+        final List<PlaybookStep> steps,
+        final List<PlaybookStep> afterSteps,
+        final List<Map<String, SessionData.DataEntry>> dataSets,
+        final Map<String, String> promptAddons,
+        final String description)
+    {
+        this.beforeSteps = beforeSteps != null ? Collections.unmodifiableList(new ArrayList<>(beforeSteps)) : Collections.emptyList();
+        this.steps = steps != null ? Collections.unmodifiableList(new ArrayList<>(steps)) : Collections.emptyList();
+        this.afterSteps = afterSteps != null ? Collections.unmodifiableList(new ArrayList<>(afterSteps)) : Collections.emptyList();
 
         // Defensive copy of datasets list and individual dataset parameter maps
         final List<Map<String, SessionData.DataEntry>> datasetsCopy = new ArrayList<>();
@@ -117,13 +150,47 @@ public final class Playbook
     }
 
     /**
-     * Returns the unmodifiable list of playbook steps.
+     * Returns the unmodifiable list of setup/before playbook steps.
      *
-     * @return the unmodifiable steps list
+     * @return the unmodifiable before steps list
+     */
+    public List<PlaybookStep> getBeforeSteps()
+    {
+        return this.beforeSteps;
+    }
+
+    /**
+     * Returns the unmodifiable list of primary core playbook steps.
+     *
+     * @return the unmodifiable core steps list
      */
     public List<PlaybookStep> getSteps()
     {
-        return Collections.unmodifiableList(this.steps);
+        return this.steps;
+    }
+
+    /**
+     * Returns the unmodifiable list of teardown/after playbook steps.
+     *
+     * @return the unmodifiable after steps list
+     */
+    public List<PlaybookStep> getAfterSteps()
+    {
+        return this.afterSteps;
+    }
+
+    /**
+     * Returns the unmodifiable combined list of all playbook steps across before, core, and after blocks.
+     *
+     * @return the unmodifiable combined steps list
+     */
+    public List<PlaybookStep> getAllSteps()
+    {
+        final List<PlaybookStep> all = new ArrayList<>(this.beforeSteps.size() + this.steps.size() + this.afterSteps.size());
+        all.addAll(this.beforeSteps);
+        all.addAll(this.steps);
+        all.addAll(this.afterSteps);
+        return Collections.unmodifiableList(all);
     }
 
     /**
@@ -161,12 +228,69 @@ public final class Playbook
      */
     public static final class Builder
     {
+        private final List<PlaybookStep> beforeSteps = new ArrayList<>();
         private final List<PlaybookStep> steps = new ArrayList<>();
+        private final List<PlaybookStep> afterSteps = new ArrayList<>();
         private final List<Map<String, SessionData.DataEntry>> dataSets = new ArrayList<>();
         private final Map<String, String> promptAddons = new HashMap<>();
 
         private Builder()
         {
+        }
+
+        /**
+         * Adds a setup/before step by instruction string.
+         *
+         * @param instruction the step instruction prompt
+         * @return this builder instance
+         */
+        public Builder beforeStep(final String instruction)
+        {
+            if (instruction != null && !instruction.isBlank())
+            {
+                final PlaybookStep step = new PlaybookStep(instruction);
+                step.setBlock("before");
+                this.beforeSteps.add(step);
+            }
+            return this;
+        }
+
+        /**
+         * Adds a setup/before {@link PlaybookStep}.
+         *
+         * @param step the playbook step
+         * @return this builder instance
+         */
+        public Builder beforeStep(final PlaybookStep step)
+        {
+            if (step != null)
+            {
+                step.setBlock("before");
+                this.beforeSteps.add(step);
+            }
+            return this;
+        }
+
+        /**
+         * Adds a list of setup/before {@link PlaybookStep} instances.
+         *
+         * @param beforeSteps the list of steps to add
+         * @return this builder instance
+         */
+        public Builder beforeSteps(final List<PlaybookStep> beforeSteps)
+        {
+            if (beforeSteps != null)
+            {
+                for (final PlaybookStep s : beforeSteps)
+                {
+                    if (s != null)
+                    {
+                        s.setBlock("before");
+                        this.beforeSteps.add(s);
+                    }
+                }
+            }
+            return this;
         }
 
         /**
@@ -179,7 +303,9 @@ public final class Playbook
         {
             if (instruction != null && !instruction.isBlank())
             {
-                this.steps.add(new PlaybookStep(instruction));
+                final PlaybookStep step = new PlaybookStep(instruction);
+                step.setBlock("steps");
+                this.steps.add(step);
             }
             return this;
         }
@@ -235,6 +361,7 @@ public final class Playbook
         {
             if (step != null)
             {
+                step.setBlock("steps");
                 this.steps.add(step);
             }
             return this;
@@ -250,7 +377,69 @@ public final class Playbook
         {
             if (steps != null)
             {
-                this.steps.addAll(steps);
+                for (final PlaybookStep s : steps)
+                {
+                    if (s != null)
+                    {
+                        s.setBlock("steps");
+                        this.steps.add(s);
+                    }
+                }
+            }
+            return this;
+        }
+
+        /**
+         * Adds a teardown/after step by instruction string.
+         *
+         * @param instruction the step instruction prompt
+         * @return this builder instance
+         */
+        public Builder afterStep(final String instruction)
+        {
+            if (instruction != null && !instruction.isBlank())
+            {
+                final PlaybookStep step = new PlaybookStep(instruction);
+                step.setBlock("after");
+                this.afterSteps.add(step);
+            }
+            return this;
+        }
+
+        /**
+         * Adds a teardown/after {@link PlaybookStep}.
+         *
+         * @param step the playbook step
+         * @return this builder instance
+         */
+        public Builder afterStep(final PlaybookStep step)
+        {
+            if (step != null)
+            {
+                step.setBlock("after");
+                this.afterSteps.add(step);
+            }
+            return this;
+        }
+
+        /**
+         * Adds a list of teardown/after {@link PlaybookStep} instances.
+         *
+         * @param afterSteps the list of steps to add
+         * @return this builder instance
+         */
+        public Builder afterSteps(final List<PlaybookStep> afterSteps)
+        {
+            if (afterSteps != null)
+            {
+                for (final PlaybookStep s : afterSteps)
+                {
+                    if (s != null)
+                    {
+                        s.setBlock("after");
+                        this.afterSteps.add(s);
+                    }
+                }
             }
             return this;
         }
@@ -303,7 +492,7 @@ public final class Playbook
          */
         public Playbook build()
         {
-            return new Playbook(this.steps, this.dataSets, this.promptAddons, this.description);
+            return new Playbook(this.beforeSteps, this.steps, this.afterSteps, this.dataSets, this.promptAddons, this.description);
         }
     }
 }

@@ -68,6 +68,7 @@ These tags dictate engine logic and are removed (stripped) from the text via `st
 - `(bug)` or `(bug: <id>)`: Marks an **Expected Failure**. The engine verifies that the step fails.
 - `(optional)` or `(soft)`: Bypasses execution errors gracefully. The step failure is logged as a warning, and execution continues.
 - `(timeout: <value><unit>)`: Dynamically overrides the `Configuration.timeout` for element searches within this step (e.g., `(timeout: 5s)`).
+- `(context: <level>)` or `(contextlevel=<level>)`: Explicitly sets the initial DOM context fidelity level for Turn 1 of this step (e.g., `(context: none)` for zero DOM elements, `(context: lean)`, `(contextlevel=standard)`), overriding the global `neodymium.ai.contextLevel`. Supported aliases: `none` and `zero` map to zero-DOM `HINT`.
 - `(no-replay)`: Instructs the engine to completely bypass the playbook cache for this specific step. The step is always evaluated live via Direct Plugins or the LLM. **Inheritance**: If a step has child milestones or sub-steps, the `(no-replay)` tag is also checked against the parent instruction, meaning child sub-steps inherit the no-replay behavior from their parent compound step.
 
 ### 4.2 Non-Stripped Tags

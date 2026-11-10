@@ -23,21 +23,30 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
+import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.aura.report.dto.AreaSummaryDto;
 import com.xceptance.aura.report.dto.RunReportDto;
 import com.xceptance.aura.report.dto.TestClassSummaryDto;
+import com.xceptance.aura.report.dto.TestExecutionDto;
 import com.xceptance.aura.report.entity.TestBaseBugEntity;
+import com.xceptance.aura.report.entity.TestBaseVariationEntity;
 import com.xceptance.aura.report.entity.TestRunEntity;
 import com.xceptance.aura.report.repository.TestBaseBugRepository;
+import com.xceptance.aura.report.repository.TestBaseVariationRepository;
 import com.xceptance.aura.report.repository.TestRunRepository;
 
 /**
@@ -65,6 +74,9 @@ public class RunStorageSyncServiceTest
 
     @Autowired
     private AuraReportDataService dataService;
+
+    @Autowired
+    private TestBaseVariationRepository variationRepository;
 
     @AfterEach
     public void cleanup() throws IOException
@@ -459,7 +471,7 @@ public class RunStorageSyncServiceTest
             final boolean synced = syncService.importOrUpdateRunReport(runId);
             Assertions.assertTrue(synced, "syncService should import report into DB");
 
-            final Optional<com.xceptance.aura.report.entity.TestRunEntity> entityOpt = runRepository.findById(runId);
+            final Optional<TestRunEntity> entityOpt = runRepository.findById(runId);
             Assertions.assertTrue(entityOpt.isPresent(), "TestRunEntity should be in database");
             final String label = entityOpt.get().getTimestampLabel();
             Assertions.assertTrue(label != null && (label.contains("06:15:00") || label.contains("08:15:00")),
@@ -514,7 +526,7 @@ public class RunStorageSyncServiceTest
             final boolean synced = syncService.importOrUpdateRunReport(runId);
             Assertions.assertTrue(synced, "syncService should import report into DB");
 
-            final Optional<com.xceptance.aura.report.entity.TestRunEntity> entityOpt = runRepository.findById(runId);
+            final Optional<TestRunEntity> entityOpt = runRepository.findById(runId);
             Assertions.assertTrue(entityOpt.isPresent(), "TestRunEntity should be in database");
             final String locales = entityOpt.get().getLocalesCsv();
             Assertions.assertTrue(locales != null && locales.contains("DE") && locales.contains("FR"),
@@ -770,5 +782,893 @@ public class RunStorageSyncServiceTest
             }
         }
     }
+
+    @Test
+    public void testHealedActionTargetPreservedInStorageService() throws Exception
+    {
+        final String runId = "run_test_healed_action_" + System.currentTimeMillis();
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path execDir = runDir.resolve("Aura_my_test_yaml_Test");
+        Files.createDirectories(execDir);
+
+        final String healedJson = """
+            {
+              "runId": "%s",
+              "status": "passed",
+              "testName": "Aura_my_test_yaml_Test",
+              "blocks": {
+                "steps": [
+                  {
+                    "instruction": "Select language",
+                    "status": "passed",
+                    "actions": [
+                      {
+                        "type": "SELECT",
+                        "target": "#searchLanguage",
+                        "resolvedTarget": "#searchLanguage",
+                        "expectedTarget": "#selectLanguage",
+                        "originalTarget": "#selectLanguage",
+                        "healedFrom": "#selectLanguage",
+                        "value": "en",
+                        "resolvedValue": "en",
+                        "healed": true
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+            """.formatted(runId);
+
+        final Path execFile = execDir.resolve("console-execution-1.json");
+        Files.writeString(execFile, healedJson);
+
+        try
+        {
+            final ObjectMapper mapper = new ObjectMapper();
+            final JsonNode rootNode = mapper.readTree(execFile.toFile());
+            final TestExecutionDto dto = mapper.treeToValue(rootNode, TestExecutionDto.class);
+            Assertions.assertNotNull(dto.getBlocks(), "Blocks should be populated");
+
+            final JsonNode actionNode = dto.getBlocks().path("steps").get(0).path("actions").get(0);
+            Assertions.assertEquals("#searchLanguage", actionNode.path("target").asText());
+            Assertions.assertEquals("#searchLanguage", actionNode.path("resolvedTarget").asText());
+            Assertions.assertEquals("#selectLanguage", actionNode.path("expectedTarget").asText());
+            Assertions.assertEquals("#selectLanguage", actionNode.path("originalTarget").asText());
+            Assertions.assertEquals("#selectLanguage", actionNode.path("healedFrom").asText());
+            Assertions.assertTrue(actionNode.path("healed").asBoolean(), "healed flag should be true");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
+    public void testHealedStepAndExecutionStatusInStorageAndDto() throws IOException
+    {
+        final String runId = "run-healed-status-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path execDir = runDir.resolve("Yaml").resolve("YamlTest");
+        Files.createDirectories(execDir);
+
+        final String healedJson = """
+            {
+              "id": "yaml-exec-1",
+              "runId": "%s",
+              "testClass": "YamlTest",
+              "status": "passed",
+              "blocks": {
+                "steps": [
+                  {
+                    "instruction": "Select language",
+                    "status": "healed",
+                    "healed": true,
+                    "actions": [
+                      {
+                        "type": "SELECT",
+                        "target": "#searchLanguage",
+                        "expectedTarget": "#selectLanguage",
+                        "healed": true
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+            """.formatted(runId);
+
+        final Path execFile = execDir.resolve("console-execution-1.json");
+        Files.writeString(execFile, healedJson);
+
+        try
+        {
+            final ObjectMapper mapper = new ObjectMapper();
+            final JsonNode rootNode = mapper.readTree(execFile.toFile());
+            final TestExecutionDto dto = mapper.treeToValue(rootNode, TestExecutionDto.class);
+            Assertions.assertEquals("PASSED", dto.getDisplayStatusKey());
+            Assertions.assertTrue(dto.isHealed(), "Execution should be marked as healed");
+            Assertions.assertTrue(dto.isPassedHealed(), "Execution should be passed healed");
+            Assertions.assertFalse(dto.isFailedHealed(), "Execution should not be failed healed");
+
+            final Optional<String> runJsonOpt = storageService.buildRunJsonContent(runDir.toFile(), runId, true);
+            Assertions.assertTrue(runJsonOpt.isPresent(), "run.json content should be generated");
+            final JsonNode runNode = mapper.readTree(runJsonOpt.get());
+            Assertions.assertEquals(0, runNode.path("summary").path("fixed").asInt(), "Fixed count should be 0 because no bugs are linked");
+            Assertions.assertEquals(1, runNode.path("summary").path("pass").asInt(), "Passed count should be 1");
+            final RunReportDto report = dataService.getRunReport(runId);
+            Assertions.assertNotNull(report, "RunReportDto should not be null");
+            Assertions.assertEquals(0, report.getFixedCount(), "RunReport should reflect 0 fixed tests (no bugs)");
+            Assertions.assertEquals(1, report.getPassCount(), "RunReport should reflect 1 passed test");
+            Assertions.assertEquals(1, report.getPassedHealedCount(), "RunReport should reflect 1 passed healed test");
+            Assertions.assertEquals(0, report.getFailedHealedCount(), "RunReport should reflect 0 failed healed tests");
+            Assertions.assertEquals(1, report.getHealedCount(), "RunReport should reflect 1 healed step");
+            Assertions.assertEquals("PASSED", report.getExecutions().get(0).getDisplayStatusKey());
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
+    public void testFailedHealedStepAndExecutionStatusInStorageAndDto() throws Exception
+    {
+        final String runId = "run-failed-healed-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path execDir = runDir.resolve("Yaml").resolve("YamlFailTest");
+        Files.createDirectories(execDir);
+
+        final String failedHealedJson = """
+            {
+              "id": "yaml-exec-fail-1",
+              "runId": "%s",
+              "testClass": "YamlFailTest",
+              "status": "failed-unknown",
+              "failure": "Element not clickable",
+              "blocks": {
+                "steps": [
+                  {
+                    "instruction": "Select language",
+                    "status": "healed",
+                    "healed": true,
+                    "actions": [
+                      {
+                        "type": "SELECT",
+                        "target": "#searchLanguage",
+                        "expectedTarget": "#selectLanguage",
+                        "healed": true
+                      }
+                    ]
+                  },
+                  {
+                    "instruction": "Click checkout",
+                    "status": "failed",
+                    "error": "Element not clickable"
+                  }
+                ]
+              }
+            }
+            """.formatted(runId);
+
+        final Path execFile = execDir.resolve("console-execution-fail-1.json");
+        Files.writeString(execFile, failedHealedJson);
+
+        try
+        {
+            final ObjectMapper mapper = new ObjectMapper();
+            final JsonNode rootNode = mapper.readTree(execFile.toFile());
+            final TestExecutionDto dto = mapper.treeToValue(rootNode, TestExecutionDto.class);
+            Assertions.assertEquals("FAILED_UNKNOWN", dto.getDisplayStatusKey());
+            Assertions.assertTrue(dto.isHealed(), "Execution should be marked as healed");
+            Assertions.assertFalse(dto.isPassedHealed(), "Execution should not be passed healed");
+            Assertions.assertTrue(dto.isFailedHealed(), "Execution should be failed healed");
+
+            final Optional<String> runJsonOpt = storageService.buildRunJsonContent(runDir.toFile(), runId, true);
+            Assertions.assertTrue(runJsonOpt.isPresent(), "run.json content should be generated");
+            final JsonNode runNode = mapper.readTree(runJsonOpt.get());
+            Assertions.assertEquals(0, runNode.path("summary").path("fixed").asInt(), "Fixed count should be 0");
+            Assertions.assertEquals(0, runNode.path("summary").path("pass").asInt(), "Passed count should be 0");
+            Assertions.assertEquals(1, runNode.path("summary").path("unknown").asInt(), "Unknown fail count should be 1");
+            final RunReportDto report = dataService.getRunReport(runId);
+            Assertions.assertNotNull(report, "RunReportDto should not be null");
+            Assertions.assertEquals(0, report.getFixedCount(), "RunReport should reflect 0 fixed tests");
+            Assertions.assertEquals(0, report.getPassCount(), "RunReport should reflect 0 passed tests");
+            Assertions.assertEquals(0, report.getPassedHealedCount(), "RunReport should reflect 0 passed healed tests");
+            Assertions.assertEquals(1, report.getFailedHealedCount(), "RunReport should reflect 1 failed healed test");
+            Assertions.assertEquals(1, report.getHealedCount(), "RunReport should reflect 1 healed step");
+            Assertions.assertEquals("FAILED_UNKNOWN", report.getExecutions().get(0).getDisplayStatusKey());
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
+    public void testSyncExecutionWithHealedSetsVariationEntityHealedAndHistoryLink() throws IOException
+    {
+        final String runId = "run-healed-sync-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path execDir = runDir.resolve("Checkout").resolve("HealedSyncTest");
+
+        final String testClass = "HealedSyncTest";
+        final String testMethod = "testAutoHeal";
+        final String dataSet = "Default";
+        final String location = "US";
+        final String browser = "Chrome";
+        final String varId = AuraReportDataService.generateVariationId(testClass, testMethod, dataSet, location, browser);
+
+        try
+        {
+            Files.createDirectories(execDir);
+
+            final String execJson = """
+                {
+                    "id": "exec-healed-1",
+                    "title": "Default",
+                    "testClass": "HealedSyncTest",
+                    "testMethod": "testAutoHeal",
+                    "status": "passed-clean",
+                    "healed": true,
+                    "location": "US",
+                    "browser": "Chrome"
+                }
+                """;
+            Files.writeString(execDir.resolve("exec-1.json"), execJson);
+
+            Assertions.assertTrue(syncService.importOrUpdateRunReport(runId), "Import should succeed");
+
+            final Optional<TestBaseVariationEntity> varOpt = variationRepository.findById(varId);
+            Assertions.assertTrue(varOpt.isPresent(), "Variation entity should be created/updated in database");
+            final TestBaseVariationEntity varEntity = varOpt.get();
+            Assertions.assertTrue(varEntity.isHealed(), "Variation entity should be marked as healed");
+            Assertions.assertNotNull(varEntity.getHistoryLinks(), "History links should not be null");
+            Assertions.assertTrue(varEntity.getHistoryLinks().contains("&healed=true"), "History link should contain &healed=true");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+            runRepository.findById(runId).ifPresent(runRepository::delete);
+            variationRepository.findById(varId).ifPresent(variationRepository::delete);
+        }
+    }
+
+    @Test
+    public void testEarliestTestStartTimeOverridesContainerTimestamp() throws IOException
+    {
+        final String runId = "run-earliest-override-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        if (Files.exists(runDir))
+        {
+            deleteRecursively(runDir);
+        }
+        final Path execDir = runDir.resolve("Browsing (default)").resolve("CartTest");
+        Files.createDirectories(execDir);
+
+        // Pre-create a run.json with a top-level container timestamp of 05:00:00
+        final String initialRunJson = """
+            {
+                "runId": "run-earliest-override-test",
+                "timestamp": "2026-08-20 05:00:00",
+                "startTimeMs": 1787202000000
+            }
+            """;
+        Files.writeString(runDir.resolve("run.json"), initialRunJson);
+
+        final String exec1Json = """
+            {
+                "id": "exec-later",
+                "testClass": "CartTest",
+                "status": "passed-clean",
+                "startTime": "2026-08-20 10:00:00"
+            }
+            """;
+        final String exec2Json = """
+            {
+                "id": "exec-earliest",
+                "testClass": "CartTest",
+                "status": "passed-clean",
+                "startTime": "2026-08-20 07:15:00"
+            }
+            """;
+
+        Files.writeString(execDir.resolve("exec-1.json"), exec1Json);
+        Files.writeString(execDir.resolve("exec-2.json"), exec2Json);
+
+        try
+        {
+            final boolean synced = syncService.importOrUpdateRunReport(runId);
+            Assertions.assertTrue(synced, "syncService should import report into DB");
+
+            final Optional<TestRunEntity> entityOpt = runRepository.findById(runId);
+            Assertions.assertTrue(entityOpt.isPresent(), "TestRunEntity should be in database");
+
+            final TestRunEntity entity = entityOpt.get();
+            final String label = entity.getTimestampLabel();
+            // Earliest test starts at 07:15:00, not the container's 05:00:00
+            Assertions.assertFalse(label != null && label.contains("05:00:00"),
+                "Run timestamp must NOT be the container timestamp (05:00:00) when tests have start times");
+            Assertions.assertTrue(label != null && (label.contains("07:15:00") || label.contains("09:15:00")),
+                "Expected run timestamp to be defined by earliest test '07:15:00' (or local tz '09:15:00'), but was: " + label);
+
+            // Also verify that the generated run.json has the updated earliest startTimeMs
+            final Optional<String> runJsonOpt = storageService.readRunJson(runId);
+            Assertions.assertTrue(runJsonOpt.isPresent(), "run.json should exist");
+            final JsonNode runJsonRoot = new ObjectMapper().readTree(runJsonOpt.get());
+            Assertions.assertEquals(entity.getStartTimeMs(), runJsonRoot.path("startTimeMs").asLong(),
+                "run.json startTimeMs should match DB entity startTimeMs");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+            runRepository.findById(runId).ifPresent(runRepository::delete);
+        }
+    }
+
+    @Test
+    public void testLiveIngestionAndFinishRunUpdatesRunTimestampToEarliestTest() throws IOException
+    {
+        final String runId = "run-live-earliest-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        if (Files.exists(runDir))
+        {
+            deleteRecursively(runDir);
+        }
+
+        try
+        {
+            dataService.startRun(runId, "EarliestTestBatch", "PROD", "TEST");
+
+            final Map<String, Object> exec1 = new HashMap<>();
+            exec1.put("id", "exec-live-1");
+            exec1.put("testClass", "LiveTest");
+            exec1.put("title", "LiveTest1");
+            exec1.put("status", "passed");
+            exec1.put("startTime", "2026-08-20 11:30:00");
+
+            dataService.ingestExecution(runId, exec1);
+
+            Optional<TestRunEntity> entityOpt = runRepository.findById(runId);
+            Assertions.assertTrue(entityOpt.isPresent());
+            String label = entityOpt.get().getTimestampLabel();
+            Assertions.assertTrue(label != null && (label.contains("11:30:00") || label.contains("13:30:00")),
+                "Expected timestamp from exec1, but was: " + label);
+
+            // Ingest an execution that started earlier
+            final Map<String, Object> exec2 = new HashMap<>();
+            exec2.put("id", "exec-live-2");
+            exec2.put("testClass", "LiveTest");
+            exec2.put("title", "LiveTest2");
+            exec2.put("status", "passed");
+            exec2.put("startTime", "2026-08-20 08:15:00");
+
+            dataService.ingestExecution(runId, exec2);
+
+            entityOpt = runRepository.findById(runId);
+            Assertions.assertTrue(entityOpt.isPresent());
+            label = entityOpt.get().getTimestampLabel();
+            Assertions.assertTrue(label != null && (label.contains("08:15:00") || label.contains("10:15:00")),
+                "Expected run timestamp updated to earlier exec2 '08:15:00', but was: " + label);
+
+            // Finish run
+            dataService.finishRun(runId);
+
+            entityOpt = runRepository.findById(runId);
+            Assertions.assertTrue(entityOpt.isPresent());
+            final TestRunEntity finishedRun = entityOpt.get();
+            final String finishLabel = finishedRun.getTimestampLabel();
+            Assertions.assertTrue(finishLabel != null && (finishLabel.contains("08:15:00") || finishLabel.contains("10:15:00")),
+                "Expected finished run timestamp to remain earliest test '08:15:00', but was: " + finishLabel);
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+            runRepository.findById(runId).ifPresent(runRepository::delete);
+        }
+    }
+
+    @Test
+    public void testExecutionDetailsResolvesWithFolderFallbackAndMissingTopLevelMetadata() throws Exception
+    {
+        final String runId = "run_test_step_resolution_" + System.currentTimeMillis();
+        final Path runDir = storageService.getRunDir(runId);
+        final String parentFolderName = "Aura_tests_stokke_stokkeOrderPayPalTest_yml_Test";
+        final Path testFolder = runDir.resolve(parentFolderName);
+
+        try
+        {
+            Files.createDirectories(testFolder);
+            final String executionJson = """
+                {
+                    "testFile": "com.xceptance.test.PayPalTest#testOrderPayPal",
+                    "datasetId": "default",
+                    "status": "failed-assertion",
+                    "blocks": {
+                        "steps": [
+                            { "name": "Navigate to Home", "status": "PASSED" },
+                            { "name": "Add to Cart", "status": "FAILED" }
+                        ]
+                    }
+                }
+                """;
+            Files.writeString(testFolder.resolve("console-execution-1.json"), executionJson);
+
+            // 1. Resolve by composite key using parent folder and method
+            final TestExecutionDto dtoByKey = dataService.getExecutionDetails(
+                runId,
+                parentFolderName + "#testOrderPayPal#default#Chrome"
+            );
+            Assertions.assertNotNull(dtoByKey, "Execution details must be located using folder and method composite key");
+            Assertions.assertNotNull(dtoByKey.getBlocks(), "Execution blocks must be populated");
+            Assertions.assertEquals(2, dtoByKey.getBlocks().path("steps").size());
+
+            // 2. Resolve when runId carries '#' prefix from frontend URL
+            final TestExecutionDto dtoWithHash = dataService.getExecutionDetails(
+                "#" + runId,
+                parentFolderName + "#console-execution-1"
+            );
+            Assertions.assertNotNull(dtoWithHash, "Execution details must be resolved even with leading hash in runId");
+
+            // 3. Resolve using folder prefix match
+            final TestExecutionDto dtoByPrefix = dataService.getExecutionDetails(
+                runId,
+                parentFolderName + "#exec-random-postfix"
+            );
+            Assertions.assertNotNull(dtoByPrefix, "Execution details must match based on unique class folder prefix");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
+    public void testMultiDatasetExecutionResolutionInSharedFolderDoesNotCrossTalk() throws IOException
+    {
+        final String runId = "run-multi-dataset-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final String parentFolderName = "Aura_tests_stokke_stokkeOrderPayPalTest_yml_Test";
+        final Path testFolder = runDir.resolve(parentFolderName);
+
+        try
+        {
+            Files.createDirectories(testFolder);
+
+            // Dataset A (File 1)
+            final String exec1Json = """
+                {
+                    "id": "order-us-dataset",
+                    "testClass": "com.xceptance.neodymium.aura.sandbox.Aura_tests_stokke_stokkeOrderPayPalTest_yml_Test",
+                    "testMethod": "executeYamlTest",
+                    "title": "Order US Product",
+                    "browser": "Chrome_1500x1000",
+                    "status": "passed-clean",
+                    "blocks": { "steps": [{ "name": "Step US" }] }
+                }
+                """;
+            Files.writeString(testFolder.resolve("console-execution-1.json"), exec1Json);
+
+            // Dataset B (File 2)
+            final String exec2Json = """
+                {
+                    "id": "order-de-dataset",
+                    "testClass": "com.xceptance.neodymium.aura.sandbox.Aura_tests_stokke_stokkeOrderPayPalTest_yml_Test",
+                    "testMethod": "executeYamlTest",
+                    "title": "Order DE Product",
+                    "browser": "Chrome_1500x1000",
+                    "status": "failed",
+                    "blocks": { "steps": [{ "name": "Step DE 1" }, { "name": "Step DE 2" }] }
+                }
+                """;
+            Files.writeString(testFolder.resolve("console-execution-2.json"), exec2Json);
+
+            // 1. Resolve Dataset B by simple class name key (must NOT be hijacked by File 1)
+            final TestExecutionDto dtoB = dataService.getExecutionDetails(
+                runId,
+                parentFolderName + "#executeYamlTest#Order DE Product#Chrome_1500x1000"
+            );
+            Assertions.assertNotNull(dtoB, "Dataset B must be resolved");
+            Assertions.assertEquals("Order DE Product", dtoB.getTitle(), "Dataset B must not return Dataset A");
+            Assertions.assertEquals("failed", dtoB.getStatus());
+            Assertions.assertEquals(2, dtoB.getBlocks().path("steps").size());
+
+            // 2. Resolve Dataset A by simple class name key
+            final TestExecutionDto dtoA = dataService.getExecutionDetails(
+                runId,
+                parentFolderName + "#executeYamlTest#Order US Product#Chrome_1500x1000"
+            );
+            Assertions.assertNotNull(dtoA, "Dataset A must be resolved");
+            Assertions.assertEquals("Order US Product", dtoA.getTitle(), "Dataset A must return Dataset A");
+            Assertions.assertEquals("passed-clean", dtoA.getStatus());
+            Assertions.assertEquals(1, dtoA.getBlocks().path("steps").size());
+
+            // 3. In multi-file folder, an arbitrary unknown postfix must NOT greedily match File 1
+            final TestExecutionDto dtoAmbiguous = dataService.getExecutionDetails(
+                runId,
+                parentFolderName + "#arbitrary-unknown-id"
+            );
+            Assertions.assertNull(dtoAmbiguous, "Ambiguous prefix on multi-dataset folder must not hijack first file");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
+    public void testFuzzyFolderFallbackDoesNotHijackOtherDatasetOfSameClass() throws IOException
+    {
+        final String runId = "run-fuzzy-no-hijack-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path testFolder = runDir.resolve("OrderTest");
+
+        try
+        {
+            Files.createDirectories(testFolder);
+            // Only dataset A has been written so far (live run); dataset B is still pending.
+            Files.writeString(testFolder.resolve("console-execution-1.json"), """
+                {
+                    "id": "order-us-dataset",
+                    "testClass": "com.example.OrderTest",
+                    "testMethod": "order",
+                    "title": "Order US",
+                    "browser": "Chrome",
+                    "status": "running"
+                }
+                """);
+
+            Assertions.assertNull(dataService.getExecutionDetails(runId, "OrderTest#order#Order DE#Chrome#order-de-dataset"),
+                                  "A pending dataset must not be answered with the data of another dataset");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
+    public void testSimpleClassKeyCollisionAcrossPackagesIsNotGuessed() throws IOException
+    {
+        final String runId = "run-simple-key-collision-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+
+        try
+        {
+            for (final String pkg : new String[]
+            {
+                "a", "b"
+            })
+            {
+                final Path folder = runDir.resolve("com_" + pkg + "_LoginTest");
+                Files.createDirectories(folder);
+                Files.writeString(folder.resolve("console-execution-1.json"), """
+                    {
+                        "id": "exec-%s",
+                        "testClass": "com.%s.LoginTest",
+                        "testMethod": "login",
+                        "title": "Default",
+                        "browser": "Chrome",
+                        "status": "passed-clean"
+                    }
+                    """.formatted(pkg, pkg));
+            }
+
+            Assertions.assertNull(dataService.getExecutionDetails(runId, "LoginTest#login#Default#Chrome"),
+                                  "Ambiguous simple-class key must not resolve to an arbitrary class");
+            final TestExecutionDto exact = dataService.getExecutionDetails(runId, "com.b.LoginTest#login#Default#Chrome");
+            Assertions.assertNotNull(exact, "Fully qualified key stays unambiguous");
+            Assertions.assertEquals("exec-b", exact.getId());
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
+    public void testExecutionDetailsResolvesViaRunJsonFallbackWithSimpleKey() throws IOException
+
+    {
+        final String runId = "run-fallback-simple-key-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+
+        try
+        {
+            Files.createDirectories(runDir);
+
+            final String runJsonContent = """
+                {
+                    "runId": "run-fallback-simple-key-test",
+                    "executionMetrics": {
+                        "com.xceptance.neodymium.aura.sandbox.PayPalTest#testOrderPayPal#default#Chrome": {
+                            "id": "paypal-exec-1",
+                            "testClass": "com.xceptance.neodymium.aura.sandbox.PayPalTest",
+                            "testMethod": "testOrderPayPal",
+                            "title": "PayPal Payment Test",
+                            "browser": "Chrome",
+                            "status": "passed-clean",
+                            "blocks": {
+                                "steps": [
+                                    { "name": "Log in to PayPal", "status": "PASSED" },
+                                    { "name": "Approve Payment", "status": "PASSED" }
+                                ]
+                            }
+                        }
+                    },
+                    "executions": [
+                        {
+                            "id": "checkout-exec-2",
+                            "testClass": "com.xceptance.neodymium.aura.sandbox.CheckoutTest",
+                            "testMethod": "testCheckout",
+                            "title": "Guest Checkout",
+                            "browser": "Firefox",
+                            "status": "failed",
+                            "blocks": {
+                                "steps": [
+                                    { "name": "Enter Address", "status": "PASSED" },
+                                    { "name": "Place Order", "status": "FAILED" }
+                                ]
+                            }
+                        }
+                    ]
+                }
+                """;
+            Files.writeString(runDir.resolve("run.json"), runJsonContent);
+
+            // 1. Resolve from executionMetrics using simple class key
+            final TestExecutionDto dtoFromMetrics = dataService.getExecutionDetails(
+                runId,
+                "PayPalTest#testOrderPayPal#default#Chrome"
+            );
+            Assertions.assertNotNull(dtoFromMetrics, "Execution details must be resolved from executionMetrics via simple key");
+            Assertions.assertEquals("paypal-exec-1", dtoFromMetrics.getId());
+            Assertions.assertEquals("PayPal Payment Test", dtoFromMetrics.getTitle());
+            Assertions.assertEquals(2, dtoFromMetrics.getBlocks().path("steps").size());
+
+            // 2. Resolve from executions array using simple class key
+            final TestExecutionDto dtoFromArray = dataService.getExecutionDetails(
+                runId,
+                "CheckoutTest#testCheckout#Guest Checkout#Firefox"
+            );
+            Assertions.assertNotNull(dtoFromArray, "Execution details must be resolved from executions array via simple key");
+            Assertions.assertEquals("checkout-exec-2", dtoFromArray.getId());
+            Assertions.assertEquals("Guest Checkout", dtoFromArray.getTitle());
+            Assertions.assertEquals(2, dtoFromArray.getBlocks().path("steps").size());
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
+    public void testExecutionDetailsResolvesViaLiveBufferWithSimpleKey()
+    {
+        final String runId = "run-live-buffer-simple-key-test";
+
+        final Map<String, Object> payload = new HashMap<>();
+        payload.put("id", "live-exec-1");
+        payload.put("testClass", "com.xceptance.neodymium.aura.sandbox.OrderLiveTest");
+        payload.put("testMethod", "testSubmitOrder");
+        payload.put("title", "Live Submit Order");
+        payload.put("browser", "Chrome_1920x1080");
+        payload.put("status", "running");
+        payload.put("blocks", Map.of("steps", List.of(
+            Map.of("name", "Submit Step 1", "status", "PASSED")
+        )));
+
+        dataService.ingestExecution(runId, payload);
+
+        // Resolve via simple class key
+        final TestExecutionDto dto = dataService.getExecutionDetails(
+            runId,
+            "OrderLiveTest#testSubmitOrder#Live Submit Order#Chrome_1920x1080"
+        );
+        Assertions.assertNotNull(dto, "Execution details must be resolved from live buffer via simple key");
+        Assertions.assertEquals("live-exec-1", dto.getId());
+        Assertions.assertEquals("Live Submit Order", dto.getTitle());
+        Assertions.assertEquals("running", dto.getStatus());
+        Assertions.assertEquals(1, dto.getBlocks().path("steps").size());
+    }
+
+    @Test
+    public void testExecutionDetailsWithInteractiveSessionDoesNotHijackUnrelatedExecutions()
+    {
+        final AuraInteractiveService mockInteractiveService = new AuraInteractiveService();
+        final InteractiveConsoleEngine mockEngine = Mockito.mock(InteractiveConsoleEngine.class);
+        final String activeStateJson = """
+            {
+                "runId": "run-interactive-test",
+                "id": "interactive-active-exec",
+                "testClass": "com.xceptance.neodymium.aura.sandbox.LiveLoginTest",
+                "testMethod": "testLogin",
+                "title": "Default",
+                "browser": "Chrome",
+                "status": "running"
+            }
+            """;
+        Mockito.when(mockEngine.getCurrentStateJson()).thenReturn(activeStateJson);
+        mockInteractiveService.setCurrentConsoleEngine(mockEngine);
+
+        final AuraReportDataService service = new AuraReportDataService(
+            runRepository,
+            null,
+            variationRepository,
+            bugRepository,
+            storageService,
+            null,
+            mockInteractiveService
+        );
+
+        // 1. Matches when querying the interactive test directly via simple execution key
+        final TestExecutionDto matchedDto = service.getExecutionDetails("run-interactive-test", "LiveLoginTest#testLogin#Default#Chrome");
+        Assertions.assertNotNull(matchedDto, "Interactive execution must match its own composite key");
+        Assertions.assertEquals("interactive-active-exec", matchedDto.getId());
+
+        // 2. Matches when querying a generic console execution id
+        final TestExecutionDto genericDto = service.getExecutionDetails("run-interactive-test", "console-execution");
+        Assertions.assertNotNull(genericDto, "Generic execution ID must resolve to active interactive session");
+
+        // 3. Does NOT hijack an unrelated execution ID when the session belongs to a different test
+        final TestExecutionDto unrelatedDto = service.getExecutionDetails("run-interactive-test", "UnrelatedOrderTest#testOrder#Default#Chrome");
+        Assertions.assertNull(unrelatedDto, "Interactive session must NOT match an unrelated execution key");
+    }
+
+    @Test
+    public void testExpectedFailureAndSyntheticRunExclusionInStorageAndDto() throws Exception
+    {
+        final String runId = "run-expected-failure-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path execDir = runDir.resolve("NegativeTests").resolve("ExpectedFailTest");
+        Files.createDirectories(execDir);
+
+        final String expectedFailureJson = """
+            {
+              "id": "expected-fail-exec-1",
+              "runId": "%s",
+              "testClass": "ExpectedFailTest",
+              "testMethod": "testIntentionalFailureHandledByAssertThrows",
+              "status": "passed",
+              "expectedFailure": true,
+              "failure": "Intentional assertion error",
+              "blocks": {
+                "steps": [
+                  {
+                    "instruction": "Assert invalid state",
+                    "status": "failed",
+                    "expectedFailure": true,
+                    "error": "Intentional assertion error"
+                  }
+                ]
+              }
+            }
+            """.formatted(runId);
+
+        final String syntheticRunJson = """
+            {
+              "id": "synthetic-exec-fixture",
+              "runId": "%s",
+              "testClass": "FixtureSetup",
+              "testMethod": "setupEnv",
+              "status": "passed",
+              "synthetic": true,
+              "blocks": {
+                "steps": []
+              }
+            }
+            """.formatted(runId);
+
+        final Path execFile = execDir.resolve("console-execution-1.json");
+        Files.writeString(execFile, expectedFailureJson);
+
+        final Path syntheticFile = execDir.resolve("console-execution-fixture.json");
+        Files.writeString(syntheticFile, syntheticRunJson);
+
+        try
+        {
+            final ObjectMapper mapper = new ObjectMapper();
+            final Optional<String> runJsonOpt = storageService.buildRunJsonContent(runDir.toFile(), runId, true);
+            Assertions.assertTrue(runJsonOpt.isPresent(), "run.json content should be generated");
+
+            final JsonNode runNode = mapper.readTree(runJsonOpt.get());
+
+            // Summary must tally the expected failure as a PASS and exclude synthetic fixture execution
+            Assertions.assertEquals(1, runNode.path("summary").path("total").asInt(), "Total runs must exclude synthetic fixtures");
+            Assertions.assertEquals(1, runNode.path("summary").path("pass").asInt(), "Passed count must be 1 for expected failure");
+            Assertions.assertEquals(0, runNode.path("summary").path("unknown").asInt(), "Unknown fail count must be 0");
+            Assertions.assertEquals(0, runNode.path("summary").path("failedAssertion").asInt(), "Failed assertion count must be 0");
+
+            // Verify via AuraReportDataService
+            final RunReportDto report = dataService.getRunReport(runId);
+            Assertions.assertNotNull(report, "RunReportDto should not be null");
+            Assertions.assertEquals(1, report.getPassCount(), "RunReport should reflect 1 passed test");
+            Assertions.assertEquals(0, report.getFailCount(), "RunReport should reflect 0 failed tests");
+            Assertions.assertEquals(1, report.getExecutions().size(), "Only non-synthetic execution should be recorded");
+            Assertions.assertEquals("PASSED", report.getExecutions().get(0).getDisplayStatusKey());
+            Assertions.assertEquals(0, report.getExecutions().get(0).getFailedStepsCount(), "Steps failed must be 0 for expected failure");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
+    public void testSyncLocalRunStoragePopulatesStepReasoningAndReasonings() throws IOException
+    {
+        final String runId = "run-sync-reasoning-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path execDir = runDir.resolve("Checkout").resolve("CheckoutProcessTest");
+        Files.createDirectories(execDir);
+
+        final String execJson = """
+            {
+              "id": "exec-reasoning-1",
+              "runId": "%s",
+              "testClass": "CheckoutProcessTest",
+              "testMethod": "testCheckout",
+              "status": "passed",
+              "steps": {
+                "tries": {
+                  "1": {
+                    "coreSteps": [
+                      {
+                        "name": "Navigate to login",
+                        "status": "success",
+                        "reasoning": "Navigated to home page and dismissed cookies",
+                        "reasonings": [
+                          "Locating navigation bar",
+                          "Navigated to home page and dismissed cookies"
+                        ],
+                        "actions": []
+                      },
+                      {
+                        "name": "Click submit",
+                        "status": "success",
+                        "reasonings": [
+                          "Submit button located and clicked"
+                        ],
+                        "actions": []
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+            """.formatted(runId);
+
+        final Path execFile = execDir.resolve("execution-1.json");
+        Files.writeString(execFile, execJson);
+
+        try
+        {
+            final ObjectMapper mapper = new ObjectMapper();
+            final Optional<String> runJsonOpt = storageService.buildRunJsonContent(runDir.toFile(), runId, true);
+            Assertions.assertTrue(runJsonOpt.isPresent(), "run.json content should be generated");
+
+            final JsonNode updatedExec = mapper.readTree(execFile.toFile());
+            final JsonNode blockSteps = updatedExec.path("blocks").path("steps");
+            Assertions.assertTrue(blockSteps.isArray() && !blockSteps.isEmpty(), "blocks.steps should be populated");
+
+            final JsonNode firstStep = blockSteps.get(0);
+            Assertions.assertEquals("Navigated to home page and dismissed cookies", firstStep.path("reasoning").asText());
+            Assertions.assertTrue(firstStep.has("reasonings"), "step should have reasonings array");
+            Assertions.assertEquals(2, firstStep.path("reasonings").size());
+            Assertions.assertEquals("Locating navigation bar", firstStep.path("reasonings").get(0).asText());
+            Assertions.assertEquals("Navigated to home page and dismissed cookies", firstStep.path("reasonings").get(1).asText());
+
+            final JsonNode secondStep = blockSteps.get(1);
+            Assertions.assertEquals("Submit button located and clicked", secondStep.path("reasoning").asText());
+            Assertions.assertTrue(secondStep.has("reasonings"), "second step should have reasonings array");
+            Assertions.assertEquals(1, secondStep.path("reasonings").size());
+            Assertions.assertEquals("Submit button located and clicked", secondStep.path("reasonings").get(0).asText());
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
 }
+
 

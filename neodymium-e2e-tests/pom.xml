@@ -1,0 +1,296 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>com.xceptance</groupId>
+		<artifactId>neodymium-parent</artifactId>
+		<version>5.6.0-SNAPSHOT</version>
+		<relativePath>../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>neodymium-e2e-tests</artifactId>
+	<name>neodymium-e2e-tests</name>
+	<description>End-to-End, SUT scenario, VÉRLA storefront, and Aura Glance sandbox tests for the Neodymium test automation ecosystem.</description>
+
+	<properties>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<maven.compiler.source.version>21</maven.compiler.source.version>
+		<maven.compiler.target.version>21</maven.compiler.target.version>
+		<surefire.version>3.5.4</surefire.version>
+		<allure.version>2.32.0</allure.version>
+		<allure.maven.version>2.15.2</allure.maven.version>
+		<allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
+		<selenide.version>7.18.2</selenide.version>
+		<log4j.version>2.25.3</log4j.version>
+		<junit.jupiter.version>6.1.0-M1</junit.jupiter.version>
+		<junit.vintage.version>6.1.0-M1</junit.vintage.version>
+		<surefire.forkCount>1</surefire.forkCount>
+		<!--
+			JUnit tags excluded from the default run. LiveAPI/LiveLlm tests call a real LLM provider (cost, API key,
+			non-determinism), ExternalSite tests need internet access to third-party sites.
+			Activate -PLiveAPI (or pass -De2e.excludedGroups=) to run everything.
+		-->
+		<e2e.excludedGroups>LiveAPI,LiveLlm,ExternalSite</e2e.excludedGroups>
+	</properties>
+
+	<dependencies>
+		<dependency>
+			<groupId>com.xceptance</groupId>
+			<artifactId>neodymium-core</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.xceptance</groupId>
+			<artifactId>neodymium-test-server</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.logging.log4j</groupId>
+			<artifactId>log4j-api</artifactId>
+			<version>${log4j.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.logging.log4j</groupId>
+			<artifactId>log4j-core</artifactId>
+			<version>${log4j.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.logging.log4j</groupId>
+			<artifactId>log4j-slf4j2-impl</artifactId>
+			<version>${log4j.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter-api</artifactId>
+			<version>${junit.jupiter.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter-engine</artifactId>
+			<version>${junit.jupiter.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter-params</artifactId>
+			<version>${junit.jupiter.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>io.qameta.allure</groupId>
+			<artifactId>allure-junit5</artifactId>
+			<version>${allure.version}</version>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>3.14.1</version>
+				<configuration>
+					<release>${maven.compiler.target.version}</release>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>${surefire.version}</version>
+				<configuration>
+					<systemPropertyVariables>
+						<java.util.logging.config.file>logging.properties</java.util.logging.config.file>
+						<allure.results.directory>${allure.results.directory}</allure.results.directory>
+						<selenide.headless>true</selenide.headless>
+					</systemPropertyVariables>
+					<workingDirectory>${session.executionRootDirectory}</workingDirectory>
+					<forkCount>${surefire.forkCount}</forkCount>
+					<reuseForks>false</reuseForks>
+					<excludedGroups>${e2e.excludedGroups}</excludedGroups>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
+	<profiles>
+		<!-- 1. Skip classic JUnit 4 tests in E2E -->
+		<profile>
+			<id>neo-classic-junit4</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+
+		<!-- 2. Skip classic JUnit 5 tests in E2E -->
+		<profile>
+			<id>neo-classic-junit5</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+
+		<!-- 3. Skip in-memory unit tests in E2E (E2E module contains browser/integration tests) -->
+		<profile>
+			<id>unit-tests</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+
+		<!-- 4. Non-LLM tests: all modern e2e tests excluding live LLM and external sites -->
+		<profile>
+			<id>non-llm-tests</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<includes combine.self="override">
+								<include>org/neodymium/**/*Test.java</include>
+							</includes>
+							<excludes combine.self="override">
+								<exclude>**/BaseAiTest.java</exclude>
+								<exclude>**/BaseLlmTest.java</exclude>
+								<exclude>com/xceptance/neodymium/junit4/**</exclude>
+								<exclude>com/xceptance/neodymium/junit5/**</exclude>
+							</excludes>
+							<excludedGroups>LiveAPI,LiveLlm,ExternalSite</excludedGroups>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!-- 5. All VÉRLA storefront UI and mock AI integration tests -->
+		<profile>
+			<id>verla-tests</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<includes combine.self="override">
+								<include>org/neodymium/verla/**/*Test.java</include>
+								<include>org/neodymium/ai/integration/verla/**/*Test.java</include>
+							</includes>
+							<excludedGroups>LiveAPI,LiveLlm,ExternalSite</excludedGroups>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!-- 6. AI mock tests: all AI tests using mocked LLM responses -->
+		<profile>
+			<id>ai-mock-tests</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<includes combine.self="override">
+								<include>org/neodymium/ai/**/*Test.java</include>
+							</includes>
+							<excludes combine.self="override">
+								<exclude>**/BaseAiTest.java</exclude>
+								<exclude>**/BaseLlmTest.java</exclude>
+							</excludes>
+							<excludedGroups>LiveAPI,LiveLlm,ExternalSite</excludedGroups>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!-- 7. Real LLM tests only (requires API key) -->
+		<profile>
+			<id>ai-live-tests</id>
+			<properties>
+				<e2e.excludedGroups></e2e.excludedGroups>
+			</properties>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<groups>LiveAPI,LiveLlm</groups>
+							<excludedGroups combine.self="override"></excludedGroups>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!-- 8. Aura Glance visual defect & baseline sandbox tests -->
+		<profile>
+			<id>aura-sandbox</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<includes combine.self="override">
+								<include>org/neodymium/ai/integration/sandbox/**/*Test.java</include>
+							</includes>
+							<excludedGroups>LiveAPI,LiveLlm,ExternalSite</excludedGroups>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!-- 9. Skip Aura Manager profile in E2E -->
+		<profile>
+			<id>aura-manager</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+
+		<!-- 10. Smoke suite subset in e2e-tests -->
+		<profile>
+			<id>smoke</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<includes combine.self="override">
+								<include>org/neodymium/verla/VerlaTailwindStorefrontTest.java</include>
+								<include>org/neodymium/ai/integration/verla/checkout/normal/basic/CheckoutTest.java</include>
+								<include>org/neodymium/ai/integration/sandbox/mock/AutocompleteSandboxMockTest.java</include>
+							</includes>
+							<excludedGroups>LiveAPI,LiveLlm,ExternalSite</excludedGroups>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!--
+			Lifts the default tag exclusion so live-LLM and external-site tests run as well.
+			Requires network access and API keys (e.g. GEMINI_API_KEY). To run only the live tests,
+			combine with -Dgroups=LiveAPI,LiveLlm.
+		-->
+		<profile>
+			<id>LiveAPI</id>
+			<properties>
+				<e2e.excludedGroups></e2e.excludedGroups>
+			</properties>
+		</profile>
+	</profiles>
+</project>

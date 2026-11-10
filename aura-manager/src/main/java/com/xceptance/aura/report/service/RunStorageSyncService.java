@@ -20,8 +20,6 @@ package com.xceptance.aura.report.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.xceptance.aura.report.entity.TestBaseBugEntity;
 import com.xceptance.aura.report.entity.TestBaseVariationEntity;
 import com.xceptance.aura.report.entity.TestBatchEntity;
@@ -32,16 +30,22 @@ import com.xceptance.aura.report.repository.TestBatchRepository;
 import com.xceptance.aura.report.repository.TestRunRepository;
 import java.io.File;
 import java.io.IOException;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -122,10 +126,16 @@ public class RunStorageSyncService
                 if (Files.isDirectory(entry))
                 {
                     final String runId = entry.getFileName().toString();
-                    if (localRunJsonStorageService.hasRunJsonFile(runId) && runRepository.existsById(runId))
+                    final Optional<TestRunEntity> existingRunOpt = runRepository.findById(runId);
+                    if (localRunJsonStorageService.hasRunJsonFile(runId) && existingRunOpt.isPresent())
                     {
-                        LOG.debug("Skipping already initialized run report: runId={}", runId);
-                        continue;
+                        final TestRunEntity existingRun = existingRunOpt.get();
+                        if (existingRun.getPassedHealedCount() != null && existingRun.getSucceededFixedHealedCount() != null
+                            && existingRun.getFailedKnownHealedCount() != null && existingRun.getFailedUnknownHealedCount() != null)
+                        {
+                            LOG.debug("Skipping already initialized run report: runId={}", runId);
+                            continue;
+                        }
                     }
                     final boolean success = importOrUpdateRunReport(runId);
                     if (success)
@@ -193,6 +203,9 @@ public class RunStorageSyncService
                                             {
                                                 final String engine = exec.has("engine") ? exec.path("engine").asText("Java") : "Java";
                                                 final String rawStatus = exec.path("status").asText("failed-unknown");
+                                                final boolean isHealed = (exec.has("healed") && exec.path("healed").asBoolean(false))
+                                                                      || (exec.has("healedStepsCount") && exec.path("healedStepsCount").asInt(0) > 0)
+                                                                      || "healed".equalsIgnoreCase(rawStatus);
                                                 final List<String> bugList = new ArrayList<>();
                                                 if (exec.has("bugs") && exec.path("bugs").isArray())
                                                 {
@@ -206,13 +219,14 @@ public class RunStorageSyncService
                                                 }
                                                 final String bugsStr = !bugList.isEmpty() ? String.join(";", bugList) : "";
 
-                                                final String enrichedUrl = "/run-report?runId=" + java.net.URLEncoder.encode(rId, java.nio.charset.StandardCharsets.UTF_8)
-                                                    + (curExecId != null && !curExecId.trim().isEmpty() ? "&executionId=" + java.net.URLEncoder.encode(curExecId.trim(), java.nio.charset.StandardCharsets.UTF_8) : "")
-                                                    + "&batch=" + java.net.URLEncoder.encode(bName, java.nio.charset.StandardCharsets.UTF_8)
-                                                    + "&engine=" + java.net.URLEncoder.encode(engine, java.nio.charset.StandardCharsets.UTF_8)
-                                                    + "&ts=" + java.net.URLEncoder.encode(ts, java.nio.charset.StandardCharsets.UTF_8)
-                                                    + "&status=" + java.net.URLEncoder.encode(rawStatus, java.nio.charset.StandardCharsets.UTF_8)
-                                                    + (!bugsStr.isEmpty() ? "&bugs=" + java.net.URLEncoder.encode(bugsStr, java.nio.charset.StandardCharsets.UTF_8) : "");
+                                                final String enrichedUrl = "/run-report?runId=" + URLEncoder.encode(rId, StandardCharsets.UTF_8)
+                                                    + (curExecId != null && !curExecId.trim().isEmpty() ? "&executionId=" + URLEncoder.encode(curExecId.trim(), StandardCharsets.UTF_8) : "")
+                                                    + "&batch=" + URLEncoder.encode(bName, StandardCharsets.UTF_8)
+                                                    + "&engine=" + URLEncoder.encode(engine, StandardCharsets.UTF_8)
+                                                    + "&ts=" + URLEncoder.encode(ts, StandardCharsets.UTF_8)
+                                                    + "&status=" + URLEncoder.encode(rawStatus, StandardCharsets.UTF_8)
+                                                    + (isHealed ? "&healed=true" : "")
+                                                    + (!bugsStr.isEmpty() ? "&bugs=" + URLEncoder.encode(bugsStr, StandardCharsets.UTF_8) : "");
 
                                                 upgradedLinks.add(enrichedUrl);
                                                 modified = true;
@@ -245,6 +259,18 @@ public class RunStorageSyncService
                 if (modified && !upgradedLinks.isEmpty())
                 {
                     varEntity.setHistoryLinks(String.join(",", upgradedLinks));
+                    variationRepository.save(varEntity);
+                }
+            }
+            if ("Chrome".equalsIgnoreCase(varEntity.getBrowser()) && varEntity.getHistoryLinks() != null && !varEntity.getHistoryLinks().isBlank())
+            {
+                final String firstLink = varEntity.getHistoryLinks().split(",")[0].trim();
+                final Map<String, String> params = AuraReportDataService.parseQueryParams(firstLink);
+                final String linkExecId = params.get("executionId");
+                final String extracted = AuraReportDataService.extractBrowserFromIdOrKey(linkExecId);
+                if (extracted != null && !extracted.isBlank() && !"Chrome".equalsIgnoreCase(extracted))
+                {
+                    varEntity.setBrowser(AuraReportDataService.normalizeBrowser(extracted));
                     variationRepository.save(varEntity);
                 }
             }
@@ -286,6 +312,14 @@ public class RunStorageSyncService
             final int known = summaryNode.path("known").asInt(0);
             final int unknown = summaryNode.path("unknown").asInt(0);
             final int ignored = summaryNode.path("ignored").asInt(0);
+            final int passHealed = summaryNode.path("passHealed").asInt(summaryNode.path("passedHealed").asInt(0));
+            final int fixedHealed = summaryNode.path("fixedHealed").asInt(summaryNode.path("succeededFixedHealed").asInt(0));
+            final int knownHealed = summaryNode.path("knownHealed").asInt(summaryNode.path("failedKnownHealed").asInt(0));
+            final int unknownHealed = summaryNode.path("unknownHealed").asInt(summaryNode.path("failedUnknownHealed").asInt(0));
+            final int passAi = summaryNode.path("passAi").asInt(summaryNode.path("passedAi").asInt(0));
+            final int fixedAi = summaryNode.path("fixedAi").asInt(summaryNode.path("succeededFixedAi").asInt(0));
+            final int knownAi = summaryNode.path("knownAi").asInt(summaryNode.path("failedKnownAi").asInt(0));
+            final int unknownAi = summaryNode.path("unknownAi").asInt(summaryNode.path("failedUnknownAi").asInt(0));
             final double passRate = summaryNode.path("passRate").asDouble(totalTests > 0 ? (double) (pass + fixed) / totalTests * 100.0 : 0.0);
 
             int sumLlmCalls = summaryNode.path("totalLlmCalls").asInt(0);
@@ -352,60 +386,24 @@ public class RunStorageSyncService
                 final Set<String> bSet = new LinkedHashSet<>();
                 for (final JsonNode mNode : execMetricsNode)
                 {
-                    final String br = mNode.path("browser").asText("").trim();
+                    String br = mNode.path("browser").asText("").trim();
+                    if (br.isEmpty() || "Chrome".equalsIgnoreCase(br) || "Unknown".equalsIgnoreCase(br))
+                    {
+                        final String mId = mNode.path("id").asText("");
+                        final String extracted = AuraReportDataService.extractBrowserFromIdOrKey(mId);
+                        if (extracted != null && !extracted.isBlank())
+                        {
+                            br = extracted;
+                        }
+                    }
                     if (!br.isEmpty() && !"Unknown".equalsIgnoreCase(br))
                     {
-                        bSet.add(br);
+                        bSet.add(AuraReportDataService.normalizeBrowser(br));
                     }
                 }
                 browsersList.addAll(bSet);
             }
             final String browsersCsv = !browsersList.isEmpty() ? String.join(",", browsersList) : "Chrome";
-
-            String timestampVal = root.path("timestamp").asText(root.path("startTime").asText("")).trim();
-            if (execMetricsNode.isObject() && !execMetricsNode.isEmpty())
-            {
-                String earliestTime = null;
-                Long minMs = null;
-                if (!timestampVal.isEmpty() && !"Recently".equalsIgnoreCase(timestampVal))
-                {
-                    earliestTime = timestampVal;
-                    minMs = parseTimestampToMs(timestampVal);
-                }
-                for (final JsonNode mNode : execMetricsNode)
-                {
-                    final Long ms = parseStartTimeMs(mNode);
-                    String st = mNode.path("startTime").asText("").trim();
-                    if (st.isEmpty() && mNode.has("timestamp"))
-                    {
-                        st = mNode.path("timestamp").asText("").trim();
-                    }
-                    if (ms != null && ms > 0L)
-                    {
-                        if (minMs == null || ms < minMs)
-                        {
-                            minMs = ms;
-                            if (!st.isEmpty())
-                            {
-                                earliestTime = st;
-                            }
-                        }
-                    }
-                    else if (!st.isEmpty() && (earliestTime == null || st.compareTo(earliestTime) < 0))
-                    {
-                        earliestTime = st;
-                    }
-                }
-                if (earliestTime != null)
-                {
-                    timestampVal = earliestTime;
-                }
-            }
-            if (timestampVal.isEmpty())
-            {
-                timestampVal = "Recently";
-            }
-            final String timestamp = timestampVal;
 
             final List<JsonNode> execList = new ArrayList<>();
             if (execMetricsNode.isObject() && !execMetricsNode.isEmpty())
@@ -416,6 +414,67 @@ public class RunStorageSyncService
             {
                 root.path("executions").elements().forEachRemaining(execList::add);
             }
+
+            Long minStartTimeMs = null;
+            Long maxStartTimeMs = null;
+            String earliestStartTimeStr = null;
+            long durationOfLatestExecMs = 0L;
+
+            for (final JsonNode exec : execList)
+            {
+                final Long execStartMs = parseStartTimeMs(exec);
+                final long execDurationMs = exec.hasNonNull("duration") ? exec.path("duration").asLong(0L) : exec.path("durationMs").asLong(0L);
+
+                String st = exec.path("startTime").asText("").trim();
+                if (st.isEmpty() && exec.has("timestamp"))
+                {
+                    st = exec.path("timestamp").asText("").trim();
+                }
+
+                if (execStartMs != null && execStartMs > 0L)
+                {
+                    if (minStartTimeMs == null || execStartMs < minStartTimeMs)
+                    {
+                        minStartTimeMs = execStartMs;
+                        earliestStartTimeStr = !st.isEmpty() ? st : null;
+                    }
+                    if (maxStartTimeMs == null || execStartMs >= maxStartTimeMs)
+                    {
+                        maxStartTimeMs = execStartMs;
+                        durationOfLatestExecMs = execDurationMs;
+                    }
+                }
+                else if (!st.isEmpty())
+                {
+                    if (earliestStartTimeStr == null || st.compareTo(earliestStartTimeStr) < 0)
+                    {
+                        earliestStartTimeStr = st;
+                    }
+                }
+            }
+
+            String timestampVal = null;
+            if (earliestStartTimeStr != null && !earliestStartTimeStr.isBlank())
+            {
+                timestampVal = earliestStartTimeStr;
+            }
+            else if (minStartTimeMs != null && minStartTimeMs > 0L)
+            {
+                final LocalDateTime ldt = LocalDateTime.ofInstant(
+                    Instant.ofEpochMilli(minStartTimeMs),
+                    ZoneId.systemDefault()
+                );
+                timestampVal = ldt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            }
+            else
+            {
+                timestampVal = root.path("timestamp").asText(root.path("startTime").asText("")).trim();
+            }
+            if (timestampVal == null || timestampVal.isBlank())
+            {
+                timestampVal = "Recently";
+            }
+            final String timestamp = timestampVal;
 
             final String runEnv = env != null ? env : "ALL";
             final String runBatch = batchName != null ? batchName : "ALL";
@@ -449,11 +508,17 @@ public class RunStorageSyncService
             int calcKnown = 0;
             int calcUnknown = 0;
             int calcIgnored = 0;
+            int calcPassHealed = 0;
+            int calcFixedHealed = 0;
+            int calcKnownHealed = 0;
+            int calcUnknownHealed = 0;
+            int calcPassAi = 0;
+            int calcFixedAi = 0;
+            int calcKnownAi = 0;
+            int calcUnknownAi = 0;
 
-            Long minStartTimeMs = null;
-            Long maxStartTimeMs = null;
-            long durationOfLatestExecMs = 0L;
             long sumDurationMs = 0L;
+            final boolean isRunActive = runRepository.findById(runId).map(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus())).orElse(false);
 
             if (!execList.isEmpty())
             {
@@ -461,20 +526,6 @@ public class RunStorageSyncService
                 {
                     final long execDurationMs = exec.hasNonNull("duration") ? exec.path("duration").asLong(0L) : exec.path("durationMs").asLong(0L);
                     sumDurationMs += execDurationMs;
-
-                    final Long execStartMs = parseStartTimeMs(exec);
-                    if (execStartMs != null && execStartMs > 0L)
-                    {
-                        if (minStartTimeMs == null || execStartMs < minStartTimeMs)
-                        {
-                            minStartTimeMs = execStartMs;
-                        }
-                        if (maxStartTimeMs == null || execStartMs >= maxStartTimeMs)
-                        {
-                            maxStartTimeMs = execStartMs;
-                            durationOfLatestExecMs = execDurationMs;
-                        }
-                    }
                     final String execId = exec.path("id").asText("");
                     final String testClass = exec.path("testClass").asText("UnknownClass");
                     final String testMethod = LocalRunJsonStorageService.extractTestMethod(exec);
@@ -490,16 +541,44 @@ public class RunStorageSyncService
                     final String dataSet = !rawTitle.isEmpty() ? rawTitle : "Default";
                     final String rawLoc = exec.has("locale") && !exec.path("locale").asText().trim().isEmpty() ? exec.path("locale").asText().trim() : exec.path("location").asText("Unknown");
                     final String location = AuraReportDataService.normalizeLocation(rawLoc);
-                    final String browser = AuraReportDataService.normalizeBrowser(exec.path("browser").asText("Chrome"));
+                    String rawBrowser = exec.path("browser").asText("").trim();
+                    if (rawBrowser.isEmpty() || "Chrome".equalsIgnoreCase(rawBrowser) || "Unknown".equalsIgnoreCase(rawBrowser))
+                    {
+                        final String extracted = AuraReportDataService.extractBrowserFromIdOrKey(execId);
+                        if (extracted != null && !extracted.isBlank())
+                        {
+                            rawBrowser = extracted;
+                        }
+                    }
+                    final String browser = AuraReportDataService.normalizeBrowser(!rawBrowser.isEmpty() ? rawBrowser : "Chrome");
                     final String rawStatus = exec.path("status").asText("failed-unknown");
 
-                    final String varId = generateVariationId(testClass, testMethod, dataSet, location, browser);
-                    final List<String> dbBugTickets = dbBugsByVarId.getOrDefault(varId, List.of()).stream()
-                        .distinct()
-                        .collect(Collectors.toList());
+                    final boolean isHealed = (exec.has("healed") && exec.path("healed").asBoolean(false))
+                                          || (exec.has("healedStepsCount") && exec.path("healedStepsCount").asInt(0) > 0)
+                                          || "healed".equalsIgnoreCase(rawStatus);
 
-                    final java.util.Set<String> removedTickets = removedBugsByVarId.getOrDefault(varId, java.util.Set.of());
-                    final java.util.Set<String> combinedBugs = new java.util.LinkedHashSet<>();
+                    final String execMode = exec.path("executionMode").asText(exec.path("mode").asText("")).trim();
+                    final int llmCalls = exec.path("llmCallsCount").asInt(exec.path("llmCalls").asInt(0));
+                    final boolean isAi = "AI".equalsIgnoreCase(execMode)
+                                      || "LLM_RECORDING".equalsIgnoreCase(execMode)
+                                      || "LLM_ONLY".equalsIgnoreCase(execMode)
+                                      || "FORCE_RECORDING".equalsIgnoreCase(execMode)
+                                      || llmCalls > 0;
+
+                    final String varId = generateVariationId(testClass, testMethod, dataSet, location, browser);
+                    final String varIdNoMethod = generateVariationId(testClass, null, dataSet, location, browser);
+                    final List<String> dbBugTickets = new ArrayList<>(dbBugsByVarId.getOrDefault(varId, List.of()));
+                    for (final String t : dbBugsByVarId.getOrDefault(varIdNoMethod, List.of()))
+                    {
+                        if (!dbBugTickets.contains(t))
+                        {
+                            dbBugTickets.add(t);
+                        }
+                    }
+
+                    final Set<String> removedTickets = new HashSet<>(removedBugsByVarId.getOrDefault(varId, Set.of()));
+                    removedTickets.addAll(removedBugsByVarId.getOrDefault(varIdNoMethod, Set.of()));
+                    final Set<String> combinedBugs = new LinkedHashSet<>();
                     if (exec.has("bugs") && exec.path("bugs").isArray())
                     {
                         for (final JsonNode bugNode : exec.path("bugs"))
@@ -517,49 +596,77 @@ public class RunStorageSyncService
                     final boolean hasBugs = !bugList.isEmpty();
                     final String bugsStr = hasBugs ? String.join(";", bugList) : "";
 
-                    final String effectiveStatus;
-                    if ("failed".equalsIgnoreCase(rawStatus) || "failed-known".equalsIgnoreCase(rawStatus) || "failed-unknown".equalsIgnoreCase(rawStatus) || "error".equalsIgnoreCase(rawStatus) || "failure".equalsIgnoreCase(rawStatus))
+                    final String failureText = AuraReportDataService.extractFailureText(exec);
+                    final int failedSteps = LocalRunJsonStorageService.extractStepsFailed(exec);
+                    final int totalSteps = exec.has("totalStepsCount") ? exec.path("totalStepsCount").asInt(0) : 0;
+                    final String effectiveStatus = AuraReportDataService.computeEffectiveStatus(rawStatus, totalSteps, failedSteps, hasBugs, failureText, isRunActive);
+
+                    if ("failed-known".equals(effectiveStatus))
                     {
-                        if (hasBugs)
+                        calcKnown++;
+                        if (isHealed)
                         {
-                            effectiveStatus = "failed-known";
-                            calcKnown++;
+                            calcKnownHealed++;
                         }
-                        else
+                        if (isAi)
                         {
-                            effectiveStatus = "failed-unknown";
-                            calcUnknown++;
+                            calcKnownAi++;
                         }
                     }
-                    else if ("passed".equalsIgnoreCase(rawStatus) || "succeeded-fixed".equalsIgnoreCase(rawStatus) || "passed-clean".equalsIgnoreCase(rawStatus) || "succeeded".equalsIgnoreCase(rawStatus))
+                    else if ("failed-unknown".equals(effectiveStatus))
                     {
-                        if (hasBugs)
+                        calcUnknown++;
+                        if (isHealed)
                         {
-                            effectiveStatus = "succeeded-fixed";
-                            calcFixed++;
+                            calcUnknownHealed++;
                         }
-                        else
+                        if (isAi)
                         {
-                            effectiveStatus = "passed-clean";
-                            calcPass++;
+                            calcUnknownAi++;
                         }
                     }
-                    else if ("ignored".equalsIgnoreCase(rawStatus) || "skipped".equalsIgnoreCase(rawStatus))
+                    else if ("succeeded-fixed".equals(effectiveStatus))
                     {
-                        effectiveStatus = rawStatus;
+                        calcFixed++;
+                        if (isHealed)
+                        {
+                            calcFixedHealed++;
+                        }
+                        if (isAi)
+                        {
+                            calcFixedAi++;
+                        }
+                    }
+                    else if ("passed-clean".equals(effectiveStatus))
+                    {
+                        calcPass++;
+                        if (isHealed)
+                        {
+                            calcPassHealed++;
+                        }
+                        if (isAi)
+                        {
+                            calcPassAi++;
+                        }
+                    }
+                    else if ("ignored".equals(effectiveStatus))
+                    {
                         calcIgnored++;
+                    }
+                    else if ("running".equals(effectiveStatus))
+                    {
+                        // In-flight execution during active run
                     }
                     else
                     {
-                        if (hasBugs)
+                        calcUnknown++;
+                        if (isHealed)
                         {
-                            effectiveStatus = "failed-known";
-                            calcKnown++;
+                            calcUnknownHealed++;
                         }
-                        else
+                        if (isAi)
                         {
-                            effectiveStatus = "failed-unknown";
-                            calcUnknown++;
+                            calcUnknownAi++;
                         }
                     }
 
@@ -586,25 +693,47 @@ public class RunStorageSyncService
 
                         varEntity.setLastStatus(effectiveStatus);
                         varEntity.setLastExecutedAt(System.currentTimeMillis());
+                        varEntity.setHealed(isHealed);
 
-                        final String engine = exec.has("engine") ? exec.path("engine").asText("Java") : "Java";
-
-                        final String relUrl = "/run-report?runId=" + java.net.URLEncoder.encode(runId, java.nio.charset.StandardCharsets.UTF_8)
-                            + (execId != null && !execId.trim().isEmpty() ? "&executionId=" + java.net.URLEncoder.encode(execId.trim(), java.nio.charset.StandardCharsets.UTF_8) : "")
-                            + "&batch=" + java.net.URLEncoder.encode(batchName, java.nio.charset.StandardCharsets.UTF_8)
-                            + "&engine=" + java.net.URLEncoder.encode(engine, java.nio.charset.StandardCharsets.UTF_8)
-                            + "&ts=" + java.net.URLEncoder.encode(timestamp, java.nio.charset.StandardCharsets.UTF_8)
-                            + "&status=" + java.net.URLEncoder.encode(effectiveStatus, java.nio.charset.StandardCharsets.UTF_8)
-                            + (!bugsStr.isEmpty() ? "&bugs=" + java.net.URLEncoder.encode(bugsStr, java.nio.charset.StandardCharsets.UTF_8) : "");
-
-                        final String currentHistory = varEntity.getHistoryLinks();
-                        if (currentHistory == null || currentHistory.trim().isEmpty())
+                        final String calculatedMode;
+                        if (isAi)
                         {
-                            varEntity.setHistoryLinks(relUrl);
+                            calculatedMode = "AI";
+                        }
+                        else if (isHealed)
+                        {
+                            calculatedMode = "HEALED";
+                        }
+                        else if ("PLAYBOOK".equalsIgnoreCase(execMode) || "REPLAY_STRICT".equalsIgnoreCase(execMode) || "REPLAY_WITH_HEALING".equalsIgnoreCase(execMode) || testClass.contains("_yaml_") || testClass.contains("_yml_"))
+                        {
+                            calculatedMode = "PLAYBOOK";
                         }
                         else
                         {
-                            final List<String> linksList = new ArrayList<>(List.of(currentHistory.split(",")));
+                            calculatedMode = "JAVA";
+                        }
+                        final String engine = exec.has("engine") ? exec.path("engine").asText("Java") : "Java";
+
+                        final String relUrl = "/run-report?runId=" + URLEncoder.encode(runId, StandardCharsets.UTF_8)
+                            + (execId != null && !execId.trim().isEmpty() ? "&executionId=" + URLEncoder.encode(execId.trim(), StandardCharsets.UTF_8) : "")
+                            + "&batch=" + URLEncoder.encode(batchName, StandardCharsets.UTF_8)
+                            + "&engine=" + URLEncoder.encode(engine, StandardCharsets.UTF_8)
+                            + "&ts=" + URLEncoder.encode(timestamp, StandardCharsets.UTF_8)
+                            + "&status=" + URLEncoder.encode(effectiveStatus, StandardCharsets.UTF_8)
+                            + (isHealed ? "&healed=true" : "")
+                            + "&mode=" + URLEncoder.encode(calculatedMode, StandardCharsets.UTF_8)
+                            + (!bugsStr.isEmpty() ? "&bugs=" + URLEncoder.encode(bugsStr, StandardCharsets.UTF_8) : "");
+
+                        final String currentHistory = varEntity.getHistoryLinks();
+                        final List<String> linksList;
+                        if (currentHistory == null || currentHistory.trim().isEmpty())
+                        {
+                            linksList = new ArrayList<>();
+                            linksList.add(relUrl);
+                        }
+                        else
+                        {
+                            linksList = new ArrayList<>(List.of(currentHistory.split(",")));
                             boolean replaced = false;
                             for (int i = 0; i < linksList.size(); i++)
                             {
@@ -613,7 +742,7 @@ public class RunStorageSyncService
                                 final String existingRunId = existingParams.get("runId");
                                 final String existingExecId = existingParams.get("executionId");
 
-                                if (runId.equals(existingRunId) && java.util.Objects.equals(execId, existingExecId))
+                                if (runId.equals(existingRunId) && Objects.equals(execId, existingExecId))
                                 {
                                     linksList.set(i, relUrl);
                                     replaced = true;
@@ -624,10 +753,94 @@ public class RunStorageSyncService
                             {
                                 linksList.add(relUrl);
                             }
-                            varEntity.setHistoryLinks(String.join(",", linksList));
                         }
 
-                        varEntity.setTotalExecutionsCount(AuraReportDataService.countHistoryLinks(varEntity.getHistoryLinks()));
+                        final List<String> sortedLinks = AuraReportDataService.sortHistoryLinksDescending(String.join(",", linksList));
+                        varEntity.setHistoryLinks(String.join(",", sortedLinks));
+                        varEntity.setTotalExecutionsCount(sortedLinks.size());
+
+                        if (!sortedLinks.isEmpty())
+                        {
+                            final Map<String, String> latestParams = AuraReportDataService.parseQueryParams(sortedLinks.get(0));
+                            final String latestStatus = latestParams.get("status");
+                            final String latestHealed = latestParams.get("healed");
+                            String latestMode = latestParams.get("mode");
+                            final boolean latestIsHealed = "true".equalsIgnoreCase(latestHealed) || "healed".equalsIgnoreCase(latestStatus);
+                            varEntity.setHealed(latestIsHealed);
+
+                            if (latestMode == null || latestMode.isBlank())
+                            {
+                                final String latestRunId = latestParams.get("runId");
+                                if (runId.equals(latestRunId))
+                                {
+                                    latestMode = calculatedMode;
+                                }
+                                else if (latestRunId != null)
+                                {
+                                    final Optional<String> rJsonOpt = localRunJsonStorageService.readRunJson(latestRunId);
+                                    if (rJsonOpt.isPresent())
+                                    {
+                                        try
+                                        {
+                                            final JsonNode rRoot = objectMapper.readTree(rJsonOpt.get());
+                                            final JsonNode exMetrics = rRoot.path("executionMetrics");
+                                            final String latestExecId = latestParams.get("executionId");
+                                            if (exMetrics.isObject())
+                                            {
+                                                for (final JsonNode mNode : exMetrics)
+                                                {
+                                                    final String mId = mNode.path("id").asText("");
+                                                    if (latestExecId != null && !latestExecId.isEmpty() && latestExecId.equals(mId))
+                                                    {
+                                                        final String mMode = mNode.path("executionMode").asText(mNode.path("mode").asText("")).trim();
+                                                        final boolean mHealed = mNode.path("healed").asBoolean(false) || mNode.path("healedStepsCount").asInt(0) > 0;
+                                                        final int mLlm = mNode.path("llmCallsCount").asInt(0);
+                                                        final boolean mAi = "AI".equalsIgnoreCase(mMode) || "LLM_RECORDING".equalsIgnoreCase(mMode) || mLlm > 0;
+                                                        if (mAi)
+                                                        {
+                                                            latestMode = "AI";
+                                                        }
+                                                        else if (mHealed)
+                                                        {
+                                                            latestMode = "HEALED";
+                                                        }
+                                                        else if ("PLAYBOOK".equalsIgnoreCase(mMode) || "REPLAY_STRICT".equalsIgnoreCase(mMode) || testClass.contains("_yaml_") || testClass.contains("_yml_"))
+                                                        {
+                                                            latestMode = "PLAYBOOK";
+                                                        }
+                                                        else
+                                                        {
+                                                            latestMode = "JAVA";
+                                                        }
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        catch (final Exception ex)
+                                        {
+                                            LOG.debug("Unable to parse execution mode from latest run JSON for runId {}: {}", latestRunId, ex.getMessage());
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (latestMode != null && !latestMode.isBlank())
+                            {
+                                varEntity.setExecutionMode(latestMode);
+                            }
+                            if (latestStatus != null && !latestStatus.isBlank())
+                            {
+                                varEntity.setLastStatus("healed".equalsIgnoreCase(latestStatus) ? "passed-clean" : latestStatus);
+                            }
+                        }
+                        else
+                        {
+                            varEntity.setExecutionMode(calculatedMode);
+                            varEntity.setLastStatus("healed".equalsIgnoreCase(effectiveStatus) ? "passed-clean" : effectiveStatus);
+                            varEntity.setHealed(isHealed);
+                        }
+
                         variationRepository.save(varEntity);
                     }
                 }
@@ -635,6 +848,7 @@ public class RunStorageSyncService
 
             final Optional<TestRunEntity> existingRunOpt = runRepository.findById(runId);
             final TestRunEntity runEntity;
+            final Long initialStartMs = minStartTimeMs != null ? minStartTimeMs : parseTimestampToMs(timestamp);
             if (existingRunOpt.isPresent())
             {
                 runEntity = existingRunOpt.get();
@@ -642,6 +856,10 @@ public class RunStorageSyncService
                 runEntity.setEnvironment(env);
                 runEntity.setTriggerSource(trigger);
                 runEntity.setTimestampLabel(timestamp);
+                if (minStartTimeMs != null)
+                {
+                    runEntity.setStartTimeMs(minStartTimeMs);
+                }
             }
             else
             {
@@ -654,7 +872,7 @@ public class RunStorageSyncService
                     localesCsv,
                     browsersCsv,
                     timestamp,
-                    System.currentTimeMillis()
+                    initialStartMs != null && initialStartMs > 0L ? initialStartMs : System.currentTimeMillis()
                 );
             }
 
@@ -665,6 +883,14 @@ public class RunStorageSyncService
             final int finalKnown = hasExecCounts ? calcKnown : known;
             final int finalUnknown = hasExecCounts ? calcUnknown : unknown;
             final int finalIgnored = hasExecCounts ? calcIgnored : ignored;
+            final int finalPassHealed = hasExecCounts ? calcPassHealed : passHealed;
+            final int finalFixedHealed = hasExecCounts ? calcFixedHealed : fixedHealed;
+            final int finalKnownHealed = hasExecCounts ? calcKnownHealed : knownHealed;
+            final int finalUnknownHealed = hasExecCounts ? calcUnknownHealed : unknownHealed;
+            final int finalPassAi = hasExecCounts ? calcPassAi : passAi;
+            final int finalFixedAi = hasExecCounts ? calcFixedAi : fixedAi;
+            final int finalKnownAi = hasExecCounts ? calcKnownAi : knownAi;
+            final int finalUnknownAi = hasExecCounts ? calcUnknownAi : unknownAi;
             final double finalPassRate = finalTotal > 0 ? (double)(finalPass + finalFixed) / finalTotal * 100.0 : passRate;
 
             final long calculatedRunDurationMs;
@@ -693,6 +919,14 @@ public class RunStorageSyncService
             runEntity.setFailedKnownCount(finalKnown);
             runEntity.setFailedUnknownCount(finalUnknown);
             runEntity.setIgnoredCount(finalIgnored);
+            runEntity.setPassedHealedCount(finalPassHealed);
+            runEntity.setSucceededFixedHealedCount(finalFixedHealed);
+            runEntity.setFailedKnownHealedCount(finalKnownHealed);
+            runEntity.setFailedUnknownHealedCount(finalUnknownHealed);
+            runEntity.setPassedAiCount(finalPassAi);
+            runEntity.setSucceededFixedAiCount(finalFixedAi);
+            runEntity.setFailedKnownAiCount(finalKnownAi);
+            runEntity.setFailedUnknownAiCount(finalUnknownAi);
             runEntity.setPassRate(finalPassRate);
             runEntity.setTotalLlmCalls(sumLlmCalls);
             runEntity.setTotalLlmTokens(sumLlmTokens);
@@ -811,7 +1045,7 @@ public class RunStorageSyncService
 
         try
         {
-            return java.time.Instant.parse(trimmed).toEpochMilli();
+            return Instant.parse(trimmed).toEpochMilli();
         }
         catch (final Exception ignored)
         {
@@ -821,8 +1055,8 @@ public class RunStorageSyncService
         {
             try
             {
-                final java.time.LocalDateTime ldt = java.time.LocalDateTime.parse(trimmed, java.time.format.DateTimeFormatter.ofPattern(pattern));
-                return ldt.toInstant(java.time.ZoneOffset.UTC).toEpochMilli();
+                final LocalDateTime ldt = LocalDateTime.parse(trimmed, DateTimeFormatter.ofPattern(pattern));
+                return ldt.toInstant(ZoneOffset.UTC).toEpochMilli();
             }
             catch (final Exception ignored)
             {

@@ -75,6 +75,28 @@ public class CoordinateActionTest
     }
 
     @Test
+    public void testParseHeadingScopedAndPseudoClassAnchorCoordinates()
+    {
+        final CoordinateTarget target1 = ClickAction.parseCoordinateTarget("coord:article:has-text(\"Starter Plan\")@42,18");
+        Assertions.assertNotNull(target1);
+        Assertions.assertEquals("article:has-text(\"Starter Plan\")", target1.anchorSelector());
+        Assertions.assertEquals(42, target1.x());
+        Assertions.assertEquals(18, target1.y());
+
+        final CoordinateTarget target2 = ClickAction.parseCoordinateTarget("coord:div:has(h3)@10,20");
+        Assertions.assertNotNull(target2);
+        Assertions.assertEquals("div:has(h3)", target2.anchorSelector());
+        Assertions.assertEquals(10, target2.x());
+        Assertions.assertEquals(20, target2.y());
+
+        final CoordinateTarget target3 = ClickAction.parseCoordinateTarget("coord:li:nth-child(2)@15,30");
+        Assertions.assertNotNull(target3);
+        Assertions.assertEquals("li:nth-child(2)", target3.anchorSelector());
+        Assertions.assertEquals(15, target3.x());
+        Assertions.assertEquals(30, target3.y());
+    }
+
+    @Test
     public void testNonCoordinateStringsDoNotMatch()
     {
         Assertions.assertNull(ClickAction.parseCoordinateTarget("10x20"));

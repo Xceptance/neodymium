@@ -151,4 +151,19 @@ public interface TargetExecutor extends AutoCloseable
     default void registerBasicAuth(final String username, final String password)
     {
     }
+
+    /**
+     * Applies transient color wireframe styling to the active target environment.
+     * Injects styles neutralizing dynamic media/text while preserving layout geometry and theme colors.
+     */
+    default void applyColorWireframe()
+    {
+    }
+
+    /**
+     * Removes transient color wireframe styling from the active target environment.
+     */
+    default void removeColorWireframe()
+    {
+    }
 }

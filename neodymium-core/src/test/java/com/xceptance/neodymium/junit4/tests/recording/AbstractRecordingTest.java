@@ -43,6 +43,7 @@ public abstract class AbstractRecordingTest extends NeodymiumTest
         properties1.put(format + ".filmAutomatically", Boolean.toString(filmAutomatically));
         properties1.put(format + ".enableFilming", "true");
         properties1.put(format + ".deleteRecordingsAfterAddingToAllureReport", "false");
+        properties1.put(format + ".deleteTempRecordings", "false");
         properties1.put(format + ".ffmpegLogFile", "target/ffmpeg_output_msg_" + UUID.randomUUID() + ".txt");
         final String fileLocation = "config/temp-" + format + "-" + filmAutomatically +UUID.randomUUID()+ ".properties";
         File tempConfigFile1 = new File("./" + fileLocation);
@@ -64,10 +65,16 @@ public abstract class AbstractRecordingTest extends NeodymiumTest
     @AfterClass
     public static void assertRecordingFileExists()
     {
-        File recordingFile = new File(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).tempFolderToStoreRecording() + uuid.get(Thread.currentThread()) + "."
+        final String runFolder = com.xceptance.neodymium.ai.console.InteractiveConsoleEngine.getRunFolder();
+        File recordingFile = new File(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).tempFolderToStoreRecording() + runFolder + "/" + uuid.get(Thread.currentThread()) + "."
             + FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).format());
+        if (!recordingFile.exists())
+        {
+            recordingFile = new File(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).tempFolderToStoreRecording() + uuid.get(Thread.currentThread()) + "."
+                + FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).format());
+        }
         Assert.assertTrue("the recording file doesn't exist", recordingFile.exists());
         recordingFile.delete();
         Assert.assertFalse("the recording file wasn't deleted", recordingFile.exists());
- }
+    }
 }

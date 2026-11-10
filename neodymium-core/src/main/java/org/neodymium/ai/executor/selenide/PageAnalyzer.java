@@ -28,6 +28,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
@@ -48,6 +50,7 @@ import org.slf4j.LoggerFactory;
 import org.neodymium.common.ScreenshotWriter;
 import org.neodymium.common.browser.WebDriverStateContainer;
 import org.neodymium.util.Neodymium;
+import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.LocatorCascadeResolver;
@@ -70,6 +73,8 @@ public class PageAnalyzer
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private static final String FINGERPRINT_JS_FUNCTIONS = loadResource("ai-scripts/neodymium-dom-helpers.js");
+
+    private static final String COLOR_WIREFRAME_JS = loadResource("ai-scripts/neodymium-color-wireframe.js");
 
     private final WebDriver providedDriver;
 
@@ -127,7 +132,7 @@ public class PageAnalyzer
      * fallback.
      */
     static final String CAPTURE_SCRIPT = """
-            return (function(level, includesText, includesRich, isMinimal, volatilePatterns) {
+            return (function(level, includesText, includesRich, isMinimal, volatilePatterns, isDataAiEnabled) {
                 // Configuration constants to prevent payload bloat
                 var MAX_PER_SELECTOR = 150; // Safeguard against massive list rendering
                 var MAX_TEXT = 200;         // Max characters captured for element text labels
@@ -155,25 +160,37 @@ public class PageAnalyzer
 
                 var seenRefs = {};
 
-                // Pre-populate registry from IDs already stamped on this page
-                // (handles repeated script injections on the same page)
-                // Also detects duplicates caused by JS cloning and removes the attribute so a unique one is generated.
-                for (var i = 0; i < allRoots.length; i++) {
-                    allRoots[i].querySelectorAll('[data-ai]').forEach(function(el) {
-                        var ref = el.getAttribute('data-ai');
-                        if (seenRefs[ref]) {
+                // If data-ai is disabled, strip any existing synthetic data-ai attributes from all roots
+                if (!isDataAiEnabled) {
+                    for (var i = 0; i < allRoots.length; i++) {
+                        allRoots[i].querySelectorAll('[data-ai]').forEach(function(el) {
                             el.removeAttribute('data-ai');
-                        } else {
-                            seenRefs[ref] = true;
-                            usedIds[ref] = true;
-                        }
-                    });
+                        });
+                    }
+                } else {
+                    // Pre-populate registry from IDs already stamped on this page
+                    // (handles repeated script injections on the same page)
+                    // Also detects duplicates caused by JS cloning and removes the attribute so a unique one is generated.
+                    for (var i = 0; i < allRoots.length; i++) {
+                        allRoots[i].querySelectorAll('[data-ai]').forEach(function(el) {
+                            var ref = el.getAttribute('data-ai');
+                            if (seenRefs[ref]) {
+                                el.removeAttribute('data-ai');
+                            } else {
+                                seenRefs[ref] = true;
+                                usedIds[ref] = true;
+                            }
+                        });
+                    }
                 }
             """
             + FINGERPRINT_JS_FUNCTIONS
             + """
                 // Retrieves or generates and stamps a unique 'data-ai' ID on the DOM element
                 function assignId(el) {
+                    if (!isDataAiEnabled) {
+                        return null;
+                    }
                     if (el.hasAttribute('data-ai')) {
                         return el.getAttribute('data-ai');
                     }
@@ -502,6 +519,21 @@ public class PageAnalyzer
                     return false;
                 }
 
+                // Helper to extract authentic test attributes without synthetic bucketing
+                function getTestAttributes(el) {
+                    if (!el || !el.getAttribute) return {};
+                    var known = ['data-testid', 'data-test-id', 'data-test', 'data-qa', 'data-cy'];
+                    var found = {};
+                    for (var i = 0; i < known.length; i++) {
+                        var a = known[i];
+                        var val = el.getAttribute(a);
+                        if (val !== null && val !== undefined && val !== '') {
+                            found[a] = val;
+                        }
+                    }
+                    return found;
+                }
+
                 // Recursive Structural DOM Tree Traversal
                 function buildNodeTree(el) {
                     if (!el) return null;
@@ -534,6 +566,8 @@ public class PageAnalyzer
                     // 1. Leaf interactive or heading element (Atomic)
                     if (isStandardLeaf || isCustomLeaf) {
                         var autoId = assignId(el);
+                        var testAttrs = getTestAttributes(el);
+                        var primaryTestVal = testAttrs['data-testid'] || testAttrs['data-test-id'] || testAttrs['data-test'] || testAttrs['data-qa'] || testAttrs['data-cy'] || null;
                         var text = (el.innerText || '').trim().replace(new RegExp('\\s*\\n\\s*', 'g'), ' ');
                         if (!text && el.querySelector) {
                             var img = el.querySelector('img, svg');
@@ -565,7 +599,8 @@ public class PageAnalyzer
                             focused: isFocused ? 'true' : null,
                             placeholder: el.getAttribute('placeholder'),
                             ariaLabel: el.getAttribute('aria-label'),
-                            dataTestId: el.getAttribute('data-testid') || el.getAttribute('data-test') || el.getAttribute('data-qa'),
+                            testAttrs: testAttrs,
+                            dataTestId: primaryTestVal,
                             value: getElementValue(el, tag),
                             options: options,
                             automationId: autoId,
@@ -575,7 +610,8 @@ public class PageAnalyzer
 
                     var isCustomElement = tag.indexOf('-') !== -1 || !!el.shadowRoot;
                     var isContainerTag = ['header','nav','main','section','article','aside','form','footer','fieldset','details','ul','ol','select','optgroup','p','table','tbody','thead','tfoot','tr','td','th','dl','dt','dd','figure','figcaption'].indexOf(tag) !== -1 || isCustomElement;
-                    var hasClassOrId = (el.id || (typeof el.className === 'string' && el.className.trim().length > 0) || el.getAttribute('role') || el.getAttribute('aria-label') || el.getAttribute('data-testid') || el.getAttribute('data-test'));
+                    var hasTestAttr = (el.getAttribute && (el.hasAttribute('data-testid') || el.hasAttribute('data-test-id') || el.hasAttribute('data-test') || el.hasAttribute('data-qa') || el.hasAttribute('data-cy')));
+                    var hasClassOrId = (el.id || (typeof el.className === 'string' && el.className.trim().length > 0) || el.getAttribute('role') || el.getAttribute('aria-label') || hasTestAttr);
                     var isDivContainer = (tag === 'div' || tag === 'li') && hasClassOrId;
 
                     var children = [];
@@ -602,6 +638,8 @@ public class PageAnalyzer
                             return children[0];
                         }
                         var autoIdContainer = assignId(el);
+                        var testAttrsContainer = getTestAttributes(el);
+                        var primaryTestValContainer = testAttrsContainer['data-testid'] || testAttrsContainer['data-test-id'] || testAttrsContainer['data-test'] || testAttrsContainer['data-qa'] || testAttrsContainer['data-cy'] || null;
                         return {
                             nodeType: 'container',
                             tagName: tag,
@@ -611,7 +649,8 @@ public class PageAnalyzer
                             role: el.getAttribute('role'),
                             contenteditable: isContentEditable ? 'true' : null,
                             ariaLabel: el.getAttribute('aria-label'),
-                            dataTestId: el.getAttribute('data-testid') || el.getAttribute('data-test') || el.getAttribute('data-qa'),
+                            testAttrs: testAttrsContainer,
+                            dataTestId: primaryTestValContainer,
                             parentText: el.getAttribute('data-parent-text') || null,
                             automationId: autoIdContainer,
                             children: children
@@ -631,6 +670,8 @@ public class PageAnalyzer
                             }
                         }
                         var autoId = assignId(el);
+                        var testAttrsLeaf = getTestAttributes(el);
+                        var primaryTestValLeaf = testAttrsLeaf['data-testid'] || testAttrsLeaf['data-test-id'] || testAttrsLeaf['data-test'] || testAttrsLeaf['data-qa'] || testAttrsLeaf['data-cy'] || null;
                         var leafNode = {
                             nodeType: 'leaf',
                             tagName: tag,
@@ -644,7 +685,8 @@ public class PageAnalyzer
                             checked: isChecked(el) ? 'true' : null,
                             disabled: (el.disabled || el.hasAttribute('disabled')) ? 'true' : null,
                             ariaLabel: el.getAttribute('aria-label'),
-                            dataTestId: el.getAttribute('data-testid') || el.getAttribute('data-test') || el.getAttribute('data-qa'),
+                            testAttrs: testAttrsLeaf,
+                            dataTestId: primaryTestValLeaf,
                             automationId: autoId,
                             parentText: el.getAttribute('data-parent-text') || null
                         };
@@ -680,7 +722,7 @@ public class PageAnalyzer
                 }
 
                 return {tree: rootNodes, forms: level >= 1 ? captureForms() : []};
-            })(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4]);
+            })(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5]);
             """;
 
     private boolean hasActiveWebDriver(final WebDriver explicitDriver) {
@@ -1058,11 +1100,13 @@ public class PageAnalyzer
         int elementCount = 0;
         try {
             final long scriptStart = System.nanoTime();
+            final boolean dataAiEnabled = AiConfiguration.getInstance().isDataAiEnabled();
             final Map<String, Object> data = (Map<String, Object>) js
                     .executeScript(CAPTURE_SCRIPT, level.ordinal(), level.includesTextContent(), level.includesRichMetadata(),
                             level == ContextLevel.MINIMAL,
-                            this.volatileIdDetector.getPatterns().stream().map(java.util.regex.Pattern::pattern).toList());
-            final long scriptMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - scriptStart);
+                            this.volatileIdDetector.getPatterns().stream().map(Pattern::pattern).toList(),
+                            dataAiEnabled);
+            final long scriptMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - scriptStart);
 
             // Render element tree
             final List<Map<String, Object>> tree = (List<Map<String, Object>>) data.get("tree");
@@ -1108,6 +1152,16 @@ public class PageAnalyzer
                             } catch (e) {
                                 return null;
                             }
+                            var volatilePatterns = arguments[1] || [];
+                            function isVolatile(idStr) {
+                              if (!idStr) return true;
+                              for (var v = 0; v < volatilePatterns.length; v++) {
+                                try {
+                                  if (new RegExp(volatilePatterns[v]).test(idStr)) return true;
+                                } catch(e) {}
+                              }
+                              return false;
+                            }
                             function escapeId(str) {
                               if (typeof CSS !== 'undefined' && CSS.escape) { return CSS.escape(str); }
                               return str;
@@ -1115,11 +1169,31 @@ public class PageAnalyzer
                             function escapeAttr(str) {
                               return (str || '').replaceAll("'", "\\\\'");
                             }
-                            if (el.id) { return '#' + escapeId(el.id); }
-                            if (el.name) { return el.tagName.toLowerCase() + "[name='" + escapeAttr(el.name) + "']"; }
+                            function isUnique(sel) {
+                              try { return el.ownerDocument.querySelectorAll(sel).length === 1; } catch (e) { return false; }
+                            }
+                            if (el.id && !isVolatile(el.id)) { return '#' + escapeId(el.id); }
+                            if (el.name) {
+                              var nameSel = el.tagName.toLowerCase() + "[name='" + escapeAttr(el.name) + "']";
+                              if (isUnique(nameSel)) { return nameSel; }
+                            }
+                            var title = el.getAttribute('title');
+                            if (title && title.trim()) {
+                              var titleSel = el.tagName.toLowerCase() + "[title='" + escapeAttr(title.trim()) + "']";
+                              if (isUnique(titleSel)) { return titleSel; }
+                            }
+                            var src = el.getAttribute('src');
+                            if (src && src.indexOf('/') !== -1 && src.indexOf('blob:') !== 0 && src.indexOf('data:') !== 0) {
+                              var cleanSrc = src.split('?')[0].split('#')[0];
+                              var filename = cleanSrc.substring(cleanSrc.lastIndexOf('/') + 1);
+                              if (filename && filename.length >= 3) {
+                                var srcSel = el.tagName.toLowerCase() + "[src*='" + escapeAttr(filename) + "']";
+                                if (isUnique(srcSel)) { return srcSel; }
+                              }
+                            }
                             var path = [];
                             while (el && el.nodeType === 1) {
-                              if (el.id) {
+                              if (el.id && !isVolatile(el.id)) {
                                 path.unshift('#' + escapeId(el.id));
                                 break;
                               }
@@ -1136,7 +1210,8 @@ public class PageAnalyzer
                             }
                             return path.join(' > ');
                             """,
-                            frames.get(i));
+                            frames.get(i),
+                            this.volatileIdDetector.getPatterns().stream().map(Pattern::pattern).toList());
                     if (selector == null) {
                         skippedFrames++;
                         continue;
@@ -1230,11 +1305,14 @@ public class PageAnalyzer
             final Object name = node.get("name");
             final Object role = node.get("role");
             final Object dataTestId = node.get("dataTestId");
+            @SuppressWarnings("unchecked")
+            final Map<String, Object> testAttrs = (Map<String, Object>) node.get("testAttrs");
+            final boolean hasTestAttr = (testAttrs != null && !testAttrs.isEmpty()) || dataTestId != null;
             final Object autoId = node.get("automationId");
             final Object ariaLabel = node.get("ariaLabel");
 
             // Omit class on containers if semantic locators exist (unless in RICH mode)
-            final boolean hasSemanticLocator = hasId || name != null || dataTestId != null || autoId != null || ariaLabel != null || role != null;
+            final boolean hasSemanticLocator = hasId || name != null || hasTestAttr || ariaLabel != null || role != null;
             if (level != null && level.includesRichMetadata() || !hasSemanticLocator)
             {
                 appendSanitizedClassAttribute(dom, node.get("className"));
@@ -1243,8 +1321,21 @@ public class PageAnalyzer
             appendAttribute(dom, "role", role);
             appendAttribute(dom, "contenteditable", node.get("contenteditable"));
             appendAttribute(dom, "aria-label", ariaLabel);
-            appendAttribute(dom, "data-testid", dataTestId);
-            appendAttribute(dom, "data-ai", autoId);
+            if (testAttrs != null && !testAttrs.isEmpty())
+            {
+                for (final Map.Entry<String, Object> entry : testAttrs.entrySet())
+                {
+                    appendAttribute(dom, entry.getKey(), entry.getValue());
+                }
+            }
+            else
+            {
+                appendAttribute(dom, "data-testid", dataTestId);
+            }
+            if (AiConfiguration.getInstance().isDataAiEnabled())
+            {
+                appendAttribute(dom, "data-ai", autoId);
+            }
             dom.append(">\n");
 
             final List<Map<String, Object>> children = (List<Map<String, Object>>) node.get("children");
@@ -1289,6 +1380,9 @@ public class PageAnalyzer
         }
         final Object name = el.get("name");
         final Object dataTestId = el.get("dataTestId");
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> testAttrs = (Map<String, Object>) el.get("testAttrs");
+        final boolean hasTestAttr = (testAttrs != null && !testAttrs.isEmpty()) || dataTestId != null;
         final Object autoId = el.get("automationId");
         final Object ariaLabel = el.get("ariaLabel");
         final Object placeholder = el.get("placeholder");
@@ -1297,7 +1391,7 @@ public class PageAnalyzer
         final boolean hasDistinctText = text != null && !text.isBlank() && text.length() <= 80;
 
         // Omit presentation class in MINIMAL/LEAN if element already has strong semantic identification
-        final boolean hasSemanticLocator = hasId || name != null || dataTestId != null || autoId != null || ariaLabel != null || placeholder != null || hasDistinctText;
+        final boolean hasSemanticLocator = hasId || name != null || hasTestAttr || ariaLabel != null || placeholder != null || hasDistinctText;
         if (level != null && level.includesRichMetadata() || !hasSemanticLocator)
         {
             appendSanitizedClassAttribute(dom, el.get("className"));
@@ -1312,7 +1406,17 @@ public class PageAnalyzer
         appendAttribute(dom, "href", el.get("href"));
         appendAttribute(dom, "placeholder", el.get("placeholder"));
         appendAttribute(dom, "aria-label", el.get("ariaLabel"));
-        appendAttribute(dom, "data-testid", el.get("dataTestId"));
+        if (testAttrs != null && !testAttrs.isEmpty())
+        {
+            for (final Map.Entry<String, Object> entry : testAttrs.entrySet())
+            {
+                appendAttribute(dom, entry.getKey(), entry.getValue());
+            }
+        }
+        else
+        {
+            appendAttribute(dom, "data-testid", dataTestId);
+        }
         appendAttribute(dom, "pattern", el.get("pattern"));
         appendAttribute(dom, "title", el.get("title"));
         appendAttribute(dom, "min", el.get("min"));
@@ -1329,7 +1433,10 @@ public class PageAnalyzer
         appendAttribute(dom, "value", el.get("value"));
         appendAttribute(dom, "options", el.get("options"));
 
-        appendAttribute(dom, "data-ai", el.get("automationId"));
+        if (AiConfiguration.getInstance().isDataAiEnabled())
+        {
+            appendAttribute(dom, "data-ai", el.get("automationId"));
+        }
 
         appendAttribute(dom, "frameId", el.get("frameId"));
 
@@ -1413,6 +1520,51 @@ public class PageAnalyzer
     }
 
     /**
+     * Injects the transient color wireframe stylesheet into the active page.
+     * Neutralizes dynamic media and text while preserving layout geometry and brand colors.
+     *
+     * @param explicitDriver driver override to evaluate against, or null to resolve default
+     */
+    public void applyColorWireframe(final WebDriver explicitDriver)
+    {
+        final WebDriver activeDriver = resolveDriver(explicitDriver);
+        if (activeDriver instanceof final JavascriptExecutor js)
+        {
+            js.executeScript(COLOR_WIREFRAME_JS + "; if (window.__neodymiumApplyColorWireframe) { window.__neodymiumApplyColorWireframe(); }");
+        }
+    }
+
+    /**
+     * Injects the transient color wireframe stylesheet into the active page using the default driver.
+     */
+    public void applyColorWireframe()
+    {
+        applyColorWireframe(null);
+    }
+
+    /**
+     * Removes the transient color wireframe stylesheet from the active page.
+     *
+     * @param explicitDriver driver override to evaluate against, or null to resolve default
+     */
+    public void removeColorWireframe(final WebDriver explicitDriver)
+    {
+        final WebDriver activeDriver = resolveDriver(explicitDriver);
+        if (activeDriver instanceof final JavascriptExecutor js)
+        {
+            js.executeScript("if (window.__neodymiumRemoveColorWireframe) { window.__neodymiumRemoveColorWireframe(); }");
+        }
+    }
+
+    /**
+     * Removes the transient color wireframe stylesheet from the active page using the default driver.
+     */
+    public void removeColorWireframe()
+    {
+        removeColorWireframe(null);
+    }
+
+    /**
      * Extracts all visible interactive elements across windows, frames, and shadow DOM roots
      * as structured {@link DomFeatureVector} objects for sub-millisecond local similarity matching.
      *
@@ -1440,6 +1592,41 @@ public class PageAnalyzer
 
         final String script = """
             return (function() {
+                function computeGraphicSig(el) {
+                    if (!el) return '';
+                    var tName = el.tagName ? el.tagName.toLowerCase() : '';
+                    var svg = tName === 'svg' ? el : (el.querySelector ? el.querySelector('svg') : null);
+                    if (svg) {
+                        var vb = svg.getAttribute('viewBox') || '';
+                        var parts = [];
+                        var shapes = svg.querySelectorAll ? svg.querySelectorAll('path, circle, rect, line, polygon, polyline, use') : [];
+                        for (var s = 0; s < shapes.length && s < 6; s++) {
+                            var sh = shapes[s];
+                            var st = sh.tagName ? sh.tagName.toLowerCase() : '';
+                            var d = sh.getAttribute('d') || sh.getAttribute('points') || sh.getAttribute('href') || sh.getAttribute('xlink:href')
+                                || ((sh.getAttribute('cx') || '') + ',' + (sh.getAttribute('cy') || '') + ',' + (sh.getAttribute('r') || '')
+                                    + (sh.getAttribute('width') || '') + 'x' + (sh.getAttribute('height') || ''));
+                            if (d) {
+                                d = d.trim().replace(/\\s+/g, ' ');
+                                if (d.length > 48) d = d.substring(0, 48);
+                                parts.push(st + ':' + d);
+                            }
+                        }
+                        return 'svg[' + vb + ']{' + parts.join(';') + '}';
+                    }
+                    var img = tName === 'img' ? el : (el.querySelector ? el.querySelector('img') : null);
+                    if (img) {
+                        var src = img.getAttribute('src') || '';
+                        if (src) {
+                            var qIdx = src.indexOf('?');
+                            if (qIdx > 0) src = src.substring(0, qIdx);
+                            if (src.length > 64) src = src.substring(src.length - 64);
+                            return 'img:' + src;
+                        }
+                    }
+                    return '';
+                }
+
                 var roots = [document];
                 function collectRoots(root) {
                     try {
@@ -1457,7 +1644,7 @@ public class PageAnalyzer
                 var results = [];
                 for (var r = 0; r < roots.length; r++) {
                     try {
-                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, li, [role], [onclick], [hx-get], [hx-post], [hx-target], [tabindex], [contenteditable], [data-testid], [data-test], [data-qa]');
+                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, li, [role], [onclick], [hx-get], [hx-post], [hx-target], [tabindex], [contenteditable], [data-testid], [data-test-id], [data-test], [data-qa], [data-cy]');
                         for (var i = 0; i < els.length; i++) {
                             var el = els[i];
                             if (el.closest && el.closest('.neodymium-ai-hud')) continue;
@@ -1468,10 +1655,14 @@ public class PageAnalyzer
                             if (el.attributes) {
                                 for (var a = 0; a < el.attributes.length; a++) {
                                     var attr = el.attributes[a];
-                                    if (attr.name !== 'class' && attr.name !== 'style' && !attr.name.startsWith('data-ai')) {
+                                    if (attr.name !== 'class' && attr.name !== 'style' && attr.name !== 'data-m' && !attr.name.startsWith('data-ai')) {
                                         attrMap[attr.name] = attr.value;
                                     }
                                 }
+                            }
+                            var gSig = computeGraphicSig(el);
+                            if (gSig) {
+                                attrMap['data-graphic-sig'] = gSig;
                             }
                             var role = el.getAttribute('role') || '';
                             var accessibleName = el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('placeholder') || (el.labels && el.labels[0] ? el.labels[0].innerText : '') || text;
@@ -1551,6 +1742,40 @@ public class PageAnalyzer
         final String script = """
             return (function(el) {
                 if (!el) return null;
+                function computeGraphicSig(node) {
+                    if (!node) return '';
+                    var tName = node.tagName ? node.tagName.toLowerCase() : '';
+                    var svg = tName === 'svg' ? node : (node.querySelector ? node.querySelector('svg') : null);
+                    if (svg) {
+                        var vb = svg.getAttribute('viewBox') || '';
+                        var parts = [];
+                        var shapes = svg.querySelectorAll ? svg.querySelectorAll('path, circle, rect, line, polygon, polyline, use') : [];
+                        for (var s = 0; s < shapes.length && s < 6; s++) {
+                            var sh = shapes[s];
+                            var st = sh.tagName ? sh.tagName.toLowerCase() : '';
+                            var d = sh.getAttribute('d') || sh.getAttribute('points') || sh.getAttribute('href') || sh.getAttribute('xlink:href')
+                                || ((sh.getAttribute('cx') || '') + ',' + (sh.getAttribute('cy') || '') + ',' + (sh.getAttribute('r') || '')
+                                    + (sh.getAttribute('width') || '') + 'x' + (sh.getAttribute('height') || ''));
+                            if (d) {
+                                d = d.trim().replace(/\\s+/g, ' ');
+                                if (d.length > 48) d = d.substring(0, 48);
+                                parts.push(st + ':' + d);
+                            }
+                        }
+                        return 'svg[' + vb + ']{' + parts.join(';') + '}';
+                    }
+                    var img = tName === 'img' ? node : (node.querySelector ? node.querySelector('img') : null);
+                    if (img) {
+                        var src = img.getAttribute('src') || '';
+                        if (src) {
+                            var qIdx = src.indexOf('?');
+                            if (qIdx > 0) src = src.substring(0, qIdx);
+                            if (src.length > 64) src = src.substring(src.length - 64);
+                            return 'img:' + src;
+                        }
+                    }
+                    return '';
+                }
                 var tag = el.tagName ? el.tagName.toLowerCase() : '';
                 var text = (el.innerText || el.value || el.placeholder || '').trim().replace(/\\s*\\n\\s*/g, ' ');
                 var classes = Array.from(el.classList || []);
@@ -1558,10 +1783,14 @@ public class PageAnalyzer
                 if (el.attributes) {
                     for (var a = 0; a < el.attributes.length; a++) {
                         var attr = el.attributes[a];
-                        if (attr.name !== 'class' && attr.name !== 'style' && !attr.name.startsWith('data-ai')) {
+                        if (attr.name !== 'class' && attr.name !== 'style' && attr.name !== 'data-m' && !attr.name.startsWith('data-ai')) {
                             attrMap[attr.name] = attr.value;
                         }
                     }
+                }
+                var gSig = computeGraphicSig(el);
+                if (gSig) {
+                    attrMap['data-graphic-sig'] = gSig;
                 }
                 var role = el.getAttribute('role') || '';
                 var accessibleName = el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('placeholder') || (el.labels && el.labels[0] ? el.labels[0].innerText : '') || text;
@@ -1647,6 +1876,41 @@ public class PageAnalyzer
 
         final String script = """
             return (function() {
+                function computeGraphicSig(el) {
+                    if (!el) return '';
+                    var tName = el.tagName ? el.tagName.toLowerCase() : '';
+                    var svg = tName === 'svg' ? el : (el.querySelector ? el.querySelector('svg') : null);
+                    if (svg) {
+                        var vb = svg.getAttribute('viewBox') || '';
+                        var parts = [];
+                        var shapes = svg.querySelectorAll ? svg.querySelectorAll('path, circle, rect, line, polygon, polyline, use') : [];
+                        for (var s = 0; s < shapes.length && s < 6; s++) {
+                            var sh = shapes[s];
+                            var st = sh.tagName ? sh.tagName.toLowerCase() : '';
+                            var d = sh.getAttribute('d') || sh.getAttribute('points') || sh.getAttribute('href') || sh.getAttribute('xlink:href')
+                                || ((sh.getAttribute('cx') || '') + ',' + (sh.getAttribute('cy') || '') + ',' + (sh.getAttribute('r') || '')
+                                    + (sh.getAttribute('width') || '') + 'x' + (sh.getAttribute('height') || ''));
+                            if (d) {
+                                d = d.trim().replace(/\\s+/g, ' ');
+                                if (d.length > 48) d = d.substring(0, 48);
+                                parts.push(st + ':' + d);
+                            }
+                        }
+                        return 'svg[' + vb + ']{' + parts.join(';') + '}';
+                    }
+                    var img = tName === 'img' ? el : (el.querySelector ? el.querySelector('img') : null);
+                    if (img) {
+                        var src = img.getAttribute('src') || '';
+                        if (src) {
+                            var qIdx = src.indexOf('?');
+                            if (qIdx > 0) src = src.substring(0, qIdx);
+                            if (src.length > 64) src = src.substring(src.length - 64);
+                            return 'img:' + src;
+                        }
+                    }
+                    return '';
+                }
+
                 var roots = [document];
                 function collectRoots(root) {
                     try {
@@ -1665,7 +1929,7 @@ public class PageAnalyzer
                 var vectorData = [];
                 for (var r = 0; r < roots.length; r++) {
                     try {
-                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, li, [role], [onclick], [hx-get], [hx-post], [hx-target], [tabindex], [contenteditable], [data-testid], [data-test], [data-qa]');
+                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, li, [role], [onclick], [hx-get], [hx-post], [hx-target], [tabindex], [contenteditable], [data-testid], [data-test-id], [data-test], [data-qa], [data-cy]');
                         for (var i = 0; i < els.length; i++) {
                             var el = els[i];
                             if (el.closest && el.closest('.neodymium-ai-hud')) continue;
@@ -1676,10 +1940,14 @@ public class PageAnalyzer
                             if (el.attributes) {
                                 for (var a = 0; a < el.attributes.length; a++) {
                                     var attr = el.attributes[a];
-                                    if (attr.name !== 'class' && attr.name !== 'style' && !attr.name.startsWith('data-ai')) {
+                                    if (attr.name !== 'class' && attr.name !== 'style' && attr.name !== 'data-m' && !attr.name.startsWith('data-ai')) {
                                         attrMap[attr.name] = attr.value;
                                     }
                                 }
+                            }
+                            var gSig = computeGraphicSig(el);
+                            if (gSig) {
+                                attrMap['data-graphic-sig'] = gSig;
                             }
                             var role = el.getAttribute('role') || '';
                             var accessibleName = el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('placeholder') || (el.labels && el.labels[0] ? el.labels[0].innerText : '') || text;
@@ -1806,19 +2074,60 @@ public class PageAnalyzer
                 if (!el || el === document.body || el === document.documentElement) {
                     return null;
                 }
-                var id = el.id ? '#' + el.id : null;
-                var dataAi = el.getAttribute('data-ai') ? '[data-ai="' + el.getAttribute('data-ai') + '"]' : null;
-                var selector = id || dataAi;
-                if (!selector && el.className && typeof el.className === 'string' && el.className.trim()) {
-                    var cls = el.className.trim().split(/\\s+/)[0];
-                    if (cls && !cls.includes(':') && !cls.includes('/')) {
-                        selector = '.' + cls;
+                var anchor = null;
+                var selector = null;
+                var curr = el;
+                while (curr && curr !== document.body && curr !== document.documentElement) {
+                    var tag = curr.tagName ? curr.tagName.toLowerCase() : '';
+                    if (curr.id && !/[0-9]{4,}/.test(curr.id)) {
+                        anchor = curr;
+                        selector = '#' + curr.id;
+                        break;
+                    }
+                    var testId = curr.getAttribute && (curr.getAttribute('data-testid') || curr.getAttribute('data-test-id') || curr.getAttribute('data-test') || curr.getAttribute('data-qa') || curr.getAttribute('data-cy'));
+                    if (testId) {
+                        var attrName = curr.getAttribute('data-testid') ? 'data-testid' : (curr.getAttribute('data-test-id') ? 'data-test-id' : (curr.getAttribute('data-test') ? 'data-test' : (curr.getAttribute('data-qa') ? 'data-qa' : 'data-cy')));
+                        anchor = curr;
+                        selector = '[' + attrName + '="' + testId + '"]';
+                        break;
+                    }
+                    if (curr !== el && (['article', 'tr', 'li', 'div', 'section', 'form', 'fieldset'].indexOf(tag) !== -1)) {
+                        var heading = curr.querySelector && curr.querySelector('h1, h2, h3, h4, h5, h6, [role="heading"], legend, th');
+                        if (heading) {
+                            var hText = (heading.innerText || heading.textContent || '').trim().replace(/\\s+/g, ' ');
+                            if (hText && hText.length >= 2 && hText.length <= 60 && /[a-zA-Z]{2,}/.test(hText)) {
+                                var sameContainers = document.querySelectorAll(tag);
+                                var matchCount = 0;
+                                for (var k = 0; k < sameContainers.length; k++) {
+                                    var ct = (sameContainers[k].innerText || sameContainers[k].textContent || '');
+                                    if (ct.indexOf(hText) !== -1) matchCount++;
+                                }
+                                if (matchCount === 1) {
+                                    anchor = curr;
+                                    selector = tag + ':has-text("' + hText.replace(/"/g, '\\\\"') + '")';
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    curr = curr.parentElement;
+                }
+                if (!anchor) {
+                    anchor = el;
+                    var id = el.id ? '#' + el.id : null;
+                    var dataAi = el.getAttribute('data-ai') ? '[data-ai="' + el.getAttribute('data-ai') + '"]' : null;
+                    selector = id || dataAi;
+                    if (!selector && el.className && typeof el.className === 'string' && el.className.trim()) {
+                        var cls = el.className.trim().split(/\\s+/)[0];
+                        if (cls && !cls.includes(':') && !cls.includes('/')) {
+                            selector = '.' + cls;
+                        }
+                    }
+                    if (!selector) {
+                        selector = el.tagName.toLowerCase();
                     }
                 }
-                if (!selector) {
-                    selector = el.tagName.toLowerCase();
-                }
-                var rect = el.getBoundingClientRect();
+                var rect = anchor.getBoundingClientRect();
                 var relX = Math.round(vx - rect.left);
                 var relY = Math.round(vy - rect.top);
                 return JSON.stringify({ selector: selector, relX: relX, relY: relY });

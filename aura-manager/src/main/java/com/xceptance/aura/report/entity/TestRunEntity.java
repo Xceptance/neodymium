@@ -23,6 +23,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * JPA entity representing a single Test Execution Run instance.
@@ -85,6 +87,30 @@ public class TestRunEntity
 
     @Column(name = "ignored_count")
     private Integer ignoredCount = 0;
+
+    @Column(name = "passed_healed_count")
+    private Integer passedHealedCount = 0;
+
+    @Column(name = "succeeded_fixed_healed_count")
+    private Integer succeededFixedHealedCount = 0;
+
+    @Column(name = "failed_known_healed_count")
+    private Integer failedKnownHealedCount = 0;
+
+    @Column(name = "failed_unknown_healed_count")
+    private Integer failedUnknownHealedCount = 0;
+
+    @Column(name = "passed_ai_count")
+    private Integer passedAiCount = 0;
+
+    @Column(name = "succeeded_fixed_ai_count")
+    private Integer succeededFixedAiCount = 0;
+
+    @Column(name = "failed_known_ai_count")
+    private Integer failedKnownAiCount = 0;
+
+    @Column(name = "failed_unknown_ai_count")
+    private Integer failedUnknownAiCount = 0;
 
     @Column(name = "pass_rate")
     private Double passRate = 0.0;
@@ -493,24 +519,92 @@ public class TestRunEntity
     public String getPassedTooltip()
     {
         final int count = (passedCount != null) ? passedCount : 0;
+        final int healed = getPassedHealedCountSafe();
+        final int ai = getPassedAiCountSafe();
+        final int clean = getPassedCleanCount();
+        if (healed > 0 || ai > 0)
+        {
+            final List<String> parts = new ArrayList<>();
+            parts.add(clean + " clean");
+            if (healed > 0)
+            {
+                parts.add(healed + " healed");
+            }
+            if (ai > 0)
+            {
+                parts.add(ai + " AI-driven");
+            }
+            return "Passed: " + count + " (" + String.join(", ", parts) + ", " + Math.round(getPassedPct()) + "%)";
+        }
         return "Passed Clean: " + count + " (" + Math.round(getPassedPct()) + "%)";
     }
 
     public String getFixedTooltip()
     {
         final int count = (succeededFixedCount != null) ? succeededFixedCount : 0;
+        final int healed = getFixedHealedCountSafe();
+        final int ai = getFixedAiCountSafe();
+        final int clean = getFixedCleanCount();
+        if (healed > 0 || ai > 0)
+        {
+            final List<String> parts = new ArrayList<>();
+            parts.add(clean + " clean");
+            if (healed > 0)
+            {
+                parts.add(healed + " healed");
+            }
+            if (ai > 0)
+            {
+                parts.add(ai + " AI-driven");
+            }
+            return "Succeeded Fixed: " + count + " (" + String.join(", ", parts) + ", " + Math.round(getFixedPct()) + "%)";
+        }
         return "Succeeded Fixed: " + count + " (" + Math.round(getFixedPct()) + "%)";
     }
 
     public String getKnownTooltip()
     {
         final int count = (failedKnownCount != null) ? failedKnownCount : 0;
+        final int healed = getKnownHealedCountSafe();
+        final int ai = getKnownAiCountSafe();
+        final int clean = getKnownCleanCount();
+        if (healed > 0 || ai > 0)
+        {
+            final List<String> parts = new ArrayList<>();
+            parts.add(clean + " clean");
+            if (healed > 0)
+            {
+                parts.add(healed + " healed");
+            }
+            if (ai > 0)
+            {
+                parts.add(ai + " AI-driven");
+            }
+            return "Failed Known: " + count + " (" + String.join(", ", parts) + ", " + Math.round(getKnownPct()) + "%)";
+        }
         return "Failed Known: " + count + " (" + Math.round(getKnownPct()) + "%)";
     }
 
     public String getUnknownTooltip()
     {
         final int count = (failedUnknownCount != null) ? failedUnknownCount : 0;
+        final int healed = getUnknownHealedCountSafe();
+        final int ai = getUnknownAiCountSafe();
+        final int clean = getUnknownCleanCount();
+        if (healed > 0 || ai > 0)
+        {
+            final List<String> parts = new ArrayList<>();
+            parts.add(clean + " clean");
+            if (healed > 0)
+            {
+                parts.add(healed + " healed");
+            }
+            if (ai > 0)
+            {
+                parts.add(ai + " AI-driven");
+            }
+            return "Failed Unknown: " + count + " (" + String.join(", ", parts) + ", " + Math.round(getUnknownPct()) + "%)";
+        }
         return "Failed Unknown: " + count + " (" + Math.round(getUnknownPct()) + "%)";
     }
 
@@ -518,5 +612,385 @@ public class TestRunEntity
     {
         final int count = (ignoredCount != null) ? ignoredCount : 0;
         return "Ignored: " + count + " (" + Math.round(getIgnoredPct()) + "%)";
+    }
+
+    public Integer getPassedHealedCount()
+    {
+        return passedHealedCount;
+    }
+
+    public void setPassedHealedCount(final Integer passedHealedCount)
+    {
+        this.passedHealedCount = passedHealedCount;
+    }
+
+    public Integer getSucceededFixedHealedCount()
+    {
+        return succeededFixedHealedCount;
+    }
+
+    public void setSucceededFixedHealedCount(final Integer succeededFixedHealedCount)
+    {
+        this.succeededFixedHealedCount = succeededFixedHealedCount;
+    }
+
+    public Integer getFailedKnownHealedCount()
+    {
+        return failedKnownHealedCount;
+    }
+
+    public void setFailedKnownHealedCount(final Integer failedKnownHealedCount)
+    {
+        this.failedKnownHealedCount = failedKnownHealedCount;
+    }
+
+    public Integer getFailedUnknownHealedCount()
+    {
+        return failedUnknownHealedCount;
+    }
+
+    public void setFailedUnknownHealedCount(final Integer failedUnknownHealedCount)
+    {
+        this.failedUnknownHealedCount = failedUnknownHealedCount;
+    }
+
+    public int getPassedHealedCountSafe()
+    {
+        return passedHealedCount != null ? passedHealedCount : 0;
+    }
+
+    public int getPassedCleanCount()
+    {
+        final int pass = (passedCount != null) ? passedCount : 0;
+        return Math.max(0, pass - getPassedHealedCountSafe() - getPassedAiCountSafe());
+    }
+
+    public double getPassedCleanPct()
+    {
+        final int total = (totalTests != null && totalTests > 0) ? totalTests : 0;
+        return total > 0 ? (getPassedCleanCount() * 100.0 / total) : 0.0;
+    }
+
+    public double getPassedHealedPct()
+    {
+        final int total = (totalTests != null && totalTests > 0) ? totalTests : 0;
+        return total > 0 ? (getPassedHealedCountSafe() * 100.0 / total) : 0.0;
+    }
+
+    public double getPassedAiPct()
+    {
+        final int total = (totalTests != null && totalTests > 0) ? totalTests : 0;
+        return total > 0 ? (getPassedAiCountSafe() * 100.0 / total) : 0.0;
+    }
+
+    public int getFixedHealedCountSafe()
+    {
+        return succeededFixedHealedCount != null ? succeededFixedHealedCount : 0;
+    }
+
+    public int getFixedCleanCount()
+    {
+        final int fixed = (succeededFixedCount != null) ? succeededFixedCount : 0;
+        return Math.max(0, fixed - getFixedHealedCountSafe() - getFixedAiCountSafe());
+    }
+
+    public double getFixedCleanPct()
+    {
+        final int total = (totalTests != null && totalTests > 0) ? totalTests : 0;
+        return total > 0 ? (getFixedCleanCount() * 100.0 / total) : 0.0;
+    }
+
+    public double getFixedHealedPct()
+    {
+        final int total = (totalTests != null && totalTests > 0) ? totalTests : 0;
+        return total > 0 ? (getFixedHealedCountSafe() * 100.0 / total) : 0.0;
+    }
+
+    public double getFixedAiPct()
+    {
+        final int total = (totalTests != null && totalTests > 0) ? totalTests : 0;
+        return total > 0 ? (getFixedAiCountSafe() * 100.0 / total) : 0.0;
+    }
+
+    public int getKnownHealedCountSafe()
+    {
+        return failedKnownHealedCount != null ? failedKnownHealedCount : 0;
+    }
+
+    public int getKnownCleanCount()
+    {
+        final int known = (failedKnownCount != null) ? failedKnownCount : 0;
+        return Math.max(0, known - getKnownHealedCountSafe() - getKnownAiCountSafe());
+    }
+
+    public double getKnownCleanPct()
+    {
+        final int total = (totalTests != null && totalTests > 0) ? totalTests : 0;
+        return total > 0 ? (getKnownCleanCount() * 100.0 / total) : 0.0;
+    }
+
+    public double getKnownHealedPct()
+    {
+        final int total = (totalTests != null && totalTests > 0) ? totalTests : 0;
+        return total > 0 ? (getKnownHealedCountSafe() * 100.0 / total) : 0.0;
+    }
+
+    public double getKnownAiPct()
+    {
+        final int total = (totalTests != null && totalTests > 0) ? totalTests : 0;
+        return total > 0 ? (getKnownAiCountSafe() * 100.0 / total) : 0.0;
+    }
+
+    public int getUnknownHealedCountSafe()
+    {
+        return failedUnknownHealedCount != null ? failedUnknownHealedCount : 0;
+    }
+
+    public int getUnknownCleanCount()
+    {
+        final int unknown = (failedUnknownCount != null) ? failedUnknownCount : 0;
+        return Math.max(0, unknown - getUnknownHealedCountSafe() - getUnknownAiCountSafe());
+    }
+
+    public double getUnknownCleanPct()
+    {
+        final int total = (totalTests != null && totalTests > 0) ? totalTests : 0;
+        return total > 0 ? (getUnknownCleanCount() * 100.0 / total) : 0.0;
+    }
+
+    public double getUnknownHealedPct()
+    {
+        final int total = (totalTests != null && totalTests > 0) ? totalTests : 0;
+        return total > 0 ? (getUnknownHealedCountSafe() * 100.0 / total) : 0.0;
+    }
+
+    public double getUnknownAiPct()
+    {
+        final int total = (totalTests != null && totalTests > 0) ? totalTests : 0;
+        return total > 0 ? (getUnknownAiCountSafe() * 100.0 / total) : 0.0;
+    }
+
+    public Integer getPassedAiCount()
+    {
+        return passedAiCount;
+    }
+
+    public void setPassedAiCount(final Integer passedAiCount)
+    {
+        this.passedAiCount = passedAiCount;
+    }
+
+    public Integer getSucceededFixedAiCount()
+    {
+        return succeededFixedAiCount;
+    }
+
+    public void setSucceededFixedAiCount(final Integer succeededFixedAiCount)
+    {
+        this.succeededFixedAiCount = succeededFixedAiCount;
+    }
+
+    public Integer getFailedKnownAiCount()
+    {
+        return failedKnownAiCount;
+    }
+
+    public void setFailedKnownAiCount(final Integer failedKnownAiCount)
+    {
+        this.failedKnownAiCount = failedKnownAiCount;
+    }
+
+    public Integer getFailedUnknownAiCount()
+    {
+        return failedUnknownAiCount;
+    }
+
+    public void setFailedUnknownAiCount(final Integer failedUnknownAiCount)
+    {
+        this.failedUnknownAiCount = failedUnknownAiCount;
+    }
+
+    public int getPassedAiCountSafe()
+    {
+        return passedAiCount != null ? passedAiCount : 0;
+    }
+
+    public int getFixedAiCountSafe()
+    {
+        return succeededFixedAiCount != null ? succeededFixedAiCount : 0;
+    }
+
+    public int getKnownAiCountSafe()
+    {
+        return failedKnownAiCount != null ? failedKnownAiCount : 0;
+    }
+
+    public int getUnknownAiCountSafe()
+    {
+        return failedUnknownAiCount != null ? failedUnknownAiCount : 0;
+    }
+
+    public int getPassAiCountSafe()
+    {
+        return getPassedAiCountSafe();
+    }
+
+    public int getSucceededFixedAiCountSafe()
+    {
+        return getFixedAiCountSafe();
+    }
+
+    public int getFailedKnownAiCountSafe()
+    {
+        return getKnownAiCountSafe();
+    }
+
+    public int getFailedUnknownAiCountSafe()
+    {
+        return getUnknownAiCountSafe();
+    }
+
+    public String getPassedCleanLabel()
+    {
+        final int count = getPassedCleanCount();
+        return getPassedCleanPct() >= 7.0 ? String.valueOf(count) : "";
+    }
+
+    public String getPassedHealedLabel()
+    {
+        final int count = getPassedHealedCountSafe();
+        return getPassedHealedPct() >= 7.0 ? ("✨ " + count) : "";
+    }
+
+    public String getFixedCleanLabel()
+    {
+        final int count = getFixedCleanCount();
+        return getFixedCleanPct() >= 7.0 ? String.valueOf(count) : "";
+    }
+
+    public String getFixedHealedLabel()
+    {
+        final int count = getFixedHealedCountSafe();
+        return getFixedHealedPct() >= 7.0 ? ("✨ " + count) : "";
+    }
+
+    public String getKnownCleanLabel()
+    {
+        final int count = getKnownCleanCount();
+        return getKnownCleanPct() >= 7.0 ? String.valueOf(count) : "";
+    }
+
+    public String getKnownHealedLabel()
+    {
+        final int count = getKnownHealedCountSafe();
+        return getKnownHealedPct() >= 7.0 ? ("✨ " + count) : "";
+    }
+
+    public String getUnknownCleanLabel()
+    {
+        final int count = getUnknownCleanCount();
+        return getUnknownCleanPct() >= 7.0 ? String.valueOf(count) : "";
+    }
+
+    public String getUnknownHealedLabel()
+    {
+        final int count = getUnknownHealedCountSafe();
+        return getUnknownHealedPct() >= 7.0 ? ("✨ " + count) : "";
+    }
+
+    public String getPassedCleanTooltip()
+    {
+        final int count = getPassedCleanCount();
+        return "Passed Clean: " + count + " (" + Math.round(getPassedCleanPct()) + "%)";
+    }
+
+    public String getPassedHealedTooltip()
+    {
+        final int count = getPassedHealedCountSafe();
+        return "Passed (Healed): " + count + " (" + Math.round(getPassedHealedPct()) + "%)";
+    }
+
+    public String getFixedCleanTooltip()
+    {
+        final int count = getFixedCleanCount();
+        return "Succeeded Fixed: " + count + " (" + Math.round(getFixedCleanPct()) + "%)";
+    }
+
+    public String getFixedHealedTooltip()
+    {
+        final int count = getFixedHealedCountSafe();
+        return "Succeeded Fixed (Healed): " + count + " (" + Math.round(getFixedHealedPct()) + "%)";
+    }
+
+    public String getKnownCleanTooltip()
+    {
+        final int count = getKnownCleanCount();
+        return "Failed Known: " + count + " (" + Math.round(getKnownCleanPct()) + "%)";
+    }
+
+    public String getKnownHealedTooltip()
+    {
+        final int count = getKnownHealedCountSafe();
+        return "Failed Known (Healed): " + count + " (" + Math.round(getKnownHealedPct()) + "%)";
+    }
+
+    public String getUnknownCleanTooltip()
+    {
+        final int count = getUnknownCleanCount();
+        return "Failed Unknown: " + count + " (" + Math.round(getUnknownCleanPct()) + "%)";
+    }
+
+    public String getUnknownHealedTooltip()
+    {
+        final int count = getUnknownHealedCountSafe();
+        return "Failed Unknown (Healed): " + count + " (" + Math.round(getUnknownHealedPct()) + "%)";
+    }
+
+    public String getPassedAiLabel()
+    {
+        final int count = getPassedAiCountSafe();
+        return getPassedAiPct() >= 7.0 ? String.valueOf(count) : "";
+    }
+
+    public String getFixedAiLabel()
+    {
+        final int count = getFixedAiCountSafe();
+        return getFixedAiPct() >= 7.0 ? String.valueOf(count) : "";
+    }
+
+    public String getKnownAiLabel()
+    {
+        final int count = getKnownAiCountSafe();
+        return getKnownAiPct() >= 7.0 ? String.valueOf(count) : "";
+    }
+
+    public String getUnknownAiLabel()
+    {
+        final int count = getUnknownAiCountSafe();
+        return getUnknownAiPct() >= 7.0 ? String.valueOf(count) : "";
+    }
+
+    public String getPassedAiTooltip()
+    {
+        final int count = getPassedAiCountSafe();
+        return "Passed (AI-Driven): " + count + " (" + Math.round(getPassedAiPct()) + "%)";
+    }
+
+    public String getFixedAiTooltip()
+    {
+        final int count = getFixedAiCountSafe();
+        return "Succeeded Fixed (AI-Driven): " + count + " (" + Math.round(getFixedAiPct()) + "%)";
+    }
+
+    public String getKnownAiTooltip()
+    {
+        final int count = getKnownAiCountSafe();
+        return "Failed Known (AI-Driven): " + count + " (" + Math.round(getKnownAiPct()) + "%)";
+    }
+
+    public String getUnknownAiTooltip()
+    {
+        final int count = getUnknownAiCountSafe();
+        return "Failed Unknown (AI-Driven): " + count + " (" + Math.round(getUnknownAiPct()) + "%)";
     }
 }

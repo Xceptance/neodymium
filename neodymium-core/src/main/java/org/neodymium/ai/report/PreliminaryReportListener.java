@@ -34,8 +34,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.aeonbits.owner.Accessible;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.client.TokenUsage;
@@ -54,8 +57,13 @@ import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.neodymium.ai.pipeline.StepStats;
+import org.neodymium.ai.prompt.LlmResponseSanitizer;
+import org.neodymium.ai.prompt.VisualRcaResult;
 import org.neodymium.ai.telemetry.MetricsCollector;
+import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.ai.tool.ToolDefinition;
 import org.neodymium.util.Neodymium;
 import org.slf4j.Logger;
@@ -73,6 +81,7 @@ import org.slf4j.LoggerFactory;
 public final class PreliminaryReportListener implements ExecutionListener
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(PreliminaryReportListener.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final SimpleDateFormat FILE_TIMESTAMP_FORMAT = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US);
 
     private final boolean isCustomOutputDirectory;
@@ -194,14 +203,15 @@ public final class PreliminaryReportListener implements ExecutionListener
             }
 
             final PlaybookStep pbStep = stepStarted.getStep();
-            final String rawInstruction = pbStep != null ? pbStep.getInstruction() : null;
-            String resolvedInstruction = rawInstruction;
+            final String rawInstruction = pbStep != null ? pbStep.getRawInstruction() : null;
+            final String stepInstruction = pbStep != null ? pbStep.getInstruction() : rawInstruction;
+            String resolvedInstruction = stepInstruction;
 
-            if (activeCtx != null && activeCtx.getSessionData() != null && rawInstruction != null)
+            if (activeCtx != null && activeCtx.getSessionData() != null && stepInstruction != null)
             {
                 try
                 {
-                    resolvedInstruction = activeCtx.getSessionData().resolveAvailableVariables(rawInstruction);
+                    resolvedInstruction = activeCtx.getSessionData().resolveAvailableVariables(stepInstruction);
                 }
                 catch (final Exception ignored)
                 {
@@ -222,7 +232,9 @@ public final class PreliminaryReportListener implements ExecutionListener
                 stepEntry.setOptional(pbStep.isOptional());
                 stepEntry.setContinueOnError(pbStep.isContinueOnError());
                 stepEntry.setNoHealing(pbStep.isNoHealing());
-                stepEntry.setVisual(pbStep.isVisualStep());
+                stepEntry.setVisual(pbStep.isVisualOrLayoutStep());
+                stepEntry.setMarker(pbStep.isMarker());
+                stepEntry.setBlock(pbStep.getBlock());
 
                 if (pbStep.getReasoning() != null)
                 {
@@ -238,6 +250,8 @@ public final class PreliminaryReportListener implements ExecutionListener
                 final boolean isVisualInstruction = PlaybookStep.VISUAL_PATTERN.matcher(rawInstruction).find()
                     || PlaybookStep.LAYOUT_PATTERN.matcher(rawInstruction).find();
                 stepEntry.setVisual(isVisualInstruction);
+                final boolean isMarkerInstruction = PlaybookStep.MARKER_PATTERN.matcher(rawInstruction).find();
+                stepEntry.setMarker(isMarkerInstruction);
             }
 
             if (pbStep != null && pbStep.getParent() != null)
@@ -279,27 +293,32 @@ public final class PreliminaryReportListener implements ExecutionListener
                     parentEntry.setRawInstruction(pRaw);
                     parentEntry.setSourceFile(rootPb.getSourceFile());
                     parentEntry.setLineNumber(rootPb.getLineNumber());
+                    parentEntry.setBlock(rootPb.getBlock());
                     parentEntry.setStatus("SUCCESS");
                     parentEntry.setBug(rootPb.isBug());
                     parentEntry.setBugDetails(rootPb.getBugDetails());
                     parentEntry.setOptional(rootPb.isOptional());
                     parentEntry.setContinueOnError(rootPb.isContinueOnError());
                     parentEntry.setNoHealing(rootPb.isNoHealing());
-                    parentEntry.setVisual(rootPb.isVisualStep());
+                    parentEntry.setVisual(rootPb.isVisualOrLayoutStep());
+                    parentEntry.setMarker(rootPb.isMarker());
                     this.report.addStep(parentEntry);
                 }
 
                 // If an intermediate parent container was added to parentEntry, remove it in favor of leaf sub-steps
-                if (pbStep.getParent() != rootPb && pbStep.getParent().getInstruction() != null)
+                if (pbStep.getParent() != null && pbStep.getParent().getInstruction() != null)
                 {
-                    final String intermediateInstruction = pbStep.getParent().getInstruction();
-                    parentEntry.removeSubStepIf(sub -> intermediateInstruction.equals(sub.getInstruction()) || intermediateInstruction.equals(sub.getRawInstruction()));
+                    final String parentInstruction = pbStep.getParent().getInstruction();
+                    parentEntry.removeSubStepIf(sub -> parentInstruction.equals(sub.getInstruction())
+                        || parentInstruction.equals(sub.getRawInstruction())
+                        || (sub.getInstruction() != null && sub.getInstruction().contains("_include:")));
                 }
 
                 TestExecutionReport.ReportStepEntry existingSub = null;
                 for (final TestExecutionReport.ReportStepEntry sub : parentEntry.getSubSteps())
                 {
-                    if (rawInstruction != null && (rawInstruction.equals(sub.getRawInstruction()) || rawInstruction.equals(sub.getInstruction())))
+                    if ((rawInstruction != null && (rawInstruction.equals(sub.getRawInstruction()) || rawInstruction.equals(sub.getInstruction())))
+                        || (pbStep.getInstruction() != null && (pbStep.getInstruction().equals(sub.getRawInstruction()) || pbStep.getInstruction().equals(sub.getInstruction()))))
                     {
                         existingSub = sub;
                         break;
@@ -326,13 +345,17 @@ public final class PreliminaryReportListener implements ExecutionListener
                 for (int s = 0; s < pbStep.getSubSteps().size(); s++)
                 {
                     final PlaybookStep childStep = pbStep.getSubSteps().get(s);
-                    final String cRaw = childStep.getInstruction();
-                    String cResolved = cRaw;
-                    if (activeCtx != null && activeCtx.getSessionData() != null && cRaw != null)
+                    final String cRaw = childStep.getRawInstruction() != null ? childStep.getRawInstruction() : childStep.getInstruction();
+                    if (cRaw != null && cRaw.contains("_include:"))
+                    {
+                        continue;
+                    }
+                    String cResolved = childStep.getInstruction() != null ? childStep.getInstruction() : cRaw;
+                    if (activeCtx != null && activeCtx.getSessionData() != null && cResolved != null)
                     {
                         try
                         {
-                            cResolved = activeCtx.getSessionData().resolveAvailableVariables(cRaw);
+                            cResolved = activeCtx.getSessionData().resolveAvailableVariables(cResolved);
                         }
                         catch (final Exception ignored)
                         {
@@ -342,13 +365,15 @@ public final class PreliminaryReportListener implements ExecutionListener
                     childEntry.setRawInstruction(cRaw);
                     childEntry.setSourceFile(childStep.getSourceFile());
                     childEntry.setLineNumber(childStep.getLineNumber());
-                    childEntry.setStatus(childStep.getStatus() != null ? childStep.getStatus().name() : "PENDING");
+                    childEntry.setBlock(childStep.getBlock());
+                    childEntry.setStatus("PENDING");
                     childEntry.setBug(childStep.isBug());
                     childEntry.setBugDetails(childStep.getBugDetails());
                     childEntry.setOptional(childStep.isOptional());
                     childEntry.setContinueOnError(childStep.isContinueOnError());
                     childEntry.setNoHealing(childStep.isNoHealing());
-                    childEntry.setVisual(childStep.isVisualStep());
+                    childEntry.setVisual(childStep.isVisualOrLayoutStep());
+                    childEntry.setMarker(childStep.isMarker());
                     stepEntry.addSubStep(childEntry);
                 }
             }
@@ -366,18 +391,24 @@ public final class PreliminaryReportListener implements ExecutionListener
             if (pbStep != null)
             {
                 final String pbInstr = pbStep.getInstruction();
-                if (this.currentStep != null && pbInstr != null
-                    && (pbInstr.equals(this.currentStep.getRawInstruction()) || pbInstr.equals(this.currentStep.getInstruction())))
+                final String pbRaw = pbStep.getRawInstruction();
+                if (this.currentStep != null)
                 {
-                    targetStep = this.currentStep;
+                    final boolean matchesCurrent = (pbInstr != null && (pbInstr.equals(this.currentStep.getRawInstruction()) || pbInstr.equals(this.currentStep.getInstruction())))
+                        || (pbRaw != null && (pbRaw.equals(this.currentStep.getRawInstruction()) || pbRaw.equals(this.currentStep.getInstruction())));
+                    if (matchesCurrent)
+                    {
+                        targetStep = this.currentStep;
+                    }
                 }
 
-                if (targetStep == null && pbInstr != null)
+                if (targetStep == null)
                 {
                     for (int i = this.report.getSteps().size() - 1; i >= 0; i--)
                     {
                         final TestExecutionReport.ReportStepEntry rootEntry = this.report.getSteps().get(i);
-                        if (pbInstr.equals(rootEntry.getRawInstruction()) || pbInstr.equals(rootEntry.getInstruction()))
+                        if ((pbInstr != null && (pbInstr.equals(rootEntry.getRawInstruction()) || pbInstr.equals(rootEntry.getInstruction())))
+                            || (pbRaw != null && (pbRaw.equals(rootEntry.getRawInstruction()) || pbRaw.equals(rootEntry.getInstruction()))))
                         {
                             targetStep = rootEntry;
                             break;
@@ -385,7 +416,8 @@ public final class PreliminaryReportListener implements ExecutionListener
                         for (int j = rootEntry.getSubSteps().size() - 1; j >= 0; j--)
                         {
                             final TestExecutionReport.ReportStepEntry sub = rootEntry.getSubSteps().get(j);
-                            if (pbInstr.equals(sub.getRawInstruction()) || pbInstr.equals(sub.getInstruction()))
+                            if ((pbInstr != null && (pbInstr.equals(sub.getRawInstruction()) || pbInstr.equals(sub.getInstruction())))
+                                || (pbRaw != null && (pbRaw.equals(sub.getRawInstruction()) || pbRaw.equals(sub.getInstruction()))))
                             {
                                 targetStep = sub;
                                 break;
@@ -398,19 +430,25 @@ public final class PreliminaryReportListener implements ExecutionListener
                     }
                 }
             }
-
-            if (targetStep == null)
+            else
             {
+                // Only fall back to currentStep or last step when the event step is completely untracked (pbStep == null)
                 targetStep = this.currentStep;
-            }
-            if (targetStep == null && !this.report.getSteps().isEmpty())
-            {
-                targetStep = this.report.getSteps().get(this.report.getSteps().size() - 1);
+                if (targetStep == null && !this.report.getSteps().isEmpty())
+                {
+                    targetStep = this.report.getSteps().get(this.report.getSteps().size() - 1);
+                }
             }
 
             if (targetStep != null)
             {
                 targetStep.setStatus(status != null ? status.name() : "SUCCESS");
+                if (status == PlaybookStepStatus.FAILED && !targetStep.isOptional())
+                {
+                    this.report.setStatus("FAILED");
+                    this.report.setSuccess(false);
+                }
+                final boolean isStepSuccess = "SUCCESS".equalsIgnoreCase(targetStep.getStatus()) || "PASSED".equalsIgnoreCase(targetStep.getStatus());
                 if (targetStep.getStartTimeMs() > 0)
                 {
                     targetStep.setDurationMs(System.currentTimeMillis() - targetStep.getStartTimeMs());
@@ -430,6 +468,8 @@ public final class PreliminaryReportListener implements ExecutionListener
                 if (pbStep != null)
                 {
                     targetStep.setBug(pbStep.isBug());
+                    targetStep.setMarker(pbStep.isMarker());
+                    targetStep.setVisual(pbStep.isVisualOrLayoutStep());
                     if (pbStep.getBugDetails() != null)
                     {
                         targetStep.setBugDetails(pbStep.getBugDetails());
@@ -445,6 +485,10 @@ public final class PreliminaryReportListener implements ExecutionListener
                     if (pbStep.getFailureReason() != null)
                     {
                         targetStep.setFailureReason(pbStep.getFailureReason());
+                    }
+                    if (pbStep.getNotRunReason() != null)
+                    {
+                        targetStep.setNotRunReason(pbStep.getNotRunReason());
                     }
                     if (pbStep.getSsimScore() != null)
                     {
@@ -470,23 +514,56 @@ public final class PreliminaryReportListener implements ExecutionListener
                     {
                         targetStep.setScreenshotHashDim(pbStep.getScreenshotHashDim());
                     }
-                    if (pbStep.getVerificationResult() != null)
+                    if (isStepSuccess && pbStep.getVerificationResult() != null)
                     {
                         targetStep.setVerificationResult(pbStep.getVerificationResult());
                     }
-                    if (targetStep.getActions().isEmpty() && pbStep.getActions() != null && !pbStep.getActions().isEmpty())
+                    else if (!isStepSuccess)
                     {
-                        for (final Action act : pbStep.getActions())
+                        targetStep.setVerificationResult(null);
+                    }
+                    if (pbStep.getActions() != null && !pbStep.getActions().isEmpty())
+                    {
+                        if (isStepSuccess && targetStep.getActions().isEmpty())
                         {
-                            targetStep.addAction(new TestExecutionReport.ReportActionEntry(
-                                act.getType(),
-                                act.getTarget(),
-                                act.getValue(),
-                                act.getDescription(),
-                                act.getReasoning(),
-                                true,
-                                null
-                            ));
+                            for (final Action act : pbStep.getActions())
+                            {
+                                final TestExecutionReport.ReportActionEntry actionEntry = new TestExecutionReport.ReportActionEntry(
+                                    act.getType(),
+                                    act.getTarget(),
+                                    act.getValue(),
+                                    act.getDescription(),
+                                    act.getReasoning(),
+                                    true,
+                                    null
+                                );
+                                if (act.getSubStepIndex() != null)
+                                {
+                                    actionEntry.setSubStepIndex(act.getSubStepIndex());
+                                }
+                                if (act.getSubStepInstruction() != null)
+                                {
+                                    actionEntry.setSubStepInstruction(act.getSubStepInstruction());
+                                }
+                                targetStep.addAction(actionEntry);
+                            }
+                        }
+                        else
+                        {
+                            final int count = Math.min(targetStep.getActions().size(), pbStep.getActions().size());
+                            for (int a = 0; a < count; a++)
+                            {
+                                final TestExecutionReport.ReportActionEntry rAct = targetStep.getActions().get(a);
+                                final Action pbAct = pbStep.getActions().get(a);
+                                if (rAct.getSubStepIndex() == null && pbAct.getSubStepIndex() != null)
+                                {
+                                    rAct.setSubStepIndex(pbAct.getSubStepIndex());
+                                }
+                                if (rAct.getSubStepInstruction() == null && pbAct.getSubStepInstruction() != null)
+                                {
+                                    rAct.setSubStepInstruction(pbAct.getSubStepInstruction());
+                                }
+                            }
                         }
                     }
 
@@ -495,13 +572,13 @@ public final class PreliminaryReportListener implements ExecutionListener
                         for (int s = 0; s < pbStep.getSubSteps().size(); s++)
                         {
                             final PlaybookStep childStep = pbStep.getSubSteps().get(s);
-                            final String cRaw = childStep.getInstruction();
-                            String cResolved = cRaw;
-                            if (activeCtx != null && activeCtx.getSessionData() != null && cRaw != null)
+                            final String cRaw = childStep.getRawInstruction() != null ? childStep.getRawInstruction() : childStep.getInstruction();
+                            String cResolved = childStep.getInstruction() != null ? childStep.getInstruction() : cRaw;
+                            if (activeCtx != null && activeCtx.getSessionData() != null && cResolved != null)
                             {
                                 try
                                 {
-                                    cResolved = activeCtx.getSessionData().resolveAvailableVariables(cRaw);
+                                    cResolved = activeCtx.getSessionData().resolveAvailableVariables(cResolved);
                                 }
                                 catch (final Exception ignored)
                                 {
@@ -511,6 +588,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                             childEntry.setRawInstruction(cRaw);
                             childEntry.setSourceFile(childStep.getSourceFile());
                             childEntry.setLineNumber(childStep.getLineNumber());
+                            childEntry.setBlock(childStep.getBlock());
                             childEntry.setStatus(childStep.getStatus() != null ? childStep.getStatus().name() : "PENDING");
                             if (childStep.getFailureReason() != null)
                             {
@@ -524,7 +602,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                             {
                                 for (final Action act : childStep.getActions())
                                 {
-                                    childEntry.addAction(new TestExecutionReport.ReportActionEntry(
+                                    final TestExecutionReport.ReportActionEntry actionEntry = new TestExecutionReport.ReportActionEntry(
                                         act.getType(),
                                         act.getTarget(),
                                         act.getValue(),
@@ -532,19 +610,33 @@ public final class PreliminaryReportListener implements ExecutionListener
                                         act.getReasoning(),
                                         true,
                                         null
-                                    ));
+                                    );
+                                    if (act.getSubStepIndex() != null)
+                                    {
+                                        actionEntry.setSubStepIndex(act.getSubStepIndex());
+                                    }
+                                    else
+                                    {
+                                        actionEntry.setSubStepIndex(s);
+                                    }
+                                    if (act.getSubStepInstruction() != null)
+                                    {
+                                        actionEntry.setSubStepInstruction(act.getSubStepInstruction());
+                                    }
+                                    else
+                                    {
+                                        actionEntry.setSubStepInstruction(childEntry.getInstruction());
+                                    }
+                                    childEntry.addAction(actionEntry);
                                 }
-                            }
-                            else if (targetStep.getActions().size() == pbStep.getSubSteps().size())
-                            {
-                                childEntry.addAction(targetStep.getActions().get(s));
                             }
                             childEntry.setBug(childStep.isBug());
                             childEntry.setBugDetails(childStep.getBugDetails());
                             childEntry.setOptional(childStep.isOptional());
                             childEntry.setContinueOnError(childStep.isContinueOnError());
                             childEntry.setNoHealing(childStep.isNoHealing());
-                            childEntry.setVisual(childStep.isVisualStep());
+                            childEntry.setVisual(childStep.isVisualOrLayoutStep());
+                            childEntry.setMarker(childStep.isMarker());
                             targetStep.addSubStep(childEntry);
                         }
                     }
@@ -558,7 +650,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                             {
                                 for (final Action act : childStep.getActions())
                                 {
-                                    childEntry.addAction(new TestExecutionReport.ReportActionEntry(
+                                    final TestExecutionReport.ReportActionEntry actionEntry = new TestExecutionReport.ReportActionEntry(
                                         act.getType(),
                                         act.getTarget(),
                                         act.getValue(),
@@ -566,23 +658,78 @@ public final class PreliminaryReportListener implements ExecutionListener
                                         act.getReasoning(),
                                         true,
                                         null
-                                    ));
+                                    );
+                                    if (act.getSubStepIndex() != null)
+                                    {
+                                        actionEntry.setSubStepIndex(act.getSubStepIndex());
+                                    }
+                                    else
+                                    {
+                                        actionEntry.setSubStepIndex(s);
+                                    }
+                                    if (act.getSubStepInstruction() != null)
+                                    {
+                                        actionEntry.setSubStepInstruction(act.getSubStepInstruction());
+                                    }
+                                    else
+                                    {
+                                        actionEntry.setSubStepInstruction(childEntry.getInstruction());
+                                    }
+                                    childEntry.addAction(actionEntry);
                                 }
                             }
-                            else if (childEntry.getActions().isEmpty() && targetStep.getActions().size() == pbStep.getSubSteps().size())
-                            {
-                                childEntry.addAction(targetStep.getActions().get(s));
-                            }
-                            if (childStep.getDurationMs() != null && childStep.getDurationMs() > 0 && childEntry.getDurationMs() <= 0)
+                            if ((isStepSuccess || !targetStep.getActions().isEmpty()) && childStep.getDurationMs() != null && childStep.getDurationMs() > 0 && childEntry.getDurationMs() <= 0)
                             {
                                 childEntry.setDurationMs(childStep.getDurationMs());
                             }
-                            if (childStep.getStatus() != null && (childEntry.getStatus() == null || "PENDING".equalsIgnoreCase(childEntry.getStatus()) || "RUNNING".equalsIgnoreCase(childEntry.getStatus())))
+                            if ((isStepSuccess || !targetStep.getActions().isEmpty())
+                                && childStep.getStatus() != null
+                                && (childEntry.getStatus() == null || "PENDING".equalsIgnoreCase(childEntry.getStatus()) || "RUNNING".equalsIgnoreCase(childEntry.getStatus())))
                             {
                                 childEntry.setStatus(childStep.getStatus().name());
-                                if (childStep.getFailureReason() != null && childEntry.getFailureReason() == null)
+                                if (childStep.getFailureReason() != null)
                                 {
                                     childEntry.setFailureReason(childStep.getFailureReason());
+                                }
+                            }
+                        }
+                    }
+
+                    if (pbStep.getActions() != null && !pbStep.getActions().isEmpty() && !targetStep.getActions().isEmpty())
+                    {
+                        final List<Action> pActions = pbStep.getActions();
+                        final List<TestExecutionReport.ReportActionEntry> rActions = targetStep.getActions();
+                        for (int i = 0; i < pActions.size() && i < rActions.size(); i++)
+                        {
+                            final Action pa = pActions.get(i);
+                            final TestExecutionReport.ReportActionEntry ra = rActions.get(i);
+                            if (ra != null && pa != null)
+                            {
+                                if (pa.getSubStepIndex() != null)
+                                {
+                                    ra.setSubStepIndex(pa.getSubStepIndex());
+                                }
+                                if (pa.getSubStepInstruction() != null && !pa.getSubStepInstruction().isBlank())
+                                {
+                                    ra.setSubStepInstruction(pa.getSubStepInstruction());
+                                }
+                            }
+                        }
+                    }
+
+                    if (!targetStep.getSubSteps().isEmpty() && !targetStep.getActions().isEmpty())
+                    {
+                        for (int s = 0; s < targetStep.getSubSteps().size(); s++)
+                        {
+                            final TestExecutionReport.ReportStepEntry sub = targetStep.getSubSteps().get(s);
+                            if (sub.getActions().isEmpty())
+                            {
+                                for (final TestExecutionReport.ReportActionEntry act : targetStep.getActions())
+                                {
+                                    if (act.getSubStepIndex() != null && act.getSubStepIndex() == s)
+                                    {
+                                        sub.addAction(act);
+                                    }
                                 }
                             }
                         }
@@ -609,7 +756,6 @@ public final class PreliminaryReportListener implements ExecutionListener
 
                 if (!targetStep.getSubSteps().isEmpty())
                 {
-                    final boolean isStepSuccess = "SUCCESS".equalsIgnoreCase(targetStep.getStatus()) || "PASSED".equalsIgnoreCase(targetStep.getStatus());
                     final String parentFailure = targetStep.getFailureReason() != null ? targetStep.getFailureReason() : "";
                     final boolean isAbortiveFailure = parentFailure.contains("Token budget exceeded")
                             || parentFailure.contains("timeout")
@@ -623,6 +769,10 @@ public final class PreliminaryReportListener implements ExecutionListener
                         if ("FAILED".equalsIgnoreCase(sub.getStatus()))
                         {
                             failureEncountered = true;
+                            continue;
+                        }
+                        if ("SKIPPED".equalsIgnoreCase(sub.getStatus()) || sub.isNotRun())
+                        {
                             continue;
                         }
                         if (isStepSuccess)
@@ -651,7 +801,8 @@ public final class PreliminaryReportListener implements ExecutionListener
                             }
                             else
                             {
-                                sub.setStatus("PENDING");
+                                sub.setStatus("NOT RUN");
+                                sub.setNotRunReason("Not executed because of failure in step #" + (targetStep.getStepIndex() + 1));
                             }
                         }
                         else
@@ -678,17 +829,57 @@ public final class PreliminaryReportListener implements ExecutionListener
                             }
                             else if (sub.getStatus() == null || "PENDING".equalsIgnoreCase(sub.getStatus()) || "RUNNING".equalsIgnoreCase(sub.getStatus()))
                             {
-                                sub.setStatus("SUCCESS");
+                                final boolean hasLaterBug = targetStep.getSubSteps().stream().anyMatch(TestExecutionReport.ReportStepEntry::isBug);
+                                sub.setStatus((isStepSuccess || hasLaterBug) ? "SUCCESS" : "NOT RUN");
+                                if (!isStepSuccess && !hasLaterBug)
+                                {
+                                    sub.setNotRunReason("Not executed because of failure in step #" + (targetStep.getStepIndex() + 1));
+                                }
                             }
                         }
                     }
-                    if (!isStepSuccess && targetStep.getSubSteps().stream().noneMatch(sub -> "FAILED".equalsIgnoreCase(sub.getStatus())))
+                    if (!isStepSuccess && !targetStep.getActions().isEmpty() && targetStep.getSubSteps().stream().noneMatch(sub -> "FAILED".equalsIgnoreCase(sub.getStatus())))
                     {
                         final TestExecutionReport.ReportStepEntry lastSub = targetStep.getSubSteps().get(targetStep.getSubSteps().size() - 1);
-                        lastSub.setStatus("FAILED");
-                        lastSub.setFailureReason(targetStep.getFailureReason());
+                        final boolean lastSubSucceeded = "SUCCESS".equalsIgnoreCase(lastSub.getStatus())
+                            && (!lastSub.getActions().isEmpty() && lastSub.getActions().stream().allMatch(TestExecutionReport.ReportActionEntry::isSuccess));
+                        if (!lastSubSucceeded)
+                        {
+                            lastSub.setStatus("FAILED");
+                            lastSub.setFailureReason(targetStep.getFailureReason());
+                        }
                     }
                 }
+
+                StepStats matchedStats = null;
+                if (activeCtx != null)
+                {
+                    @SuppressWarnings("unchecked")
+                    final Map<PlaybookStep, StepStats> stepStatsMap =
+                        (Map<PlaybookStep, StepStats>) activeCtx.getTransientData().get("execution.stepStatsMap");
+                    if (stepStatsMap != null && pbStep != null)
+                    {
+                        matchedStats = stepStatsMap.get(pbStep);
+                    }
+                    if (matchedStats == null)
+                    {
+                        final Object curStatsObj = activeCtx.getTransientData().get("KEY_CURRENT_STEP_STATS");
+                        if (curStatsObj instanceof StepStats curS)
+                        {
+                            matchedStats = curS;
+                        }
+                    }
+                }
+                if (matchedStats != null)
+                {
+                    mergeStepStats(targetStep, matchedStats);
+                }
+                if (targetStep.getContextLevels() == null && pbStep != null && pbStep.getContextLevel() != null && !pbStep.getContextLevel().isBlank())
+                {
+                    targetStep.setContextLevels(pbStep.getContextLevel());
+                }
+                recalculateMetrics();
+
                 this.currentStep = targetStep;
                 if (pbStep == null || pbStep.getParent() == null || targetStep == this.currentParentStep)
                 {
@@ -716,11 +907,37 @@ public final class PreliminaryReportListener implements ExecutionListener
                     actionEntry.setResolvedTarget(resolvedAction.getTarget());
                     actionEntry.setResolvedValue(resolvedAction.getValue());
                 }
+                actionEntry.setHealed(actionExecuted.isHealed());
+                final String origTarget = (resolvedAction != null && resolvedAction.getExpectedTarget() != null && !resolvedAction.getExpectedTarget().isBlank())
+                    ? resolvedAction.getExpectedTarget()
+                    : ((action.getExpectedTarget() != null && !action.getExpectedTarget().isBlank()) ? action.getExpectedTarget() : action.getTarget());
+                actionEntry.setExpectedTarget(origTarget);
                 if (actionExecuted.getPhase() != null)
                 {
                     this.currentStep.setMultiStage(true);
                 }
+                if (action.getSubStepIndex() != null)
+                {
+                    actionEntry.setSubStepIndex(action.getSubStepIndex());
+                }
+                if (action.getSubStepInstruction() != null)
+                {
+                    actionEntry.setSubStepInstruction(action.getSubStepInstruction());
+                }
                 this.currentStep.addAction(actionEntry);
+                if (action.getSubStepIndex() != null && !this.currentStep.getSubSteps().isEmpty())
+                {
+                    final int sIdx = action.getSubStepIndex();
+                    if (sIdx >= 0 && sIdx < this.currentStep.getSubSteps().size())
+                    {
+                        final TestExecutionReport.ReportStepEntry subEntry = this.currentStep.getSubSteps().get(sIdx);
+                        subEntry.addAction(actionEntry);
+                        if (actionExecuted.isSuccess())
+                        {
+                            subEntry.setStatus("SUCCESS");
+                        }
+                    }
+                }
             }
         }
         else if (event instanceof LlmResponseReceivedEvent llmReceived)
@@ -748,9 +965,24 @@ public final class PreliminaryReportListener implements ExecutionListener
                 subStepIdx = -1;
             }
 
+            final String callBlock;
+            if (this.currentParentStep != null && this.currentParentStep.getBlock() != null)
+            {
+                callBlock = this.currentParentStep.getBlock();
+            }
+            else if (this.currentStep != null && this.currentStep.getBlock() != null)
+            {
+                callBlock = this.currentStep.getBlock();
+            }
+            else
+            {
+                callBlock = "steps";
+            }
+
             final TestExecutionReport.ReportLlmCallEntry callEntry = new TestExecutionReport.ReportLlmCallEntry();
             callEntry.setStepIndex(stepIdx);
             callEntry.setSubStepIndex(subStepIdx);
+            callEntry.setBlock(callBlock);
             callEntry.setCapability(llmReceived.getCapability());
             callEntry.setDurationMs(llmReceived.getDurationMs());
 
@@ -776,7 +1008,58 @@ public final class PreliminaryReportListener implements ExecutionListener
             if (llmReceived.getResponse() != null)
             {
                 callEntry.setModelName(llmReceived.getResponse().modelName());
+                if (llmReceived.getResponse().hasThinking())
+                {
+                    callEntry.setThinking(llmReceived.getResponse().thinking().trim());
+                }
+                else if (llmReceived.getResponse().hasToolCalls())
+                {
+                    for (final ToolCall tc : llmReceived.getResponse().toolCalls())
+                    {
+                        if ("complete_step".equals(tc.toolName()) && tc.arguments() != null && tc.arguments().hasNonNull("summary"))
+                        {
+                            final String s = tc.arguments().path("summary").asText("").trim();
+                            if (!s.isBlank())
+                            {
+                                callEntry.setThinking(s);
+                                break;
+                            }
+                        }
+                    }
+                }
+
                 final String content = llmReceived.getResponse().content();
+                if (callEntry.getThinking() == null && content != null && !content.isBlank())
+                {
+                    try
+                    {
+                        final String json = LlmResponseSanitizer.extractJson(content);
+                        if (!json.isBlank())
+                        {
+                            final JsonNode node = OBJECT_MAPPER.readTree(json);
+                            if (node.hasNonNull("thought") && !node.path("thought").asText().isBlank())
+                            {
+                                callEntry.setThinking(node.path("thought").asText().trim());
+                            }
+                            else if (node.hasNonNull("reasoning") && !node.path("reasoning").asText().isBlank())
+                            {
+                                callEntry.setThinking(node.path("reasoning").asText().trim());
+                            }
+                            else if (node.hasNonNull("actions") && node.path("actions").isArray() && !node.path("actions").isEmpty())
+                            {
+                                final JsonNode firstAction = node.path("actions").get(0);
+                                if (firstAction.hasNonNull("reasoning") && !firstAction.path("reasoning").asText().isBlank())
+                                {
+                                    callEntry.setThinking(firstAction.path("reasoning").asText().trim());
+                                }
+                            }
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
+
                 if (content != null && !content.isBlank())
                 {
                     if (llmReceived.getResponse().hasToolCalls())
@@ -850,10 +1133,14 @@ public final class PreliminaryReportListener implements ExecutionListener
                 }
 
                 final boolean isVisual = this.currentStep != null && this.currentStep.isVisual();
+                final boolean isMarker = (stateCaptured.getState() != null
+                    && stateCaptured.getState().getTextContent() != null
+                    && stateCaptured.getState().getTextContent().startsWith("Visual Markers"))
+                    || (this.currentStep != null && this.currentStep.isMarker());
                 final String stepLabel = (stepIdx >= 0)
                     ? (subStepIdx >= 0 ? "Step #" + (stepIdx + 1) + "." + (subStepIdx + 1) : "Step #" + (stepIdx + 1))
                     : "Step";
-                final String label = stepLabel + (isVisual ? " (Visual Verification)" : " Capture");
+                final String label = stepLabel + (isMarker ? " (Visual Markers Overlay)" : (isVisual ? " (Visual Verification)" : " Capture"));
 
                 for (final SutAttachment attachment : stateCaptured.getState().getAttachments())
                 {
@@ -881,6 +1168,29 @@ public final class PreliminaryReportListener implements ExecutionListener
                         if (this.currentStep != null)
                         {
                             this.currentStep.addScreenshot(screenshot);
+                        }
+                        if (this.currentParentStep != null && this.currentParentStep != this.currentStep)
+                        {
+                            final Object curStepObj = activeCtx != null ? activeCtx.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP) : null;
+                            final boolean isModelStepFailed = curStepObj instanceof PlaybookStep pb
+                                && (pb.isFailed() || (pb.getParent() != null && pb.getParent().isFailed()));
+                            final boolean hasExecError = activeCtx != null
+                                && (activeCtx.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR) != null
+                                    || activeCtx.getTransientData().get("KEY_LAST_STEP_FAILURE") != null);
+
+                            final boolean isFailureCapture = isModelStepFailed || hasExecError
+                                || (this.currentStep != null && "FAILED".equalsIgnoreCase(this.currentStep.getStatus()))
+                                || "FAILED".equalsIgnoreCase(this.currentParentStep.getStatus())
+                                || "FAILED".equalsIgnoreCase(this.report.getStatus());
+                            if (isFailureCapture)
+                            {
+                                final boolean alreadyHasParent = this.currentParentStep.getScreenshots().stream()
+                                    .anyMatch(s -> s.getBase64Data() != null && s.getBase64Data().equals(attachment.base64Data()));
+                                if (!alreadyHasParent)
+                                {
+                                    this.currentParentStep.addScreenshot(screenshot);
+                                }
+                            }
                         }
                         LOGGER.debug("   📸 Recorded screenshot for {}: \"{}\" | Dimensions: {}",
                             stepLabel, label, screenshot.getDimensions() != null ? screenshot.getDimensions() : "unknown");
@@ -929,13 +1239,21 @@ public final class PreliminaryReportListener implements ExecutionListener
         }
         else if (event instanceof SessionFinishedEvent sessionFinished)
         {
-            this.report.setEndTimeMs(System.currentTimeMillis());
-            this.report.setDurationMs(sessionFinished.getDurationMs());
-            this.report.setSuccess(sessionFinished.isSuccess());
-            this.report.setStatus(sessionFinished.isSuccess() ? "PASSED" : "FAILED");
+            final long now = System.currentTimeMillis();
+            this.report.setEndTimeMs(now);
+            final long totalDuration = (this.report.getStartTimeMs() > 0)
+                ? Math.max(sessionFinished.getDurationMs(), now - this.report.getStartTimeMs())
+                : sessionFinished.getDurationMs();
+            this.report.setDurationMs(totalDuration);
+
+            final boolean hasFailingSteps = hasNonOptionalFailedSteps();
+            final boolean wasAlreadyFailed = "FAILED".equalsIgnoreCase(this.report.getStatus()) || hasFailingSteps;
+            final boolean cumulativeSuccess = !wasAlreadyFailed && sessionFinished.isSuccess();
+            this.report.setSuccess(cumulativeSuccess);
+            this.report.setStatus(cumulativeSuccess ? "PASSED" : "FAILED");
             this.report.addWarnings(sessionFinished.getWarnings());
 
-            if (sessionFinished.isSuccess())
+            if (cumulativeSuccess)
             {
                 this.report.setFailureReason(null);
                 this.report.setFailureStackTrace(null);
@@ -944,11 +1262,38 @@ public final class PreliminaryReportListener implements ExecutionListener
             populateContextMetadata();
             resolveUnfinishedSteps();
             recalculateMetrics();
+
+            if (!this.report.isExpectedFailure()
+                && (hasNonOptionalFailedSteps() || (this.report.getMetrics() != null && this.report.getMetrics().getFailedSteps() > 0)))
+            {
+                this.report.setSuccess(false);
+                this.report.setStatus("FAILED");
+            }
+
             flushReport();
         }
     }
 
-    private void resolveUnfinishedSteps()
+    private boolean hasNonOptionalFailedSteps()
+    {
+        for (final TestExecutionReport.ReportStepEntry step : this.report.getSteps())
+        {
+            if ("FAILED".equalsIgnoreCase(step.getStatus()) && !step.isOptional() && !step.isExpectedFailure())
+            {
+                return true;
+            }
+            for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
+            {
+                if ("FAILED".equalsIgnoreCase(sub.getStatus()) && !sub.isOptional() && !sub.isExpectedFailure())
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    void resolveUnfinishedSteps()
     {
         final List<TestExecutionReport.ReportStepEntry> rootSteps = this.report.getSteps();
         if (rootSteps.isEmpty())
@@ -978,11 +1323,12 @@ public final class PreliminaryReportListener implements ExecutionListener
         }
         else
         {
-            // The session failed. Find the failing leaf step.
+            // The session failed. Find the failing leaf step that caused the session failure.
             int failedIndex = -1;
             for (int i = 0; i < leafSteps.size(); i++)
             {
-                if ("FAILED".equalsIgnoreCase(leafSteps.get(i).getStatus()))
+                final TestExecutionReport.ReportStepEntry leaf = leafSteps.get(i);
+                if ("FAILED".equalsIgnoreCase(leaf.getStatus()) && !leaf.isOptional())
                 {
                     failedIndex = i;
                     break;
@@ -1007,6 +1353,9 @@ public final class PreliminaryReportListener implements ExecutionListener
                     failedIndex = leafSteps.size() - 1;
                 }
             }
+
+            final TestExecutionReport.ReportStepEntry failedLeaf = leafSteps.get(failedIndex);
+            final String failedStepLabel = resolveStepDisplayLabel(failedLeaf, rootSteps, failedIndex);
 
             for (int i = 0; i < leafSteps.size(); i++)
             {
@@ -1039,10 +1388,15 @@ public final class PreliminaryReportListener implements ExecutionListener
                 else
                 {
                     // Steps after the failure were not executed
-                    if ("RUNNING".equalsIgnoreCase(leaf.getStatus()) || "PENDING".equalsIgnoreCase(leaf.getStatus()) || leaf.getStatus() == null)
+                    if ("RUNNING".equalsIgnoreCase(leaf.getStatus()) || "PENDING".equalsIgnoreCase(leaf.getStatus())
+                        || leaf.isNotRun() || leaf.getStatus() == null)
                     {
-                        leaf.setStatus("SKIPPED");
+                        leaf.setStatus("NOT RUN");
                         leaf.setFailureReason(null);
+                        if (leaf.getNotRunReason() == null || leaf.getNotRunReason().isBlank())
+                        {
+                            leaf.setNotRunReason("Not executed because step " + failedStepLabel + " failed.");
+                        }
                     }
                 }
             }
@@ -1053,6 +1407,39 @@ public final class PreliminaryReportListener implements ExecutionListener
         {
             resolveParentStepStatus(root);
         }
+    }
+
+    private String resolveStepDisplayLabel(final TestExecutionReport.ReportStepEntry leaf, final List<TestExecutionReport.ReportStepEntry> rootSteps, final int leafIndex)
+    {
+        if (leaf != null)
+        {
+            for (int r = 0; r < rootSteps.size(); r++)
+            {
+                final TestExecutionReport.ReportStepEntry root = rootSteps.get(r);
+                if (root == leaf)
+                {
+                    return "#" + (r + 1);
+                }
+                for (int s = 0; s < root.getSubSteps().size(); s++)
+                {
+                    if (root.getSubSteps().get(s) == leaf)
+                    {
+                        return "#" + (r + 1) + "." + (s + 1);
+                    }
+                }
+            }
+            if (leaf.getParent() != null)
+            {
+                final int parentIdx = Math.max(0, leaf.getParent().getStepIndex());
+                final int subIdx = Math.max(0, leaf.getStepIndex());
+                return "#" + (parentIdx + 1) + "." + (subIdx + 1);
+            }
+            if (leaf.getStepIndex() >= 0)
+            {
+                return "#" + (leaf.getStepIndex() + 1);
+            }
+        }
+        return "#" + (leafIndex + 1);
     }
 
     private void collectLeafSteps(final TestExecutionReport.ReportStepEntry entry, final List<TestExecutionReport.ReportStepEntry> leafList)
@@ -1085,7 +1472,9 @@ public final class PreliminaryReportListener implements ExecutionListener
         boolean anyFailed = false;
         boolean allSuccess = true;
         boolean allSkipped = true;
+        boolean allNotRun = true;
         String firstFailedReason = null;
+        String firstNotRunReason = null;
 
         for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
         {
@@ -1094,26 +1483,47 @@ public final class PreliminaryReportListener implements ExecutionListener
             final String subStatus = sub.getStatus();
             if ("FAILED".equalsIgnoreCase(subStatus))
             {
-                anyFailed = true;
-                allSuccess = false;
-                allSkipped = false;
-                if (firstFailedReason == null && sub.getFailureReason() != null)
+                if (!sub.isOptional())
                 {
-                    firstFailedReason = sub.getFailureReason();
+                    anyFailed = true;
+                    allSuccess = false;
+                    allSkipped = false;
+                    allNotRun = false;
+                    if (firstFailedReason == null && sub.getFailureReason() != null)
+                    {
+                        firstFailedReason = sub.getFailureReason();
+                    }
+                }
+                else
+                {
+                    allSkipped = false;
+                    allNotRun = false;
                 }
             }
             else if ("SUCCESS".equalsIgnoreCase(subStatus) || "PASSED".equalsIgnoreCase(subStatus) || "HEALED".equalsIgnoreCase(subStatus))
             {
                 allSkipped = false;
+                allNotRun = false;
             }
             else if ("SKIPPED".equalsIgnoreCase(subStatus))
             {
                 allSuccess = false;
+                allNotRun = false;
+            }
+            else if ("NOT RUN".equalsIgnoreCase(subStatus) || "NOT_RUN".equalsIgnoreCase(subStatus) || "UNREACHED".equalsIgnoreCase(subStatus))
+            {
+                allSuccess = false;
+                allSkipped = false;
+                if (firstNotRunReason == null && sub.getNotRunReason() != null)
+                {
+                    firstNotRunReason = sub.getNotRunReason();
+                }
             }
             else
             {
                 allSuccess = false;
                 allSkipped = false;
+                allNotRun = false;
             }
         }
 
@@ -1124,20 +1534,48 @@ public final class PreliminaryReportListener implements ExecutionListener
             {
                 step.setFailureReason(firstFailedReason);
             }
+            if (step.getScreenshots().isEmpty())
+            {
+                for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
+                {
+                    if ("FAILED".equalsIgnoreCase(sub.getStatus()) && !sub.getScreenshots().isEmpty())
+                    {
+                        for (final TestExecutionReport.ReportScreenshotEntry sc : sub.getScreenshots())
+                        {
+                            final boolean alreadyHas = step.getScreenshots().stream()
+                                .anyMatch(s -> s.getBase64Data() != null && s.getBase64Data().equals(sc.getBase64Data()));
+                            if (!alreadyHas)
+                            {
+                                step.addScreenshot(sc);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else if (allNotRun)
+        {
+            step.setStatus("NOT RUN");
+            step.setFailureReason(null);
+            step.setNotRunReason(firstNotRunReason);
         }
         else if (allSkipped)
         {
             step.setStatus("SKIPPED");
             step.setFailureReason(null);
         }
-        else if (allSuccess)
+        else if (allSuccess || (firstNotRunReason == null && !anyFailed))
         {
             step.setStatus("SUCCESS");
             step.setFailureReason(null);
         }
         else
         {
-            step.setStatus(this.report.isSuccess() ? "SUCCESS" : "SKIPPED");
+            step.setStatus(this.report.isSuccess() ? "SUCCESS" : "NOT RUN");
+            if (!this.report.isSuccess() && step.getNotRunReason() == null)
+            {
+                step.setNotRunReason(firstNotRunReason);
+            }
         }
 
         if (step.getDurationMs() <= 0)
@@ -1203,6 +1641,14 @@ public final class PreliminaryReportListener implements ExecutionListener
                             this.report.addTag(item.toString());
                         }
                     }
+                }
+            }
+            if (this.report.getVisualRcaResult() == null)
+            {
+                final Object rcaResult = ctx.getTransientData().get(ExecutionContext.KEY_VISUAL_RCA_RESULT);
+                if (rcaResult instanceof VisualRcaResult vr)
+                {
+                    this.report.setVisualRcaResult(vr);
                 }
             }
             if (this.report.getVisualRcaExplanation() == null)
@@ -1289,9 +1735,127 @@ public final class PreliminaryReportListener implements ExecutionListener
                 this.report.setTestName("AI_Test_Run");
             }
         }
+
+        populateActiveProperties();
     }
 
-    private void recalculateMetrics()
+    private void populateActiveProperties()
+    {
+        final Map<String, String> propertiesMap = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+
+        // 1. Neodymium configuration properties via Accessible
+        try
+        {
+            if (Neodymium.configuration() instanceof Accessible acc)
+            {
+                for (final String propName : acc.propertyNames())
+                {
+                    final String val = acc.getProperty(propName, null);
+                    if (val != null)
+                    {
+                        propertiesMap.put(propName, maskIfSensitive(propName, val));
+                    }
+                }
+            }
+        }
+        catch (final Throwable ignored)
+        {
+        }
+
+        // 2. AiConfiguration properties
+        try
+        {
+            final AiConfiguration aiConfig = AiConfiguration.getInstance();
+            if (aiConfig != null)
+            {
+                for (final Map.Entry<String, String> entry : aiConfig.getAllProperties().entrySet())
+                {
+                    if (entry.getKey() != null && entry.getValue() != null)
+                    {
+                        propertiesMap.put(entry.getKey(), maskIfSensitive(entry.getKey(), entry.getValue()));
+                    }
+                }
+            }
+        }
+        catch (final Throwable ignored)
+        {
+        }
+
+        // 3. Neodymium test data properties
+        try
+        {
+            if (Neodymium.getData() != null)
+            {
+                for (final Map.Entry<String, String> entry : Neodymium.getData().entrySet())
+                {
+                    if (entry.getKey() != null && entry.getValue() != null)
+                    {
+                        propertiesMap.put(entry.getKey(), maskIfSensitive(entry.getKey(), entry.getValue()));
+                    }
+                }
+            }
+        }
+        catch (final Throwable ignored)
+        {
+        }
+
+        // 4. System properties (filtering standard JVM internals)
+        try
+        {
+            final Properties sysProps = System.getProperties();
+            if (sysProps != null)
+            {
+                for (final String key : sysProps.stringPropertyNames())
+                {
+                    if (isRelevantSystemProperty(key))
+                    {
+                        final String val = sysProps.getProperty(key);
+                        if (val != null)
+                        {
+                            propertiesMap.put(key, maskIfSensitive(key, val));
+                        }
+                    }
+                }
+            }
+        }
+        catch (final Throwable ignored)
+        {
+        }
+
+        this.report.setActiveProperties(propertiesMap);
+    }
+
+    private static boolean isRelevantSystemProperty(final String key)
+    {
+        if (key == null || key.isBlank())
+        {
+            return false;
+        }
+        final String lower = key.toLowerCase(Locale.ROOT);
+        return !lower.startsWith("java.") && !lower.startsWith("sun.") && !lower.startsWith("jdk.")
+            && !lower.startsWith("user.") && !lower.startsWith("os.") && !lower.startsWith("file.")
+            && !lower.startsWith("path.") && !lower.startsWith("line.") && !lower.startsWith("awt.")
+            && !lower.startsWith("org.gradle.") && !lower.startsWith("idea.") && !lower.startsWith("surefire.");
+    }
+
+    private static String maskIfSensitive(final String key, final String value)
+    {
+        if (key == null || value == null || value.isEmpty())
+        {
+            return value;
+        }
+        final String lower = key.toLowerCase(Locale.ROOT);
+        if (lower.contains("apikey") || lower.contains("api_key") || lower.contains("api.key")
+            || lower.contains("secret") || lower.contains("password") || lower.contains("token")
+            || lower.contains("credential") || lower.contains("privatekey") || lower.contains("private_key")
+            || lower.contains("passphrase") || lower.contains("authorization"))
+        {
+            return "••••••••";
+        }
+        return value;
+    }
+
+    void recalculateMetrics()
     {
         final TestExecutionReport.ReportMetrics m = this.report.getMetrics();
         final List<TestExecutionReport.ReportStepEntry> steps = this.report.getSteps();
@@ -1300,6 +1864,7 @@ public final class PreliminaryReportListener implements ExecutionListener
         int healed = 0;
         int failed = 0;
         int skipped = 0;
+        int notRun = 0;
 
         for (final TestExecutionReport.ReportStepEntry step : steps)
         {
@@ -1310,16 +1875,24 @@ public final class PreliminaryReportListener implements ExecutionListener
             }
             else if ("FAILED".equals(st))
             {
-                failed++;
+                if (!step.isExpectedFailure())
+                {
+                    failed++;
+                }
             }
             else if ("SKIPPED".equals(st))
             {
                 skipped++;
             }
+            else if ("NOT RUN".equals(st) || "NOT_RUN".equals(st) || "UNREACHED".equals(st))
+            {
+                notRun++;
+            }
         }
         m.setHealedSteps(healed);
         m.setFailedSteps(failed);
         m.setSkippedSteps(skipped);
+        m.setNotRunSteps(notRun);
 
         final ExecutionContext ctx = ExecutionContext.getActiveContext();
         if (ctx != null)
@@ -1591,7 +2164,7 @@ public final class PreliminaryReportListener implements ExecutionListener
         m.setPostFlightLinter(new TestExecutionReport.CategoryTokenUsage(postFlightCalls, postFlightIn, postFlightOut, postFlightCached, postFlightCost));
     }
 
-    private static int aggregateStepStats(final StepStats stats, final Map<String, Integer> contextLevelCounts)
+    static int aggregateStepStats(final StepStats stats, final Map<String, Integer> contextLevelCounts)
     {
         if (stats == null)
         {
@@ -1602,13 +2175,19 @@ public final class PreliminaryReportListener implements ExecutionListener
         if (levels != null && !levels.isEmpty())
         {
             escalations += Math.max(0, levels.size() - 1);
-            for (final String lvl : levels)
+            String finalLevel = null;
+            for (int i = levels.size() - 1; i >= 0; i--)
             {
+                final String lvl = levels.get(i);
                 if (lvl != null && !lvl.isBlank())
                 {
-                    final String normalized = lvl.trim().toUpperCase();
-                    contextLevelCounts.put(normalized, contextLevelCounts.getOrDefault(normalized, 0) + 1);
+                    finalLevel = lvl.trim().toUpperCase();
+                    break;
                 }
+            }
+            if (finalLevel != null)
+            {
+                contextLevelCounts.put(finalLevel, contextLevelCounts.getOrDefault(finalLevel, 0) + 1);
             }
         }
         for (final StepStats child : stats.getSubStats())
@@ -1672,7 +2251,12 @@ public final class PreliminaryReportListener implements ExecutionListener
 
                 if (matchingSub == null && s < entry.getSubSteps().size())
                 {
-                    matchingSub = entry.getSubSteps().get(s);
+                    final TestExecutionReport.ReportStepEntry candidate = entry.getSubSteps().get(s);
+                    if (candidate.getInstruction() == null || candidate.getInstruction().isBlank()
+                        || (sub.getInstruction() != null && sub.getInstruction().equals(candidate.getInstruction())))
+                    {
+                        matchingSub = candidate;
+                    }
                 }
 
                 if (matchingSub != null)
@@ -1694,12 +2278,13 @@ public final class PreliminaryReportListener implements ExecutionListener
                         matchingSub.setStatus(sub.getFailureReason() != null ? "FAILED" : "SUCCESS");
                     }
                 }
-                else if (entry.getSubSteps().isEmpty())
+                else
                 {
                     final TestExecutionReport.ReportStepEntry subEntry = new TestExecutionReport.ReportStepEntry(
-                        s,
+                        entry.getSubSteps().size(),
                         sub.getInstruction() != null ? sub.getInstruction() : "Sub-step " + (s + 1)
                     );
+                    subEntry.setBlock(entry.getBlock());
                     mergeStepStats(subEntry, sub);
                     subEntry.setStatus(sub.getFailureReason() != null ? "FAILED" : "SUCCESS");
                     entry.addSubStep(subEntry);
@@ -1734,14 +2319,69 @@ public final class PreliminaryReportListener implements ExecutionListener
     }
 
     /**
+     * Reconciles the preliminary report status with the actual JUnit test lifecycle outcome.
+     *
+     * @param testPassed true if JUnit completed the test method successfully without uncaught exceptions
+     * @param uncaughtException the uncaught exception if JUnit failed, or null if test passed
+     */
+    public synchronized void reconcileTestOutcome(final boolean testPassed, final Throwable uncaughtException)
+    {
+        if (this.report == null)
+        {
+            return;
+        }
+
+        if (testPassed)
+        {
+            final boolean wasFailed = "FAILED".equalsIgnoreCase(this.report.getStatus())
+                || "ERROR".equalsIgnoreCase(this.report.getStatus())
+                || !this.report.isSuccess();
+
+            if (wasFailed)
+            {
+                this.report.setSuccess(true);
+                this.report.setStatus("PASSED");
+                this.report.setExpectedFailure(true);
+                for (final TestExecutionReport.ReportStepEntry step : this.report.getSteps())
+                {
+                    if ("FAILED".equalsIgnoreCase(step.getStatus()))
+                    {
+                        step.setExpectedFailure(true);
+                    }
+                    for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
+                    {
+                        if ("FAILED".equalsIgnoreCase(sub.getStatus()))
+                        {
+                            sub.setExpectedFailure(true);
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            this.report.setSuccess(false);
+            this.report.setStatus("FAILED");
+            this.report.setExpectedFailure(false);
+            if (uncaughtException != null)
+            {
+                this.report.setFailureReason(uncaughtException.getMessage() != null ? uncaughtException.getMessage() : uncaughtException.toString());
+                final StringWriter sw = new StringWriter();
+                uncaughtException.printStackTrace(new PrintWriter(sw));
+                this.report.setFailureStackTrace(sw.toString());
+            }
+        }
+
+        recalculateMetrics();
+        flushReport();
+    }
+
+    /**
      * Flushes generated reports to disk across configured formats.
      */
     public synchronized void flushReport()
     {
-        if (!this.reportFlushed.compareAndSet(false, true))
-        {
-            return;
-        }
+        this.reportFlushed.set(true);
 
         try
         {
@@ -1758,7 +2398,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                 Files.createDirectories(this.outputDirectory);
             }
 
-            final String baseFileName = computeBaseFileName();
+            final String baseFileName = (this.lastBaseFileName != null) ? this.lastBaseFileName : computeBaseFileName();
             this.lastBaseFileName = baseFileName;
 
             for (final DiskReportFormat format : this.formats)

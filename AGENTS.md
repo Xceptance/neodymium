@@ -5,15 +5,15 @@
 > **NEVER modify files or execute state-changing operations without explicit user approval first.**
 > 
 > 1. **Phase 1 — Investigation & Proposal Only:**
->    - You MAY read files (`view_file`, `grep_search`), inspect logs, or use `code-review-graph` tools.
+>    - You MAY read files (`view_file`, `grep_search`) or inspect logs.
 >    - You MUST re-interpret requests like "Fix X" or "Implement Y" as "Diagnose/Plan X and propose a solution".
 >    - Present your diagnosis and detailed implementation plan to the user.
->    - When diagnosing a bug or regression, include the planned [doc/DEFECTS.md](doc/DEFECTS.md) entry (root cause, symptom, detection gap, and safety net) directly in the proposal.
+>    - When diagnosing a bug or regression, include the planned defect entry (root cause, symptom, detection gap, and safety net) directly in the proposal following [doc/DEFECT_TEMPLATE.md](doc/DEFECT_TEMPLATE.md).
 >    - **HARD STOP:** End your turn with a clear request for approval (e.g. *"Do you approve this plan to proceed with implementation?"*) without invoking any edit tools.
 > 
 > 2. **Phase 2 — Implementation:**
 >    - Do NOT call editing tools (`replace_file_content`, `multi_replace_file_content`, `write_to_file`) or run state-mutating shell commands until the user responds with explicit approval in a subsequent turn.
->    - When resolving a defect, record the post-mortem entry in [doc/DEFECTS.md](doc/DEFECTS.md) alongside the code and test changes.
+>    - When resolving a defect, record the post-mortem entry in a dedicated file under `doc/defects/YYYY-MM/DEF-YYYYMMDD-HHmm-<slug>.md` following [doc/DEFECT_TEMPLATE.md](doc/DEFECT_TEMPLATE.md) alongside the code and test changes.
 
 > [!CRITICAL]
 > ## POST-EDIT CLEAN CODE AUDIT (MANDATORY ON EVERY JAVA EDIT)
@@ -32,20 +32,19 @@
 
 ## General
 - **Java First:** Prefer Java for scripting/agent tasks over Python/Bash, unless standard Unix tooling fits perfectly.
-- **Workflow:** Check `specifications/openspec/changes/` for active changes and delta specs before implementing. Use `/opsx-*` workflows.
+- **Workflow:** Check `openspec/changes/` for active changes and delta specs before implementing. Use `/opsx-*` workflows.
 - **Secrets & Security:** You must never directly store any secrets, such as API keys, in source code, configuration files (e.g. `neodymium.properties`, `ai.properties`), or templates. All API keys and credentials must be injected dynamically via environment variables (such as `GEMINI_API_KEY`) or passed at run-time as JVM arguments (e.g., `-Dneodymium.ai.apiKey=...`). Before you commit anything, verify your staged changes do not contain keys by running `git diff --cached | grep -E "(apiKey|API_KEY|AQ\.[a-zA-Z0-9_\-]{10,})"`. If a secret is accidentally committed, notify the user immediately.
 - **Universal & Domain-Neutral Framework (No SUT / Locale / Currency Hardcoding):** Neodymium is strictly universal, application-agnostic, and language-neutral. We must never hardcode domain concepts like currencies (e.g., CAD, USD, EUR, ¥, £), locales, date/number formats, or SUT-specific heuristics and assumptions in Java code (including the core engine and AI modules). All domain- or site-specific behavior must remain configurable or dynamically evaluated.
 
-## Defect Tracking & Post-Mortem Logging (doc/DEFECTS.md)
-- **Mandatory Defect Logging:** Whenever a confirmed defect (in Neodymium framework, test harness/fixtures, or SUT behavior) is diagnosed and fixed, it MUST be recorded in [doc/DEFECTS.md](doc/DEFECTS.md). Even if fixed immediately, log it to capture root causes and detection gaps.
-- **Entry Structure:** Prepend entries to `doc/DEFECTS.md` in reverse-chronological order using the format:
-  - ID (`[DEF-YYYYMMDD-01]`), Date, Component, Scope (`Framework` | `Test/Harness` | `SUT`)
-  - Symptom (observed error or unexpected behavior)
-  - Root Cause (underlying technical cause)
-  - Detection Gap ("What did we miss?" — why existing tests, linters, or type systems failed to catch it)
-  - Resolution (summary of fix)
-  - Safety Net Added (regression test, assertion, or linter preventing recurrence)
+## Defect Tracking & Post-Mortem Logging (doc/defects/)
+- **Mandatory Defect Logging:** Whenever a confirmed defect (in Neodymium framework, test harness/fixtures, SUT behavior, AI prompts, or build tooling) is diagnosed and fixed, it MUST be recorded in a dedicated file under `doc/defects/YYYY-MM/DEF-YYYYMMDD-HHmm-<slug>.md` following [doc/DEFECT_TEMPLATE.md](doc/DEFECT_TEMPLATE.md). Never use or edit a shared monolithic defect file.
+- **File Naming & Path:** `doc/defects/YYYY-MM/DEF-YYYYMMDD-HHmm-<slug>.md` where `HHmm` is the local creation time and `<slug>` is a concise kebab-case summary of the failure mechanism.
+- **Specification & Quality Rubrics:** Strictly follow the lifecycle statuses, scope taxonomy, root-cause depth, detection gap analysis, and regression safety net standards documented in [doc/DEFECT_TEMPLATE.md](doc/DEFECT_TEMPLATE.md).
 - **Exclusions:** Do NOT log expected failures during normal TDD red-green cycles, work-in-progress compile errors, or transient external network/quota outages.
+
+## Ideas & Architectural Proposals (doc/ideas/)
+- **Distributed Idea Records:** When proposing architectural enhancements, optimization strategies, or future roadmap concepts, document them in a dedicated file under `doc/ideas/YYYY-MM/IDEA-YYYYMMDD-HHmm-<slug>.md` following [doc/IDEA_TEMPLATE.md](doc/IDEA_TEMPLATE.md). Never use or edit a monolithic ideas file.
+- **Lifecycle & Categorization:** Assign appropriate lifecycle statuses (`Proposed`, `Under Review`, `Accepted`, `In Progress`, `Implemented`, `Deferred`, `Rejected`) and categories as specified in [doc/IDEA_TEMPLATE.md](doc/IDEA_TEMPLATE.md).
 
 ## Coding Standards
 - **TDD:** Write unit/integration tests before implementing new functionality. Ensure full coverage.
@@ -57,14 +56,21 @@
 - **Imports:** Always import fully qualified. Use static imports such as `Assertions.assertEquals`, only when it increases readability and the import is used multiple times. Remove unused imports.
 
 ## Dependencies & Git
-- **Dependencies:** ALWAYS ask permission before adding. Document in `NOTICE.md` and `doc/3rd-party-licenses/`.
+- **Dependencies:** ALWAYS ask permission before adding dependencies to `pom.xml`. Ensure license compatibility (MIT / Apache 2.0).
 - **Git:** No fast-forward merges. Ask before stashing. Branch naming: `(feat|fix|chore|docs)/kebab-case`.
 
 ## Testing & Specifications
 - **Maintenance:** Tests MUST be created/updated for any logic or UI changes (reinforces TDD).
 
 ## Aura AI Test Sandbox
-- **Aura Glance Sandbox:** To test any Neodymium Aura AI features (such as visual audits, dHash baselines, parameterizations, multi-port, offline replays, or dynamic visual defects), utilize our self-contained **Aura Test Suite Hub** under `src/test/resources/ai-test-pages/AuraGlanceTest/`.
-- **Server Ports:** Served dynamically on random free ports (HTTP + HTTPS self-signed cert `keystore.p12`) via `EmbeddedHtmlServer.java` (no external running app required!).
-- **How to Use:** Write tests in `AuraGlanceTest.java` and `AuraFeatureMatrixTest.java` extending `BaseAiTest`. Inject parameterized data from `AuraFeatureMatrixTest.json`.
+- **Aura Glance Sandbox:** To test any Neodymium Aura AI features (such as visual audits, dHash baselines, parameterizations, multi-port, offline replays, or dynamic visual defects), utilize our self-contained **Aura Test Suite Hub** under `neodymium-test-server/src/main/resources/ai-test-pages/AuraGlanceTest/`.
+- **Manual Test Server Execution:** For standalone browser testing, VÉRLA storefront inspection, or live debugging, launch the Javalin server indefinitely via:
+  ```bash
+  mvn exec:java -pl neodymium-test-server
+  # Optional custom ports (defaults: HTTP 8542, HTTPS 8543):
+  mvn exec:java -pl neodymium-test-server -Dexec.args="--port 8542 --httpsPort 8543"
+  ```
+  *(Note: `neodymium-test-server` is powered by Javalin and uses `exec:java`; only `aura-manager` uses `mvn spring-boot:run -pl aura-manager`)*
+- **Server Ports:** Served dynamically on random free ports (HTTP + HTTPS self-signed cert `keystore.p12`) via `JavalinTestServer.java` in `neodymium-test-server` (no external running app required!).
+- **How to Use:** Write tests in `neodymium-e2e-tests/src/test/java/org/neodymium/ai/integration/sandbox/` (e.g. `*SandboxMockTest.java`, `*SandboxLiveTest.java`) extending `BaseAiTest`.
 - **Extensive Documentation:** For detailed guidelines, directory layouts, and step replays instructions, refer to [doc/aura-visual-defect-sandbox.md](doc/aura-visual-defect-sandbox.md).

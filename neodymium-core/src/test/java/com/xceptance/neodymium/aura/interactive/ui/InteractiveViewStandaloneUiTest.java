@@ -37,7 +37,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.neodymium.ai.testing.BaseAiTest;
 import org.openqa.selenium.JavascriptExecutor;
 
 import com.codeborne.selenide.CollectionCondition;
@@ -62,7 +61,7 @@ import org.neodymium.junit5.NeodymiumTest;
 @Tag("ui")
 @Tag("interactive-view")
 @Browser("Chrome_headless")
-public class InteractiveViewStandaloneUiTest extends BaseAiTest
+public class InteractiveViewStandaloneUiTest
 {
     private InteractiveConsoleServer consoleServer;
     private InteractiveConsoleEngine consoleEngine;
@@ -84,7 +83,12 @@ public class InteractiveViewStandaloneUiTest extends BaseAiTest
         consoleUrl = "http://127.0.0.1:" + consoleServer.getLocalUrl().replaceAll(".*:(\\d+)$", "$1");
 
         Selenide.open(consoleUrl);
-        sleep(800);
+        final long deadline = System.currentTimeMillis() + 5000;
+        while (!consoleEngine.hasSseClients() && System.currentTimeMillis() < deadline)
+        {
+            sleep(50);
+        }
+        sleep(200);
     }
 
     @AfterEach
@@ -350,7 +354,7 @@ public class InteractiveViewStandaloneUiTest extends BaseAiTest
         stateWithEdits.addProperty("runId", consoleEngine.getRunId());
         stateWithEdits.addProperty("hudPromptChanged", true);
         
-        consoleEngine.broadcastSseEvent("state", stateWithEdits.toString());
+        consoleEngine.pushState(stateWithEdits.toString());
         sleep(400);
 
         final JsonObject pausePayload1 = new JsonObject();
@@ -376,7 +380,7 @@ public class InteractiveViewStandaloneUiTest extends BaseAiTest
         stateNoEdits.addProperty("runId", consoleEngine.getRunId());
         stateNoEdits.addProperty("hudPromptChanged", false);
 
-        consoleEngine.broadcastSseEvent("state", stateNoEdits.toString());
+        consoleEngine.pushState(stateNoEdits.toString());
         sleep(400);
 
         final JsonObject pausePayload2 = new JsonObject();

@@ -19,6 +19,7 @@
 package com.xceptance.aura.report.dto;
 
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Data transfer object representing batch summary information.
@@ -44,6 +45,14 @@ public final class BatchSummaryDto
     private final int latestUnknownCount;
     private final int latestIgnoredCount;
     private final int latestTotalTests;
+    private final int latestPassHealedCount;
+    private final int latestFixedHealedCount;
+    private final int latestKnownHealedCount;
+    private final int latestUnknownHealedCount;
+    private final int latestPassAiCount;
+    private final int latestFixedAiCount;
+    private final int latestKnownAiCount;
+    private final int latestUnknownAiCount;
 
     public BatchSummaryDto(
         final String id,
@@ -56,7 +65,7 @@ public final class BatchSummaryDto
         final List<String> locales,
         final List<String> browsers)
     {
-        this(id, name, environment, description, lastExecuted, latestPassRate, knownBugs, locales, browsers, null, 0, 0, 0, 0, 0, 0);
+        this(id, name, environment, description, lastExecuted, latestPassRate, knownBugs, locales, browsers, null, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
 
     public BatchSummaryDto(
@@ -77,6 +86,65 @@ public final class BatchSummaryDto
         final int latestIgnoredCount,
         final int latestTotalTests)
     {
+        this(id, name, environment, description, lastExecuted, latestPassRate, knownBugs, locales, browsers, latestRunId,
+             latestPassedCount, latestFixedCount, latestKnownCount, latestUnknownCount, latestIgnoredCount, latestTotalTests,
+             0, 0, 0, 0, 0, 0, 0, 0);
+    }
+
+    public BatchSummaryDto(
+        final String id,
+        final String name,
+        final String environment,
+        final String description,
+        final String lastExecuted,
+        final String latestPassRate,
+        final String knownBugs,
+        final List<String> locales,
+        final List<String> browsers,
+        final String latestRunId,
+        final int latestPassedCount,
+        final int latestFixedCount,
+        final int latestKnownCount,
+        final int latestUnknownCount,
+        final int latestIgnoredCount,
+        final int latestTotalTests,
+        final int latestPassHealedCount,
+        final int latestFixedHealedCount,
+        final int latestKnownHealedCount,
+        final int latestUnknownHealedCount)
+    {
+        this(id, name, environment, description, lastExecuted, latestPassRate, knownBugs, locales, browsers, latestRunId,
+             latestPassedCount, latestFixedCount, latestKnownCount, latestUnknownCount, latestIgnoredCount, latestTotalTests,
+             latestPassHealedCount, latestFixedHealedCount, latestKnownHealedCount, latestUnknownHealedCount,
+             0, 0, 0, 0);
+    }
+
+    public BatchSummaryDto(
+        final String id,
+        final String name,
+        final String environment,
+        final String description,
+        final String lastExecuted,
+        final String latestPassRate,
+        final String knownBugs,
+        final List<String> locales,
+        final List<String> browsers,
+        final String latestRunId,
+        final int latestPassedCount,
+        final int latestFixedCount,
+        final int latestKnownCount,
+        final int latestUnknownCount,
+        final int latestIgnoredCount,
+        final int latestTotalTests,
+        final int latestPassHealedCount,
+        final int latestFixedHealedCount,
+        final int latestKnownHealedCount,
+        final int latestUnknownHealedCount,
+        final int latestPassAiCount,
+        final int latestFixedAiCount,
+        final int latestKnownAiCount,
+        final int latestUnknownAiCount)
+    {
         this.id = id;
         this.name = name;
         this.environment = environment;
@@ -93,6 +161,14 @@ public final class BatchSummaryDto
         this.latestUnknownCount = latestUnknownCount;
         this.latestIgnoredCount = latestIgnoredCount;
         this.latestTotalTests = latestTotalTests;
+        this.latestPassHealedCount = latestPassHealedCount;
+        this.latestFixedHealedCount = latestFixedHealedCount;
+        this.latestKnownHealedCount = latestKnownHealedCount;
+        this.latestUnknownHealedCount = latestUnknownHealedCount;
+        this.latestPassAiCount = latestPassAiCount;
+        this.latestFixedAiCount = latestFixedAiCount;
+        this.latestKnownAiCount = latestKnownAiCount;
+        this.latestUnknownAiCount = latestUnknownAiCount;
     }
 
     public String getId()
@@ -225,18 +301,275 @@ public final class BatchSummaryDto
         return latestTotalTests > 0 ? (latestIgnoredCount * 100.0 / latestTotalTests) : 0.0;
     }
 
+    public int getLatestPassHealedCount()
+    {
+        return latestPassHealedCount;
+    }
+
+    public int getLatestFixedHealedCount()
+    {
+        return latestFixedHealedCount;
+    }
+
+    public int getLatestKnownHealedCount()
+    {
+        return latestKnownHealedCount;
+    }
+
+    public int getLatestUnknownHealedCount()
+    {
+        return latestUnknownHealedCount;
+    }
+
+    public int getLatestPassAiCount()
+    {
+        return latestPassAiCount;
+    }
+
+    public int getLatestFixedAiCount()
+    {
+        return latestFixedAiCount;
+    }
+
+    public int getLatestKnownAiCount()
+    {
+        return latestKnownAiCount;
+    }
+
+    public int getLatestUnknownAiCount()
+    {
+        return latestUnknownAiCount;
+    }
+
+    public int getLatestTotalAiCount()
+    {
+        return latestPassAiCount + latestFixedAiCount + latestKnownAiCount + latestUnknownAiCount;
+    }
+
+    public int getLatestPassCleanCount()
+    {
+        return Math.max(0, latestPassedCount - latestPassHealedCount - latestPassAiCount);
+    }
+
+    public int getLatestFixedCleanCount()
+    {
+        return Math.max(0, latestFixedCount - latestFixedHealedCount - latestFixedAiCount);
+    }
+
+    public int getLatestKnownCleanCount()
+    {
+        return Math.max(0, latestKnownCount - latestKnownHealedCount - latestKnownAiCount);
+    }
+
+    public int getLatestUnknownCleanCount()
+    {
+        return Math.max(0, latestUnknownCount - latestUnknownHealedCount - latestUnknownAiCount);
+    }
+
+    public double getLatestPassCleanPct()
+    {
+        return latestTotalTests > 0 ? (getLatestPassCleanCount() * 100.0 / latestTotalTests) : 0.0;
+    }
+
+    public double getLatestPassHealedPct()
+    {
+        return latestTotalTests > 0 ? (latestPassHealedCount * 100.0 / latestTotalTests) : 0.0;
+    }
+
+    public double getLatestPassAiPct()
+    {
+        return latestTotalTests > 0 ? (latestPassAiCount * 100.0 / latestTotalTests) : 0.0;
+    }
+
+    public double getLatestFixedCleanPct()
+    {
+        return latestTotalTests > 0 ? (getLatestFixedCleanCount() * 100.0 / latestTotalTests) : 0.0;
+    }
+
+    public double getLatestFixedHealedPct()
+    {
+        return latestTotalTests > 0 ? (latestFixedHealedCount * 100.0 / latestTotalTests) : 0.0;
+    }
+
+    public double getLatestFixedAiPct()
+    {
+        return latestTotalTests > 0 ? (latestFixedAiCount * 100.0 / latestTotalTests) : 0.0;
+    }
+
+    public double getLatestKnownCleanPct()
+    {
+        return latestTotalTests > 0 ? (getLatestKnownCleanCount() * 100.0 / latestTotalTests) : 0.0;
+    }
+
+    public double getLatestKnownHealedPct()
+    {
+        return latestTotalTests > 0 ? (latestKnownHealedCount * 100.0 / latestTotalTests) : 0.0;
+    }
+
+    public double getLatestKnownAiPct()
+    {
+        return latestTotalTests > 0 ? (latestKnownAiCount * 100.0 / latestTotalTests) : 0.0;
+    }
+
+    public double getLatestUnknownCleanPct()
+    {
+        return latestTotalTests > 0 ? (getLatestUnknownCleanCount() * 100.0 / latestTotalTests) : 0.0;
+    }
+
+    public double getLatestUnknownHealedPct()
+    {
+        return latestTotalTests > 0 ? (latestUnknownHealedCount * 100.0 / latestTotalTests) : 0.0;
+    }
+
+    public double getLatestUnknownAiPct()
+    {
+        return latestTotalTests > 0 ? (latestUnknownAiCount * 100.0 / latestTotalTests) : 0.0;
+    }
+
     public String getLatestRunPassRateText()
     {
         if (latestTotalTests <= 0) return "N/A";
         final int numPassed = latestPassedCount + latestFixedCount;
         final double rate = (numPassed * 100.0) / latestTotalTests;
-        return String.format(java.util.Locale.US, "%.0f%% Pass", rate);
+        return String.format(Locale.US, "%.0f%% Pass", rate);
+    }
+
+    public String getPassCleanDashArray()
+    {
+        final double p = getLatestPassCleanPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getPassCleanDashOffset()
+    {
+        return "25";
+    }
+
+    public String getPassHealedDashArray()
+    {
+        final double p = getLatestPassHealedPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getPassHealedDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getLatestPassCleanPct());
+    }
+
+    public String getPassAiDashArray()
+    {
+        final double p = getLatestPassAiPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getPassAiDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getLatestPassCleanPct() - getLatestPassHealedPct());
+    }
+
+    public String getFixedCleanDashArray()
+    {
+        final double p = getLatestFixedCleanPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getFixedCleanDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getLatestPassedPct());
+    }
+
+    public String getFixedHealedDashArray()
+    {
+        final double p = getLatestFixedHealedPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getFixedHealedDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getLatestPassedPct() - getLatestFixedCleanPct());
+    }
+
+    public String getFixedAiDashArray()
+    {
+        final double p = getLatestFixedAiPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getFixedAiDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getLatestPassedPct() - getLatestFixedCleanPct() - getLatestFixedHealedPct());
+    }
+
+    public String getKnownCleanDashArray()
+    {
+        final double p = getLatestKnownCleanPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getKnownCleanDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getLatestPassedPct() - getLatestFixedPct());
+    }
+
+    public String getKnownHealedDashArray()
+    {
+        final double p = getLatestKnownHealedPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getKnownHealedDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getLatestPassedPct() - getLatestFixedPct() - getLatestKnownCleanPct());
+    }
+
+    public String getKnownAiDashArray()
+    {
+        final double p = getLatestKnownAiPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getKnownAiDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getLatestPassedPct() - getLatestFixedPct() - getLatestKnownCleanPct() - getLatestKnownHealedPct());
+    }
+
+    public String getUnknownCleanDashArray()
+    {
+        final double p = getLatestUnknownCleanPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getUnknownCleanDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getLatestPassedPct() - getLatestFixedPct() - getLatestKnownPct());
+    }
+
+    public String getUnknownAiDashArray()
+    {
+        final double p = getLatestUnknownAiPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getUnknownAiDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getLatestPassedPct() - getLatestFixedPct() - getLatestKnownPct() - getLatestUnknownCleanPct() - getLatestUnknownHealedPct());
+    }
+
+    public String getUnknownHealedDashArray()
+    {
+        final double p = getLatestUnknownHealedPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getUnknownHealedDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getLatestPassedPct() - getLatestFixedPct() - getLatestKnownPct() - getLatestUnknownCleanPct());
     }
 
     public String getPassDashArray()
     {
         final double p = getLatestPassedPct();
-        return String.format(java.util.Locale.US, "%.2f %.2f", p, 100.0 - p);
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
     }
 
     public String getPassDashOffset()
@@ -247,44 +580,44 @@ public final class BatchSummaryDto
     public String getFixedDashArray()
     {
         final double p = getLatestFixedPct();
-        return String.format(java.util.Locale.US, "%.2f %.2f", p, 100.0 - p);
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
     }
 
     public String getFixedDashOffset()
     {
-        return String.format(java.util.Locale.US, "%.2f", 25.0 - getLatestPassedPct());
+        return String.format(Locale.US, "%.2f", 25.0 - getLatestPassedPct());
     }
 
     public String getKnownDashArray()
     {
         final double p = getLatestKnownPct();
-        return String.format(java.util.Locale.US, "%.2f %.2f", p, 100.0 - p);
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
     }
 
     public String getKnownDashOffset()
     {
-        return String.format(java.util.Locale.US, "%.2f", 25.0 - getLatestPassedPct() - getLatestFixedPct());
+        return String.format(Locale.US, "%.2f", 25.0 - getLatestPassedPct() - getLatestFixedPct());
     }
 
     public String getUnknownDashArray()
     {
         final double p = getLatestUnknownPct();
-        return String.format(java.util.Locale.US, "%.2f %.2f", p, 100.0 - p);
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
     }
 
     public String getUnknownDashOffset()
     {
-        return String.format(java.util.Locale.US, "%.2f", 25.0 - getLatestPassedPct() - getLatestFixedPct() - getLatestKnownPct());
+        return String.format(Locale.US, "%.2f", 25.0 - getLatestPassedPct() - getLatestFixedPct() - getLatestKnownPct());
     }
 
     public String getIgnoredDashArray()
     {
         final double p = getLatestIgnoredPct();
-        return String.format(java.util.Locale.US, "%.2f %.2f", p, 100.0 - p);
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
     }
 
     public String getIgnoredDashOffset()
     {
-        return String.format(java.util.Locale.US, "%.2f", 25.0 - getLatestPassedPct() - getLatestFixedPct() - getLatestKnownPct() - getLatestUnknownPct());
+        return String.format(Locale.US, "%.2f", 25.0 - getLatestPassedPct() - getLatestFixedPct() - getLatestKnownPct() - getLatestUnknownPct());
     }
 }

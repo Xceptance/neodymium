@@ -22,12 +22,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.neodymium.ai.client.ReasoningEffort;
 
 /**
  * Unit tests for {@link AiConfiguration}.
@@ -59,6 +63,12 @@ public class AiConfigurationTest
         System.clearProperty("neodymium.ai.ssim.minScore");
         System.clearProperty("neodymium.ai.visual.threshold");
         System.clearProperty("neodymium.ai.visual.minScore");
+        System.clearProperty("neodymium.ai.reasoningEffort");
+        System.clearProperty("neodymium.ai.thinkingLevel");
+        System.clearProperty("neodymium.ai.execution.reasoningEffort");
+        System.clearProperty("neodymium.ai.execution.thinkingLevel");
+        System.clearProperty("neodymium.ai.linter.reasoningEffort");
+        System.clearProperty("neodymium.ai.linter.thinkingLevel");
     }
 
     @Test
@@ -170,6 +180,32 @@ public class AiConfigurationTest
     }
 
     @Test
+    public void testStepTimeoutSecondsResolution()
+    {
+        System.clearProperty("neodymium.ai.step.timeoutSeconds");
+        System.clearProperty("neodymium.ai.step.timeout.seconds");
+        System.clearProperty("neodymium.ai.timeoutSeconds");
+        AiConfiguration.resetInstance();
+
+        final AiConfiguration defaultConfig = AiConfiguration.getInstance();
+        assertEquals(120, defaultConfig.getStepTimeoutSeconds(), "Step timeout should default to 120 seconds.");
+
+        System.setProperty("neodymium.ai.step.timeoutSeconds", "75");
+        AiConfiguration.resetInstance();
+        final AiConfiguration customConfig = AiConfiguration.getInstance();
+        assertEquals(75, customConfig.getStepTimeoutSeconds(), "Step timeout should resolve custom setting.");
+
+        System.clearProperty("neodymium.ai.step.timeoutSeconds");
+        System.setProperty("neodymium.ai.step.timeout.seconds", "95");
+        AiConfiguration.resetInstance();
+        final AiConfiguration normalizedConfig = AiConfiguration.getInstance();
+        assertEquals(95, normalizedConfig.getStepTimeoutSeconds(), "Normalized step timeout should resolve.");
+
+        System.clearProperty("neodymium.ai.step.timeout.seconds");
+        AiConfiguration.resetInstance();
+    }
+
+    @Test
     public void testConsoleExecutionLogsDirectoryDefaultAndOverride()
     {
         AiConfiguration.resetInstance();
@@ -243,6 +279,83 @@ public class AiConfigurationTest
         System.setProperty("neodymium.ai.ssim.minScore", "0.98");
         AiConfiguration.resetInstance();
         assertEquals(0.98, AiConfiguration.getInstance().getVisualSsimMinScore(), 0.001, "ssim.minScore should take precedence over aliases");
+    }
+
+    @Test
+    public void testReasoningEffortResolutionAndAliases()
+    {
+        AiConfiguration.resetInstance();
+        final AiConfiguration defaultConfig = AiConfiguration.getInstance();
+        assertEquals(ReasoningEffort.LOW, defaultConfig.getReasoningEffort(), "Execution reasoning effort should default to LOW.");
+        assertEquals(ReasoningEffort.MEDIUM, defaultConfig.getLinterReasoningEffort(), "Linter reasoning effort should default to MEDIUM.");
+
+        // Global reasoningEffort
+        System.setProperty("neodymium.ai.reasoningEffort", "HIGH");
+        AiConfiguration.resetInstance();
+        final AiConfiguration globalConfig = AiConfiguration.getInstance();
+        assertEquals(ReasoningEffort.HIGH, globalConfig.getReasoningEffort(), "Should resolve global reasoningEffort.");
+        assertEquals(ReasoningEffort.HIGH, globalConfig.getLinterReasoningEffort(), "Linter should fall back to global reasoningEffort.");
+
+        // Global thinkingLevel alias
+        System.clearProperty("neodymium.ai.reasoningEffort");
+        System.setProperty("neodymium.ai.thinkingLevel", "MEDIUM");
+        AiConfiguration.resetInstance();
+        final AiConfiguration aliasConfig = AiConfiguration.getInstance();
+        assertEquals(ReasoningEffort.MEDIUM, aliasConfig.getReasoningEffort(), "Should resolve global thinkingLevel alias.");
+        assertEquals(ReasoningEffort.MEDIUM, aliasConfig.getLinterReasoningEffort(), "Linter should fall back to global thinkingLevel alias.");
+
+        // Precedence: reasoningEffort over thinkingLevel
+        System.setProperty("neodymium.ai.reasoningEffort", "HIGH");
+        System.setProperty("neodymium.ai.thinkingLevel", "LOW");
+        AiConfiguration.resetInstance();
+        final AiConfiguration precConfig = AiConfiguration.getInstance();
+        assertEquals(ReasoningEffort.HIGH, precConfig.getReasoningEffort(), "reasoningEffort should take precedence over thinkingLevel.");
+
+        // Role override: execution role over global
+        System.setProperty("neodymium.ai.execution.reasoningEffort", "OFF");
+        AiConfiguration.resetInstance();
+        final AiConfiguration roleConfig = AiConfiguration.getInstance();
+        assertEquals(ReasoningEffort.OFF, roleConfig.getReasoningEffort(), "Role-specific execution reasoningEffort should override global.");
+        assertEquals(ReasoningEffort.HIGH, roleConfig.getLinterReasoningEffort(), "Linter should still resolve global HIGH.");
+
+        // Role alias: execution.thinkingLevel
+        System.clearProperty("neodymium.ai.execution.reasoningEffort");
+        System.setProperty("neodymium.ai.execution.thinkingLevel", "MINIMAL");
+        AiConfiguration.resetInstance();
+        final AiConfiguration roleAliasConfig = AiConfiguration.getInstance();
+        assertEquals(ReasoningEffort.OFF, roleAliasConfig.getReasoningEffort(), "MINIMAL alias should map to OFF.");
+
+        // Parse aliases
+        assertEquals(ReasoningEffort.OFF, AiConfiguration.parseReasoningEffort("off"));
+        assertEquals(ReasoningEffort.OFF, AiConfiguration.parseReasoningEffort("minimal"));
+        assertEquals(ReasoningEffort.OFF, AiConfiguration.parseReasoningEffort("NONE"));
+        assertEquals(ReasoningEffort.LOW, AiConfiguration.parseReasoningEffort("low"));
+        assertEquals(ReasoningEffort.MEDIUM, AiConfiguration.parseReasoningEffort("Medium"));
+        assertEquals(ReasoningEffort.HIGH, AiConfiguration.parseReasoningEffort("HIGH"));
+        assertNull(AiConfiguration.parseReasoningEffort("invalid-value"));
+        assertNull(AiConfiguration.parseReasoningEffort(null));
+        assertNull(AiConfiguration.parseReasoningEffort("   "));
+    }
+
+    @Test
+    public void testGetAllProperties()
+    {
+        System.setProperty("neodymium.ai.testCustomProp", "activeValue123");
+        AiConfiguration.resetInstance();
+        final AiConfiguration config = AiConfiguration.getInstance();
+        final Map<String, String> all = config.getAllProperties();
+
+        assertNotNull(all, "Properties snapshot should not be null.");
+        assertTrue(all.containsKey("neodymium.ai.testCustomProp"), "Should contain testCustomProp.");
+        assertEquals("activeValue123", all.get("neodymium.ai.testCustomProp"));
+
+        // Verify unmodifiable
+        assertThrows(UnsupportedOperationException.class, () -> all.put("neodymium.ai.illegal", "val"),
+                     "Returned map must be unmodifiable.");
+        assertThrows(UnsupportedOperationException.class, () -> all.remove("neodymium.ai.testCustomProp"),
+                     "Returned map must be unmodifiable.");
+
+        System.clearProperty("neodymium.ai.testCustomProp");
     }
 }
 

@@ -18,8 +18,15 @@
  */
 package com.xceptance.aura.report.controller;
 
+import com.xceptance.aura.report.dto.AreaRunPointDto;
+import com.xceptance.aura.report.dto.AreaSummaryDto;
+import com.xceptance.aura.report.dto.BatchAreaTrendDto;
+import com.xceptance.aura.report.dto.BatchOverviewDataDto;
 import com.xceptance.aura.report.dto.RunReportDto;
 import com.xceptance.aura.report.dto.TestBaseDataDto;
+import com.xceptance.aura.report.dto.TestExecutionDto;
+import com.xceptance.aura.report.entity.TestRunEntity;
+import jakarta.servlet.http.HttpServletResponse;
 import com.xceptance.aura.report.repository.TestBaseBugRepository;
 import com.xceptance.aura.report.repository.TestBaseVariationRepository;
 import com.xceptance.aura.report.repository.TestBatchRepository;
@@ -27,8 +34,10 @@ import com.xceptance.aura.report.repository.TestRunRepository;
 import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.RunStorageSyncService;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -136,6 +145,9 @@ public class AuraReportViewControllerTest
         Assertions.assertEquals("RUN-100", model.getAttribute("runId"));
         Assertions.assertEquals("EXEC-1", model.getAttribute("targetExecutionId"));
         Assertions.assertEquals("runReportSubTabAllTests", model.getAttribute("activeSubTab"));
+        Assertions.assertNotNull(model.getAttribute("filterModes"));
+        Assertions.assertNotNull(model.getAttribute("filterBrowsers"));
+        Assertions.assertNotNull(model.getAttribute("filterLocales"));
     }
 
     @Test
@@ -166,5 +178,389 @@ public class AuraReportViewControllerTest
         Assertions.assertEquals("runReportSubTabAllTests", model.getAttribute("activeSubTab"));
         Mockito.verify(syncService, Mockito.times(1)).syncLocalRunStorage();
         Mockito.verify(dataService, Mockito.times(1)).clearCache();
+    }
+
+    @Test
+    public void testBatchHistoryWithoutLimitReturnsAllRuns()
+    {
+        final TestRunEntity r1 = new TestRunEntity();
+        r1.setId("run-1");
+        r1.setBatchName("SmokeBatch");
+        r1.setEnvironment("Staging");
+        r1.setLocalesCsv("US,DE");
+        r1.setBrowsersCsv("Chrome");
+
+        final TestRunEntity r2 = new TestRunEntity();
+        r2.setId("run-2");
+        r2.setBatchName("SmokeBatch");
+        r2.setEnvironment("Staging");
+        r2.setLocalesCsv("US");
+        r2.setBrowsersCsv("Firefox");
+
+        final List<TestRunEntity> allRuns = Arrays.asList(r1, r2);
+        Mockito.when(runRepository.findByBatchNameAndIsDeletedFalseOrderByStartTimeMsDesc("SmokeBatch")).thenReturn(allRuns);
+        Mockito.when(batchRepository.findById("SmokeBatch")).thenReturn(Optional.empty());
+
+        final Model model = new ConcurrentModel();
+        final String view = controller.batchHistory("SmokeBatch", null, "true", model);
+
+        Assertions.assertEquals("fragments/batch-history :: batchHistory", view);
+        Assertions.assertEquals("SmokeBatch", model.getAttribute("batchName"));
+        Assertions.assertEquals(2, model.getAttribute("totalRunsCount"));
+        Assertions.assertNull(model.getAttribute("currentLimit"));
+        Assertions.assertEquals(2, model.getAttribute("showingRunsCount"));
+
+        final List<?> runs = (List<?>) model.getAttribute("runs");
+        Assertions.assertNotNull(runs);
+        Assertions.assertEquals(2, runs.size());
+    }
+
+    @Test
+    public void testBatchHistoryWithCustomLimitAppliesLimit()
+    {
+        final TestRunEntity r1 = new TestRunEntity();
+        r1.setId("run-1");
+        r1.setBatchName("SmokeBatch");
+        r1.setEnvironment("Staging");
+        r1.setLocalesCsv("US,DE");
+        r1.setBrowsersCsv("Chrome");
+
+        final TestRunEntity r2 = new TestRunEntity();
+        r2.setId("run-2");
+        r2.setBatchName("SmokeBatch");
+        r2.setEnvironment("Staging");
+        r2.setLocalesCsv("FR");
+        r2.setBrowsersCsv("Firefox");
+
+        final TestRunEntity r3 = new TestRunEntity();
+        r3.setId("run-3");
+        r3.setBatchName("SmokeBatch");
+        r3.setEnvironment("Staging");
+        r3.setLocalesCsv("JP");
+        r3.setBrowsersCsv("Safari");
+
+        final List<TestRunEntity> allRuns = Arrays.asList(r1, r2, r3);
+        Mockito.when(runRepository.findByBatchNameAndIsDeletedFalseOrderByStartTimeMsDesc("SmokeBatch")).thenReturn(allRuns);
+        Mockito.when(batchRepository.findById("SmokeBatch")).thenReturn(Optional.empty());
+
+        final Model model = new ConcurrentModel();
+        final String view = controller.batchHistory("SmokeBatch", 2, "true", model);
+
+        Assertions.assertEquals("fragments/batch-history :: batchHistory", view);
+        Assertions.assertEquals("SmokeBatch", model.getAttribute("batchName"));
+        Assertions.assertEquals(3, model.getAttribute("totalRunsCount"));
+        Assertions.assertEquals(2, model.getAttribute("currentLimit"));
+        Assertions.assertEquals(2, model.getAttribute("showingRunsCount"));
+
+        final List<?> runs = (List<?>) model.getAttribute("runs");
+        Assertions.assertNotNull(runs);
+        Assertions.assertEquals(2, runs.size());
+        Assertions.assertSame(r1, runs.get(0));
+        Assertions.assertSame(r2, runs.get(1));
+
+        @SuppressWarnings("unchecked")
+        final List<String> locales = (List<String>) model.getAttribute("batchLocales");
+        Assertions.assertNotNull(locales);
+        Assertions.assertTrue(locales.contains("US"));
+        Assertions.assertTrue(locales.contains("DE"));
+        Assertions.assertTrue(locales.contains("FR"));
+        Assertions.assertFalse(locales.contains("JP"));
+
+        @SuppressWarnings("unchecked")
+        final List<String> browsers = (List<String>) model.getAttribute("batchBrowsers");
+        Assertions.assertNotNull(browsers);
+        Assertions.assertTrue(browsers.contains("Chrome"));
+        Assertions.assertTrue(browsers.contains("Firefox"));
+        Assertions.assertFalse(browsers.contains("Safari"));
+    }
+
+    @Test
+    public void testBatchHistoryWithLimitGreaterThanTotalClampsGracefully()
+    {
+        final TestRunEntity r1 = new TestRunEntity();
+        r1.setId("run-1");
+        r1.setBatchName("SmokeBatch");
+
+        final List<TestRunEntity> allRuns = Arrays.asList(r1);
+        Mockito.when(runRepository.findByBatchNameAndIsDeletedFalseOrderByStartTimeMsDesc("SmokeBatch")).thenReturn(allRuns);
+        Mockito.when(batchRepository.findById("SmokeBatch")).thenReturn(Optional.empty());
+
+        final Model model = new ConcurrentModel();
+        final String view = controller.batchHistory("SmokeBatch", 50, "true", model);
+
+        Assertions.assertEquals("fragments/batch-history :: batchHistory", view);
+        Assertions.assertEquals(1, model.getAttribute("totalRunsCount"));
+        Assertions.assertEquals(50, model.getAttribute("currentLimit"));
+        Assertions.assertEquals(1, model.getAttribute("showingRunsCount"));
+
+        final List<?> runs = (List<?>) model.getAttribute("runs");
+        Assertions.assertNotNull(runs);
+        Assertions.assertEquals(1, runs.size());
+    }
+
+    @Test
+    public void testRefreshAndResyncRunsPreservesLimit()
+    {
+        final TestRunEntity r1 = new TestRunEntity();
+        r1.setId("run-1");
+        r1.setBatchName("SmokeBatch");
+
+        final TestRunEntity r2 = new TestRunEntity();
+        r2.setId("run-2");
+        r2.setBatchName("SmokeBatch");
+
+        final TestRunEntity r3 = new TestRunEntity();
+        r3.setId("run-3");
+        r3.setBatchName("SmokeBatch");
+
+        final List<TestRunEntity> allRuns = Arrays.asList(r1, r2, r3);
+        Mockito.when(runRepository.findByBatchNameAndIsDeletedFalseOrderByStartTimeMsDesc("SmokeBatch")).thenReturn(allRuns);
+        Mockito.when(batchRepository.findById("SmokeBatch")).thenReturn(Optional.empty());
+
+        final Model model = new ConcurrentModel();
+        final String currentUrl = "http://localhost:8080/batch-history?batchName=SmokeBatch&limit=1";
+        final String view = controller.refreshAndResyncRuns("true", currentUrl, null, model);
+
+        Assertions.assertEquals("fragments/batch-history :: batchHistory", view);
+        Assertions.assertEquals("SmokeBatch", model.getAttribute("batchName"));
+        Assertions.assertEquals(3, model.getAttribute("totalRunsCount"));
+        Assertions.assertEquals(1, model.getAttribute("currentLimit"));
+        Assertions.assertEquals(1, model.getAttribute("showingRunsCount"));
+    }
+
+    @Test
+    public void testBatchHistoryPopulatesGranularHealingInAreaTrends()
+    {
+        final TestRunEntity r1 = new TestRunEntity();
+        r1.setId("run-100");
+        r1.setBatchName("SmokeBatch");
+        r1.setStartTimeMs(1000L);
+
+        final List<TestRunEntity> allRuns = Arrays.asList(r1);
+        Mockito.when(runRepository.findByBatchNameAndIsDeletedFalseOrderByStartTimeMsDesc("SmokeBatch")).thenReturn(allRuns);
+        Mockito.when(batchRepository.findById("SmokeBatch")).thenReturn(Optional.empty());
+
+        final RunReportDto runReport = Mockito.mock(RunReportDto.class);
+        final AreaSummaryDto areaSummary = Mockito.mock(AreaSummaryDto.class);
+        Mockito.when(areaSummary.getAreaName()).thenReturn("Checkout");
+        Mockito.when(areaSummary.getPassCount()).thenReturn(4);
+        Mockito.when(areaSummary.getFixedCount()).thenReturn(2);
+        Mockito.when(areaSummary.getKnownCount()).thenReturn(1);
+        Mockito.when(areaSummary.getUnknownCount()).thenReturn(1);
+        Mockito.when(areaSummary.getIgnoredCount()).thenReturn(0);
+        Mockito.when(areaSummary.getTotalCount()).thenReturn(8);
+        Mockito.when(areaSummary.getPassHealedCount()).thenReturn(2);
+        Mockito.when(areaSummary.getFixedHealedCount()).thenReturn(1);
+        Mockito.when(areaSummary.getKnownHealedCount()).thenReturn(1);
+        Mockito.when(areaSummary.getUnknownHealedCount()).thenReturn(0);
+
+        Mockito.when(runReport.getAreaSummaries()).thenReturn(Arrays.asList(areaSummary));
+        Mockito.when(dataService.getRunReport("run-100")).thenReturn(runReport);
+
+        final Model model = new ConcurrentModel();
+        final String view = controller.batchHistory("SmokeBatch", null, "true", model);
+
+        Assertions.assertEquals("fragments/batch-history :: batchHistory", view);
+        @SuppressWarnings("unchecked")
+        final List<BatchAreaTrendDto> areaTrends = (List<BatchAreaTrendDto>) model.getAttribute("areaTrends");
+        Assertions.assertNotNull(areaTrends);
+        Assertions.assertEquals(1, areaTrends.size());
+
+        final BatchAreaTrendDto trend = areaTrends.get(0);
+        Assertions.assertEquals("Checkout", trend.getAreaName());
+        Assertions.assertEquals(1, trend.getRunPoints().size());
+
+        final AreaRunPointDto point = trend.getRunPoints().get(0);
+        Assertions.assertEquals("run-100", point.getRunId());
+        Assertions.assertEquals(4, point.getPassCount());
+        Assertions.assertEquals(2, point.getPassHealedCount());
+        Assertions.assertEquals(2, point.getPassCleanCount());
+        Assertions.assertEquals(2, point.getFixedCount());
+        Assertions.assertEquals(1, point.getFixedHealedCount());
+        Assertions.assertEquals(1, point.getFixedCleanCount());
+        Assertions.assertEquals(1, point.getKnownCount());
+        Assertions.assertEquals(1, point.getKnownHealedCount());
+        Assertions.assertEquals(0, point.getKnownCleanCount());
+        Assertions.assertEquals(1, point.getUnknownCount());
+        Assertions.assertEquals(0, point.getUnknownHealedCount());
+        Assertions.assertEquals(1, point.getUnknownCleanCount());
+    }
+
+    @Test
+    public void testRemoveBugFromExecutionResolvesRunIdFromCurrentUrlWhenPlaceholderProvided()
+    {
+        final String runIdPlaceholder = "#RUN_ID";
+        final String currentUrl = "/run-report?runId=run-resolved-456";
+        final TestExecutionDto execDto = new TestExecutionDto();
+        execDto.setId("row-1");
+        execDto.setStatus("failed-unknown");
+
+        final RunReportDto reportDto = Mockito.mock(RunReportDto.class);
+        Mockito.when(reportDto.getRunId()).thenReturn("run-resolved-456");
+
+        Mockito.when(dataService.removeBugFromExecution("run-resolved-456", "row-1", "BUG-123"))
+            .thenReturn(execDto);
+        Mockito.when(dataService.getRunReport("run-resolved-456"))
+            .thenReturn(reportDto);
+
+        final Model model = new ConcurrentModel();
+        final HttpServletResponse response = Mockito.mock(HttpServletResponse.class);
+
+        final String view = controller.removeBugFromExecution(
+            runIdPlaceholder, "row-1", null, "BUG-123", null, currentUrl, null, model, response);
+
+        Assertions.assertEquals("fragments/side-panel-step-list :: sidePanelBugSection", view);
+        Assertions.assertEquals("run-resolved-456", model.getAttribute("runId"));
+        Mockito.verify(dataService).removeBugFromExecution("run-resolved-456", "row-1", "BUG-123");
+    }
+
+    @Test
+    public void testRemoveBugFromExecutionStripsHashPrefixFromRunId()
+    {
+        final String runIdWithHash = "#run-with-hash-789";
+        final TestExecutionDto execDto = new TestExecutionDto();
+        execDto.setId("row-2");
+        execDto.setStatus("failed-unknown");
+
+        final RunReportDto reportDto = Mockito.mock(RunReportDto.class);
+        Mockito.when(reportDto.getRunId()).thenReturn("run-with-hash-789");
+
+        Mockito.when(dataService.removeBugFromExecution("run-with-hash-789", "row-2", "BUG-456"))
+            .thenReturn(execDto);
+        Mockito.when(dataService.getRunReport("run-with-hash-789"))
+            .thenReturn(reportDto);
+
+        final Model model = new ConcurrentModel();
+        final HttpServletResponse response = Mockito.mock(HttpServletResponse.class);
+
+        final String view = controller.removeBugFromExecution(
+            runIdWithHash, "row-2", null, "BUG-456", null, null, null, model, response);
+
+        Assertions.assertEquals("fragments/side-panel-step-list :: sidePanelBugSection", view);
+        Assertions.assertEquals("run-with-hash-789", model.getAttribute("runId"));
+        Mockito.verify(dataService).removeBugFromExecution("run-with-hash-789", "row-2", "BUG-456");
+    }
+
+    @Test
+    public void testRemoveBugFromExecutionWithCompositeKeyContainingHashes()
+    {
+        final String runId = "run-comp-1";
+        final String compositeRowId = "Aura_google_test_yaml_Test#executeYamlTest#Default#Chrome_1920x1080";
+        final String ticket = "BUG-48868";
+
+        final TestExecutionDto execDto = new TestExecutionDto();
+        execDto.setId(compositeRowId);
+        execDto.setStatus("failed-unknown");
+        execDto.setBugs(List.of());
+
+        final RunReportDto reportDto = Mockito.mock(RunReportDto.class);
+        Mockito.when(reportDto.getRunId()).thenReturn(runId);
+
+        Mockito.when(dataService.removeBugFromExecution(runId, compositeRowId, ticket))
+            .thenReturn(execDto);
+        Mockito.when(dataService.getRunReport(runId))
+            .thenReturn(reportDto);
+
+        final Model model = new ConcurrentModel();
+        final HttpServletResponse response = Mockito.mock(HttpServletResponse.class);
+
+        final String view = controller.removeBugFromExecution(
+            runId, compositeRowId, null, ticket, null, null, null, model, response);
+
+        Assertions.assertEquals("fragments/side-panel-step-list :: sidePanelBugSection", view);
+        Assertions.assertEquals(runId, model.getAttribute("runId"));
+        Assertions.assertEquals(compositeRowId, model.getAttribute("rowId"));
+        Assertions.assertEquals(execDto, model.getAttribute("exec"));
+        Mockito.verify(dataService).removeBugFromExecution(runId, compositeRowId, ticket);
+    }
+
+    @Test
+    public void testRemoveBugFromExecutionFallsBackToExecutionDetailsWhenRemovalYieldsHollowDto()
+    {
+        final String runId = "run-comp-2";
+        final String compositeRowId = "Aura_test#method#title#Chrome";
+
+        final TestExecutionDto existingExec = new TestExecutionDto();
+        existingExec.setId(compositeRowId);
+        existingExec.setStatus("failed-known");
+        existingExec.setBugs(List.of("BUG-EXISTING-1"));
+
+        final RunReportDto reportDto = Mockito.mock(RunReportDto.class);
+        Mockito.when(reportDto.getRunId()).thenReturn(runId);
+
+        // When dataService returns a hollow DTO (e.g. bugTicket was null or not found)
+        Mockito.when(dataService.removeBugFromExecution(runId, compositeRowId, null))
+            .thenReturn(new TestExecutionDto());
+        Mockito.when(dataService.getExecutionDetails(runId, compositeRowId))
+            .thenReturn(existingExec);
+        Mockito.when(dataService.getRunReport(runId))
+            .thenReturn(reportDto);
+
+        final Model model = new ConcurrentModel();
+        final HttpServletResponse response = Mockito.mock(HttpServletResponse.class);
+
+        final String view = controller.removeBugFromExecution(
+            runId, compositeRowId, null, null, null, null, null, model, response);
+
+        Assertions.assertEquals("fragments/side-panel-step-list :: sidePanelBugSection", view);
+        Assertions.assertEquals(existingExec, model.getAttribute("exec"));
+        Assertions.assertEquals(List.of("BUG-EXISTING-1"), ((TestExecutionDto) model.getAttribute("exec")).getBugs());
+    }
+
+    @Test
+    public void testDeleteRunRemovesRunAndReturnsBatchOverview()
+    {
+        final BatchOverviewDataDto overviewData = new BatchOverviewDataDto(
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of()
+        );
+        Mockito.when(dataService.getBatchOverviewData()).thenReturn(overviewData);
+
+        final Model model = new ConcurrentModel();
+        final String view = controller.deleteRun("RUN-100", null, "true", "http://localhost:8080/batch-overview", null, model);
+
+        Assertions.assertEquals("fragments/batch-overview :: batchOverview", view);
+        Mockito.verify(dataService).removeRunFromHistory("RUN-100");
+    }
+
+    @Test
+    public void testDeleteRunFromBatchHistoryReturnsBatchHistoryFragment()
+    {
+        final String batchName = "SmokeBatch";
+        final List<TestRunEntity> runs = List.of();
+        Mockito.when(runRepository.findByBatchNameAndIsDeletedFalseOrderByStartTimeMsDesc(batchName)).thenReturn(runs);
+        Mockito.when(batchRepository.findById(batchName)).thenReturn(Optional.empty());
+
+        final Model model = new ConcurrentModel();
+        final String view = controller.deleteRun(null, "RUN-200", "true", "http://localhost:8080/batch-history?batchName=" + batchName + "&limit=10", null, model);
+
+        Assertions.assertEquals("fragments/batch-history :: batchHistory", view);
+        Assertions.assertEquals(batchName, model.getAttribute("batchName"));
+        Mockito.verify(dataService).removeRunFromHistory("RUN-200");
+    }
+
+    @Test
+    public void testDeleteRunFromTestBaseReturnsTestBaseFragment()
+    {
+        final TestBaseDataDto testBaseData = new TestBaseDataDto(
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            Map.of(),
+            0,
+            0
+        );
+        Mockito.when(dataService.getTestBaseData()).thenReturn(testBaseData);
+
+        final Model model = new ConcurrentModel();
+        final String view = controller.deleteRun("RUN-300", null, "true", "http://localhost:8080/test-base?testName=CheckoutTest", null, model);
+
+        Assertions.assertEquals("fragments/test-base :: testBase", view);
+        Assertions.assertEquals("CheckoutTest", model.getAttribute("targetTestName"));
+        Mockito.verify(dataService).removeRunFromHistory("RUN-300");
     }
 }

@@ -337,7 +337,12 @@ function openAiLogModal(reportId) {
         .then(r => r.text())
         .then(text => {
             const lines = text.split('\n');
-            const filtered = lines.filter(l => typeof isAiLogLine === 'function' && isAiLogLine(l)).join('\n');
+            let prevWasAi = false;
+            const filtered = lines.filter(l => {
+                const isAi = typeof isAiLogLine === 'function' ? isAiLogLine(l, prevWasAi) : true;
+                prevWasAi = isAi && !l.trim().startsWith('╚') && (typeof allowsAiContinuation === 'function' ? allowsAiContinuation(l) : false);
+                return isAi;
+            }).join('\n');
             openLogModal(`AI Execution Log (${reportId})`, filtered || "No AI logs found.");
         })
         .catch(e => showToast("Failed to fetch log", "error"));

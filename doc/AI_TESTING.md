@@ -260,28 +260,42 @@ public final class SelfHealingTest
 For tests requiring a physical browser engine (Chrome, Firefox, Safari) to scan layout grids, test CSS contrast, or verify shadow DOM boundaries:
 
 ### Sandbox Directory Layout
-Sandbox assets reside in the classpath under:
-`src/test/resources/ai-test-pages/AuraGlanceTest/`
+Sandbox assets reside in the classpath of `neodymium-test-server` under:
+`neodymium-test-server/src/main/resources/ai-test-pages/AuraGlanceTest/`
 
 * **Dashboard & Shop Apps**: `dashboard/` (SaaS administration) and `shop/` (Apparel storefront with `homepage-perfect.html`, `homepage-normal.html`, `homepage-bad.html`).
 * **Scenario Playground (`shop/sandbox/`)**: Isolated challenge pages testing SVG-only buttons (`svg-icons.html`), canvas clicks (`canvas-click.html`), Shadow DOM (`shadow-dom.html`), z-index click interception (`click-intercept.html`), AJAX table sorting (`table-sorting.html`), and cross-origin iframes (`cross-origin-iframe.html`).
 
-### Embedded Server (`EmbeddedHtmlServer`)
-Tests extending `BaseAiTest` spin up an embedded HTTP + HTTPS server automatically on free random ports via `EmbeddedHtmlServer.java`. The server loads `keystore.p12` for local SSL testing and shuts down automatically after test execution.
+### Embedded Server (`JavalinTestServer`)
+Tests extending `BaseAiTest` in `neodymium-e2e-tests` spin up an embedded HTTP + HTTPS server automatically on free random ports via `JavalinTestServer.java` (provided by `neodymium-test-server`). The server loads `keystore.p12` for local SSL testing and shuts down automatically after test execution.
 
 ---
 
 ## 6. How to Run AI Tests via Maven
 
-Execute the hermetic test suite via Maven:
+Execute the test suites via Maven's reactor:
 
 ```bash
-# Compile source and test classes
-mvn test-compile
+# Compile all modules
+mvn clean test-compile
 
-# Run hermetic JUnit 5 unit & state machine suite
-mvn test
+# Run core framework tests (hermetic JUnit 5 unit & state machine suite)
+mvn test -pl neodymium-core
 
-# Run live integration tests (requires network & API keys configured)
-mvn test -PLiveAPI
+# Run test server tests (multi-port fallback and state reset suite)
+mvn test -pl neodymium-test-server
+
+# Run end-to-end integration and sandbox mock suites (default: hermetic).
+# Tests tagged LiveAPI, LiveLlm or ExternalSite are excluded by default.
+mvn test -pl neodymium-e2e-tests -am
+
+# Run everything including live LLM and external-site tests
+# (requires network access and API keys, e.g. GEMINI_API_KEY)
+mvn test -pl neodymium-e2e-tests -PLiveAPI -am
+
+# Run only the live tests
+mvn test -pl neodymium-e2e-tests -PLiveAPI -Dgroups=LiveAPI,LiveLlm -am
 ```
+
+Any test class that calls a real LLM (`FORCE_RECORDING`, `LLM_RECORDING`, `LLM_ONLY` without a mock) or an external
+site must carry `@Tag("LiveAPI")` (and `@Tag("ExternalSite")` where applicable), otherwise it runs in the default build.

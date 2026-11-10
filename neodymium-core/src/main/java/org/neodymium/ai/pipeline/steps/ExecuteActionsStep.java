@@ -19,17 +19,22 @@
 package org.neodymium.ai.pipeline.steps;
 
 import com.codeborne.selenide.Configuration;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.neodymium.ai.action.Action;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.event.ExecutionListener;
+import org.neodymium.ai.event.InteractiveConsoleListener;
 import org.neodymium.ai.event.structural.StateCapturedEvent;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.event.structural.StepStartedEvent;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
+import org.neodymium.ai.executor.selenide.plugins.ClickAction;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
@@ -39,6 +44,7 @@ import org.neodymium.ai.pipeline.ExpectedBugNotReproducedException;
 import org.neodymium.ai.pipeline.HealingRequiredException;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
+import org.neodymium.ai.pipeline.PlaybookPipelineStep;
 import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.pipeline.structural.SequenceStep;
 import org.neodymium.ai.pipeline.structural.TryCatchStep;
@@ -48,6 +54,7 @@ import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.tool.SimpleToolContext;
 import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.tool.browser.BrowserToolProvider;
+import org.neodymium.ai.util.DomQuiescenceWatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -86,8 +93,18 @@ public final class ExecuteActionsStep
     {
         if (step == null)
         {
-            return c ->
+            return new PlaybookPipelineStep()
             {
+                @Override
+                public void execute(final ExecutionContext c) throws PipelineException
+                {
+                }
+
+                @Override
+                public PlaybookStep getPlaybookStep()
+                {
+                    return null;
+                }
             };
         }
 
@@ -106,13 +123,16 @@ public final class ExecuteActionsStep
         // If the step is an include file, a recorded sub-step replay, or a legacy replay, schedule the sub-steps in sequence
         if ((isInclude || isLegacySubStepReplay || (isReplayStep && hasSubStepToolCalls)) && step.getSubSteps() != null && !step.getSubSteps().isEmpty())
         {
-            return contextState ->
+            return new PlaybookPipelineStep()
             {
+                @Override
+                public void execute(final ExecutionContext contextState) throws PipelineException
+                {
                 contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
                 step.setStatus(PlaybookStepStatus.RUNNING);
                 final long parentStartTime = System.currentTimeMillis();
                 step.setStartTimeMs(parentStartTime);
-                final String rawInstruction = step.getInstruction();
+                final String rawInstruction = step.getRawInstruction();
                 final String resolvedInstruction = (contextState.getSessionData() != null && rawInstruction != null)
                     ? contextState.getSessionData().resolveAvailableVariables(rawInstruction)
                     : rawInstruction;
@@ -153,12 +173,12 @@ public final class ExecuteActionsStep
                     PlaybookStepStatus finalStatus = PlaybookStepStatus.SUCCESS;
                     for (final PlaybookStep sub : step.getSubSteps())
                     {
-                        if (sub.getStatus() == PlaybookStepStatus.FAILED)
+                        if (sub.getStatus() == PlaybookStepStatus.FAILED && !sub.isOptional())
                         {
                             finalStatus = PlaybookStepStatus.FAILED;
                             break;
                         }
-                        else if (sub.getStatus() == PlaybookStepStatus.HEALED)
+                        else if (sub.getStatus() == PlaybookStepStatus.HEALED && finalStatus != PlaybookStepStatus.FAILED)
                         {
                             finalStatus = PlaybookStepStatus.HEALED;
                         }
@@ -169,6 +189,30 @@ public final class ExecuteActionsStep
                     if (parentStats != null)
                     {
                         parentStats.setDurationMs(parentDuration);
+                    }
+                    if (step.getActions().isEmpty())
+                    {
+                        final List<Action> aggregated = new ArrayList<>();
+                        for (int i = 0; i < step.getSubSteps().size(); i++)
+                        {
+                            final PlaybookStep sub = step.getSubSteps().get(i);
+                            if (sub.getActions() != null)
+                            {
+                                for (final Action act : sub.getActions())
+                                {
+                                    if (act.getSubStepIndex() == null)
+                                    {
+                                        act.setSubStepIndex(i);
+                                        act.setSubStepInstruction(sub.getInstruction());
+                                    }
+                                    aggregated.add(act);
+                                }
+                            }
+                        }
+                        if (!aggregated.isEmpty())
+                        {
+                            step.setActions(aggregated);
+                        }
                     }
                     if (session != null && session.getEventBus() != null)
                     {
@@ -194,23 +238,48 @@ public final class ExecuteActionsStep
                     }
                     contextState.pushStep(mapPlaybookStepToPipelineStep(child, session, contextState));
                 }
-            };
-        }
+            }
+
+            @Override
+            public PlaybookStep getPlaybookStep()
+            {
+                return step;
+            }
+        };
+    }
 
         // For leaf steps (or compound turn groups), return a pipeline step wrapper setting the active instruction and pushing execution loop
-        return contextState ->
+        return new PlaybookPipelineStep()
         {
+            @Override
+            public void execute(final ExecutionContext contextState) throws PipelineException
+            {
             final PlaybookStepStatus initialStepStatus = step.getStatus();
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
+            contextState.resetStepInteractivePause();
             step.setStatus(PlaybookStepStatus.RUNNING);
-            final String rawInstruction = step.hasSubSteps() ? step.getFullInstruction() : step.getInstruction();
-            final String resolvedInstruction = (contextState.getSessionData() != null && rawInstruction != null)
-                ? contextState.getSessionData().resolveAvailableVariables(rawInstruction)
-                : rawInstruction;
+            final String rawInstruction = step.hasSubSteps() ? step.getFullInstruction() : step.getRawInstruction();
+            final String resolvedInstruction;
+            if (contextState.getSessionData() != null && rawInstruction != null)
+            {
+                if (!step.hasSubSteps())
+                {
+                    resolvedInstruction = contextState.getSessionData().resolveVariables(rawInstruction);
+                }
+                else
+                {
+                    resolvedInstruction = contextState.getSessionData().resolveAvailableVariables(rawInstruction);
+                }
+            }
+            else
+            {
+                resolvedInstruction = rawInstruction;
+            }
             final String preparedInstruction = prepareInstruction(resolvedInstruction);
             contextState.getTransientData().put("KEY_CURRENT_STEP_RAW_INSTRUCTION", resolvedInstruction);
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, preparedInstruction);
             contextState.getTransientData().remove("KEY_IN_CONTINUATION_LOOP");
+            contextState.getTransientData().remove(ExecutionContext.KEY_IS_HEALED_STEP);
             if (step.hasSubSteps())
             {
                 final List<String> milestones = new ArrayList<>();
@@ -273,27 +342,24 @@ public final class ExecuteActionsStep
             final StepStats stats = getOrCreateStatsForStep(step, stepStartTime, isReplayStats, stepStatsMap, allStats, contextState);
             contextState.getTransientData().put("KEY_CURRENT_STEP_STATS", stats);
 
-            ContextLevel initialLevel = ContextLevel.LEAN;
-            if (step.getContextLevel() != null && !step.getContextLevel().isBlank())
-            {
-                try
-                {
-                    initialLevel = ContextLevel.valueOf(step.getContextLevel().toUpperCase().trim());
-                }
-                catch (final Exception ignored)
-                {
-                }
-            }
+            ContextLevel initialLevel = AiConfiguration.getInstance().getContextLevel();
 
             final boolean hasVisualFull = PlaybookStep.VISUAL_FULL_PATTERN.matcher(resolvedInstruction).find();
             final boolean hasLayout = PlaybookStep.LAYOUT_PATTERN.matcher(resolvedInstruction).find();
             final boolean hasVisual = PlaybookStep.VISUAL_PATTERN.matcher(resolvedInstruction).find();
             final boolean hasHint = PlaybookStep.HINT_PATTERN.matcher(resolvedInstruction).find();
+            final boolean hasMarker = (step != null && step.isMarker())
+                || PlaybookStep.MARKER_PATTERN.matcher(resolvedInstruction).find()
+                || (step != null && step.getRawInstruction() != null && PlaybookStep.MARKER_PATTERN.matcher(step.getRawInstruction()).find());
 
             final boolean isFullPageTag = hasVisualFull || hasLayout;
             contextState.getTransientData().put("KEY_IS_FULL_PAGE_SCREENSHOT", isFullPageTag);
 
-            if (hasVisualFull || hasVisual)
+            if (hasMarker)
+            {
+                initialLevel = ContextLevel.VISUAL_LEAN;
+            }
+            else if (hasVisualFull || hasVisual)
             {
                 initialLevel = ContextLevel.VISUAL;
             }
@@ -304,6 +370,11 @@ public final class ExecuteActionsStep
             else if (hasHint)
             {
                 initialLevel = ContextLevel.HINT;
+            }
+
+            if (step.getContextLevel() != null && !step.getContextLevel().isBlank())
+            {
+                initialLevel = ContextLevel.fromString(step.getContextLevel(), initialLevel);
             }
 
             @SuppressWarnings("unchecked")
@@ -318,9 +389,81 @@ public final class ExecuteActionsStep
                 session.getEventBus().dispatch(new StepStartedEvent(step, Math.max(0, stepIndex)));
             }
 
+            InteractiveConsoleListener interactiveListener = null;
+            if (session != null && session.getEventBus() != null)
+            {
+                for (final ExecutionListener listener : session.getEventBus().getListeners())
+                {
+                    if (listener instanceof InteractiveConsoleListener icl && icl.isInteractive())
+                    {
+                        interactiveListener = icl;
+                        break;
+                    }
+                }
+            }
+
+            final boolean hasRecordedCalls = (step.getToolCalls() != null && !step.getToolCalls().isEmpty())
+                || (step.getActions() != null && !step.getActions().isEmpty())
+                || (initialStepStatus != null && initialStepStatus != PlaybookStepStatus.PENDING)
+                || (step.getRecordedStatus() != null && step.getRecordedStatus() != PlaybookStepStatus.PENDING);
+            if (hasRecordedCalls && interactiveListener != null && !interactiveListener.isAutoRun())
+            {
+                final String userAction = interactiveListener.pauseBeforeActionExecution(contextState, step);
+                final boolean isRescheduled = "RESCHEDULE".equalsIgnoreCase(userAction)
+                    || Boolean.TRUE.equals(contextState.getTransientData().remove("KEY_STEP_RESCHEDULED"));
+                if ("REWIND".equalsIgnoreCase(userAction) || isRescheduled)
+                {
+                    return;
+                }
+                if ("SKIP".equalsIgnoreCase(userAction) || step.getStatus() == PlaybookStepStatus.SKIPPED)
+                {
+                    if (step.getParent() != null)
+                    {
+                        LOGGER.warn("   ⏭️ Skipping sub-step execution per user request: \"{}\" (Parent include: \"{}\", includeFile={})",
+                            resolvedInstruction, step.getParent().getInstruction(), step.getSourceFile());
+                    }
+                    else
+                    {
+                        LOGGER.info("   ⏭️ Skipping step execution per user request: \"{}\"", resolvedInstruction);
+                    }
+                    if (session != null && session.getEventBus() != null)
+                    {
+                        session.getEventBus().dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SKIPPED));
+                    }
+                    return;
+                }
+                final boolean stepEditedDuringPause = "EDIT".equalsIgnoreCase(userAction)
+                    || "UPDATE_STEP".equalsIgnoreCase(userAction)
+                    || "SAVE_STEP".equalsIgnoreCase(userAction)
+                    || Boolean.TRUE.equals(contextState.getTransientData().remove("KEY_STEP_EDITED"));
+                if (stepEditedDuringPause)
+                {
+                    step.setRecordedStatus(null);
+                    step.setScreenshotHash(null);
+                    step.setNoReplay(true);
+                    contextState.getTransientData().put("KEY_CURRENT_STEP_NO_REPLAY", true);
+                    contextState.getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, true);
+                }
+                final String currentRaw = step.hasSubSteps() ? step.getFullInstruction() : step.getInstruction();
+                final String currentResolved = (contextState.getSessionData() != null && currentRaw != null)
+                    ? (step.hasSubSteps() ? contextState.getSessionData().resolveAvailableVariables(currentRaw) : contextState.getSessionData().resolveVariables(currentRaw))
+                    : currentRaw;
+                final String currentPrepared = prepareInstruction(currentResolved);
+                contextState.getTransientData().put("KEY_CURRENT_STEP_RAW_INSTRUCTION", currentResolved);
+                contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, currentPrepared);
+            }
+
             if (step.getStatus() == PlaybookStepStatus.SKIPPED)
             {
-                LOGGER.info("   ⏭️ Skipping step execution per user request: \"{}\"", resolvedInstruction);
+                if (step.getParent() != null)
+                {
+                    LOGGER.warn("   ⏭️ Skipping sub-step execution per user request: \"{}\" (Parent include: \"{}\", includeFile={})",
+                        resolvedInstruction, step.getParent().getInstruction(), step.getSourceFile());
+                }
+                else
+                {
+                    LOGGER.info("   ⏭️ Skipping step execution per user request: \"{}\"", resolvedInstruction);
+                }
                 if (session != null && session.getEventBus() != null)
                 {
                     session.getEventBus().dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SKIPPED));
@@ -362,17 +505,215 @@ public final class ExecuteActionsStep
             final ExecutionMode mode = (ExecutionMode) contextState.getTransientData()
                 .computeIfAbsent(ExecutionContext.KEY_EXECUTION_MODE, k -> AiConfiguration.getInstance().getExecutionMode());
 
-            final boolean hasRecordedContent = (step.getToolCalls() != null && !step.getToolCalls().isEmpty())
+            final boolean currentStepNoReplay = stepNoReplay || step.isNoReplay()
+                || Boolean.TRUE.equals(contextState.getTransientData().get("KEY_CURRENT_STEP_NO_REPLAY"));
+            final boolean hasRecordedContent = !currentStepNoReplay && ((step.getToolCalls() != null && !step.getToolCalls().isEmpty())
                 || (step.getScreenshotHash() != null && !step.getScreenshotHash().isEmpty())
-                || (initialStepStatus != null && initialStepStatus != PlaybookStepStatus.PENDING);
-            final boolean isReplay = mode.isReplay() && !stepNoReplay && (mode == ExecutionMode.REPLAY_STRICT || hasRecordedContent);
+                || (initialStepStatus != null && initialStepStatus != PlaybookStepStatus.PENDING)
+                || (step.getRecordedStatus() != null && step.getRecordedStatus() != PlaybookStepStatus.PENDING));
+            final boolean isReplay = mode.isReplay() && !currentStepNoReplay && (mode == ExecutionMode.REPLAY_STRICT || hasRecordedContent);
 
 
             final ContextLevel effectiveLevel = (ContextLevel) contextState.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
             stats.addContextLevel(effectiveLevel != null ? effectiveLevel.name() : initialLevel.name());
 
+            final VerifyOutcomeStep verifyStep = new VerifyOutcomeStep();
+            final PipelineStep endHookStep = c ->
+            {
+                if (Boolean.TRUE.equals(c.getTransientData().remove("KEY_STEP_RESCHEDULED")))
+                {
+                    step.setStatus(PlaybookStepStatus.PENDING);
+                    return;
+                }
+                final Object isHealed = c.getTransientData().remove(ExecutionContext.KEY_IS_HEALED_STEP);
+                if (!step.isFailed() && step.getStatus() != PlaybookStepStatus.SKIPPED)
+                {
+                    if (Boolean.TRUE.equals(isHealed) || step.getStatus() == PlaybookStepStatus.HEALED)
+                    {
+                        step.setStatus(PlaybookStepStatus.HEALED);
+                        step.setSchemaVersion(PlaybookStep.CURRENT_SCHEMA_VERSION);
+                    }
+                    else
+                    {
+                        step.setStatus(PlaybookStepStatus.SUCCESS);
+                    }
+                    step.setFailed(false);
+                    step.setFailureReason(null);
+                }
+
+                if (step.getStartTimeMs() != null)
+                {
+                    step.setDurationMs(System.currentTimeMillis() - step.getStartTimeMs());
+                }
+                final Object statsObj = c.getTransientData().get("KEY_CURRENT_STEP_STATS");
+                if (statsObj instanceof StepStats stepStats)
+                {
+                    stepStats.setDurationMs(System.currentTimeMillis() - stepStats.getStartTime());
+                }
+
+                if (step.hasSubSteps())
+                {
+                    AgentToolLoopStep.partitionToolCallsAndActions(step.getSubSteps(), step.getToolCalls(), step.getActions());
+                    final long childDuration = step.getDurationMs() != null && !step.getSubSteps().isEmpty()
+                        ? step.getDurationMs() / step.getSubSteps().size()
+                        : 0L;
+                    if (!step.isFailed())
+                    {
+                        for (final PlaybookStep sub : step.getSubSteps())
+                        {
+                            if (sub.getStatus() == null || sub.getStatus() == PlaybookStepStatus.PENDING)
+                            {
+                                sub.setStatus(step.getStatus());
+                            }
+                            sub.setFailed(false);
+                            sub.setFailureReason(null);
+                            if (sub.getDurationMs() == null || sub.getDurationMs() == 0L)
+                            {
+                                sub.setDurationMs(childDuration);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        int failIdx = -1;
+                        for (int i = 0; i < step.getSubSteps().size(); i++)
+                        {
+                            final PlaybookStep sub = step.getSubSteps().get(i);
+                            if (sub.getActions() == null || sub.getActions().isEmpty())
+                            {
+                                failIdx = i;
+                                break;
+                            }
+                        }
+                        if (failIdx < 0)
+                        {
+                            failIdx = step.getSubSteps().size() - 1;
+                        }
+                        for (int i = 0; i < step.getSubSteps().size(); i++)
+                        {
+                            final PlaybookStep sub = step.getSubSteps().get(i);
+                            if (sub.getDurationMs() == null || sub.getDurationMs() == 0L)
+                            {
+                                sub.setDurationMs(childDuration);
+                            }
+                            if (i < failIdx)
+                            {
+                                if (sub.getStatus() == null || sub.getStatus() == PlaybookStepStatus.PENDING)
+                                {
+                                    sub.setStatus(PlaybookStepStatus.SUCCESS);
+                                }
+                                sub.setFailed(false);
+                            }
+                            else if (i == failIdx)
+                            {
+                                sub.setStatus(PlaybookStepStatus.FAILED);
+                                sub.setFailed(true);
+                                sub.setFailureReason(step.getFailureReason());
+                            }
+                            else
+                            {
+                                sub.setStatus(PlaybookStepStatus.NOT_RUN);
+                                sub.setFailed(false);
+                                sub.setNotRunReason("Not executed because sub-step #" + (failIdx + 1) + " failed.");
+                            }
+                        }
+                    }
+                    if (statsObj instanceof StepStats stepStats && stepStats.getSubStats().isEmpty())
+                    {
+                        final boolean replayed = stepStats.isReplayed();
+                        final List<PlaybookStep> leafSubSteps = getEffectiveLeafSubSteps(step.getSubSteps());
+                        final long leafDuration = step.getDurationMs() != null && !leafSubSteps.isEmpty()
+                            ? step.getDurationMs() / leafSubSteps.size()
+                            : childDuration;
+                        for (final PlaybookStep sub : leafSubSteps)
+                        {
+                            final String rawSub = sub.getInstruction();
+                            final String resSub = c.getSessionData() != null
+                                ? c.getSessionData().resolveAvailableVariables(rawSub)
+                                : rawSub;
+                            final StepStats subStats = new StepStats(resSub, stepStats.getStartTime());
+                            subStats.setDurationMs(leafDuration);
+                            subStats.setReplayed(replayed);
+                            stepStats.getSubStats().add(subStats);
+                        }
+                    }
+                }
+
+                if (step.isBug() && !step.isFailed())
+                {
+                    final String bugComment = step.getBugDetails();
+                    final String bugStr = bugComment != null ? " (" + bugComment + ")" : "";
+                    final String resolvedBugInstruction = c.getSessionData() != null
+                        ? c.getSessionData().resolveAvailableVariables(step.getInstruction())
+                        : step.getInstruction();
+                    final String msg = String.format("Expected bug%s but step succeeded: %s:%d (%s)",
+                        bugStr, step.getSourceFile(), step.getLineNumber(), resolvedBugInstruction);
+                    LOGGER.error("   ❌ {}", msg);
+
+                    if (!step.isContinueOnError())
+                    {
+                        throw new ExpectedBugNotReproducedException(msg);
+                    }
+                    else
+                    {
+                        @SuppressWarnings("unchecked")
+                        final List<String> warnings = (List<String>) c.getTransientData()
+                            .computeIfAbsent("verificationWarnings", k -> new ArrayList<String>());
+                        warnings.add(msg);
+                    }
+                }
+
+                final Long origTimeout = (Long) c.getTransientData().remove("KEY_ORIG_SELENIDE_TIMEOUT");
+                if (origTimeout != null)
+                {
+                    Configuration.timeout = origTimeout;
+                }
+
+                c.getTransientData().remove(ExecutionContext.KEY_POST_ACTION_STATE);
+                c.getTransientData().remove(ExecutionContext.KEY_PRE_ACTION_STATE);
+                c.getTransientData().remove("KEY_IS_FULL_PAGE_SCREENSHOT");
+
+                if (session != null && session.getEventBus() != null)
+                {
+                    session.getEventBus().dispatch(new StepFinishedEvent(step, step.getStatus()));
+                }
+            };
+
             final VisualBaselineGateStep visualBaselineGateStep = new VisualBaselineGateStep(step, session);
-            final boolean isBypassed = visualBaselineGateStep.executeGate(contextState);
+            boolean isBypassed = false;
+            try
+            {
+                isBypassed = visualBaselineGateStep.executeGate(contextState);
+            }
+            catch (final HealingRequiredException hre)
+            {
+                if (mode.supportsHealing() && !step.isNoHealing())
+                {
+                    contextState.getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, true);
+                    LOGGER.warn("⚠️ Visual gate requires online healing — launching AgentToolLoopStep for: \"{}\"", step.getInstruction());
+                    final TargetExecutor executor = (TargetExecutor) contextState.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
+                    if (executor != null && contextState.getTransientData().get(ExecutionContext.KEY_LAST_STATE) == null)
+                    {
+                        try
+                        {
+                            final SutState freshState = executor.captureState(ContextLevel.STANDARD);
+                            contextState.getTransientData().put(ExecutionContext.KEY_LAST_STATE, freshState);
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+                    contextState.pushStep(endHookStep);
+                    if (AiConfiguration.getInstance().isSemanticVerificationEnabled() || step.isVisualOrLayoutStep())
+                    {
+                        contextState.pushStep(verifyStep);
+                    }
+                    contextState.pushStep(new AgentToolLoopStep());
+                    return;
+                }
+                throw hre;
+            }
+
             if (isBypassed)
             {
                 step.setDurationMs(System.currentTimeMillis() - stepStartTime);
@@ -392,7 +733,6 @@ public final class ExecuteActionsStep
                 return;
             }
 
-            final VerifyOutcomeStep verifyStep = new VerifyOutcomeStep();
             final List<PipelineStep> standardFlow = new ArrayList<>();
 
             // Pre-step visual state capture for outcome verification
@@ -410,13 +750,23 @@ public final class ExecuteActionsStep
                     {
                         try
                         {
-                            final boolean isFullPageReq = Boolean.TRUE.equals(c.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
-                                    || (step != null && step.isFullPageVisualStep());
+                            final boolean isFullPageReq = !hasCoordinateAction(step)
+                                    && (Boolean.TRUE.equals(c.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                                            || (step != null && step.isFullPageVisualStep()));
                             final ContextLevel cl = isFullPageReq ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL;
-                            final SutState initialVisual = executor.captureState(cl, isFullPageReq);
-                            if (initialVisual != null && initialVisual.getAttachments() != null && !initialVisual.getAttachments().isEmpty())
+
+                            final Object prevPostState = c.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
+                            if (prevPostState instanceof final SutState prevSutState && !isFullPageReq)
                             {
-                                c.getTransientData().put(ExecutionContext.KEY_PRE_ACTION_STATE, initialVisual);
+                                c.getTransientData().put(ExecutionContext.KEY_PRE_ACTION_STATE, prevSutState);
+                            }
+                            else
+                            {
+                                final SutState initialVisual = executor.captureState(cl, isFullPageReq);
+                                if (initialVisual != null && initialVisual.getAttachments() != null && !initialVisual.getAttachments().isEmpty())
+                                {
+                                    c.getTransientData().put(ExecutionContext.KEY_PRE_ACTION_STATE, initialVisual);
+                                }
                             }
                         }
                         catch (final Exception e)
@@ -434,7 +784,8 @@ public final class ExecuteActionsStep
                     final boolean isRecorded = step.getToolCalls() != null && !step.getToolCalls().isEmpty();
                     final boolean isVisualOnly = step.getScreenshotHash() != null && !step.getScreenshotHash().isEmpty();
                     final boolean isComposite = step.getSubSteps() != null && !step.getSubSteps().isEmpty();
-                    final boolean isRecordedCompletedStep = initialStepStatus != null && initialStepStatus != PlaybookStepStatus.PENDING;
+                    final boolean isRecordedCompletedStep = (initialStepStatus != null && initialStepStatus != PlaybookStepStatus.PENDING)
+                        || (step.getRecordedStatus() != null && step.getRecordedStatus() != PlaybookStepStatus.PENDING);
                     final boolean isCoalescedSubStep = step.getParent() != null;
                     if (mode == ExecutionMode.REPLAY_STRICT && !isRecorded && !isVisualOnly && !isComposite && !isRecordedCompletedStep && !isCoalescedSubStep)
                     {
@@ -445,17 +796,22 @@ public final class ExecuteActionsStep
                             "No recorded tool calls found for step '" + resolvedStrictStep + "' in REPLAY_STRICT mode. Companion JSON recording file is missing or step was not recorded.");
                     }
 
-                    if ((step.getStatus() == PlaybookStepStatus.FAILED || step.isFailed())
+                    final PlaybookStepStatus effectiveStatus = (step.getRecordedStatus() != null && step.getRecordedStatus() != PlaybookStepStatus.PENDING)
+                        ? step.getRecordedStatus()
+                        : step.getStatus();
+                    if ((effectiveStatus == PlaybookStepStatus.FAILED || step.isFailed())
                             && (step.getToolCalls() == null || step.getToolCalls().isEmpty()))
                     {
                         final String reason = step.getFailureReason() != null && !step.getFailureReason().trim().isEmpty()
                             ? step.getFailureReason()
-                            : "Recorded step execution failed.";
+                            : (step.getRecordedFailureReason() != null ? step.getRecordedFailureReason() : "Recorded step execution failed.");
                         throw new ConclusiveFailureException(reason);
                     }
 
                     final TargetExecutor executor = (TargetExecutor) c.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
-                    if (executor != null)
+                    final boolean skipPreCapture = !mode.supportsHealing()
+                            || AiConfiguration.getInstance().isReplayLeanStateCapture();
+                    if (!skipPreCapture && executor != null)
                     {
                         try
                         {
@@ -478,6 +834,7 @@ public final class ExecuteActionsStep
                     try
                     {
                         final SimpleToolContext toolContext = new SimpleToolContext(reg);
+                        toolContext.setVariable("neodymium.executionMode", mode);
                         if (executor != null)
                         {
                             toolContext.setVariable("neodymium.targetExecutor", executor);
@@ -500,6 +857,18 @@ public final class ExecuteActionsStep
                         if (t.getCause() instanceof final IncompatiblePlaybookSchemaException schemaErr)
                         {
                             throw schemaErr;
+                        }
+                        if (t instanceof final ConclusiveFailureException conclusive)
+                        {
+                            throw conclusive;
+                        }
+                        if (t.getCause() instanceof final ConclusiveFailureException conclusive)
+                        {
+                            throw conclusive;
+                        }
+                        if (step != null && step.isAssertionStep())
+                        {
+                            throw new ConclusiveFailureException("Assertion step failed during replay: " + t.getMessage(), t);
                         }
                         if (mode.supportsHealing() && !step.isNoHealing())
                         {
@@ -547,24 +916,41 @@ public final class ExecuteActionsStep
                         final long settleMs = AiConfiguration.getInstance().getVisualPostActionSettleMs();
                         if (settleMs > 0 && hasMutatingAction)
                         {
-                            try
+                            final boolean isVisualRequired = step != null && step.isVisualOrLayoutStep();
+                            if (isVisualRequired)
                             {
-                                Thread.sleep(settleMs);
+                                try
+                                {
+                                    Thread.sleep(settleMs);
+                                }
+                                catch (final InterruptedException e)
+                                {
+                                    Thread.currentThread().interrupt();
+                                }
                             }
-                            catch (final InterruptedException e)
+                            else
                             {
-                                Thread.currentThread().interrupt();
+                                DomQuiescenceWatcher.waitForDomQuiet(Duration.ofMillis(Math.min(settleMs, 200L)), Duration.ofMillis(50L));
                             }
                         }
 
-                        final boolean isFullPageReq = Boolean.TRUE.equals(c.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
-                                || (step != null && step.isFullPageVisualStep());
-                        final ContextLevel cl = isFullPageReq ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL;
-                        final SutState postStepState = executor.captureState(cl, isFullPageReq);
-                        if (postStepState != null)
+                        final boolean isVisualRequired = (step != null && step.isVisualOrLayoutStep())
+                                || AiConfiguration.getInstance().isSemanticVerificationEnabled()
+                                || !isReplay
+                                || AiConfiguration.getInstance().isReplayScreenshotCaptureEnabled(mode);
+
+                        if (isVisualRequired)
                         {
-                            c.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, postStepState);
-                            session.getEventBus().dispatch(new StateCapturedEvent(postStepState));
+                            final boolean isFullPageReq = !hasCoordinateAction(step)
+                                    && (Boolean.TRUE.equals(c.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                                            || (step != null && step.isFullPageVisualStep()));
+                            final ContextLevel cl = isFullPageReq ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL;
+                            final SutState postStepState = executor.captureState(cl, isFullPageReq);
+                            if (postStepState != null)
+                            {
+                                c.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, postStepState);
+                                session.getEventBus().dispatch(new StateCapturedEvent(postStepState));
+                            }
                         }
                     }
                     catch (final Exception e)
@@ -574,16 +960,20 @@ public final class ExecuteActionsStep
                 }
             });
 
-            if (isReplay && step != null && step.isVisualStep() && !visualBaselineGateStep.isPureVerification())
+            if (isReplay && step != null && step.isVisualOrLayoutStep() && !visualBaselineGateStep.isPureVerification())
             {
                 standardFlow.add(visualBaselineGateStep::executePostActionCheck);
             }
 
-            if (AiConfiguration.getInstance().isSemanticVerificationEnabled()
-                || (step != null && step.isVisualStep()))
+            standardFlow.add(c ->
             {
-                standardFlow.add(verifyStep);
-            }
+                if (AiConfiguration.getInstance().isSemanticVerificationEnabled()
+                    || (step != null && (step.isVisualOrLayoutStep() || step.isMarker() || hasCoordinateAction(step)))
+                    || c.getTransientData().containsKey(ExecutionContext.KEY_PRE_CLICK_COORD_TILE_MATRIX))
+                {
+                    verifyStep.execute(c);
+                }
+            });
 
             // Register exception handlers based on execution mode
             final Map<Class<? extends PipelineException>, PipelineStep> handlers = new HashMap<>();
@@ -594,10 +984,27 @@ public final class ExecuteActionsStep
                 {
                     c.getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, true);
                     LOGGER.warn("⚠️ Replay step requires online healing — launching AgentToolLoopStep for: \"{}\"", step.getInstruction());
-                    if (AiConfiguration.getInstance().isSemanticVerificationEnabled())
+                    final TargetExecutor executor = (TargetExecutor) c.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
+                    if (executor != null && c.getTransientData().get(ExecutionContext.KEY_LAST_STATE) == null)
                     {
-                        c.pushStep(verifyStep);
+                        try
+                        {
+                            final SutState freshState = executor.captureState(ContextLevel.STANDARD);
+                            c.getTransientData().put(ExecutionContext.KEY_LAST_STATE, freshState);
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
                     }
+                    c.pushStep(ctx ->
+                    {
+                        if (AiConfiguration.getInstance().isSemanticVerificationEnabled()
+                            || (step != null && (step.isVisualOrLayoutStep() || step.isMarker() || hasCoordinateAction(step)))
+                            || ctx.getTransientData().containsKey(ExecutionContext.KEY_PRE_CLICK_COORD_TILE_MATRIX))
+                        {
+                            verifyStep.execute(ctx);
+                        }
+                    });
                     c.pushStep(new AgentToolLoopStep());
                 });
             }
@@ -605,120 +1012,16 @@ public final class ExecuteActionsStep
             final TryCatchStep tryCatch = new TryCatchStep(new SequenceStep(standardFlow), handlers);
 
             // Push end-hook step first, so it runs AFTER tryCatch executes
-            contextState.pushStep(c ->
-            {
-                if (!step.isFailed() && step.getStatus() != PlaybookStepStatus.SKIPPED)
-                {
-                    final Boolean isHealed = (Boolean) c.getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP);
-                    if (Boolean.TRUE.equals(isHealed))
-                    {
-                        step.setStatus(PlaybookStepStatus.HEALED);
-                        step.setSchemaVersion(PlaybookStep.CURRENT_SCHEMA_VERSION);
-                    }
-                    else
-                    {
-                        step.setStatus(PlaybookStepStatus.SUCCESS);
-                    }
-                    step.setFailed(false);
-                    step.setFailureReason(null);
-                }
-
-                if (step.getStartTimeMs() != null)
-                {
-                    step.setDurationMs(System.currentTimeMillis() - step.getStartTimeMs());
-                }
-                final Object statsObj = c.getTransientData().get("KEY_CURRENT_STEP_STATS");
-                if (statsObj instanceof StepStats stepStats)
-                {
-                    stepStats.setDurationMs(System.currentTimeMillis() - stepStats.getStartTime());
-                }
-
-                if (step.hasSubSteps())
-                {
-                    final long childDuration = step.getDurationMs() != null && !step.getSubSteps().isEmpty()
-                        ? step.getDurationMs() / step.getSubSteps().size()
-                        : 0L;
-                    if (!step.isFailed())
-                    {
-                        for (final PlaybookStep sub : step.getSubSteps())
-                        {
-                            sub.setStatus(step.getStatus());
-                            sub.setFailed(step.isFailed());
-                            sub.setFailureReason(step.getFailureReason());
-                            sub.setDurationMs(childDuration);
-                        }
-                    }
-                    else
-                    {
-                        for (final PlaybookStep sub : step.getSubSteps())
-                        {
-                            if (sub.getDurationMs() == null || sub.getDurationMs() == 0L)
-                            {
-                                sub.setDurationMs(childDuration);
-                            }
-                        }
-                    }
-                    if (statsObj instanceof StepStats stepStats && stepStats.getSubStats().isEmpty())
-                    {
-                        final boolean replayed = stepStats.isReplayed();
-                        for (final PlaybookStep sub : step.getSubSteps())
-                        {
-                            final String rawSub = sub.getInstruction();
-                            final String resSub = c.getSessionData() != null
-                                ? c.getSessionData().resolveAvailableVariables(rawSub)
-                                : rawSub;
-                            final StepStats subStats = new StepStats(resSub, stepStats.getStartTime());
-                            subStats.setDurationMs(childDuration);
-                            subStats.setReplayed(replayed);
-                            stepStats.getSubStats().add(subStats);
-                        }
-                    }
-                }
-
-                if (step.isBug() && !step.isFailed())
-                {
-                    final String bugComment = step.getBugDetails();
-                    final String bugStr = bugComment != null ? " (" + bugComment + ")" : "";
-                    final String resolvedBugInstruction = c.getSessionData() != null
-                        ? c.getSessionData().resolveAvailableVariables(step.getInstruction())
-                        : step.getInstruction();
-                    final String msg = String.format("Expected bug%s but step succeeded: %s:%d (%s)",
-                        bugStr, step.getSourceFile(), step.getLineNumber(), resolvedBugInstruction);
-                    LOGGER.error("   ❌ {}", msg);
-
-                    if (!step.isContinueOnError())
-                    {
-                        throw new ExpectedBugNotReproducedException(msg);
-                    }
-                    else
-                    {
-                        @SuppressWarnings("unchecked")
-                        final List<String> warnings = (List<String>) c.getTransientData()
-                            .computeIfAbsent("verificationWarnings", k -> new ArrayList<String>());
-                        warnings.add(msg);
-                    }
-                }
-
-                final Long origTimeout = (Long) c.getTransientData().remove("KEY_ORIG_SELENIDE_TIMEOUT");
-                if (origTimeout != null)
-                {
-                    Configuration.timeout = origTimeout;
-                }
-
-                c.getTransientData().remove(ExecutionContext.KEY_POST_ACTION_STATE);
-                c.getTransientData().remove(ExecutionContext.KEY_PRE_ACTION_STATE);
-                c.getTransientData().remove("KEY_IS_FULL_PAGE_SCREENSHOT");
-
-
-
-                if (session != null && session.getEventBus() != null)
-                {
-                    session.getEventBus().dispatch(new StepFinishedEvent(step, step.getStatus()));
-                }
-            });
-
+            contextState.pushStep(endHookStep);
             contextState.pushStep(tryCatch);
-        };
+        }
+
+        @Override
+        public PlaybookStep getPlaybookStep()
+        {
+            return step;
+        }
+    };
     }
 
     private static StepStats getOrCreateStatsForStep(
@@ -768,16 +1071,34 @@ public final class ExecuteActionsStep
             return null;
         }
         String prepared = instruction;
-        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*no-replay\\s*\\)\\s*", " ");
-        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*bug(?:\\s*:\\s*[^)]+)?\\s*\\)\\s*", " ");
-        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*continue-on-error\\s*\\)\\s*", " ");
-        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*no-healing\\s*\\)\\s*", " ");
-        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*(optional|soft)\\s*\\)\\s*", " ");
-        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*timeout\\s*:\\s*\\d+(?:ms|s)?\\)\\s*", " ");
-        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*visual(?:\\s*:\\s*full)?\\s*\\)\\s*", " ");
-        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*layout\\s*\\)\\s*", " ");
-        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*hint(?:\\s*:\\s*[^)]+)?\\s*\\)\\s*", " ");
-        return prepared.replaceAll("\\s+", " ").trim();
+        prepared = prepared.replaceAll("(?i)[ \\t]*\\(\\s*no-replay\\s*\\)[ \\t]*", " ");
+        prepared = prepared.replaceAll("(?i)[ \\t]*\\(\\s*bug(?:\\s*:[^)]+)?\\s*\\)[ \\t]*", " ");
+        prepared = prepared.replaceAll("(?i)[ \\t]*\\(\\s*continue-on-error\\s*\\)[ \\t]*", " ");
+        prepared = prepared.replaceAll("(?i)[ \\t]*\\(\\s*no-healing\\s*\\)[ \\t]*", " ");
+        prepared = prepared.replaceAll("(?i)[ \\t]*\\(\\s*(optional|soft)\\s*\\)[ \\t]*", " ");
+        prepared = prepared.replaceAll("(?i)[ \\t]*\\(\\s*timeout\\s*:\\s*\\d+(?:ms|s)?\\)[ \\t]*", " ");
+        prepared = prepared.replaceAll("(?i)[ \\t]*\\(\\s*visual(?:\\s*:\\s*full)?\\s*\\)[ \\t]*", " ");
+        prepared = prepared.replaceAll("(?i)[ \\t]*\\(\\s*layout\\s*\\)[ \\t]*", " ");
+        prepared = prepared.replaceAll("(?i)[ \\t]*\\(\\s*hint(?:\\s*:\\s*[^)]+)?\\s*\\)[ \\t]*", " ");
+        if (!prepared.contains("\n"))
+        {
+            return prepared.replaceAll("[ \\t]+", " ").replaceAll("[ \\t]+([:,;])", "$1").trim();
+        }
+        final String[] lines = prepared.split("\\r?\\n");
+        final StringBuilder sb = new StringBuilder(prepared.length());
+        for (final String line : lines)
+        {
+            final String cleanedLine = line.replaceAll("[ \\t]+", " ").replaceAll("[ \\t]+([:,;])", "$1").trim();
+            if (!cleanedLine.isEmpty())
+            {
+                if (sb.length() > 0)
+                {
+                    sb.append("\n");
+                }
+                sb.append(cleanedLine);
+            }
+        }
+        return sb.toString();
     }
 
     /**
@@ -797,12 +1118,36 @@ public final class ExecuteActionsStep
         final List<PlaybookStep> playbookSteps
     )
     {
-        // 1. Check playbook.steps for top-level step match
+        // 1. Exact identity match for targetForIndex in flatSteps (global canonical index)
+        if (flatSteps != null && !flatSteps.isEmpty())
+        {
+            for (int i = 0; i < flatSteps.size(); i++)
+            {
+                if (flatSteps.get(i) == targetForIndex)
+                {
+                    return i;
+                }
+            }
+        }
+
+        // 2. If targetForIndex was step's parent and not in flatSteps, try step itself in flatSteps
+        if (flatSteps != null && !flatSteps.isEmpty() && targetForIndex != step)
+        {
+            for (int i = 0; i < flatSteps.size(); i++)
+            {
+                if (flatSteps.get(i) == step)
+                {
+                    return i;
+                }
+            }
+        }
+
+        // 3. Fallback to playbook.steps if flatSteps is not yet populated
         if (playbookSteps != null && !playbookSteps.isEmpty())
         {
             for (int i = 0; i < playbookSteps.size(); i++)
             {
-                if (playbookSteps.get(i) == targetForIndex)
+                if (playbookSteps.get(i) == targetForIndex || playbookSteps.get(i) == step)
                 {
                     return i;
                 }
@@ -812,27 +1157,6 @@ public final class ExecuteActionsStep
         if (flatSteps == null || flatSteps.isEmpty())
         {
             return -1;
-        }
-
-        // 2. Exact identity match for targetForIndex in flatSteps
-        for (int i = 0; i < flatSteps.size(); i++)
-        {
-            if (flatSteps.get(i) == targetForIndex)
-            {
-                return i;
-            }
-        }
-
-        // 3. If targetForIndex was step's parent and not in flatSteps, try step itself by identity
-        if (targetForIndex != step)
-        {
-            for (int i = 0; i < flatSteps.size(); i++)
-            {
-                if (flatSteps.get(i) == step)
-                {
-                    return i;
-                }
-            }
         }
 
         // 4. Fallback heuristic by matching instruction and line number
@@ -849,5 +1173,32 @@ public final class ExecuteActionsStep
         }
 
         return -1;
+    }
+
+    private static List<PlaybookStep> getEffectiveLeafSubSteps(final List<PlaybookStep> subSteps)
+    {
+        final List<PlaybookStep> result = new ArrayList<>();
+        if (subSteps == null)
+        {
+            return result;
+        }
+        for (final PlaybookStep sub : subSteps)
+        {
+            if (sub.hasSubSteps())
+            {
+                result.addAll(getEffectiveLeafSubSteps(sub.getSubSteps()));
+            }
+            else if (sub.getInstruction() == null || !sub.getInstruction().contains("_include:"))
+            {
+                result.add(sub);
+            }
+        }
+        return result;
+    }
+
+    private static boolean hasCoordinateAction(final PlaybookStep step)
+    {
+        return step != null && step.getActions() != null && step.getActions().stream()
+            .anyMatch(a -> a != null && ClickAction.parseCoordinateTarget(a.getTarget()) != null);
     }
 }

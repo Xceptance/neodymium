@@ -62,7 +62,7 @@ The system SHALL provide interactive discovery tools (including `browser_query_d
 - **THEN** the system returns matching element candidates, attributes, and viewport visibility states without restarting the pipeline step.
 
 ### Requirement: Agent tool execution loop and stop criteria
-The system SHALL execute an iterative agentic loop (`Think` → `ToolCall` → `Observe` → `Finish`) for atomic playbook steps, evaluating six explicit stop criteria:
+The system SHALL execute an iterative agentic loop (`Think` → `ToolCall` → `Observe` → `Finish`) using a native multi-turn message protocol where tools are provided as structured schemas, assistant outputs contain structured tool calls, and tool execution results are appended as structured tool messages, evaluating six explicit stop criteria:
 1. **Goal Completion**: Agent calls `complete_step` or requests no further tools (`SUCCESS`).
 2. **Assertion Failure**: An assertion tool fails with `AssertionError` (`FAILED`).
 3. **Thrashing / Stagnation**: Identical consecutive tool calls detected with no progress (`FAILED`).
@@ -86,6 +86,10 @@ The system SHALL execute an iterative agentic loop (`Think` → `ToolCall` → `
 - **WHEN** a step marked with the optional flag does not resolve its target on the initial attempt
 - **THEN** the system explores up to 3 viable candidate options or locators to resolve the step
 - **AND** only logs a warning and marks the step as skipped after all 3 candidate options are exhausted without failing the overall test run.
+
+#### Scenario: Native tool call response and execution
+- **WHEN** the agent returns a structured tool call for an available tool
+- **THEN** the system executes the tool in-process and appends its structured result as a native tool role message to the conversation history without string parsing or markdown backtick extraction.
 
 ### Requirement: Quality judge locator guard
 The system SHALL intercept proposed `browser_*` tool calls before browser dispatch to evaluate candidate locator stability, passing high-confidence locators through without latency and triggering deliberation when ambiguity is detected.
@@ -154,3 +158,122 @@ The system SHALL evaluate perceptual visual dHash and tile SSIM similarity in `L
 - **WHEN** a recorded button with an icon and no inner text cannot be located by its primary selector
 - **AND** candidate elements in the container match the recorded bounding box aspect ratio and perceptual visual dHash with similarity $\ge 0.85$
 - **THEN** the system heals the locator and passes the candidate element directly to native driver condition polling without LLM invocation.
+
+### Requirement: Turn-aware dynamic context resolution
+The system SHALL resolve the context provided to the LLM dynamically based on the current turn and operational objective, providing zero DOM elements for navigation and metadata operations, supplying pierced DOM Light on the initial turn of interactive operations, and feeding structured tool results directly into tool messages on subsequent turns without re-extracting the full DOM tree.
+
+#### Scenario: Zero DOM provided for navigation operations
+- **WHEN** an instruction with navigation or metadata intent is executed, or immediately after a `browser_navigate` tool call
+- **THEN** the system supplies only page URL and title metadata to the model without extracting or serializing DOM element trees.
+
+#### Scenario: DOM Light provided for interactive step initiation
+- **WHEN** an interactive instruction (such as click, type, select, or hover) initiates Turn 1
+- **THEN** the system supplies a compact DOM Light representation including pierced Shadow DOMs, custom elements, and unique automation IDs.
+
+#### Scenario: Intermediate turn receives tool result without full DOM re-dump
+- **WHEN** a mutating browser action completes during a multi-turn step
+- **THEN** the system returns the structured tool execution result in the tool message and updates page URL and title without re-dumping the full DOM tree.
+
+### Requirement: Internal loop milestones for compound instructions
+The system SHALL execute compound multi-action instructions within a single continuous tool loop conversation using an internal sequence of milestone sub-actions, preserving conversational context across turns and eliminating artificial external pipeline step splitting.
+
+#### Scenario: Compound instruction executes sequentially in single step
+- **WHEN** an instruction containing multiple distinct field entries or sequential actions is executed
+- **THEN** the agent executes each action sequentially across conversational turns in a single step
+- **AND** calls `complete_step` only after all milestone actions are accomplished
+- **AND** records all tool calls under the original playbook step.
+
+### Requirement: Protocol-level network traffic introspection
+The system SHALL capture failed HTTP network requests (status >= 400, network aborts, and CORS errors) from active browser sessions and expose a `browser_get_network_failures` tool allowing agents to inspect recent failures with optional status filtering and buffer draining.
+
+#### Scenario: Query HTTP 500 failures after asynchronous backend API error
+- **WHEN** an asynchronous `fetch` or `XHR` request fails with HTTP 500 during page execution
+- **AND** the agent calls `browser_get_network_failures`
+- **THEN** the system returns a structured list containing the failed request URL, HTTP status code 500, method, and failure description.
+
+#### Scenario: Query HTTP 404 failures on missing endpoints
+- **WHEN** a background request targets a non-existent endpoint returning HTTP 404
+- **AND** the agent calls `browser_get_network_failures` with `status_filter="4xx"`
+- **THEN** the system returns the 404 failure entries and excludes any 5xx entries.
+
+#### Scenario: Capture network-level aborts or CORS rejections
+- **WHEN** a browser network request is aborted or blocked by CORS policy without receiving an HTTP response code
+- **AND** the agent calls `browser_get_network_failures` with `status_filter="blocked"`
+- **THEN** the system returns the blocked entry indicating network abort or CORS failure.
+
+#### Scenario: Ignore benign network failures matching configured ignore regex
+- **WHEN** a network request to an analytics or tracking domain fails with an HTTP error
+- **AND** the URL matches the pattern in `neodymium.ai.network.ignorePattern`
+- **THEN** the system excludes the entry from the captured network failure buffer.
+
+#### Scenario: Filter network failures by status category
+- **WHEN** both 4xx and 5xx errors exist in the network buffer
+- **AND** the agent calls `browser_get_network_failures` with `status_filter="5xx"`
+- **THEN** the system returns only 5xx server failures and omits 4xx client errors.
+
+#### Scenario: Clear network failure buffer on demand
+- **WHEN** the agent calls `browser_get_network_failures` with `clear_buffer=true`
+- **THEN** the returned entries are drained from the buffer so subsequent calls only return new failures.
+
+### Requirement: Client-side JavaScript console error introspection
+The system SHALL capture unhandled JavaScript exceptions, runtime errors, and console warnings from the active browser session and expose a `browser_get_console_errors` tool allowing agents to inspect recent console entries filtered by severity.
+
+#### Scenario: Retrieve unhandled JavaScript runtime exceptions
+- **WHEN** an unhandled client-side `TypeError` or `ReferenceError` occurs during an interaction turn
+- **AND** the agent calls `browser_get_console_errors` with minimum severity `SEVERE`
+- **THEN** the system returns the error message, source script URL, line number, and stack trace snippet.
+
+#### Scenario: Filter console logs by minimum severity level
+- **WHEN** console warnings and informational messages exist alongside severe errors
+- **AND** the agent calls `browser_get_console_errors` with minimum severity `SEVERE`
+- **THEN** the system returns only `SEVERE` runtime exceptions and excludes `WARNING` or `INFO` messages.
+
+#### Scenario: Capture explicit console.error invocations
+- **WHEN** page JavaScript invokes `console.error(...)` with diagnostic context
+- **AND** the agent calls `browser_get_console_errors`
+- **THEN** the system captures and returns the logged error message and arguments.
+
+#### Scenario: Clear console error buffer on demand
+- **WHEN** the agent calls `browser_get_console_errors` with `clear_buffer=true`
+- **THEN** the captured logs are drained so subsequent calls only return new console events.
+
+### Requirement: Passive diagnostic enrichment on action failure
+The system SHALL buffer recent protocol-level network and console failures during agent tool execution and automatically append a concise diagnostic advisory into the conversational tool loop when actions fail repeatedly, preventing wasteful locator thrashing loops.
+
+#### Scenario: Inject diagnostic advisory when click fails due to 500 API response
+- **WHEN** an action or element assertion fails after retry attempts
+- **AND** an HTTP 5xx was captured during the interaction turn
+- **THEN** the system appends a diagnostic notice containing the failing endpoint and status to the conversation prompt.
+
+#### Scenario: Inject diagnostic advisory when action fails due to unhandled JS exception
+- **WHEN** an interaction fails to produce expected DOM changes
+- **AND** an unhandled JavaScript exception was captured during the turn
+- **THEN** the system appends a diagnostic alert containing the exception type and message to the conversation prompt.
+
+#### Scenario: Suppress passive alerts when no protocol failures occurred
+- **WHEN** an action fails due purely to an invalid element locator with zero protocol-level network or console errors
+- **THEN** the system does not append a network or console diagnostic advisory.
+
+#### Scenario: Stop locator thrashing loop upon passive error injection
+- **WHEN** the agent receives a passive diagnostic notice regarding an HTTP 500 failure
+- **THEN** the agent ceases alternate locator exploration and terminates the step with an informative backend defect verdict.
+
+### Requirement: Test fixture and sandbox challenge endpoints for protocol introspection
+The system SHALL provide dedicated test sandbox challenge pages and Javalin REST endpoints within `neodymium-test-server` to deterministically trigger, verify, and replay network failure and console error scenarios across mock and live test suites.
+
+#### Scenario: Embedded test server serves interactive protocol failure challenge page
+- **WHEN** a test navigates to `/AuraGlanceTest/shop/sandbox/protocol-introspection.html`
+- **THEN** the test server serves an interactive page equipped with controls to trigger HTTP 404, HTTP 500, network aborts, unhandled JS exceptions, and background tracking requests.
+
+#### Scenario: Embedded test server simulates configurable HTTP error endpoints on demand
+- **WHEN** a client issues requests to `/AuraGlanceTest/api/faulty-backend` or `/AuraGlanceTest/api/missing-endpoint`
+- **THEN** the test server returns HTTP 500 and HTTP 404 responses respectively with structured JSON error bodies.
+
+#### Scenario: Mock sandbox test exercises diagnostic discovery tools offline
+- **WHEN** `ProtocolIntrospectionSandboxMockTest` executes against the protocol introspection sandbox page
+- **THEN** the mock agent discovers the failure details via `browser_get_network_failures` and `browser_get_console_errors` without connecting to external LLMs.
+
+#### Scenario: Recorded playbooks containing introspection tools replay cleanly without network side effects
+- **WHEN** a recorded playbook containing introspection tool calls is replayed in `REPLAY_STRICT` mode
+- **THEN** the replayer treats introspection tools as non-mutating inspections and verifies all assertions successfully.
+

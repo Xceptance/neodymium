@@ -18,38 +18,61 @@
  */
 package org.neodymium.ai.replay;
 
+import com.codeborne.selenide.Selenide;
+import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
+import com.codeborne.selenide.ex.ElementNotFound;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.structural.ActionExecutedEvent;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.executor.selenide.PageAnalyzer;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
+import org.neodymium.ai.executor.selenide.plugins.ClickAction;
+import org.neodymium.ai.executor.selenide.plugins.ClickAction.CoordinateTarget;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.LocatorCascadeResolver;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
+import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.steps.AgentToolLoopStep;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.tool.AiTool;
 import org.neodymium.ai.tool.SimpleToolContext;
 import org.neodymium.ai.tool.ToolCall;
+import org.neodymium.ai.tool.ToolCallVariableResolver;
 import org.neodymium.ai.tool.ToolContext;
 import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.tool.ToolResult;
 import org.neodymium.ai.tool.browser.BrowserToolProvider;
+import org.neodymium.ai.tool.browser.ReanchoringBridge;
+import org.neodymium.ai.util.DomQuiescenceWatcher;
+import org.neodymium.ai.util.ScreenshotHasher;
+import org.openqa.selenium.ElementNotInteractableException;
+import org.openqa.selenium.NoSuchElementException;
+import org.openqa.selenium.OutputType;
+import org.openqa.selenium.StaleElementReferenceException;
+import org.openqa.selenium.TakesScreenshot;
+import org.openqa.selenium.TimeoutException;
+import org.openqa.selenium.WebDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 /**
  * Replay engine executing recorded {@link ToolCall}s directly via {@link ToolRegistry}
@@ -150,6 +173,16 @@ public final class PlaybookToolReplayer
 
         LOGGER.info("▶ Replaying {} tool calls for step: \"{}\"", toolCalls.size(), step.getInstruction());
 
+        final AiSession session = effectiveContext.getVariable("neodymium.session", AiSession.class).orElse(null);
+        final ExecutionMode executionMode = effectiveContext.getVariable("neodymium.executionMode", ExecutionMode.class)
+                .orElseGet(() -> {
+                    if (session != null && session.getExecutionMode() != null)
+                    {
+                        return session.getExecutionMode();
+                    }
+                    return AiConfiguration.getInstance().getExecutionMode();
+                });
+
         boolean anyHealed = false;
 
         for (int i = 0; i < toolCalls.size(); i++)
@@ -157,15 +190,19 @@ public final class PlaybookToolReplayer
             final ToolCall rawCall = toolCalls.get(i);
             final ToolCall variableResolvedCall = resolveVariables(rawCall, sessionData);
 
-            // Attempt locator self-healing if candidates or DomFeatureVector are available
+            // Attempt locator self-healing if candidates or DomFeatureVector are available,
+            // strictly bypassing in REPLAY_STRICT or when healing is unsupported
             ToolCall healedCall = null;
-            try
+            if (executionMode != ExecutionMode.REPLAY_STRICT && (executionMode == null || executionMode.supportsHealing()))
             {
-                healedCall = attemptHealing(variableResolvedCall, step, i, effectiveContext);
-            }
-            catch (final AssertionError | Exception e)
-            {
-                LOGGER.debug("Self-healing evaluation skipped due to exception: {}", e.getMessage());
+                try
+                {
+                    healedCall = attemptHealing(variableResolvedCall, step, i, effectiveContext);
+                }
+                catch (final AssertionError | Exception e)
+                {
+                    LOGGER.debug("Self-healing evaluation skipped due to exception: {}", e.getMessage());
+                }
             }
             final ToolCall intermediateCall;
             if (healedCall != null)
@@ -186,46 +223,88 @@ public final class PlaybookToolReplayer
             }
 
             final ToolCall finalCall = intermediateCall;
+            final boolean isToolHealed = healedCall != null;
 
-            final AiSession session = effectiveContext.getVariable("neodymium.session", AiSession.class).orElse(null);
+            if (executionMode == ExecutionMode.REPLAY_STRICT)
+            {
+                verifyStrictReplayGuards(finalCall, step, i);
+            }
 
             // Check if tool is registered
             final Optional<AiTool> toolOpt = effectiveRegistry.getTool(finalCall.toolName());
-            final ToolResult result;
+            ToolResult result;
             if (toolOpt.isPresent())
             {
                 try
                 {
                     result = toolOpt.get().execute(finalCall, effectiveContext);
-                    if (session != null && session.getEventBus() != null)
-                    {
-                        final Action mapped = AgentToolLoopStep.mapToolCallToAction(finalCall);
-                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, true));
-                    }
+                    dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, true);
+                    syncStepActionOnSuccess(step, i, variableResolvedCall, finalCall, isToolHealed);
                 }
                 catch (final AssertionError e)
                 {
-                    if (session != null && session.getEventBus() != null)
-                    {
-                        final Action mapped = AgentToolLoopStep.mapToolCallToAction(finalCall);
-                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, false));
-                    }
+                    dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, false);
                     step.setStatus(PlaybookStepStatus.FAILED);
                     step.setFailed(true);
                     step.setFailureReason(e.getMessage());
+                    if (PlaybookStep.isAssertionToolName(finalCall.toolName()) || (step != null && step.isAssertionStep()))
+                    {
+                        throw new ConclusiveFailureException("Assertion failed during replay: " + e.getMessage(), e);
+                    }
                     throw e;
                 }
                 catch (final Exception e)
                 {
-                    if (session != null && session.getEventBus() != null)
+                    ToolResult retryResult = null;
+                    if (!isToolHealed && executionMode != ExecutionMode.REPLAY_STRICT
+                            && (executionMode == null || executionMode.supportsHealing())
+                            && isRecoverableElementFailure(e))
                     {
-                        final Action mapped = AgentToolLoopStep.mapToolCallToAction(finalCall);
-                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, false));
+                        LOGGER.info("⚠️ Replay tool call '{}' failed with {}. Attempting reactive fallback self-healing...", finalCall.toolName(), e.getClass().getSimpleName());
+                        DomQuiescenceWatcher.waitForDomQuiet(Duration.ofMillis(1200), Duration.ofMillis(100));
+                        ToolCall reactiveHealedCall = null;
+                        try
+                        {
+                            reactiveHealedCall = attemptHealing(variableResolvedCall, step, i, effectiveContext);
+                        }
+                        catch (final AssertionError | Exception healEx)
+                        {
+                            LOGGER.debug("Reactive fallback self-healing evaluation skipped due to exception: {}", healEx.getMessage());
+                        }
+
+                        if (reactiveHealedCall != null && !reactiveHealedCall.equals(finalCall))
+                        {
+                            LOGGER.info("🧬 Reactive fallback healed locator to: {}", reactiveHealedCall.arguments());
+                            try
+                            {
+                                retryResult = toolOpt.get().execute(reactiveHealedCall, effectiveContext);
+                                dispatchActionEvent(session, variableResolvedCall, reactiveHealedCall, true, true);
+                                syncStepActionOnSuccess(step, i, variableResolvedCall, reactiveHealedCall, true);
+                                anyHealed = true;
+                            }
+                            catch (final Exception retryEx)
+                            {
+                                LOGGER.warn("Reactive fallback healed execution failed: {}", retryEx.getMessage());
+                            }
+                        }
                     }
-                    step.setStatus(PlaybookStepStatus.FAILED);
-                    step.setFailed(true);
-                    step.setFailureReason(e.getMessage());
-                    throw e;
+
+                    if (retryResult != null)
+                    {
+                        result = retryResult;
+                    }
+                    else
+                    {
+                        dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, false);
+                        step.setStatus(PlaybookStepStatus.FAILED);
+                        step.setFailed(true);
+                        step.setFailureReason(e.getMessage());
+                        if (PlaybookStep.isAssertionToolName(finalCall.toolName()) || (step != null && step.isAssertionStep()))
+                        {
+                            throw new ConclusiveFailureException("Assertion failed during replay: " + e.getMessage(), e);
+                        }
+                        throw e;
+                    }
                 }
             }
             else if (effectiveExecutor != null)
@@ -235,32 +314,74 @@ public final class PlaybookToolReplayer
                 {
                     effectiveExecutor.execute(mapped);
                     result = ToolResult.success(finalCall.callId(), "Action executed via TargetExecutor");
-                    if (session != null && session.getEventBus() != null)
-                    {
-                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, true));
-                    }
+                    dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, true);
+                    syncStepActionOnSuccess(step, i, variableResolvedCall, finalCall, isToolHealed);
                 }
                 catch (final AssertionError e)
                 {
-                    if (session != null && session.getEventBus() != null)
-                    {
-                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, false));
-                    }
+                    dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, false);
                     step.setStatus(PlaybookStepStatus.FAILED);
                     step.setFailed(true);
                     step.setFailureReason(e.getMessage());
+                    if (PlaybookStep.isAssertionToolName(finalCall.toolName()) || (step != null && step.isAssertionStep()))
+                    {
+                        throw new ConclusiveFailureException("Assertion failed during replay: " + e.getMessage(), e);
+                    }
                     throw e;
                 }
                 catch (final Exception e)
                 {
-                    if (session != null && session.getEventBus() != null)
+                    ToolResult retryResult = null;
+                    if (!isToolHealed && executionMode != ExecutionMode.REPLAY_STRICT
+                            && (executionMode == null || executionMode.supportsHealing())
+                            && isRecoverableElementFailure(e))
                     {
-                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, false));
+                        LOGGER.info("⚠️ Replay executor action failed with {}. Attempting reactive fallback self-healing...", e.getClass().getSimpleName());
+                        DomQuiescenceWatcher.waitForDomQuiet(Duration.ofMillis(1200), Duration.ofMillis(100));
+                        ToolCall reactiveHealedCall = null;
+                        try
+                        {
+                            reactiveHealedCall = attemptHealing(variableResolvedCall, step, i, effectiveContext);
+                        }
+                        catch (final AssertionError | Exception healEx)
+                        {
+                            LOGGER.debug("Reactive fallback self-healing evaluation skipped due to exception: {}", healEx.getMessage());
+                        }
+
+                        if (reactiveHealedCall != null && !reactiveHealedCall.equals(finalCall))
+                        {
+                            final Action reactiveMapped = AgentToolLoopStep.mapToolCallToAction(reactiveHealedCall);
+                            try
+                            {
+                                effectiveExecutor.execute(reactiveMapped);
+                                retryResult = ToolResult.success(reactiveHealedCall.callId(), "Action executed via TargetExecutor after reactive self-healing");
+                                dispatchActionEvent(session, variableResolvedCall, reactiveHealedCall, true, true);
+                                syncStepActionOnSuccess(step, i, variableResolvedCall, reactiveHealedCall, true);
+                                anyHealed = true;
+                            }
+                            catch (final Exception retryEx)
+                            {
+                                LOGGER.warn("Reactive fallback executor execution failed: {}", retryEx.getMessage());
+                            }
+                        }
                     }
-                    step.setStatus(PlaybookStepStatus.FAILED);
-                    step.setFailed(true);
-                    step.setFailureReason(e.getMessage());
-                    throw e;
+
+                    if (retryResult != null)
+                    {
+                        result = retryResult;
+                    }
+                    else
+                    {
+                        dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, false);
+                        step.setStatus(PlaybookStepStatus.FAILED);
+                        step.setFailed(true);
+                        step.setFailureReason(e.getMessage());
+                        if (PlaybookStep.isAssertionToolName(finalCall.toolName()) || (step != null && step.isAssertionStep()))
+                        {
+                            throw new ConclusiveFailureException("Assertion failed during replay: " + e.getMessage(), e);
+                        }
+                        throw e;
+                    }
                 }
             }
             else
@@ -270,21 +391,31 @@ public final class PlaybookToolReplayer
 
             if (result != null && result.status() == ToolResult.Status.ERROR)
             {
+                step.setStatus(PlaybookStepStatus.FAILED);
+                step.setFailed(true);
+                step.setFailureReason(result.content());
+                if (PlaybookStep.isAssertionToolName(finalCall.toolName()) || (step != null && step.isAssertionStep()))
+                {
+                    throw new ConclusiveFailureException("Assertion failed during replay: " + result.content());
+                }
                 if (result.content() != null && result.content().startsWith("AssertionError"))
                 {
-                    step.setStatus(PlaybookStepStatus.FAILED);
-                    step.setFailed(true);
-                    step.setFailureReason(result.content());
                     throw new AssertionError(result.content());
                 }
                 throw new RuntimeException("Tool execution error in '" + finalCall.toolName() + "': " + result.content());
             }
         }
 
-        if (anyHealed)
+        final boolean isTransientHealed = session != null && session.getExecutionContext() != null
+                && Boolean.TRUE.equals(session.getExecutionContext().getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP));
+        if (anyHealed || step.getStatus() == PlaybookStepStatus.HEALED || isTransientHealed)
         {
             step.setStatus(PlaybookStepStatus.HEALED);
             step.setSchemaVersion(PlaybookStep.CURRENT_SCHEMA_VERSION);
+            if (session != null && session.getExecutionContext() != null && session.getExecutionContext().getTransientData() != null)
+            {
+                session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, Boolean.TRUE);
+            }
             LOGGER.info("✨ Step successfully replayed with self-healing: \"{}\"", step.getInstruction());
         }
         else
@@ -294,6 +425,61 @@ public final class PlaybookToolReplayer
         }
 
         return ToolResult.success(UUID.randomUUID().toString(), "Successfully replayed " + toolCalls.size() + " tool calls");
+    }
+
+    private static void dispatchActionEvent(
+        final AiSession session,
+        final ToolCall canonicalCall,
+        final ToolCall finalCall,
+        final boolean isHealed,
+        final boolean success
+    )
+    {
+        if (session != null && session.getEventBus() != null)
+        {
+            final Action resolvedAction = AgentToolLoopStep.mapToolCallToAction(finalCall);
+            if (isHealed && canonicalCall != null)
+            {
+                final Action canonicalAction = AgentToolLoopStep.mapToolCallToAction(canonicalCall);
+                final String origTarget = canonicalAction.getExpectedTarget() != null && !canonicalAction.getExpectedTarget().isBlank()
+                    ? canonicalAction.getExpectedTarget()
+                    : canonicalAction.getTarget();
+                resolvedAction.setExpectedTarget(origTarget);
+                resolvedAction.setHealed(true);
+                session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, resolvedAction, success, null, true));
+            }
+            else
+            {
+                session.getEventBus().dispatch(new ActionExecutedEvent(resolvedAction, success));
+            }
+        }
+    }
+
+    private static void syncStepActionOnSuccess(
+        final PlaybookStep step,
+        final int callIndex,
+        final ToolCall canonicalCall,
+        final ToolCall finalCall,
+        final boolean isHealed
+    )
+    {
+        if (step != null && step.getActions() != null && callIndex >= 0 && callIndex < step.getActions().size())
+        {
+            final Action act = step.getActions().get(callIndex);
+            if (act != null && isHealed && canonicalCall != null)
+            {
+                final Action canonicalAction = AgentToolLoopStep.mapToolCallToAction(canonicalCall);
+                final Action resolvedAction = AgentToolLoopStep.mapToolCallToAction(finalCall);
+                final String origTarget = canonicalAction.getExpectedTarget() != null && !canonicalAction.getExpectedTarget().isBlank()
+                    ? canonicalAction.getExpectedTarget()
+                    : canonicalAction.getTarget();
+                final Action updated = act.withTarget(resolvedAction.getTarget());
+                updated.setExpectedTarget(origTarget);
+                updated.setOriginalTarget(origTarget);
+                updated.setHealed(true);
+                step.getActions().set(callIndex, updated);
+            }
+        }
     }
 
     /**
@@ -323,79 +509,7 @@ public final class PlaybookToolReplayer
 
     private static ToolCall resolveVariables(final ToolCall call, final SessionData sessionData)
     {
-        if (sessionData == null || call.arguments() == null || !call.arguments().isObject())
-        {
-            return call;
-        }
-
-        final ObjectNode args = call.arguments().deepCopy();
-        final List<String> textKeys = new ArrayList<>();
-        final Iterator<String> fieldNames = args.fieldNames();
-        while (fieldNames.hasNext())
-        {
-            final String fieldName = fieldNames.next();
-            if (args.get(fieldName).isTextual())
-            {
-                textKeys.add(fieldName);
-            }
-        }
-        final boolean isStoreTool = call.toolName() != null && "store".equalsIgnoreCase(call.toolName().trim());
-        final String storeTargetVar;
-        if (isStoreTool)
-        {
-            if (args.hasNonNull("variableName"))
-            {
-                storeTargetVar = args.path("variableName").asText().trim();
-            }
-            else if (args.hasNonNull("variable"))
-            {
-                storeTargetVar = args.path("variable").asText().trim();
-            }
-            else if (args.hasNonNull("name"))
-            {
-                storeTargetVar = args.path("name").asText().trim();
-            }
-            else if (args.hasNonNull("key"))
-            {
-                storeTargetVar = args.path("key").asText().trim();
-            }
-            else
-            {
-                storeTargetVar = null;
-            }
-        }
-        else
-        {
-            storeTargetVar = null;
-        }
-
-        boolean changed = false;
-        for (final String key : textKeys)
-        {
-            if (isStoreTool && ("variableName".equals(key) || "variable".equals(key) || "name".equals(key) || "key".equals(key)))
-            {
-                continue;
-            }
-
-            final String original = args.get(key).asText();
-
-            if (isStoreTool && storeTargetVar != null && "value".equals(key) && original.equals("${" + storeTargetVar + "}"))
-            {
-                if (sessionData.get(storeTargetVar) == null)
-                {
-                    LOGGER.warn("Skipping unresolvable self-referential variable placeholder '{}' in store tool value", original);
-                    continue;
-                }
-            }
-
-            final String resolved = sessionData.resolveVariables(original);
-            if (!resolved.equals(original))
-            {
-                args.put(key, resolved);
-                changed = true;
-            }
-        }
-        return changed ? new ToolCall(call.callId(), call.toolName(), args) : call;
+        return ToolCallVariableResolver.resolveVariables(call, sessionData);
     }
 
     private static ToolCall attemptHealing(
@@ -410,60 +524,82 @@ public final class PlaybookToolReplayer
             return null;
         }
 
+        final ExecutionMode executionMode = context != null
+                ? context.getVariable("neodymium.executionMode", ExecutionMode.class).orElse(null)
+                : null;
+        if (executionMode == ExecutionMode.REPLAY_STRICT || (executionMode != null && !executionMode.supportsHealing()))
+        {
+            return null;
+        }
+
         // Only interactive / actionable tools targeting an element can be healed.
         // Read-only inspection / navigation tools must never trigger locator healing.
-        final String toolName = call.toolName() != null ? call.toolName().trim().toLowerCase() : "";
+        final String toolName = call.toolName() != null ? call.toolName().trim().toLowerCase(Locale.ROOT) : "";
         if ("query_dom".equals(toolName) || "inspect_element".equals(toolName) || "execute_script".equals(toolName)
                 || "take_screenshot".equals(toolName) || "screenshot".equals(toolName) || "navigate".equals(toolName)
-                || "browser_navigate".equals(toolName) || "get_page_source".equals(toolName))
+                || "browser_navigate".equals(toolName) || "get_page_source".equals(toolName)
+                || "assert_url".equals(toolName) || "browser_assert_url".equals(toolName)
+                || "assert_title".equals(toolName) || "browser_assert_title".equals(toolName)
+                || "assert_count".equals(toolName) || "browser_assert_count".equals(toolName))
         {
             return null;
         }
 
         final String currentTarget = args.hasNonNull("target") ? args.path("target").asText().trim() : args.path("selector").asText().trim();
-        if (currentTarget.isBlank() || currentTarget.startsWith("coord:") || currentTarget.startsWith("badge:"))
+        final boolean isCoordinateTarget = currentTarget.startsWith("coord:")
+                || (args.hasNonNull("x") && args.hasNonNull("y") && (!args.hasNonNull("selector") || args.path("selector").asText().isBlank()));
+        if (currentTarget.isBlank() && !isCoordinateTarget)
         {
             return null;
         }
 
         // Check if DomFeatureVector is recorded
-        DomFeatureVector recordedVector = null;
-        if (callIndex < step.getActions().size())
-        {
-            final Action matchingAction = step.getActions().get(callIndex);
-            if (matchingAction != null)
-            {
-                recordedVector = matchingAction.getDomFeatureVector();
-            }
-        }
-
-        if (recordedVector == null && args.has("domFeatureVector"))
-        {
-            try
-            {
-                recordedVector = MAPPER.treeToValue(args.path("domFeatureVector"), DomFeatureVector.class);
-            }
-            catch (final Exception ignored)
-            {
-            }
-        }
-
+        final DomFeatureVector recordedVector = extractRecordedVector(args, step, callIndex);
         if (recordedVector == null)
         {
             return null;
         }
 
-        // If the current target is already directly present and visible on the live page,
-        // no healing is needed. Never overwrite or corrupt an active, working locator.
-        try
+        if (isCoordinateTarget)
         {
-            if (WebDriverRunner.hasWebDriverStarted() && SelenideElementFinder.isDirectlyPresent(currentTarget))
+            if (WebDriverRunner.hasWebDriverStarted())
+            {
+                final int[] resolvedCoords = resolveCoordinatePoint(args, currentTarget);
+                final int x = resolvedCoords[0];
+                final int y = resolvedCoords[1];
+                final WebDriver driver = WebDriverRunner.getWebDriver();
+                final ReanchoringBridge.ReanchoredElement liveEl = ReanchoringBridge.resolveElementAtPoint(driver, x, y);
+                if (matchesRecordedIdentity(liveEl, recordedVector)
+                        && matchesCoordinateVisualTile(driver, x, y, recordedVector, context))
+                {
+                    return null;
+                }
+            }
+            else if (context == null || context.getVariable("liveCandidates", Object.class).isEmpty())
             {
                 return null;
             }
         }
-        catch (final AssertionError | Exception ignored)
+        else
         {
+            // If the current target is already directly present and visible on the live page,
+            // no healing is needed. Never overwrite or corrupt an active, working locator.
+            try
+            {
+                if (WebDriverRunner.hasWebDriverStarted() && SelenideElementFinder.isDirectlyPresent(currentTarget))
+                {
+                    return null;
+                }
+            }
+            catch (final AssertionError | Exception ignored)
+            {
+            }
+        }
+
+        // Optional steps (e.g. dismissible modals, cookie banners) must not perform heavy full-DOM healing scans
+        if (step != null && step.isOptional())
+        {
+            return null;
         }
 
         // Check for live candidate vectors provided via context variable or dynamically extracted from active page
@@ -478,6 +614,16 @@ public final class PlaybookToolReplayer
         }
         else if (WebDriverRunner.hasWebDriverStarted())
         {
+            // For standard CSS or ID locators, wait for in-flight DOM mutations and network requests to settle cleanly
+            if (!currentTarget.contains("data-ai=") && !currentTarget.contains("#xc"))
+            {
+                DomQuiescenceWatcher.waitForDomQuiet(Duration.ofMillis(400), Duration.ofMillis(50));
+                if (SelenideElementFinder.isDirectlyPresent(currentTarget))
+                {
+                    return null;
+                }
+            }
+
             try
             {
                 liveCandidates = new PageAnalyzer().extractFeatureVectors(WebDriverRunner.getWebDriver());
@@ -489,23 +635,66 @@ public final class PlaybookToolReplayer
 
         if (liveCandidates != null && !liveCandidates.isEmpty())
         {
+            liveCandidates = enrichCandidatesWithVisualSignatures(recordedVector, liveCandidates, context);
             // Sub-millisecond similarity healing on CPU
             final DomFeatureVector best = LocatorCascadeResolver.findBestMatch(recordedVector, liveCandidates, 0.70);
             if (best != null)
             {
+                if (PlaybookStep.isAssertionToolName(toolName) && !candidateMatchesAssertionExpectation(best, toolName, args))
+                {
+                    LOGGER.info("🚫 Rejected locator healing for assertion tool '{}': candidate element did not match assertion criteria", toolName);
+                    return null;
+                }
                 final String healedSelector = resolveSelectorForCandidate(best);
-                if (!currentTarget.equals(healedSelector))
+                final ObjectNode updatedArgs = args.deepCopy();
+                if (healedSelector != null && !currentTarget.equals(healedSelector) && (!isCoordinateTarget || !isBareGenericTag(healedSelector)))
                 {
                     LOGGER.info("🧬 Healed locator '{}' -> '{}' using DomFeatureVector similarity", currentTarget, healedSelector);
-                    final ObjectNode updatedArgs = args.deepCopy();
-                    if (args.hasNonNull("selector"))
+                    if (args.hasNonNull("selector") || isCoordinateTarget)
                     {
                         updatedArgs.put("selector", healedSelector);
                     }
-                    if (args.hasNonNull("target"))
+                    if (args.hasNonNull("target") || isCoordinateTarget)
                     {
                         updatedArgs.put("target", healedSelector);
                     }
+                    if (isCoordinateTarget)
+                    {
+                        updatedArgs.remove("x");
+                        updatedArgs.remove("y");
+                    }
+                    return new ToolCall(call.callId(), call.toolName(), updatedArgs);
+                }
+                else if (isCoordinateTarget)
+                {
+                    final int newX = best.getX() + (best.getWidth() / 2);
+                    final int newY = best.getY() + (best.getHeight() / 2);
+                    final CoordinateTarget origCoord = ClickAction.parseCoordinateTarget(currentTarget);
+                    final String origAnchor = (origCoord != null && origCoord.anchorSelector() != null && !origCoord.anchorSelector().isBlank())
+                            ? origCoord.anchorSelector().trim()
+                            : (args.hasNonNull("selector")
+                                    && !args.path("selector").asText().isBlank()
+                                    && !args.path("selector").asText().trim().startsWith("coord:")
+                                    ? args.path("selector").asText().trim()
+                                    : null);
+                    if (origAnchor != null)
+                    {
+                        final int[] anchorTopLeft = resolveAnchorTopLeft(origAnchor, context);
+                        final int relX = anchorTopLeft != null ? (newX - anchorTopLeft[0]) : newX;
+                        final int relY = anchorTopLeft != null ? (newY - anchorTopLeft[1]) : newY;
+                        final String newTarget = "coord:" + origAnchor + "@" + relX + "," + relY;
+                        LOGGER.info("🧬 Relocated anchored coordinate target '{}' -> '{}' using DomFeatureVector similarity", currentTarget, newTarget);
+                        updatedArgs.put("target", newTarget);
+                        updatedArgs.put("selector", origAnchor);
+                        updatedArgs.put("x", relX);
+                        updatedArgs.put("y", relY);
+                        return new ToolCall(call.callId(), call.toolName(), updatedArgs);
+                    }
+                    final String newTarget = "coord: " + newX + "," + newY;
+                    LOGGER.info("🧬 Relocated coordinate target '{}' -> '{}' using DomFeatureVector similarity", currentTarget, newTarget);
+                    updatedArgs.put("target", newTarget);
+                    updatedArgs.put("x", newX);
+                    updatedArgs.put("y", newY);
                     return new ToolCall(call.callId(), call.toolName(), updatedArgs);
                 }
             }
@@ -514,33 +703,258 @@ public final class PlaybookToolReplayer
         return null;
     }
 
-    private static String resolveSelectorForCandidate(final DomFeatureVector candidate)
+    private static int[] resolveAnchorTopLeft(final String anchorSelector, final ToolContext context)
+    {
+        if (context != null)
+        {
+            final Optional<int[]> boundsOpt = context.getVariable("anchorBounds", int[].class);
+            if (boundsOpt.isPresent() && boundsOpt.get().length >= 2)
+            {
+                return boundsOpt.get();
+            }
+        }
+        if (WebDriverRunner.hasWebDriverStarted() && anchorSelector != null && !anchorSelector.isBlank())
+        {
+            try
+            {
+                final SelenideElement anchorEl = SelenideElementFinder.findElement(anchorSelector);
+                if (anchorEl != null && anchorEl.exists())
+                {
+                    SelenideElementFinder.scrollIntoViewIfNeeded(anchorEl);
+                    final Object rectObj = Selenide.executeJavaScript(
+                            "var r = arguments[0].getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top)];",
+                            anchorEl);
+                    if (rectObj instanceof final List<?> list && list.size() >= 2)
+                    {
+                        return new int[] { ((Number) list.get(0)).intValue(), ((Number) list.get(1)).intValue() };
+                    }
+                }
+            }
+            catch (final Exception | AssertionError ignored)
+            {
+            }
+        }
+        return null;
+    }
+
+    private static List<DomFeatureVector> enrichCandidatesWithVisualSignatures(
+            final DomFeatureVector recordedVector,
+            final List<DomFeatureVector> candidates,
+            final ToolContext context)
+    {
+        if (recordedVector == null || candidates == null || candidates.isEmpty())
+        {
+            return candidates;
+        }
+        final boolean needDHash = recordedVector.hasVisualHash();
+        final boolean needTileSsim = recordedVector.getTileSsim() != null && !recordedVector.getTileSsim().isBlank();
+        if (!needDHash && !needTileSsim)
+        {
+            return candidates;
+        }
+        String base64Screenshot = context != null
+                ? context.getVariable("liveScreenshotBase64", String.class).orElse(null)
+                : null;
+        if ((base64Screenshot == null || base64Screenshot.isBlank()) && WebDriverRunner.hasWebDriverStarted())
+        {
+            final WebDriver driver = WebDriverRunner.getWebDriver();
+            if (driver instanceof final TakesScreenshot ts)
+            {
+                try
+                {
+                    base64Screenshot = ts.getScreenshotAs(OutputType.BASE64);
+                }
+                catch (final Throwable ignored)
+                {
+                }
+            }
+        }
+        if (base64Screenshot == null || base64Screenshot.isBlank())
+        {
+            return candidates;
+        }
+        final List<DomFeatureVector> enriched = new ArrayList<>(candidates.size());
+        for (final DomFeatureVector c : candidates)
+        {
+            if (c == null || c.getWidth() <= 0 || c.getHeight() <= 0)
+            {
+                enriched.add(c);
+                continue;
+            }
+            final boolean alreadyHasDHash = !needDHash || c.hasVisualHash();
+            final boolean alreadyHasTile = !needTileSsim || (c.getTileSsim() != null && !c.getTileSsim().isBlank());
+            if (alreadyHasDHash && alreadyHasTile)
+            {
+                enriched.add(c);
+                continue;
+            }
+            final String vHash = alreadyHasDHash
+                    ? c.getVisualHash()
+                    : ScreenshotHasher.computeElementDHash(base64Screenshot, c.getX(), c.getY(), c.getWidth(), c.getHeight());
+            final String tSsim = alreadyHasTile
+                    ? c.getTileSsim()
+                    : ScreenshotHasher.computeTileSsimMatrix(
+                            base64Screenshot,
+                            c.getX() + (c.getWidth() / 2),
+                            c.getY() + (c.getHeight() / 2),
+                            32);
+            enriched.add(new DomFeatureVector(
+                    c.getTag(),
+                    c.getText(),
+                    c.getClasses(),
+                    c.getAttributes(),
+                    c.getRole(),
+                    c.getAccessibleName(),
+                    c.getParentTag(),
+                    c.getSiblingIndex(),
+                    c.getX(),
+                    c.getY(),
+                    c.getWidth(),
+                    c.getHeight(),
+                    vHash != null ? vHash : "",
+                    tSsim != null ? tSsim : ""));
+        }
+        return enriched;
+    }
+
+    private static boolean matchesCoordinateVisualTile(
+            final WebDriver driver,
+            final int x,
+            final int y,
+            final DomFeatureVector recordedVector,
+            final ToolContext context)
+    {
+        if (recordedVector == null)
+        {
+            return true;
+        }
+        final String recordedTile = recordedVector.getTileSsim();
+        if (recordedTile == null || recordedTile.isBlank())
+        {
+            return true;
+        }
+        String base64Screenshot = context != null
+                ? context.getVariable("liveScreenshotBase64", String.class).orElse(null)
+                : null;
+        if ((base64Screenshot == null || base64Screenshot.isBlank()) && driver instanceof final TakesScreenshot ts)
+        {
+            try
+            {
+                base64Screenshot = ts.getScreenshotAs(OutputType.BASE64);
+            }
+            catch (final Throwable ignored)
+            {
+            }
+        }
+        if (base64Screenshot == null || base64Screenshot.isBlank())
+        {
+            return true;
+        }
+        final String liveTile = ScreenshotHasher.computeTileSsimMatrix(base64Screenshot, x, y, 32);
+        if (liveTile == null || liveTile.isBlank())
+        {
+            return true;
+        }
+        final double ssim = ScreenshotHasher.calculateSsim(recordedTile, liveTile);
+        return ssim >= 0.95;
+    }
+
+    /**
+     * Derives a selector for a healed candidate element, in decreasing order of stability.
+     * <p>
+     * The result is written back into the replayed tool call, so it has to match the candidate: every
+     * attribute value is escaped, and no selector is invented from data the element does not carry.
+     * In particular the computed accessible name is <em>not</em> turned into an {@code aria-label}
+     * attribute selector (it usually comes from the element text or a label, so such a selector never
+     * matches), and raw viewport coordinates are never produced because they are not an element identity.
+     *
+     * @param candidate the best matching live element
+     * @return a CSS-style selector for the candidate, or {@code null} if none can be derived
+     */
+    static String resolveSelectorForCandidate(final DomFeatureVector candidate)
     {
         if (candidate.getAttributes().containsKey("id") && !candidate.getAttributes().get("id").isBlank())
         {
-            return "#" + candidate.getAttributes().get("id");
+            final String idVal = candidate.getAttributes().get("id").trim();
+            if (isStandardCssIdentifier(idVal))
+            {
+                return "#" + idVal;
+            }
+            final String tag = candidate.getTag() != null && !candidate.getTag().isBlank() ? candidate.getTag() : "";
+            return tag + "[id=\"" + escapeAttributeValue(idVal) + "\"]";
         }
-        if (candidate.getAttributes().containsKey("data-testid") && !candidate.getAttributes().get("data-testid").isBlank())
+        for (final String testAttr : new String[] {"data-testid", "data-test-id", "data-test", "data-qa", "data-cy"})
         {
-            return candidate.getTag() + "[data-testid=\"" + candidate.getAttributes().get("data-testid") + "\"]";
+            if (candidate.getAttributes().containsKey(testAttr) && !candidate.getAttributes().get(testAttr).isBlank())
+            {
+                final String tag = candidate.getTag() != null ? candidate.getTag() : "";
+                return tag + "[" + testAttr + "=\"" + escapeAttributeValue(candidate.getAttributes().get(testAttr)) + "\"]";
+            }
         }
         if (candidate.getAttributes().containsKey("name") && !candidate.getAttributes().get("name").isBlank())
         {
-            return candidate.getTag() + "[name=\"" + candidate.getAttributes().get("name") + "\"]";
+            return candidate.getTag() + "[name=\"" + escapeAttributeValue(candidate.getAttributes().get("name")) + "\"]";
         }
+
+        final List<String> validClasses = candidate.getClasses() != null
+                ? candidate.getClasses().stream()
+                        .filter(PlaybookToolReplayer::isStandardCssIdentifier)
+                        .toList()
+                : List.of();
+
         if (candidate.getText() != null && !candidate.getText().isBlank())
         {
-            final String cleanText = candidate.getText().trim().replace("\"", "\\\"").replace("\n", " ");
-            final String base = !candidate.getClasses().isEmpty()
-                    ? candidate.getTag() + "." + String.join(".", candidate.getClasses())
+            final String cleanText = escapeAttributeValue(candidate.getText().trim());
+            final String base = !validClasses.isEmpty()
+                    ? candidate.getTag() + "." + String.join(".", validClasses)
                     : candidate.getTag();
             return base + ":has-text(\"" + cleanText + "\")";
         }
-        if (!candidate.getClasses().isEmpty())
+        if (candidate.getAttributes().containsKey("aria-label") && !candidate.getAttributes().get("aria-label").isBlank())
         {
-            return candidate.getTag() + "." + String.join(".", candidate.getClasses());
+            return candidate.getTag() + "[aria-label=\"" + escapeAttributeValue(candidate.getAttributes().get("aria-label")) + "\"]";
         }
-        return candidate.getTag();
+        if (!validClasses.isEmpty())
+        {
+            return candidate.getTag() + "." + String.join(".", validClasses);
+        }
+        return candidate.getTag().isBlank() ? null : candidate.getTag();
+    }
+
+    /**
+     * Checks whether the given string is a standard, unescaped CSS identifier (letters, digits,
+     * underscores, and hyphens, not starting with a digit or a hyphen followed by a digit).
+     *
+     * @param identifier candidate identifier string
+     * @return {@code true} if safe to use directly without CSS escaping
+     */
+    private static boolean isBareGenericTag(final String selector)
+    {
+        if (selector == null)
+        {
+            return true;
+        }
+        final String s = selector.trim().toLowerCase();
+        return "div".equals(s) || "span".equals(s) || "section".equals(s) || "p".equals(s)
+                || "li".equals(s) || "ul".equals(s) || "ol".equals(s) || "body".equals(s);
+    }
+
+    private static boolean isStandardCssIdentifier(final String identifier)
+    {
+        return identifier != null && identifier.matches("^-?[a-zA-Z_][a-zA-Z0-9_-]*$");
+    }
+
+    /**
+     * Escapes a value for use inside a double-quoted CSS attribute selector string.
+     * Backslashes and double quotes are escaped; line breaks, which cannot appear unescaped in a CSS
+     * string, are replaced by a space.
+     *
+     * @param value the raw attribute value
+     * @return the value safe to embed between double quotes
+     */
+    private static String escapeAttributeValue(final String value)
+    {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\r", " ").replace("\n", " ");
     }
 
     private static ToolRegistry createDefaultRegistry()
@@ -548,5 +962,494 @@ public final class PlaybookToolReplayer
         final ToolRegistry registry = new ToolRegistry();
         BrowserToolProvider.registerBrowserTools(registry);
         return registry;
+    }
+
+    private static void verifyStrictReplayGuards(final ToolCall call, final PlaybookStep step, final int callIndex)
+    {
+        final String toolName = call.toolName() != null ? call.toolName().trim().toLowerCase() : "";
+        if (!"click".equals(toolName) && !"browser_click".equals(toolName))
+        {
+            return;
+        }
+
+        final JsonNode args = call.arguments();
+        if (args == null)
+        {
+            return;
+        }
+
+        final String target = args.hasNonNull("target") ? args.path("target").asText().trim() : "";
+        final boolean isCoord = target.startsWith("coord:")
+                || (args.hasNonNull("x") && args.hasNonNull("y") && (!args.hasNonNull("selector") || args.path("selector").asText().isBlank()));
+        if (!isCoord)
+        {
+            return;
+        }
+
+        final DomFeatureVector recordedVector = extractRecordedVector(args, step, callIndex);
+        if (recordedVector != null && WebDriverRunner.hasWebDriverStarted())
+        {
+            final int[] resolvedCoords = resolveCoordinatePoint(args, target);
+            final int x = resolvedCoords[0];
+            final int y = resolvedCoords[1];
+            final WebDriver driver = WebDriverRunner.getWebDriver();
+            final ReanchoringBridge.ReanchoredElement liveEl = ReanchoringBridge.resolveElementAtPoint(driver, x, y);
+            if (!matchesRecordedIdentity(liveEl, recordedVector)
+                    || !matchesCoordinateVisualTile(driver, x, y, recordedVector, null))
+            {
+                final String actualIdentity = liveEl != null
+                        ? liveEl.tagName() + (liveEl.text().isBlank() ? "" : " ['" + liveEl.text() + "']")
+                        : "none";
+                final String expectedIdentity = recordedVector.getTag()
+                        + (recordedVector.getText() == null || recordedVector.getText().isBlank() ? "" : " ['" + recordedVector.getText() + "']");
+                throw new AssertionError("Coordinate click target drifted in REPLAY_STRICT at (" + x + ", " + y + "): expected "
+                        + expectedIdentity + ", but found " + actualIdentity + " on the live page");
+            }
+        }
+    }
+
+    static DomFeatureVector extractRecordedVector(final JsonNode args, final PlaybookStep step, final int callIndex)
+    {
+        DomFeatureVector recordedVector = null;
+        if (step != null && callIndex >= 0 && callIndex < step.getActions().size())
+        {
+            final Action matchingAction = step.getActions().get(callIndex);
+            if (matchingAction != null)
+            {
+                recordedVector = matchingAction.getDomFeatureVector();
+            }
+        }
+        if (recordedVector == null && args != null && args.has("domFeatureVector"))
+        {
+            try
+            {
+                recordedVector = MAPPER.treeToValue(args.path("domFeatureVector"), DomFeatureVector.class);
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+        return recordedVector;
+    }
+
+    static int[] resolveCoordinatePoint(final JsonNode args, final String target)
+    {
+        final CoordinateTarget coordTarget = ClickAction.parseCoordinateTarget(target);
+        if (coordTarget != null && coordTarget.anchorSelector() != null && !coordTarget.anchorSelector().isBlank())
+        {
+            try
+            {
+                final SelenideElement anchorEl = SelenideElementFinder.findElement(coordTarget.anchorSelector());
+                if (anchorEl != null && anchorEl.exists())
+                {
+                    SelenideElementFinder.scrollIntoViewIfNeeded(anchorEl);
+                    final Object rectObj = Selenide.executeJavaScript(
+                        "var r = arguments[0].getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top)];",
+                        anchorEl);
+                    if (rectObj instanceof List<?> list && list.size() >= 2)
+                    {
+                        final int cx = ((Number) list.get(0)).intValue() + coordTarget.x();
+                        final int cy = ((Number) list.get(1)).intValue() + coordTarget.y();
+                        return new int[]{cx, cy};
+                    }
+                }
+            }
+            catch (final Exception | AssertionError ignored)
+            {
+            }
+            return new int[]{coordTarget.x(), coordTarget.y()};
+        }
+        final int x = extractCoordinate(args, "x", target, 0);
+        final int y = extractCoordinate(args, "y", target, 1);
+        return new int[]{x, y};
+    }
+
+    static int extractCoordinate(final JsonNode args, final String prop, final String target, final int index)
+    {
+        final CoordinateTarget coordTarget = ClickAction.parseCoordinateTarget(target);
+        if (coordTarget != null)
+        {
+            return index == 0 ? coordTarget.x() : coordTarget.y();
+        }
+        if (args != null && args.hasNonNull(prop))
+        {
+            return args.path(prop).asInt();
+        }
+        if (target != null && target.startsWith("coord:"))
+        {
+            final String[] parts = target.substring(6).split(",");
+            if (parts.length > index)
+            {
+                try
+                {
+                    return Integer.parseInt(parts[index].trim());
+                }
+                catch (final NumberFormatException ignored)
+                {
+                }
+            }
+        }
+        return 0;
+    }
+
+    private static final List<String> IDENTITY_ATTRIBUTE_KEYS = List.of(
+            "data-graphic-sig",
+            "id",
+            "name",
+            "type",
+            "role",
+            "aria-label",
+            "title",
+            "data-action",
+            "data-testid",
+            "data-test-id",
+            "data-test",
+            "data-qa",
+            "data-cy",
+            "data-canvas-item",
+            "href");
+
+    static boolean matchesRecordedIdentity(final ReanchoringBridge.ReanchoredElement liveEl, final DomFeatureVector recordedVector)
+    {
+        if (liveEl == null || recordedVector == null)
+        {
+            return false;
+        }
+        final String liveTag = liveEl.tagName();
+        final String recordedTag = recordedVector.getTag();
+        if (liveTag == null || recordedTag == null || !liveTag.equalsIgnoreCase(recordedTag))
+        {
+            return false;
+        }
+        final String recordedText = recordedVector.getText();
+        if (recordedText != null && !recordedText.isBlank())
+        {
+            final String liveText = liveEl.text();
+            if (liveText == null || liveText.isBlank())
+            {
+                return false;
+            }
+            final String normRecorded = recordedText.trim().toLowerCase(Locale.ROOT);
+            final String normLive = liveText.trim().toLowerCase(Locale.ROOT);
+            return normLive.contains(normRecorded) || normRecorded.contains(normLive);
+        }
+
+        // Recorded element was textless (e.g. icon button, SVG action, or canvas item).
+        // If the live element at (x, y) now has visible text, it is not the same textless element.
+        if (liveEl.text() != null && !liveEl.text().isBlank())
+        {
+            return false;
+        }
+
+        final Map<String, Object> liveVecMap = liveEl.domFeatureVector();
+        if (liveVecMap == null || liveVecMap.isEmpty())
+        {
+            return true;
+        }
+
+        final Map<String, String> recordedAttrs = recordedVector.getAttributes();
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> liveAttrs = liveVecMap.get("attributes") instanceof Map<?, ?> m
+                ? (Map<String, Object>) m
+                : Map.of();
+
+        boolean anyIdentityAttrMatched = false;
+        if (recordedAttrs != null && !recordedAttrs.isEmpty())
+        {
+            for (final String key : IDENTITY_ATTRIBUTE_KEYS)
+            {
+                final String recVal = recordedAttrs.get(key);
+                if (recVal != null && !recVal.isBlank())
+                {
+                    final Object liveValObj = liveAttrs.get(key);
+                    final String liveVal = liveValObj != null ? String.valueOf(liveValObj).trim() : "";
+                    if (!recVal.trim().equalsIgnoreCase(liveVal))
+                    {
+                        return false;
+                    }
+                    anyIdentityAttrMatched = true;
+                }
+            }
+        }
+        if (liveAttrs.containsKey("data-graphic-sig")
+                && (recordedAttrs == null || !recordedAttrs.containsKey("data-graphic-sig")))
+        {
+            final String liveSig = String.valueOf(liveAttrs.get("data-graphic-sig")).trim();
+            if (!liveSig.isEmpty() && recordedAttrs != null && !recordedAttrs.isEmpty())
+            {
+                return false;
+            }
+        }
+
+        final String recordedAccName = recordedVector.getAccessibleName();
+        if (recordedAccName != null && !recordedAccName.isBlank())
+        {
+            final Object liveAccObj = liveVecMap.get("accessibleName");
+            if (liveAccObj != null)
+            {
+                final String liveAcc = String.valueOf(liveAccObj).trim().toLowerCase(Locale.ROOT);
+                final String recAcc = recordedAccName.trim().toLowerCase(Locale.ROOT);
+                if (liveAcc.isEmpty() || (!liveAcc.contains(recAcc) && !recAcc.contains(liveAcc)))
+                {
+                    return false;
+                }
+                anyIdentityAttrMatched = true;
+            }
+        }
+
+        final String recordedParent = recordedVector.getParentTag();
+        if (recordedParent != null && !recordedParent.isBlank() && liveVecMap.get("parentTag") instanceof final String liveParent && !liveParent.isBlank())
+        {
+            if (!recordedParent.trim().equalsIgnoreCase(liveParent.trim()))
+            {
+                return false;
+            }
+        }
+
+        if (!anyIdentityAttrMatched && liveVecMap.get("siblingIndex") instanceof final Number liveSibling)
+        {
+            if (liveSibling.intValue() != recordedVector.getSiblingIndex())
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static boolean candidateMatchesAssertionExpectation(
+            final DomFeatureVector candidate,
+            final String toolName,
+            final JsonNode args)
+    {
+        if (candidate == null || toolName == null || args == null)
+        {
+            return false;
+        }
+
+        final String cleanTool = stripNamespacePrefix(toolName).toLowerCase(Locale.ROOT);
+
+        if ("assert_text".equals(cleanTool) || "browser_assert_text".equals(cleanTool))
+        {
+            final String rawExpectedText = args.hasNonNull("expectedText")
+                    ? args.path("expectedText").asText()
+                    : args.path("text").asText("");
+            final boolean exact = args.path("exact").asBoolean(false);
+            final boolean regex = args.path("regex").asBoolean(false);
+            final boolean negated = args.path("negated").asBoolean(false)
+                    || args.path("not").asBoolean(false)
+                    || args.path("invert").asBoolean(false);
+
+            final List<String> textCandidates = new ArrayList<>();
+            if (candidate.getText() != null && !candidate.getText().isBlank())
+            {
+                textCandidates.add(candidate.getText());
+            }
+            if (candidate.getAccessibleName() != null && !candidate.getAccessibleName().isBlank())
+            {
+                textCandidates.add(candidate.getAccessibleName());
+            }
+            final String valAttr = candidate.getAttributes().get("value");
+            if (valAttr != null && !valAttr.isBlank())
+            {
+                textCandidates.add(valAttr);
+            }
+            final String placeholder = candidate.getAttributes().get("placeholder");
+            if (placeholder != null && !placeholder.isBlank())
+            {
+                textCandidates.add(placeholder);
+            }
+            final String title = candidate.getAttributes().get("title");
+            if (title != null && !title.isBlank())
+            {
+                textCandidates.add(title);
+            }
+
+            boolean matched = false;
+            for (final String text : textCandidates)
+            {
+                if (BrowserToolProvider.matchesCandidate(text, rawExpectedText, regex, exact))
+                {
+                    matched = true;
+                    break;
+                }
+            }
+
+            return negated ? !matched : matched;
+        }
+
+        if ("assert_attribute".equals(cleanTool) || "browser_assert_attribute".equals(cleanTool))
+        {
+            final String attrName = args.hasNonNull("attribute")
+                    ? args.path("attribute").asText()
+                    : args.path("attributeName").asText("");
+            if (attrName.isBlank())
+            {
+                return false;
+            }
+
+            final boolean hasExpectedVal = args.hasNonNull("expectedValue") || args.hasNonNull("value");
+            final String expectedVal = args.hasNonNull("expectedValue")
+                    ? args.path("expectedValue").asText()
+                    : args.path("value").asText("");
+            final boolean exact = args.path("exact").asBoolean(false);
+            final boolean regex = args.path("regex").asBoolean(false);
+            final boolean negated = args.path("negated").asBoolean(false)
+                    || args.path("not").asBoolean(false);
+
+            String actualVal = null;
+            for (final Map.Entry<String, String> entry : candidate.getAttributes().entrySet())
+            {
+                if (entry.getKey().equalsIgnoreCase(attrName))
+                {
+                    actualVal = entry.getValue();
+                    break;
+                }
+            }
+
+            if (actualVal == null)
+            {
+                return negated;
+            }
+
+            if (!hasExpectedVal)
+            {
+                return !negated;
+            }
+
+            boolean matched = false;
+            if (regex)
+            {
+                Pattern pattern;
+                try
+                {
+                    pattern = Pattern.compile(expectedVal, Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                }
+                catch (final PatternSyntaxException e)
+                {
+                    pattern = Pattern.compile(Pattern.quote(expectedVal), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                }
+                matched = pattern.matcher(actualVal).find();
+            }
+            else if (exact)
+            {
+                matched = actualVal.equalsIgnoreCase(expectedVal);
+            }
+            else
+            {
+                matched = actualVal.toLowerCase(Locale.ROOT).contains(expectedVal.toLowerCase(Locale.ROOT));
+            }
+
+            return negated ? !matched : matched;
+        }
+
+        if ("assert_element_state".equals(cleanTool) || "browser_assert_element_state".equals(cleanTool))
+        {
+            final List<String> states = new ArrayList<>();
+            if (args.has("states") && args.path("states").isArray())
+            {
+                for (final JsonNode s : args.path("states"))
+                {
+                    if (s.isTextual() && !s.asText().isBlank())
+                    {
+                        states.add(s.asText().trim().toLowerCase(Locale.ROOT));
+                    }
+                }
+            }
+            if (states.isEmpty())
+            {
+                final String rawState = args.hasNonNull("state")
+                        ? args.path("state").asText()
+                        : (args.hasNonNull("expectedState")
+                                ? args.path("expectedState").asText()
+                                : args.path("value").asText(""));
+                for (final String part : rawState.split("[,&]|\\band\\b"))
+                {
+                    final String trimmed = part.trim().toLowerCase(Locale.ROOT);
+                    if (!trimmed.isBlank())
+                    {
+                        states.add(trimmed);
+                    }
+                }
+            }
+
+            final boolean negated = args.path("negated").asBoolean(false)
+                    || args.path("not").asBoolean(false);
+
+            for (final String state : states)
+            {
+                final boolean satisfies = switch (state)
+                {
+                    case "visible", "displayed" -> candidate.getWidth() > 0 && candidate.getHeight() > 0;
+                    case "hidden", "invisible" -> candidate.getWidth() <= 0 || candidate.getHeight() <= 0;
+                    case "disabled" -> candidate.getAttributes().containsKey("disabled")
+                            || "true".equalsIgnoreCase(candidate.getAttributes().get("aria-disabled"));
+                    case "enabled" -> !candidate.getAttributes().containsKey("disabled")
+                            && !"true".equalsIgnoreCase(candidate.getAttributes().get("aria-disabled"));
+                    case "checked" -> candidate.getAttributes().containsKey("checked")
+                            || "true".equalsIgnoreCase(candidate.getAttributes().get("aria-checked"));
+                    case "unchecked" -> !candidate.getAttributes().containsKey("checked")
+                            && !"true".equalsIgnoreCase(candidate.getAttributes().get("aria-checked"));
+                    case "readonly" -> candidate.getAttributes().containsKey("readonly")
+                            || "true".equalsIgnoreCase(candidate.getAttributes().get("aria-readonly"));
+                    case "editable" -> !candidate.getAttributes().containsKey("readonly")
+                            && !candidate.getAttributes().containsKey("disabled");
+                    case "exists" -> true;
+                    case "absent" -> false;
+                    default -> true;
+                };
+
+                final boolean stateMatched = negated ? !satisfies : satisfies;
+                if (!stateMatched)
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // For any other assertion tools, do not allow healing without exact validation
+        return false;
+    }
+
+    private static boolean isRecoverableElementFailure(final Throwable t)
+    {
+        if (t == null)
+        {
+            return false;
+        }
+        if (t instanceof ElementNotFound
+                || t instanceof NoSuchElementException
+                || t instanceof StaleElementReferenceException
+                || t instanceof ElementNotInteractableException
+                || t instanceof TimeoutException)
+        {
+            return true;
+        }
+        if (t.getCause() != null && isRecoverableElementFailure(t.getCause()))
+        {
+            return true;
+        }
+        final String msg = t.getMessage();
+        if (msg != null)
+        {
+            final String lower = msg.toLowerCase(Locale.ROOT);
+            return lower.contains("element not found")
+                    || lower.contains("nosuchelement")
+                    || lower.contains("not interactable")
+                    || lower.contains("stale element")
+                    || lower.contains("cannot locate");
+        }
+        return false;
+    }
+
+    private static String stripNamespacePrefix(final String toolName)
+    {
+        if (toolName == null)
+        {
+            return "";
+        }
+        final int colonIdx = toolName.indexOf(':');
+        return colonIdx >= 0 ? toolName.substring(colonIdx + 1) : toolName;
     }
 }

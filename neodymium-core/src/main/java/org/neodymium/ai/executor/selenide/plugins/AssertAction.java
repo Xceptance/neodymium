@@ -36,6 +36,8 @@ import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
 import com.codeborne.selenide.WebElementCondition;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.executor.selenide.frame.FrameContextManager;
+import org.neodymium.ai.tool.browser.BrowserToolProvider;
 import org.neodymium.util.SelenideAddons;
 
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
@@ -77,6 +79,10 @@ public final class AssertAction implements BrowserActionPlugin
         // Handle URL assertions
         if ("ASSERT_URL".equals(type) || ("ASSERT".equals(type) && ("url".equalsIgnoreCase(action.getTarget()) || "currentUrl".equalsIgnoreCase(action.getTarget()) || "pageUrl".equalsIgnoreCase(action.getTarget()))))
         {
+            if (FrameContextManager.isDefaultContent(action.getFrame()) && WebDriverRunner.hasWebDriverStarted())
+            {
+                FrameContextManager.switchToDefaultContent(WebDriverRunner.getWebDriver());
+            }
             executeUrlAssertion(action, expected);
             return;
         }
@@ -84,6 +90,10 @@ public final class AssertAction implements BrowserActionPlugin
         // Handle Title assertions
         if ("ASSERT_TITLE".equals(type) || ("ASSERT".equals(type) && ("title".equalsIgnoreCase(action.getTarget()) || "pageTitle".equalsIgnoreCase(action.getTarget()))))
         {
+            if (FrameContextManager.isDefaultContent(action.getFrame()) && WebDriverRunner.hasWebDriverStarted())
+            {
+                FrameContextManager.switchToDefaultContent(WebDriverRunner.getWebDriver());
+            }
             executeTitleAssertion(action, expected);
             return;
         }
@@ -257,6 +267,11 @@ public final class AssertAction implements BrowserActionPlugin
                 case "ASSERT_ATTRIBUTE" ->
                 {
                     executeAttributeAssertion(element, action, expected);
+                    return;
+                }
+                case "ASSERT_ELEMENT_STATE" ->
+                {
+                    executeCompoundStateAssertion(element, action, expected);
                     return;
                 }
                 case "ASSERT_TEXT" ->
@@ -984,5 +999,97 @@ public final class AssertAction implements BrowserActionPlugin
             // Ignore
         }
         return false;
+    }
+
+    private void executeCompoundStateAssertion(final SelenideElement element, final Action action, final String expected)
+    {
+        final String rawExpected = expected != null && !expected.isBlank() ? expected : "visible";
+        final String[] parts = rawExpected.split("[,&]|\\band\\b");
+        final boolean negated = action != null && action.isNegated();
+
+        for (final String part : parts)
+        {
+            final String trimmed = part.trim();
+            if (trimmed.isBlank())
+            {
+                continue;
+            }
+
+            final String normalized = BrowserToolProvider.normalizeElementState(trimmed);
+            final String state = negated ? switch (normalized)
+            {
+                case "visible" -> "hidden";
+                case "hidden" -> "visible";
+                case "enabled" -> "disabled";
+                case "disabled" -> "enabled";
+                case "checked" -> "unchecked";
+                case "unchecked" -> "checked";
+                case "selected" -> "unselected";
+                case "unselected" -> "selected";
+                case "focused" -> "unfocused";
+                case "unfocused" -> "focused";
+                case "exists" -> "absent";
+                case "absent" -> "exists";
+                default -> normalized;
+            } : normalized;
+
+            switch (state)
+            {
+                case "visible" -> element.shouldBe(Condition.visible);
+                case "hidden" -> element.shouldBe(Condition.hidden);
+                case "enabled" -> element.shouldBe(Condition.enabled);
+                case "disabled" -> element.shouldBe(Condition.disabled);
+                case "editable" -> element.shouldBe(Condition.editable);
+                case "readonly" -> element.shouldBe(Condition.readonly);
+                case "checked" -> element.shouldBe(Condition.checked);
+                case "unchecked" -> element.shouldNotBe(Condition.checked);
+                case "selected" ->
+                {
+                    if ("SELECT".equalsIgnoreCase(element.getTagName()))
+                    {
+                        element.getSelectedOption().shouldBe(Condition.exist);
+                    }
+                    else
+                    {
+                        element.shouldBe(Condition.selected);
+                    }
+                }
+                case "unselected" ->
+                {
+                    if ("SELECT".equalsIgnoreCase(element.getTagName()))
+                    {
+                        element.getSelectedOption().shouldNotBe(Condition.exist);
+                    }
+                    else
+                    {
+                        element.shouldNotBe(Condition.selected);
+                    }
+                }
+                case "focused" ->
+                {
+                    final Boolean isFocused = Selenide.executeJavaScript(
+                            "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
+                            element);
+                    if (!Boolean.TRUE.equals(isFocused))
+                    {
+                        element.shouldBe(Condition.focused);
+                    }
+                }
+                case "unfocused" ->
+                {
+                    final Boolean isFocused = Selenide.executeJavaScript(
+                            "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
+                            element);
+                    if (Boolean.TRUE.equals(isFocused))
+                    {
+                        element.shouldNotBe(Condition.focused);
+                    }
+                }
+                case "exists" -> element.should(Condition.exist);
+                case "absent" -> element.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
+                default -> throw new AssertionError("Unsupported element state assertion: '" + trimmed + "'. Allowed states: visible, hidden, enabled, disabled, editable, readonly, checked, unchecked, selected, unselected, focused, unfocused, exists, absent.");
+            }
+            LOG.debug("   ✅ Element satisfied state '{}': {}", state, action);
+        }
     }
 }

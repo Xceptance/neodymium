@@ -138,7 +138,13 @@ public final class InteractiveViewErrorRecoveryAndSuggestFixTest extends BaseInt
 
         openConsoleUrl();
 
-        // 1. Click "Suggest Fix" button on failed step card
+        // 1. Verify "Heal" button is rendered and enabled in error mode
+        final SelenideElement runBtn = $("#btnRun");
+        runBtn.should(Condition.exist);
+        runBtn.shouldHave(Condition.cssClass("btn-heal"));
+        runBtn.shouldBe(Condition.enabled);
+
+        // 2. Click "Suggest Fix" button on failed step card
         final SelenideElement step0Card = $(".step-card[data-step-idx='0']");
         step0Card.should(Condition.exist);
 
@@ -146,18 +152,29 @@ public final class InteractiveViewErrorRecoveryAndSuggestFixTest extends BaseInt
         btnSuggestFix.should(Condition.exist);
         btnSuggestFix.click();
 
-        // 2. Verify Suggestion Overlay opens in loading state
+        // 3. Verify Suggestion Overlay opens in loading state
         final SelenideElement overlay = $("#suggestionOverlay");
         overlay.should(Condition.exist);
         overlay.shouldHave(Condition.cssClass("active"));
         $("#suggestionLoading").shouldBe(Condition.visible);
 
-        // 3. Simulate backend fixSuggestion SSE broadcast / handler invocation
+        // 4. Test closing dialog and verify Heal button remains enabled
+        overlay.$(".close-btn").click();
+        overlay.shouldNotHave(Condition.cssClass("active"));
+        overlay.shouldNotBe(Condition.visible);
+        runBtn.shouldBe(Condition.enabled);
+
+        // 5. Click "Suggest Fix" again - verify it successfully re-opens
+        btnSuggestFix.click();
+        overlay.shouldHave(Condition.cssClass("active"));
+        overlay.shouldBe(Condition.visible);
+        $("#suggestionLoading").shouldBe(Condition.visible);
+
+        // 6. Deliver fix suggestion via SSE broadcast and verify UI updates automatically
         final String fixEventJson = "{\"originalInstruction\":\"Click missing search icon '.search-trigger'\",\"suggestedInstruction\":\"Click header search button 'button[aria-label=\\\"Search\\\"]'\"}";
         this.engine.broadcastSseEvent("fixSuggestion", fixEventJson);
-        com.codeborne.selenide.Selenide.executeJavaScript("handleFixSuggestionReceived(" + fixEventJson + ");");
 
-        // 4. Verify original text and editable suggestion in popup
+        // 7. Verify original text and editable suggestion in popup
         $("#suggestionBody").shouldBe(Condition.visible);
         final SelenideElement origText = $("#suggestionOriginalText");
         origText.should(Condition.exist);
@@ -167,14 +184,20 @@ public final class InteractiveViewErrorRecoveryAndSuggestFixTest extends BaseInt
         textarea.should(Condition.exist);
         textarea.shouldHave(Condition.value("Click header search button 'button[aria-label=\"Search\"]'"));
 
-        // 5. Modify suggestion in popup and click Apply Only
+        // 8. Modify suggestion in popup and click Apply Only
         textarea.clear();
         textarea.sendKeys("Click main search button '#mainSearch'");
 
         final SelenideElement btnApply = $("#suggestionActions button.btn-primary");
+        btnApply.shouldHave(Condition.text("Apply Only"));
+
+        final SelenideElement btnApplyAndConfirm = $("#suggestionActions button.btn-success");
+        btnApplyAndConfirm.should(Condition.exist);
+        btnApplyAndConfirm.shouldHave(Condition.text("Apply and Confirm"));
+
         btnApply.click();
 
-        // 6. Verify overlay closes
+        // 9. Verify overlay closes
         overlay.shouldNotHave(Condition.cssClass("active"));
     }
 

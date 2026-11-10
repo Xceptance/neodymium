@@ -18,7 +18,11 @@
  */
 package com.xceptance.neodymium.ai.console;
 
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -27,10 +31,19 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
+import org.openqa.selenium.HasCapabilities;
+import org.openqa.selenium.WebDriver;
+
+import com.codeborne.selenide.WebDriverRunner;
+import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.StepStats;
+import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 import org.neodymium.ai.report.TestExecutionReport;
 import org.neodymium.ai.report.TestExecutionReport.CategoryTokenUsage;
 import org.neodymium.ai.report.TestExecutionReport.ReportActionEntry;
@@ -42,7 +55,9 @@ import org.neodymium.ai.session.AiSession;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 /**
  * Utility serializing active {@link AiSession} and {@link ExecutionContext} state into
@@ -241,11 +256,17 @@ public final class InteractiveStateBuilder
             }
             if (testClass != null)
             {
+                state.addProperty("testClass", testClass);
                 state.addProperty("testFile", testClass + (testMethod != null ? "#" + testMethod : ""));
+            }
+            if (testMethod != null && !testMethod.isEmpty())
+            {
+                state.addProperty("testMethod", testMethod);
             }
 
             if (datasetLabel != null && !datasetLabel.isEmpty())
             {
+                state.addProperty("title", datasetLabel);
                 state.addProperty("testId", datasetLabel);
                 state.addProperty("datasetId", datasetLabel);
             }
@@ -281,7 +302,7 @@ public final class InteractiveStateBuilder
         {
             try
             {
-                browser = com.xceptance.neodymium.util.Neodymium.getBrowserProfileName();
+                browser = Neodymium.getBrowserProfileName();
             }
             catch (final Throwable ignored)
             {
@@ -291,7 +312,7 @@ public final class InteractiveStateBuilder
         {
             try
             {
-                browser = com.xceptance.neodymium.util.Neodymium.getBrowserName();
+                browser = Neodymium.getBrowserName();
             }
             catch (final Throwable ignored)
             {
@@ -299,14 +320,14 @@ public final class InteractiveStateBuilder
         }
         if (browser == null || browser.isEmpty())
         {
-            if (com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
+            if (WebDriverRunner.hasWebDriverStarted())
             {
                 try
                 {
-                    final org.openqa.selenium.WebDriver webDriver = com.codeborne.selenide.WebDriverRunner.getWebDriver();
-                    if (webDriver instanceof org.openqa.selenium.HasCapabilities)
+                    final WebDriver webDriver = WebDriverRunner.getWebDriver();
+                    if (webDriver instanceof HasCapabilities capabilities)
                     {
-                        browser = ((org.openqa.selenium.HasCapabilities) webDriver).getCapabilities().getBrowserName();
+                        browser = capabilities.getCapabilities().getBrowserName();
                     }
                 }
                 catch (final Throwable ignored)
@@ -330,7 +351,7 @@ public final class InteractiveStateBuilder
         {
             try
             {
-                modeObj = org.neodymium.ai.config.AiConfiguration.getInstance().getExecutionMode();
+                modeObj = AiConfiguration.getInstance().getExecutionMode();
             }
             catch (final Throwable ignored)
             {
@@ -344,7 +365,7 @@ public final class InteractiveStateBuilder
 
         // Test execution start time
         final long testStartTimeMs = context != null ? context.getStartTimeMs() : System.currentTimeMillis();
-        state.addProperty("startTime", java.time.Instant.ofEpochMilli(testStartTimeMs).toString());
+        state.addProperty("startTime", Instant.ofEpochMilli(testStartTimeMs).toString());
 
         // Data bindings from SessionData
         if (context != null && context.getSessionData() != null)
@@ -373,49 +394,207 @@ public final class InteractiveStateBuilder
         if (context != null)
         {
             @SuppressWarnings("unchecked")
-            final List<PlaybookStep> beforeSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.beforeSteps");
+            List<PlaybookStep> beforeSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.beforeSteps");
+            if (beforeSteps == null)
+            {
+                final Object pbObj = context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK);
+                if (pbObj instanceof Playbook pb && !pb.getBeforeSteps().isEmpty())
+                {
+                    beforeSteps = pb.getBeforeSteps();
+                }
+            }
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> mainSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.mainSteps");
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> sessionSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+
+            List<PlaybookStep> playbookSteps;
+            if (mainSteps != null && !mainSteps.isEmpty())
+            {
+                if (sessionSteps != null && !sessionSteps.isEmpty())
+                {
+                    final Set<PlaybookStep> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+                    final List<PlaybookStep> merged = new ArrayList<>();
+                    for (final PlaybookStep s : sessionSteps)
+                    {
+                        if (s != null && seen.add(s))
+                        {
+                            merged.add(s);
+                        }
+                    }
+                    for (final PlaybookStep s : mainSteps)
+                    {
+                        if (s != null && seen.add(s))
+                        {
+                            merged.add(s);
+                        }
+                    }
+                    playbookSteps = merged;
+                }
+                else
+                {
+                    playbookSteps = mainSteps;
+                }
+            }
+            else if (sessionSteps != null && !sessionSteps.isEmpty())
+            {
+                playbookSteps = sessionSteps;
+            }
+            else
+            {
+                final Object pbObj = context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK);
+                if (pbObj instanceof Playbook pb)
+                {
+                    playbookSteps = pb.getSteps();
+                }
+                else
+                {
+                    playbookSteps = null;
+                }
+            }
             @SuppressWarnings("unchecked")
             final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
             @SuppressWarnings("unchecked")
-            final List<PlaybookStep> afterSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.afterSteps");
+            List<PlaybookStep> afterSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.afterSteps");
+            if (afterSteps == null)
+            {
+                final Object pbObj = context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK);
+                if (pbObj instanceof Playbook pb && !pb.getAfterSteps().isEmpty())
+                {
+                    afterSteps = pb.getAfterSteps();
+                }
+            }
+
+            PlaybookStep currentStep = null;
+            final Object curObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+            if (curObj instanceof PlaybookStep ps)
+            {
+                currentStep = ps;
+            }
 
             boolean beforeActive = false;
             boolean stepsActive = false;
             boolean afterActive = false;
 
-            if (beforeSteps != null && beforeSteps.stream().anyMatch(s -> s.getStatus() == PlaybookStepStatus.RUNNING))
+            if (currentStep != null)
             {
-                beforeActive = true;
-            }
-            else if (afterSteps != null && afterSteps.stream().anyMatch(s -> s.getStatus() == PlaybookStepStatus.RUNNING))
-            {
-                afterActive = true;
+                final PlaybookStep root = currentStep.getRootStep() != null ? currentStep.getRootStep() : currentStep;
+                if (beforeSteps != null && (beforeSteps.contains(root) || beforeSteps.contains(currentStep)))
+                {
+                    beforeActive = true;
+                }
+                else if (afterSteps != null && (afterSteps.contains(root) || afterSteps.contains(currentStep)))
+                {
+                    afterActive = true;
+                }
+                else
+                {
+                    stepsActive = true;
+                }
             }
             else
             {
-                stepsActive = true;
+                if (beforeSteps != null && beforeSteps.stream().anyMatch(s -> s.getStatus() == PlaybookStepStatus.RUNNING))
+                {
+                    beforeActive = true;
+                }
+                else if (afterSteps != null && afterSteps.stream().anyMatch(s -> s.getStatus() == PlaybookStepStatus.RUNNING))
+                {
+                    afterActive = true;
+                }
+                else if (beforeSteps != null && beforeSteps.stream().anyMatch(s -> s.getStatus() == PlaybookStepStatus.PENDING)
+                    && (playbookSteps == null || playbookSteps.stream().allMatch(s -> s.getStatus() == PlaybookStepStatus.PENDING)))
+                {
+                    beforeActive = true;
+                }
+                else
+                {
+                    stepsActive = true;
+                }
             }
 
             final boolean beforePassed = !beforeActive && (stepsActive || afterActive);
             final boolean stepsPassed = !beforeActive && !stepsActive && afterActive;
 
+            int globalIndex = 0;
+            boolean sectionFailed = false;
+            String firstFailedStepLabel = null;
             if (beforeSteps != null)
             {
                 for (int i = 0; i < beforeSteps.size(); i++)
                 {
                     final PlaybookStep step = beforeSteps.get(i);
-                    final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context, "before", beforeActive, beforePassed, execReport);
+                    final JsonObject stepObj = serializeStep(step, i, globalIndex, activeStepIndex, context, "before", beforeActive, beforePassed, execReport, runnerStatus, sectionFailed, firstFailedStepLabel, currentStep);
+                    if (stepObj.has("status") && "failed".equalsIgnoreCase(stepObj.get("status").getAsString()))
+                    {
+                        sectionFailed = true;
+                        if (firstFailedStepLabel == null)
+                        {
+                            firstFailedStepLabel = stepObj.has("index") ? "#" + stepObj.get("index").getAsInt() : "#" + (globalIndex + 1);
+                        }
+                    }
                     beforeArray.add(stepObj);
+                    globalIndex++;
                 }
             }
 
-            if (flatSteps != null)
+            final List<PlaybookStep> stepsToSerialize;
+            if (playbookSteps != null && !playbookSteps.isEmpty())
             {
-                for (int i = 0; i < flatSteps.size(); i++)
+                stepsToSerialize = playbookSteps;
+            }
+            else if (flatSteps != null)
+            {
+                stepsToSerialize = new ArrayList<>();
+                for (final PlaybookStep step : flatSteps)
                 {
-                    final PlaybookStep step = flatSteps.get(i);
-                    final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context, "playbook", stepsActive, stepsPassed, execReport);
+                    if (step != null && step.getParent() != null && (flatSteps.contains(step.getParent()) || flatSteps.contains(step.getRootStep())))
+                    {
+                        continue;
+                    }
+                    stepsToSerialize.add(step);
+                }
+            }
+            else
+            {
+                stepsToSerialize = null;
+            }
+
+            if (stepsToSerialize != null)
+            {
+                final Set<PlaybookStep> beforeSet = beforeSteps != null ? new HashSet<>(beforeSteps) : Collections.emptySet();
+                final Set<PlaybookStep> afterSet = afterSteps != null ? new HashSet<>(afterSteps) : Collections.emptySet();
+                int blockStepIndex = 0;
+                for (int i = 0; i < stepsToSerialize.size(); i++)
+                {
+                    final PlaybookStep step = stepsToSerialize.get(i);
+                    if (step == null)
+                    {
+                        continue;
+                    }
+                    final String block = step.getBlock();
+                    final PlaybookStep root = step.getRootStep() != null ? step.getRootStep() : step;
+                    if ("before".equalsIgnoreCase(block)
+                        || "after".equalsIgnoreCase(block)
+                        || beforeSet.contains(step)
+                        || beforeSet.contains(root)
+                        || afterSet.contains(step)
+                        || afterSet.contains(root))
+                    {
+                        continue;
+                    }
+                    final JsonObject stepObj = serializeStep(step, blockStepIndex, globalIndex, activeStepIndex, context, "playbook", stepsActive, stepsPassed, execReport, runnerStatus, sectionFailed, firstFailedStepLabel, currentStep);
+                    if (stepObj.has("status") && "failed".equalsIgnoreCase(stepObj.get("status").getAsString()))
+                    {
+                        sectionFailed = true;
+                        if (firstFailedStepLabel == null)
+                        {
+                            firstFailedStepLabel = stepObj.has("index") ? "#" + stepObj.get("index").getAsInt() : "#" + (globalIndex + 1);
+                        }
+                    }
                     stepsArray.add(stepObj);
+                    globalIndex++;
+                    blockStepIndex++;
                 }
             }
 
@@ -424,8 +603,17 @@ public final class InteractiveStateBuilder
                 for (int i = 0; i < afterSteps.size(); i++)
                 {
                     final PlaybookStep step = afterSteps.get(i);
-                    final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context, "after", afterActive, false, execReport);
+                    final JsonObject stepObj = serializeStep(step, i, globalIndex, activeStepIndex, context, "after", afterActive, false, execReport, runnerStatus, sectionFailed, firstFailedStepLabel, currentStep);
+                    if (stepObj.has("status") && "failed".equalsIgnoreCase(stepObj.get("status").getAsString()))
+                    {
+                        sectionFailed = true;
+                        if (firstFailedStepLabel == null)
+                        {
+                            firstFailedStepLabel = stepObj.has("index") ? "#" + stepObj.get("index").getAsInt() : "#" + (globalIndex + 1);
+                        }
+                    }
                     afterArray.add(stepObj);
+                    globalIndex++;
                 }
             }
         }
@@ -434,6 +622,80 @@ public final class InteractiveStateBuilder
         blocks.add("steps", stepsArray);
         blocks.add("after", afterArray);
         state.add("blocks", blocks);
+
+        final boolean hasHealedReport = (execReport != null && execReport.getMetrics() != null && execReport.getMetrics().getHealedSteps() > 0)
+            || (context != null && Boolean.TRUE.equals(context.getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP)));
+        boolean anyStepHealed = hasHealedReport;
+        if (!anyStepHealed)
+        {
+            for (final JsonArray arr : List.of(beforeArray, stepsArray, afterArray))
+            {
+                for (final JsonElement elem : arr)
+                {
+                    if (elem.isJsonObject())
+                    {
+                        final JsonObject stepObj = elem.getAsJsonObject();
+                        final String st = stepObj.has("status") && !stepObj.get("status").isJsonNull() ? stepObj.get("status").getAsString() : "";
+                        final boolean isHealed = (stepObj.has("healed") && !stepObj.get("healed").isJsonNull() && stepObj.get("healed").getAsBoolean()) || "healed".equalsIgnoreCase(st);
+                        if (isHealed)
+                        {
+                            anyStepHealed = true;
+                            break;
+                        }
+                    }
+                }
+                if (anyStepHealed)
+                {
+                    break;
+                }
+            }
+        }
+        if (anyStepHealed && state.has("status") && ("passed".equalsIgnoreCase(state.get("status").getAsString()) || "succeeded".equalsIgnoreCase(state.get("status").getAsString())))
+        {
+            state.addProperty("status", "healed");
+        }
+
+        final boolean isExpectedFailure = execReport != null && execReport.isExpectedFailure();
+        if (isExpectedFailure)
+        {
+            state.addProperty("status", "passed");
+            state.addProperty("expectedFailure", true);
+        }
+        else
+        {
+            boolean anyStepFailed = (execReport != null && ("FAILED".equalsIgnoreCase(execReport.getStatus()) || "ERROR".equalsIgnoreCase(execReport.getStatus())));
+            if (!anyStepFailed)
+            {
+                for (final JsonArray arr : List.of(beforeArray, stepsArray, afterArray))
+                {
+                    for (final JsonElement elem : arr)
+                    {
+                        if (elem.isJsonObject())
+                        {
+                            final JsonObject stepObj = elem.getAsJsonObject();
+                            final String st = stepObj.has("status") && !stepObj.get("status").isJsonNull() ? stepObj.get("status").getAsString() : "";
+                            final boolean optional = stepObj.has("optional") && !stepObj.get("optional").isJsonNull() && stepObj.get("optional").getAsBoolean();
+                            final boolean stepExpectedFailure = stepObj.has("expectedFailure") && !stepObj.get("expectedFailure").isJsonNull() && stepObj.get("expectedFailure").getAsBoolean();
+                            if ("failed".equalsIgnoreCase(st) && !optional && !stepExpectedFailure)
+                            {
+                                anyStepFailed = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (anyStepFailed)
+                    {
+                        break;
+                    }
+                }
+            }
+            final boolean isExecutionFinished = (execReport != null && ("FAILED".equalsIgnoreCase(execReport.getStatus()) || "ERROR".equalsIgnoreCase(execReport.getStatus())))
+                || (state.has("status") && ("passed".equalsIgnoreCase(state.get("status").getAsString()) || "succeeded".equalsIgnoreCase(state.get("status").getAsString())));
+            if (anyStepFailed && (isExecutionFinished || "failed".equalsIgnoreCase(runnerStatus)))
+            {
+                state.addProperty("status", "failed");
+            }
+        }
 
         // Enrich with TestExecutionReport data if available
         if (execReport != null)
@@ -447,6 +709,7 @@ public final class InteractiveStateBuilder
             {
                 state.addProperty("error", execReport.getFailureReason());
                 state.addProperty("failureReason", execReport.getFailureReason());
+                state.addProperty("errorMessage", execReport.getFailureReason());
             }
             if (execReport.getFailureStackTrace() != null && !execReport.getFailureStackTrace().isBlank())
             {
@@ -462,8 +725,43 @@ public final class InteractiveStateBuilder
             }
             if (execReport.getEndTimeMs() > 0)
             {
-                state.addProperty("endTime", java.time.Instant.ofEpochMilli(execReport.getEndTimeMs()).toString());
+                state.addProperty("endTime", Instant.ofEpochMilli(execReport.getEndTimeMs()).toString());
             }
+        }
+
+        final AiConfiguration aiConfig = AiConfiguration.getInstance();
+        if (aiConfig.isLinterEnabled())
+        {
+            List<PlaybookLinterFinding> linterFindings = null;
+            if (execReport != null && !execReport.getLinterFindings().isEmpty())
+            {
+                linterFindings = execReport.getLinterFindings();
+            }
+            else if (context != null && context.getTransientData() != null)
+            {
+                @SuppressWarnings("unchecked")
+                final List<PlaybookLinterFinding> ctxFindings =
+                    (List<PlaybookLinterFinding>) context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK_LINTER_FINDINGS);
+                linterFindings = ctxFindings;
+            }
+            state.add("linterFindings", serializeLinterFindings(linterFindings));
+        }
+
+        if (aiConfig.isPostFlightLinterEnabled())
+        {
+            List<PlaybookLinterFinding> postFlightFindings = null;
+            if (execReport != null && !execReport.getPostFlightFindings().isEmpty())
+            {
+                postFlightFindings = execReport.getPostFlightFindings();
+            }
+            else if (context != null && context.getTransientData() != null)
+            {
+                @SuppressWarnings("unchecked")
+                final List<PlaybookLinterFinding> ctxFindings =
+                    (List<PlaybookLinterFinding>) context.getTransientData().get(ExecutionContext.KEY_POST_FLIGHT_LINTER_FINDINGS);
+                postFlightFindings = ctxFindings;
+            }
+            state.add("postFlightFindings", serializeLinterFindings(postFlightFindings));
         }
 
         // Top-level reasoning property for the active step
@@ -497,22 +795,50 @@ public final class InteractiveStateBuilder
             state.addProperty("reasoning", topReasoning);
         }
 
+        // Fix suggestion fallback if generated during pause
+        if (context != null)
+        {
+            final Object fixObj = context.getTransientData().get("lastFixSuggestion");
+            if (fixObj instanceof final JsonObject fixJson)
+            {
+                state.add("fixSuggestion", fixJson);
+            }
+            else if (fixObj instanceof final String fixStr && !fixStr.isBlank())
+            {
+                try
+                {
+                    state.add("fixSuggestion", JsonParser.parseString(fixStr).getAsJsonObject());
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
+        }
+
         // Top-level failure error message fallback if not set by execReport
-        if ("failed".equalsIgnoreCase(runnerStatus) && !state.has("error"))
+        if (("failed".equalsIgnoreCase(runnerStatus) || "paused".equalsIgnoreCase(runnerStatus)) && !state.has("error"))
         {
             String failureMessage = null;
             if (context != null)
             {
-                @SuppressWarnings("unchecked")
-                final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
-                if (flatSteps != null)
+                final Object lastFail = context.getTransientData().get("KEY_LAST_STEP_FAILURE");
+                if (lastFail instanceof final String s && !s.isBlank())
                 {
-                    for (final PlaybookStep s : flatSteps)
+                    failureMessage = s;
+                }
+                if (failureMessage == null)
+                {
+                    @SuppressWarnings("unchecked")
+                    final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
+                    if (flatSteps != null)
                     {
-                        if (s != null && s.getFailureReason() != null && !s.getFailureReason().isBlank())
+                        for (final PlaybookStep s : flatSteps)
                         {
-                            failureMessage = s.getFailureReason();
-                            break;
+                            if (s != null && s.getFailureReason() != null && !s.getFailureReason().isBlank())
+                            {
+                                failureMessage = s.getFailureReason();
+                                break;
+                            }
                         }
                     }
                 }
@@ -521,6 +847,7 @@ public final class InteractiveStateBuilder
             {
                 state.addProperty("error", failureMessage);
                 state.addProperty("failureReason", failureMessage);
+                state.addProperty("errorMessage", failureMessage);
             }
         }
 
@@ -530,24 +857,49 @@ public final class InteractiveStateBuilder
     private static JsonObject serializeStep(
         final PlaybookStep step,
         final int stepIndex,
+        final int globalIndex,
         final int activeStepIndex,
         final ExecutionContext context,
         final String source,
         final boolean isCurrentSection,
         final boolean isPastSection,
-        final TestExecutionReport report
+        final TestExecutionReport report,
+        final String runnerStatus,
+        final boolean precedingStepFailed,
+        final String firstFailedStepLabel,
+        final PlaybookStep currentPlaybookStep
     )
     {
         final JsonObject obj = new JsonObject();
         obj.addProperty("id", source + "_" + stepIndex);
-        obj.addProperty("index", stepIndex + 1);
+        obj.addProperty("index", globalIndex + 1);
+        obj.addProperty("blockIndex", stepIndex);
+        final String expectedBlock = "playbook".equalsIgnoreCase(source) ? "steps" : source;
+        obj.addProperty("block", expectedBlock);
         final String rawInstruction = step.getInstruction() != null ? step.getInstruction() : "";
-        final String resolvedInstruction = (ExecutionContext.getActiveContext() != null && ExecutionContext.getActiveContext().getSessionData() != null)
-            ? ExecutionContext.getActiveContext().getSessionData().resolveAvailableVariables(rawInstruction)
+        final ExecutionContext effContext = context != null ? context : ExecutionContext.getActiveContext();
+        final String resolvedInstruction = (effContext != null && effContext.getSessionData() != null)
+            ? effContext.getSessionData().resolveAvailableVariables(rawInstruction)
             : rawInstruction;
         obj.addProperty("instruction", resolvedInstruction);
         obj.addProperty("line", step.getLineNumber());
         obj.addProperty("file", step.getSourceFile() != null ? step.getSourceFile() : "");
+        if (step.getParent() != null)
+        {
+            obj.addProperty("isSubStep", true);
+            if (step.getParent().getInstruction() != null)
+            {
+                obj.addProperty("parentInstruction", step.getParent().getInstruction());
+            }
+        }
+        if (step.hasSubSteps())
+        {
+            obj.addProperty("hasSubSteps", true);
+        }
+        if (step.getContextLevel() != null && !step.getContextLevel().isBlank())
+        {
+            obj.addProperty("contextLevel", step.getContextLevel());
+        }
 
         final ExecutionMode mode = context != null
             ? (ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE)
@@ -576,52 +928,87 @@ public final class InteractiveStateBuilder
         obj.addProperty("source", stepEngine);
         obj.addProperty("origin", origin);
 
+        final PlaybookStep rootStep = currentPlaybookStep != null
+            ? (currentPlaybookStep.getRootStep() != null ? currentPlaybookStep.getRootStep() : currentPlaybookStep)
+            : null;
+        final boolean isThisStepActive = currentPlaybookStep != null
+            ? (step == currentPlaybookStep || step == rootStep)
+            : (isCurrentSection && (stepIndex == activeStepIndex || globalIndex == activeStepIndex));
+
+        final boolean isRunFailed = runnerStatus != null && ("failed".equalsIgnoreCase(runnerStatus) || "aborted".equalsIgnoreCase(runnerStatus));
+
         PlaybookStepStatus status = step.getStatus();
-        if (status == null || status == PlaybookStepStatus.PENDING)
+        if (status == null || status == PlaybookStepStatus.PENDING || status == PlaybookStepStatus.SPLITTED)
         {
-            if (isCurrentSection)
+            if (precedingStepFailed && isRunFailed)
             {
-                if (stepIndex < activeStepIndex)
+                status = PlaybookStepStatus.NOT_RUN;
+            }
+            else if (status == null)
+            {
+                if (isRunFailed)
                 {
-                    status = PlaybookStepStatus.SUCCESS;
+                    status = precedingStepFailed ? PlaybookStepStatus.NOT_RUN : PlaybookStepStatus.SKIPPED;
                 }
-                else if (stepIndex == activeStepIndex)
+                else if (isThisStepActive)
                 {
                     status = PlaybookStepStatus.RUNNING;
+                }
+                else if (isPastSection || (isCurrentSection && (stepIndex < activeStepIndex || globalIndex < activeStepIndex)))
+                {
+                    status = PlaybookStepStatus.SUCCESS;
                 }
                 else
                 {
                     status = PlaybookStepStatus.PENDING;
                 }
             }
-            else if (isPastSection)
+            else if (isThisStepActive && "running".equalsIgnoreCase(runnerStatus))
             {
-                status = PlaybookStepStatus.SUCCESS;
-            }
-            else
-            {
-                status = PlaybookStepStatus.PENDING;
+                status = PlaybookStepStatus.RUNNING;
             }
         }
 
         final String statusStr = switch (status)
         {
-            case SUCCESS, HEALED -> "passed";
+            case SUCCESS -> "passed";
+            case HEALED -> "healed";
             case RUNNING -> "running";
             case FAILED -> "failed";
             case SKIPPED -> "skipped";
+            case NOT_RUN -> "not_run";
             case PENDING, SPLITTED -> "pending";
         };
         obj.addProperty("status", statusStr);
+        if (status == PlaybookStepStatus.HEALED)
+        {
+            obj.addProperty("healed", true);
+        }
+
+        if (status == PlaybookStepStatus.NOT_RUN)
+        {
+            String reason = step.getNotRunReason();
+            if (reason == null || reason.isBlank())
+            {
+                reason = firstFailedStepLabel != null
+                    ? "Not executed because step " + firstFailedStepLabel + " failed."
+                    : "Not executed due to a preceding test failure.";
+            }
+            obj.addProperty("notRunReason", reason);
+        }
+        else if (step.getNotRunReason() != null && !step.getNotRunReason().isBlank())
+        {
+            obj.addProperty("notRunReason", step.getNotRunReason());
+        }
 
         Long stepStart = step.getStartTimeMs();
-        if (stepStart == null && isCurrentSection && stepIndex == activeStepIndex && context != null)
+        if (stepStart == null && isThisStepActive && context != null)
         {
             stepStart = (Long) context.getTransientData().get("KEY_STEP_START_TIME");
         }
-        if (stepStart != null && stepStart > 0)
+        if (stepStart != null && stepStart > 0 && status != PlaybookStepStatus.SKIPPED && status != PlaybookStepStatus.NOT_RUN)
         {
-            obj.addProperty("startTimestamp", java.time.Instant.ofEpochMilli(stepStart).toString());
+            obj.addProperty("startTimestamp", Instant.ofEpochMilli(stepStart).toString());
         }
 
         Long stepDuration = step.getDurationMs();
@@ -629,18 +1016,29 @@ public final class InteractiveStateBuilder
         {
             stepDuration = Math.max(0L, System.currentTimeMillis() - stepStart);
         }
-        if (stepDuration != null)
+        if (stepDuration != null && status != PlaybookStepStatus.SKIPPED && status != PlaybookStepStatus.NOT_RUN)
         {
             obj.addProperty("duration", stepDuration);
         }
 
-        if (step.getFailureReason() != null && !step.getFailureReason().isBlank())
+        String stepFailureReason = step.getFailureReason();
+        if ((stepFailureReason == null || stepFailureReason.isBlank()) && (status == PlaybookStepStatus.FAILED || step.isFailed()) && context != null)
         {
-            obj.addProperty("error", step.getFailureReason());
-            obj.addProperty("failureReason", step.getFailureReason());
+            final Object lastFail = context.getTransientData().get("KEY_LAST_STEP_FAILURE");
+            if (lastFail instanceof final String s && !s.isBlank())
+            {
+                stepFailureReason = s;
+            }
         }
 
-        if (isCurrentSection && stepIndex == activeStepIndex && context != null)
+        if (stepFailureReason != null && !stepFailureReason.isBlank())
+        {
+            obj.addProperty("error", stepFailureReason);
+            obj.addProperty("failureReason", stepFailureReason);
+            obj.addProperty("errorMessage", stepFailureReason);
+        }
+
+        if (isThisStepActive && context != null)
         {
             final String currentScreenshot = (String) context.getTransientData().get("currentScreenshot");
             if (currentScreenshot != null && !currentScreenshot.isEmpty())
@@ -683,6 +1081,25 @@ public final class InteractiveStateBuilder
                     actObj.addProperty("value", action.getValue() != null ? action.getValue() : "");
                     actObj.addProperty("description", action.getDescription() != null ? action.getDescription() : "");
                     actObj.addProperty("reasoning", action.getReasoning() != null ? action.getReasoning() : "");
+                    final String expectedTarget = action.getExpectedTarget();
+                    if (expectedTarget != null && !expectedTarget.isBlank() && !expectedTarget.equals(action.getTarget()))
+                    {
+                        actObj.addProperty("expectedTarget", expectedTarget);
+                        actObj.addProperty("originalTarget", expectedTarget);
+                        actObj.addProperty("healedFrom", expectedTarget);
+                    }
+                    if (action.isHealed())
+                    {
+                        actObj.addProperty("healed", true);
+                    }
+                    if (action.getSubStepIndex() != null)
+                    {
+                        actObj.addProperty("subStepIndex", action.getSubStepIndex());
+                    }
+                    if (action.getSubStepInstruction() != null && !action.getSubStepInstruction().isBlank())
+                    {
+                        actObj.addProperty("subStepInstruction", action.getSubStepInstruction());
+                    }
                     actionsArray.add(actObj);
                 }
             }
@@ -694,19 +1111,48 @@ public final class InteractiveStateBuilder
         {
             for (final ReportStepEntry entry : report.getSteps())
             {
-                if (entry != null && entry.getStepIndex() == stepIndex)
+                if (entry != null && (entry.getStepIndex() == stepIndex || entry.getStepIndex() == globalIndex))
                 {
-                    reportStep = entry;
-                    break;
+                    final String entryBlock = entry.getBlock();
+                    final boolean blockMatches = (entryBlock == null || expectedBlock == null || expectedBlock.equalsIgnoreCase(entryBlock));
+                    if (!blockMatches)
+                    {
+                        continue;
+                    }
+                    final String entryRaw = entry.getRawInstruction();
+                    final String entryInst = entry.getInstruction();
+                    final boolean matchesInstruction = (rawInstruction != null && !rawInstruction.isBlank()
+                        && (rawInstruction.equals(entryRaw) || rawInstruction.equals(entryInst)))
+                        || (resolvedInstruction != null && !resolvedInstruction.isBlank()
+                        && (resolvedInstruction.equals(entryRaw) || resolvedInstruction.equals(entryInst)));
+                    if (matchesInstruction || entryRaw == null || rawInstruction == null || rawInstruction.isBlank())
+                    {
+                        reportStep = entry;
+                        break;
+                    }
                 }
             }
         }
 
         if (reportStep != null)
         {
+            if (reportStep.isExpectedFailure())
+            {
+                obj.addProperty("expectedFailure", true);
+            }
             if (reportStep.getRawInstruction() != null)
             {
                 obj.addProperty("rawInstruction", reportStep.getRawInstruction());
+            }
+            if (reportStep.getContextLevels() != null && !reportStep.getContextLevels().isBlank())
+            {
+                obj.addProperty("contextLevels", reportStep.getContextLevels());
+                final String cl = reportStep.getContextLevels();
+                final String[] parts = cl.split("\\s*(?:→|->)\\s*");
+                if (parts.length > 0 && !parts[parts.length - 1].isBlank())
+                {
+                    obj.addProperty("contextLevel", parts[parts.length - 1].trim());
+                }
             }
             obj.addProperty("bug", reportStep.isBug());
             if (reportStep.getBugDetails() != null)
@@ -717,10 +1163,33 @@ public final class InteractiveStateBuilder
             obj.addProperty("continueOnError", reportStep.isContinueOnError());
             obj.addProperty("noHealing", reportStep.isNoHealing());
             obj.addProperty("visual", reportStep.isVisual());
+            if (reportStep.isNotRun() || "NOT RUN".equalsIgnoreCase(reportStep.getStatus()) || "NOT_RUN".equalsIgnoreCase(reportStep.getStatus()))
+            {
+                obj.addProperty("status", "not_run");
+                if (reportStep.getNotRunReason() != null && !reportStep.getNotRunReason().isBlank())
+                {
+                    obj.addProperty("notRunReason", reportStep.getNotRunReason());
+                }
+            }
+            else if (reportStep.isHealed() || "HEALED".equalsIgnoreCase(reportStep.getStatus()))
+            {
+                obj.addProperty("status", "healed");
+                obj.addProperty("healed", true);
+            }
 
             if (!reportStep.getActions().isEmpty())
             {
-                obj.add("actions", serializeReportActions(reportStep.getActions()));
+                final JsonArray reportActions = serializeReportActions(reportStep.getActions());
+                obj.add("actions", reportActions);
+                for (final JsonElement actElem : reportActions)
+                {
+                    if (actElem.isJsonObject() && actElem.getAsJsonObject().has("healed") && actElem.getAsJsonObject().get("healed").getAsBoolean())
+                    {
+                        obj.addProperty("status", "healed");
+                        obj.addProperty("healed", true);
+                        break;
+                    }
+                }
             }
             else
             {
@@ -731,12 +1200,74 @@ public final class InteractiveStateBuilder
             {
                 obj.add("screenshots", serializeScreenshots(reportStep.getScreenshots()));
             }
+            else if (!reportStep.getSubSteps().isEmpty())
+            {
+                final boolean isStepFailed = status == PlaybookStepStatus.FAILED
+                    || step.isFailed()
+                    || "FAILED".equalsIgnoreCase(reportStep.getStatus());
+                final boolean hasFailedSubStep = reportStep.getSubSteps().stream()
+                    .anyMatch(s -> s != null && ("FAILED".equalsIgnoreCase(s.getStatus()) || s.getFailureReason() != null));
+                final boolean isFailing = isStepFailed || hasFailedSubStep || (isRunFailed && isThisStepActive);
+
+                if (isFailing)
+                {
+                    final List<ReportScreenshotEntry> subScreenshots = new ArrayList<>();
+                    for (final ReportStepEntry sub : reportStep.getSubSteps())
+                    {
+                        final boolean subFailed = sub != null
+                            && ("FAILED".equalsIgnoreCase(sub.getStatus()) || sub.getFailureReason() != null);
+                        if (subFailed && !sub.getScreenshots().isEmpty())
+                        {
+                            for (final ReportScreenshotEntry sc : sub.getScreenshots())
+                            {
+                                final boolean alreadyHas = subScreenshots.stream()
+                                    .anyMatch(s -> s.getBase64Data() != null && s.getBase64Data().equals(sc.getBase64Data()));
+                                if (!alreadyHas)
+                                {
+                                    subScreenshots.add(sc);
+                                }
+                            }
+                        }
+                    }
+                    if (subScreenshots.isEmpty())
+                    {
+                        for (final ReportStepEntry sub : reportStep.getSubSteps())
+                        {
+                            if (sub != null && !sub.getScreenshots().isEmpty())
+                            {
+                                for (final ReportScreenshotEntry sc : sub.getScreenshots())
+                                {
+                                    final boolean alreadyHas = subScreenshots.stream()
+                                        .anyMatch(s -> s.getBase64Data() != null && s.getBase64Data().equals(sc.getBase64Data()));
+                                    if (!alreadyHas)
+                                    {
+                                        subScreenshots.add(sc);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (!subScreenshots.isEmpty())
+                    {
+                        obj.add("screenshots", serializeScreenshots(subScreenshots));
+                    }
+                }
+            }
             if (!reportStep.getLlmCalls().isEmpty())
             {
                 obj.add("llmCalls", serializeLlmCalls(reportStep.getLlmCalls()));
             }
-            obj.add("stats", serializeStepStats(reportStep));
-            if (!reportStep.getSubSteps().isEmpty())
+            final JsonObject statsObj = serializeStepStats(reportStep, step, effContext);
+            obj.add("stats", statsObj);
+            if (!obj.has("contextLevels") && statsObj.has("contextLevels"))
+            {
+                obj.addProperty("contextLevels", statsObj.get("contextLevels").getAsString());
+            }
+            if (!obj.has("contextLevel") && statsObj.has("contextLevel"))
+            {
+                obj.addProperty("contextLevel", statsObj.get("contextLevel").getAsString());
+            }
+            if (!reportStep.getSubSteps().isEmpty() && (!step.hasSubSteps() && (rawInstruction != null && rawInstruction.contains("_include:"))))
             {
                 obj.add("subSteps", serializeSubSteps(reportStep.getSubSteps()));
             }
@@ -744,6 +1275,174 @@ public final class InteractiveStateBuilder
         else
         {
             obj.add("actions", actionsArray);
+            final JsonObject statsObj = serializeStepStats(null, step, effContext);
+            obj.add("stats", statsObj);
+            if (!obj.has("contextLevels") && statsObj.has("contextLevels"))
+            {
+                obj.addProperty("contextLevels", statsObj.get("contextLevels").getAsString());
+            }
+            if (!obj.has("contextLevel") && statsObj.has("contextLevel"))
+            {
+                obj.addProperty("contextLevel", statsObj.get("contextLevel").getAsString());
+            }
+        }
+
+        if (step.hasSubSteps() && step.getSubSteps() != null && !step.getSubSteps().isEmpty())
+        {
+            final JsonArray subStepsArr = new JsonArray();
+            for (int sIdx = 0; sIdx < step.getSubSteps().size(); sIdx++)
+            {
+                final PlaybookStep sub = step.getSubSteps().get(sIdx);
+                if (sub != null)
+                {
+                    final JsonObject subObj = new JsonObject();
+                    subObj.addProperty("stepIndex", sIdx);
+                    subObj.addProperty("index", sIdx + 1);
+                    final String subRaw = sub.getInstruction() != null ? sub.getInstruction() : "";
+                    final String subResolved = (effContext != null && effContext.getSessionData() != null)
+                        ? effContext.getSessionData().resolveAvailableVariables(subRaw)
+                        : subRaw;
+                    subObj.addProperty("instruction", subResolved);
+                    subObj.addProperty("rawInstruction", subRaw);
+                    subObj.addProperty("file", sub.getSourceFile() != null ? sub.getSourceFile() : "");
+                    if (sub.getLineNumber() > 0)
+                    {
+                        subObj.addProperty("line", sub.getLineNumber());
+                    }
+                    PlaybookStepStatus subStatus = sub.getStatus();
+                    if (subStatus == null || subStatus == PlaybookStepStatus.PENDING)
+                    {
+                        if (isPastSection || (isCurrentSection && (stepIndex < activeStepIndex || globalIndex < activeStepIndex)))
+                        {
+                            subStatus = PlaybookStepStatus.SUCCESS;
+                        }
+                        else if (status == PlaybookStepStatus.NOT_RUN || (precedingStepFailed && isRunFailed))
+                        {
+                            subStatus = PlaybookStepStatus.NOT_RUN;
+                        }
+                    }
+                    final String subStatusStr = switch (subStatus != null ? subStatus : PlaybookStepStatus.PENDING)
+                    {
+                        case SUCCESS -> "passed";
+                        case HEALED -> "healed";
+                        case RUNNING -> "running";
+                        case FAILED -> "failed";
+                        case SKIPPED -> "skipped";
+                        case NOT_RUN -> "not_run";
+                        case PENDING, SPLITTED -> "pending";
+                    };
+                    subObj.addProperty("status", subStatusStr);
+                    if (sub.getNotRunReason() != null && !sub.getNotRunReason().isBlank())
+                    {
+                        subObj.addProperty("notRunReason", sub.getNotRunReason());
+                    }
+                    else if (subStatus == PlaybookStepStatus.NOT_RUN && firstFailedStepLabel != null)
+                    {
+                        subObj.addProperty("notRunReason", "Not executed because step " + firstFailedStepLabel + " failed.");
+                    }
+                    if (sub.getContextLevel() != null && !sub.getContextLevel().isBlank())
+                    {
+                        subObj.addProperty("contextLevel", sub.getContextLevel());
+                        subObj.addProperty("contextLevels", sub.getContextLevel());
+                    }
+                    subObj.addProperty("startTimeMs", sub.getStartTimeMs() != null ? sub.getStartTimeMs() : 0L);
+                    subObj.addProperty("durationMs", sub.getDurationMs() != null ? sub.getDurationMs() : 0L);
+                    if (sub.getReasoning() != null && !sub.getReasoning().isBlank())
+                    {
+                        subObj.addProperty("reasoning", sub.getReasoning());
+                    }
+                    if (sub.getReasonings() != null && !sub.getReasonings().isEmpty())
+                    {
+                        final List<String> subReasonings = new ArrayList<>(sub.getReasonings());
+                        final JsonArray subReasoningsArr = new JsonArray();
+                        for (final String sr : subReasonings)
+                        {
+                            if (sr != null && !sr.isBlank())
+                            {
+                                subReasoningsArr.add(sr.trim());
+                            }
+                        }
+                        if (!subReasoningsArr.isEmpty())
+                        {
+                            subObj.add("reasonings", subReasoningsArr);
+                        }
+                    }
+                    if (sub.getFailureReason() != null && !sub.getFailureReason().isBlank())
+                    {
+                        subObj.addProperty("failureReason", sub.getFailureReason());
+                        subObj.addProperty("error", sub.getFailureReason());
+                        subObj.addProperty("errorMessage", sub.getFailureReason());
+                    }
+                    if (sub.getActions() != null && !sub.getActions().isEmpty())
+                    {
+                        final JsonArray subActArr = new JsonArray();
+                        for (final Action subAct : sub.getActions())
+                        {
+                            if (subAct != null)
+                            {
+                                final JsonObject actObj = new JsonObject();
+                                actObj.addProperty("type", subAct.getType() != null ? subAct.getType() : "");
+                                actObj.addProperty("target", subAct.getTarget() != null ? subAct.getTarget() : "");
+                                actObj.addProperty("value", subAct.getValue() != null ? subAct.getValue() : "");
+                                actObj.addProperty("description", subAct.getDescription() != null ? subAct.getDescription() : "");
+                                actObj.addProperty("reasoning", subAct.getReasoning() != null ? subAct.getReasoning() : "");
+                                if (subAct.isHealed())
+                                {
+                                    actObj.addProperty("healed", true);
+                                }
+                                subActArr.add(actObj);
+                            }
+                        }
+                        subObj.add("actions", subActArr);
+                    }
+                    if (reportStep != null && reportStep.getSubSteps() != null && reportStep.getSubSteps().size() > sIdx)
+                    {
+                        final ReportStepEntry repSub = reportStep.getSubSteps().get(sIdx);
+                        if (repSub != null)
+                        {
+                            if (!subObj.has("actions") && !repSub.getActions().isEmpty())
+                            {
+                                subObj.add("actions", serializeReportActions(repSub.getActions()));
+                            }
+                            if (!repSub.getScreenshots().isEmpty())
+                            {
+                                subObj.add("screenshots", serializeScreenshots(repSub.getScreenshots()));
+                            }
+                            if (!repSub.getLlmCalls().isEmpty())
+                            {
+                                subObj.add("llmCalls", serializeLlmCalls(repSub.getLlmCalls()));
+                            }
+                        }
+                    }
+                    subStepsArr.add(subObj);
+                }
+            }
+            obj.add("subSteps", subStepsArr);
+        }
+        else if (!obj.has("subSteps") && reportStep != null && !reportStep.getSubSteps().isEmpty())
+        {
+            obj.add("subSteps", serializeSubSteps(reportStep.getSubSteps()));
+        }
+
+        if (!obj.has("llmCalls") && report != null && report.getLlmCalls() != null)
+        {
+            final List<ReportLlmCallEntry> matchingCalls = new ArrayList<>();
+            for (final ReportLlmCallEntry call : report.getLlmCalls())
+            {
+                if (call != null)
+                {
+                    final String callBlock = call.getBlock() != null ? call.getBlock() : "steps";
+                    final boolean blockMatches = expectedBlock.equalsIgnoreCase(callBlock);
+                    if (blockMatches && (call.getStepIndex() == stepIndex || call.getStepIndex() == globalIndex))
+                    {
+                        matchingCalls.add(call);
+                    }
+                }
+            }
+            if (!matchingCalls.isEmpty())
+            {
+                obj.add("llmCalls", serializeLlmCalls(matchingCalls));
+            }
         }
 
         if (step.getReasoning() != null && !step.getReasoning().isBlank())
@@ -774,6 +1473,26 @@ public final class InteractiveStateBuilder
             }
         }
 
+        final List<String> rawReasonings = (step.getReasonings() != null && !step.getReasonings().isEmpty())
+            ? step.getReasonings()
+            : (reportStep != null ? reportStep.getReasonings() : null);
+        if (rawReasonings != null && !rawReasonings.isEmpty())
+        {
+            final List<String> reasonings = new ArrayList<>(rawReasonings);
+            final JsonArray reasoningsArr = new JsonArray();
+            for (final String r : reasonings)
+            {
+                if (r != null && !r.isBlank())
+                {
+                    reasoningsArr.add(r.trim());
+                }
+            }
+            if (!reasoningsArr.isEmpty())
+            {
+                obj.add("reasonings", reasoningsArr);
+            }
+        }
+
         return obj;
     }
 
@@ -788,6 +1507,7 @@ public final class InteractiveStateBuilder
         obj.addProperty("healedSteps", metrics.getHealedSteps());
         obj.addProperty("failedSteps", metrics.getFailedSteps());
         obj.addProperty("skippedSteps", metrics.getSkippedSteps());
+        obj.addProperty("notRunSteps", metrics.getNotRunSteps());
         obj.addProperty("totalLlmCalls", metrics.getTotalLlmCalls());
         obj.addProperty("tokenUsageInput", metrics.getTokenUsageInput());
         obj.addProperty("tokenUsageOutput", metrics.getTokenUsageOutput());
@@ -871,6 +1591,7 @@ public final class InteractiveStateBuilder
                     {
                         callObj.addProperty("subStepIndex", call.getSubStepIndex());
                     }
+                    callObj.addProperty("block", call.getBlock() != null ? call.getBlock() : "steps");
                     callObj.addProperty("capability", call.getCapability());
                     callObj.addProperty("modelName", call.getModelName());
                     callObj.addProperty("durationMs", call.getDurationMs());
@@ -882,6 +1603,11 @@ public final class InteractiveStateBuilder
                     callObj.addProperty("systemPrompt", call.getSystemPrompt());
                     callObj.addProperty("userPrompt", call.getUserPrompt());
                     callObj.addProperty("responseContent", call.getResponseContent());
+                    if (call.getThinking() != null && !call.getThinking().isBlank())
+                    {
+                        callObj.addProperty("thinking", call.getThinking());
+                        callObj.addProperty("reasoning", call.getThinking());
+                    }
                     if (call.getAvailableTools() != null && !call.getAvailableTools().isEmpty())
                     {
                         final JsonArray toolsArr = new JsonArray();
@@ -941,6 +1667,48 @@ public final class InteractiveStateBuilder
         return arr;
     }
 
+    private static JsonArray serializeLinterFindings(final List<PlaybookLinterFinding> findings)
+    {
+        final JsonArray arr = new JsonArray();
+        if (findings != null)
+        {
+            for (final PlaybookLinterFinding finding : findings)
+            {
+                if (finding != null)
+                {
+                    final JsonObject obj = new JsonObject();
+                    obj.addProperty("stepIndex", finding.stepIndex());
+                    obj.addProperty("lineNumber", finding.lineNumber());
+                    if (finding.sourceFile() != null)
+                    {
+                        obj.addProperty("sourceFile", finding.sourceFile());
+                    }
+                    obj.addProperty("rawInstruction", finding.rawInstruction());
+                    obj.addProperty("resolvedInstruction", finding.resolvedInstruction());
+                    if (finding.category() != null)
+                    {
+                        obj.addProperty("category", finding.category().name());
+                    }
+                    if (finding.severity() != null)
+                    {
+                        obj.addProperty("severity", finding.severity().name());
+                    }
+                    obj.addProperty("message", finding.message());
+                    if (finding.suggestedRewrite() != null)
+                    {
+                        obj.addProperty("suggestedRewrite", finding.suggestedRewrite());
+                    }
+                    if (finding.scope() != null)
+                    {
+                        obj.addProperty("scope", finding.scope());
+                    }
+                    arr.add(obj);
+                }
+            }
+        }
+        return arr;
+    }
+
     private static JsonArray serializeReportActions(final List<ReportActionEntry> actions)
     {
         final JsonArray arr = new JsonArray();
@@ -952,11 +1720,56 @@ public final class InteractiveStateBuilder
                 {
                     final JsonObject actObj = new JsonObject();
                     actObj.addProperty("type", action.getType() != null ? action.getType() : "");
-                    actObj.addProperty("target", action.getTarget() != null ? action.getTarget() : "");
-                    actObj.addProperty("value", action.getValue() != null ? action.getValue() : "");
-                    actObj.addProperty("description", action.getDescription() != null ? action.getDescription() : "");
+
+                    final String resolvedTarget = action.getResolvedTarget();
+                    final String originalTarget = action.getTarget() != null ? action.getTarget() : "";
+                    final String effectiveTarget = (resolvedTarget != null && !resolvedTarget.isBlank()) ? resolvedTarget : originalTarget;
+                    actObj.addProperty("target", effectiveTarget);
+                    if (resolvedTarget != null && !resolvedTarget.isBlank())
+                    {
+                        actObj.addProperty("resolvedTarget", resolvedTarget);
+                    }
+
+                    final String resolvedValue = action.getResolvedValue();
+                    final String originalValue = action.getValue() != null ? action.getValue() : "";
+                    final String effectiveValue = (resolvedValue != null && !resolvedValue.isBlank()) ? resolvedValue : originalValue;
+                    actObj.addProperty("value", effectiveValue);
+                    if (resolvedValue != null && !resolvedValue.isBlank())
+                    {
+                        actObj.addProperty("resolvedValue", resolvedValue);
+                    }
+
+                    String description = action.getDescription() != null ? action.getDescription() : "";
+                    if (resolvedTarget != null && !resolvedTarget.isBlank() && !originalTarget.isBlank() && description.contains(originalTarget))
+                    {
+                        description = description.replace(originalTarget, resolvedTarget);
+                    }
+                    actObj.addProperty("description", description);
                     actObj.addProperty("reasoning", action.getReasoning() != null ? action.getReasoning() : "");
                     actObj.addProperty("success", action.isSuccess());
+                    if (action.isHealed())
+                    {
+                        actObj.addProperty("healed", true);
+                    }
+                    String expectedTarget = action.getExpectedTarget();
+                    if ((expectedTarget == null || expectedTarget.isBlank()) && (action.isHealed() || (resolvedTarget != null && !resolvedTarget.isBlank() && !resolvedTarget.equals(originalTarget))))
+                    {
+                        expectedTarget = originalTarget;
+                    }
+                    if (expectedTarget != null && !expectedTarget.isBlank() && !expectedTarget.equals(effectiveTarget))
+                    {
+                        actObj.addProperty("expectedTarget", expectedTarget);
+                        actObj.addProperty("originalTarget", expectedTarget);
+                        actObj.addProperty("healedFrom", expectedTarget);
+                    }
+                    if (action.getSubStepIndex() != null)
+                    {
+                        actObj.addProperty("subStepIndex", action.getSubStepIndex());
+                    }
+                    if (action.getSubStepInstruction() != null && !action.getSubStepInstruction().isBlank())
+                    {
+                        actObj.addProperty("subStepInstruction", action.getSubStepInstruction());
+                    }
                     arr.add(actObj);
                 }
             }
@@ -964,17 +1777,95 @@ public final class InteractiveStateBuilder
         return arr;
     }
 
-    private static JsonObject serializeStepStats(final ReportStepEntry step)
+    @SuppressWarnings("unchecked")
+    private static JsonObject serializeStepStats(final ReportStepEntry step, final PlaybookStep pbStep, final ExecutionContext context)
     {
         final JsonObject obj = new JsonObject();
+        StepStats matchedStats = null;
+        if (context != null)
+        {
+            final Map<PlaybookStep, StepStats> stepStatsMap =
+                (Map<PlaybookStep, StepStats>) context.getTransientData().get("execution.stepStatsMap");
+            if (stepStatsMap != null && pbStep != null)
+            {
+                matchedStats = stepStatsMap.get(pbStep);
+            }
+            if (matchedStats == null)
+            {
+                final Object curStatsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
+                if (curStatsObj instanceof StepStats curS)
+                {
+                    matchedStats = curS;
+                }
+            }
+        }
+
+        String statsContextLevels = null;
+        int statsEscalations = 0;
+        if (matchedStats != null && matchedStats.getContextLevels() != null && !matchedStats.getContextLevels().isEmpty())
+        {
+            final List<String> lvls = matchedStats.getContextLevels();
+            statsContextLevels = String.join(" → ", lvls);
+            statsEscalations = Math.max(0, lvls.size() - 1);
+        }
+
         if (step != null)
         {
-            obj.addProperty("escalations", step.getEscalations());
-            obj.addProperty("contextLevels", step.getContextLevels());
-            obj.addProperty("standardCalls", step.getStandardCalls());
-            obj.addProperty("standardInputTokens", step.getStandardInputTokens());
-            obj.addProperty("standardOutputTokens", step.getStandardOutputTokens());
-            obj.addProperty("standardCachedTokens", step.getStandardCachedTokens());
+            obj.addProperty("escalations", step.getEscalations() > 0 ? step.getEscalations() : statsEscalations);
+            String contextLevels = step.getContextLevels();
+            if ((contextLevels == null || contextLevels.isBlank()) && statsContextLevels != null)
+            {
+                contextLevels = statsContextLevels;
+            }
+            if ((contextLevels == null || contextLevels.isBlank()) && pbStep != null && pbStep.getContextLevel() != null)
+            {
+                contextLevels = pbStep.getContextLevel();
+            }
+            if (contextLevels != null && !contextLevels.isBlank())
+            {
+                obj.addProperty("contextLevels", contextLevels);
+                final String[] parts = contextLevels.split("\\s*(?:→|->)\\s*");
+                if (parts.length > 0 && !parts[parts.length - 1].isBlank())
+                {
+                    obj.addProperty("contextLevel", parts[parts.length - 1].trim());
+                }
+            }
+            obj.addProperty("standardCalls", step.getStandardCalls() > 0 ? step.getStandardCalls() : (matchedStats != null ? matchedStats.getStandardCalls() : 0));
+            obj.addProperty("standardInputTokens", step.getStandardInputTokens() > 0 ? step.getStandardInputTokens() : (matchedStats != null ? matchedStats.getStandardInputTokens() : 0));
+            obj.addProperty("standardOutputTokens", step.getStandardOutputTokens() > 0 ? step.getStandardOutputTokens() : (matchedStats != null ? matchedStats.getStandardOutputTokens() : 0));
+            obj.addProperty("standardCachedTokens", step.getStandardCachedTokens() > 0 ? step.getStandardCachedTokens() : (matchedStats != null ? matchedStats.getStandardCachedTokens() : 0));
+        }
+        else if (matchedStats != null)
+        {
+            obj.addProperty("escalations", statsEscalations);
+            String contextLevels = statsContextLevels;
+            if ((contextLevels == null || contextLevels.isBlank()) && pbStep != null && pbStep.getContextLevel() != null)
+            {
+                contextLevels = pbStep.getContextLevel();
+            }
+            if (contextLevels != null && !contextLevels.isBlank())
+            {
+                obj.addProperty("contextLevels", contextLevels);
+                final String[] parts = contextLevels.split("\\s*(?:→|->)\\s*");
+                if (parts.length > 0 && !parts[parts.length - 1].isBlank())
+                {
+                    obj.addProperty("contextLevel", parts[parts.length - 1].trim());
+                }
+            }
+            obj.addProperty("standardCalls", matchedStats.getStandardCalls());
+            obj.addProperty("standardInputTokens", matchedStats.getStandardInputTokens());
+            obj.addProperty("standardOutputTokens", matchedStats.getStandardOutputTokens());
+            obj.addProperty("standardCachedTokens", matchedStats.getStandardCachedTokens());
+        }
+        else if (pbStep != null && pbStep.getContextLevel() != null && !pbStep.getContextLevel().isBlank())
+        {
+            final String contextLevels = pbStep.getContextLevel();
+            obj.addProperty("contextLevels", contextLevels);
+            final String[] parts = contextLevels.split("\\s*(?:→|->)\\s*");
+            if (parts.length > 0 && !parts[parts.length - 1].isBlank())
+            {
+                obj.addProperty("contextLevel", parts[parts.length - 1].trim());
+            }
         }
         return obj;
     }
@@ -988,15 +1879,68 @@ public final class InteractiveStateBuilder
             {
                 if (sub != null)
                 {
+                    if (sub.getInstruction() != null && sub.getInstruction().contains("_include:"))
+                    {
+                        continue;
+                    }
                     final JsonObject subObj = new JsonObject();
                     subObj.addProperty("stepIndex", sub.getStepIndex());
+                    subObj.addProperty("index", sub.getStepIndex() >= 0 ? sub.getStepIndex() + 1 : 1);
                     subObj.addProperty("instruction", sub.getInstruction() != null ? sub.getInstruction() : "");
                     subObj.addProperty("rawInstruction", sub.getRawInstruction());
-                    subObj.addProperty("status", sub.getStatus());
+                    subObj.addProperty("file", sub.getSourceFile() != null ? sub.getSourceFile() : "");
+                    if (sub.getLineNumber() > 0)
+                    {
+                        subObj.addProperty("line", sub.getLineNumber());
+                    }
+                    final String rawStatus = sub.getStatus() != null ? sub.getStatus().trim() : "pending";
+                    final String normalizedStatus = "SUCCESS".equalsIgnoreCase(rawStatus) ? "passed"
+                        : ("NOT RUN".equalsIgnoreCase(rawStatus) || "NOT_RUN".equalsIgnoreCase(rawStatus)) ? "not_run"
+                        : rawStatus.toLowerCase(Locale.ROOT);
+                    subObj.addProperty("status", normalizedStatus);
+                    if (sub.isExpectedFailure())
+                    {
+                        subObj.addProperty("expectedFailure", true);
+                    }
+                    if (sub.getNotRunReason() != null && !sub.getNotRunReason().isBlank())
+                    {
+                        subObj.addProperty("notRunReason", sub.getNotRunReason());
+                    }
                     subObj.addProperty("startTimeMs", sub.getStartTimeMs());
                     subObj.addProperty("durationMs", sub.getDurationMs());
                     subObj.addProperty("reasoning", sub.getReasoning());
+                    if (sub.getReasonings() != null && !sub.getReasonings().isEmpty())
+                    {
+                        final List<String> subReasonings = new ArrayList<>(sub.getReasonings());
+                        final JsonArray subReasoningsArr = new JsonArray();
+                        for (final String sr : subReasonings)
+                        {
+                            if (sr != null && !sr.isBlank())
+                            {
+                                subReasoningsArr.add(sr.trim());
+                            }
+                        }
+                        if (!subReasoningsArr.isEmpty())
+                        {
+                            subObj.add("reasonings", subReasoningsArr);
+                        }
+                    }
                     subObj.addProperty("failureReason", sub.getFailureReason());
+                    if (sub.getFailureReason() != null && !sub.getFailureReason().isBlank())
+                    {
+                        subObj.addProperty("error", sub.getFailureReason());
+                        subObj.addProperty("errorMessage", sub.getFailureReason());
+                    }
+                    if (sub.getContextLevels() != null && !sub.getContextLevels().isBlank())
+                    {
+                        subObj.addProperty("contextLevels", sub.getContextLevels());
+                        final String cl = sub.getContextLevels();
+                        final String[] parts = cl.split("\\s*(?:→|->)\\s*");
+                        if (parts.length > 0 && !parts[parts.length - 1].isBlank())
+                        {
+                            subObj.addProperty("contextLevel", parts[parts.length - 1].trim());
+                        }
+                    }
                     if (!sub.getActions().isEmpty())
                     {
                         subObj.add("actions", serializeReportActions(sub.getActions()));
@@ -1011,7 +1955,11 @@ public final class InteractiveStateBuilder
                     }
                     if (!sub.getSubSteps().isEmpty())
                     {
-                        subObj.add("subSteps", serializeSubSteps(sub.getSubSteps()));
+                        final JsonArray innerSubs = serializeSubSteps(sub.getSubSteps());
+                        if (innerSubs.size() > 0)
+                        {
+                            subObj.add("subSteps", innerSubs);
+                        }
                     }
                     arr.add(subObj);
                 }

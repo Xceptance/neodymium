@@ -17,7 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.neodymium.ai.executor.selenide.plugins;
-
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.neodymium.ai.action.Action;
@@ -46,7 +46,7 @@ public final class ClickAction implements BrowserActionPlugin
     }
 
     public static final Pattern COORD_PATTERN = Pattern.compile(
-        "^(?:(?:coord:|coordinates:|point\\()\\s*(?:([^@:\\)]+)[@:])?\\s*([0-9]+)\\s*[,x]\\s*([0-9]+)\\)?|([^@]+)[@]([0-9]+)\\s*[,x]\\s*([0-9]+))$",
+        "^(?:(?:coord:|coordinates:|point\\()\\s*(?:([^@]+?)@|([^@:\\)]+?):)?\\s*([0-9]+)\\s*[,x]\\s*([0-9]+)\\)?|([^@]+)[@]([0-9]+)\\s*[,x]\\s*([0-9]+))$",
         Pattern.CASE_INSENSITIVE
     );
 
@@ -65,18 +65,19 @@ public final class ClickAction implements BrowserActionPlugin
         final Matcher matcher = COORD_PATTERN.matcher(rawTarget.trim());
         if (matcher.matches())
         {
-            if (matcher.group(2) != null && matcher.group(3) != null)
+            if (matcher.group(3) != null && matcher.group(4) != null)
             {
-                final String anchor = matcher.group(1) != null ? matcher.group(1).trim() : null;
-                final int x = Integer.parseInt(matcher.group(2));
-                final int y = Integer.parseInt(matcher.group(3));
+                final String rawAnchor = matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
+                final String anchor = rawAnchor != null ? rawAnchor.trim() : null;
+                final int x = Integer.parseInt(matcher.group(3));
+                final int y = Integer.parseInt(matcher.group(4));
                 return new CoordinateTarget(anchor, x, y);
             }
-            else if (matcher.group(5) != null && matcher.group(6) != null)
+            else if (matcher.group(6) != null && matcher.group(7) != null)
             {
-                final String anchor = matcher.group(4) != null ? matcher.group(4).trim() : null;
-                final int x = Integer.parseInt(matcher.group(5));
-                final int y = Integer.parseInt(matcher.group(6));
+                final String anchor = matcher.group(5) != null ? matcher.group(5).trim() : null;
+                final int x = Integer.parseInt(matcher.group(6));
+                final int y = Integer.parseInt(matcher.group(7));
                 return new CoordinateTarget(anchor, x, y);
             }
         }
@@ -108,10 +109,36 @@ public final class ClickAction implements BrowserActionPlugin
                 final Actions actions = new Actions(WebDriverRunner.getWebDriver());
                 if (coord.anchorSelector() != null && !coord.anchorSelector().isBlank())
                 {
-                    final SelenideElement anchorElement = SelenideElementFinder.findElement(coord.anchorSelector());
-                    final int xOffset = coord.x() - (anchorElement.getSize().getWidth() / 2);
-                    final int yOffset = coord.y() - (anchorElement.getSize().getHeight() / 2);
-                    actions.moveToElement(anchorElement.toWebElement(), xOffset, yOffset).click().perform();
+                    Integer clientX = null;
+                    Integer clientY = null;
+                    try
+                    {
+                        final SelenideElement anchorElement = SelenideElementFinder.findElement(coord.anchorSelector());
+                        if (anchorElement != null && anchorElement.exists())
+                        {
+                            SelenideElementFinder.scrollIntoViewIfNeeded(anchorElement);
+                            final Object rectObj = Selenide.executeJavaScript(
+                                "var r = arguments[0].getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top)];",
+                                anchorElement);
+                            if (rectObj instanceof List<?> list && list.size() >= 2)
+                            {
+                                clientX = ((Number) list.get(0)).intValue() + coord.x();
+                                clientY = ((Number) list.get(1)).intValue() + coord.y();
+                            }
+                        }
+                    }
+                    catch (final Exception | AssertionError ignored)
+                    {
+                    }
+
+                    if (clientX != null && clientY != null)
+                    {
+                        actions.moveToLocation(clientX, clientY).click().perform();
+                    }
+                    else
+                    {
+                        actions.moveToLocation(coord.x(), coord.y()).click().perform();
+                    }
                 }
                 else
                 {

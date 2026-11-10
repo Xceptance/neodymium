@@ -19,10 +19,10 @@ The **Aura Test Suite Hub** fulfills these constraints 100% locally with zero ex
 
 ## 2. Directory Layout & Structure
 
-All sandbox sub-applications and shared assets reside directly inside the library's test resources classpath:
+All sandbox sub-applications and shared assets reside directly inside the `neodymium-test-server` module classpath:
 
 ```
-src/test/resources/
+neodymium-test-server/src/main/resources/
 ├── keystore.p12                    # Self-signed PKCS12 localhost SSL certificate
 ├── ai-test-pages/
 │   └── AuraGlanceTest/             # Unified Sandbox Root
@@ -58,7 +58,8 @@ src/test/resources/
 │       │       ├── floating-labels.html# Text overlay visual collision challenge
 │       │       ├── cross-origin-iframe.html # Context frame switching challenge
 │       │       ├── mock-payment-iframe.html # Iframe page source
-│       │       └── mock-oauth-login.html    # Authentication redirect challenge
+│       │       ├── mock-oauth-login.html    # Authentication redirect challenge
+│       │       └── protocol-introspection.html # Network 4xx/5xx and console error challenge
 │       └── a11y/                   # Sub-App 3: Accessibility Test Grounds
 │           └── index.html          # Low contrast overrides, text clippings
 ```
@@ -67,7 +68,7 @@ src/test/resources/
 
 ## 3. Multi-Port HTTP & HTTPS Server Setup
 
-The embedded test runner server (`EmbeddedHtmlServer.java`) spins up **two parallel server engines** listening on dynamic, OS-allocated random free ports to eliminate network collisions:
+The embedded test runner server (`JavalinTestServer.java`) spins up **two parallel server engines** listening on dynamic, OS-allocated random free ports to eliminate network collisions:
 
 1. **HTTP Server (`http://localhost:<port>`)**: Plain HTTP instance.
 2. **HTTPS Server (`https://localhost:<httpsPort>`)**: Encrypted SSL instance.
@@ -163,9 +164,9 @@ mvn test -Pjunit-5 -Dtest=com.xceptance.neodymium.ai.Aura*Test
 There are two ways to start the embedded HTML server and keep it running indefinitely:
 
 #### Option A: Running the Main Class Directly (Recommended - No Code Modification Needed)
-Execute the `main` method of the `EmbeddedHtmlServer` class using Maven's exec plugin:
+Execute the `main` method of the `JavalinTestServer` class using Maven's exec plugin:
 ```bash
-mvn compile test-compile exec:java -Dexec.mainClass="org.neodymium.ai.util.EmbeddedHtmlServer" -Dexec.classpathScope="test"
+mvn exec:java -pl neodymium-test-server
 ```
 
 #### Option B: Running via JUnit (Requires Modifying RunServerTest)
@@ -260,6 +261,9 @@ This directory contains standalone pages designed to test isolated edge cases in
 11. **Mock OAuth Login (`mock-oauth-login.html`):**
     * *Challenge:* An external auth provider login form that redirects back with token parameters.
     * *Aura AI Verification:* Tests cross-domain redirect flows, browser window redirection handles, and query token extraction.
+12. **Protocol & Console Introspection (`protocol-introspection.html`):**
+    * *Challenge:* Buttons triggering synthetic backend failures (HTTP 500 `/api/faulty-backend`, HTTP 404 `/api/missing-endpoint`, HTTP 400 `/api/analytics`), unhandled runtime JavaScript exceptions, console error spam, and delayed responses.
+    * *Aura AI Verification:* Tests active diagnosis via `browser_get_network_failures` and `browser_get_console_errors`, and validates passive diagnostic alert injection into agent prompts during locator thrashing.
 
 ---
 
@@ -318,7 +322,7 @@ In addition to the complex Apparel storefront, dashboard, and SPA applications, 
 | **`TypeActionTest/`** | `/{className}/test*.html` | Text input typing validations and textarea submissions. |
 | **`WaitActionTest/`** | `/{className}/test*.html` | Timeout delays and loading transitions. |
 
-These simple pages are loaded dynamically by their corresponding integration tests (e.g. `ClickActionTest.java` or `TypeActionTest.java`) which extend `BaseAiTest.java` and resolve URLs using the pattern `http://localhost:<port>/<ClassName>/<methodName>.html`.
+These simple pages are loaded dynamically by their corresponding integration tests (e.g. `ClickActionTest.java` or `TypeActionTest.java` in `neodymium-e2e-tests`) which extend `BaseAiTest.java` and resolve URLs using the pattern `http://localhost:<port>/<ClassName>/<methodName>.html`.
 
 
 

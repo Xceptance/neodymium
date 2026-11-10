@@ -8,6 +8,8 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.ProcessBuilder.Redirect;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.Date;
 import java.util.UUID;
 
@@ -128,12 +130,15 @@ public class VideoWriter implements Writer
     {
         try
         {
-            ffmpegInput.close();
-            ffmpegInput.flush();
+            if (ffmpegInput != null)
+            {
+                ffmpegInput.flush();
+                ffmpegInput.close();
+            }
         }
-        catch (IOException e)
+        catch (final IOException e)
         {
-            throw new RuntimeException(e);
+            LOGGER.warn("Exception closing FFmpeg output stream: {}", e.getMessage());
         }
 
         long videoProcessingStart = new Date().getTime();
@@ -146,10 +151,35 @@ public class VideoWriter implements Writer
             }
             Selenide.sleep(200);
         }
-        File tempFile = new File(recordingConfigurations.tempFolderToStoreRecording() + "/" + "temp" + UUID.randomUUID() + ".mp4");
-        new File(videoFileName).renameTo(tempFile);
-        double actualFramerate = screenshots / ((double) testDuration / 1000);
-        pb = new ProcessBuilder(recordingConfigurations.ffmpegBinaryPath(), "-y", "-r", actualFramerate + "", "-i", tempFile.getPath(), videoFileName);
+        final File srcFile = new File(videoFileName);
+        if (!srcFile.exists() || screenshots == 0 || testDuration <= 0)
+        {
+            LOGGER.warn("Video file '{}' does not exist or contains no captured frames; skipping framerate adjustment.", videoFileName);
+            return;
+        }
+
+        final File tempFile = new File(recordingConfigurations.tempFolderToStoreRecording(), "temp-" + UUID.randomUUID() + ".mp4");
+        if (!srcFile.renameTo(tempFile))
+        {
+            try
+            {
+                Files.copy(srcFile.toPath(), tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                srcFile.delete();
+            }
+            catch (final Exception e)
+            {
+                LOGGER.error("Failed to copy video file for framerate adjustment", e);
+                return;
+            }
+        }
+
+        double actualFramerate = screenshots / ((double) testDuration / 1000.0);
+        if (Double.isNaN(actualFramerate) || Double.isInfinite(actualFramerate) || actualFramerate <= 0.0)
+        {
+            actualFramerate = 1.0;
+        }
+
+        pb = new ProcessBuilder(recordingConfigurations.ffmpegBinaryPath(), "-y", "-r", String.valueOf(actualFramerate), "-i", tempFile.getPath(), videoFileName);
 
         pb.redirectErrorStream(true);
         pb.redirectOutput(Redirect.appendTo(new File((this.recordingConfigurations).ffmpegLogFile())));

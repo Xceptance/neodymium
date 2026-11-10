@@ -39,6 +39,9 @@ function toggleFileCheckboxesInstant(fileCb) {
     datasetCbs.forEach(cb => {
         cb.checked = fileCb.checked;
     });
+    if (typeof updateParentFolderCheckboxes === 'function') {
+        updateParentFolderCheckboxes(fileCb);
+    }
 }
 window.toggleFileCheckboxesInstant = toggleFileCheckboxesInstant;
 
@@ -57,8 +60,352 @@ function toggleDatasetCheckboxInstant(datasetCb) {
     });
     fileCb.checked = allChecked;
     fileCb.indeterminate = (!allChecked && anyChecked);
+    if (typeof updateParentFolderCheckboxes === 'function') {
+        updateParentFolderCheckboxes(fileCb);
+    }
 }
 window.toggleDatasetCheckboxInstant = toggleDatasetCheckboxInstant;
+
+function getFolderTotalDatasets(folderPath) {
+    if (!folderPath) return 0;
+    if (!window.currentFolderTotals) {
+        try {
+            const targetEl = document.querySelector('[data-folder-totals]') || document.getElementById('sidebarTestsContainer') || document.getElementById('yamlFileList');
+            const raw = targetEl ? targetEl.getAttribute('data-folder-totals') : null;
+            if (raw) {
+                window.currentFolderTotals = JSON.parse(raw);
+            }
+        } catch (e) {}
+    }
+    if (window.currentFolderTotals && typeof window.currentFolderTotals[folderPath] === 'number') {
+        return window.currentFolderTotals[folderPath];
+    }
+    return 0;
+}
+window.getFolderTotalDatasets = getFolderTotalDatasets;
+
+function countFolderTotalDatasets(groupEl, folderPath) {
+    const knownTotal = getFolderTotalDatasets(folderPath);
+    if (knownTotal > 0) {
+        return knownTotal;
+    }
+    if (!groupEl) return 0;
+    let domTotal = 0;
+    const fileContainers = groupEl.querySelectorAll('.file-container');
+    fileContainers.forEach(container => {
+        const datasetCbs = container.querySelectorAll('.dataset-select-cb');
+        if (datasetCbs.length > 0) {
+            domTotal += datasetCbs.length;
+        } else {
+            domTotal += 1;
+        }
+    });
+    return domTotal;
+}
+window.countFolderTotalDatasets = countFolderTotalDatasets;
+
+function countFolderSelectedDatasets(groupEl, folderPath) {
+    if (!groupEl) return 0;
+    let selectedCount = 0;
+
+    // 1. Count selected datasets/files currently present in DOM under groupEl
+    const fileContainers = groupEl.querySelectorAll('.file-container');
+    const domFilePaths = new Set();
+
+    fileContainers.forEach(container => {
+        const filePath = container.getAttribute('data-file');
+        if (filePath) {
+            domFilePaths.add(filePath);
+        }
+        const datasetCbs = container.querySelectorAll('.dataset-select-cb');
+        if (datasetCbs.length > 0) {
+            datasetCbs.forEach(dcb => {
+                if (dcb.checked) {
+                    selectedCount++;
+                }
+            });
+        } else {
+            const fileCb = container.querySelector('.file-select-cb');
+            if (fileCb && fileCb.checked) {
+                selectedCount++;
+            }
+        }
+    });
+
+    // 2. Count selected items from queue that belong to this folder but are filtered out of the DOM
+    if (folderPath) {
+        const queueContainer = document.getElementById('queueListContainer');
+        if (queueContainer) {
+            const queueItems = queueContainer.querySelectorAll('.queue-item');
+            queueItems.forEach(qItem => {
+                const qFile = qItem.getAttribute('data-file');
+                if (qFile && !domFilePaths.has(qFile)) {
+                    const prefix = folderPath.endsWith('/') ? folderPath : (folderPath + '/');
+                    if (qFile.startsWith(prefix) || qFile === folderPath) {
+                        selectedCount++;
+                    }
+                }
+            });
+        }
+    }
+
+    return selectedCount;
+}
+window.countFolderSelectedDatasets = countFolderSelectedDatasets;
+
+function applyFolderCheckboxState(folderCb, selectedCount, totalCount) {
+    if (!folderCb) return;
+    if (selectedCount === 0 || totalCount === 0) {
+        folderCb.checked = false;
+        folderCb.indeterminate = false;
+    } else if (selectedCount >= totalCount) {
+        folderCb.checked = true;
+        folderCb.indeterminate = false;
+    } else {
+        folderCb.checked = false;
+        folderCb.indeterminate = true;
+    }
+}
+window.applyFolderCheckboxState = applyFolderCheckboxState;
+
+function updateFolderCheckboxState(groupEl) {
+    if (!groupEl) return;
+    const folderHeader = groupEl.querySelector(':scope > .tree-folder-header');
+    const folderCb = folderHeader ? folderHeader.querySelector('.folder-select-cb') : null;
+    if (!folderCb) return;
+
+    const folderPath = groupEl.getAttribute('data-folder-path');
+    const knownTotal = getFolderTotalDatasets(folderPath);
+    const totalCount = countFolderTotalDatasets(groupEl, folderPath);
+    const selectedCount = countFolderSelectedDatasets(groupEl, folderPath);
+
+    const searchInput = document.getElementById('testSearchInput');
+    const activeQuery = (searchInput && searchInput.value) ? searchInput.value.trim() : '';
+    const isFiltered = Boolean(activeQuery);
+
+    if (selectedCount === 0 || totalCount === 0) {
+        folderCb.checked = false;
+        folderCb.indeterminate = false;
+    } else if (isFiltered && knownTotal === 0 && selectedCount > 0) {
+        // When filtered and project total is unknown, ancestor folders cannot be safely assumed 100% selected
+        folderCb.checked = false;
+        folderCb.indeterminate = true;
+    } else if (selectedCount >= totalCount) {
+        folderCb.checked = true;
+        folderCb.indeterminate = false;
+    } else {
+        folderCb.checked = false;
+        folderCb.indeterminate = true;
+    }
+
+    if (folderPath) {
+        if (!window.currentFolderSelectionStates) {
+            window.currentFolderSelectionStates = {};
+        }
+        window.currentFolderSelectionStates[folderPath] = folderCb.checked ? 'checked' : (folderCb.indeterminate ? 'indeterminate' : 'unchecked');
+    }
+}
+window.updateFolderCheckboxState = updateFolderCheckboxState;
+
+function toggleFolderCheckboxesInstant(folderCb) {
+    if (!folderCb) return;
+    const folderGroup = folderCb.closest('.tree-folder-group');
+    if (!folderGroup) return;
+
+    const folderPath = folderGroup.getAttribute('data-folder-path');
+    const searchInput = document.getElementById('testSearchInput');
+    const activeQuery = (searchInput && searchInput.value) ? searchInput.value.trim() : '';
+    const isFiltered = Boolean(activeQuery);
+
+    const content = folderGroup.querySelector(':scope > .tree-folder-content');
+    let isChecked = folderCb.checked;
+
+    if (content) {
+        if (isFiltered) {
+            // Determine desired target state based on visible files
+            const fileContainers = content.querySelectorAll('.file-container');
+            const visibleContainers = Array.from(fileContainers).filter(fc => fc.style.display !== 'none');
+            const visibleFileCbs = visibleContainers.map(fc => fc.querySelector('.file-select-cb')).filter(Boolean);
+
+            if (visibleFileCbs.length > 0) {
+                const allVisibleChecked = visibleFileCbs.every(cb => cb.checked);
+                // If all visible files are already checked, user is deselecting them; otherwise selecting.
+                isChecked = !allVisibleChecked;
+            }
+
+            // Scoped selection: only toggle visible matching file containers and their datasets
+            fileContainers.forEach(container => {
+                if (container.style.display !== 'none') {
+                    const fileCb = container.querySelector('.file-select-cb');
+                    if (fileCb) {
+                        fileCb.checked = isChecked;
+                        fileCb.indeterminate = false;
+                    }
+                    const datasetCbs = container.querySelectorAll('.dataset-select-cb');
+                    datasetCbs.forEach(dcb => {
+                        const dItem = dcb.closest('.dataset-item');
+                        if (!dItem || dItem.style.display !== 'none') {
+                            dcb.checked = isChecked;
+                        }
+                    });
+                }
+            });
+
+            // Update subfolder checkboxes within this folder (deepest first)
+            const subFolderGroups = Array.from(content.querySelectorAll('.tree-folder-group'));
+            subFolderGroups.sort((a, b) => {
+                const depthA = (a.getAttribute('data-folder-path') || '').split('/').length;
+                const depthB = (b.getAttribute('data-folder-path') || '').split('/').length;
+                return depthB - depthA;
+            });
+            subFolderGroups.forEach(subGroup => {
+                updateFolderCheckboxState(subGroup);
+            });
+
+            // Update clicked folder checkbox state accurately using total datasets
+            updateFolderCheckboxState(folderGroup);
+        } else {
+            // Not filtered: full cascade
+            folderCb.checked = isChecked;
+            folderCb.indeterminate = false;
+
+            // Cascade to all descendant folder checkboxes
+            const subFolderCbs = content.querySelectorAll('.folder-select-cb');
+            subFolderCbs.forEach(cb => {
+                cb.checked = isChecked;
+                cb.indeterminate = false;
+            });
+
+            // Cascade to all descendant file checkboxes
+            const fileCbs = content.querySelectorAll('.file-select-cb');
+            fileCbs.forEach(cb => {
+                cb.checked = isChecked;
+                cb.indeterminate = false;
+            });
+
+            // Cascade to all descendant dataset checkboxes
+            const datasetCbs = content.querySelectorAll('.dataset-select-cb');
+            datasetCbs.forEach(cb => {
+                cb.checked = isChecked;
+            });
+
+            // Update subfolder selection states cache
+            const subFolderGroups = content.querySelectorAll('.tree-folder-group');
+            subFolderGroups.forEach(subGroup => {
+                const subPath = subGroup.getAttribute('data-folder-path');
+                if (subPath && window.currentFolderSelectionStates) {
+                    window.currentFolderSelectionStates[subPath] = isChecked ? 'checked' : 'unchecked';
+                }
+            });
+
+            if (folderPath && window.currentFolderSelectionStates) {
+                window.currentFolderSelectionStates[folderPath] = isChecked ? 'checked' : 'unchecked';
+            }
+        }
+    }
+
+    if (folderPath && window.currentFolderSelectionStates) {
+        window.currentFolderSelectionStates[folderPath] = folderCb.checked ? 'checked' : (folderCb.indeterminate ? 'indeterminate' : 'unchecked');
+    }
+
+    if (typeof updateParentFolderCheckboxes === 'function') {
+        updateParentFolderCheckboxes(folderGroup);
+    }
+
+    // Call backend endpoint to synchronize queue
+    if (folderPath && typeof htmx !== 'undefined' && htmx.ajax) {
+        let url = '/api/queue/toggleFolder?folder=' + encodeURIComponent(folderPath) + '&checked=' + isChecked;
+        if (activeQuery) {
+            url += '&q=' + encodeURIComponent(activeQuery);
+        }
+        htmx.ajax('POST', url, {
+            target: '#queueListContainer',
+            swap: 'innerHTML'
+        });
+    }
+}
+window.toggleFolderCheckboxesInstant = toggleFolderCheckboxesInstant;
+
+function updateParentFolderCheckboxes(startEl) {
+    if (!startEl) return;
+    let parentGroup = startEl.parentElement ? startEl.parentElement.closest('.tree-folder-group') : null;
+    while (parentGroup) {
+        updateFolderCheckboxState(parentGroup);
+        parentGroup = parentGroup.parentElement ? parentGroup.parentElement.closest('.tree-folder-group') : null;
+    }
+}
+window.updateParentFolderCheckboxes = updateParentFolderCheckboxes;
+
+function updateAllFolderCheckboxes(rootContainer) {
+    const root = rootContainer || document.getElementById('sidebarTestsContainer') || document.getElementById('yamlFileList');
+    if (!root) return;
+    const folderGroups = Array.from(root.querySelectorAll('.tree-folder-group'));
+    if (folderGroups.length === 0) return;
+
+    folderGroups.sort((a, b) => {
+        const depthA = (a.getAttribute('data-folder-path') || '').split('/').length;
+        const depthB = (b.getAttribute('data-folder-path') || '').split('/').length;
+        return depthB - depthA;
+    });
+
+    folderGroups.forEach(group => {
+        updateFolderCheckboxState(group);
+    });
+}
+window.updateAllFolderCheckboxes = updateAllFolderCheckboxes;
+
+function applyFolderSelectionStates(states) {
+    if (!states || typeof states !== 'object') return;
+    window.currentFolderSelectionStates = Object.assign(window.currentFolderSelectionStates || {}, states);
+    const root = document.getElementById('sidebarTestsContainer') || document.getElementById('yamlFileList');
+    if (!root) return;
+
+    try {
+        const targetContainer = document.getElementById('sidebarTestsContainer') || root;
+        targetContainer.setAttribute('data-folder-states', JSON.stringify(window.currentFolderSelectionStates));
+    } catch (e) {}
+
+    const folderGroups = root.querySelectorAll('.tree-folder-group');
+    folderGroups.forEach(group => {
+        const folderPath = group.getAttribute('data-folder-path');
+        if (!folderPath) return;
+        const header = group.querySelector(':scope > .tree-folder-header');
+        const folderCb = header ? header.querySelector('.folder-select-cb') : null;
+        if (!folderCb) return;
+
+        const state = window.currentFolderSelectionStates[folderPath];
+        if (state === 'checked') {
+            folderCb.checked = true;
+            folderCb.indeterminate = false;
+        } else if (state === 'indeterminate') {
+            folderCb.checked = false;
+            folderCb.indeterminate = true;
+        } else if (state === 'unchecked') {
+            folderCb.checked = false;
+            folderCb.indeterminate = false;
+        }
+    });
+}
+window.applyFolderSelectionStates = applyFolderSelectionStates;
+
+if (typeof document !== 'undefined') {
+    document.body.addEventListener('folderStatesUpdated', function(evt) {
+        if (evt && evt.detail) {
+            applyFolderSelectionStates(evt.detail);
+        }
+    });
+    document.body.addEventListener('folderTotalsUpdated', function(evt) {
+        if (evt && evt.detail) {
+            window.currentFolderTotals = Object.assign(window.currentFolderTotals || {}, evt.detail);
+            try {
+                const target = document.getElementById('sidebarTestsContainer') || document.getElementById('yamlFileList');
+                if (target) {
+                    target.setAttribute('data-folder-totals', JSON.stringify(window.currentFolderTotals));
+                }
+            } catch (e) {}
+        }
+    });
+}
 
 function toggleExpandFile(file, targetEl) {
     if (!file) return;
@@ -91,7 +438,125 @@ function toggleExpandFile(file, targetEl) {
 }
 window.toggleExpandFile = toggleExpandFile;
 
-function loadFiles() {
+function setFilterCookie(query) {
+    try {
+        const trimmed = (query || '').trim();
+        if (trimmed) {
+            document.cookie = 'aura_test_search_query=' + encodeURIComponent(trimmed) + '; path=/; max-age=31536000; SameSite=Lax';
+        } else {
+            document.cookie = 'aura_test_search_query=; path=/; max-age=0; SameSite=Lax';
+        }
+    } catch (e) {}
+}
+window.setFilterCookie = setFilterCookie;
+
+function getFilterCookie() {
+    try {
+        const match = document.cookie.match(/(?:^|;\s*)aura_test_search_query=([^;]*)/);
+        return match ? decodeURIComponent(match[1]) : null;
+    } catch (e) {
+        return null;
+    }
+}
+window.getFilterCookie = getFilterCookie;
+
+function applyInstantTestFilter(query) {
+    const term = (query || '').trim().toLowerCase();
+    const yamlContainer = document.getElementById('yamlFileList');
+    if (!yamlContainer) return;
+
+    const fileContainers = yamlContainer.querySelectorAll('.file-container');
+    const folderGroups = yamlContainer.querySelectorAll('.tree-folder-group');
+    if (fileContainers.length === 0 && folderGroups.length === 0) return;
+
+    if (!term) {
+        fileContainers.forEach(container => {
+            container.style.display = 'flex';
+            const datasetItems = container.querySelectorAll('.dataset-item');
+            datasetItems.forEach(d => { d.style.display = 'flex'; });
+        });
+        folderGroups.forEach(folder => {
+            folder.style.display = '';
+        });
+        return;
+    }
+
+    // 1. Identify which folder groups directly match the filter
+    const matchingFolders = new Set();
+    folderGroups.forEach(folder => {
+        const folderPath = (folder.getAttribute('data-folder-path') || '').toLowerCase();
+        const folderNameEl = folder.querySelector('.tree-folder-name');
+        const folderName = (folderNameEl ? folderNameEl.textContent : '').toLowerCase();
+        if ((folderPath && folderPath.includes(term)) || (folderName && folderName.includes(term))) {
+            matchingFolders.add(folder);
+        }
+    });
+
+    // 2. Filter file containers
+    fileContainers.forEach(container => {
+        // Check if any ancestor folder matches the filter
+        let inMatchingFolder = false;
+        let parent = container.parentElement;
+        while (parent && parent !== yamlContainer) {
+            if (parent.classList && parent.classList.contains('tree-folder-group') && matchingFolders.has(parent)) {
+                inMatchingFolder = true;
+                break;
+            }
+            parent = parent.parentElement;
+        }
+
+        const datasetItems = container.querySelectorAll('.dataset-item');
+
+        if (inMatchingFolder) {
+            container.style.display = 'flex';
+            datasetItems.forEach(d => { d.style.display = 'flex'; });
+            return;
+        }
+
+        const fileName = (container.getAttribute('data-file') || '').toLowerCase();
+        const matchesFile = fileName.includes(term);
+
+        let anyDatasetMatched = false;
+        if (datasetItems.length > 0) {
+            datasetItems.forEach(d => {
+                const label = (d.textContent || '').toLowerCase();
+                const dId = (d.getAttribute('data-id') || '').toLowerCase();
+                const matched = matchesFile || label.includes(term) || dId.includes(term);
+                d.style.display = matched ? 'flex' : 'none';
+                if (matched) anyDatasetMatched = true;
+            });
+        }
+
+        if (matchesFile || anyDatasetMatched) {
+            container.style.display = 'flex';
+        } else {
+            container.style.display = 'none';
+        }
+    });
+
+    // 3. Update folder visibility bottom-up (reverse DOM order)
+    const reversedFolders = Array.from(folderGroups).reverse();
+    reversedFolders.forEach(folder => {
+        if (matchingFolders.has(folder)) {
+            folder.style.display = '';
+            // Ensure all subfolders inside a matching folder are also displayed
+            const subFolders = folder.querySelectorAll('.tree-folder-group');
+            subFolders.forEach(sub => { sub.style.display = ''; });
+            return;
+        }
+
+        const visibleFile = folder.querySelector('.file-container:not([style*="display: none"])');
+        const visibleSubFolder = folder.querySelector('.tree-folder-group:not([style*="display: none"])');
+        folder.style.display = (visibleFile || visibleSubFolder) ? '' : 'none';
+    });
+
+    if (typeof updateAllFolderCheckboxes === 'function') {
+        updateAllFolderCheckboxes();
+    }
+}
+window.applyInstantTestFilter = applyInstantTestFilter;
+
+function loadFiles(forceSwap = false) {
     return new Promise(async (resolve, reject) => {
         let resolved = false;
         const done = () => {
@@ -107,7 +572,16 @@ function loadFiles() {
             currentFilesListCached = await res.json();
             window.currentFilesListCached = currentFilesListCached;
             const fileListEl = document.getElementById('yamlFileList');
-            if (fileListEl) {
+            const searchInput = document.getElementById('testSearchInput');
+            const storedQuery = (typeof sessionStorage !== 'undefined') ? sessionStorage.getItem('aura_test_search_query') : null;
+            const cookieQuery = (typeof getFilterCookie === 'function') ? getFilterCookie() : null;
+            const activeQuery = (searchInput && searchInput.value.trim()) ? searchInput.value.trim() : (cookieQuery ? cookieQuery.trim() : (storedQuery ? storedQuery.trim() : ''));
+            if (searchInput && !searchInput.value && activeQuery) {
+                searchInput.value = activeQuery;
+            }
+            updateClearTestSearchBtn(activeQuery);
+
+            if (fileListEl && (forceSwap || window.initializedAlready)) {
                 const listener = function(evt) {
                     if (evt.detail.target && evt.detail.target.id === 'yamlFileList') {
                         document.removeEventListener('htmx:afterSwap', listener);
@@ -118,7 +592,8 @@ function loadFiles() {
                     }
                 };
                 document.addEventListener('htmx:afterSwap', listener);
-                htmx.ajax('GET', '/api/files/list?t=' + timestamp, { target: '#yamlFileList', swap: 'innerHTML' });
+                const targetUrl = activeQuery ? ('/api/files/search?q=' + encodeURIComponent(activeQuery) + '&t=' + timestamp) : ('/api/files/list?t=' + timestamp);
+                htmx.ajax('GET', targetUrl, { target: '#yamlFileList', swap: 'innerHTML' });
             } else {
                 window.initializedAlready = true;
                 syncCheckboxesFromState();
@@ -132,6 +607,57 @@ function loadFiles() {
     });
 }
 window.loadFiles = loadFiles;
+
+function onTestSearchInput(query) {
+    const trimmed = (query || '').trim();
+    if (typeof sessionStorage !== 'undefined') {
+        if (trimmed) {
+            sessionStorage.setItem('aura_test_search_query', trimmed);
+        } else {
+            sessionStorage.removeItem('aura_test_search_query');
+        }
+    }
+    setFilterCookie(trimmed);
+    updateClearTestSearchBtn(trimmed);
+    applyInstantTestFilter(trimmed);
+}
+window.onTestSearchInput = onTestSearchInput;
+
+function updateClearTestSearchBtn(query) {
+    const clearBtn = document.getElementById('clearTestSearchBtn');
+    if (!clearBtn) return;
+    const searchInput = document.getElementById('testSearchInput');
+    const val = (query !== undefined && query !== null) ? query : (searchInput ? searchInput.value : '');
+    const hasQuery = (typeof val === 'string' ? val.trim() : String(val).trim()).length > 0;
+    clearBtn.style.display = hasQuery ? 'inline-flex' : 'none';
+}
+window.updateClearTestSearchBtn = updateClearTestSearchBtn;
+
+function clearTestSearch() {
+    const searchInput = document.getElementById('testSearchInput');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('aura_test_search_query');
+    }
+    setFilterCookie('');
+    updateClearTestSearchBtn('');
+    applyInstantTestFilter('');
+    if (window.history && window.history.replaceState) {
+        try {
+            const url = new URL(window.location.href);
+            if (url.searchParams.has('q')) {
+                url.searchParams.delete('q');
+                window.history.replaceState({}, '', url.toString());
+            }
+        } catch (e) {}
+    }
+    if (window.htmx) {
+        htmx.ajax('GET', '/api/files/list', { target: '#yamlFileList', swap: 'innerHTML' });
+    }
+}
+window.clearTestSearch = clearTestSearch;
 
 function syncCheckboxesFromState() {
     const fileContainers = document.querySelectorAll('.file-container');
@@ -546,7 +1072,15 @@ window.openYamlEditor = openYamlEditor;
 /* HTMX save request listeners */
 document.addEventListener('htmx:configRequest', function(evt) {
     if (evt.detail && evt.detail.elt && evt.detail.elt.id === 'saveYamlBtn') {
-        const yaml = compilePlaybookToYaml();
+        const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw') 
+            || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
+        let yaml;
+        if (isRaw) {
+            const rawTextarea = document.getElementById('rawYamlTextarea');
+            yaml = rawTextarea ? rawTextarea.value : '';
+        } else {
+            yaml = compilePlaybookToYaml(true);
+        }
         const hiddenInput = document.getElementById('editorContent');
         if (hiddenInput) {
             hiddenInput.value = yaml;
@@ -577,6 +1111,10 @@ async function saveYamlFile() {
             activeEditingFile = fileEl.getAttribute('data-file');
             window.activeEditingFile = activeEditingFile;
         }
+    }
+    if (activeEditingFile && activeEditingFile.includes(',')) {
+        activeEditingFile = activeEditingFile.split(',')[0].trim();
+        window.activeEditingFile = activeEditingFile;
     }
     if (!activeEditingFile) return;
 
@@ -1003,16 +1541,13 @@ window.addEventListener('popstate', function(evt) {
 document.addEventListener('DOMContentLoaded', function() {
     const fileSpan = document.getElementById('editorFileName');
     if (fileSpan) {
-        const dataFile = fileSpan.getAttribute('data-file');
+        let dataFile = fileSpan.getAttribute('data-file');
         if (dataFile && dataFile.trim() !== '') {
+            if (dataFile.includes(',')) {
+                dataFile = dataFile.split(',')[0].trim();
+            }
             activeEditingFile = dataFile.trim();
             window.activeEditingFile = activeEditingFile;
-            if (typeof compilePlaybookToYaml === 'function') {
-                initialEditorContent = compilePlaybookToYaml();
-            }
-            if (typeof checkEditorDirtyStatus === 'function') {
-                checkEditorDirtyStatus();
-            }
             if (typeof updateCenterLayout === 'function') {
                 updateCenterLayout();
             }
@@ -1103,18 +1638,20 @@ function setEditorMode(mode) {
     const reviewBtn = document.getElementById('reviewStepsBtn');
 
     if (mode === 'raw') {
-        currentEditorMode = 'raw';
-        window.currentEditorMode = 'raw';
         if (visualContainer && rawPanel) {
             if (visualContainer.style.display !== 'none') {
-                const compiled = compilePlaybookToYaml();
-                if (rawTextarea && (!rawTextarea.value || rawTextarea.value.trim() === '')) {
-                    rawTextarea.value = compiled;
+                if (typeof isEditorDirty === 'function' && isEditorDirty()) {
+                    const compiled = compilePlaybookToYaml(true);
+                    if (rawTextarea) {
+                        rawTextarea.value = compiled;
+                    }
                 }
             }
             visualContainer.style.display = 'none';
             rawPanel.style.display = 'flex';
         }
+        currentEditorMode = 'raw';
+        window.currentEditorMode = 'raw';
         if (btnVisual) {
             btnVisual.style.background = 'transparent';
             btnVisual.style.color = 'var(--text-secondary)';
@@ -1135,6 +1672,18 @@ function setEditorMode(mode) {
             showToast("Cannot switch to Visual Editor: file contains YAML syntax errors.", "error");
             return;
         }
+
+        // If raw textarea has been modified while in raw mode, re-sync visual editor via POST /api/editor
+        if (currentEditorMode === 'raw' && rawTextarea && initialEditorContent && rawTextarea.value !== initialEditorContent && activeEditingFile) {
+            const cleanFile = activeEditingFile.split(',')[0].trim();
+            htmx.ajax('POST', '/api/editor', {
+                target: '#editorPanel',
+                swap: 'outerHTML',
+                values: { file: cleanFile, content: rawTextarea.value }
+            });
+            return;
+        }
+
         currentEditorMode = 'visual';
         window.currentEditorMode = 'visual';
         if (visualContainer && rawPanel) {
@@ -1171,6 +1720,163 @@ function handleRawYamlInput(textarea) {
     checkNewVariablePrompts();
 }
 window.handleRawYamlInput = handleRawYamlInput;
+
+function findInlineCommentIndex(text) {
+    if (!text || typeof text !== 'string') return -1;
+    let inSingle = false;
+    let inDouble = false;
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        const prev = i > 0 ? text[i - 1] : '';
+        if (ch === '"' && prev !== '\\' && !inSingle) {
+            inDouble = !inDouble;
+        } else if (ch === "'" && prev !== '\\' && !inDouble) {
+            inSingle = !inSingle;
+        } else if (ch === '#' && !inSingle && !inDouble) {
+            if (i > 0 && (/\s/.test(prev) || prev === '"' || prev === "'")) {
+                return i;
+            }
+        }
+    }
+    return -1;
+}
+window.findInlineCommentIndex = findInlineCommentIndex;
+
+function getStepRawText(content) {
+    if (!content) return '';
+    const rawAttr = content.getAttribute('data-raw');
+    const hasPills = content.querySelector('.var-pill, .unified-include-pill, .missing-include-pill, .invalid-include-pill, .hint-badge, .substep-folded-badge, .step-inline-comment, .material-symbols-outlined');
+    
+    // If no pills or icon tokens are present, rawAttr or innerText is clean plain text
+    if (!hasPills) {
+        return (rawAttr !== null && rawAttr !== undefined && rawAttr.length > 0) ? rawAttr : (content.innerText || '');
+    }
+    
+    // If not focused, data-raw is the authoritative source of truth
+    const isFocused = (document.activeElement === content || content.contains(document.activeElement));
+    if (!isFocused && rawAttr !== null && rawAttr !== undefined && rawAttr.trim().length > 0) {
+        return rawAttr;
+    }
+    
+    // When focused or if data-raw is missing, reconstruct cleanly from DOM without icon ligatures
+    const clone = content.cloneNode(true);
+    clone.querySelectorAll('.material-symbols-outlined').forEach(el => el.remove());
+    clone.querySelectorAll('.var-pill').forEach(el => {
+        const v = el.getAttribute('data-var') || el.textContent.trim();
+        el.replaceWith(document.createTextNode(`\${${v}}`));
+    });
+    clone.querySelectorAll('.unified-include-pill, .invalid-include-pill, .missing-include-pill').forEach(el => {
+        const r = el.getAttribute('data-raw');
+        if (r) {
+            el.replaceWith(document.createTextNode(r));
+        } else {
+            const txt = el.textContent.trim();
+            el.replaceWith(document.createTextNode(txt));
+        }
+    });
+    clone.querySelectorAll('.substep-folded-badge').forEach(el => {
+        el.replaceWith(document.createTextNode('>-'));
+    });
+    return clone.textContent || '';
+}
+window.getStepRawText = getStepRawText;
+
+function checkAndUpdateCommentRow(stepContentOrRow) {
+    if (!stepContentOrRow) return;
+    const row = stepContentOrRow.classList && stepContentOrRow.classList.contains('step-row') 
+        ? stepContentOrRow 
+        : stepContentOrRow.closest('.step-row');
+    if (!row) return;
+
+    const content = row.querySelector('.step-content');
+    if (!content) return;
+
+    const text = getStepRawText(content).replace(/\r?\n+/g, ' ').trim();
+    const isComment = text.startsWith('#');
+    const wasComment = row.classList.contains('step-row-comment');
+
+    if (isComment && !wasComment) {
+        row.classList.add('step-row-comment');
+        row.classList.remove('step-row-substep', 'substep-last');
+        content.style.color = 'var(--text-secondary, #64748b)';
+        content.style.fontStyle = 'italic';
+        updateAllLineNumbers();
+        refreshAllSubstepToggleBars();
+    } else if (isComment && wasComment) {
+        content.style.color = 'var(--text-secondary, #64748b)';
+        content.style.fontStyle = 'italic';
+        // If followed by substeps, update the group title without full rebuilding
+        const next = row.nextElementSibling;
+        if (next && next.classList.contains('substeps-toggle-bar')) {
+            const titleEl = next.querySelector('.substeps-title');
+            if (titleEl) {
+                const raw = text.replace(/^#\s*/, '').trim();
+                titleEl.textContent = raw || 'Sub-steps';
+            }
+        }
+    } else if (!isComment && wasComment) {
+        row.classList.remove('step-row-comment');
+        content.style.color = '';
+        content.style.fontStyle = '';
+        updateAllLineNumbers();
+        refreshAllSubstepToggleBars();
+    }
+
+    if (!isComment) {
+        const inlineCommentIdx = findInlineCommentIndex(text);
+        const existingInlineSpan = content.querySelector('.step-inline-comment');
+        if (inlineCommentIdx >= 0) {
+            const expectedComment = text.substring(inlineCommentIdx);
+            if (!existingInlineSpan || existingInlineSpan.textContent !== expectedComment) {
+                const caret = getCaretOffset(content);
+                const instruction = text.substring(0, inlineCommentIdx);
+                const safeInstruction = instruction.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const safeComment = expectedComment.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                content.innerHTML = safeInstruction + `<span class="step-inline-comment">${safeComment}</span>`;
+                setCaretOffset(content, caret);
+            }
+        } else if (existingInlineSpan) {
+            const caret = getCaretOffset(content);
+            content.innerText = text;
+            setCaretOffset(content, caret);
+        }
+
+        const isSubstepPrefix = text.startsWith('>-') || text.startsWith('- >-') || text.startsWith('->-') || text.startsWith('  - ');
+        const isCurrentlySubstep = row.classList.contains('step-row-substep');
+
+        if (isSubstepPrefix && !isCurrentlySubstep) {
+            row.classList.add('step-row-substep');
+            row.setAttribute('data-manual-substep', 'true');
+
+            // Strip the trigger prefix so it is not displayed in the sub-step line
+            let cleanText = text;
+            if (cleanText.startsWith('- >-')) cleanText = cleanText.substring(4).trim();
+            else if (cleanText.startsWith('->-')) cleanText = cleanText.substring(3).trim();
+            else if (cleanText.startsWith('>-')) cleanText = cleanText.substring(2).trim();
+            else if (cleanText.startsWith('  - ')) cleanText = cleanText.substring(4).trim();
+
+            const caret = getCaretOffset(content);
+            const prefixLen = text.length - cleanText.length;
+            const newCaret = Math.max(0, caret - prefixLen);
+
+            content.innerText = cleanText;
+            content.setAttribute('data-raw', cleanText);
+            setCaretOffset(content, newCaret);
+
+            updateAllLineNumbers();
+            refreshAllSubstepToggleBars();
+            compilePlaybookToYaml();
+        }
+    }
+}
+window.checkAndUpdateCommentRow = checkAndUpdateCommentRow;
+
+document.addEventListener('input', function(evt) {
+    const stepContent = evt.target && evt.target.closest ? evt.target.closest('.step-content') : null;
+    if (stepContent) {
+        checkAndUpdateCommentRow(stepContent);
+    }
+});
 
 function initVisualPlaybookEditor() {
     const editorPanel = document.getElementById('editorPanel');
@@ -1214,7 +1920,8 @@ function initVisualPlaybookEditor() {
     });
 
     updateFragmentVariablesList();
-    compilePlaybookToYaml();
+    compilePlaybookToYaml(false);
+    updateAllLineNumbers();
 
     // Live typing & editing delegation for full Undo/Redo tracking
     const mainEditor = document.getElementById('visualEditorMain');
@@ -1223,22 +1930,29 @@ function initVisualPlaybookEditor() {
         mainEditor.addEventListener('input', function(evt) {
             const stepContent = evt.target.closest('.step-content');
             if (stepContent) {
+                checkAndUpdateCommentRow(stepContent);
                 const hasPills = stepContent.querySelector('.var-pill, .unified-include-pill, .missing-include-pill, .hint-badge');
                 if (!hasPills) {
                     stepContent.setAttribute('data-raw', stepContent.innerText);
+                } else {
+                    stepContent.setAttribute('data-raw', getStepRawText(stepContent));
                 }
                 updateFragmentVariablesList();
-                compilePlaybookToYaml();
+                compilePlaybookToYaml(true);
                 debouncedPushSnapshot();
             } else if (evt.target.classList.contains('var-key-input') || evt.target.classList.contains('cell-val')) {
-                compilePlaybookToYaml();
+                compilePlaybookToYaml(true);
                 debouncedPushSnapshot();
             }
         });
     }
 
     // Record initial baseline content and initialize undo/redo snapshot stack
-    const currentYaml = compilePlaybookToYaml();
+    const currentYaml = compilePlaybookToYaml(false);
+    const rawTextarea = document.getElementById('rawYamlTextarea');
+    if (rawTextarea && (typeof currentEditorMode === 'undefined' || currentEditorMode !== 'raw')) {
+        rawTextarea.value = currentYaml;
+    }
     if (!initialEditorContent || undoStack.length === 0) {
         initialEditorContent = currentYaml;
         if (typeof pushEditorSnapshot === 'function') {
@@ -1269,7 +1983,7 @@ function getExtractedFragmentVariables() {
             rows.forEach(row => {
                 const contentEl = row.querySelector('.step-content');
                 if (contentEl) {
-                    const text = contentEl.getAttribute('data-raw') || contentEl.innerText.trim();
+                    const text = getStepRawText(contentEl).trim();
                     let match;
                     regex.lastIndex = 0;
                     while ((match = regex.exec(text)) !== null) {
@@ -1425,8 +2139,73 @@ function toggleFragmentVarScope(varName, scope) {
 }
 window.toggleFragmentVarScope = toggleFragmentVarScope;
 
-function compilePlaybookToYaml() {
+function compilePlaybookToYaml(syncToRaw = true) {
     let yaml = "# Neodymium YAML Test Data File\n\n";
+
+    // _properties block (Only for test playbooks, above steps)
+    const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
+        || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
+    
+    if (!isFragmentFile) {
+        const propertiesPanel = document.getElementById('playbookPropertiesPanel');
+        if (propertiesPanel && propertiesPanel.style.display !== 'none') {
+            const propRows = document.querySelectorAll('#propertiesTableBody tr.property-row');
+            const validProps = [];
+            propRows.forEach(tr => {
+                const keyInput = tr.querySelector('.property-key-input');
+                const valInput = tr.querySelector('.property-val-input');
+                const k = keyInput ? keyInput.value.trim() : '';
+                const v = valInput ? valInput.value.trim() : '';
+                if (k) {
+                    validProps.push({ key: k, value: v });
+                }
+            });
+
+            if (validProps.length > 0) {
+                yaml += "_properties:\n";
+                validProps.forEach(p => {
+                    yaml += `  ${p.key}: ${p.value}\n`;
+                });
+                yaml += "\n";
+            }
+        }
+    }
+
+    function serializeStepRows(rows) {
+        let block = "";
+        let inSubstepsGroup = false;
+        rows.forEach(row => {
+            const content = row.querySelector('.step-content');
+            if (content) {
+                const text = getStepRawText(content).replace(/\r?\n+/g, ' ').trim();
+                if (!text) return;
+                if (row.classList.contains('step-row-comment') || text.startsWith('#')) {
+                    inSubstepsGroup = false;
+                    const comment = text.startsWith('#') ? text : `# ${text}`;
+                    block += `  ${comment}\n`;
+                } else if (row.classList.contains('step-row-substep') || text.startsWith('>-') || text.startsWith('- >-') || text.startsWith('->-') || text.startsWith('  - ')) {
+                    if (!inSubstepsGroup) {
+                        block += `  - >-\n`;
+                        inSubstepsGroup = true;
+                    }
+                    let subText = text;
+                    if (subText.startsWith('- >-')) subText = subText.substring(4).trim();
+                    else if (subText.startsWith('->-')) subText = subText.substring(3).trim();
+                    else if (subText.startsWith('>-')) subText = subText.substring(2).trim();
+                    else if (subText.startsWith('  - ')) subText = subText.substring(4).trim();
+                    else if (subText.startsWith('- ') || subText.startsWith('* ')) subText = subText.substring(2).trim();
+                    if (subText) {
+                        block += `    ${subText}\n`;
+                    }
+                } else {
+                    inSubstepsGroup = false;
+                    const cleanText = (text.startsWith('- ') || text.startsWith('* ')) ? text.substring(2).trim() : text;
+                    block += `  ${cleanText}\n`;
+                }
+            }
+        });
+        return block;
+    }
 
     // before block
     const beforeContainer = document.getElementById('beforeStepsList');
@@ -1434,15 +2213,7 @@ function compilePlaybookToYaml() {
     if (beforePanel && beforePanel.style.display !== 'none' && beforeContainer) {
         const rows = beforeContainer.querySelectorAll(':scope > .step-row');
         if (rows.length > 0) {
-            yaml += "before: |\n";
-            rows.forEach(row => {
-                const content = row.querySelector('.step-content');
-                if (content) {
-                    const raw = content.getAttribute('data-raw') || content.innerText.trim();
-                    if (raw) yaml += `  ${raw}\n`;
-                }
-            });
-            yaml += "\n";
+            yaml += "before: |\n" + serializeStepRows(rows) + "\n";
         }
     }
 
@@ -1450,15 +2221,7 @@ function compilePlaybookToYaml() {
     const stepsContainer = document.getElementById('stepsList');
     if (stepsContainer) {
         const rows = stepsContainer.querySelectorAll(':scope > .step-row');
-        yaml += "steps: |\n";
-        rows.forEach(row => {
-            const content = row.querySelector('.step-content');
-            if (content) {
-                const raw = content.getAttribute('data-raw') || content.innerText.trim();
-                if (raw) yaml += `  ${raw}\n`;
-            }
-        });
-        yaml += "\n";
+        yaml += "steps: |\n" + serializeStepRows(rows) + "\n";
     }
 
     // after block
@@ -1467,20 +2230,9 @@ function compilePlaybookToYaml() {
     if (afterPanel && afterPanel.style.display !== 'none' && afterContainer) {
         const rows = afterContainer.querySelectorAll(':scope > .step-row');
         if (rows.length > 0) {
-            yaml += "after: |\n";
-            rows.forEach(row => {
-                const content = row.querySelector('.step-content');
-                if (content) {
-                    const raw = content.getAttribute('data-raw') || content.innerText.trim();
-                    if (raw) yaml += `  ${raw}\n`;
-                }
-            });
-            yaml += "\n";
+            yaml += "after: |\n" + serializeStepRows(rows) + "\n";
         }
     }
-
-    const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
-        || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
 
     if (!isFragmentFile) {
         // data matrix (Only for test playbooks)
@@ -1520,6 +2272,10 @@ function compilePlaybookToYaml() {
     if (hiddenInput) {
         hiddenInput.value = yaml;
     }
+    const rawTextarea = document.getElementById('rawYamlTextarea');
+    if (syncToRaw && rawTextarea && (typeof currentEditorMode === 'undefined' || currentEditorMode !== 'raw')) {
+        rawTextarea.value = yaml;
+    }
     return yaml;
 }
 window.compilePlaybookToYaml = compilePlaybookToYaml;
@@ -1536,10 +2292,23 @@ function updateAllLineNumbers() {
         const parentPanel = container.closest('.editor-code-panel');
         if (parentPanel && parentPanel.style.display === 'none') return;
 
+        let lastMainStepLine = 1;
+        let substepIndex = 0;
         const rootRows = container.querySelectorAll(':scope > .step-row');
         rootRows.forEach(row => {
             const rootLineNum = row.getAttribute('data-line');
             const numSpan = row.querySelector('.step-number');
+            if (row.classList.contains('step-row-comment')) {
+                if (numSpan) numSpan.innerHTML = '<span class="comment-hash-badge">#</span>';
+                return;
+            }
+            if (row.classList.contains('step-row-substep')) {
+                substepIndex++;
+                if (numSpan) numSpan.innerText = `${lastMainStepLine}.${substepIndex}`;
+                return;
+            }
+            lastMainStepLine = currentLine;
+            substepIndex = 0;
             if (numSpan) numSpan.innerText = currentLine;
             currentLine++;
 
@@ -1613,6 +2382,102 @@ document.addEventListener('htmx:afterSwap', function(evt) {
 });
 
 /* Optional Block Management */
+function addPropertyRow(key = '', value = '') {
+    const tbody = document.getElementById('propertiesTableBody');
+    if (!tbody) return;
+    const tr = document.createElement('tr');
+    tr.className = 'property-row';
+
+    const tdKey = document.createElement('td');
+    const inputKey = document.createElement('input');
+    inputKey.type = 'text';
+    inputKey.className = 'property-key-input';
+    inputKey.value = key || '';
+    inputKey.placeholder = 'e.g. skipReplay';
+    inputKey.setAttribute('list', 'propertyKeySuggestions');
+    inputKey.oninput = () => {
+        compilePlaybookToYaml(true);
+        debouncedPushSnapshot();
+    };
+    tdKey.appendChild(inputKey);
+
+    const tdVal = document.createElement('td');
+    const inputVal = document.createElement('input');
+    inputVal.type = 'text';
+    inputVal.className = 'property-val-input';
+    inputVal.value = value !== undefined && value !== null ? String(value) : '';
+    inputVal.placeholder = 'Value';
+    inputVal.oninput = () => {
+        compilePlaybookToYaml(true);
+        debouncedPushSnapshot();
+    };
+    tdVal.appendChild(inputVal);
+
+    const tdAction = document.createElement('td');
+    tdAction.className = 'property-action-col';
+    const btnRemove = document.createElement('button');
+    btnRemove.type = 'button';
+    btnRemove.className = 'btn-remove-property';
+    btnRemove.title = 'Remove Property';
+    btnRemove.onclick = function() { removePropertyRow(this); };
+    btnRemove.innerHTML = '<span class="material-symbols-outlined">delete</span>';
+    tdAction.appendChild(btnRemove);
+
+    tr.appendChild(tdKey);
+    tr.appendChild(tdVal);
+    tr.appendChild(tdAction);
+    tbody.appendChild(tr);
+
+    compilePlaybookToYaml(true);
+    debouncedPushSnapshot();
+    if (!key) {
+        inputKey.focus();
+    }
+}
+window.addPropertyRow = addPropertyRow;
+
+function removePropertyRow(btn) {
+    const tr = btn.closest('.property-row');
+    if (tr) {
+        tr.remove();
+        compilePlaybookToYaml(true);
+        debouncedPushSnapshot();
+    }
+}
+window.removePropertyRow = removePropertyRow;
+
+function addPropertiesBlock() {
+    const panel = document.getElementById('playbookPropertiesPanel');
+    const btnContainer = document.getElementById('addPropertiesBtnContainer');
+    const tbody = document.getElementById('propertiesTableBody');
+    if (!panel) return;
+
+    panel.style.display = 'flex';
+    if (btnContainer) btnContainer.style.display = 'none';
+
+    if (tbody && tbody.querySelectorAll('tr.property-row').length === 0) {
+        addPropertyRow('neodymium.ai.tokenBudget.input', '1500000');
+    } else {
+        compilePlaybookToYaml(true);
+        debouncedPushSnapshot();
+    }
+}
+window.addPropertiesBlock = addPropertiesBlock;
+
+function removePropertiesBlock() {
+    const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
+        || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
+    const panel = document.getElementById('playbookPropertiesPanel');
+    const btnContainer = document.getElementById('addPropertiesBtnContainer');
+    const tbody = document.getElementById('propertiesTableBody');
+    if (panel) panel.style.display = 'none';
+    if (btnContainer) btnContainer.style.display = isFragmentFile ? 'none' : 'block';
+    if (tbody) tbody.innerHTML = '';
+    compilePlaybookToYaml(true);
+    debouncedPushSnapshot();
+}
+window.removePropertiesBlock = removePropertiesBlock;
+
 function addBeforeBlock() {
     const panel = document.getElementById('beforeCodePanel');
     const btnContainer = document.getElementById('addBeforeBtnContainer');
@@ -1812,7 +2677,16 @@ function handleStepFocus(lineNumOrElement) {
 
     const raw = content.getAttribute('data-raw');
     if (raw !== null && raw !== undefined) {
-        content.innerText = raw;
+        const inlineCommentIdx = findInlineCommentIndex(raw);
+        if (inlineCommentIdx >= 0 && !row.classList.contains('step-row-comment')) {
+            const instruction = raw.substring(0, inlineCommentIdx);
+            const comment = raw.substring(inlineCommentIdx);
+            const safeInstruction = instruction.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const safeComment = comment.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            content.innerHTML = safeInstruction + `<span class="step-inline-comment">${safeComment}</span>`;
+        } else {
+            content.innerText = raw;
+        }
     }
 
     const statLine = document.getElementById('statLine');
@@ -1844,6 +2718,8 @@ function handleStepBlur(lineNumOrElement) {
         if (currentText !== undefined && currentText !== null) {
             content.setAttribute('data-raw', currentText);
         }
+    } else {
+        content.setAttribute('data-raw', getStepRawText(content));
     }
 
     // Auto-collapse check for empty optional sections
@@ -1943,6 +2819,23 @@ function handleKeyDown(event, lineNum) {
         const currentOffset = getCaretOffset(contentEl);
         const raw = contentEl.getAttribute('data-raw') || contentEl.innerText || '';
 
+        if (undoDebounceTimer) {
+            clearTimeout(undoDebounceTimer);
+            undoDebounceTimer = null;
+            pushEditorSnapshot(false);
+        }
+
+        // If Enter is pressed in an empty sub-step line (e.g. second Enter in sub-steps area), exit the sub-steps area
+        if (currentRow && currentRow.classList.contains('step-row-substep') && raw.trim() === '') {
+            currentRow.classList.remove('step-row-substep', 'substep-last');
+            currentRow.removeAttribute('data-manual-substep');
+            updateAllLineNumbers();
+            refreshAllSubstepToggleBars();
+            compilePlaybookToYaml();
+            if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+            return;
+        }
+
         const headText = raw.substring(0, currentOffset).replace(/[\r\n]+/g, ' ').trim();
         const tailText = raw.substring(currentOffset).replace(/[\r\n]+/g, ' ').trim();
 
@@ -1960,11 +2853,31 @@ function handleKeyDown(event, lineNum) {
             }
         }
         compilePlaybookToYaml();
-        if (typeof debouncedPushSnapshot === 'function') debouncedPushSnapshot();
+        if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
     } else if (event.key === 'Backspace' && currentOffset === 0) {
+        if (currentRow.classList.contains('step-row-substep')) {
+            event.preventDefault();
+            if (undoDebounceTimer) {
+                clearTimeout(undoDebounceTimer);
+                undoDebounceTimer = null;
+                pushEditorSnapshot(false);
+            }
+            currentRow.classList.remove('step-row-substep', 'substep-last');
+            currentRow.removeAttribute('data-manual-substep');
+            updateAllLineNumbers();
+            refreshAllSubstepToggleBars();
+            compilePlaybookToYaml();
+            if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+            return;
+        }
         const prevRow = getAdjacentStepRow(currentRow, -1);
         if (prevRow) {
             event.preventDefault();
+            if (undoDebounceTimer) {
+                clearTimeout(undoDebounceTimer);
+                undoDebounceTimer = null;
+                pushEditorSnapshot(false);
+            }
             const prevContent = prevRow.querySelector('.step-content');
             if (prevContent) {
                 const prevRaw = prevContent.getAttribute('data-raw') || prevContent.innerText || '';
@@ -1976,13 +2889,18 @@ function handleKeyDown(event, lineNum) {
                 deleteStep(currentRow);
                 focusRow(prevRow, joinOffset);
                 compilePlaybookToYaml();
-                if (typeof debouncedPushSnapshot === 'function') debouncedPushSnapshot();
+                if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
             }
         }
     } else if (event.key === 'Delete' && currentOffset >= raw.length) {
         const nextRow = getAdjacentStepRow(currentRow, 1);
         if (nextRow) {
             event.preventDefault();
+            if (undoDebounceTimer) {
+                clearTimeout(undoDebounceTimer);
+                undoDebounceTimer = null;
+                pushEditorSnapshot(false);
+            }
             const nextContent = nextRow.querySelector('.step-content');
             if (nextContent) {
                 const nextRaw = nextContent.getAttribute('data-raw') || nextContent.innerText || '';
@@ -1993,7 +2911,7 @@ function handleKeyDown(event, lineNum) {
                 deleteStep(nextRow);
                 focusRow(currentRow, currentOffset);
                 compilePlaybookToYaml();
-                if (typeof debouncedPushSnapshot === 'function') debouncedPushSnapshot();
+                if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
             }
         }
     }
@@ -2050,7 +2968,7 @@ function addStepToContainer(containerId = 'stepsList', initialText = '') {
 
     newRow.innerHTML = `
         <span class="step-number">${lineId}</span>
-        <div class="step-content" contenteditable="true" spellcheck="false" data-raw="${safeInitial}" onkeydown="handleKeyDown(event, ${lineId})" onfocus="handleStepFocus(${lineId})" onblur="handleStepBlur(${lineId})">${safeInitial}</div>
+        <div class="step-content" contenteditable="true" spellcheck="false" data-raw="${safeInitial}" onkeydown="handleKeyDown(event, ${lineId})" onfocus="handleStepFocus(${lineId})" onblur="handleStepBlur(${lineId})" oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);">${safeInitial}</div>
         <div class="step-actions">
             <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${lineId}, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
             <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${lineId}, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
@@ -2137,11 +3055,16 @@ function insertStepBelow(lineNumOrElement, initialText = '') {
     newRow.className = 'step-row';
     newRow.setAttribute('data-line', currentLineCount);
 
+    if (targetRow && targetRow.classList.contains('step-row-substep')) {
+        newRow.classList.add('step-row-substep');
+        newRow.setAttribute('data-manual-substep', 'true');
+    }
+
     const safeInitial = (initialText || '').replace(/"/g, '&quot;');
 
     newRow.innerHTML = `
         <span class="step-number">${currentLineCount}</span>
-        <div class="step-content" contenteditable="true" spellcheck="false" data-raw="${safeInitial}" onkeydown="handleKeyDown(event, ${currentLineCount})" onfocus="handleStepFocus(${currentLineCount})" onblur="handleStepBlur(${currentLineCount})">${safeInitial}</div>
+        <div class="step-content" contenteditable="true" spellcheck="false" data-raw="${safeInitial}" onkeydown="handleKeyDown(event, ${currentLineCount})" onfocus="handleStepFocus(${currentLineCount})" onblur="handleStepBlur(${currentLineCount})" oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);">${safeInitial}</div>
         <div class="step-actions">
             <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${currentLineCount}, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
             <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${currentLineCount}, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
@@ -2293,6 +3216,7 @@ function reindexSteps() {
                 content.setAttribute('onkeydown', `handleKeyDown(event, ${lNum})`);
                 content.setAttribute('onfocus', `handleStepFocus(${lNum})`);
                 content.setAttribute('onblur', `handleStepBlur(${lNum})`);
+                content.setAttribute('oninput', `if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);`);
             }
             const moveUpBtn = row.querySelector('.step-actions .btn-move-up');
             if (moveUpBtn) {
@@ -2314,9 +3238,257 @@ function reindexSteps() {
     window.currentLineCount = currentLineCount;
     updateAllLineNumbers();
     ensureEmptyPlaceholders();
+    refreshAllSubstepToggleBars();
     compilePlaybookToYaml();
 }
 window.reindexSteps = reindexSteps;
+
+function toggleSubsteps(toggleBar) {
+    if (!toggleBar) return;
+    toggleBar.classList.toggle('collapsed');
+    const isCollapsed = toggleBar.classList.contains('collapsed');
+    let next = toggleBar.nextElementSibling;
+    while (next && next.classList.contains('step-row-substep')) {
+        next.style.display = isCollapsed ? 'none' : 'flex';
+        next = next.nextElementSibling;
+    }
+}
+window.toggleSubsteps = toggleSubsteps;
+
+function handleSubstepTitleClick(event, el) {
+    if (event) {
+        event.stopPropagation();
+    }
+}
+window.handleSubstepTitleClick = handleSubstepTitleClick;
+
+function handleSubstepTitleKeyDown(event, el) {
+    if (!el) return;
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        event.stopPropagation();
+        el.blur();
+        return;
+    }
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        el.blur();
+        return;
+    }
+    event.stopPropagation();
+}
+window.handleSubstepTitleKeyDown = handleSubstepTitleKeyDown;
+
+function handleSubstepTitleFocus(el) {
+    if (!el) return;
+    if (el.innerText.trim() === 'Sub-steps') {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const sel = window.getSelection();
+        if (sel) {
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+    }
+}
+window.handleSubstepTitleFocus = handleSubstepTitleFocus;
+
+function handleSubstepTitleInput(el) {
+    if (!el) return;
+    const toggleBar = el.closest('.substeps-toggle-bar');
+    if (!toggleBar) return;
+    const container = toggleBar.parentElement;
+    if (!container) return;
+
+    const raw = (el.innerText || '').trim();
+    const prev = toggleBar.previousElementSibling;
+    if (prev && prev.classList.contains('step-row-comment')) {
+        const commentContent = prev.querySelector('.step-content');
+        if (commentContent) {
+            const commentText = raw && raw !== 'Sub-steps' ? `# ${raw}` : '#';
+            commentContent.innerText = commentText;
+            commentContent.setAttribute('data-raw', commentText);
+        }
+    } else if (raw && raw !== 'Sub-steps') {
+        currentLineCount++;
+        const lineId = currentLineCount;
+        const newRow = document.createElement('div');
+        newRow.className = 'step-row step-row-comment';
+        newRow.setAttribute('data-line', lineId);
+        const commentText = `# ${raw}`;
+        newRow.innerHTML = `
+            <span class="step-number"><span class="comment-hash-badge">#</span></span>
+            <div class="step-content" contenteditable="true" spellcheck="false" data-raw="${commentText.replace(/"/g, '&quot;')}"
+                 style="color: var(--text-secondary, #64748b); font-style: italic;"
+                 onkeydown="handleKeyDown(event, ${lineId})"
+                 onfocus="handleStepFocus(${lineId})"
+                 onblur="handleStepBlur(${lineId})"
+                 oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);">${commentText}</div>
+            <div class="step-actions">
+                <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${lineId}, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${lineId}, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${lineId})"><span class="material-symbols-outlined">delete</span></button>
+            </div>
+        `;
+        container.insertBefore(newRow, toggleBar);
+        updateAllLineNumbers();
+    }
+    compilePlaybookToYaml();
+    checkEditorDirtyStatus();
+}
+window.handleSubstepTitleInput = handleSubstepTitleInput;
+
+function handleSubstepTitleBlur(el) {
+    if (!el) return;
+    const toggleBar = el.closest('.substeps-toggle-bar');
+    if (!toggleBar) return;
+    const container = toggleBar.parentElement;
+    if (!container) return;
+
+    const raw = (el.innerText || '').trim();
+    const prev = toggleBar.previousElementSibling;
+
+    if (!raw || raw === 'Sub-steps') {
+        el.innerText = 'Sub-steps';
+        if (prev && prev.classList.contains('step-row-comment')) {
+            const commentContent = prev.querySelector('.step-content');
+            const commentText = (commentContent ? (commentContent.innerText || '') : '').trim();
+            if (commentText === '#' || commentText === '' || commentText === '# Sub-steps') {
+                prev.remove();
+                updateAllLineNumbers();
+            }
+        }
+    } else {
+        if (prev && prev.classList.contains('step-row-comment')) {
+            const commentContent = prev.querySelector('.step-content');
+            if (commentContent) {
+                const commentText = `# ${raw}`;
+                commentContent.innerText = commentText;
+                commentContent.setAttribute('data-raw', commentText);
+            }
+        } else {
+            currentLineCount++;
+            const lineId = currentLineCount;
+            const newRow = document.createElement('div');
+            newRow.className = 'step-row step-row-comment';
+            newRow.setAttribute('data-line', lineId);
+            const commentText = `# ${raw}`;
+            newRow.innerHTML = `
+                <span class="step-number"><span class="comment-hash-badge">#</span></span>
+                <div class="step-content" contenteditable="true" spellcheck="false" data-raw="${commentText.replace(/"/g, '&quot;')}"
+                     style="color: var(--text-secondary, #64748b); font-style: italic;"
+                     onkeydown="handleKeyDown(event, ${lineId})"
+                     onfocus="handleStepFocus(${lineId})"
+                     onblur="handleStepBlur(${lineId})"
+                     oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);">${commentText}</div>
+                <div class="step-actions">
+                    <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${lineId}, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                    <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${lineId}, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                    <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${lineId})"><span class="material-symbols-outlined">delete</span></button>
+                </div>
+            `;
+            container.insertBefore(newRow, toggleBar);
+            updateAllLineNumbers();
+        }
+    }
+    compilePlaybookToYaml();
+    checkEditorDirtyStatus();
+    if (typeof debouncedPushSnapshot === 'function') {
+        debouncedPushSnapshot();
+    }
+}
+window.handleSubstepTitleBlur = handleSubstepTitleBlur;
+
+function refreshSubstepToggleBars(container) {
+    if (!container) return;
+
+    container.querySelectorAll('.substeps-toggle-bar').forEach(bar => bar.remove());
+    container.querySelectorAll('.step-row-substep').forEach(row => {
+        row.classList.remove('substep-last');
+    });
+
+    const children = Array.from(container.children);
+    let i = 0;
+    while (i < children.length) {
+        if (children[i].classList.contains('step-row-substep')) {
+            const startRow = children[i];
+            let count = 0;
+            let lastSubstep = startRow;
+
+            // Extract group title from preceding comment or step
+            let groupTitle = 'Sub-steps';
+            const prev = startRow.previousElementSibling;
+            if (prev && prev.classList.contains('step-row-comment')) {
+                const commentContent = prev.querySelector('.step-content');
+                if (commentContent) {
+                    const raw = commentContent.innerText.replace(/^#\s*/, '').trim();
+                    if (raw) {
+                        groupTitle = raw;
+                    }
+                }
+            }
+
+            while (i < children.length && children[i].classList.contains('step-row-substep')) {
+                lastSubstep = children[i];
+                count++;
+                i++;
+            }
+            if (lastSubstep) {
+                lastSubstep.classList.add('substep-last');
+            }
+            if (count > 0) {
+                const toggleBar = document.createElement('div');
+                toggleBar.className = 'substeps-toggle-bar substeps-group-header';
+                toggleBar.setAttribute('onclick', 'toggleSubsteps(this)');
+
+                const headerLeft = document.createElement('div');
+                headerLeft.className = 'substeps-header-left';
+
+                const chevron = document.createElement('span');
+                chevron.className = 'material-symbols-outlined toggle-chevron';
+                chevron.textContent = 'expand_more';
+
+                const titleSpan = document.createElement('span');
+                titleSpan.className = 'substeps-title';
+                titleSpan.contentEditable = 'true';
+                titleSpan.spellcheck = false;
+                titleSpan.title = 'Click to rename sub-steps block';
+                titleSpan.textContent = groupTitle;
+                titleSpan.setAttribute('onclick', 'handleSubstepTitleClick(event, this)');
+                titleSpan.setAttribute('onkeydown', 'handleSubstepTitleKeyDown(event, this)');
+                titleSpan.setAttribute('onfocus', 'handleSubstepTitleFocus(this)');
+                titleSpan.setAttribute('oninput', 'handleSubstepTitleInput(this)');
+                titleSpan.setAttribute('onblur', 'handleSubstepTitleBlur(this)');
+
+                headerLeft.appendChild(chevron);
+                headerLeft.appendChild(titleSpan);
+
+                const badge = document.createElement('span');
+                badge.className = 'substeps-count-badge';
+                badge.textContent = `${count} sub-step${count > 1 ? 's' : ''}`;
+
+                toggleBar.appendChild(headerLeft);
+                toggleBar.appendChild(badge);
+
+                container.insertBefore(toggleBar, startRow);
+            }
+        } else {
+            i++;
+        }
+    }
+}
+window.refreshSubstepToggleBars = refreshSubstepToggleBars;
+
+function refreshAllSubstepToggleBars() {
+    ['#beforeStepsList', '#stepsList', '#afterStepsList'].forEach(sel => {
+        const container = document.querySelector(sel);
+        if (container) {
+            refreshSubstepToggleBars(container);
+        }
+    });
+}
+window.refreshAllSubstepToggleBars = refreshAllSubstepToggleBars;
 
 /* Token Rendering Parser */
 function formatStepToTokens(lineNumOrElement) {
@@ -2333,31 +3505,54 @@ function formatStepToTokens(lineNumOrElement) {
     const content = row.querySelector('.step-content');
     if (!content) return;
 
-    const rawText = content.getAttribute('data-raw') || content.innerText;
+    const rawText = getStepRawText(content);
     if (!rawText) return;
+    content.setAttribute('data-raw', rawText);
 
-    let safeText = rawText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    checkAndUpdateCommentRow(row);
+
+    if (row.classList.contains('step-row-comment')) {
+        content.innerText = rawText;
+        return;
+    }
+
+    const inlineCommentIdx = findInlineCommentIndex(rawText);
+    const instructionPart = inlineCommentIdx >= 0 ? rawText.substring(0, inlineCommentIdx) : rawText;
+    const commentPart = inlineCommentIdx >= 0 ? rawText.substring(inlineCommentIdx) : '';
+
+    let safeText = instructionPart.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    if (row.classList.contains('step-row-substep')) {
+        safeText = safeText.replace(/^(?:-\s*)?&gt;-\s*/, '');
+    } else {
+        safeText = safeText.replace(/(^|\s)(?:-\s*)?&gt;-(?=\s|$)/g, '$1<span class="substep-folded-badge">&gt;-</span>');
+    }
 
     safeText = safeText.replace(/(#[a-zA-Z0-9_\-]+)/g, '<span class="hint-badge">$1</span>');
 
     safeText = safeText.replace(/(?:_include|include):\s*([a-zA-Z0-9_\/\.\-]*missing[a-zA-Z0-9_\/\.\-]*)/g, function(match, path) {
-        return `<span class="missing-include-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">error</span>Missing Include: ${path}</span>`;
+        return `<span class="missing-include-pill" data-raw="${match.replace(/"/g, '&quot;')}" contenteditable="false"><span class="material-symbols-outlined pill-icon">error</span>Missing Include: ${path}</span>`;
     });
 
     safeText = safeText.replace(/(?:_include|include):\s*["']?([a-zA-Z0-9_\/\.\-]+)["']?/g, function(match, path) {
         const cleanPath = path.replace(/^['"]|['"]$/g, '');
         const filename = cleanPath.split('/').pop();
         if (cleanPath.toLowerCase().endsWith('.yaml') || cleanPath.toLowerCase().endsWith('.yml')) {
-            return `<span class="invalid-include-pill" contenteditable="false" title="Invalid Include: Only .steps fragment files can be included in playbooks"><span class="material-symbols-outlined pill-icon">warning</span><span>Invalid Include: ${filename}</span></span>`;
+            return `<span class="invalid-include-pill" data-raw="${match.replace(/"/g, '&quot;')}" contenteditable="false" title="Invalid Include: Only .steps fragment files can be included in playbooks"><span class="material-symbols-outlined pill-icon">warning</span><span>Invalid Include: ${filename}</span></span>`;
         }
-        return `<span class="unified-include-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">extension</span><span>include: ${filename}</span><span class="material-symbols-outlined hover-arrow" onmousedown="handleArrowMouseDown(event, '${lineNum}', '${cleanPath}')" title="Toggle steps for ${filename}">expand_more</span></span>`;
+        return `<span class="unified-include-pill" data-raw="${match.replace(/"/g, '&quot;')}" contenteditable="false"><span class="material-symbols-outlined pill-icon">extension</span><span>include: ${filename}</span><span class="material-symbols-outlined hover-arrow" onmousedown="handleArrowMouseDown(event, '${lineNum}', '${cleanPath}')" title="Toggle steps for ${filename}">expand_more</span></span>`;
     });
 
     safeText = safeText.replace(/\$\{([a-zA-Z0-9_\.]+)\}/g, function(match, name) {
-        return `<span class="var-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">data_object</span>${name}</span>`;
+        return `<span class="var-pill" data-var="${name}" contenteditable="false"><span class="material-symbols-outlined pill-icon">data_object</span>${name}</span>`;
     });
 
-    content.innerHTML = safeText;
+    if (inlineCommentIdx >= 0) {
+        const safeComment = commentPart.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        content.innerHTML = safeText + `<span class="step-inline-comment">${safeComment}</span>`;
+    } else {
+        content.innerHTML = safeText;
+    }
 }
 window.formatStepToTokens = formatStepToTokens;
 
@@ -2508,12 +3703,12 @@ function formatIncludeTreeCardTokens(treeCard) {
                 const cleanPath = path.replace(/^['"]|['"]$/g, '');
                 const filename = cleanPath.split('/').pop();
                 if (cleanPath.toLowerCase().endsWith('.yaml') || cleanPath.toLowerCase().endsWith('.yml')) {
-                    return `<span class="invalid-include-pill" contenteditable="false" title="Invalid Include: Only .steps fragment files can be included in playbooks"><span class="material-symbols-outlined pill-icon">warning</span><span>Invalid Include: ${filename}</span></span>`;
+                    return `<span class="invalid-include-pill" data-raw="${match.replace(/"/g, '&quot;')}" contenteditable="false" title="Invalid Include: Only .steps fragment files can be included in playbooks"><span class="material-symbols-outlined pill-icon">warning</span><span>Invalid Include: ${filename}</span></span>`;
                 }
-                return `<span class="unified-include-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">extension</span><span>include: ${filename}</span><span class="material-symbols-outlined hover-arrow" onmousedown="handleArrowMouseDown(event, '${stepCardId}', '${cleanPath}')" title="Toggle steps for ${filename}">expand_more</span></span>`;
+                return `<span class="unified-include-pill" data-raw="${match.replace(/"/g, '&quot;')}" contenteditable="false"><span class="material-symbols-outlined pill-icon">extension</span><span>include: ${filename}</span><span class="material-symbols-outlined hover-arrow" onmousedown="handleArrowMouseDown(event, '${stepCardId}', '${cleanPath}')" title="Toggle steps for ${filename}">expand_more</span></span>`;
             });
             safeText = safeText.replace(/\$\{([a-zA-Z0-9_\.]+)\}/g, function(match, name) {
-                return `<span class="var-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">data_object</span>${name}</span>`;
+                return `<span class="var-pill" data-var="${name}" contenteditable="false"><span class="material-symbols-outlined pill-icon">data_object</span>${name}</span>`;
             });
 
             stepEl.innerHTML = `<span class="sub-line-num">${lineNumText}</span><span class="step-token-content">${safeText}</span>`;
@@ -2820,6 +4015,48 @@ function handleNestedKeyDown(event, cardId) {
 }
 window.handleNestedKeyDown = handleNestedKeyDown;
 
+function addNestedStep(cardId) {
+    const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
+    if (!treeCard) return;
+
+    const stepsContainer = document.getElementById(`includeInnerSteps_${cardId}`) || treeCard.querySelector('[id^="includeInnerSteps_"]');
+    if (!stepsContainer) return;
+
+    if (treeCard.getAttribute('data-editing') !== 'true') {
+        enableIncludeEdit(cardId);
+    }
+
+    const placeholder = stepsContainer.querySelector('.empty-steps-placeholder');
+    if (placeholder) {
+        placeholder.remove();
+    }
+
+    const newStep = document.createElement('div');
+    newStep.className = 'nested-editable-step';
+    newStep.setAttribute('contenteditable', 'false');
+    newStep.setAttribute('data-original', '');
+    newStep.setAttribute('data-card-id', cardId);
+    newStep.setAttribute('onfocus', 'handleNestedFocus(this, event)');
+    newStep.setAttribute('onblur', `handleNestedBlur(this, '${cardId}')`);
+    newStep.setAttribute('onkeydown', `handleNestedKeyDown(event, '${cardId}')`);
+    newStep.setAttribute('oninput', `markIncludeUnsaved('${cardId}')`);
+
+    const lineNumSpan = newStep.querySelector('.sub-line-num');
+    const lineNumText = lineNumSpan ? lineNumSpan.innerText : '-';
+    newStep.innerHTML = `<span class="sub-line-num" contenteditable="false">${lineNumText}</span><span class="raw-nested-text" style="outline: none;" contenteditable="true"></span>`;
+
+    stepsContainer.appendChild(newStep);
+    markIncludeUnsaved(cardId);
+    updateAllLineNumbers();
+
+    handleNestedFocus(newStep, null, 0);
+    const newRawSpan = newStep.querySelector('.raw-nested-text');
+    if (newRawSpan) {
+        newRawSpan.focus();
+    }
+}
+window.addNestedStep = addNestedStep;
+
 function enableIncludeEdit(cardId) {
     const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
     if (!treeCard) return;
@@ -2831,6 +4068,7 @@ function enableIncludeEdit(cardId) {
     treeCard.setAttribute('data-editing', 'true');
 
     const btnEdit = document.getElementById(`btnEditInclude_${cardId}`);
+    const btnAdd = document.getElementById(`btnAddIncludeStep_${cardId}`);
     const btnSave = document.getElementById(`btnSaveInclude_${cardId}`);
     const btnDiscard = document.getElementById(`btnDiscardInclude_${cardId}`);
 
@@ -2859,6 +4097,7 @@ function enableIncludeEdit(cardId) {
     });
 
     if (btnEdit) btnEdit.style.display = 'none';
+    if (btnAdd) btnAdd.style.display = 'inline-flex';
     if (btnSave) btnSave.style.display = 'inline-flex';
     if (btnDiscard) btnDiscard.style.display = 'inline-flex';
 
@@ -2866,6 +4105,8 @@ function enableIncludeEdit(cardId) {
 
     if (steps.length > 0) {
         handleNestedFocus(steps[0], null, 0);
+    } else {
+        addNestedStep(cardId);
     }
 }
 window.enableIncludeEdit = enableIncludeEdit;
@@ -2876,15 +4117,98 @@ function markIncludeUnsaved(cardId) {
     const btnSave = document.getElementById(`btnSaveInclude_${cardId}`);
     const btnDiscard = document.getElementById(`btnDiscardInclude_${cardId}`);
     const btnEdit = document.getElementById(`btnEditInclude_${cardId}`);
+    const btnAdd = document.getElementById(`btnAddIncludeStep_${cardId}`);
     if (treeCard) treeCard.classList.add('has-unsaved-changes');
     if (badge) badge.style.display = 'inline-flex';
     if (btnSave) btnSave.style.display = 'inline-flex';
     if (btnDiscard) btnDiscard.style.display = 'inline-flex';
+    if (btnAdd) btnAdd.style.display = 'inline-flex';
     if (btnEdit) btnEdit.style.display = 'none';
+    updateIncludeVarsDropdown(cardId);
 }
 window.markIncludeUnsaved = markIncludeUnsaved;
 
+function updateIncludeVarsDropdown(cardId) {
+    const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
+    if (!treeCard) return;
+
+    const dropdownBody = treeCard.querySelector('.include-vars-dropdown-body');
+    const countSpan = treeCard.querySelector(`[id^="btnVarsInclude_"] span:nth-child(2)`) || treeCard.querySelector(`.btn-include-vars span:nth-child(2)`);
+    if (!dropdownBody) return;
+
+    const steps = getDirectNestedSteps(treeCard);
+    const stepLines = [];
+    steps.forEach(step => {
+        const rawSpan = step.querySelector('.raw-nested-text');
+        const textSpan = step.querySelector('span:last-child');
+        let lineText = rawSpan ? rawSpan.innerText : (step.getAttribute('data-original') || (textSpan ? textSpan.innerText : step.innerText));
+        if (lineText) stepLines.push(lineText.trim());
+    });
+
+    const allVars = new Set();
+    const varRegex = /\$\{([a-zA-Z0-9_.-]+)(?::[^}]*)?\}/g;
+    stepLines.forEach(line => {
+        let match;
+        while ((match = varRegex.exec(line)) !== null) {
+            if (match[1]) allVars.add(match[1]);
+        }
+    });
+
+    if (treeCard._varScopes) {
+        Object.keys(treeCard._varScopes).forEach(v => allVars.add(v));
+    }
+
+    if (countSpan) {
+        countSpan.innerText = `Variables (${allVars.size})`;
+    }
+
+    if (allVars.size === 0) {
+        dropdownBody.innerHTML = '<div class="empty-include-vars">No variables used in this include.</div>';
+        return;
+    }
+
+    let html = '';
+    allVars.forEach(v => {
+        let scope = 'required';
+        if (treeCard._varScopes && treeCard._varScopes[v]) {
+            scope = treeCard._varScopes[v];
+        } else {
+            const selector = CSS && CSS.escape ? CSS.escape(v) : v;
+            const defBtn = treeCard.querySelector(`.include-var-row[data-var="${selector}"] .scope-defined.active-defined`);
+            if (defBtn) scope = 'defined';
+        }
+
+        const safeVar = (v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const isDefined = scope === 'defined';
+
+        html += `
+            <div class="include-var-row" data-var="${safeVar}">
+                <code class="var-badge">\${${safeVar}}</code>
+                <div class="var-scope-toggle-group">
+                    <button type="button" class="btn-var-scope scope-defined ${isDefined ? 'active-defined' : ''}"
+                            data-card-id="${cardId}"
+                            data-var="${safeVar}"
+                            onclick="toggleIncludeTreeVarScope('${cardId}', '${safeVar}', 'defined')"
+                            title="Variable is defined within this fragment">
+                        Defined in include
+                    </button>
+                    <button type="button" class="btn-var-scope scope-required ${!isDefined ? 'active-required' : ''}"
+                            data-card-id="${cardId}"
+                            data-var="${safeVar}"
+                            onclick="toggleIncludeTreeVarScope('${cardId}', '${safeVar}', 'required')"
+                            title="Variable requires definition from using file">
+                        Required from using file
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+    dropdownBody.innerHTML = html;
+}
+window.updateIncludeVarsDropdown = updateIncludeVarsDropdown;
+
 function toggleIncludeVarsDropdown(cardId) {
+    updateIncludeVarsDropdown(cardId);
     const dropdown = document.getElementById(`varsDropdown_${cardId}`);
     if (!dropdown) return;
 
@@ -2898,6 +4222,7 @@ function toggleIncludeVarsDropdown(cardId) {
     }
 }
 window.toggleIncludeVarsDropdown = toggleIncludeVarsDropdown;
+
 
 function toggleIncludeTreeVarScope(cardId, varName, scope) {
     const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
@@ -3007,6 +4332,11 @@ async function saveIncludeInline(cardId) {
                 showToast(`💾 Saved included file ${filePath}`, "success");
                 loadFiles();
 
+                const warningBanner = treeCard.querySelector('.include-warning-banner');
+                if (warningBanner) {
+                    warningBanner.remove();
+                }
+
                 const cleanFilePath = filePath.replace(/^['"]|['"]$/g, '').trim();
                 const cleanActiveFile = (window.activeEditingFile || '').replace(/^['"]|['"]$/g, '').trim();
                 if (cleanActiveFile && (cleanActiveFile === cleanFilePath || cleanActiveFile.endsWith(cleanFilePath))) {
@@ -3029,6 +4359,7 @@ async function saveIncludeInline(cardId) {
 
     const badge = document.getElementById(`unsavedBadge_${cardId}`);
     const btnEdit = document.getElementById(`btnEditInclude_${cardId}`);
+    const btnAdd = document.getElementById(`btnAddIncludeStep_${cardId}`);
     const btnSave = document.getElementById(`btnSaveInclude_${cardId}`);
     const btnDiscard = document.getElementById(`btnDiscardInclude_${cardId}`);
 
@@ -3040,6 +4371,18 @@ async function saveIncludeInline(cardId) {
         step.setAttribute('data-original', text);
     });
 
+    if (steps.length === 0) {
+        const stepsContainer = document.getElementById(`includeInnerSteps_${cardId}`) || treeCard.querySelector('[id^="includeInnerSteps_"]');
+        if (stepsContainer) {
+            const safeCardId = CSS && CSS.escape ? CSS.escape(cardId) : cardId;
+            stepsContainer.innerHTML = `
+                <div class="empty-steps-placeholder" data-card-id="${safeCardId}" onclick="addNestedStep(this.getAttribute('data-card-id'))">
+                    <span class="material-symbols-outlined" style="font-size: 20px; color: var(--accent, #2563eb);">add_circle</span>
+                    <span>No steps defined in this include. Click here to add a step.</span>
+                </div>`;
+        }
+    }
+
     delete treeCard._initialStepsSnapshot;
 
     formatIncludeTreeCardTokens(treeCard);
@@ -3047,6 +4390,7 @@ async function saveIncludeInline(cardId) {
     treeCard.classList.remove('has-unsaved-changes');
     if (badge) badge.style.display = 'none';
     if (btnEdit) btnEdit.style.display = 'inline-flex';
+    if (btnAdd) btnAdd.style.display = 'none';
     if (btnSave) btnSave.style.display = 'none';
     if (btnDiscard) btnDiscard.style.display = 'none';
     return true;
@@ -3061,6 +4405,7 @@ function discardIncludeInline(cardId) {
 
     const badge = document.getElementById(`unsavedBadge_${cardId}`);
     const btnEdit = document.getElementById(`btnEditInclude_${cardId}`);
+    const btnAdd = document.getElementById(`btnAddIncludeStep_${cardId}`);
     const btnSave = document.getElementById(`btnSaveInclude_${cardId}`);
     const btnDiscard = document.getElementById(`btnDiscardInclude_${cardId}`);
 
@@ -3069,21 +4414,30 @@ function discardIncludeInline(cardId) {
 
     if (stepsContainer && Array.isArray(snapshot)) {
         stepsContainer.innerHTML = '';
-        snapshot.forEach(origText => {
-            const stepDiv = document.createElement('div');
-            stepDiv.className = 'nested-editable-step';
-            stepDiv.setAttribute('contenteditable', 'false');
-            stepDiv.setAttribute('data-original', origText);
-            stepDiv.setAttribute('data-card-id', cardId);
-            stepDiv.setAttribute('onfocus', 'handleNestedFocus(this, event)');
-            stepDiv.setAttribute('onblur', `handleNestedBlur(this, '${cardId}')`);
-            stepDiv.setAttribute('onkeydown', `handleNestedKeyDown(event, '${cardId}')`);
-            stepDiv.setAttribute('oninput', `markIncludeUnsaved('${cardId}')`);
+        if (snapshot.length === 0) {
+            const safeCardId = CSS && CSS.escape ? CSS.escape(cardId) : cardId;
+            stepsContainer.innerHTML = `
+                <div class="empty-steps-placeholder" data-card-id="${safeCardId}" onclick="addNestedStep(this.getAttribute('data-card-id'))">
+                    <span class="material-symbols-outlined" style="font-size: 20px; color: var(--accent, #2563eb);">add_circle</span>
+                    <span>No steps defined in this include. Click here to add a step.</span>
+                </div>`;
+        } else {
+            snapshot.forEach(origText => {
+                const stepDiv = document.createElement('div');
+                stepDiv.className = 'nested-editable-step';
+                stepDiv.setAttribute('contenteditable', 'false');
+                stepDiv.setAttribute('data-original', origText);
+                stepDiv.setAttribute('data-card-id', cardId);
+                stepDiv.setAttribute('onfocus', 'handleNestedFocus(this, event)');
+                stepDiv.setAttribute('onblur', `handleNestedBlur(this, '${cardId}')`);
+                stepDiv.setAttribute('onkeydown', `handleNestedKeyDown(event, '${cardId}')`);
+                stepDiv.setAttribute('oninput', `markIncludeUnsaved('${cardId}')`);
 
-            const safeText = origText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            stepDiv.innerHTML = `<span class="sub-line-num">-</span><span>${safeText}</span>`;
-            stepsContainer.appendChild(stepDiv);
-        });
+                const safeText = origText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                stepDiv.innerHTML = `<span class="sub-line-num">-</span><span>${safeText}</span>`;
+                stepsContainer.appendChild(stepDiv);
+            });
+        }
         delete treeCard._initialStepsSnapshot;
     } else {
         const steps = getDirectNestedSteps(treeCard);
@@ -3106,6 +4460,7 @@ function discardIncludeInline(cardId) {
     treeCard.classList.remove('has-unsaved-changes');
     if (badge) badge.style.display = 'none';
     if (btnEdit) btnEdit.style.display = 'inline-flex';
+    if (btnAdd) btnAdd.style.display = 'none';
     if (btnSave) btnSave.style.display = 'none';
     if (btnDiscard) btnDiscard.style.display = 'none';
 }
@@ -3114,7 +4469,7 @@ window.discardIncludeInline = discardIncludeInline;
 // Track Caret Offset Position
 document.addEventListener('selectionchange', () => {
     const activeEl = document.activeElement;
-    if (activeEl && activeEl.classList.contains('step-content')) {
+    if (activeEl && (activeEl.classList.contains('step-content') || activeEl.classList.contains('raw-nested-text'))) {
         lastCaretOffset = getCaretOffset(activeEl);
         window.lastCaretOffset = lastCaretOffset;
         const statLine = document.getElementById('statLine');
@@ -3126,6 +4481,52 @@ document.addEventListener('selectionchange', () => {
 
 function insertVariableFromInput(varName) {
     if (!varName) return;
+    const activeEl = document.activeElement;
+    let nestedStep = (activeEl && activeEl.closest('.nested-editable-step')) ? activeEl.closest('.nested-editable-step') : activeNestedStep;
+    if (!nestedStep && document.querySelector('.include-tree-card[data-editing="true"]')) {
+        const editingCard = document.querySelector('.include-tree-card[data-editing="true"]');
+        const steps = getDirectNestedSteps(editingCard);
+        if (steps.length > 0) {
+            nestedStep = steps[steps.length - 1];
+        }
+    }
+
+    if (nestedStep && document.contains(nestedStep)) {
+        const treeCard = nestedStep.closest('.include-tree-card');
+        let rawSpan = nestedStep.querySelector('.raw-nested-text');
+        if (!rawSpan) {
+            handleNestedFocus(nestedStep, null, 'end');
+            rawSpan = nestedStep.querySelector('.raw-nested-text') || nestedStep;
+        }
+        let raw = rawSpan.innerText || '';
+        const insertText = `\${${varName}}`;
+
+        if (lastCaretOffset >= 0 && lastCaretOffset <= raw.length) {
+            raw = raw.slice(0, lastCaretOffset) + insertText + raw.slice(lastCaretOffset);
+            lastCaretOffset += insertText.length;
+        } else {
+            raw += (raw.length > 0 && !raw.endsWith(' ') ? ' ' : '') + insertText;
+            lastCaretOffset = raw.length;
+        }
+
+        if (rawSpan !== nestedStep) {
+            rawSpan.innerText = raw;
+        } else {
+            nestedStep.innerText = raw;
+        }
+
+        if (treeCard) {
+            const safeCardId = treeCard.getAttribute('data-card-id') || treeCard.id.replace('includeTreeCard_', '').replace('includeTreeCard', '');
+            markIncludeUnsaved(safeCardId);
+            updateIncludeVarsDropdown(safeCardId);
+        }
+        if (rawSpan && typeof rawSpan.focus === 'function') {
+            rawSpan.focus();
+            setCaretOffset(rawSpan, lastCaretOffset);
+        }
+        return;
+    }
+
     const activeRow = document.querySelector(`.step-row[data-line="${activeLineNum}"]`);
     if (activeRow) {
         const content = activeRow.querySelector('.step-content');
@@ -3148,6 +4549,7 @@ function insertVariableFromInput(varName) {
     }
 }
 window.insertVariableFromInput = insertVariableFromInput;
+
 
 function insertSnippetWithCaret(templateText, caretOffset = -1) {
     const activeEl = document.activeElement;
@@ -3736,11 +5138,41 @@ function getEditorSnapshot() {
         rows.forEach(row => {
             const content = row.querySelector('.step-content');
             if (content) {
-                list.push(content.getAttribute('data-raw') || content.innerText.trim());
+                list.push({
+                    text: content.getAttribute('data-raw') || content.innerText.trim(),
+                    isSubstep: row.classList.contains('step-row-substep'),
+                    isManualSubstep: row.getAttribute('data-manual-substep') === 'true',
+                    isComment: row.classList.contains('step-row-comment')
+                });
             }
         });
         return list;
     };
+
+    let activeLine = null;
+    let activeCaret = 0;
+    const activeEl = document.activeElement;
+    if (activeEl && activeEl.classList.contains('step-content')) {
+        const row = activeEl.closest('.step-row');
+        if (row) {
+            activeLine = row.getAttribute('data-line');
+            if (typeof getCaretOffset === 'function') {
+                activeCaret = getCaretOffset(activeEl);
+            }
+        }
+    }
+
+    const propertiesPanel = document.getElementById('playbookPropertiesPanel');
+    const hasProperties = propertiesPanel && propertiesPanel.style.display !== 'none';
+    const propertyRows = [];
+    const propRows = document.querySelectorAll('#propertiesTableBody tr.property-row');
+    propRows.forEach(tr => {
+        const keyInput = tr.querySelector('.property-key-input');
+        const valInput = tr.querySelector('.property-val-input');
+        if (keyInput && valInput) {
+            propertyRows.push({ key: keyInput.value, value: valInput.value });
+        }
+    });
 
     const beforePanel = document.getElementById('beforeCodePanel');
     const hasBefore = beforePanel && beforePanel.style.display !== 'none';
@@ -3767,13 +5199,17 @@ function getEditorSnapshot() {
     }
 
     return {
+        hasProperties,
+        propertyRows,
         hasBefore,
         hasAfter,
         beforeSteps: captureBlock('beforeStepsList'),
         steps: captureBlock('stepsList'),
         afterSteps: captureBlock('afterStepsList'),
         matrixData,
-        matrixHeaders
+        matrixHeaders,
+        activeLine,
+        activeCaret
     };
 }
 window.getEditorSnapshot = getEditorSnapshot;
@@ -3813,6 +5249,20 @@ function restoreEditorSnapshot(snap) {
     const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
         || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
 
+    const propertiesPanel = document.getElementById('playbookPropertiesPanel');
+    const addPropertiesBtn = document.getElementById('addPropertiesBtnContainer');
+    const tbody = document.getElementById('propertiesTableBody');
+    if (propertiesPanel && addPropertiesBtn) {
+        propertiesPanel.style.display = (snap.hasProperties && !isFragmentFile) ? 'flex' : 'none';
+        addPropertiesBtn.style.display = (isFragmentFile || snap.hasProperties) ? 'none' : 'block';
+        if (tbody && Array.isArray(snap.propertyRows)) {
+            tbody.innerHTML = '';
+            snap.propertyRows.forEach(p => {
+                addPropertyRow(p.key, p.value);
+            });
+        }
+    }
+
     const beforePanel = document.getElementById('beforeCodePanel');
     const addBeforeBtn = document.getElementById('addBeforeBtnContainer');
     if (beforePanel && addBeforeBtn) {
@@ -3831,10 +5281,18 @@ function restoreEditorSnapshot(snap) {
         const container = document.getElementById(containerId);
         if (!container) return;
         container.innerHTML = '';
-        (stepArray || []).forEach((stepText, idx) => {
+        (stepArray || []).forEach((stepItem, idx) => {
             const lineNum = idx + 1;
+            const stepText = (typeof stepItem === 'object' && stepItem !== null) ? (stepItem.text || '') : (stepItem || '');
+            const isSubstep = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isSubstep) : false;
+            const isManualSubstep = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isManualSubstep) : false;
+            const isComment = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isComment) : false;
+
             const row = document.createElement('div');
-            row.className = 'step-row';
+            row.className = 'step-row' + (isSubstep ? ' step-row-substep' : '') + (isComment ? ' step-row-comment' : '');
+            if (isManualSubstep) {
+                row.setAttribute('data-manual-substep', 'true');
+            }
             row.setAttribute('data-line', lineNum);
             row.innerHTML = `
                 <span class="step-number">${lineNum}</span>
@@ -3842,7 +5300,8 @@ function restoreEditorSnapshot(snap) {
                      data-raw="${stepText.replace(/"/g, '&quot;')}"
                      onkeydown="handleKeyDown(event, ${lineNum})"
                      onfocus="handleStepFocus(${lineNum})"
-                     onblur="handleStepBlur(${lineNum})"></div>
+                     onblur="handleStepBlur(${lineNum})"
+                     oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);"></div>
                 <div class="step-actions">
                     <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${lineNum}, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
                     <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${lineNum}, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
@@ -3909,19 +5368,46 @@ function restoreEditorSnapshot(snap) {
     compilePlaybookToYaml();
     checkEditorDirtyStatus();
     updateUndoRedoUI();
+
+    if (snap.activeLine) {
+        const row = document.querySelector(`.step-row[data-line="${snap.activeLine}"]`);
+        if (row) {
+            const content = row.querySelector('.step-content');
+            if (content) {
+                content.focus();
+                if (typeof setCaretOffset === 'function' && typeof snap.activeCaret === 'number') {
+                    setCaretOffset(content, snap.activeCaret);
+                }
+            }
+        }
+    }
 }
 window.restoreEditorSnapshot = restoreEditorSnapshot;
 
 function editorUndo() {
+    clearTimeout(undoDebounceTimer);
+    undoDebounceTimer = null;
+
+    const currentSnap = getEditorSnapshot();
+    const lastSnap = undoStack.length > 0 ? undoStack[undoStack.length - 1] : null;
+
+    if (lastSnap && JSON.stringify(lastSnap) !== JSON.stringify(currentSnap)) {
+        redoStack.push(currentSnap);
+        restoreEditorSnapshot(lastSnap);
+        return;
+    }
+
     if (undoStack.length <= 1) return;
-    const currentSnap = undoStack.pop();
-    redoStack.push(currentSnap);
+    const currentPopped = undoStack.pop();
+    redoStack.push(currentPopped);
     const prevSnap = undoStack[undoStack.length - 1];
     restoreEditorSnapshot(prevSnap);
 }
 window.editorUndo = editorUndo;
 
 function editorRedo() {
+    clearTimeout(undoDebounceTimer);
+    undoDebounceTimer = null;
     if (redoStack.length === 0) return;
     const nextSnap = redoStack.pop();
     undoStack.push(nextSnap);
@@ -3972,6 +5458,9 @@ document.addEventListener('keydown', function(evt) {
 
     // Undo: Ctrl+Z / Cmd+Z (without Shift)
     if (modKey && evt.key.toLowerCase() === 'z' && !evt.shiftKey) {
+        if (evt.target && (evt.target.id === 'rawYamlTextarea' || (evt.target.closest && evt.target.closest('#rawEditorPanel')))) {
+            return;
+        }
         evt.preventDefault();
         editorUndo();
         return;
@@ -3979,6 +5468,9 @@ document.addEventListener('keydown', function(evt) {
 
     // Redo: Ctrl+Y / Cmd+Y or Cmd+Shift+Z
     if ((modKey && evt.key.toLowerCase() === 'y') || (modKey && evt.shiftKey && evt.key.toLowerCase() === 'z')) {
+        if (evt.target && (evt.target.id === 'rawYamlTextarea' || (evt.target.closest && evt.target.closest('#rawEditorPanel')))) {
+            return;
+        }
         evt.preventDefault();
         editorRedo();
         return;
@@ -3988,6 +5480,13 @@ document.addEventListener('keydown', function(evt) {
 // Plain Text & Multi-Line Step Paste Handler
 document.addEventListener('paste', function(evt) {
     if (!window.activeEditingFile || !document.getElementById('visualEditorMain')) return;
+
+    // Do not intercept paste in the Raw YAML code editor panel (preserve original formatting and newlines)
+    const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw')
+        || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
+    if (isRaw || (evt.target && (evt.target.id === 'rawYamlTextarea' || (evt.target.closest && evt.target.closest('#rawEditorPanel'))))) {
+        return;
+    }
 
     const stepContent = evt.target.closest ? evt.target.closest('.step-content') : null;
     if (stepContent) {
@@ -4054,7 +5553,7 @@ document.addEventListener('paste', function(evt) {
         if (typeof debouncedPushSnapshot === 'function') {
             debouncedPushSnapshot();
         }
-    } else if (evt.target.getAttribute && (evt.target.getAttribute('contenteditable') === 'true' || evt.target.tagName === 'INPUT' || evt.target.tagName === 'TEXTAREA')) {
+    } else if (evt.target.getAttribute && (evt.target.getAttribute('contenteditable') === 'true' || evt.target.tagName === 'INPUT')) {
         evt.preventDefault();
         const plainText = (evt.clipboardData || window.clipboardData).getData('text/plain') || '';
         const singleLineText = plainText.replace(/[\r\n]+/g, ' ');

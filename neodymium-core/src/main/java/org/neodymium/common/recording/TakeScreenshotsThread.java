@@ -21,6 +21,9 @@ import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 
+import com.codeborne.selenide.WebDriverRunner;
+import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
+import org.neodymium.util.Neodymium;
 import static org.openqa.selenium.support.ui.ExpectedConditions.alertIsPresent;
 
 /**
@@ -40,6 +43,8 @@ public class TakeScreenshotsThread extends Thread
 
     private String fileName;
 
+    private String testName;
+
     private boolean run = true;
 
     private boolean testFailed = true;
@@ -54,14 +59,15 @@ public class TakeScreenshotsThread extends Thread
         InvocationTargetException
     {
         this.recordingConfigurations = recordingConfigurations;
+        this.testName = testName;
+        final File directory = new File(recordingConfigurations.tempFolderToStoreRecording());
+        if (!directory.exists())
+        {
+            directory.mkdirs();
+        }
         fileName = recordingConfigurations.tempFolderToStoreRecording()
                    + testName.replaceAll("\\s", "-").replaceAll(":", "-").replaceAll("/", "_") + "." + recordingConfigurations.format();
         this.writer = Writer.instantiate(writerClass, recordingConfigurations, fileName);
-        File directory = new File(recordingConfigurations.tempFolderToStoreRecording());
-        if (!directory.exists())
-        {
-            directory.mkdir();
-        }
         this.driver = driver;
     }
 
@@ -114,11 +120,24 @@ public class TakeScreenshotsThread extends Thread
 
                     try
                     {
+                        final WebDriver activeDriver = getActiveDriver();
+                        if (activeDriver == null)
+                        {
+                            try
+                            {
+                                Thread.sleep(Math.max(recordingConfigurations.oneImagePerMilliseconds(), 100));
+                            }
+                            catch (final InterruptedException ignored)
+                            {
+                            }
+                            continue;
+                        }
+
                         long delay = Math.max(recordingConfigurations.oneImagePerMilliseconds(), duration);
 
                         // taking a screenshot while an alert is open will throw an exception and closes the alert, so
                         // it is checked here
-                        if (alertIsPresent().apply(driver) != null)
+                        if (alertIsPresent().apply(activeDriver) != null)
                         {
                             // write the last successful frame again, if it exists
                             if (lastFrameTempFile != null && lastFrameTempFile.exists() && lastFrameTempFile.length() > 0)
@@ -128,9 +147,9 @@ public class TakeScreenshotsThread extends Thread
                         }
                         else
                         {
-                            File file = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
-                            int cropWidth = ((Long) ((JavascriptExecutor) driver).executeScript("return window.innerWidth;")).intValue();
-                            int cropHeight = ((Long) ((JavascriptExecutor) driver).executeScript("return window.innerHeight;")).intValue();
+                            File file = ((TakesScreenshot) activeDriver).getScreenshotAs(OutputType.FILE);
+                            int cropWidth = ((Long) ((JavascriptExecutor) activeDriver).executeScript("return window.innerWidth;")).intValue();
+                            int cropHeight = ((Long) ((JavascriptExecutor) activeDriver).executeScript("return window.innerHeight;")).intValue();
                             BufferedImage fullImage = ImageIO.read(file);
                             if (cropWidth > 0 && cropHeight > 0)
                             {
@@ -182,26 +201,64 @@ public class TakeScreenshotsThread extends Thread
                     AllureAddons.addToReport("average " + (isGif ? "gif" : "video") + " sequence recording creation duration = " + millis + " / " + turns + "="
                                              + millis / turns, "");
                 }
-                writer.stop();
                 try
                 {
-                    File tempRecording = new File(fileName);
+                    writer.stop();
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.warn("Exception stopping video writer: {}", e.getMessage());
+                }
+                try
+                {
+                    final File tempRecording = new File(fileName);
+                    File finalRecording = tempRecording;
+                    if (tempRecording.exists())
+                    {
+                        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+                        final File runFolderDir = new File(recordingConfigurations.tempFolderToStoreRecording(), runFolder);
+                        if (!runFolderDir.exists())
+                        {
+                            runFolderDir.mkdirs();
+                        }
+                        final File movedFile = new File(runFolderDir, tempRecording.getName());
+                        try
+                        {
+                            Files.move(tempRecording.toPath(), movedFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                            finalRecording = movedFile;
+                        }
+                        catch (final IOException e)
+                        {
+                            LOGGER.warn("Could not move recording file to run folder: {}", e.getMessage());
+                        }
+                    }
+
+                    try
+                    {
+                        InteractiveConsoleEngine.attachVideoToLatestExecutionLog(finalRecording, testName);
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+
                     if (recordingConfigurations.appendAllRecordingsToAllureReport() || testFailed)
                     {
-
-                        String type = isGif ? "image/gif" : "video/mp4";
-                        Allure.addAttachment(fileName, type, new FileInputStream(fileName), recordingConfigurations.format());
-
-                        if (recordingConfigurations.deleteRecordingsAfterAddingToAllureReport())
+                        final String type = isGif ? "image/gif" : "video/mp4";
+                        if (finalRecording.exists())
                         {
-                            tempRecording.delete();
+                            Allure.addAttachment(finalRecording.getName(), type, new FileInputStream(finalRecording), recordingConfigurations.format());
+                        }
+
+                        if (recordingConfigurations.deleteRecordingsAfterAddingToAllureReport() && finalRecording.exists())
+                        {
+                            finalRecording.delete();
                         }
                     }
 
                     // delete the file when configured and only if it wasn't deleted already
-                    if (recordingConfigurations.deleteTempRecordings() && tempRecording.exists())
+                    if (recordingConfigurations.deleteTempRecordings() && finalRecording.exists())
                     {
-                        tempRecording.delete();
+                        finalRecording.delete();
                     }
                 }
                 catch (IOException e)
@@ -222,6 +279,19 @@ public class TakeScreenshotsThread extends Thread
                 }
             }
         }
+    }
+
+    private WebDriver getActiveDriver()
+    {
+        if (Neodymium.hasDriver())
+        {
+            return Neodymium.getDriver();
+        }
+        if (WebDriverRunner.hasWebDriverStarted())
+        {
+            return WebDriverRunner.getWebDriver();
+        }
+        return this.driver;
     }
 
     /**

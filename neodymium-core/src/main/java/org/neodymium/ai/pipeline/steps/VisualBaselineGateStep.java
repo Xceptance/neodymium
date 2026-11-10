@@ -17,7 +17,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.neodymium.ai.pipeline.steps;
-
+import java.util.List;
+import com.codeborne.selenide.Selenide;
+import com.codeborne.selenide.SelenideElement;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.config.AiConfiguration;
@@ -25,7 +27,9 @@ import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.structural.StateCapturedEvent;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
+import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 import org.neodymium.ai.executor.selenide.plugins.ClickAction;
+import org.neodymium.ai.executor.selenide.plugins.ClickAction.CoordinateTarget;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.pipeline.DivergenceException;
@@ -126,10 +130,12 @@ public final class VisualBaselineGateStep implements PipelineStep
             return false;
         }
 
-        final String rawInstruction = this.step.getInstruction();
-        final String resolvedInstruction = (context.getSessionData() != null && rawInstruction != null)
-            ? context.getSessionData().resolveAvailableVariables(rawInstruction)
-            : rawInstruction;
+        final Object currentInstructionObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
+        final String resolvedInstruction = currentInstructionObj instanceof String s && !s.isBlank()
+            ? s
+            : (context.getSessionData() != null && this.step.getInstruction() != null
+                ? context.getSessionData().resolveAvailableVariables(this.step.getInstruction())
+                : this.step.getInstruction());
         final ExecutionMode mode = (ExecutionMode) context.getTransientData()
             .computeIfAbsent(ExecutionContext.KEY_EXECUTION_MODE, k -> AiConfiguration.getInstance().getExecutionMode());
 
@@ -161,14 +167,14 @@ public final class VisualBaselineGateStep implements PipelineStep
                         }
                     }
 
-                    ClickAction.CoordinateTarget coordinateTarget = null;
+                    CoordinateTarget coordinateTarget = null;
                     if (this.step.getActions() != null)
                     {
                         for (final Action act : this.step.getActions())
                         {
                             if (act != null && act.getTarget() != null)
                             {
-                                final ClickAction.CoordinateTarget parsed = ClickAction.parseCoordinateTarget(act.getTarget());
+                                final CoordinateTarget parsed = ClickAction.parseCoordinateTarget(act.getTarget());
                                 if (parsed != null)
                                 {
                                     coordinateTarget = parsed;
@@ -178,12 +184,33 @@ public final class VisualBaselineGateStep implements PipelineStep
                         }
                     }
 
+                    if (coordinateTarget != null)
+                    {
+                        this.step.setFullPage(false);
+                    }
+
                     final boolean pureVerification = isPureVerification();
-                    if (!pureVerification && coordinateTarget == null)
+                    final boolean isMarkerCoordinateGate = this.step.isMarker() && coordinateTarget != null;
+                    if (!pureVerification && !isMarkerCoordinateGate)
                     {
                         LOGGER.debug("   Visual step contains recorded mutating actions; deferring visual baseline check to post-action for: \"{}\"",
                             resolvedInstruction);
                         return false;
+                    }
+
+                    if (coordinateTarget != null && coordinateTarget.anchorSelector() != null && !coordinateTarget.anchorSelector().isBlank())
+                    {
+                        try
+                        {
+                            final SelenideElement anchorEl = SelenideElementFinder.findElement(coordinateTarget.anchorSelector());
+                            if (anchorEl != null && anchorEl.exists())
+                            {
+                                SelenideElementFinder.scrollIntoViewIfNeeded(anchorEl);
+                            }
+                        }
+                        catch (final Exception | AssertionError ignored)
+                        {
+                        }
                     }
 
                     final String recordedHash = this.step.getScreenshotHash();
@@ -191,13 +218,29 @@ public final class VisualBaselineGateStep implements PipelineStep
                         ? this.step.getSsimMinScore()
                         : (coordinateTarget != null ? 0.95 : AiConfiguration.getInstance().getVisualSsimMinScore());
 
-                    final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
-                        || (this.step != null && this.step.isFullPageVisualStep());
-                    final SutState currentState = VisualStabilityDetector.captureSettledState(
-                        executor,
-                        isFullPageReq,
-                        coordinateTarget == null ? recordedHash : null,
-                        minScore);
+                    final boolean isFullPageReq = coordinateTarget == null
+                        && (Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                            || (this.step != null && this.step.isFullPageVisualStep()));
+                    if (this.step.isLayoutStep())
+                    {
+                        executor.applyColorWireframe();
+                    }
+                    final SutState currentState;
+                    try
+                    {
+                        currentState = VisualStabilityDetector.captureSettledState(
+                            executor,
+                            isFullPageReq,
+                            coordinateTarget == null ? recordedHash : null,
+                            minScore);
+                    }
+                    finally
+                    {
+                        if (this.step.isLayoutStep())
+                        {
+                            executor.removeColorWireframe();
+                        }
+                    }
                     context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, currentState);
                     if (this.session != null && this.session.getEventBus() != null && currentState != null)
                     {
@@ -208,13 +251,50 @@ public final class VisualBaselineGateStep implements PipelineStep
                     if (coordinateTarget != null)
                     {
                         // Micro-crop 64x64 luminance tile around centroid (x, y) with radius 32
-                        if (currentState.getAttachments() != null)
+                        if (currentState != null && currentState.getAttachments() != null)
                         {
                             for (final SutAttachment attachment : currentState.getAttachments())
                             {
                                 if (attachment.mediaType() != null && attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
                                 {
-                                    currentSsimMatrix = ScreenshotHasher.computeTileSsimMatrix(attachment.base64Data(), coordinateTarget.x(), coordinateTarget.y(), 32);
+                                    int cropX = coordinateTarget.x();
+                                    int cropY = coordinateTarget.y();
+                                    if (coordinateTarget.anchorSelector() != null && !coordinateTarget.anchorSelector().isBlank())
+                                    {
+                                        try
+                                        {
+                                            final SelenideElement anchorEl = SelenideElementFinder.findElement(coordinateTarget.anchorSelector());
+                                            if (anchorEl != null && anchorEl.exists())
+                                            {
+                                                final Object rectObj = Selenide.executeJavaScript(
+                                                    "var r = arguments[0].getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top)];",
+                                                    anchorEl);
+                                                if (rectObj instanceof List<?> list && list.size() >= 2)
+                                                {
+                                                    cropX = ((Number) list.get(0)).intValue() + coordinateTarget.x();
+                                                    cropY = ((Number) list.get(1)).intValue() + coordinateTarget.y();
+                                                }
+                                            }
+                                        }
+                                        catch (final Exception | AssertionError ignored)
+                                        {
+                                        }
+                                    }
+                                    currentSsimMatrix = ScreenshotHasher.computeTileSsimMatrix(attachment.base64Data(), cropX, cropY, 32);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    else if (this.step.isLayoutStep() || ScreenshotHasher.isColorMatrix(recordedHash))
+                    {
+                        if (currentState != null && currentState.getAttachments() != null)
+                        {
+                            for (final SutAttachment attachment : currentState.getAttachments())
+                            {
+                                if (attachment.mediaType() != null && attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
+                                {
+                                    currentSsimMatrix = ScreenshotHasher.computeColorSsimMatrix(attachment.base64Data());
                                     break;
                                 }
                             }
@@ -282,8 +362,12 @@ public final class VisualBaselineGateStep implements PipelineStep
                         {
                             if (pureVerification && !isVisualMatch)
                             {
-                                final String msg = String.format("Visual SSIM score below threshold (score: %s < %.2f) for visual instruction: \"%s\".",
-                                    currentSsimScore != null ? String.format("%.4f", currentSsimScore) : "N/A", minScore, resolvedInstruction);
+                                final String msg = String.format("%s SSIM score below threshold (score: %s < %.2f) for %s instruction: \"%s\".",
+                                    this.step.isLayoutStep() ? "Layout" : "Visual",
+                                    currentSsimScore != null ? String.format("%.4f", currentSsimScore) : "N/A",
+                                    minScore,
+                                    this.step.isLayoutStep() ? "layout" : "visual",
+                                    resolvedInstruction);
                                 LOGGER.warn("   ❌ " + msg);
 
                                 if (mode.supportsHealing())
@@ -383,21 +467,62 @@ public final class VisualBaselineGateStep implements PipelineStep
             return;
         }
 
+        CoordinateTarget coordinateTarget = null;
+        if (this.step.getActions() != null)
+        {
+            for (final Action act : this.step.getActions())
+            {
+                if (act != null && act.getTarget() != null)
+                {
+                    final CoordinateTarget parsed = ClickAction.parseCoordinateTarget(act.getTarget());
+                    if (parsed != null)
+                    {
+                        coordinateTarget = parsed;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (coordinateTarget != null)
+        {
+            this.step.setFullPage(false);
+            if (this.step.isMarker() && !this.step.isVisualOrLayoutStep())
+            {
+                return;
+            }
+        }
+
         SutState postState = (SutState) context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
-        if (postState == null || postState.getAttachments() == null || postState.getAttachments().isEmpty())
+        if (this.step.isLayoutStep() || postState == null || postState.getAttachments() == null || postState.getAttachments().isEmpty())
         {
             final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
             if (executor != null)
             {
-                final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
-                    || this.step.isFullPageVisualStep();
+                final boolean isFullPageReq = coordinateTarget == null
+                    && (Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                        || this.step.isFullPageVisualStep());
                 final ContextLevel cl = isFullPageReq ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL;
                 try
                 {
-                    postState = executor.captureState(cl, isFullPageReq);
-                    if (postState != null)
+                    if (this.step.isLayoutStep())
                     {
-                        context.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, postState);
+                        executor.applyColorWireframe();
+                    }
+                    try
+                    {
+                        postState = executor.captureState(cl, isFullPageReq);
+                        if (postState != null)
+                        {
+                            context.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, postState);
+                        }
+                    }
+                    finally
+                    {
+                        if (this.step.isLayoutStep())
+                        {
+                            executor.removeColorWireframe();
+                        }
                     }
                 }
                 catch (final Exception e)
@@ -415,7 +540,67 @@ public final class VisualBaselineGateStep implements PipelineStep
 
         context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, postState);
 
-        final String currentSsimMatrix = VisualStabilityDetector.extractSsimMatrix(postState);
+        final String currentSsimMatrix;
+        if (this.step.isLayoutStep() || ScreenshotHasher.isColorMatrix(recordedHash))
+        {
+            String extracted = null;
+            if (postState.getAttachments() != null)
+            {
+                for (final SutAttachment attachment : postState.getAttachments())
+                {
+                    if (attachment.mediaType() != null && attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
+                    {
+                        extracted = ScreenshotHasher.computeColorSsimMatrix(attachment.base64Data());
+                        break;
+                    }
+                }
+            }
+            currentSsimMatrix = extracted;
+        }
+        else if (coordinateTarget != null)
+        {
+            String extracted = null;
+            if (postState.getAttachments() != null)
+            {
+                for (final SutAttachment attachment : postState.getAttachments())
+                {
+                    if (attachment.mediaType() != null && attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
+                    {
+                        int cropX = coordinateTarget.x();
+                        int cropY = coordinateTarget.y();
+                        if (coordinateTarget.anchorSelector() != null && !coordinateTarget.anchorSelector().isBlank())
+                        {
+                            try
+                            {
+                                final SelenideElement anchorEl = SelenideElementFinder.findElement(coordinateTarget.anchorSelector());
+                                if (anchorEl != null && anchorEl.exists())
+                                {
+                                    SelenideElementFinder.scrollIntoViewIfNeeded(anchorEl);
+                                    final Object rectObj = Selenide.executeJavaScript(
+                                        "var r = arguments[0].getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top)];",
+                                        anchorEl);
+                                    if (rectObj instanceof List<?> list && list.size() >= 2)
+                                    {
+                                        cropX = ((Number) list.get(0)).intValue() + coordinateTarget.x();
+                                        cropY = ((Number) list.get(1)).intValue() + coordinateTarget.y();
+                                    }
+                                }
+                            }
+                            catch (final Exception | AssertionError ignored)
+                            {
+                            }
+                        }
+                        extracted = ScreenshotHasher.computeTileSsimMatrix(attachment.base64Data(), cropX, cropY, 32);
+                        break;
+                    }
+                }
+            }
+            currentSsimMatrix = extracted;
+        }
+        else
+        {
+            currentSsimMatrix = VisualStabilityDetector.extractSsimMatrix(postState);
+        }
         if (currentSsimMatrix == null)
         {
             LOGGER.warn("Failed to extract SSIM matrix from post-action state for: \"{}\"", this.step.getInstruction());
@@ -424,7 +609,7 @@ public final class VisualBaselineGateStep implements PipelineStep
 
         final double minScore = this.step.getSsimMinScore() != null
             ? this.step.getSsimMinScore()
-            : AiConfiguration.getInstance().getVisualSsimMinScore();
+            : (coordinateTarget != null ? 0.95 : AiConfiguration.getInstance().getVisualSsimMinScore());
         final double ssimScore = ScreenshotHasher.calculateSsim(recordedHash, currentSsimMatrix);
         this.step.setSsimScore(ssimScore);
         if (this.step.getSsimMinScore() != null)
@@ -435,13 +620,15 @@ public final class VisualBaselineGateStep implements PipelineStep
         this.step.setReplayMatrixPng(ScreenshotHasher.matrixToDataUri(currentSsimMatrix));
         if (this.step.getScreenshotHashDim() == null)
         {
-            this.step.setScreenshotHashDim(ScreenshotHasher.DEFAULT_SSIM_MATRIX_DIM);
+            this.step.setScreenshotHashDim(coordinateTarget != null ? ScreenshotHasher.TILE_SSIM_MATRIX_DIM : ScreenshotHasher.DEFAULT_SSIM_MATRIX_DIM);
         }
 
-        final String rawInstruction = this.step.getInstruction();
-        final String resolvedInstruction = (context.getSessionData() != null && rawInstruction != null)
-            ? context.getSessionData().resolveAvailableVariables(rawInstruction)
-            : rawInstruction;
+        final Object currentInstructionObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
+        final String resolvedInstruction = currentInstructionObj instanceof String s && !s.isBlank()
+            ? s
+            : (context.getSessionData() != null && this.step.getInstruction() != null
+                ? context.getSessionData().resolveAvailableVariables(this.step.getInstruction())
+                : this.step.getInstruction());
 
         String replayDims = null;
         if (postState.getAttachments() != null)
@@ -468,8 +655,12 @@ public final class VisualBaselineGateStep implements PipelineStep
         }
         else
         {
-            final String msg = String.format("Visual SSIM score below threshold (score: %s < %.2f) for visual instruction: \"%s\".",
-                String.format("%.4f", ssimScore), minScore, resolvedInstruction);
+            final String msg = String.format("%s SSIM score below threshold (score: %s < %.2f) for %s instruction: \"%s\".",
+                this.step.isLayoutStep() ? "Layout" : "Visual",
+                String.format("%.4f", ssimScore),
+                minScore,
+                this.step.isLayoutStep() ? "layout" : "visual",
+                resolvedInstruction);
             LOGGER.warn("   ❌ " + msg);
 
             if (mode.supportsHealing())

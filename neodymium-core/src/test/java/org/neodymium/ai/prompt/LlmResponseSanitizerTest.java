@@ -221,4 +221,12 @@ public final class LlmResponseSanitizerTest
         Assertions.assertTrue(actual.contains("\"status\": \"SUCCESS2\""));
         Assertions.assertTrue(actual.contains("Click the country trigger button in the header to open the country selection menu/modal."));
     }
+
+    @Test
+    public void testNonJsonTextWithoutDelimitersReturnsEmpty()
+    {
+        final String input = "is already there! Or, if not locked, the dialog did not appear, so the user clicks \"Auswahl\" to open the case!";
+        final String actual = LlmResponseSanitizer.extractJson(input);
+        Assertions.assertEquals("", actual);
+    }
 }

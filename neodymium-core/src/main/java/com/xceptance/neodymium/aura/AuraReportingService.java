@@ -475,7 +475,7 @@ public final class AuraReportingService
                 targetDir = new File("target/allure-results");
             }
             final File[] consoleFiles = targetDir
-                    .listFiles((dir, name) -> name.startsWith("console-execution") && name.endsWith(".json"));
+                    .listFiles((dir, name) -> (name.startsWith("console-execution") && name.endsWith(".json")) || name.endsWith(".mp4"));
             if (consoleFiles != null && consoleFiles.length > 0)
             {
                 for (final File consoleFile : consoleFiles)
@@ -483,7 +483,7 @@ public final class AuraReportingService
                     final File destConsoleFile = new File(destDir, consoleFile.getName());
                     Files.copy(consoleFile.toPath(), destConsoleFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
                 }
-                LOGGER.info("[Aura Server] Archived {} console-execution JSONs to {}", consoleFiles.length,
+                LOGGER.info("[Aura Server] Archived {} console-execution JSONs/videos to {}", consoleFiles.length,
                         destDir.getName());
             }
             else

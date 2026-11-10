@@ -10,6 +10,9 @@ import static com.codeborne.selenide.Selenide.$$;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
 import org.junit.After;
@@ -21,7 +24,8 @@ import org.junit.runner.RunWith;
 
 import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
-import org.neodymium.ai.util.EmbeddedHtmlServer;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
 import org.neodymium.common.browser.Browser;
 import org.neodymium.common.browser.SuppressBrowsers;
 import org.neodymium.junit4.NeodymiumRunner;
@@ -37,7 +41,7 @@ import org.neodymium.util.Neodymium;
 @Browser("firefox_download")
 public class DownloadFilesInDifferentWays extends NeodymiumTest
 {
-    private static EmbeddedHtmlServer server;
+    private static HttpServer server;
 
     private static String baseUrl;
 
@@ -46,9 +50,40 @@ public class DownloadFilesInDifferentWays extends NeodymiumTest
     @BeforeClass
     public static void startServer() throws IOException
     {
-        server = new EmbeddedHtmlServer();
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/DownloadTest", (final HttpExchange exchange) -> {
+            final String path = exchange.getRequestURI().getPath();
+            final byte[] response;
+            if (path.endsWith("sample.pdf") || path.endsWith("test.pdf"))
+            {
+                response = "%PDF-1.4 dummy pdf content for neodymium download test".getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/pdf");
+                exchange.getResponseHeaders().set("Content-Disposition", "attachment; filename=\"" + (path.endsWith("test.pdf") ? "test.pdf" : "sample.pdf") + "\"");
+            }
+            else if (path.endsWith("upload.html"))
+            {
+                response = ("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Upload</title></head><body>"
+                    + "<input id=\"fileInput\" type=\"file\" accept=\"image/png\" />"
+                    + "<button id=\"uploadBtn\" onclick=\"document.getElementById('downloadBtn').style.display='inline-block'\">Convert</button>"
+                    + "<a id=\"downloadBtn\" href=\"files/test.pdf\" download=\"test.pdf\" style=\"display:none\">DOWNLOAD</a>"
+                    + "</body></html>").getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "text/html; charset=UTF-8");
+            }
+            else
+            {
+                response = ("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Download</title></head><body>"
+                    + "<a id=\"downloadLink\" href=\"files/sample.pdf\" download=\"sample.pdf\">Download sample.pdf</a>"
+                    + "</body></html>").getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "text/html; charset=UTF-8");
+            }
+            exchange.sendResponseHeaders(200, response.length);
+            try (final OutputStream os = exchange.getResponseBody())
+            {
+                os.write(response);
+            }
+        });
         server.start();
-        baseUrl = "http://localhost:" + server.getPort() + "/DownloadTest";
+        baseUrl = "http://localhost:" + server.getAddress().getPort() + "/DownloadTest";
     }
 
     @AfterClass
@@ -56,7 +91,7 @@ public class DownloadFilesInDifferentWays extends NeodymiumTest
     {
         if (server != null)
         {
-            server.stop();
+            server.stop(0);
         }
     }
 
@@ -93,7 +128,7 @@ public class DownloadFilesInDifferentWays extends NeodymiumTest
         fileName = new File("target/test.pdf");
         Selenide.open(baseUrl + "/upload.html");
         $("#fileInput").should(exist, Duration.ofMillis(10000))
-                       .uploadFile(new File("src/test/resources/xceptance_bugs.png"));
+                       .uploadFromClasspath("xceptance_bugs.png");
         $("#uploadBtn").shouldBe(visible, Duration.ofMillis(10000)).click();
         $("#downloadBtn").shouldBe(visible, Duration.ofMillis(10000)).click();
         waitForFileDownloading();

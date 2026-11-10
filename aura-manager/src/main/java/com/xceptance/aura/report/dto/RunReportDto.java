@@ -242,11 +242,15 @@ public final class RunReportDto
             return List.of();
         }
         return executions.stream()
-            .map(TestExecutionDto::getLocation)
-            .filter(l -> l != null && !l.isBlank())
+            .map(e -> (e.getLocation() == null || e.getLocation().isBlank()) ? "Unknown" : e.getLocation().trim())
             .distinct()
             .sorted()
             .collect(Collectors.toList());
+    }
+
+    public List<String> getFilterLocales()
+    {
+        return getFilterLocations();
     }
 
     public List<String> getFilterBrowsers()
@@ -256,8 +260,7 @@ public final class RunReportDto
             return List.of();
         }
         return executions.stream()
-            .map(TestExecutionDto::getBrowser)
-            .filter(b -> b != null && !b.isBlank())
+            .map(e -> (e.getBrowser() == null || e.getBrowser().isBlank()) ? "Unknown" : e.getBrowser().trim())
             .distinct()
             .sorted()
             .collect(Collectors.toList());
@@ -265,7 +268,115 @@ public final class RunReportDto
 
     public int getHealedCount()
     {
-        return fixedCount;
+        if (executions != null && !executions.isEmpty())
+        {
+            final int stepsHealed = executions.stream().mapToInt(TestExecutionDto::getHealedStepsCount).sum();
+            if (stepsHealed > 0)
+            {
+                return stepsHealed;
+            }
+        }
+        return 0;
+    }
+
+    public int getPassedHealedCount()
+    {
+        if (executions != null && !executions.isEmpty())
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isPassedHealed).count();
+        }
+        return 0;
+    }
+
+    public int getFailedHealedCount()
+    {
+        if (executions != null && !executions.isEmpty())
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isFailedHealed).count();
+        }
+        return 0;
+    }
+
+    public int getPassHealedCount()
+    {
+        if (executions != null && !executions.isEmpty())
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isPassHealed).count();
+        }
+        return 0;
+    }
+
+    public int getFixedHealedCount()
+    {
+        if (executions != null && !executions.isEmpty())
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isFixedHealed).count();
+        }
+        return 0;
+    }
+
+    public int getKnownHealedCount()
+    {
+        if (executions != null && !executions.isEmpty())
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isKnownHealed).count();
+        }
+        return 0;
+    }
+
+    public int getUnknownHealedCount()
+    {
+        if (executions != null && !executions.isEmpty())
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isUnknownHealed).count();
+        }
+        return 0;
+    }
+
+    public int getTotalHealedCount()
+    {
+        return getPassHealedCount() + getFixedHealedCount() + getKnownHealedCount() + getUnknownHealedCount();
+    }
+
+    public int getPassAiCount()
+    {
+        if (executions != null && !executions.isEmpty())
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isPassAi).count();
+        }
+        return 0;
+    }
+
+    public int getFixedAiCount()
+    {
+        if (executions != null && !executions.isEmpty())
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isFixedAi).count();
+        }
+        return 0;
+    }
+
+    public int getKnownAiCount()
+    {
+        if (executions != null && !executions.isEmpty())
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isKnownAi).count();
+        }
+        return 0;
+    }
+
+    public int getUnknownAiCount()
+    {
+        if (executions != null && !executions.isEmpty())
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isUnknownAi).count();
+        }
+        return 0;
+    }
+
+    public int getTotalAiCount()
+    {
+        return getPassAiCount() + getFixedAiCount() + getKnownAiCount() + getUnknownAiCount();
     }
 
     public int getFailCount()
@@ -283,27 +394,40 @@ public final class RunReportDto
         long minStartMs = Long.MAX_VALUE;
         long maxStartMs = Long.MIN_VALUE;
         TestExecutionDto latestExec = null;
+        long sumDurationMs = 0L;
+        int validTimestampCount = 0;
 
         for (final TestExecutionDto exec : executions)
         {
+            sumDurationMs += exec.getDurationMs();
             final long startMs = exec.getTimestampMs();
-            if (startMs < minStartMs)
+            if (startMs > 0L)
             {
-                minStartMs = startMs;
-            }
-            if (startMs >= maxStartMs)
-            {
-                maxStartMs = startMs;
-                latestExec = exec;
+                validTimestampCount++;
+                if (startMs < minStartMs)
+                {
+                    minStartMs = startMs;
+                }
+                if (startMs >= maxStartMs)
+                {
+                    maxStartMs = startMs;
+                    latestExec = exec;
+                }
             }
         }
 
-        if (latestExec == null)
+        if (latestExec == null || validTimestampCount < 1)
         {
-            return 0L;
+            return sumDurationMs;
         }
 
-        return (maxStartMs - minStartMs) + latestExec.getDurationMs();
+        if (validTimestampCount < 2 && executions.size() > 1)
+        {
+            return sumDurationMs;
+        }
+
+        final long wallClockDurationMs = (maxStartMs - minStartMs) + latestExec.getDurationMs();
+        return wallClockDurationMs > 0L ? wallClockDurationMs : sumDurationMs;
     }
 
     public String getTotalDurationFormatted()
@@ -380,7 +504,7 @@ public final class RunReportDto
             return List.of();
         }
         return executions.stream()
-            .map(TestExecutionDto::getExecutionMode)
+            .map(TestExecutionDto::getDisplayMode)
             .filter(m -> m != null && !m.isBlank())
             .distinct()
             .sorted()

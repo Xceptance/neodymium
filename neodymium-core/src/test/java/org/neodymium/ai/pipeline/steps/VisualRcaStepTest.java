@@ -100,7 +100,7 @@ public class VisualRcaStepTest
         // Assert expected multimodal RCA summary is retrieved and saved in transient context
         Assertions.assertNotNull(summary);
         Assertions.assertEquals("Checkout button was blocked by an unaccepted cookie consent overlay.", summary);
-        Assertions.assertEquals(summary, explanation);
+        Assertions.assertTrue(explanation.contains(summary));
 
         // Assert events were dispatched
         Assertions.assertTrue(events.stream().anyMatch(e -> e instanceof LlmRequestSentEvent sent && "VISUAL_RCA".equals(sent.getCapability())));
@@ -160,7 +160,7 @@ public class VisualRcaStepTest
         final VisualRcaStep rcaStep = new VisualRcaStep("ElementClickInterceptedException");
         rcaStep.execute(context);
 
-        Assertions.assertEquals("Radio button #express was obscured by sticky footer.", step.getFailureReason());
+        Assertions.assertTrue(step.getFailureReason().contains("Radio button #express was obscured by sticky footer."));
     }
 
     /**
@@ -187,6 +187,6 @@ public class VisualRcaStepTest
         final String summary = (String) context.getTransientData().get(ExecutionContext.KEY_VISUAL_RCA_SUMMARY);
         Assertions.assertNotNull(summary);
         Assertions.assertEquals("CVV input field was marked with validation error border.", summary);
-        Assertions.assertEquals("CVV input field was marked with validation error border.", step.getFailureReason());
+        Assertions.assertTrue(step.getFailureReason().contains("CVV input field was marked with validation error border."));
     }
 }

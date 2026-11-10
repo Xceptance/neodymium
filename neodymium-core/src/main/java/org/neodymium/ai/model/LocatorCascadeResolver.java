@@ -20,10 +20,10 @@ package org.neodymium.ai.model;
 
 import org.neodymium.ai.util.ScreenshotHasher;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -35,8 +35,29 @@ import java.util.Set;
  */
 public final class LocatorCascadeResolver
 {
+    /**
+     * Synthetic attribute key storing the structural graphic signature of child {@code <svg>} or {@code <img>} elements.
+     */
+    public static final String ATTR_GRAPHIC_SIG = "data-graphic-sig";
+
     private LocatorCascadeResolver()
     {
+    }
+
+    /**
+     * Checks whether the given feature vector carries a non-blank structural graphic signature.
+     *
+     * @param vector the feature vector to inspect
+     * @return {@code true} if {@link #ATTR_GRAPHIC_SIG} is present and non-blank
+     */
+    public static boolean hasGraphicSignature(final DomFeatureVector vector)
+    {
+        if (vector == null || vector.getAttributes() == null)
+        {
+            return false;
+        }
+        final String sig = vector.getAttributes().get(ATTR_GRAPHIC_SIG);
+        return sig != null && !sig.isBlank();
     }
 
     /**
@@ -44,7 +65,7 @@ public final class LocatorCascadeResolver
      * and a live candidate element vector using the exact OpenSpec formula:
      * 0.35 * TagScore + 0.30 * AttrJaccard + 0.25 * TextLevenshtein + 0.10 * ClassJaccard.
      * When text and accessible names are absent (e.g. icon-only elements), Tier 2 visual
-     * perceptual dHash and aspect ratio similarity are evaluated.
+     * perceptual dHash, tile SSIM, graphic signature, and aspect ratio similarity are evaluated.
      *
      * @param recorded the baseline recorded feature vector
      * @param candidate the live candidate feature vector
@@ -67,9 +88,11 @@ public final class LocatorCascadeResolver
         final boolean isTextless = (recorded.getText() == null || recorded.getText().isBlank())
             && (recorded.getAccessibleName() == null || recorded.getAccessibleName().isBlank());
 
-        if (isTextless && (recorded.hasVisualHash() || (recorded.getTileSsim() != null && !recorded.getTileSsim().isBlank())))
+        if (isTextless && (recorded.hasVisualHash()
+            || (recorded.getTileSsim() != null && !recorded.getTileSsim().isBlank())
+            || hasGraphicSignature(recorded)))
         {
-            // Tier 2 Perceptual Visual Similarity (Aspect ratio + dHash / Tile SSIM)
+            // Tier 2 Perceptual Visual Similarity (Aspect ratio + dHash / Tile SSIM / Graphic Signature)
             final double visualScore = computeVisualSimilarity(recorded, candidate);
             final double classScore = calculateJaccard(recorded.getClasses(), candidate.getClasses());
 
@@ -315,8 +338,8 @@ public final class LocatorCascadeResolver
         final double charSim = Math.max(0.0, 1.0 - ((double) distance / maxLength));
 
         // 2. Word Token Jaccard Overlap
-        final Set<String> words1 = new HashSet<>(java.util.Arrays.asList(str1.split("\\s+")));
-        final Set<String> words2 = new HashSet<>(java.util.Arrays.asList(str2.split("\\s+")));
+        final Set<String> words1 = new HashSet<>(Arrays.asList(str1.split("\\s+")));
+        final Set<String> words2 = new HashSet<>(Arrays.asList(str2.split("\\s+")));
         final double tokenSim = calculateJaccard(words1, words2);
 
         return Math.max(charSim, tokenSim);
@@ -347,7 +370,8 @@ public final class LocatorCascadeResolver
     }
 
     /**
-     * Computes perceptual visual similarity combining bounding box aspect ratio and visual dHash (or tile SSIM).
+     * Computes perceptual visual similarity combining bounding box aspect ratio, structural
+     * graphic signature ({@link #ATTR_GRAPHIC_SIG}), and visual dHash (or tile SSIM).
      *
      * @param recorded baseline recorded vector
      * @param candidate candidate live vector
@@ -373,9 +397,40 @@ public final class LocatorCascadeResolver
             hashSim = ScreenshotHasher.calculateSsim(recorded.getTileSsim(), candidate.getTileSsim());
         }
 
-        if (hashSim >= 0.0)
+        double graphicSim = -1.0;
+        final boolean recHasGraphic = hasGraphicSignature(recorded);
+        final boolean candHasGraphic = hasGraphicSignature(candidate);
+        if (recHasGraphic || candHasGraphic)
         {
-            return (hashSim * 0.75) + (aspectSim * 0.25);
+            if (recHasGraphic && candHasGraphic)
+            {
+                final String recSig = recorded.getAttributes().get(ATTR_GRAPHIC_SIG).trim();
+                final String candSig = candidate.getAttributes().get(ATTR_GRAPHIC_SIG).trim();
+                graphicSim = recSig.equals(candSig) ? 1.0 : 0.0;
+            }
+            else
+            {
+                graphicSim = 0.0;
+            }
+        }
+
+        final double combinedVisualSim;
+        if (hashSim >= 0.0 && graphicSim >= 0.0)
+        {
+            combinedVisualSim = (hashSim * 0.50) + (graphicSim * 0.50);
+        }
+        else if (hashSim >= 0.0)
+        {
+            combinedVisualSim = hashSim;
+        }
+        else
+        {
+            combinedVisualSim = graphicSim;
+        }
+
+        if (combinedVisualSim >= 0.0)
+        {
+            return (combinedVisualSim * 0.75) + (aspectSim * 0.25);
         }
 
         return aspectSim;

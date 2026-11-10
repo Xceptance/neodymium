@@ -22,20 +22,28 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.xceptance.aura.report.dto.RunReportDto;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import org.neodymium.ai.util.AtomicFileUtils;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -147,6 +155,11 @@ public class LocalRunJsonStorageService
 
     public Optional<String> buildRunJsonContent(final File runDir, final String runId, final boolean writeToDisk)
     {
+        return buildRunJsonContent(runDir, runId, writeToDisk, false);
+    }
+
+    public Optional<String> buildRunJsonContent(final File runDir, final String runId, final boolean writeToDisk, final boolean isRunActive)
+    {
         try
         {
             final List<File> testExecJsonFiles = new ArrayList<>();
@@ -167,6 +180,7 @@ public class LocalRunJsonStorageService
             final List<String> existingBrowsers = new ArrayList<>();
             int totalExecsCount = 0;
             int pass = 0, fixed = 0, known = 0, unknown = 0, ignoredCount = 0;
+            int passHealed = 0, fixedHealed = 0, knownHealed = 0, unknownHealed = 0;
             long earliestMs = Long.MAX_VALUE;
             String earliestTimeStr = null;
 
@@ -221,6 +235,12 @@ public class LocalRunJsonStorageService
                     final JsonNode node = objectMapper.readTree(f);
                     if (isTestExecutionJson(node))
                     {
+                        final boolean isSynthetic = node.path("synthetic").asBoolean(false) || node.path("fixture").asBoolean(false);
+                        if (isSynthetic)
+                        {
+                            continue;
+                        }
+
                         extractLocalesFromNode(node, localesSet);
                         extractBrowsersFromNode(node, browsersSet);
 
@@ -435,7 +455,20 @@ public class LocalRunJsonStorageService
                                 blocksNode.set("steps", stepsArr);
                                 blocksNode.set("after", afterArr);
 
+                                if (objNode.has("llmCalls") && !blocksNode.has("llmCalls"))
+                                {
+                                    blocksNode.set("llmCalls", objNode.get("llmCalls"));
+                                }
+
                                 objNode.set("blocks", blocksNode);
+                            }
+                            else if (objNode.has("llmCalls") && objNode.get("blocks").isObject())
+                            {
+                                final ObjectNode existingBlocks = (ObjectNode) objNode.get("blocks");
+                                if (!existingBlocks.has("llmCalls"))
+                                {
+                                    existingBlocks.set("llmCalls", objNode.get("llmCalls"));
+                                }
                             }
 
                             // Keep the execution JSON at its current location on disk (class folders
@@ -460,42 +493,61 @@ public class LocalRunJsonStorageService
                         final String rawStatus = node.path("status").asText("failed-unknown");
                         final JsonNode bugsNode = node.path("bugs");
                         final boolean hasBugs = bugsNode.isArray() && bugsNode.size() > 0;
+                        final boolean isHealed = (node.has("healed") && node.path("healed").asBoolean(false))
+                                              || (node.has("healedStepsCount") && node.path("healedStepsCount").asInt(0) > 0)
+                                              || "healed".equalsIgnoreCase(rawStatus);
 
-                        if ("failed".equalsIgnoreCase(rawStatus) || "failed-known".equalsIgnoreCase(rawStatus) || "failed-unknown".equalsIgnoreCase(rawStatus) || "error".equalsIgnoreCase(rawStatus) || "failure".equalsIgnoreCase(rawStatus))
+                        final String failureText = AuraReportDataService.extractFailureText(node);
+                        final int failedSteps = extractStepsFailed(node);
+                        final int totalSteps = node.has("totalStepsCount") ? node.path("totalStepsCount").asInt(0) : 0;
+                        final String eff = AuraReportDataService.computeEffectiveStatus(rawStatus, totalSteps, failedSteps, hasBugs, failureText, isRunActive);
+
+                        if ("failed-known".equals(eff))
                         {
-                            if (hasBugs)
+                            known++;
+                            if (isHealed)
                             {
-                                known++;
-                            }
-                            else
-                            {
-                                unknown++;
+                                knownHealed++;
                             }
                         }
-                        else if ("passed".equalsIgnoreCase(rawStatus) || "succeeded-fixed".equalsIgnoreCase(rawStatus) || "passed-clean".equalsIgnoreCase(rawStatus) || "succeeded".equalsIgnoreCase(rawStatus))
+                        else if ("failed-unknown".equals(eff))
                         {
-                            if (hasBugs)
+                            unknown++;
+                            if (isHealed)
                             {
-                                fixed++;
-                            }
-                            else
-                            {
-                                pass++;
+                                unknownHealed++;
                             }
                         }
-                        else if ("ignored".equalsIgnoreCase(rawStatus) || "skipped".equalsIgnoreCase(rawStatus) || "cancelled".equalsIgnoreCase(rawStatus))
+                        else if ("succeeded-fixed".equals(eff))
+                        {
+                            fixed++;
+                            if (isHealed)
+                            {
+                                fixedHealed++;
+                            }
+                        }
+                        else if ("passed-clean".equals(eff))
+                        {
+                            pass++;
+                            if (isHealed)
+                            {
+                                passHealed++;
+                            }
+                        }
+                        else if ("ignored".equals(eff))
                         {
                             ignoredCount++;
                         }
+                        else if ("running".equals(eff))
+                        {
+                            // In-flight execution
+                        }
                         else
                         {
-                            if (hasBugs)
+                            unknown++;
+                            if (isHealed)
                             {
-                                known++;
-                            }
-                            else
-                            {
-                                unknown++;
+                                unknownHealed++;
                             }
                         }
                     }
@@ -521,6 +573,10 @@ public class LocalRunJsonStorageService
             rootNode.put("trigger", trigger);
             rootNode.put("timestamp", timestamp);
             rootNode.put("startTime", timestamp);
+            if (earliestMs != Long.MAX_VALUE && earliestMs > 0L)
+            {
+                rootNode.put("startTimeMs", earliestMs);
+            }
 
             final ArrayNode localesArray = objectMapper.createArrayNode();
             if (!localesSet.isEmpty())
@@ -559,6 +615,10 @@ public class LocalRunJsonStorageService
             summaryNode.put("known", known);
             summaryNode.put("unknown", unknown);
             summaryNode.put("ignored", ignoredCount);
+            summaryNode.put("passHealed", passHealed);
+            summaryNode.put("fixedHealed", fixedHealed);
+            summaryNode.put("knownHealed", knownHealed);
+            summaryNode.put("unknownHealed", unknownHealed);
             summaryNode.put("passRate", Math.round(passRate * 10.0) / 10.0);
 
             final ArrayNode areasArray = objectMapper.createArrayNode();
@@ -612,7 +672,13 @@ public class LocalRunJsonStorageService
                     metricObj.put("title", tTitle);
                     metricObj.put("location", loc);
                     metricObj.put("browser", tBrowser);
-                    metricObj.put("status", objNode.path("status").asText("failed-unknown"));
+                    final String baseStatus = objNode.path("status").asText("failed-unknown");
+                    final boolean hasBugsNode = objNode.has("bugs") && objNode.get("bugs").isArray() && objNode.get("bugs").size() > 0;
+                    final String failureText = AuraReportDataService.extractFailureText(objNode);
+                    final int failedSteps = extractStepsFailed(objNode);
+                    final int totalSteps = objNode.has("totalStepsCount") ? objNode.path("totalStepsCount").asInt(0) : 0;
+                    final String effStatus = AuraReportDataService.computeEffectiveStatus(baseStatus, totalSteps, failedSteps, hasBugsNode, failureText, isRunActive);
+                    metricObj.put("status", effStatus);
                     metricObj.put("areaName", objNode.path("areaName").asText("Browsing (default)"));
                     if (objNode.has("startTime"))
                     {
@@ -623,17 +689,37 @@ public class LocalRunJsonStorageService
                             metricObj.put("timestampMs", parsedStartMs);
                         }
                     }
-                    metricObj.put("executionMode", objNode.path("executionMode").asText("FORCE_RECORDING"));
+                    final String execMode = objNode.hasNonNull("executionMode")
+                        ? objNode.path("executionMode").asText("")
+                        : objNode.path("mode").asText("");
+                    metricObj.put("executionMode", execMode);
                     final long durMs = objNode.hasNonNull("duration") ? objNode.path("duration").asLong(0L) : objNode.path("durationMs").asLong(0L);
                     metricObj.put("durationMs", durMs);
                     metricObj.put("durationFormatted", objNode.hasNonNull("durationFormatted") ? objNode.path("durationFormatted").asText() : RunStorageSyncService.formatDurationMs(durMs));
 
+                    final int healedSteps = extractStepsHealed(objNode);
+                    final boolean isHealed = (objNode.has("healed") && objNode.path("healed").asBoolean(false))
+                        || healedSteps > 0
+                        || "healed".equalsIgnoreCase(baseStatus);
+
                     metricObj.put("totalStepsCount", extractStepsTotal(objNode));
                     metricObj.put("failedStepsCount", extractStepsFailed(objNode));
-                    metricObj.put("healedStepsCount", extractStepsHealed(objNode));
+                    metricObj.put("healedStepsCount", healedSteps);
+                    metricObj.put("healed", isHealed);
                     metricObj.put("llmCallsCount", extractLlmCalls(objNode));
                     metricObj.put("llmTotalTokens", extractLlmTokens(objNode));
+                    metricObj.put("inputTokensCount", extractInputTokens(objNode));
+                    metricObj.put("outputTokensCount", extractOutputTokens(objNode));
+                    metricObj.put("cachedTokensCount", extractCachedTokens(objNode));
                     metricObj.put("llmCost", extractLlmCost(objNode));
+                    if (objNode.has("metrics"))
+                    {
+                        metricObj.set("metrics", objNode.get("metrics"));
+                    }
+                    if (objNode.has("llmResponsibility"))
+                    {
+                        metricObj.set("llmResponsibility", objNode.get("llmResponsibility"));
+                    }
                     metricObj.set("bugs", objNode.path("bugs"));
 
                     String uniqueKey = key;
@@ -669,6 +755,11 @@ public class LocalRunJsonStorageService
             if (earliestTimeStr != null && !earliestTimeStr.isBlank())
             {
                 compactRootNode.put("timestamp", earliestTimeStr);
+                compactRootNode.put("startTime", earliestTimeStr);
+            }
+            if (earliestMs != Long.MAX_VALUE && earliestMs > 0L)
+            {
+                compactRootNode.put("startTimeMs", earliestMs);
             }
             compactRootNode.set("summary", summaryNode);
             compactRootNode.set("executionMetrics", executionMetricsNode);
@@ -696,7 +787,7 @@ public class LocalRunJsonStorageService
         return Optional.empty();
     }
 
-    public boolean updateRunJsonSummaryStats(final File runDir, final com.xceptance.aura.report.dto.RunReportDto report)
+    public boolean updateRunJsonSummaryStats(final File runDir, final RunReportDto report)
     {
         if (runDir == null || !runDir.exists() || report == null)
         {
@@ -817,8 +908,12 @@ public class LocalRunJsonStorageService
         return 0;
     }
 
-    private int extractStepsFailed(final JsonNode node)
+    public static int extractStepsFailed(final JsonNode node)
     {
+        if (node.has("expectedFailure") && node.path("expectedFailure").asBoolean(false))
+        {
+            return 0;
+        }
         if (node.has("failedStepsCount") && node.path("failedStepsCount").isInt())
         {
             return node.path("failedStepsCount").asInt();
@@ -836,7 +931,8 @@ public class LocalRunJsonStorageService
                     {
                         final String status = step.path("status").asText("");
                         final boolean passed = step.path("passed").asBoolean(true);
-                        if ("failed".equalsIgnoreCase(status) || !passed)
+                        final boolean expectedFailure = step.path("expectedFailure").asBoolean(false);
+                        if (!expectedFailure && ("failed".equalsIgnoreCase(status) || !passed))
                         {
                             failed++;
                         }
@@ -854,23 +950,47 @@ public class LocalRunJsonStorageService
         {
             return node.path("healedStepsCount").asInt();
         }
+        int count = 0;
+        final JsonNode blocks = node.path("blocks");
+        if (blocks.isObject())
+        {
+            for (final String key : List.of("before", "steps", "after"))
+            {
+                final JsonNode arr = blocks.path(key);
+                if (arr.isArray())
+                {
+                    for (final JsonNode step : arr)
+                    {
+                        final String st = step.path("status").asText("");
+                        if ("healed".equalsIgnoreCase(st) || step.path("healed").asBoolean(false))
+                        {
+                            count++;
+                        }
+                    }
+                }
+            }
+        }
+        if (count > 0)
+        {
+            return count;
+        }
         final String status = node.path("status").asText("");
-        return "succeeded-fixed".equalsIgnoreCase(status) || "fixed".equalsIgnoreCase(status) || "healed".equalsIgnoreCase(status) ? 1 : 0;
+        return (node.path("healed").asBoolean(false) || "healed".equalsIgnoreCase(status)) ? 1 : 0;
     }
 
     private int extractLlmCalls(final JsonNode node)
     {
-        if (node.has("llmCallsCount") && node.path("llmCallsCount").isInt())
+        if (node.has("llmCallsCount") && node.path("llmCallsCount").isInt() && node.path("llmCallsCount").asInt() > 0)
         {
             return node.path("llmCallsCount").asInt();
         }
         final JsonNode metrics = node.path("metrics");
-        if (metrics.has("totalLlmCalls") && metrics.path("totalLlmCalls").isInt())
+        if (metrics.has("totalLlmCalls") && metrics.path("totalLlmCalls").isInt() && metrics.path("totalLlmCalls").asInt() > 0)
         {
             return metrics.path("totalLlmCalls").asInt();
         }
         final JsonNode blocks = node.path("blocks");
-        if (blocks.has("llmCalls") && blocks.path("llmCalls").isArray())
+        if (blocks.has("llmCalls") && blocks.path("llmCalls").isArray() && !blocks.path("llmCalls").isEmpty())
         {
             return blocks.path("llmCalls").size();
         }
@@ -884,26 +1004,109 @@ public class LocalRunJsonStorageService
 
     private long extractLlmTokens(final JsonNode node)
     {
-        if (node.has("llmTotalTokens") && node.path("llmTotalTokens").isNumber())
+        if (node.has("llmTotalTokens") && node.path("llmTotalTokens").isNumber() && node.path("llmTotalTokens").asLong() > 0L)
         {
             return node.path("llmTotalTokens").asLong();
         }
         final JsonNode metrics = node.path("metrics");
-        if (metrics.has("totalTokens") && metrics.path("totalTokens").isNumber())
+        if (metrics.has("totalTokens") && metrics.path("totalTokens").isNumber() && metrics.path("totalTokens").asLong() > 0L)
         {
             return metrics.path("totalTokens").asLong();
+        }
+        final long in = extractInputTokens(node);
+        final long out = extractOutputTokens(node);
+        if (in > 0L || out > 0L)
+        {
+            return in + out;
+        }
+        final JsonNode calls = node.has("llmCalls") && node.get("llmCalls").isArray()
+            ? node.get("llmCalls")
+            : (node.path("blocks").has("llmCalls") && node.path("blocks").get("llmCalls").isArray()
+                ? node.path("blocks").get("llmCalls") : null);
+        if (calls != null && calls.isArray() && !calls.isEmpty())
+        {
+            long sum = 0L;
+            for (final JsonNode c : calls)
+            {
+                if (c.has("totalTokens") && c.path("totalTokens").isNumber())
+                {
+                    sum += c.path("totalTokens").asLong();
+                }
+                else
+                {
+                    sum += (c.path("inputTokens").asLong(0L) + c.path("outputTokens").asLong(0L));
+                }
+            }
+            if (sum > 0L)
+            {
+                return sum;
+            }
+        }
+        return 0L;
+    }
+
+    private long extractInputTokens(final JsonNode node)
+    {
+        if (node.has("inputTokensCount") && node.path("inputTokensCount").isNumber() && node.path("inputTokensCount").asLong() > 0L)
+        {
+            return node.path("inputTokensCount").asLong();
+        }
+        final JsonNode metrics = node.path("metrics");
+        if (metrics.has("tokenUsageInput") && metrics.path("tokenUsageInput").isNumber() && metrics.path("tokenUsageInput").asLong() > 0L)
+        {
+            return metrics.path("tokenUsageInput").asLong();
+        }
+        if (metrics.has("inputTokens") && metrics.path("inputTokens").isNumber() && metrics.path("inputTokens").asLong() > 0L)
+        {
+            return metrics.path("inputTokens").asLong();
+        }
+        return 0L;
+    }
+
+    private long extractOutputTokens(final JsonNode node)
+    {
+        if (node.has("outputTokensCount") && node.path("outputTokensCount").isNumber() && node.path("outputTokensCount").asLong() > 0L)
+        {
+            return node.path("outputTokensCount").asLong();
+        }
+        final JsonNode metrics = node.path("metrics");
+        if (metrics.has("tokenUsageOutput") && metrics.path("tokenUsageOutput").isNumber() && metrics.path("tokenUsageOutput").asLong() > 0L)
+        {
+            return metrics.path("tokenUsageOutput").asLong();
+        }
+        if (metrics.has("outputTokens") && metrics.path("outputTokens").isNumber() && metrics.path("outputTokens").asLong() > 0L)
+        {
+            return metrics.path("outputTokens").asLong();
+        }
+        return 0L;
+    }
+
+    private long extractCachedTokens(final JsonNode node)
+    {
+        if (node.has("cachedTokensCount") && node.path("cachedTokensCount").isNumber() && node.path("cachedTokensCount").asLong() > 0L)
+        {
+            return node.path("cachedTokensCount").asLong();
+        }
+        final JsonNode metrics = node.path("metrics");
+        if (metrics.has("tokenUsageCached") && metrics.path("tokenUsageCached").isNumber() && metrics.path("tokenUsageCached").asLong() > 0L)
+        {
+            return metrics.path("tokenUsageCached").asLong();
+        }
+        if (metrics.has("cachedTokens") && metrics.path("cachedTokens").isNumber() && metrics.path("cachedTokens").asLong() > 0L)
+        {
+            return metrics.path("cachedTokens").asLong();
         }
         return 0L;
     }
 
     private double extractLlmCost(final JsonNode node)
     {
-        if (node.has("llmCost") && node.path("llmCost").isNumber())
+        if (node.has("llmCost") && node.path("llmCost").isNumber() && node.path("llmCost").asDouble() > 0.0)
         {
             return node.path("llmCost").asDouble();
         }
         final JsonNode metrics = node.path("metrics");
-        if (metrics.has("estimatedCostUsd") && metrics.path("estimatedCostUsd").isNumber())
+        if (metrics.has("estimatedCostUsd") && metrics.path("estimatedCostUsd").isNumber() && metrics.path("estimatedCostUsd").asDouble() > 0.0)
         {
             return metrics.path("estimatedCostUsd").asDouble();
         }
@@ -927,13 +1130,49 @@ public class LocalRunJsonStorageService
                 stepObj.put("file", file + ".java");
                 stepObj.put("source", stepNode.path("engine").asText(stepNode.path("source").asText(defaultEngine)));
 
+                final String stepReasoning = stepNode.path("reasoning").asText("");
+                if (!stepReasoning.isBlank())
+                {
+                    stepObj.put("reasoning", stepReasoning);
+                }
+                else if (stepNode.has("reasonings") && stepNode.get("reasonings").isArray() && !stepNode.get("reasonings").isEmpty())
+                {
+                    final JsonNode lastReasoning = stepNode.get("reasonings").get(stepNode.get("reasonings").size() - 1);
+                    if (lastReasoning != null && !lastReasoning.asText("").isBlank())
+                    {
+                        stepObj.put("reasoning", lastReasoning.asText(""));
+                    }
+                }
+                if (stepNode.hasNonNull("reasonings") && stepNode.get("reasonings").isArray())
+                {
+                    stepObj.set("reasonings", stepNode.get("reasonings"));
+                }
+
+                final JsonNode sourceActions = stepNode.path("actions");
+                final String stepStatusRaw = stepNode.path("status").asText("");
+                boolean isHealed = "healed".equalsIgnoreCase(stepStatusRaw) || stepNode.path("healed").asBoolean(false);
+                if (!isHealed && sourceActions.isArray())
+                {
+                    for (final JsonNode a : sourceActions)
+                    {
+                        if (a.has("healed") && a.get("healed").asBoolean(false))
+                        {
+                            isHealed = true;
+                            break;
+                        }
+                    }
+                }
                 final boolean isPassed = stepNode.path("passed").asBoolean(true);
-                stepObj.put("status", isPassed ? "passed" : "failed");
+                final String stepStatus = isHealed ? "healed" : (isPassed ? "passed" : "failed");
+                stepObj.put("status", stepStatus);
+                if (isHealed)
+                {
+                    stepObj.put("healed", true);
+                }
                 stepObj.put("screenshot", stepNode.path("screenshot").asText(""));
                 stepObj.put("error", stepNode.path("error").asText(""));
 
                 final ArrayNode actionsArr = mapper.createArrayNode();
-                final JsonNode sourceActions = stepNode.path("actions");
                 if (sourceActions.isArray())
                 {
                     for (final JsonNode actNode : sourceActions)
@@ -943,7 +1182,15 @@ public class LocalRunJsonStorageService
                         actObj.put("type", actName);
                         actObj.put("name", actName);
                         actObj.put("target", actNode.path("target").asText(""));
+                        if (actNode.has("resolvedTarget") && !actNode.path("resolvedTarget").asText().isBlank())
+                        {
+                            actObj.put("resolvedTarget", actNode.path("resolvedTarget").asText());
+                        }
                         actObj.put("value", actNode.path("value").asText(""));
+                        if (actNode.has("resolvedValue") && !actNode.path("resolvedValue").asText().isBlank())
+                        {
+                            actObj.put("resolvedValue", actNode.path("resolvedValue").asText());
+                        }
                         actObj.put("description", actNode.path("description").asText("Executed " + actName + " action"));
                         final String reasoning = actNode.path("reasoning").asText("");
                         if (!reasoning.isEmpty())
@@ -954,8 +1201,32 @@ public class LocalRunJsonStorageService
                         {
                             actObj.put("success", actNode.get("success").asBoolean());
                         }
+                        if (actNode.has("healed") && actNode.get("healed").isBoolean())
+                        {
+                            actObj.put("healed", actNode.get("healed").asBoolean());
+                        }
+                        if (actNode.has("expectedTarget") && !actNode.path("expectedTarget").asText().isBlank())
+                        {
+                            actObj.put("expectedTarget", actNode.path("expectedTarget").asText());
+                        }
+                        if (actNode.has("originalTarget") && !actNode.path("originalTarget").asText().isBlank())
+                        {
+                            actObj.put("originalTarget", actNode.path("originalTarget").asText());
+                        }
+                        if (actNode.has("healedFrom") && !actNode.path("healedFrom").asText().isBlank())
+                        {
+                            actObj.put("healedFrom", actNode.path("healedFrom").asText());
+                        }
                         actionsArr.add(actObj);
                     }
+                }
+                if (stepNode.has("llmCalls"))
+                {
+                    stepObj.set("llmCalls", stepNode.get("llmCalls"));
+                }
+                if (stepNode.has("subSteps"))
+                {
+                    stepObj.set("subSteps", stepNode.get("subSteps"));
                 }
                 stepObj.set("actions", actionsArr);
                 targetArray.add(stepObj);
@@ -1277,14 +1548,15 @@ public class LocalRunJsonStorageService
         }
     }
 
-    public boolean updateExecutionInRun(final String runId, final String rowId, final java.util.function.Consumer<ObjectNode> updater)
+    public boolean updateExecutionInRun(final String runId, final String rowId, final Consumer<ObjectNode> updater)
     {
+        boolean updatedOnDisk = false;
         final Path runDir = getRunDir(runId);
         if (Files.exists(runDir))
         {
             try (final var stream = Files.walk(runDir))
             {
-                final java.util.List<Path> jsonFiles = stream.filter(p -> p.toString().endsWith(".json") && !p.getFileName().toString().equals("run.json") && !p.getFileName().toString().equals("batch.json"))
+                final List<Path> jsonFiles = stream.filter(p -> p.toString().endsWith(".json") && !p.getFileName().toString().equals("run.json") && !p.getFileName().toString().equals("batch.json"))
                     .toList();
                 for (final Path jsonPath : jsonFiles)
                 {
@@ -1296,11 +1568,36 @@ public class LocalRunJsonStorageService
                         final String nodeDatasetId = objNode.has("datasetId") ? objNode.path("datasetId").asText() : "";
                         final String fileNameNoExt = jsonPath.getFileName().toString().replaceAll("\\.json$", "");
 
+                        final String tClass = objNode.has("testClass") && !objNode.path("testClass").asText("").isBlank()
+                            ? objNode.path("testClass").asText("").trim()
+                            : (jsonPath.getParent() != null ? jsonPath.getParent().getFileName().toString() : "");
+                        final String tMethod = extractTestMethod(objNode);
+                        final String tTitle = objNode.has("title") && !objNode.path("title").asText("").isBlank()
+                            ? objNode.path("title").asText("").trim()
+                            : (!nodeDatasetId.isBlank() ? nodeDatasetId : (!nodeTestId.isBlank() ? nodeTestId : "Default"));
+                        final String tBrowser = objNode.has("browser") && !objNode.path("browser").asText("").isBlank()
+                            ? objNode.path("browser").asText("").trim()
+                            : "Chrome";
+
+                        final String execKey = buildExecutionKey(tClass, tMethod, tTitle, tBrowser);
+                        final String execKeyNoMethod = buildExecutionKey(tClass, null, tTitle, tBrowser);
+                        final String fullKey = tClass + "#" + nodeId + "#" + tBrowser;
+                        final String fullKeyTestId = tClass + "#" + nodeTestId + "#" + tBrowser;
+                        final String fullKeyDatasetId = tClass + "#" + nodeDatasetId + "#" + tBrowser;
+                        final String classMethodBrowser = tClass + "#" + tMethod + "#" + tBrowser;
+
                         final boolean matches = (rowId != null && !rowId.isEmpty() && (
                             rowId.equalsIgnoreCase(nodeId)
                             || rowId.equalsIgnoreCase(nodeTestId)
                             || rowId.equalsIgnoreCase(nodeDatasetId)
                             || rowId.equalsIgnoreCase(fileNameNoExt)
+                            || rowId.equalsIgnoreCase(execKey)
+                            || rowId.equalsIgnoreCase(execKeyNoMethod)
+                            || rowId.equalsIgnoreCase(fullKey)
+                            || rowId.equalsIgnoreCase(fullKeyTestId)
+                            || rowId.equalsIgnoreCase(fullKeyDatasetId)
+                            || rowId.equalsIgnoreCase(classMethodBrowser)
+                            || (rowId.contains("#") && rowId.contains(tClass) && (!tTitle.isEmpty() && rowId.contains(tTitle)) && rowId.contains(tBrowser))
                         )) || (jsonFiles.size() == 1);
 
                         if (matches)
@@ -1320,7 +1617,8 @@ public class LocalRunJsonStorageService
                                 objectMapper.writerWithDefaultPrettyPrinter().writeValue(jsonPath.toFile(), objNode);
                                 LOG.info("Updated execution JSON on disk: {}", jsonPath.toAbsolutePath());
                             }
-                            return true;
+                            updatedOnDisk = true;
+                            break;
                         }
                     }
                 }
@@ -1329,35 +1627,210 @@ public class LocalRunJsonStorageService
             {
                 LOG.error("Failed updating execution {} in run dir {}: {}", rowId, runId, e.getMessage());
             }
+
+            final Path nestedRunJson = runDir.resolve("run.json");
+            final boolean runJsonUpdated = updateRunJsonFile(nestedRunJson, rowId, updater);
+            if (runJsonUpdated)
+            {
+                updatedOnDisk = true;
+            }
         }
 
         final Path flatRunJson = Paths.get(baseDir, "run-" + runId + ".json");
-        if (Files.exists(flatRunJson))
+        final boolean flatUpdated = updateRunJsonFile(flatRunJson, rowId, updater);
+        if (flatUpdated)
         {
-            try
+            updatedOnDisk = true;
+        }
+
+        return updatedOnDisk;
+    }
+
+    private boolean updateRunJsonFile(final Path runJsonPath, final String rowId, final Consumer<ObjectNode> updater)
+    {
+        if (!Files.exists(runJsonPath) || Files.isDirectory(runJsonPath))
+        {
+            return false;
+        }
+        try
+        {
+            final JsonNode root = objectMapper.readTree(runJsonPath.toFile());
+            if (root instanceof ObjectNode runObj)
             {
-                final ObjectNode root = (ObjectNode) objectMapper.readTree(flatRunJson.toFile());
-                final JsonNode execArray = root.path("executions");
-                if (execArray.isArray())
+                boolean updated = false;
+                final JsonNode execMetrics = runObj.path("executionMetrics");
+                if (execMetrics instanceof ObjectNode metricsObj)
                 {
-                    for (final JsonNode execNode : execArray)
+                    final Iterator<Map.Entry<String, JsonNode>> fields = metricsObj.fields();
+                    while (fields.hasNext())
                     {
-                        if (execNode instanceof ObjectNode execObj && rowId.equalsIgnoreCase(execObj.path("id").asText()))
+                        final Map.Entry<String, JsonNode> entry = fields.next();
+                        if (entry.getValue() instanceof ObjectNode metricObj)
                         {
-                            updater.accept(execObj);
-                            objectMapper.writerWithDefaultPrettyPrinter().writeValue(flatRunJson.toFile(), root);
-                            LOG.info("Updated flat run JSON on disk: {}", flatRunJson.toAbsolutePath());
-                            return true;
+                            final String mId = metricObj.has("id") ? metricObj.path("id").asText() : "";
+                            final String tClass = metricObj.path("testClass").asText("");
+                            final String tMethod = metricObj.path("testMethod").asText(extractTestMethod(metricObj));
+                            final String tTitle = metricObj.path("title").asText("");
+                            final String tBrowser = metricObj.path("browser").asText("Chrome");
+                            final String execKey = buildExecutionKey(tClass, tMethod, tTitle, tBrowser);
+                            final String execKeyNoMethod = buildExecutionKey(tClass, "", tTitle, tBrowser);
+                            final String fullKey = tClass + "#" + mId + "#" + tBrowser;
+                            final String classMethodBrowser = tClass + "#" + tMethod + "#" + tBrowser;
+
+                            final boolean matches = (rowId != null && !rowId.isEmpty() && (
+                                rowId.equalsIgnoreCase(entry.getKey())
+                                || rowId.equalsIgnoreCase(mId)
+                                || rowId.equalsIgnoreCase(execKey)
+                                || rowId.equalsIgnoreCase(execKeyNoMethod)
+                                || rowId.equalsIgnoreCase(fullKey)
+                                || rowId.equalsIgnoreCase(classMethodBrowser)
+                                || (rowId.contains("#") && rowId.contains(tClass) && (!tTitle.isEmpty() && rowId.contains(tTitle)) && rowId.contains(tBrowser))
+                            ));
+
+                            if (matches)
+                            {
+                                updater.accept(metricObj);
+                                updated = true;
+                            }
                         }
                     }
                 }
-            }
-            catch (final IOException e)
-            {
-                LOG.error("Failed updating execution {} in flat run JSON {}: {}", rowId, runId, e.getMessage());
+                final JsonNode execArr = runObj.path("executions");
+                if (execArr instanceof ArrayNode arr)
+                {
+                    for (final JsonNode item : arr)
+                    {
+                        if (item instanceof ObjectNode itemObj)
+                        {
+                            final String itemNodeId = itemObj.has("id") ? itemObj.path("id").asText() : "";
+                            final String tClass = itemObj.path("testClass").asText("");
+                            final String tMethod = itemObj.path("testMethod").asText(extractTestMethod(itemObj));
+                            final String tTitle = itemObj.path("title").asText("");
+                            final String tBrowser = itemObj.path("browser").asText("Chrome");
+                            final String execKey = buildExecutionKey(tClass, tMethod, tTitle, tBrowser);
+                            final String execKeyNoMethod = buildExecutionKey(tClass, "", tTitle, tBrowser);
+                            final String fullKey = tClass + "#" + itemNodeId + "#" + tBrowser;
+                            final String classMethodBrowser = tClass + "#" + tMethod + "#" + tBrowser;
+
+                            final boolean matches = (rowId != null && !rowId.isEmpty() && (
+                                rowId.equalsIgnoreCase(itemNodeId)
+                                || rowId.equalsIgnoreCase(execKey)
+                                || rowId.equalsIgnoreCase(execKeyNoMethod)
+                                || rowId.equalsIgnoreCase(fullKey)
+                                || rowId.equalsIgnoreCase(classMethodBrowser)
+                                || (rowId.contains("#") && rowId.contains(tClass) && (!tTitle.isEmpty() && rowId.contains(tTitle)) && rowId.contains(tBrowser))
+                            ));
+
+                            if (matches)
+                            {
+                                updater.accept(itemObj);
+                                updated = true;
+                            }
+                        }
+                    }
+                }
+                if (updated)
+                {
+                    if (execMetrics instanceof ObjectNode metricsObj && !metricsObj.isEmpty())
+                    {
+                        int sPass = 0;
+                        int sFixed = 0;
+                        int sKnown = 0;
+                        int sUnknown = 0;
+                        int sIgnored = 0;
+                        int sPassHealed = 0;
+                        int sFixedHealed = 0;
+                        int sKnownHealed = 0;
+                        int sUnknownHealed = 0;
+                        for (final JsonNode mNode : metricsObj)
+                        {
+                            final String mStatus = mNode.path("status").asText("failed-unknown");
+                            final boolean mHasBugs = mNode.has("bugs") && mNode.path("bugs").isArray() && mNode.path("bugs").size() > 0;
+                            final boolean mHealed = mNode.path("healed").asBoolean(false) || mNode.path("healedStepsCount").asInt(0) > 0 || "healed".equalsIgnoreCase(mStatus);
+                            if ("failed-known".equalsIgnoreCase(mStatus) || (("failed".equalsIgnoreCase(mStatus) || "error".equalsIgnoreCase(mStatus)) && mHasBugs))
+                            {
+                                sKnown++;
+                                if (mHealed)
+                                {
+                                    sKnownHealed++;
+                                }
+                            }
+                            else if ("failed-unknown".equalsIgnoreCase(mStatus) || "failed".equalsIgnoreCase(mStatus) || "error".equalsIgnoreCase(mStatus))
+                            {
+                                sUnknown++;
+                                if (mHealed)
+                                {
+                                    sUnknownHealed++;
+                                }
+                            }
+                            else if ("succeeded-fixed".equalsIgnoreCase(mStatus) || ("passed".equalsIgnoreCase(mStatus) && mHasBugs))
+                            {
+                                sFixed++;
+                                if (mHealed)
+                                {
+                                    sFixedHealed++;
+                                }
+                            }
+                            else if ("passed".equalsIgnoreCase(mStatus) || "passed-clean".equalsIgnoreCase(mStatus))
+                            {
+                                sPass++;
+                                if (mHealed)
+                                {
+                                    sPassHealed++;
+                                }
+                            }
+                            else if ("ignored".equalsIgnoreCase(mStatus) || "skipped".equalsIgnoreCase(mStatus))
+                            {
+                                sIgnored++;
+                            }
+                            else
+                            {
+                                if (mHasBugs)
+                                {
+                                    sKnown++;
+                                    if (mHealed)
+                                    {
+                                        sKnownHealed++;
+                                    }
+                                }
+                                else
+                                {
+                                    sUnknown++;
+                                    if (mHealed)
+                                    {
+                                        sUnknownHealed++;
+                                    }
+                                }
+                            }
+                        }
+                        final int sTotal = sPass + sFixed + sKnown + sUnknown + sIgnored;
+                        final ObjectNode sObj = runObj.has("summary") && runObj.path("summary").isObject()
+                            ? (ObjectNode) runObj.path("summary")
+                            : objectMapper.createObjectNode();
+                        sObj.put("total", sTotal);
+                        sObj.put("pass", sPass);
+                        sObj.put("fixed", sFixed);
+                        sObj.put("known", sKnown);
+                        sObj.put("unknown", sUnknown);
+                        sObj.put("ignored", sIgnored);
+                        sObj.put("passHealed", sPassHealed);
+                        sObj.put("fixedHealed", sFixedHealed);
+                        sObj.put("knownHealed", sKnownHealed);
+                        sObj.put("unknownHealed", sUnknownHealed);
+                        sObj.put("passRate", sTotal > 0 ? Math.round((double) (sPass + sFixed) / sTotal * 1000.0) / 10.0 : 0.0);
+                        runObj.set("summary", sObj);
+                    }
+
+                    objectMapper.writerWithDefaultPrettyPrinter().writeValue(runJsonPath.toFile(), runObj);
+                    LOG.info("Updated run JSON on disk: {}", runJsonPath.toAbsolutePath());
+                    return true;
+                }
             }
         }
-
+        catch (final IOException e)
+        {
+            LOG.error("Failed updating execution {} in run JSON {}: {}", rowId, runJsonPath, e.getMessage());
+        }
         return false;
     }
 
@@ -1502,7 +1975,12 @@ public class LocalRunJsonStorageService
                 num *= 1000.0;
             }
             final long ms = (long) num;
-            return new ExecutionTime(ms, rawVal);
+            final LocalDateTime ldt = LocalDateTime.ofInstant(
+                Instant.ofEpochMilli(ms),
+                ZoneId.systemDefault()
+            );
+            final String formatted = ldt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            return new ExecutionTime(ms, formatted);
         }
         catch (final NumberFormatException ignored)
         {
@@ -1510,7 +1988,7 @@ public class LocalRunJsonStorageService
 
         try
         {
-            final java.time.Instant instant = java.time.Instant.parse(rawVal);
+            final Instant instant = Instant.parse(rawVal);
             return new ExecutionTime(instant.toEpochMilli(), rawVal);
         }
         catch (final Exception ignored)
@@ -1521,8 +1999,8 @@ public class LocalRunJsonStorageService
         {
             try
             {
-                final java.time.LocalDateTime ldt = java.time.LocalDateTime.parse(rawVal, java.time.format.DateTimeFormatter.ofPattern(pattern));
-                final long ms = ldt.toInstant(java.time.ZoneOffset.UTC).toEpochMilli();
+                final LocalDateTime ldt = LocalDateTime.parse(rawVal, DateTimeFormatter.ofPattern(pattern));
+                final long ms = ldt.toInstant(ZoneOffset.UTC).toEpochMilli();
                 return new ExecutionTime(ms, rawVal);
             }
             catch (final Exception ignored)

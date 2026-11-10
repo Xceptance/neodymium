@@ -18,23 +18,36 @@
  */
 package org.neodymium.ai.tool.browser;
 
+import com.codeborne.selenide.CheckResult;
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Configuration;
+import com.codeborne.selenide.Driver;
 import com.codeborne.selenide.ElementsCollection;
+import com.codeborne.selenide.ex.ElementNotFound;
 import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
+import com.codeborne.selenide.WebElementCondition;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.executor.selenide.LocatorResolver;
 import org.neodymium.ai.executor.selenide.PageAnalyzer;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
+import org.neodymium.ai.executor.selenide.frame.FrameContextManager;
 import org.neodymium.ai.executor.selenide.plugins.ClickAction;
+import org.neodymium.ai.executor.selenide.plugins.FillFormAction;
+import org.neodymium.ai.executor.selenide.plugins.FillFormAction.FormFieldEntry;
 import org.neodymium.ai.executor.selenide.plugins.IncludeAction;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.ContextLevel;
+import org.neodymium.ai.monitor.ConsoleLogEntry;
+import org.neodymium.ai.monitor.ConsoleLogMonitor;
+import org.neodymium.ai.monitor.NetworkFailure;
+import org.neodymium.ai.monitor.NetworkTrafficMonitor;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.util.AiAssertions;
 import org.neodymium.ai.util.DomQuiescenceWatcher;
+import org.neodymium.ai.util.ScreenshotHasher;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -46,11 +59,15 @@ import org.neodymium.ai.tool.ToolDefinition;
 import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.tool.ToolResult;
 import org.openqa.selenium.Alert;
+import org.openqa.selenium.By;
 import org.openqa.selenium.Dimension;
+import org.openqa.selenium.ElementClickInterceptedException;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.Keys;
 import org.openqa.selenium.NoAlertPresentException;
+import org.openqa.selenium.NoSuchElementException;
 import org.openqa.selenium.OutputType;
+import org.openqa.selenium.StaleElementReferenceException;
 import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriver;
@@ -72,6 +89,8 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -104,6 +123,11 @@ public final class BrowserToolProvider
         final ObjectNode node = MAPPER.createObjectNode();
         node.put("status", "SUCCESS");
         node.put("action", action);
+        final String activeFrame = FrameContextManager.getActiveFramePath();
+        if (activeFrame != null && !activeFrame.isBlank())
+        {
+            node.put("frame", activeFrame);
+        }
         return node;
     }
 
@@ -117,8 +141,237 @@ public final class BrowserToolProvider
         return node;
     }
 
+    private static final ThreadLocal<NetworkTrafficMonitor> NETWORK_MONITOR = ThreadLocal.withInitial(NetworkTrafficMonitor::new);
+    private static final ThreadLocal<ConsoleLogMonitor> CONSOLE_MONITOR = ThreadLocal.withInitial(ConsoleLogMonitor::new);
+
     /**
-     * Registers all standard browser tools and active discovery tools into the given registry.
+     * Gets the thread-local {@link NetworkTrafficMonitor} for the active test session.
+     *
+     * @return the active network traffic monitor
+     */
+    public static NetworkTrafficMonitor getNetworkTrafficMonitor()
+    {
+        return NETWORK_MONITOR.get();
+    }
+
+    /**
+     * Sets or resets the thread-local {@link NetworkTrafficMonitor}.
+     *
+     * @param monitor the monitor to set, or null to clear
+     */
+    public static void setNetworkTrafficMonitor(final NetworkTrafficMonitor monitor)
+    {
+        if (monitor != null)
+        {
+            NETWORK_MONITOR.set(monitor);
+        }
+        else
+        {
+            NETWORK_MONITOR.remove();
+        }
+    }
+
+    /**
+     * Gets the thread-local {@link ConsoleLogMonitor} for the active test session.
+     *
+     * @return the active console log monitor
+     */
+    public static ConsoleLogMonitor getConsoleLogMonitor()
+    {
+        return CONSOLE_MONITOR.get();
+    }
+
+    /**
+     * Sets or resets the thread-local {@link ConsoleLogMonitor}.
+     *
+     * @param monitor the monitor to set, or null to clear
+     */
+    public static void setConsoleLogMonitor(final ConsoleLogMonitor monitor)
+    {
+        if (monitor != null)
+        {
+            CONSOLE_MONITOR.set(monitor);
+        }
+        else
+        {
+            CONSOLE_MONITOR.remove();
+        }
+    }
+
+    /**
+     * Adds the active frame path as {@code "frame"} to a JSON object result so the agent loop can record and
+     * replay it. Non-JSON results and results that already carry a {@code frame} are returned unchanged.
+     *
+     * @param result    the tool result
+     * @param framePath the frame path to attach
+     * @return the (possibly enriched) result
+     */
+    private static ToolResult attachFrameToResult(final ToolResult result, final String framePath)
+    {
+        if (result == null || framePath == null || framePath.isBlank() || result.content() == null || result.content().isBlank())
+        {
+            return result;
+        }
+        try
+        {
+            final JsonNode node = MAPPER.readTree(result.content());
+            if (node instanceof ObjectNode on && !on.hasNonNull("frame"))
+            {
+                on.put("frame", framePath);
+                return new ToolResult(result.callId(), result.status(), on.toString(), result.variables(), result.artifacts());
+            }
+        }
+        catch (final Exception e)
+        {
+            // Plain-text result: nothing to enrich
+            LOGGER.debug("Tool result is not a JSON object, frame '{}' not attached: {}", framePath, e.getMessage());
+        }
+        return result;
+    }
+
+    /**
+     * Rewrites a tool-call argument holding a (possibly frame-prefixed) selector so that it contains only the
+     * element selector.
+     *
+     * @param args  the (mutable) tool arguments
+     * @param field the argument name ({@code "selector"} or {@code "target"})
+     * @return the extracted frame prefix, or {@code null} if the argument had none
+     */
+    private static String stripFramePrefix(final ObjectNode args, final String field)
+    {
+        if (!args.hasNonNull(field))
+        {
+            return null;
+        }
+        final FrameContextManager.FrameTarget split = FrameContextManager.splitFrameTarget(args.path(field).asText());
+        if (split.frame() == null)
+        {
+            return null;
+        }
+        args.put(field, split.target());
+        return split.frame();
+    }
+
+    /**
+     * Decorates a browser tool so that it (a) advertises an optional {@code frame} parameter, (b) executes inside
+     * the requested (nested) iframe, merging an explicit {@code frame} with any {@code >>>} selector prefix,
+     * (c) restores the previous browsing context afterwards and (d) reports the effective frame in its result.
+     *
+     * @param delegate the tool to decorate
+     * @return the frame-aware tool
+     */
+    static AiTool wrapWithFrameSupport(final AiTool delegate)
+    {
+        final ToolDefinition origDef = delegate.getDefinition();
+        final JsonNode schemaNode = origDef.parametersSchema();
+        ToolDefinition enhancedDef = origDef;
+
+        if (schemaNode instanceof ObjectNode schemaObj)
+        {
+            final JsonNode propsNode = schemaObj.path("properties");
+            if (propsNode instanceof ObjectNode propsObj && !propsObj.has("frame"))
+            {
+                final ObjectNode newSchema = schemaObj.deepCopy();
+                ((ObjectNode) newSchema.path("properties")).putObject("frame")
+                        .put("type", "string")
+                        .put("description", "Optional CSS selector or path of iframe(s) containing the element (e.g. '#pact1 >>> #pact2')");
+                enhancedDef = new ToolDefinition(origDef.name(), origDef.description(), newSchema);
+            }
+        }
+
+        final ToolDefinition finalDef = enhancedDef;
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return finalDef;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context) throws Exception
+            {
+                final JsonNode args = call.arguments();
+                String frame = null;
+                if (args != null)
+                {
+                    if (args.hasNonNull("frame") && !args.path("frame").asText().isBlank())
+                    {
+                        frame = args.path("frame").asText().trim();
+                    }
+                    else if (args.hasNonNull("frameId") && !args.path("frameId").asText().isBlank())
+                    {
+                        frame = args.path("frameId").asText().trim();
+                    }
+                }
+
+                ToolCall effectiveCall = call;
+                if (args instanceof ObjectNode objArgs)
+                {
+                    final ObjectNode newArgs = objArgs.deepCopy();
+                    final String selectorPrefix = stripFramePrefix(newArgs, "selector");
+                    final String targetPrefix = stripFramePrefix(newArgs, "target");
+                    final String sourcePrefix = stripFramePrefix(newArgs, "source");
+
+                    for (final String prefix : new String[] {selectorPrefix, targetPrefix, sourcePrefix})
+                    {
+                        if (prefix != null)
+                        {
+                            frame = FrameContextManager.combine(frame, prefix);
+                        }
+                    }
+
+                    if (selectorPrefix != null || targetPrefix != null || sourcePrefix != null)
+                    {
+                        effectiveCall = new ToolCall(call.callId(), call.toolName(), newArgs);
+                    }
+                }
+
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                try (final FrameContextManager.FrameScope frameScope = FrameContextManager.enter(driver, frame))
+                {
+                    final ToolResult result = delegate.execute(effectiveCall, context);
+                    final String activeFrame = FrameContextManager.getActiveFramePath();
+                    return attachFrameToResult(result, activeFrame != null ? activeFrame : frame);
+                }
+            }
+        };
+    }
+
+    /**
+     * Decorates a tool that changes the top-level browsing context (navigation, history, tab switch/close): after
+     * it ran the driver is at the top-level document of the target window, so the tracked frame path is cleared.
+     *
+     * @param delegate the tool to decorate
+     * @return the decorated tool
+     */
+    static AiTool wrapWithFrameReset(final AiTool delegate)
+    {
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return delegate.getDefinition();
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context) throws Exception
+            {
+                try
+                {
+                    return delegate.execute(call, context);
+                }
+                finally
+                {
+                    FrameContextManager.resetActiveFramePath();
+                }
+            }
+        };
+    }
+
+    /**
+     * Registers all standard browser tools, introspection tools, and active discovery tools into the given registry.
      *
      * @param registry tool registry to populate
      */
@@ -129,42 +382,59 @@ public final class BrowserToolProvider
             throw new IllegalArgumentException("Registry must not be null.");
         }
 
-        registry.register(createClickTool());
-        registry.register(createFillTool());
-        registry.register(createTypeTool());
-        registry.register(createNavigateTool());
-        registry.register(createSelectTool());
-        registry.register(createCheckTool());
-        registry.register(createHoverTool());
-        registry.register(createClearTool());
+        registry.register(wrapWithFrameSupport(createClickTool()));
+        registry.register(wrapWithFrameSupport(createFillTool()));
+        registry.register(wrapWithFrameSupport(createFillFormTool()));
+        registry.register(wrapWithFrameSupport(createTypeTool()));
+        registry.register(wrapWithFrameReset(createNavigateTool()));
+        registry.register(wrapWithFrameSupport(createSelectTool()));
+        registry.register(wrapWithFrameSupport(createCheckTool()));
+        registry.register(wrapWithFrameSupport(createHoverTool()));
+        registry.register(wrapWithFrameSupport(createClearTool()));
         registry.register(createClearCookiesTool());
-        registry.register(createBackTool());
-        registry.register(createForwardTool());
-        registry.register(createRefreshTool());
+        registry.register(wrapWithFrameReset(createBackTool()));
+        registry.register(wrapWithFrameReset(createForwardTool()));
+        registry.register(wrapWithFrameReset(createRefreshTool()));
         registry.register(createWaitTool());
-        registry.register(createAssertTextTool());
-        registry.register(createAssertCountTool());
+        registry.register(wrapWithFrameSupport(createAssertTextTool()));
+        registry.register(wrapWithFrameSupport(createAssertCountTool()));
         registry.register(createAssertUrlTool());
         registry.register(createAssertTitleTool());
-        registry.register(createAssertElementStateTool());
-        registry.register(createAssertAttributeTool());
-        registry.register(createScrollTool());
-        registry.register(createExecuteScriptTool());
-        registry.register(createQueryDomTool());
-        registry.register(createInspectTool());
+        registry.register(wrapWithFrameSupport(createAssertElementStateTool()));
+        registry.register(wrapWithFrameSupport(createAssertAttributeTool()));
+        registry.register(wrapWithFrameSupport(createScrollTool()));
+        registry.register(wrapWithFrameSupport(createExecuteScriptTool()));
+        registry.register(wrapWithFrameSupport(createQueryDomTool()));
+        registry.register(wrapWithFrameSupport(createInspectTool()));
         registry.register(createTakeScreenshotTool());
+        registry.register(createMarkElementsTool());
         registry.register(createInspectVisualTool());
-        registry.register(createPressKeyTool());
+        registry.register(wrapWithFrameSupport(createPressKeyTool()));
         registry.register(createRequestContextTool());
-        registry.register(createStoreTool());
+        registry.register(wrapWithFrameSupport(createStoreTool()));
         registry.register(createListTabsTool());
-        registry.register(createSwitchTabTool());
-        registry.register(createCloseTabTool());
-        registry.register(createUploadFileTool());
+        registry.register(wrapWithFrameReset(createSwitchTabTool()));
+        registry.register(wrapWithFrameReset(createCloseTabTool()));
+        registry.register(wrapWithFrameSupport(createUploadFileTool()));
         registry.register(createHandleAlertTool());
-        registry.register(createDragTool());
-        registry.register(createDragToTool());
+        registry.register(wrapWithFrameSupport(createDragTool()));
+        registry.register(wrapWithFrameSupport(createDragToTool()));
         registry.register(createIncludeTool());
+        registry.register(createGetNetworkFailuresTool());
+        registry.register(createGetConsoleErrorsTool());
+
+        // Register custom tools configured in neodymium.ai.agent.methods.classes
+        ToolRegistry.registerConfiguredCustomTools(registry);
+    }
+
+    /**
+     * Alias for {@link #registerBrowserTools(ToolRegistry)} conforming to standard tool provider nomenclature.
+     *
+     * @param registry tool registry to populate
+     */
+    public static void registerStandardTools(final ToolRegistry registry)
+    {
+        registerBrowserTools(registry);
     }
 
     private static int[] performSafeCoordinateClick(final WebDriver driver, final int targetX, final int targetY)
@@ -271,28 +541,7 @@ public final class BrowserToolProvider
             final String text, final int parsedX, final int parsedY)
     {
         final String targetDesc = !selector.isBlank() ? selector : text;
-        final SelenideElement el;
-
-        if (!selector.isBlank())
-        {
-            if (selector.startsWith("text="))
-            {
-                final String rawText = selector.substring("text=".length()).trim();
-                el = $(Selectors.byText(rawText)).is(Condition.visible)
-                        ? $(Selectors.byText(rawText))
-                        : $(Selectors.withText(rawText));
-            }
-            else
-            {
-                el = findElement(selector);
-            }
-        }
-        else
-        {
-            el = $(Selectors.byText(text)).is(Condition.visible)
-                    ? $(Selectors.byText(text))
-                    : $(Selectors.withText(text));
-        }
+        final SelenideElement el = resolveElementBySelectorAndText(selector, text);
 
         SelenideElementFinder.scrollIntoViewIfNeeded(el);
 
@@ -353,29 +602,23 @@ public final class BrowserToolProvider
         {
             try
             {
-                el.shouldBe(Condition.visible).shouldBe(Condition.interactable).click();
+                el.shouldBe(Condition.visible);
+                el.click();
             }
             catch (final Exception | AssertionError e)
             {
-                SelenideElement fallbackTargetEl = null;
-                if (!text.isBlank() && !selector.isBlank())
-                {
-                    try
-                    {
-                        final SelenideElement textEl = $(Selectors.byText(text)).is(Condition.visible)
-                                ? $(Selectors.byText(text))
-                                : $(Selectors.withText(text));
-                        SelenideElementFinder.scrollIntoViewIfNeeded(textEl);
-                        textEl.shouldBe(Condition.visible).shouldBe(Condition.interactable).click();
-                        fallbackTargetEl = textEl;
-                    }
-                    catch (final Exception | AssertionError ignored)
-                    {
-                    }
-                }
+                // Check if element click was intercepted by an overlay, animation, or sticky element
+                final boolean isIntercepted = (e.getCause() instanceof ElementClickInterceptedException)
+                        || (e instanceof ElementClickInterceptedException)
+                        || (e.getMessage() != null && (e.getMessage().contains("click intercepted")
+                                || e.getMessage().contains("is not clickable at point")
+                                || e.getMessage().contains("element click intercepted")));
 
-                if (fallbackTargetEl == null)
+                SelenideElement fallbackTargetEl = null;
+                if (isIntercepted)
                 {
+                    // Fast-path: When native click is intercepted by an animation or overlay, directly execute JS click
+                    // rather than wasting multi-second retry timeouts and dumping failure attachments
                     if (el.is(Condition.disabled) || !el.is(Condition.enabled))
                     {
                         throw e;
@@ -388,6 +631,41 @@ public final class BrowserToolProvider
                     catch (final Throwable ignored)
                     {
                         throw e;
+                    }
+                }
+                else
+                {
+                    if (!text.isBlank() && !selector.isBlank())
+                    {
+                        try
+                        {
+                            final SelenideElement textEl = $(Selectors.byText(text)).is(Condition.visible)
+                                    ? $(Selectors.byText(text))
+                                    : $(Selectors.withText(text));
+                            SelenideElementFinder.scrollIntoViewIfNeeded(textEl);
+                            textEl.shouldBe(Condition.visible).click();
+                            fallbackTargetEl = textEl;
+                        }
+                        catch (final Exception | AssertionError ignored)
+                        {
+                        }
+                    }
+
+                    if (fallbackTargetEl == null)
+                    {
+                        if (el.is(Condition.disabled) || !el.is(Condition.enabled))
+                        {
+                            throw e;
+                        }
+                        try
+                        {
+                            SelenideElementFinder.scrollIntoViewIfNeeded(el);
+                            Selenide.executeJavaScript("arguments[0].click();", el);
+                        }
+                        catch (final Throwable ignored)
+                        {
+                            throw e;
+                        }
                     }
                 }
                 clickedEl = (fallbackTargetEl != null) ? fallbackTargetEl : el;
@@ -428,10 +706,131 @@ public final class BrowserToolProvider
         }
         if (driver != null)
         {
+            VisualBadgeInjector.removeMarkers(driver);
             res.put("url", getSafeUrl(driver));
             res.put("title", getSafeTitle(driver));
         }
         return ToolResult.success(call.callId(), res.toString());
+    }
+
+    private static boolean isMarkerLocator(final String raw)
+    {
+        if (raw == null || raw.isBlank())
+        {
+            return false;
+        }
+        final String lower = raw.trim().toLowerCase(Locale.ROOT);
+        return lower.startsWith("marker:") || lower.startsWith("badge:");
+    }
+
+    private static ReanchoringBridge.ReanchoredElement resolveMarkerBeforeAction(final WebDriver driver, final String selector)
+    {
+        if (driver != null && isMarkerLocator(selector))
+        {
+            final int idx = selector.indexOf(':');
+            final String markerId = idx >= 0 ? selector.substring(idx + 1).trim() : selector.trim();
+            return ReanchoringBridge.resolveMarkedElement(driver, markerId);
+        }
+        return null;
+    }
+
+    private static void applyMarkerReanchoringIfPresent(
+            final WebDriver driver,
+            final String originalTarget,
+            final ReanchoringBridge.ReanchoredElement reanchoredMarker,
+            final DomFeatureVector extractedVector,
+            final ObjectNode res)
+    {
+        if (reanchoredMarker != null)
+        {
+            if (driver != null)
+            {
+                VisualBadgeInjector.removeMarkers(driver);
+            }
+            final String resolvedSel = (reanchoredMarker.selector() != null && !reanchoredMarker.selector().isBlank())
+                ? reanchoredMarker.selector()
+                : originalTarget;
+            res.put("target", resolvedSel);
+            res.put("selector", resolvedSel);
+            if (reanchoredMarker.domFeatureVector() != null)
+            {
+                res.set("domFeatureVector", MAPPER.valueToTree(reanchoredMarker.domFeatureVector()));
+            }
+            else if (extractedVector != null)
+            {
+                res.set("domFeatureVector", MAPPER.valueToTree(extractedVector));
+            }
+        }
+        else
+        {
+            if (originalTarget != null && !originalTarget.isBlank())
+            {
+                res.put("target", originalTarget);
+            }
+            if (extractedVector != null)
+            {
+                res.set("domFeatureVector", MAPPER.valueToTree(extractedVector));
+            }
+        }
+    }
+
+    private static ReanchoringBridge.ReanchoredElement enrichWithCleanPreClickVisualSignature(
+            final WebDriver driver,
+            final int viewportX,
+            final int viewportY,
+            final ReanchoringBridge.ReanchoredElement reanchored)
+    {
+        if (!(driver instanceof TakesScreenshot ts))
+        {
+            return reanchored;
+        }
+        try
+        {
+            final String base64Png = ts.getScreenshotAs(OutputType.BASE64);
+            if (base64Png == null || base64Png.isBlank())
+            {
+                return reanchored;
+            }
+            final String tileMatrix = ScreenshotHasher.computeTileSsimMatrix(base64Png, viewportX, viewportY, 32);
+            final ExecutionContext execCtx = ExecutionContext.getActiveContext();
+            if (execCtx != null && tileMatrix != null && !tileMatrix.isBlank())
+            {
+                execCtx.getTransientData().put(ExecutionContext.KEY_PRE_CLICK_COORD_TILE_MATRIX, tileMatrix);
+            }
+            if (reanchored == null || reanchored.domFeatureVector() == null)
+            {
+                return reanchored;
+            }
+
+            final Map<String, Object> fv = new LinkedHashMap<>(reanchored.domFeatureVector());
+            if (tileMatrix != null && !tileMatrix.isBlank())
+            {
+                fv.put("tileSsim", tileMatrix);
+            }
+
+            final int elX = fv.get("x") instanceof final Number nX ? nX.intValue() : (viewportX - 32);
+            final int elY = fv.get("y") instanceof final Number nY ? nY.intValue() : (viewportY - 32);
+            final int elW = fv.get("width") instanceof final Number nW && nW.intValue() > 0 ? nW.intValue() : 64;
+            final int elH = fv.get("height") instanceof final Number nH && nH.intValue() > 0 ? nH.intValue() : 64;
+            final String dHash = ScreenshotHasher.computeElementDHash(base64Png, elX, elY, elW, elH);
+            if (dHash != null && !dHash.isBlank())
+            {
+                fv.put("visualHash", dHash);
+            }
+
+            return new ReanchoringBridge.ReanchoredElement(
+                reanchored.selector(),
+                reanchored.tagName(),
+                reanchored.text(),
+                reanchored.relativeX(),
+                reanchored.relativeY(),
+                Collections.unmodifiableMap(fv)
+            );
+        }
+        catch (final Exception ignored)
+        {
+            return reanchored;
+        }
     }
 
     private static ToolResult executeCoordinateClick(final ToolCall call, final WebDriver driver, final String selector,
@@ -445,19 +844,31 @@ public final class BrowserToolProvider
 
         if (!selector.isBlank())
         {
-            final String rectScript = """
-                var el = document.querySelector(arguments[0]);
-                if (!el) return null;
-                var r = el.getBoundingClientRect();
-                return { x: Math.round(r.left), y: Math.round(r.top) };
-                """;
             try
             {
-                final Object rectObj = ((JavascriptExecutor) driver).executeScript(rectScript, selector);
-                if (rectObj instanceof Map<?, ?> map)
+                final SelenideElement el = findElement(selector);
+                if (el != null && el.exists())
                 {
-                    x = ((Number) map.get("x")).intValue() + rawX;
-                    y = ((Number) map.get("y")).intValue() + rawY;
+                    final String rectScript = """
+                        var el = arguments[0];
+                        if (!el) return null;
+                        try {
+                            var vh = window.innerHeight || document.documentElement.clientHeight;
+                            var vw = window.innerWidth || document.documentElement.clientWidth;
+                            var r0 = el.getBoundingClientRect();
+                            if (r0.top < 0 || r0.bottom > vh || r0.left < 0 || r0.right > vw) {
+                                el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' });
+                            }
+                        } catch (e) {}
+                        var r = el.getBoundingClientRect();
+                        return { x: Math.round(r.left), y: Math.round(r.top) };
+                        """;
+                    final Object rectObj = ((JavascriptExecutor) driver).executeScript(rectScript, el.getWrappedElement());
+                    if (rectObj instanceof Map<?, ?> map)
+                    {
+                        x = ((Number) map.get("x")).intValue() + rawX;
+                        y = ((Number) map.get("y")).intValue() + rawY;
+                    }
                 }
             }
             catch (final Exception ignored)
@@ -465,11 +876,21 @@ public final class BrowserToolProvider
             }
         }
 
+        ReanchoringBridge.ReanchoredElement reanchored = ReanchoringBridge.resolveElementAtPoint(driver, x, y);
+        if (driver != null)
+        {
+            VisualBadgeInjector.removeMarkers(driver);
+            reanchored = enrichWithCleanPreClickVisualSignature(driver, x, y, reanchored);
+        }
+
         final int[] clicked = performSafeCoordinateClick(driver, x, y);
         final int finalX = clicked[0];
         final int finalY = clicked[1];
 
-        final ReanchoringBridge.ReanchoredElement reanchored = ReanchoringBridge.resolveElementAtPoint(driver, finalX, finalY);
+        if (reanchored == null)
+        {
+            reanchored = ReanchoringBridge.resolveElementAtPoint(driver, finalX, finalY);
+        }
         final ToolResult.Builder builder = ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS);
         final ObjectNode res = successNode("click");
         res.put("x", finalX);
@@ -484,11 +905,16 @@ public final class BrowserToolProvider
         if (reanchored != null)
         {
             res.put("selector", reanchored.selector());
+            if (reanchored.domFeatureVector() != null)
+            {
+                res.set("domFeatureVector", MAPPER.valueToTree(reanchored.domFeatureVector()));
+            }
             builder.withVariable("reanchoredSelector", reanchored.selector());
             builder.withVariable("reanchoredFeatureVector", reanchored.domFeatureVector());
         }
         if (driver != null)
         {
+            VisualBadgeInjector.removeMarkers(driver);
             res.put("url", getSafeUrl(driver));
             res.put("title", getSafeTitle(driver));
         }
@@ -530,19 +956,27 @@ public final class BrowserToolProvider
                 String sel = args.hasNonNull("selector") ? cleanSelector(args.path("selector").asText().trim()) : "";
                 final String text = args.hasNonNull("text") ? args.path("text").asText().trim() : "";
 
-                if ((parsedX == Integer.MIN_VALUE || parsedY == Integer.MIN_VALUE) && (target.startsWith("coord:") || target.contains("@")))
+                if (sel.isBlank() && args.hasNonNull("anchorSelector"))
+                {
+                    sel = cleanSelector(args.path("anchorSelector").asText().trim());
+                }
+
+                if (target.startsWith("coord:") || target.contains("@"))
                 {
                     final ClickAction.CoordinateTarget coord = ClickAction.parseCoordinateTarget(target);
                     if (coord != null)
                     {
-                        parsedX = coord.x();
-                        parsedY = coord.y();
+                        if (parsedX == Integer.MIN_VALUE || parsedY == Integer.MIN_VALUE)
+                        {
+                            parsedX = coord.x();
+                            parsedY = coord.y();
+                        }
                         if (sel.isBlank() && coord.anchorSelector() != null && !coord.anchorSelector().isBlank())
                         {
                             sel = cleanSelector(coord.anchorSelector());
                         }
                     }
-                    else if (target.startsWith("coord:"))
+                    else if (target.startsWith("coord:") && (parsedX == Integer.MIN_VALUE || parsedY == Integer.MIN_VALUE))
                     {
                         final String[] parts = target.substring("coord:".length()).split(",");
                         if (parts.length == 2)
@@ -559,54 +993,172 @@ public final class BrowserToolProvider
                     }
                 }
 
-                if (sel.isBlank() && !target.isBlank() && !target.startsWith("coord:") && !target.startsWith("badge:"))
+                if (sel.isBlank() && !target.isBlank() && !target.startsWith("coord:"))
                 {
                     sel = cleanSelector(target);
                 }
 
-                // Case 1: Target is badge:N
-                if (target.startsWith("badge:") && driver != null)
+                // Case 1: Target or selector is badge:N or marker:N -> pure visual coordinate click
+                final String markerTarget = target.toLowerCase(Locale.ROOT).startsWith("marker:") || target.toLowerCase(Locale.ROOT).startsWith("badge:")
+                        ? target
+                        : (sel.toLowerCase(Locale.ROOT).startsWith("marker:") || sel.toLowerCase(Locale.ROOT).startsWith("badge:") ? sel : "");
+                if (!markerTarget.isBlank() && driver != null)
                 {
-                    final String badgeNum = target.substring("badge:".length()).trim();
+                    final String markerNum = markerTarget.toLowerCase(Locale.ROOT).startsWith("marker:")
+                            ? markerTarget.substring("marker:".length()).trim()
+                            : markerTarget.substring("badge:".length()).trim();
                     final String clickBadgeScript = """
-                        var badges = document.querySelectorAll('#__neo_som_badges__ > div');
+                        var badges = document.querySelectorAll('#_neo_som_badges_ > div, #__neo_som_badges__ > div');
+                        var container = document.getElementById('__neo_som_badges__') || document.getElementById('_neo_som_badges_');
+                        var activeScope = container ? container.getAttribute('data-scope') : (arguments[1] || null);
+
+                        var el = null;
                         for (var i = 0; i < badges.length; i++) {
-                            if (badges[i].innerText.trim() === arguments[0]) {
-                                badges[i].scrollIntoView({ block: 'center', inline: 'center' });
-                                var rect = badges[i].getBoundingClientRect();
-                                return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
+                            if (badges[i].getAttribute('data-badge-id') === arguments[0] || badges[i].innerText.trim() === arguments[0]) {
+                                el = badges[i];
+                                break;
                             }
+                        }
+                        if (!el || el.id === '__neo_som_badges__' || (el.parentElement && el.parentElement.id === '__neo_som_badges__')) {
+                            el = document.querySelector('[data-m="' + arguments[0] + '"]');
+                        }
+                        if (el) {
+                            var rect = el.getBoundingClientRect();
+                            var centerX = Math.round(rect.left + rect.width / 2);
+                            var centerY = Math.round(rect.top + rect.height / 2);
+                            var anchor = null;
+                            var anchorSelector = null;
+                            if (activeScope) {
+                                try {
+                                    var sc = document.querySelector(activeScope);
+                                    if (sc && (sc === el || sc.contains(el))) {
+                                        anchor = sc;
+                                        anchorSelector = activeScope;
+                                    }
+                                } catch (e) {}
+                            }
+                            if (!anchor) {
+                                var curr = el.parentElement;
+                                while (curr && curr !== document.body && curr !== document.documentElement) {
+                                    if (curr.id && !/[0-9]{4,}/.test(curr.id)) {
+                                        try {
+                                            var sel = /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(curr.id) ? ('#' + curr.id) : ('[id="' + curr.id.replace(/"/g, '\\\\"') + '"]');
+                                            if (document.querySelectorAll(sel).length === 1) {
+                                                anchor = curr;
+                                                anchorSelector = sel;
+                                                break;
+                                            }
+                                        } catch (e) {}
+                                    }
+                                    var testId = curr.getAttribute && (curr.getAttribute('data-testid') || curr.getAttribute('data-test-id') || curr.getAttribute('data-test') || curr.getAttribute('data-qa') || curr.getAttribute('data-cy'));
+                                    if (testId) {
+                                        try {
+                                            var attrName = curr.getAttribute('data-testid') ? 'data-testid' : (curr.getAttribute('data-test-id') ? 'data-test-id' : (curr.getAttribute('data-test') ? 'data-test' : (curr.getAttribute('data-qa') ? 'data-qa' : 'data-cy')));
+                                            var tSel = '[' + attrName + '="' + testId.replace(/"/g, '\\\\"') + '"]';
+                                            if (document.querySelectorAll(tSel).length === 1) {
+                                                anchor = curr;
+                                                anchorSelector = tSel;
+                                                break;
+                                            }
+                                        } catch (e) {}
+                                    }
+                                    var tag = curr.tagName ? curr.tagName.toLowerCase() : '';
+                                    if (['article', 'tr', 'li', 'div', 'section', 'form', 'fieldset'].indexOf(tag) !== -1) {
+                                        var heading = curr.querySelector && curr.querySelector('h1, h2, h3, h4, h5, h6, [role="heading"], legend, th');
+                                        if (heading && heading !== el && !el.contains(heading)) {
+                                            var hText = (heading.innerText || heading.textContent || '').trim().replace(/\\s+/g, ' ');
+                                            if (hText && hText.length >= 2 && hText.length <= 60 && /[a-zA-Z]{2,}/.test(hText)) {
+                                                var sameContainers = document.querySelectorAll(tag);
+                                                var matchCount = 0;
+                                                for (var k = 0; k < sameContainers.length; k++) {
+                                                    var ct = (sameContainers[k].innerText || sameContainers[k].textContent || '');
+                                                    if (ct.indexOf(hText) !== -1) matchCount++;
+                                                }
+                                                if (matchCount === 1) {
+                                                    anchor = curr;
+                                                    anchorSelector = tag + ':has-text("' + hText.replace(/"/g, '\\\\"') + '")';
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (['form', 'main', 'nav', 'header', 'footer', 'section', 'article', 'table'].indexOf(tag) !== -1) {
+                                        try {
+                                            if (document.querySelectorAll(tag).length === 1) {
+                                                anchor = curr;
+                                                anchorSelector = tag;
+                                                break;
+                                            }
+                                        } catch (e) {}
+                                    }
+                                    curr = curr.parentElement;
+                                }
+                            }
+                            if (anchor) {
+                                var ar = anchor.getBoundingClientRect();
+                                return {
+                                    x: centerX,
+                                    y: centerY,
+                                    anchorSelector: anchorSelector,
+                                    relX: Math.round(centerX - ar.left),
+                                    relY: Math.round(centerY - ar.top)
+                                };
+                            }
+                            return { x: centerX, y: centerY };
                         }
                         return null;
                         """;
-                    final Object coordsObj = ((JavascriptExecutor) driver).executeScript(clickBadgeScript, badgeNum);
+                    final String activeScope = VisualBadgeInjector.getActiveScope();
+                    final Object coordsObj = ((JavascriptExecutor) driver).executeScript(clickBadgeScript, markerNum, activeScope);
                     if (coordsObj instanceof Map<?, ?> coordsMap)
                     {
                         final int bx = ((Number) coordsMap.get("x")).intValue();
                         final int by = ((Number) coordsMap.get("y")).intValue();
+                        final String anchorSelector = coordsMap.get("anchorSelector") instanceof String s && !s.isBlank() ? s : null;
+                        final Integer relX = coordsMap.get("relX") instanceof Number n ? n.intValue() : null;
+                        final Integer relY = coordsMap.get("relY") instanceof Number n ? n.intValue() : null;
+
+                        ReanchoringBridge.ReanchoredElement reanchored = ReanchoringBridge.resolveMarkedElement(driver, markerNum);
+                        if (reanchored == null)
+                        {
+                            reanchored = ReanchoringBridge.resolveElementAtPoint(driver, bx, by);
+                        }
+                        VisualBadgeInjector.removeMarkers(driver);
+                        reanchored = enrichWithCleanPreClickVisualSignature(driver, bx, by, reanchored);
+
                         final int[] clicked = performSafeCoordinateClick(driver, bx, by);
                         final int finalX = clicked[0];
                         final int finalY = clicked[1];
 
-                        final ReanchoringBridge.ReanchoredElement reanchored = ReanchoringBridge.resolveElementAtPoint(driver, finalX, finalY);
                         final ToolResult.Builder b = ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS);
                         final ObjectNode res = successNode("click");
-                        res.put("target", "badge:" + badgeNum);
-                        res.put("x", finalX);
-                        res.put("y", finalY);
-                        if (reanchored != null)
+                        if (anchorSelector != null && relX != null && relY != null)
                         {
-                            res.put("selector", reanchored.selector());
+                            final String anchoredTarget = "coord:" + anchorSelector + "@" + relX + "," + relY;
+                            res.put("target", anchoredTarget);
+                            res.put("x", relX);
+                            res.put("y", relY);
+                            res.put("selector", anchorSelector);
+                            res.put("anchorSelector", anchorSelector);
+                        }
+                        else
+                        {
+                            res.put("target", "coord: " + finalX + "," + finalY);
+                            res.put("x", finalX);
+                            res.put("y", finalY);
+                        }
+                        if (reanchored != null && reanchored.domFeatureVector() != null)
+                        {
+                            res.set("domFeatureVector", MAPPER.valueToTree(reanchored.domFeatureVector()));
                             b.withVariable("reanchoredSelector", reanchored.selector());
+                            b.withVariable("reanchoredFeatureVector", reanchored.domFeatureVector());
                         }
-                        if (driver != null)
-                        {
-                            res.put("url", getSafeUrl(driver));
-                            res.put("title", getSafeTitle(driver));
-                        }
+                        res.put("url", getSafeUrl(driver));
+                        res.put("title", getSafeTitle(driver));
                         b.withContent(res.toString());
                         return b.build();
                     }
+                    throw new IllegalArgumentException("Visual marker '" + markerTarget + "' not found on the active page");
                 }
 
                 // Case 2: Element resolution via selector and text fallback (prioritized over raw coordinates unless explicit coord: target)
@@ -656,6 +1208,76 @@ public final class BrowserToolProvider
         return createBaseInputTool(def, true);
     }
 
+    private static AiTool createFillFormTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+
+        final ObjectNode fieldsProp = props.putObject("fields");
+        fieldsProp.put("type", "array");
+        fieldsProp.put("description", "List of form fields to fill sequentially");
+        final ObjectNode itemSchema = fieldsProp.putObject("items");
+        itemSchema.put("type", "object");
+        final ObjectNode itemProps = itemSchema.putObject("properties");
+        itemProps.putObject("selector").put("type", "string").put("description", "Selector of the input or select element (e.g. CSS, role=textbox[name='...'], id=...)");
+        itemProps.putObject("value").put("type", "string").put("description", "Value or text to enter into the element");
+        itemProps.putObject("clearFirst").put("type", "boolean").put("description", "Whether to clear existing text before typing (default: true)");
+        final ArrayNode itemReq = itemSchema.putArray("required");
+        itemReq.add("selector");
+        itemReq.add("value");
+
+        final ArrayNode req = schema.putArray("required");
+        req.add("fields");
+
+        final ToolDefinition def = new ToolDefinition("fill_form", "Fills multiple form fields (inputs, textareas, selects) in a single operation. Use to fill entire forms (e.g. checkout, registration, address) efficiently without multiple sequential turns.", schema);
+
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                DomQuiescenceWatcher.installTracker();
+                final JsonNode args = call.arguments();
+                if (args == null || !args.hasNonNull("fields"))
+                {
+                    return ToolResult.error(call.callId(), "Argument 'fields' is required.");
+                }
+
+                final List<FormFieldEntry> fieldEntries = new ArrayList<>();
+                FillFormAction.parseFieldsJsonNode(args.get("fields"), fieldEntries);
+
+                if (fieldEntries.isEmpty())
+                {
+                    return ToolResult.error(call.callId(), "Argument 'fields' must contain at least one field entry.");
+                }
+
+                final ArrayNode filledList = MAPPER.createArrayNode();
+                for (final FormFieldEntry field : fieldEntries)
+                {
+                    final SelenideElement el = findElement(field.selector());
+                    SelenideElementFinder.scrollIntoViewIfNeeded(el);
+                    FillFormAction.fillElement(el, field.value(), field.clearFirst());
+
+                    final ObjectNode entryNode = filledList.addObject();
+                    entryNode.put("selector", field.selector());
+                    entryNode.put("value", field.value());
+                }
+
+                final ObjectNode res = successNode(def.name());
+                res.set("fields", filledList);
+                res.put("count", filledList.size());
+                return ToolResult.success(call.callId(), res.toString());
+            }
+        };
+    }
+
     private static AiTool createTypeTool()
     {
         final ObjectNode schema = MAPPER.createObjectNode();
@@ -695,6 +1317,7 @@ public final class BrowserToolProvider
                         : defaultClearFirst;
                 final boolean pressEnter = call.arguments().path("pressEnter").asBoolean(false);
 
+                final ReanchoringBridge.ReanchoredElement reanchoredMarker = resolveMarkerBeforeAction(driver, selector);
                 final SelenideElement el = findElement(selector);
                 SelenideElementFinder.scrollIntoViewIfNeeded(el);
                 DomFeatureVector featureVector = null;
@@ -765,13 +1388,9 @@ public final class BrowserToolProvider
                 }
 
                 final ObjectNode res = successNode(def.name());
-                res.put("target", selector);
                 res.put("value", text);
                 res.put("pressedEnter", pressEnter);
-                if (featureVector != null)
-                {
-                    res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
-                }
+                applyMarkerReanchoringIfPresent(driver, selector, reanchoredMarker, featureVector, res);
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
@@ -844,19 +1463,20 @@ public final class BrowserToolProvider
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
                 DomQuiescenceWatcher.installTracker();
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
                 final String rawKey = call.arguments().path("key").asText("Enter");
                 final String selector = resolveSelector(call.arguments());
                 final CharSequence key = resolveKey(rawKey);
+                final ReanchoringBridge.ReanchoredElement reanchoredMarker = resolveMarkerBeforeAction(driver, selector);
 
                 if (!selector.isBlank())
                 {
-                    $(selector).sendKeys(key);
+                    findElement(selector).sendKeys(key);
                 }
                 else
                 {
                     try
                     {
-                        final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
                         if (driver != null)
                         {
                             driver.switchTo().activeElement().sendKeys(key);
@@ -876,7 +1496,7 @@ public final class BrowserToolProvider
                 res.put("key", rawKey);
                 if (!selector.isBlank())
                 {
-                    res.put("target", selector);
+                    applyMarkerReanchoringIfPresent(driver, selector, reanchoredMarker, null, res);
                 }
                 return ToolResult.success(call.callId(), res.toString());
             }
@@ -938,9 +1558,19 @@ public final class BrowserToolProvider
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
                 DomQuiescenceWatcher.installTracker();
-                final String selector = resolveSelector(call.arguments());
-                final SelenideElement el = findElement(selector).shouldBe(Condition.visible).shouldBe(Condition.enabled);
                 final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                final String selector = resolveSelector(call.arguments());
+                final ReanchoringBridge.ReanchoredElement reanchoredMarker = resolveMarkerBeforeAction(driver, selector);
+                final SelenideElement found = findElement(selector);
+                final SelenideElement el;
+                if (found.is(Condition.visible))
+                {
+                    el = found.shouldBe(Condition.enabled);
+                }
+                else
+                {
+                    el = found.shouldBe(Condition.exist).shouldBe(Condition.enabled);
+                }
                 DomFeatureVector featureVector = null;
                 if (driver != null)
                 {
@@ -961,64 +1591,242 @@ public final class BrowserToolProvider
                         el.click();
                     }
                     final ObjectNode res = successNode("select");
-                    res.put("target", selector);
                     res.put("delegatedToCheck", true);
-                    if (featureVector != null)
-                    {
-                        res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
-                    }
+                    applyMarkerReanchoringIfPresent(driver, selector, reanchoredMarker, featureVector, res);
                     return ToolResult.success(call.callId(), res.toString());
                 }
 
                 final ObjectNode res = successNode("select");
-                res.put("target", selector);
                 if (call.arguments().hasNonNull("value"))
                 {
                     final String val = call.arguments().path("value").asText();
-                    try
-                    {
-                        el.selectOptionByValue(val);
-                    }
-                    catch (final Exception e)
-                    {
-                        try
-                        {
-                            el.selectOptionContainingText(val);
-                        }
-                        catch (final Exception ex)
-                        {
-                            el.selectOption(val);
-                        }
-                    }
+                    selectDropdownOption(el, val, true);
                     res.put("value", val);
                 }
                 else if (call.arguments().hasNonNull("text"))
                 {
                     final String txt = call.arguments().path("text").asText();
-                    try
-                    {
-                        el.selectOption(txt);
-                    }
-                    catch (final Exception e)
-                    {
-                        try
-                        {
-                            el.selectOptionContainingText(txt);
-                        }
-                        catch (final Exception ex)
-                        {
-                            el.selectOptionByValue(txt);
-                        }
-                    }
+                    selectDropdownOption(el, txt, false);
                     res.put("text", txt);
                 }
-                if (featureVector != null)
-                {
-                    res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
-                }
+                applyMarkerReanchoringIfPresent(driver, selector, reanchoredMarker, featureVector, res);
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
+    }
+
+    private static void selectDropdownOption(final SelenideElement el, final String target, final boolean preferValue)
+    {
+        if (target == null)
+        {
+            return;
+        }
+
+        final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+        if (driver instanceof JavascriptExecutor js)
+        {
+            try
+            {
+                final String script = """
+                    var sel = arguments[0];
+                    var target = arguments[1];
+                    var preferVal = arguments[2];
+                    if (!sel || !sel.options || sel.options.length === 0) return null;
+                    var exactValIdx = -1;
+                    var exactTextIdx = -1;
+                    var containsTextIdx = -1;
+                    for (var i = 0; i < sel.options.length; i++) {
+                        var opt = sel.options[i];
+                        if (opt.value === target && exactValIdx === -1) exactValIdx = i;
+                        var txt = (opt.text || opt.innerText || '').trim();
+                        if (txt === target && exactTextIdx === -1) exactTextIdx = i;
+                        if (txt && txt.indexOf(target) !== -1 && containsTextIdx === -1) containsTextIdx = i;
+                    }
+
+                    var chosenIdx = -1;
+                    var strategy = null;
+                    if (preferVal && exactValIdx !== -1) { chosenIdx = exactValIdx; strategy = 'value'; }
+                    else if (exactTextIdx !== -1) { chosenIdx = exactTextIdx; strategy = 'text'; }
+                    else if (exactValIdx !== -1) { chosenIdx = exactValIdx; strategy = 'value'; }
+                    else if (containsTextIdx !== -1) { chosenIdx = containsTextIdx; strategy = 'containsText'; }
+
+                    if (chosenIdx === -1) return null;
+
+                    var isVisible = false;
+                    try {
+                        var style = window.getComputedStyle ? window.getComputedStyle(sel) : null;
+                        var notHiddenStyle = !style || (style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0');
+                        var rect = sel.getBoundingClientRect ? sel.getBoundingClientRect() : null;
+                        var isClippedOrTiny = !rect || rect.width <= 1 || rect.height <= 1;
+                        var isAriaHidden = sel.getAttribute('aria-hidden') === 'true';
+                        var isClipped = style && style.clip && style.clip.indexOf('rect(0') !== -1;
+                        isVisible = notHiddenStyle && !isClippedOrTiny && !isAriaHidden && !isClipped;
+                    } catch (e) {
+                        isVisible = false;
+                    }
+
+                    if (!isVisible) {
+                        sel.selectedIndex = chosenIdx;
+                        sel.options[chosenIdx].selected = true;
+                        sel.value = sel.options[chosenIdx].value;
+                        try {
+                            sel.dispatchEvent(new Event('input', { bubbles: true }));
+                            sel.dispatchEvent(new Event('change', { bubbles: true }));
+                        } catch (e) {
+                            var ev = document.createEvent('HTMLEvents');
+                            ev.initEvent('change', true, true);
+                            sel.dispatchEvent(ev);
+                        }
+                        if (window.jQuery) {
+                            try { window.jQuery(sel).trigger('change'); } catch(e) {}
+                        }
+                        return 'domSelected';
+                    }
+
+                    return strategy;
+                    """;
+                final Object matchStrategy = js.executeScript(script, el, target, preferValue);
+                if ("domSelected".equals(matchStrategy))
+                {
+                    return;
+                }
+                else if ("value".equals(matchStrategy))
+                {
+                    try
+                    {
+                        el.selectOptionByValue(target);
+                        return;
+                    }
+                    catch (final Exception e)
+                    {
+                        applyDomSelectFallback(js, el, target, preferValue);
+                        return;
+                    }
+                }
+                else if ("text".equals(matchStrategy))
+                {
+                    try
+                    {
+                        el.selectOption(target);
+                        return;
+                    }
+                    catch (final Exception e)
+                    {
+                        applyDomSelectFallback(js, el, target, preferValue);
+                        return;
+                    }
+                }
+                else if ("containsText".equals(matchStrategy))
+                {
+                    try
+                    {
+                        el.selectOptionContainingText(target);
+                        return;
+                    }
+                    catch (final Exception e)
+                    {
+                        applyDomSelectFallback(js, el, target, preferValue);
+                        return;
+                    }
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        if (preferValue)
+        {
+            try
+            {
+                el.selectOptionByValue(target);
+            }
+            catch (final Exception e)
+            {
+                if (driver instanceof JavascriptExecutor js)
+                {
+                    applyDomSelectFallback(js, el, target, true);
+                }
+                else
+                {
+                    try
+                    {
+                        el.selectOptionContainingText(target);
+                    }
+                    catch (final Exception ex)
+                    {
+                        el.selectOption(target);
+                    }
+                }
+            }
+        }
+        else
+        {
+            try
+            {
+                el.selectOption(target);
+            }
+            catch (final Exception e)
+            {
+                if (driver instanceof JavascriptExecutor js)
+                {
+                    applyDomSelectFallback(js, el, target, false);
+                }
+                else
+                {
+                    try
+                    {
+                        el.selectOptionContainingText(target);
+                    }
+                    catch (final Exception ex)
+                    {
+                        el.selectOptionByValue(target);
+                    }
+                }
+            }
+        }
+    }
+
+    private static void applyDomSelectFallback(final JavascriptExecutor js, final SelenideElement el, final String target, final boolean preferValue)
+    {
+        try
+        {
+            final String fallbackScript = """
+                var sel = arguments[0];
+                var target = arguments[1];
+                var preferVal = arguments[2];
+                if (!sel || !sel.options) return;
+                var chosenIdx = -1;
+                for (var i = 0; i < sel.options.length; i++) {
+                    var opt = sel.options[i];
+                    if (preferVal && opt.value === target) { chosenIdx = i; break; }
+                    var txt = (opt.text || opt.innerText || '').trim();
+                    if (txt === target) { chosenIdx = i; break; }
+                    if (opt.value === target && chosenIdx === -1) chosenIdx = i;
+                    if (txt && txt.indexOf(target) !== -1 && chosenIdx === -1) chosenIdx = i;
+                }
+                if (chosenIdx !== -1) {
+                    sel.selectedIndex = chosenIdx;
+                    sel.options[chosenIdx].selected = true;
+                    sel.value = sel.options[chosenIdx].value;
+                    try {
+                        sel.dispatchEvent(new Event('input', { bubbles: true }));
+                        sel.dispatchEvent(new Event('change', { bubbles: true }));
+                    } catch (e) {
+                        var ev = document.createEvent('HTMLEvents');
+                        ev.initEvent('change', true, true);
+                        sel.dispatchEvent(ev);
+                    }
+                    if (window.jQuery) {
+                        try { window.jQuery(sel).trigger('change'); } catch(e) {}
+                    }
+                }
+                """;
+            js.executeScript(fallbackScript, el, target, preferValue);
+        }
+        catch (final Exception ignored)
+        {
+        }
     }
 
     private static AiTool createCheckTool()
@@ -1053,6 +1861,9 @@ public final class BrowserToolProvider
                 final String selector = resolveSelector(args);
                 final boolean targetChecked = !args.hasNonNull("checked") || args.path("checked").asBoolean(true);
 
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                final ReanchoringBridge.ReanchoredElement reanchoredMarker = resolveMarkerBeforeAction(driver, selector);
+
                 final SelenideElement el = findElement(selector).shouldBe(Condition.exist);
                 SelenideElementFinder.scrollIntoViewIfNeeded(el);
 
@@ -1062,7 +1873,6 @@ public final class BrowserToolProvider
                             errorNode("Element is disabled and cannot be checked: " + selector).toString());
                 }
 
-                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
                 DomFeatureVector featureVector = null;
                 if (driver != null)
                 {
@@ -1130,6 +1940,7 @@ public final class BrowserToolProvider
                 {
                     res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
                 }
+                applyMarkerReanchoringIfPresent(driver, selector, reanchoredMarker, featureVector, res);
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
@@ -1164,36 +1975,32 @@ public final class BrowserToolProvider
                     return ToolResult.error(call.callId(), "Target selector or text must be specified for hover action");
                 }
 
-                final SelenideElement el;
-                final String targetDesc;
-                if (!selector.isBlank())
-                {
-                    targetDesc = selector;
-                    if (selector.startsWith("text="))
-                    {
-                        final String rawText = selector.substring("text=".length()).trim();
-                        el = $(Selectors.byText(rawText)).is(Condition.visible)
-                                ? $(Selectors.byText(rawText))
-                                : $(Selectors.withText(rawText));
-                    }
-                    else
-                    {
-                        final SelenideElement found = SelenideElementFinder.findElement(selector);
-                        el = found != null ? found : $(selector);
-                    }
-                }
-                else
-                {
-                    targetDesc = text;
-                    el = $(Selectors.byText(text)).is(Condition.visible)
-                            ? $(Selectors.byText(text))
-                            : $(Selectors.withText(text));
-                }
+                final String targetDesc = !selector.isBlank() ? selector : text;
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                final ReanchoringBridge.ReanchoredElement reanchoredMarker = resolveMarkerBeforeAction(driver, selector);
+
+                final SelenideElement el = resolveElementBySelectorAndText(selector, text);
 
                 SelenideElementFinder.scrollIntoViewIfNeeded(el);
                 el.shouldBe(Condition.visible).hover();
+                DomFeatureVector featureVector = null;
+                if (driver != null)
+                {
+                    try
+                    {
+                        featureVector = new PageAnalyzer(driver).extractFeatureVector(el);
+                    }
+                    catch (final Throwable ignored)
+                    {
+                    }
+                }
                 final ObjectNode res = successNode("hover");
                 res.put("target", targetDesc);
+                if (featureVector != null)
+                {
+                    res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
+                }
+                applyMarkerReanchoringIfPresent(driver, selector, reanchoredMarker, featureVector, res);
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
@@ -1220,7 +2027,21 @@ public final class BrowserToolProvider
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
                 final String selector = resolveSelector(call.arguments());
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                final ReanchoringBridge.ReanchoredElement reanchoredMarker = resolveMarkerBeforeAction(driver, selector);
+
                 final SelenideElement el = findElement(selector).shouldBe(Condition.visible);
+                DomFeatureVector featureVector = null;
+                if (driver != null)
+                {
+                    try
+                    {
+                        featureVector = new PageAnalyzer(driver).extractFeatureVector(el);
+                    }
+                    catch (final Throwable ignored)
+                    {
+                    }
+                }
                 final String type = el.getAttribute("type");
                 final String role = el.getAttribute("role");
                 final boolean isCheckbox = "checkbox".equalsIgnoreCase(type) || "checkbox".equalsIgnoreCase(role);
@@ -1260,6 +2081,11 @@ public final class BrowserToolProvider
                 }
                 final ObjectNode res = successNode("clear");
                 res.put("target", selector);
+                if (featureVector != null)
+                {
+                    res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
+                }
+                applyMarkerReanchoringIfPresent(driver, selector, reanchoredMarker, featureVector, res);
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
@@ -1495,104 +2321,41 @@ public final class BrowserToolProvider
         return pattern;
     }
 
-    static boolean matchesElementText(final SelenideElement el, final String expectedText, final boolean regex, final boolean exact)
+    static boolean isStaleException(final Throwable t)
     {
-        if (el == null || !el.exists())
+        if (t == null)
         {
             return false;
         }
+        if (t instanceof StaleElementReferenceException)
+        {
+            return true;
+        }
+        if (t instanceof ElementNotFound)
+        {
+            return true;
+        }
+        if (t.getCause() != null && isStaleException(t.getCause()))
+        {
+            return true;
+        }
+        final String msg = t.getMessage();
+        if (msg == null)
+        {
+            return false;
+        }
+        final String lower = msg.toLowerCase(Locale.ROOT);
+        return lower.contains("stale element reference")
+                || lower.contains("element not found");
+    }
 
-        final List<String> candidates = new ArrayList<>();
-        try
+    public static boolean matchesCandidate(final String candidate, final String expectedText, final boolean regex, final boolean exact)
+    {
+        if (candidate == null || candidate.isBlank())
         {
-            final String text = el.getText();
-            if (text != null && !text.isBlank())
-            {
-                candidates.add(text);
-            }
+            return false;
         }
-        catch (final Exception ignored)
-        {
-        }
-
-        try
-        {
-            final String val = el.getValue();
-            if (val != null && !val.isBlank())
-            {
-                candidates.add(val);
-            }
-        }
-        catch (final Exception ignored)
-        {
-        }
-
-        try
-        {
-            final String placeholder = el.getAttribute("placeholder");
-            if (placeholder != null && !placeholder.isBlank())
-            {
-                candidates.add(placeholder);
-            }
-        }
-        catch (final Exception ignored)
-        {
-        }
-
-        try
-        {
-            final String ariaLabel = el.getAttribute("aria-label");
-            if (ariaLabel != null && !ariaLabel.isBlank())
-            {
-                candidates.add(ariaLabel);
-            }
-        }
-        catch (final Exception ignored)
-        {
-        }
-
-        try
-        {
-            final String parentText = el.getAttribute("data-parent-text");
-            if (parentText != null && !parentText.isBlank())
-            {
-                candidates.add(parentText);
-            }
-        }
-        catch (final Exception ignored)
-        {
-        }
-
-        try
-        {
-            final String innerText = el.getAttribute("innerText");
-            if (innerText != null && !innerText.isBlank() && !candidates.contains(innerText))
-            {
-                candidates.add(innerText);
-            }
-        }
-        catch (final Exception ignored)
-        {
-        }
-
-        final String tag = el.getTagName();
-        final boolean isRoot = tag == null || "body".equalsIgnoreCase(tag) || "html".equalsIgnoreCase(tag);
-        if (!isRoot)
-        {
-            try
-            {
-                final String textContent = el.getAttribute("textContent");
-                if (textContent != null && !textContent.isBlank() && !candidates.contains(textContent))
-                {
-                    candidates.add(textContent);
-                }
-            }
-            catch (final Exception ignored)
-            {
-            }
-        }
-
-        if (candidates.isEmpty())
+        if (expectedText == null)
         {
             return false;
         }
@@ -1609,49 +2372,164 @@ public final class BrowserToolProvider
             {
                 pattern = Pattern.compile(Pattern.quote(cleanPattern), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
             }
-            for (final String candidate : candidates)
-            {
-                if (pattern.matcher(candidate).find()
-                        || pattern.matcher(candidate.replaceAll("\\s+", " ")).find())
-                {
-                    return true;
-                }
-            }
-            return false;
+            return pattern.matcher(candidate).find()
+                    || pattern.matcher(candidate.replaceAll("\\s+", " ")).find();
         }
 
         final String unescaped = unescapeLiteralText(expectedText);
-        final String normExpected = unescaped.replaceAll("\\s+", " ").trim();
-        for (final String candidate : candidates)
+
+        // Tier 1: Direct literal match (preserves raw paths, literals, and unescaped strings)
+        if (exact)
         {
+            if (candidate.trim().equalsIgnoreCase(unescaped.trim()))
+            {
+                return true;
+            }
+        }
+        else
+        {
+            if (candidate.toLowerCase(Locale.ROOT).contains(unescaped.toLowerCase(Locale.ROOT)))
+            {
+                return true;
+            }
+        }
+
+        // Tier 2: Escape-interpreted match (converts literal \n, \r, \t into actual whitespace characters)
+        if (unescaped.contains("\\n") || unescaped.contains("\\r") || unescaped.contains("\\t"))
+        {
+            final String escapeInterpreted = unescaped.replace("\\n", "\n").replace("\\r", "\r").replace("\\t", "\t");
             if (exact)
             {
-                if (candidate.trim().equalsIgnoreCase(unescaped.trim())
-                        || candidate.replaceAll("\\s+", " ").trim().equalsIgnoreCase(normExpected))
+                if (candidate.trim().equalsIgnoreCase(escapeInterpreted.trim()))
                 {
                     return true;
                 }
             }
             else
             {
-                if (candidate.toLowerCase().contains(unescaped.toLowerCase())
-                        || candidate.replaceAll("\\s+", " ").toLowerCase().contains(normExpected.toLowerCase()))
+                if (candidate.toLowerCase(Locale.ROOT).contains(escapeInterpreted.toLowerCase(Locale.ROOT)))
                 {
                     return true;
                 }
             }
         }
+
+        // Tier 3: Whitespace-collapsed fallback (normalizes multiple whitespace and literal escapes to single space)
+        final String collapsedExpected = unescaped.replace("\\n", " ").replace("\\r", " ").replace("\\t", " ").replaceAll("\\s+", " ").trim();
+        final String collapsedCandidate = candidate.replaceAll("\\s+", " ").trim();
+        if (exact)
+        {
+            return collapsedCandidate.equalsIgnoreCase(collapsedExpected);
+        }
+        return collapsedCandidate.toLowerCase(Locale.ROOT).contains(collapsedExpected.toLowerCase(Locale.ROOT));
+    }
+
+    static boolean matchesElementText(final SelenideElement el, final String expectedText, final boolean regex, final boolean exact)
+    {
+        return matchesElementText((WebElement) el, expectedText, regex, exact);
+    }
+
+    static boolean matchesElementText(final WebElement el, final String expectedText, final boolean regex, final boolean exact)
+    {
+        if (el == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (el instanceof SelenideElement se && !se.exists())
+            {
+                return false;
+            }
+        }
+        catch (final Throwable t)
+        {
+            if (isStaleException(t))
+            {
+                throw (t instanceof StaleElementReferenceException sere ? sere : new StaleElementReferenceException(t.getMessage(), t));
+            }
+            return false;
+        }
+
+        try
+        {
+            final String text = el.getText();
+            if (matchesCandidate(text, expectedText, regex, exact))
+            {
+                return true;
+            }
+
+            final String val = el instanceof SelenideElement se ? se.getValue() : el.getAttribute("value");
+            if (matchesCandidate(val, expectedText, regex, exact))
+            {
+                return true;
+            }
+
+            final String placeholder = el.getAttribute("placeholder");
+            if (matchesCandidate(placeholder, expectedText, regex, exact))
+            {
+                return true;
+            }
+
+            final String ariaLabel = el.getAttribute("aria-label");
+            if (matchesCandidate(ariaLabel, expectedText, regex, exact))
+            {
+                return true;
+            }
+
+            final String parentText = el.getAttribute("data-parent-text");
+            if (matchesCandidate(parentText, expectedText, regex, exact))
+            {
+                return true;
+            }
+
+            final String innerText = el.getAttribute("innerText");
+            if (matchesCandidate(innerText, expectedText, regex, exact))
+            {
+                return true;
+            }
+
+            final String tag = el.getTagName();
+            final boolean isRoot = tag == null || "body".equalsIgnoreCase(tag) || "html".equalsIgnoreCase(tag);
+            if (!isRoot)
+            {
+                final String textContent = el.getAttribute("textContent");
+                if (matchesCandidate(textContent, expectedText, regex, exact))
+                {
+                    return true;
+                }
+            }
+        }
+        catch (final Throwable t)
+        {
+            if (isStaleException(t))
+            {
+                throw (t instanceof StaleElementReferenceException sere ? sere : new StaleElementReferenceException(t.getMessage(), t));
+            }
+        }
+
         return false;
     }
 
     static boolean matchesElementOrAssociatedLabel(final SelenideElement el, final String expectedText, final boolean regex, final boolean exact)
     {
-        if (matchesElementText(el, expectedText, regex, exact))
+        return matchesElementOrAssociatedLabel((WebElement) el, expectedText, regex, exact);
+    }
+
+    static boolean matchesElementOrAssociatedLabel(final WebElement el, final String expectedText, final boolean regex, final boolean exact)
+    {
+        if (el == null)
         {
-            return true;
+            return false;
         }
+
         try
         {
+            if (matchesElementText(el, expectedText, regex, exact))
+            {
+                return true;
+            }
             final String id = el.getAttribute("id");
             if (id != null && !id.isBlank())
             {
@@ -1664,14 +2542,19 @@ public final class BrowserToolProvider
                     }
                 }
             }
-            final SelenideElement parentLabel = el.closest("label");
+            final SelenideElement selenideEl = el instanceof SelenideElement se ? se : Selenide.$(el);
+            final SelenideElement parentLabel = selenideEl.closest("label");
             if (parentLabel.exists() && matchesElementText(parentLabel, expectedText, regex, exact))
             {
                 return true;
             }
         }
-        catch (final Exception ignored)
+        catch (final Throwable t)
         {
+            if (isStaleException(t))
+            {
+                throw (t instanceof StaleElementReferenceException sere ? sere : new StaleElementReferenceException(t.getMessage(), t));
+            }
         }
         return false;
     }
@@ -1685,7 +2568,7 @@ public final class BrowserToolProvider
                 return true;
             }
         }
-        catch (final Exception ignored)
+        catch (final Exception | AssertionError ignored)
         {
         }
 
@@ -1794,6 +2677,8 @@ public final class BrowserToolProvider
                         || "head > title".equalsIgnoreCase(selector.trim())
                         || "head title".equalsIgnoreCase(selector.trim()));
 
+                SelenideElement matchedElement = null;
+
                 if (isTitle)
                 {
                     if (!WebDriverRunner.hasWebDriverStarted())
@@ -1884,54 +2769,63 @@ public final class BrowserToolProvider
                     while ((negated ? matched : !matched) && (System.currentTimeMillis() - start) < timeout)
                     {
                         matched = false;
-                        final ElementsCollection elements = findElements(selector);
-                        if (!elements.isEmpty())
+                        try
                         {
-                            for (final SelenideElement el : elements)
+                            final WebDriver driver = WebDriverRunner.getWebDriver();
+                            final By by = safeResolveLocator(selector);
+                            final List<WebElement> elements = driver.findElements(by);
+                            if (!elements.isEmpty())
                             {
-                                if (matchesElementOrAssociatedLabel(el, expectedText, regex, exact))
+                                for (final WebElement el : elements)
                                 {
-                                    matched = true;
-                                    break;
+                                    if (matchesElementOrAssociatedLabel(el, expectedText, regex, exact))
+                                    {
+                                        matched = true;
+                                        matchedElement = Selenide.$(el);
+                                        break;
+                                    }
                                 }
                             }
-                        }
-                        else
-                        {
-                            try
+                            else
                             {
-                                final SelenideElement singleEl = findElement(selector);
+                                final SelenideElement singleEl = resolveLazyElement(selector);
                                 if (singleEl.exists() && matchesElementOrAssociatedLabel(singleEl, expectedText, regex, exact))
                                 {
                                     matched = true;
+                                    matchedElement = singleEl;
                                 }
                             }
-                            catch (final Exception ignored)
-                            {
-                            }
-                        }
 
-                        if (!matched && !negated)
-                        {
-                            try
+                            if (!matched && !negated)
                             {
-                                final ElementsCollection currentElements = findElements(selector);
-                                final SelenideElement primary = currentElements.isEmpty() ? findElement(selector) : currentElements.first();
+                                final List<WebElement> currentElements = driver.findElements(by);
+                                final SelenideElement primary = currentElements.isEmpty() ? resolveLazyElement(selector) : Selenide.$(currentElements.get(0));
                                 if (primary.exists())
                                 {
                                     final SelenideElement container = primary.closest(".form-group, .form-floating, .form-row, .field, .input-group, form, [class*='checkout'], [class*='order'], [class*='summary'], [class*='card'], [class*='table']");
                                     if (container.exists() && matchesElementText(container, expectedText, regex, exact))
                                     {
                                         matched = true;
+                                        matchedElement = container;
                                     }
                                     else if (primary.parent().exists() && matchesElementText(primary.parent(), expectedText, regex, exact))
                                     {
                                         matched = true;
+                                        matchedElement = primary.parent();
                                     }
                                 }
                             }
-                            catch (final Exception ignored)
+                        }
+                        catch (final Exception | AssertionError t)
+                        {
+                            if (isStaleException(t))
                             {
+                                if (negated)
+                                {
+                                    matched = true;
+                                }
+                                Selenide.sleep(25);
+                                continue;
                             }
                         }
 
@@ -1949,7 +2843,69 @@ public final class BrowserToolProvider
                         }
                         else
                         {
-                            throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was not found on selector \"" + selector + "\" within " + timeout + "ms.");
+                            final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                            if (driver == null)
+                            {
+                                throw new AssertionError("No active browser window found to assert text on selector \"" + selector + "\"");
+                            }
+
+                            List<WebElement> elements = Collections.emptyList();
+                            try
+                            {
+                                final By by = safeResolveLocator(selector);
+                                elements = driver.findElements(by);
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+
+                            boolean singleElExists = false;
+                            SelenideElement singleEl = null;
+                            try
+                            {
+                                singleEl = resolveLazyElement(selector);
+                                singleElExists = singleEl != null && singleEl.exists();
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+
+                            final boolean elementFound = !elements.isEmpty() || singleElExists;
+
+                            if (!elementFound)
+                            {
+                                final ObjectNode err = errorNode("Target element not found in DOM for selector '" + selector + "' within " + timeout + "ms. No element exists matching this selector. Use 'query_dom' to inspect the page structure or verify the selector.");
+                                return ToolResult.error(call.callId(), err.toString());
+                            }
+
+                            String actualPreview = "";
+                            try
+                            {
+                                if (!elements.isEmpty())
+                                {
+                                    final String text = elements.get(0).getText();
+                                    final String val = (text != null && !text.isBlank()) ? text : elements.get(0).getAttribute("value");
+                                    if (val != null)
+                                    {
+                                        final String trimmed = val.length() > 120 ? val.substring(0, 120) + "…" : val;
+                                        actualPreview = " (Actual element text: \"" + trimmed + "\")";
+                                    }
+                                }
+                                else if (singleEl != null && singleEl.exists())
+                                {
+                                    final String text = singleEl.getText();
+                                    final String val = (text != null && !text.isBlank()) ? text : singleEl.getValue();
+                                    if (val != null)
+                                    {
+                                        final String trimmed = val.length() > 120 ? val.substring(0, 120) + "…" : val;
+                                        actualPreview = " (Actual element text: \"" + trimmed + "\")";
+                                    }
+                                }
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+                            throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was not found on selector \"" + selector + "\" within " + timeout + "ms." + actualPreview);
                         }
                     }
                 }
@@ -1961,6 +2917,20 @@ public final class BrowserToolProvider
                 res.put("regex", regex);
                 res.put("negated", negated);
                 res.put("matched", true);
+                if (matchedElement != null && WebDriverRunner.hasWebDriverStarted())
+                {
+                    try
+                    {
+                        final DomFeatureVector featureVector = new PageAnalyzer(WebDriverRunner.getWebDriver()).extractFeatureVector(matchedElement);
+                        if (featureVector != null)
+                        {
+                            res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
@@ -2035,17 +3005,60 @@ public final class BrowserToolProvider
                     totalElements = allElements.size();
                     if (visibleOnly)
                     {
-                        for (final SelenideElement el : allElements)
+                        boolean batchEvaluated = false;
+                        final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                        if (driver instanceof JavascriptExecutor js && totalElements > 0)
                         {
                             try
                             {
-                                if (el.isDisplayed())
+                                final List<WebElement> webElements = new ArrayList<>(totalElements);
+                                for (final SelenideElement el : allElements)
                                 {
-                                    actualCount++;
+                                    webElements.add(el.toWebElement());
+                                }
+                                final String countScript = """
+                                    var els = arguments[0];
+                                    if (!els) return 0;
+                                    var count = 0;
+                                    for (var i = 0; i < els.length; i++) {
+                                        var el = els[i];
+                                        if (!el || !el.isConnected) continue;
+                                        var style = window.getComputedStyle(el);
+                                        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') continue;
+                                        var rects = el.getClientRects();
+                                        if (rects && rects.length > 0) {
+                                            count++;
+                                        }
+                                    }
+                                    return count;
+                                    """;
+                                final Object result = js.executeScript(countScript, webElements);
+                                if (result instanceof Number num)
+                                {
+                                    actualCount = num.intValue();
+                                    batchEvaluated = true;
                                 }
                             }
-                            catch (final Exception ignored)
+                            catch (final Exception e)
                             {
+                                LOGGER.debug("Batch visibility count script failed: {}. Falling back to sequential check.", e.getMessage());
+                            }
+                        }
+
+                        if (!batchEvaluated)
+                        {
+                            for (final SelenideElement el : allElements)
+                            {
+                                try
+                                {
+                                    if (el.isDisplayed())
+                                    {
+                                        actualCount++;
+                                    }
+                                }
+                                catch (final Exception ignored)
+                                {
+                                }
                             }
                         }
                     }
@@ -2222,6 +3235,176 @@ public final class BrowserToolProvider
         return "";
     }
 
+    private static String safeGetText(final SelenideElement el)
+    {
+        try
+        {
+            return el.getText();
+        }
+        catch (final Exception | AssertionError ignored)
+        {
+            return null;
+        }
+    }
+
+    private static SelenideElement resolveElementBySelectorAndText(final String selector, final String text)
+    {
+        final boolean hasSelector = selector != null && !selector.isBlank();
+        final boolean hasText = text != null && !text.isBlank();
+
+        if (hasSelector && !hasText)
+        {
+            if (selector.startsWith("text="))
+            {
+                final String rawText = selector.substring("text=".length()).trim();
+                return $(Selectors.byText(rawText)).is(Condition.visible)
+                        ? $(Selectors.byText(rawText))
+                        : $(Selectors.withText(rawText));
+            }
+            return findElement(selector);
+        }
+
+        if (!hasSelector && hasText)
+        {
+            return $(Selectors.byText(text)).is(Condition.visible)
+                    ? $(Selectors.byText(text))
+                    : $(Selectors.withText(text));
+        }
+
+        if (hasSelector && hasText)
+        {
+            if (selector.startsWith("text="))
+            {
+                final String rawText = selector.substring("text=".length()).trim();
+                return $(Selectors.byText(rawText)).is(Condition.visible)
+                        ? $(Selectors.byText(rawText))
+                        : $(Selectors.withText(rawText));
+            }
+
+            try
+            {
+                final ElementsCollection candidates = findElements(selector);
+                final ElementsCollection visibleCandidates = candidates.filter(Condition.visible);
+
+                for (final SelenideElement candidate : visibleCandidates)
+                {
+                    final String candidateText = safeGetText(candidate);
+                    if (candidateText != null && candidateText.trim().equalsIgnoreCase(text.trim()))
+                    {
+                        return candidate;
+                    }
+                }
+
+                for (final SelenideElement candidate : visibleCandidates)
+                {
+                    final String candidateText = safeGetText(candidate);
+                    if (candidateText != null && candidateText.toLowerCase().contains(text.toLowerCase()))
+                    {
+                        return candidate;
+                    }
+                }
+            }
+            catch (final Exception | AssertionError ignored)
+            {
+            }
+
+            try
+            {
+                final SelenideElement container = findElement(selector);
+                if (container.exists())
+                {
+                    final SelenideElement childExact = container.$(Selectors.byText(text));
+                    if (childExact.exists() && childExact.is(Condition.visible))
+                    {
+                        return childExact;
+                    }
+                    final SelenideElement childPartial = container.$(Selectors.withText(text));
+                    if (childPartial.exists() && childPartial.is(Condition.visible))
+                    {
+                        return childPartial;
+                    }
+                    if (childExact.exists())
+                    {
+                        return childExact;
+                    }
+                }
+            }
+            catch (final Exception | AssertionError ignored)
+            {
+            }
+
+            try
+            {
+                final ElementsCollection candidates = findElements(selector);
+                for (final SelenideElement candidate : candidates)
+                {
+                    final String candidateText = safeGetText(candidate);
+                    if (candidateText != null && candidateText.trim().equalsIgnoreCase(text.trim()))
+                    {
+                        return candidate;
+                    }
+                }
+            }
+            catch (final Exception | AssertionError ignored)
+            {
+            }
+
+            try
+            {
+                final SelenideElement globalText = $(Selectors.byText(text));
+                if (globalText.exists() && globalText.is(Condition.visible))
+                {
+                    return globalText;
+                }
+            }
+            catch (final Exception | AssertionError ignored)
+            {
+            }
+
+            return findElement(selector);
+        }
+
+        return $("body");
+    }
+
+    private static By safeResolveLocator(final String selector)
+    {
+        if (selector == null || selector.isBlank())
+        {
+            return By.tagName("body");
+        }
+        if (isMarkerLocator(selector))
+        {
+            final int colonIdx = selector.indexOf(':');
+            final String markerNum = colonIdx >= 0 ? selector.substring(colonIdx + 1).trim() : selector.trim();
+            return By.cssSelector("[data-m='" + markerNum + "']");
+        }
+        try
+        {
+            if (SelenideElementFinder.isAutomationIdSelector(selector))
+            {
+                SelenideElementFinder.ensureAutomationIdsStampedIfNeeded(selector);
+            }
+            return LocatorResolver.resolveLocator(selector);
+        }
+        catch (final Exception ignored)
+        {
+            try
+            {
+                return By.cssSelector(selector);
+            }
+            catch (final Exception ex)
+            {
+                return By.tagName("body");
+            }
+        }
+    }
+
+    private static SelenideElement resolveLazyElement(final String selector)
+    {
+        return $(safeResolveLocator(selector));
+    }
+
     private static SelenideElement findElement(final String selector)
     {
         if (selector == null || selector.isBlank())
@@ -2229,30 +3412,12 @@ public final class BrowserToolProvider
             return $("body");
         }
         final SelenideElement found = SelenideElementFinder.findElement(selector);
-        return found != null ? found : $(selector);
+        return found != null ? found : $(safeResolveLocator(selector));
     }
 
     private static ElementsCollection findElements(final String selector)
     {
-        if (selector == null || selector.isBlank())
-        {
-            return Selenide.$$("body");
-        }
-        try
-        {
-            return Selenide.$$(SelenideElementFinder.resolveLocator(selector));
-        }
-        catch (final Exception ignored)
-        {
-            try
-            {
-                return Selenide.$$(selector);
-            }
-            catch (final Exception ex)
-            {
-                return Selenide.$$("body");
-            }
-        }
+        return Selenide.$$(safeResolveLocator(selector));
     }
 
     private static int windowInnerHeight()
@@ -2296,6 +3461,13 @@ public final class BrowserToolProvider
             @Override
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
+                final boolean exact = call.arguments().path("exact").asBoolean(false);
+                final boolean regex = call.arguments().path("regex").asBoolean(false);
+                final boolean negated = call.arguments().path("negated").asBoolean(false)
+                        || call.arguments().path("not").asBoolean(false)
+                        || call.arguments().path("invert").asBoolean(false);
+                final boolean empty = call.arguments().path("empty").asBoolean(false);
+
                 final String rawExpectedUrl = call.arguments().hasNonNull("expectedUrl")
                         ? call.arguments().path("expectedUrl").asText()
                         : (call.arguments().hasNonNull("url")
@@ -2305,17 +3477,19 @@ public final class BrowserToolProvider
                                         : (call.arguments().hasNonNull("target")
                                                 ? call.arguments().path("target").asText()
                                                 : null)));
-                if (rawExpectedUrl == null || rawExpectedUrl.isBlank())
+
+                // 'empty: false' only means 'not empty' when no expected URL was given. Next to an expected URL it must not
+                // cancel the comparison, otherwise a recorded call would replay as a check that always passes.
+                final boolean notEmpty = call.arguments().path("notEmpty").asBoolean(false)
+                        || (call.arguments().hasNonNull("empty") && !call.arguments().path("empty").asBoolean()
+                                && (rawExpectedUrl == null || rawExpectedUrl.isBlank()));
+                final boolean isAssertNotEmpty = notEmpty || (negated && (rawExpectedUrl == null || rawExpectedUrl.isBlank()));
+                final boolean isAssertEmpty = empty || (!negated && exact && rawExpectedUrl != null && rawExpectedUrl.isBlank());
+
+                if (!isAssertNotEmpty && !isAssertEmpty && (rawExpectedUrl == null || rawExpectedUrl.isBlank()))
                 {
                     throw new AssertionError("assert_url requires an 'expectedUrl' argument");
                 }
-
-                final boolean exact = call.arguments().path("exact").asBoolean(false);
-                final boolean regex = call.arguments().path("regex").asBoolean(false);
-                final boolean negated = call.arguments().path("negated").asBoolean(false)
-                        || call.arguments().path("not").asBoolean(false)
-                        || call.arguments().path("invert").asBoolean(false);
-                final String expectedUrl = regex ? cleanRegexPattern(rawExpectedUrl) : unescapeLiteralText(rawExpectedUrl);
 
                 if (!WebDriverRunner.hasWebDriverStarted())
                 {
@@ -2324,53 +3498,74 @@ public final class BrowserToolProvider
 
                 try
                 {
-                    if (regex)
+                    if (isAssertNotEmpty)
                     {
-                        Pattern compiledPattern;
-                        try
-                        {
-                            compiledPattern = Pattern.compile(expectedUrl, Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-                        }
-                        catch (final PatternSyntaxException e)
-                        {
-                            compiledPattern = Pattern.compile(Pattern.quote(expectedUrl), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-                        }
-                        final Pattern finalPattern = compiledPattern;
-                        if (negated)
-                        {
-                            Selenide.Wait().until(d -> d.getCurrentUrl() == null || !finalPattern.matcher(d.getCurrentUrl()).find());
-                        }
-                        else
-                        {
-                            Selenide.Wait().until(d -> d.getCurrentUrl() != null && finalPattern.matcher(d.getCurrentUrl()).find());
-                        }
+                        Selenide.Wait().until(d -> d.getCurrentUrl() != null && !d.getCurrentUrl().trim().isEmpty());
                     }
-                    else if (exact)
+                    else if (isAssertEmpty)
                     {
-                        if (negated)
-                        {
-                            Selenide.Wait().until(d -> d.getCurrentUrl() == null || !d.getCurrentUrl().trim().equalsIgnoreCase(expectedUrl.trim()));
-                        }
-                        else
-                        {
-                            Selenide.Wait().until(d -> d.getCurrentUrl() != null && d.getCurrentUrl().trim().equalsIgnoreCase(expectedUrl.trim()));
-                        }
+                        Selenide.Wait().until(d -> d.getCurrentUrl() == null || d.getCurrentUrl().trim().isEmpty());
                     }
                     else
                     {
-                        if (negated)
+                        final String expectedUrl = regex ? cleanRegexPattern(rawExpectedUrl) : unescapeLiteralText(rawExpectedUrl);
+                        if (regex)
                         {
-                            Selenide.Wait().until(d -> d.getCurrentUrl() == null || !d.getCurrentUrl().toLowerCase(Locale.ROOT).contains(expectedUrl.toLowerCase(Locale.ROOT)));
+                            Pattern compiledPattern;
+                            try
+                            {
+                                compiledPattern = Pattern.compile(expectedUrl, Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                            }
+                            catch (final PatternSyntaxException e)
+                            {
+                                compiledPattern = Pattern.compile(Pattern.quote(expectedUrl), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                            }
+                            final Pattern finalPattern = compiledPattern;
+                            if (negated)
+                            {
+                                Selenide.Wait().until(d -> d.getCurrentUrl() == null || !finalPattern.matcher(d.getCurrentUrl()).find());
+                            }
+                            else
+                            {
+                                Selenide.Wait().until(d -> d.getCurrentUrl() != null && finalPattern.matcher(d.getCurrentUrl()).find());
+                            }
+                        }
+                        else if (exact)
+                        {
+                            if (negated)
+                            {
+                                Selenide.Wait().until(d -> d.getCurrentUrl() == null || !d.getCurrentUrl().trim().equalsIgnoreCase(expectedUrl.trim()));
+                            }
+                            else
+                            {
+                                Selenide.Wait().until(d -> d.getCurrentUrl() != null && d.getCurrentUrl().trim().equalsIgnoreCase(expectedUrl.trim()));
+                            }
                         }
                         else
                         {
-                            Selenide.Wait().until(d -> d.getCurrentUrl() != null && d.getCurrentUrl().toLowerCase(Locale.ROOT).contains(expectedUrl.toLowerCase(Locale.ROOT)));
+                            if (negated)
+                            {
+                                Selenide.Wait().until(d -> d.getCurrentUrl() == null || !d.getCurrentUrl().toLowerCase(Locale.ROOT).contains(expectedUrl.toLowerCase(Locale.ROOT)));
+                            }
+                            else
+                            {
+                                Selenide.Wait().until(d -> d.getCurrentUrl() != null && d.getCurrentUrl().toLowerCase(Locale.ROOT).contains(expectedUrl.toLowerCase(Locale.ROOT)));
+                            }
                         }
                     }
                 }
                 catch (final TimeoutException e)
                 {
                     final String actualUrl = WebDriverRunner.url();
+                    if (isAssertNotEmpty)
+                    {
+                        throw new AssertionError("Assertion failed: Expected URL to not be empty within " + Configuration.timeout + "ms, but was \"" + actualUrl + "\"");
+                    }
+                    if (isAssertEmpty)
+                    {
+                        throw new AssertionError("Assertion failed: Expected URL to be empty within " + Configuration.timeout + "ms, but was \"" + actualUrl + "\"");
+                    }
+                    final String expectedUrl = regex ? cleanRegexPattern(rawExpectedUrl) : unescapeLiteralText(rawExpectedUrl);
                     if (regex)
                     {
                         throw new AssertionError("Assertion failed: Expected URL to " + (negated ? "not match" : "match") + " regex \"" + expectedUrl + "\" within " + Configuration.timeout + "ms, but was \"" + actualUrl + "\"");
@@ -2416,6 +3611,13 @@ public final class BrowserToolProvider
             @Override
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
+                final boolean exact = call.arguments().path("exact").asBoolean(false);
+                final boolean regex = call.arguments().path("regex").asBoolean(false);
+                final boolean negated = call.arguments().path("negated").asBoolean(false)
+                        || call.arguments().path("not").asBoolean(false)
+                        || call.arguments().path("invert").asBoolean(false);
+                final boolean empty = call.arguments().path("empty").asBoolean(false);
+
                 final String rawExpectedTitle = call.arguments().hasNonNull("expectedTitle")
                         ? call.arguments().path("expectedTitle").asText()
                         : (call.arguments().hasNonNull("title")
@@ -2425,17 +3627,19 @@ public final class BrowserToolProvider
                                         : (call.arguments().hasNonNull("target")
                                                 ? call.arguments().path("target").asText()
                                                 : null)));
-                if (rawExpectedTitle == null || rawExpectedTitle.isBlank())
+
+                // 'empty: false' only means 'not empty' when no expected title was given. Next to an expected title it must not
+                // cancel the comparison, otherwise a recorded call would replay as a check that always passes.
+                final boolean notEmpty = call.arguments().path("notEmpty").asBoolean(false)
+                        || (call.arguments().hasNonNull("empty") && !call.arguments().path("empty").asBoolean()
+                                && (rawExpectedTitle == null || rawExpectedTitle.isBlank()));
+                final boolean isAssertNotEmpty = notEmpty || (negated && (rawExpectedTitle == null || rawExpectedTitle.isBlank()));
+                final boolean isAssertEmpty = empty || (!negated && exact && rawExpectedTitle != null && rawExpectedTitle.isBlank());
+
+                if (!isAssertNotEmpty && !isAssertEmpty && (rawExpectedTitle == null || rawExpectedTitle.isBlank()))
                 {
                     throw new AssertionError("assert_title requires an 'expectedTitle' argument");
                 }
-
-                final boolean exact = call.arguments().path("exact").asBoolean(false);
-                final boolean regex = call.arguments().path("regex").asBoolean(false);
-                final boolean negated = call.arguments().path("negated").asBoolean(false)
-                        || call.arguments().path("not").asBoolean(false)
-                        || call.arguments().path("invert").asBoolean(false);
-                final String expectedTitle = regex ? cleanRegexPattern(rawExpectedTitle) : unescapeLiteralText(rawExpectedTitle);
 
                 if (!WebDriverRunner.hasWebDriverStarted())
                 {
@@ -2444,53 +3648,74 @@ public final class BrowserToolProvider
 
                 try
                 {
-                    if (regex)
+                    if (isAssertNotEmpty)
                     {
-                        Pattern compiledPattern;
-                        try
-                        {
-                            compiledPattern = Pattern.compile(expectedTitle, Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-                        }
-                        catch (final PatternSyntaxException e)
-                        {
-                            compiledPattern = Pattern.compile(Pattern.quote(expectedTitle), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-                        }
-                        final Pattern finalPattern = compiledPattern;
-                        if (negated)
-                        {
-                            Selenide.Wait().until(d -> d.getTitle() == null || !finalPattern.matcher(d.getTitle()).find());
-                        }
-                        else
-                        {
-                            Selenide.Wait().until(d -> d.getTitle() != null && finalPattern.matcher(d.getTitle()).find());
-                        }
+                        Selenide.Wait().until(d -> d.getTitle() != null && !d.getTitle().trim().isEmpty());
                     }
-                    else if (exact)
+                    else if (isAssertEmpty)
                     {
-                        if (negated)
-                        {
-                            Selenide.Wait().until(d -> d.getTitle() == null || !d.getTitle().trim().equalsIgnoreCase(expectedTitle.trim()));
-                        }
-                        else
-                        {
-                            Selenide.Wait().until(d -> d.getTitle() != null && d.getTitle().trim().equalsIgnoreCase(expectedTitle.trim()));
-                        }
+                        Selenide.Wait().until(d -> d.getTitle() == null || d.getTitle().trim().isEmpty());
                     }
                     else
                     {
-                        if (negated)
+                        final String expectedTitle = regex ? cleanRegexPattern(rawExpectedTitle) : unescapeLiteralText(rawExpectedTitle);
+                        if (regex)
                         {
-                            Selenide.Wait().until(d -> d.getTitle() == null || !d.getTitle().toLowerCase(Locale.ROOT).contains(expectedTitle.toLowerCase(Locale.ROOT)));
+                            Pattern compiledPattern;
+                            try
+                            {
+                                compiledPattern = Pattern.compile(expectedTitle, Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                            }
+                            catch (final PatternSyntaxException e)
+                            {
+                                compiledPattern = Pattern.compile(Pattern.quote(expectedTitle), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                            }
+                            final Pattern finalPattern = compiledPattern;
+                            if (negated)
+                            {
+                                Selenide.Wait().until(d -> d.getTitle() == null || !finalPattern.matcher(d.getTitle()).find());
+                            }
+                            else
+                            {
+                                Selenide.Wait().until(d -> d.getTitle() != null && finalPattern.matcher(d.getTitle()).find());
+                            }
+                        }
+                        else if (exact)
+                        {
+                            if (negated)
+                            {
+                                Selenide.Wait().until(d -> d.getTitle() == null || !d.getTitle().trim().equalsIgnoreCase(expectedTitle.trim()));
+                            }
+                            else
+                            {
+                                Selenide.Wait().until(d -> d.getTitle() != null && d.getTitle().trim().equalsIgnoreCase(expectedTitle.trim()));
+                            }
                         }
                         else
                         {
-                            Selenide.Wait().until(d -> d.getTitle() != null && d.getTitle().toLowerCase(Locale.ROOT).contains(expectedTitle.toLowerCase(Locale.ROOT)));
+                            if (negated)
+                            {
+                                Selenide.Wait().until(d -> d.getTitle() == null || !d.getTitle().toLowerCase(Locale.ROOT).contains(expectedTitle.toLowerCase(Locale.ROOT)));
+                            }
+                            else
+                            {
+                                Selenide.Wait().until(d -> d.getTitle() != null && d.getTitle().toLowerCase(Locale.ROOT).contains(expectedTitle.toLowerCase(Locale.ROOT)));
+                            }
                         }
                     }
                 }
                 catch (final TimeoutException e)
                 {
                     final String actualTitle = Selenide.title();
+                    if (isAssertNotEmpty)
+                    {
+                        throw new AssertionError("Assertion failed: Expected page title to not be empty within " + Configuration.timeout + "ms, but was \"" + actualTitle + "\"");
+                    }
+                    if (isAssertEmpty)
+                    {
+                        throw new AssertionError("Assertion failed: Expected page title to be empty within " + Configuration.timeout + "ms, but was \"" + actualTitle + "\"");
+                    }
+                    final String expectedTitle = regex ? cleanRegexPattern(rawExpectedTitle) : unescapeLiteralText(rawExpectedTitle);
                     if (regex)
                     {
                         throw new AssertionError("Assertion failed: Expected page title to " + (negated ? "not match" : "match") + " regex \"" + expectedTitle + "\" within " + Configuration.timeout + "ms, but was \"" + actualTitle + "\"");
@@ -2519,7 +3744,7 @@ public final class BrowserToolProvider
         props.putObject("selector").put("type", "string").put("description", "CSS or XPath selector targeting the element to assert state on");
         final ArrayNode stateEnum = props.putObject("state")
                 .put("type", "string")
-                .put("description", "Expected state of the element ('visible', 'hidden', 'enabled', 'disabled', 'editable', 'readonly', 'checked', 'unchecked', 'selected', 'unselected', 'focused', 'exists', 'absent')")
+                .put("description", "Expected state or comma-separated states of the element ('visible', 'hidden', 'enabled', 'disabled', 'editable', 'readonly', 'checked', 'unchecked', 'selected', 'unselected', 'focused', 'unfocused', 'exists', 'absent', or compound e.g. 'visible, enabled')")
                 .putArray("enum");
         stateEnum.add("visible");
         stateEnum.add("hidden");
@@ -2536,13 +3761,40 @@ public final class BrowserToolProvider
         stateEnum.add("not_focused");
         stateEnum.add("exists");
         stateEnum.add("absent");
+        stateEnum.add("visible, enabled");
+        stateEnum.add("visible, disabled");
+        stateEnum.add("visible, editable");
+        stateEnum.add("visible, readonly");
+        stateEnum.add("checked, enabled");
+        stateEnum.add("checked, disabled");
+        final ArrayNode statesEnum = props.putObject("states")
+                .put("type", "array")
+                .put("description", "Optional array of multiple states to assert simultaneously on the element (e.g. ['visible', 'enabled'])")
+                .putObject("items")
+                .put("type", "string")
+                .putArray("enum");
+        statesEnum.add("visible");
+        statesEnum.add("hidden");
+        statesEnum.add("enabled");
+        statesEnum.add("disabled");
+        statesEnum.add("editable");
+        statesEnum.add("readonly");
+        statesEnum.add("checked");
+        statesEnum.add("unchecked");
+        statesEnum.add("selected");
+        statesEnum.add("unselected");
+        statesEnum.add("focused");
+        statesEnum.add("unfocused");
+        statesEnum.add("not_focused");
+        statesEnum.add("exists");
+        statesEnum.add("absent");
         props.putObject("negated").put("type", "boolean").put("description", "Whether to invert the state assertion (default: false)");
 
         final ArrayNode req = schema.putArray("required");
         req.add("selector");
         req.add("state");
 
-        final ToolDefinition def = new ToolDefinition("assert_element_state", "Asserts that an element satisfies a specific state (e.g. editable, readonly, enabled, disabled, visible, hidden, checked, unchecked, selected, unselected, focused, unfocused, exists, absent)", schema);
+        final ToolDefinition def = new ToolDefinition("assert_element_state", "Asserts that an element satisfies one or more states (e.g. editable, readonly, enabled, disabled, visible, hidden, checked, unchecked, selected, unselected, focused, unfocused, exists, absent, or compound e.g. 'visible, enabled')", schema);
         return new AiTool()
         {
             @Override
@@ -2560,114 +3812,258 @@ public final class BrowserToolProvider
                     throw new AssertionError("assert_element_state requires a 'selector' argument");
                 }
 
-                final String rawState;
-                if (call.arguments().hasNonNull("state") && !call.arguments().path("state").asText().isBlank())
+                final List<String> states = new ArrayList<>();
+                if (call.arguments().has("states") && call.arguments().path("states").isArray())
                 {
-                    rawState = call.arguments().path("state").asText();
+                    for (final JsonNode s : call.arguments().path("states"))
+                    {
+                        if (s.isTextual() && !s.asText().isBlank())
+                        {
+                            states.add(s.asText().trim());
+                        }
+                    }
                 }
-                else if (call.arguments().hasNonNull("expectedState") && !call.arguments().path("expectedState").asText().isBlank())
+
+                if (states.isEmpty())
                 {
-                    rawState = call.arguments().path("expectedState").asText();
+                    final String rawState;
+                    if (call.arguments().hasNonNull("state") && !call.arguments().path("state").asText().isBlank())
+                    {
+                        rawState = call.arguments().path("state").asText();
+                    }
+                    else if (call.arguments().hasNonNull("expectedState") && !call.arguments().path("expectedState").asText().isBlank())
+                    {
+                        rawState = call.arguments().path("expectedState").asText();
+                    }
+                    else if (call.arguments().hasNonNull("value") && !call.arguments().path("value").asText().isBlank())
+                    {
+                        rawState = call.arguments().path("value").asText();
+                    }
+                    else
+                    {
+                        throw new AssertionError("assert_element_state requires a 'state' argument");
+                    }
+
+                    final String[] parts = rawState.split("[,&]|\\band\\b");
+                    for (final String part : parts)
+                    {
+                        final String trimmed = part.trim();
+                        if (!trimmed.isBlank())
+                        {
+                            states.add(trimmed);
+                        }
+                    }
                 }
-                else if (call.arguments().hasNonNull("value") && !call.arguments().path("value").asText().isBlank())
-                {
-                    rawState = call.arguments().path("value").asText();
-                }
-                else
+
+                if (states.isEmpty())
                 {
                     throw new AssertionError("assert_element_state requires a 'state' argument");
                 }
 
                 final boolean negated = call.arguments().path("negated").asBoolean(false)
                         || call.arguments().path("not").asBoolean(false);
-                final String normalized = normalizeElementState(rawState);
-                final String state = negated ? switch (normalized)
-                {
-                    case "visible" -> "hidden";
-                    case "hidden" -> "visible";
-                    case "enabled" -> "disabled";
-                    case "disabled" -> "enabled";
-                    case "checked" -> "unchecked";
-                    case "unchecked" -> "checked";
-                    case "selected" -> "unselected";
-                    case "unselected" -> "selected";
-                    case "focused" -> "unfocused";
-                    case "unfocused" -> "focused";
-                    case "exists" -> "absent";
-                    case "absent" -> "exists";
-                    default -> normalized;
-                } : normalized;
 
-                final SelenideElement el = findElement(selector);
-
-                switch (state)
+                final List<String> resolvedStates = new ArrayList<>(states.size());
+                for (final String rawState : states)
                 {
-                    case "visible" -> el.shouldBe(Condition.visible);
-                    case "hidden" -> el.shouldBe(Condition.hidden);
-                    case "enabled" -> el.shouldBe(Condition.enabled);
-                    case "disabled" -> el.shouldBe(Condition.disabled);
-                    case "editable" -> el.shouldBe(Condition.editable);
-                    case "readonly" -> el.shouldBe(Condition.readonly);
-                    case "checked" -> el.shouldBe(Condition.checked);
-                    case "unchecked" -> el.shouldNotBe(Condition.checked);
-                    case "selected" ->
+                    final String normalized = normalizeElementState(rawState);
+                    final String targetState = negated ? switch (normalized)
                     {
-                        if ("SELECT".equalsIgnoreCase(el.getTagName()))
-                        {
-                            el.getSelectedOption().shouldBe(Condition.exist);
-                        }
-                        else
-                        {
-                            el.shouldBe(Condition.selected);
-                        }
-                    }
-                    case "unselected" ->
-                    {
-                        if ("SELECT".equalsIgnoreCase(el.getTagName()))
-                        {
-                            el.getSelectedOption().shouldNotBe(Condition.exist);
-                        }
-                        else
-                        {
-                            el.shouldNotBe(Condition.selected);
-                        }
-                    }
-                    case "focused" ->
-                    {
-                        final Boolean isFocused = Selenide.executeJavaScript(
-                                "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
-                                el);
-                        if (!Boolean.TRUE.equals(isFocused))
-                        {
-                            el.shouldBe(Condition.focused);
-                        }
-                    }
-                    case "unfocused" ->
-                    {
-                        final Boolean isFocused = Selenide.executeJavaScript(
-                                "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
-                                el);
-                        if (Boolean.TRUE.equals(isFocused))
-                        {
-                            el.shouldNotBe(Condition.focused);
-                        }
-                    }
-                    case "exists" -> el.should(Condition.exist);
-                    case "absent" -> el.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
-                    default -> throw new AssertionError("Unsupported element state assertion: '" + rawState + "'. Allowed states: visible, hidden, enabled, disabled, editable, readonly, checked, unchecked, selected, unselected, focused, unfocused, exists, absent.");
+                        case "visible" -> "hidden";
+                        case "hidden" -> "visible";
+                        case "enabled" -> "disabled";
+                        case "disabled" -> "enabled";
+                        case "checked" -> "unchecked";
+                        case "unchecked" -> "checked";
+                        case "selected" -> "unselected";
+                        case "unselected" -> "selected";
+                        case "focused" -> "unfocused";
+                        case "unfocused" -> "focused";
+                        case "exists" -> "absent";
+                        case "absent" -> "exists";
+                        default -> normalized;
+                    } : normalized;
+                    resolvedStates.add(targetState);
                 }
 
-                final ObjectNode res = successNode("assert_element_state");
-                res.put("target", selector);
-                res.put("state", state);
-                res.put("negated", negated);
-                res.put("matched", true);
-                return ToolResult.success(call.callId(), res.toString());
+                final boolean shouldAutoScroll = resolvedStates.stream().anyMatch(s ->
+                        "visible".equals(s) || "enabled".equals(s) || "editable".equals(s) || "focused".equals(s) || "selected".equals(s));
+
+                try
+                {
+                    SelenideElement el = resolveLazyElement(selector);
+                    if (shouldAutoScroll && el.exists() && !el.is(Condition.visible))
+                    {
+                        SelenideElementFinder.scrollIntoViewIfNeeded(el);
+                    }
+                    if (!el.is(Condition.visible))
+                    {
+                        final ElementsCollection visibleCandidates = findElements(selector).filter(Condition.visible);
+                        if (!visibleCandidates.isEmpty())
+                        {
+                            el = visibleCandidates.first();
+                        }
+                        else if (shouldAutoScroll)
+                        {
+                            final ElementsCollection candidates = findElements(selector);
+                            for (final SelenideElement cand : candidates)
+                            {
+                                if (cand.exists())
+                                {
+                                    if (!cand.is(Condition.visible))
+                                    {
+                                        SelenideElementFinder.scrollIntoViewIfNeeded(cand);
+                                    }
+                                    if (cand.is(Condition.visible))
+                                    {
+                                        el = cand;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    final List<String> evaluatedStates = new ArrayList<>();
+                    for (final String state : resolvedStates)
+                    {
+                        switch (state)
+                        {
+                            case "visible" ->
+                            {
+                                if (el.is(Condition.visible))
+                                {
+                                    el.shouldBe(Condition.visible);
+                                }
+                                else
+                                {
+                                    el = findElements(selector).findBy(Condition.visible);
+                                    el.shouldBe(Condition.visible);
+                                }
+                            }
+                            case "hidden" ->
+                            {
+                                final ElementsCollection visibleCandidates = findElements(selector).filter(Condition.visible);
+                                if (!visibleCandidates.isEmpty())
+                                {
+                                    el = visibleCandidates.first();
+                                }
+                                el.shouldBe(Condition.hidden);
+                            }
+                            case "enabled" -> el.shouldBe(Condition.enabled);
+                            case "disabled" -> el.shouldBe(Condition.disabled);
+                            case "editable" -> el.shouldBe(Condition.editable);
+                            case "readonly" -> el.shouldBe(Condition.readonly);
+                            case "checked" -> el.shouldBe(Condition.checked);
+                            case "unchecked" -> el.shouldNotBe(Condition.checked);
+                            case "selected" ->
+                            {
+                                if ("SELECT".equalsIgnoreCase(el.getTagName()))
+                                {
+                                    el.getSelectedOption().shouldBe(Condition.exist);
+                                }
+                                else
+                                {
+                                    el.shouldBe(Condition.selected);
+                                }
+                            }
+                            case "unselected" ->
+                            {
+                                if ("SELECT".equalsIgnoreCase(el.getTagName()))
+                                {
+                                    el.getSelectedOption().shouldNotBe(Condition.exist);
+                                }
+                                else
+                                {
+                                    el.shouldNotBe(Condition.selected);
+                                }
+                            }
+                            case "focused" ->
+                            {
+                                final Boolean isFocused = Selenide.executeJavaScript(
+                                        "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
+                                        el);
+                                if (!Boolean.TRUE.equals(isFocused))
+                                {
+                                    el.shouldBe(Condition.focused);
+                                }
+                            }
+                            case "unfocused" ->
+                            {
+                                final Boolean isFocused = Selenide.executeJavaScript(
+                                        "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
+                                        el);
+                                if (Boolean.TRUE.equals(isFocused))
+                                {
+                                    el.shouldNotBe(Condition.focused);
+                                }
+                            }
+                            case "exists" -> el.should(Condition.exist);
+                            case "absent" -> el.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
+                            default -> throw new AssertionError("Unsupported element state assertion: '" + state + "'. Allowed states: visible, hidden, enabled, disabled, editable, readonly, checked, unchecked, selected, unselected, focused, unfocused, exists, absent.");
+                        }
+                        evaluatedStates.add(state);
+                    }
+
+                    final ObjectNode res = successNode("assert_element_state");
+                    res.put("target", selector);
+                    res.put("state", String.join(", ", evaluatedStates));
+                    if (evaluatedStates.size() > 1)
+                    {
+                        final ArrayNode arr = res.putArray("states");
+                        for (final String s : evaluatedStates)
+                        {
+                            arr.add(s);
+                        }
+                    }
+                    res.put("negated", negated);
+                    res.put("matched", true);
+                    if (el != null && el.exists() && WebDriverRunner.hasWebDriverStarted())
+                    {
+                        try
+                        {
+                            final DomFeatureVector featureVector = new PageAnalyzer(WebDriverRunner.getWebDriver()).extractFeatureVector(el);
+                            if (featureVector != null)
+                            {
+                                res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
+                            }
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+                    return ToolResult.success(call.callId(), res.toString());
+                }
+                catch (final ElementNotFound | NoSuchElementException e)
+                {
+                    boolean anyElementExists = false;
+                    try
+                    {
+                        final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                        if (driver != null)
+                        {
+                            final By by = safeResolveLocator(selector);
+                            final List<WebElement> found = driver.findElements(by);
+                            anyElementExists = found != null && !found.isEmpty();
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+
+                    if (anyElementExists)
+                    {
+                        throw e;
+                    }
+
+                    final ObjectNode err = errorNode("Target element not found in DOM for selector '" + selector + "'. Element does not exist or has not rendered. Use 'query_dom' to inspect the page structure or verify the selector.");
+                    return ToolResult.error(call.callId(), err.toString());
+                }
             }
         };
     }
 
-    static String normalizeElementState(final String rawState)
+    public static String normalizeElementState(final String rawState)
     {
         if (rawState == null || rawState.isBlank())
         {
@@ -2687,6 +4083,7 @@ public final class BrowserToolProvider
             case "unfocused", "not_focused" -> "unfocused";
             case "present", "exist", "exists" -> "exists";
             case "invisible", "hidden" -> "hidden";
+            case "displayed", "visible" -> "visible";
             default -> s;
         };
     }
@@ -2699,7 +4096,7 @@ public final class BrowserToolProvider
         props.putObject("selector").put("type", "string").put("description", "CSS or XPath selector targeting the element to assert attribute on");
         props.putObject("attribute").put("type", "string").put("description", "Name of the HTML attribute (e.g. placeholder, value, href, disabled, readonly, type, data-*)");
         props.putObject("expectedValue").put("type", "string").put("description", "Expected attribute value. If omitted, asserts that the attribute exists.");
-        props.putObject("exact").put("type", "boolean").put("description", "Whether attribute value match must be exact (default: true)");
+        props.putObject("exact").put("type", "boolean").put("description", "Whether attribute value match must be exact (default: false)");
         props.putObject("regex").put("type", "boolean").put("description", "Whether expectedValue is a regular expression pattern (default: false)");
         props.putObject("negated").put("type", "boolean").put("description", "Whether to assert attribute is absent or does not match expected value (default: false)");
 
@@ -2761,58 +4158,66 @@ public final class BrowserToolProvider
                     rawExpectedValue = null;
                 }
 
-                final boolean exact = call.arguments().path("exact").asBoolean(true);
+                final boolean exact = call.arguments().path("exact").asBoolean(false);
                 final boolean regex = call.arguments().path("regex").asBoolean(false);
                 final boolean negated = call.arguments().path("negated").asBoolean(false)
                         || call.arguments().path("not").asBoolean(false)
                         || call.arguments().path("invert").asBoolean(false);
 
-                final SelenideElement el = findElement(selector);
+                final SelenideElement el = resolveLazyElement(selector);
 
-                if (rawExpectedValue != null)
+                try
                 {
-                    final String expectedValue = regex ? cleanRegexPattern(rawExpectedValue) : unescapeLiteralText(rawExpectedValue);
-                    if (negated)
+                    if (rawExpectedValue != null)
                     {
-                        if (regex)
+                        final String expectedValue = regex ? cleanRegexPattern(rawExpectedValue) : unescapeLiteralText(rawExpectedValue);
+                        if (negated)
                         {
-                            el.shouldNotHave(Condition.attributeMatching(attrName, expectedValue));
-                        }
-                        else if (exact)
-                        {
-                            el.shouldNotHave(Condition.attribute(attrName, expectedValue));
+                            if (regex)
+                            {
+                                el.shouldNotHave(attributeMatchingPattern(attrName, expectedValue));
+                            }
+                            else if (exact)
+                            {
+                                el.shouldNotHave(Condition.attribute(attrName, expectedValue));
+                            }
+                            else
+                            {
+                                el.shouldNotHave(attributeMatchingPattern(attrName, Pattern.quote(expectedValue)));
+                            }
                         }
                         else
                         {
-                            el.shouldNotHave(Condition.attributeMatching(attrName, "(?s)(?i).*" + Pattern.quote(expectedValue) + ".*"));
+                            if (regex)
+                            {
+                                el.shouldHave(attributeMatchingPattern(attrName, expectedValue));
+                            }
+                            else if (exact)
+                            {
+                                el.shouldHave(Condition.attribute(attrName, expectedValue));
+                            }
+                            else
+                            {
+                                el.shouldHave(attributeMatchingPattern(attrName, Pattern.quote(expectedValue)));
+                            }
                         }
                     }
                     else
                     {
-                        if (regex)
+                        if (negated)
                         {
-                            el.shouldHave(Condition.attributeMatching(attrName, expectedValue));
-                        }
-                        else if (exact)
-                        {
-                            el.shouldHave(Condition.attribute(attrName, expectedValue));
+                            el.shouldNotHave(Condition.attribute(attrName));
                         }
                         else
                         {
-                            el.shouldHave(Condition.attributeMatching(attrName, "(?s)(?i).*" + Pattern.quote(expectedValue) + ".*"));
+                            el.shouldHave(Condition.attribute(attrName));
                         }
                     }
                 }
-                else
+                catch (final ElementNotFound e)
                 {
-                    if (negated)
-                    {
-                        el.shouldNotHave(Condition.attribute(attrName));
-                    }
-                    else
-                    {
-                        el.shouldHave(Condition.attribute(attrName));
-                    }
+                    final ObjectNode err = errorNode("Target element not found in DOM for selector '" + selector + "'. Element does not exist or has not rendered. Use 'query_dom' to inspect the page structure or verify the selector.");
+                    return ToolResult.error(call.callId(), err.toString());
                 }
 
                 final ObjectNode res = successNode("assert_attribute");
@@ -2826,9 +4231,68 @@ public final class BrowserToolProvider
                 }
                 res.put("negated", negated);
                 res.put("matched", true);
+                if (el != null && el.exists() && WebDriverRunner.hasWebDriverStarted())
+                {
+                    try
+                    {
+                        final DomFeatureVector featureVector = new PageAnalyzer(WebDriverRunner.getWebDriver()).extractFeatureVector(el);
+                        if (featureVector != null)
+                        {
+                            res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
+    }
+
+    private static WebElementCondition attributeMatchingPattern(final String attributeName, final String patternStr)
+    {
+        return new AttributePatternCondition(attributeName, patternStr);
+    }
+
+    private static final class AttributePatternCondition extends WebElementCondition
+    {
+        private final String attributeName;
+        private final Pattern pattern;
+
+        AttributePatternCondition(final String attributeName, final String rawPattern)
+        {
+            super("match attribute");
+            this.attributeName = attributeName;
+            Pattern compiled;
+            try
+            {
+                compiled = Pattern.compile(rawPattern, Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+            }
+            catch (final PatternSyntaxException e)
+            {
+                compiled = Pattern.compile(Pattern.quote(rawPattern), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+            }
+            this.pattern = compiled;
+        }
+
+        @Override
+        public CheckResult check(final Driver driver, final WebElement element)
+        {
+            final String val = element.getAttribute(this.attributeName);
+            if (val == null)
+            {
+                return new CheckResult(false, String.format("%s is null / absent", this.attributeName));
+            }
+            final boolean matches = this.pattern.matcher(val).find();
+            return new CheckResult(matches, String.format("%s~/%s/", this.attributeName, val));
+        }
+
+        @Override
+        public String toString()
+        {
+            return String.format("%s %s~/%s/", getName(), this.attributeName, this.pattern);
+        }
     }
 
     private static AiTool createScrollTool()
@@ -2885,35 +4349,50 @@ public final class BrowserToolProvider
                         && !"window".equalsIgnoreCase(targetContainer)
                         && !"document".equalsIgnoreCase(targetContainer))
                 {
-                    final Object result = Selenide.executeJavaScript(
-                            "const target = arguments[0];"
-                            + "const dir = arguments[1];"
-                            + "const yOff = arguments[2];"
-                            + "const xOff = arguments[3];"
-                            + "const el = document.querySelector(target);"
-                            + "if (!el) { return false; }"
-                            + "const distY = (yOff !== 0) ? yOff : Math.round(el.clientHeight ? el.clientHeight * 0.8 : 400);"
-                            + "const distX = (xOff !== 0) ? xOff : Math.round(el.clientWidth ? el.clientWidth * 0.8 : 400);"
-                            + "if (dir === 'top') { el.scrollTop = 0; }"
-                            + "else if (dir === 'bottom') { el.scrollTop = el.scrollHeight; }"
-                            + "else if (dir === 'up') { el.scrollTop -= distY; }"
-                            + "else if (dir === 'left') { el.scrollLeft -= distX; }"
-                            + "else if (dir === 'right') { el.scrollLeft += distX; }"
-                            + "else { el.scrollTop += distY; }"
-                            + "el.dispatchEvent(new Event('scroll', { bubbles: true }));"
-                            + "return true;",
-                            targetContainer, direction, yOffset, xOffset);
-
-                    if (Boolean.TRUE.equals(result))
+                    SelenideElement containerEl = null;
+                    try
                     {
-                        final ObjectNode res = successNode("scroll");
-                        res.put("container", targetContainer);
-                        res.put("direction", direction);
-                        if (yOffset != 0)
+                        final SelenideElement found = findElement(targetContainer);
+                        if (found != null && found.exists())
                         {
-                            res.put("yOffset", yOffset);
+                            containerEl = found;
                         }
-                        return ToolResult.success(call.callId(), res.toString());
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+
+                    if (containerEl != null)
+                    {
+                        final Object result = Selenide.executeJavaScript(
+                                "const el = arguments[0];"
+                                + "const dir = arguments[1];"
+                                + "const yOff = arguments[2];"
+                                + "const xOff = arguments[3];"
+                                + "if (!el) { return false; }"
+                                + "const distY = (yOff !== 0) ? yOff : Math.round(el.clientHeight ? el.clientHeight * 0.8 : 400);"
+                                + "const distX = (xOff !== 0) ? xOff : Math.round(el.clientWidth ? el.clientWidth * 0.8 : 400);"
+                                + "if (dir === 'top') { el.scrollTop = 0; }"
+                                + "else if (dir === 'bottom') { el.scrollTop = el.scrollHeight; }"
+                                + "else if (dir === 'up') { el.scrollTop -= distY; }"
+                                + "else if (dir === 'left') { el.scrollLeft -= distX; }"
+                                + "else if (dir === 'right') { el.scrollLeft += distX; }"
+                                + "else { el.scrollTop += distY; }"
+                                + "el.dispatchEvent(new Event('scroll', { bubbles: true }));"
+                                + "return true;",
+                                containerEl.getWrappedElement(), direction, yOffset, xOffset);
+
+                        if (Boolean.TRUE.equals(result))
+                        {
+                            final ObjectNode res = successNode("scroll");
+                            res.put("container", targetContainer);
+                            res.put("direction", direction);
+                            if (yOffset != 0)
+                            {
+                                res.put("yOffset", yOffset);
+                            }
+                            return ToolResult.success(call.callId(), res.toString());
+                        }
                     }
                 }
 
@@ -3044,8 +4523,8 @@ public final class BrowserToolProvider
         final ObjectNode props = schema.putObject("properties");
         props.putObject("selector").put("type", "string").put("description", "CSS selector to search for");
         props.putObject("text").put("type", "string").put("description", "Case-insensitive text substring to search for");
-        props.putObject("includeAncestors").put("type", "integer").put("description", "Number of ancestor levels to include in returned subtree (default: 1)");
-        props.putObject("limit").put("type", "integer").put("description", "Maximum number of elements to return (default: 10)");
+        props.putObject("includeAncestors").put("type", "integer").put("description", "Number of ancestor levels to include in returned subtree (default: 0)");
+        props.putObject("limit").put("type", "integer").put("description", "Maximum number of elements to return (default: 20)");
 
         final ToolDefinition def = new ToolDefinition("query_dom", "Searches the live DOM for elements matching a selector or text, returning clean subtrees with attributes and visibility", schema);
         return new AiTool()
@@ -3062,12 +4541,16 @@ public final class BrowserToolProvider
                 final JsonNode args = call.arguments();
                 final String selector = args.hasNonNull("selector") ? args.path("selector").asText() : "";
                 final String text = args.hasNonNull("text") ? args.path("text").asText() : "";
-                final int limit = args.hasNonNull("limit") ? args.path("limit").asInt(10) : 10;
+                final int limit = args.hasNonNull("limit") ? args.path("limit").asInt(20) : 20;
+                final int includeAncestors = args.hasNonNull("includeAncestors") ? Math.max(0, args.path("includeAncestors").asInt(0)) : 0;
 
                 final String queryScript = """
-                    return (function(sel, searchText, maxCount) {
+                    return (function(sel, searchText, maxCount, ancestorLevels, passedElements) {
+                        ancestorLevels = (typeof ancestorLevels === 'number' && ancestorLevels > 0) ? ancestorLevels : 0;
                         var candidates = [];
-                        if (sel && sel.trim()) {
+                        if (passedElements && Array.isArray(passedElements)) {
+                            candidates = Array.from(passedElements);
+                        } else if (sel && sel.trim()) {
                             try {
                                 candidates = Array.from(document.querySelectorAll(sel));
                             } catch(e) {}
@@ -3080,7 +4563,7 @@ public final class BrowserToolProvider
                                 } catch(e) {}
                             }
                         } else {
-                            candidates = Array.from(document.querySelectorAll('button, a, input, select, textarea, [role="button"], [role="link"], [role="checkbox"], [role="radio"], [role="tab"], [role="option"], label, h1, h2, h3, h4, p, span, div'));
+                            candidates = Array.from(document.querySelectorAll('button, a, input, select, textarea, [role="button"], [role="link"], [role="checkbox"], [role="radio"], [role="tab"], [role="option"], label, h1, h2, h3, h4, p, span, div, tr, td, th, li, [role="row"], [role="cell"]'));
                         }
 
                         var lowerText = (searchText || '').toLowerCase().trim();
@@ -3108,36 +4591,174 @@ public final class BrowserToolProvider
                         }
 
                         var filtered = exactMatches.concat(wordMatches).concat(partialMatches);
+                        var uniqueFiltered = [];
+                        var seenElements = new Set();
+                        for (var k = 0; k < filtered.length; k++) {
+                            var fEl = filtered[k];
+                            if (!seenElements.has(fEl)) {
+                                seenElements.add(fEl);
+                                uniqueFiltered.push(fEl);
+                            }
+                        }
+
+                        var leafMatches = [];
+                        if (lowerText) {
+                            for (var a = 0; a < uniqueFiltered.length; a++) {
+                                var cand = uniqueFiltered[a];
+                                var isAncestorOfMatch = false;
+                                for (var b = 0; b < uniqueFiltered.length; b++) {
+                                    if (a !== b && cand.contains(uniqueFiltered[b])) {
+                                        isAncestorOfMatch = true;
+                                        break;
+                                    }
+                                }
+                                if (!isAncestorOfMatch) {
+                                    leafMatches.push(cand);
+                                }
+                            }
+                        }
+                        function isVisible(node) {
+                            if (!node || !node.isConnected) return false;
+                            if (node.closest && node.closest('.neodymium-ai-hud')) return false;
+
+                            if (typeof node.checkVisibility === 'function') {
+                                try {
+                                    if (!node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) {
+                                        return false;
+                                    }
+                                } catch(e) {}
+                            }
+
+                            var cur = node;
+                            while (cur && cur !== document.documentElement) {
+                                var style = window.getComputedStyle(cur);
+                                if (!style) return false;
+                                if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') {
+                                    return false;
+                                }
+                                var op = parseFloat(style.opacity);
+                                if (!isNaN(op) && op < 0.01) {
+                                    return false;
+                                }
+                                cur = cur.parentElement;
+                            }
+
+                            var rect = node.getBoundingClientRect();
+                            var tagName = node.tagName ? node.tagName.toLowerCase() : '';
+                            if (rect.width === 0 && rect.height === 0) {
+                                var isCheckable = tagName === 'input' && (node.type === 'radio' || node.type === 'checkbox');
+                                if (isCheckable) {
+                                    var label = (node.labels && node.labels.length > 0) ? node.labels[0] : (node.closest ? node.closest('label') : null);
+                                    if (label && isVisible(label)) return true;
+                                }
+                                return false;
+                            }
+                            return true;
+                        }
+
+                        var toProcess = leafMatches.length > 0 ? leafMatches : uniqueFiltered;
+                        toProcess.sort(function(a, b) {
+                            var visA = isVisible(a) ? 1 : 0;
+                            var visB = isVisible(b) ? 1 : 0;
+                            if (visA !== visB) {
+                                return visB - visA;
+                            }
+                            if (lowerText) {
+                                var lenA = (a.innerText || a.textContent || '').trim().length;
+                                var lenB = (b.innerText || b.textContent || '').trim().length;
+                                return lenA - lenB;
+                            }
+                            return 0;
+                        });
+
                         var results = [];
                         var seen = new Set();
 
-                        for (var j = 0; j < filtered.length; j++) {
-                            var el = filtered[j];
+                        for (var j = 0; j < toProcess.length; j++) {
+                            var rawEl = toProcess[j];
+                            var el = rawEl;
+                            if (ancestorLevels > 0) {
+                                for (var lvl = 0; lvl < ancestorLevels; lvl++) {
+                                    if (el.parentElement && el.parentElement !== document.body && el.parentElement !== document.documentElement) {
+                                        el = el.parentElement;
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            }
                             if (seen.has(el)) continue;
                             seen.add(el);
 
                             var rect = el.getBoundingClientRect();
-                            var inViewport = rect.top < window.innerHeight && rect.bottom > 0 && rect.left < window.innerWidth && rect.right > 0;
+                            var vis = isVisible(el);
+                            var inRect = rect.top < window.innerHeight && rect.bottom > 0 && rect.left < window.innerWidth && rect.right > 0;
+                            var inViewport = vis && inRect;
+
                             var tag = el.tagName.toLowerCase();
-                            var idStr = el.id ? '#' + el.id : '';
-                            var clsStr = el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\\s+/).slice(0, 2).join('.') : '';
+                            var autoId = el.getAttribute('data-ai');
+                            var idStr = (el.id && typeof el.id === 'string' && /^[a-zA-Z0-9_-]+$/.test(el.id)) ? '#' + el.id : '';
+
+                            var safeClasses = [];
+                            if (el.className && typeof el.className === 'string') {
+                                var parts = el.className.trim().split(/\\s+/);
+                                for (var p = 0; p < parts.length; p++) {
+                                    var cls = parts[p];
+                                    if (cls && /^[a-zA-Z0-9_-]+$/.test(cls)) {
+                                        safeClasses.push(cls);
+                                        if (safeClasses.length >= 2) break;
+                                    }
+                                }
+                            }
+                            var clsStr = safeClasses.length > 0 ? '.' + safeClasses.join('.') : '';
+
+                            var selectorStr = '';
+                            if (idStr) {
+                                selectorStr = tag + idStr + clsStr;
+                            } else if (autoId) {
+                                selectorStr = tag + '[data-ai="' + autoId + '"]';
+                            } else {
+                                selectorStr = tag + clsStr;
+                            }
+
                             var elText = (el.innerText || el.textContent || '').trim();
+                            var maxTextLen = ancestorLevels > 0 ? 150 : 80;
+                            var maxHtmlLen = ancestorLevels > 0 ? 500 : 200;
 
                             results.push({
                                 tag: tag,
-                                selector: tag + idStr + clsStr,
-                                text: elText.length > 80 ? elText.substring(0, 80) + '…' : elText,
+                                selector: selectorStr,
+                                text: elText.length > maxTextLen ? elText.substring(0, maxTextLen) + '…' : elText,
+                                visible: vis,
                                 inViewport: inViewport,
+                                dataAi: autoId || null,
                                 y: Math.round(rect.top + window.scrollY),
-                                outerHtml: el.outerHTML.length > 200 ? el.outerHTML.substring(0, 200) + '…' : el.outerHTML
+                                outerHtml: el.outerHTML.length > maxHtmlLen ? el.outerHTML.substring(0, maxHtmlLen) + '…' : el.outerHTML
                             });
                             if (results.length >= maxCount) break;
                         }
                         return JSON.stringify(results);
-                    })(arguments[0], arguments[1], arguments[2]);
+                    })(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4]);
                     """;
 
-                final Object res = Selenide.executeJavaScript(queryScript, selector, text, limit);
+                final boolean hasSelector = selector != null && !selector.isBlank();
+
+                List<WebElement> preResolved = null;
+                if (hasSelector && WebDriverRunner.hasWebDriverStarted())
+                {
+                    try
+                    {
+                        if (SelenideElementFinder.isAutomationIdSelector(selector))
+                        {
+                            SelenideElementFinder.ensureAutomationIdsStampedIfNeeded(selector);
+                        }
+                        preResolved = WebDriverRunner.getWebDriver().findElements(LocatorResolver.resolveLocator(selector));
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
+
+                final Object res = Selenide.executeJavaScript(queryScript, selector, text, limit, includeAncestors, preResolved);
                 final String resStr = res != null ? res.toString() : "[]";
                 final ObjectNode rootNode = successNode("query_dom");
                 JsonNode matchesNode;
@@ -3149,11 +4770,52 @@ public final class BrowserToolProvider
                 {
                     matchesNode = MAPPER.createArrayNode();
                 }
+
+                if (matchesNode.isEmpty() && !selector.isBlank() && preResolved == null && WebDriverRunner.hasWebDriverStarted())
+                {
+                    try
+                    {
+                        final List<WebElement> fallbackEls = WebDriverRunner.getWebDriver().findElements(safeResolveLocator(selector));
+                        if (fallbackEls != null && !fallbackEls.isEmpty())
+                        {
+                            final Object fallbackRes = Selenide.executeJavaScript(queryScript, selector, text, limit, includeAncestors, fallbackEls);
+                            if (fallbackRes != null)
+                            {
+                                final JsonNode fallbackNode = MAPPER.readTree(fallbackRes.toString());
+                                if (fallbackNode != null && !fallbackNode.isEmpty())
+                                {
+                                    matchesNode = fallbackNode;
+                                }
+                            }
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
+
                 rootNode.set("matches", matchesNode);
-                rootNode.put("matchCount", matchesNode.size());
-                if ("[]".equals(resStr.trim()) && !text.isBlank())
+                final int matchCount = matchesNode.size();
+                rootNode.put("matchCount", matchCount);
+                if (matchCount == 0 && !text.isBlank())
                 {
                     rootNode.put("note", "No elements found matching text: '" + text + "'. Verify if the element is inside a closed menu, dropdown, modal, or iframe");
+                }
+                else if (matchCount > 0 && !text.isBlank())
+                {
+                    boolean hasVisible = false;
+                    for (final JsonNode m : matchesNode)
+                    {
+                        if (m.path("visible").asBoolean(false))
+                        {
+                            hasVisible = true;
+                            break;
+                        }
+                    }
+                    if (!hasVisible)
+                    {
+                        rootNode.put("note", "All " + matchCount + " matching element(s) are currently hidden (visible=false). Verify if a parent dropdown, menu, or modal needs to be opened first");
+                    }
                 }
                 return ToolResult.success(call.callId(), rootNode.toString());
             }
@@ -3196,24 +4858,51 @@ public final class BrowserToolProvider
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
                 final String selector = call.arguments().path("selector").asText();
+                if (selector == null || selector.isBlank())
+                {
+                    return ToolResult.error(call.callId(), errorNode("Selector is required for inspect").toString());
+                }
+
+                final SelenideElement el;
+                try
+                {
+                    el = findElement(selector);
+                    if (el == null || !el.exists())
+                    {
+                        return ToolResult.error(call.callId(), errorNode("Element not found for selector: " + selector).toString());
+                    }
+                }
+                catch (final Exception e)
+                {
+                    return ToolResult.error(call.callId(), errorNode("Element not found for selector: " + selector + " (" + e.getMessage() + ")").toString());
+                }
+
                 final String inspectScript = """
-                    return (function(sel) {
-                        var el = document.querySelector(sel);
+                    return (function(el, sel) {
                         if (!el) return null;
                         var rect = el.getBoundingClientRect();
                         var style = window.getComputedStyle(el);
                         return JSON.stringify({
                             selector: sel,
-                            tagName: el.tagName.toLowerCase(),
+                            tagName: (el.tagName || '').toLowerCase(),
                             outerHTML: el.outerHTML,
                             text: (el.innerText || '').trim(),
                             visible: style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0,
                             boundingBox: { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) }
                         });
-                    })(arguments[0]);
+                    })(arguments[0], arguments[1]);
                     """;
 
-                final Object result = Selenide.executeJavaScript(inspectScript, selector);
+                final Object result;
+                try
+                {
+                    result = Selenide.executeJavaScript(inspectScript, el.getWrappedElement(), selector);
+                }
+                catch (final Exception e)
+                {
+                    return ToolResult.error(call.callId(), errorNode("Failed to inspect element: " + e.getMessage()).toString());
+                }
+
                 if (result == null)
                 {
                     return ToolResult.error(call.callId(), errorNode("Element not found for selector: " + selector).toString());
@@ -3264,7 +4953,7 @@ public final class BrowserToolProvider
                 List<Map<String, Object>> badges = null;
                 if (markInteractive)
                 {
-                    badges = VisualBadgeInjector.injectBadges(driver);
+                    badges = VisualBadgeInjector.injectMarkers(driver);
                 }
 
                 final byte[] screenshotBytes;
@@ -3272,12 +4961,9 @@ public final class BrowserToolProvider
                 {
                     screenshotBytes = ((TakesScreenshot) driver).getScreenshotAs(OutputType.BYTES);
                 }
-                finally
+                catch (final Exception e)
                 {
-                    if (markInteractive)
-                    {
-                        VisualBadgeInjector.removeBadges(driver);
-                    }
+                    return ToolResult.error(call.callId(), errorNode("Failed to capture screenshot: " + e.getMessage()).toString());
                 }
 
                 final String base64 = Base64.getEncoder().encodeToString(screenshotBytes);
@@ -3297,6 +4983,74 @@ public final class BrowserToolProvider
                 {
                     builder.withVariable("visualBadges", badges);
                 }
+
+                return builder.build();
+            }
+        };
+    }
+
+    private static AiTool createMarkElementsTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+        props.putObject("action").put("type", "string").put("description", "Action to perform: 'on' to inject visual markers, 'off' to purge them (default: 'on')");
+        props.putObject("scope").put("type", "string").put("description", "Optional CSS selector to restrict marker injection to a container");
+        props.putObject("maxCount").put("type", "integer").put("description", "Maximum number of elements to mark (default: 50)");
+
+        final ToolDefinition def = new ToolDefinition("mark_elements", "Activates or deactivates high-contrast visual marker overlays on screen and stamps compact [data-m=\"N\"] attributes into the DOM for visual multimodal grounding", schema);
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                final String action = call.arguments().path("action").asText("on").trim().toLowerCase(Locale.ROOT);
+                final String scope = call.arguments().hasNonNull("scope") ? call.arguments().path("scope").asText().trim() : null;
+                final int maxCount = call.arguments().path("maxCount").asInt(50);
+
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                if (driver == null)
+                {
+                    return ToolResult.error(call.callId(), errorNode("WebDriver is not running; cannot manage visual markers").toString());
+                }
+
+                if ("off".equals(action))
+                {
+                    VisualBadgeInjector.removeMarkers(driver);
+                    final ObjectNode res = successNode("mark_elements");
+                    res.put("action", "off");
+                    res.put("status", "Markers removed");
+                    return ToolResult.success(call.callId(), res.toString());
+                }
+
+                final List<Map<String, Object>> markers = VisualBadgeInjector.injectMarkers(driver, scope, maxCount);
+                final byte[] screenshotBytes;
+                try
+                {
+                    screenshotBytes = ((TakesScreenshot) driver).getScreenshotAs(OutputType.BYTES);
+                }
+                catch (final Exception e)
+                {
+                    return ToolResult.error(call.callId(), errorNode("Failed to capture marked screenshot: " + e.getMessage()).toString());
+                }
+
+                final String base64 = Base64.getEncoder().encodeToString(screenshotBytes);
+                final ObjectNode res = successNode("mark_elements");
+                res.put("action", "on");
+                res.put("markedCount", markers.size());
+
+                final ToolResult.Builder builder = ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS)
+                        .withContent(res.toString())
+                        .withArtifact("screenshot", "image/png", screenshotBytes)
+                        .withVariable("screenshotBase64", "data:image/png;base64," + base64)
+                        .withVariable("markedCount", markers.size())
+                        .withVariable("markers", markers);
 
                 return builder.build();
             }
@@ -3325,6 +5079,11 @@ public final class BrowserToolProvider
             public ToolResult execute(final ToolCall call, final ToolContext context) throws Exception
             {
                 final String selector = call.arguments().path("selector").asText();
+                if (selector == null || selector.isBlank())
+                {
+                    return ToolResult.error(call.callId(), errorNode("Selector is required for inspect_visual").toString());
+                }
+
                 final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
 
                 if (driver == null)
@@ -3332,16 +5091,38 @@ public final class BrowserToolProvider
                     return ToolResult.error(call.callId(), errorNode("WebDriver not started").toString());
                 }
 
+                final SelenideElement el;
+                try
+                {
+                    el = findElement(selector);
+                    if (el == null || !el.exists())
+                    {
+                        return ToolResult.error(call.callId(), errorNode("Element not found for selector: " + selector).toString());
+                    }
+                }
+                catch (final Exception e)
+                {
+                    return ToolResult.error(call.callId(), errorNode("Element not found for selector: " + selector + " (" + e.getMessage() + ")").toString());
+                }
+
                 final byte[] fullScreenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.BYTES);
                 final BufferedImage fullImg = ImageIO.read(new ByteArrayInputStream(fullScreenshot));
 
                 final String rectScript = """
-                    var el = document.querySelector(arguments[0]);
+                    var el = arguments[0];
                     if (!el) return null;
                     var r = el.getBoundingClientRect();
                     return { x: Math.max(0, Math.round(r.left)), y: Math.max(0, Math.round(r.top)), w: Math.round(r.width), h: Math.round(r.height) };
                     """;
-                final Object rectObj = ((JavascriptExecutor) driver).executeScript(rectScript, selector);
+                final Object rectObj;
+                try
+                {
+                    rectObj = ((JavascriptExecutor) driver).executeScript(rectScript, el.getWrappedElement());
+                }
+                catch (final Exception e)
+                {
+                    return ToolResult.error(call.callId(), errorNode("Failed to resolve bounding box for selector: " + selector + " (" + e.getMessage() + ")").toString());
+                }
 
                 if (rectObj instanceof Map<?, ?> map && fullImg != null)
                 {
@@ -3503,25 +5284,37 @@ public final class BrowserToolProvider
             {
                 final JsonNode args = call.arguments();
                 final String variableName;
+                final boolean valueUsedAsVarName;
                 if (args.hasNonNull("variableName") && !args.path("variableName").asText().isBlank())
                 {
                     variableName = args.path("variableName").asText().trim();
+                    valueUsedAsVarName = false;
                 }
                 else if (args.hasNonNull("variable") && !args.path("variable").asText().isBlank())
                 {
                     variableName = args.path("variable").asText().trim();
+                    valueUsedAsVarName = false;
                 }
                 else if (args.hasNonNull("name") && !args.path("name").asText().isBlank())
                 {
                     variableName = args.path("name").asText().trim();
+                    valueUsedAsVarName = false;
                 }
                 else if (args.hasNonNull("key") && !args.path("key").asText().isBlank())
                 {
                     variableName = args.path("key").asText().trim();
+                    valueUsedAsVarName = false;
+                }
+                else if (args.hasNonNull("value") && !args.path("value").asText().isBlank()
+                        && resolveSelector(args) != null && !resolveSelector(args).isBlank())
+                {
+                    variableName = args.path("value").asText().trim();
+                    valueUsedAsVarName = true;
                 }
                 else
                 {
                     variableName = "";
+                    valueUsedAsVarName = false;
                 }
 
                 if (variableName.isEmpty())
@@ -3532,7 +5325,7 @@ public final class BrowserToolProvider
                 final boolean adjust = args.path("adjust").asBoolean(false);
                 final String valueToStore;
 
-                if (args.hasNonNull("value") && !args.path("value").asText().isBlank())
+                if (args.hasNonNull("value") && !args.path("value").asText().isBlank() && !valueUsedAsVarName)
                 {
                     final String literalVal = args.path("value").asText();
                     valueToStore = adjust ? AiAssertions.normalizeNumericOrPrice(literalVal) : literalVal;
@@ -4376,7 +6169,7 @@ public final class BrowserToolProvider
                 try
                 {
                     final SelenideElement el = findElement(selector).shouldBe(Condition.visible);
-                    el.scrollIntoView("{behavior: \"instant\", block: \"center\"}");
+                    SelenideElementFinder.scrollIntoViewIfNeeded(el);
 
                     final WebDriver driver = WebDriverRunner.getWebDriver();
                     new Actions(driver)
@@ -4445,7 +6238,7 @@ public final class BrowserToolProvider
                     final SelenideElement sourceEl = findElement(source).shouldBe(Condition.visible);
                     final SelenideElement targetEl = findElement(target).shouldBe(Condition.visible);
 
-                    sourceEl.scrollIntoView("{behavior: \"instant\", block: \"center\"}");
+                    SelenideElementFinder.scrollIntoViewIfNeeded(sourceEl);
 
                     final WebDriver driver = WebDriverRunner.getWebDriver();
                     new Actions(driver)
@@ -4632,4 +6425,151 @@ public final class BrowserToolProvider
             }
         }
     }
+
+    /**
+     * Creates the {@code browser_get_network_failures} tool allowing agents to query captured
+     * failed HTTP network requests (status &gt;= 400, aborts, CORS blocks).
+     *
+     * @return the network introspection tool
+     */
+    public static AiTool createGetNetworkFailuresTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+        props.putObject("status_filter")
+             .put("type", "string")
+             .put("description", "Filter failures by status category: 'all_failures', '4xx', '5xx', or 'blocked' (default: 'all_failures')");
+        props.putObject("limit")
+             .put("type", "integer")
+             .put("description", "Maximum number of failure entries to return (default: 20)");
+        props.putObject("clear_buffer")
+             .put("type", "boolean")
+             .put("description", "Whether to drain the returned entries from the internal buffer (default: true)");
+
+        final ToolDefinition def = new ToolDefinition(
+            "browser_get_network_failures",
+            "Queries captured network failures (HTTP 4xx, 5xx, or network aborts/CORS errors) since the last check",
+            schema
+        );
+
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                final JsonNode args = call.arguments();
+                final String statusFilter = args.hasNonNull("status_filter") ? args.path("status_filter").asText() : "all_failures";
+                final int limit = args.hasNonNull("limit") ? args.path("limit").asInt(20) : 20;
+                final boolean clearBuffer = !args.hasNonNull("clear_buffer") || args.path("clear_buffer").asBoolean(true);
+
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                final NetworkTrafficMonitor monitor = getNetworkTrafficMonitor();
+                if (driver != null)
+                {
+                    monitor.attach(driver);
+                    monitor.syncFromPerformanceApi(driver);
+                }
+
+                final List<NetworkFailure> failures = monitor.getFailures(statusFilter, limit, clearBuffer);
+
+                final ObjectNode resultNode = successNode("browser_get_network_failures");
+                resultNode.put("count", failures.size());
+                final ArrayNode failuresArr = resultNode.putArray("failures");
+                for (final NetworkFailure failure : failures)
+                {
+                    final ObjectNode entry = failuresArr.addObject();
+                    entry.put("url", failure.url());
+                    entry.put("statusCode", failure.statusCode());
+                    entry.put("method", failure.method());
+                    entry.put("error", failure.errorDescription());
+                    entry.put("timestamp", failure.timestamp());
+                }
+
+                return ToolResult.success(call.callId(), resultNode.toString());
+            }
+        };
+    }
+
+    /**
+     * Creates the {@code browser_get_console_errors} tool allowing agents to inspect captured
+     * JavaScript console errors, warnings, and unhandled runtime exceptions.
+     *
+     * @return the console introspection tool
+     */
+    public static AiTool createGetConsoleErrorsTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+        props.putObject("min_level")
+             .put("type", "string")
+             .put("description", "Minimum severity level: 'SEVERE', 'WARNING', or 'INFO' (default: 'SEVERE')");
+        props.putObject("limit")
+             .put("type", "integer")
+             .put("description", "Maximum number of log entries to return (default: 20)");
+        props.putObject("clear_buffer")
+             .put("type", "boolean")
+             .put("description", "Whether to drain the returned entries from the internal buffer (default: true)");
+
+        final ToolDefinition def = new ToolDefinition(
+            "browser_get_console_errors",
+            "Queries captured JavaScript console errors, warnings, and unhandled runtime exceptions",
+            schema
+        );
+
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                final JsonNode args = call.arguments();
+                final String minLevel = args.hasNonNull("min_level") ? args.path("min_level").asText() : "SEVERE";
+                final int limit = args.hasNonNull("limit") ? args.path("limit").asInt(20) : 20;
+                final boolean clearBuffer = !args.hasNonNull("clear_buffer") || args.path("clear_buffer").asBoolean(true);
+
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                final ConsoleLogMonitor monitor = getConsoleLogMonitor();
+                if (driver != null)
+                {
+                    monitor.attach(driver);
+                    monitor.syncFromW3cLogs(driver);
+                }
+
+                final List<ConsoleLogEntry> logs = monitor.getLogs(minLevel, limit, clearBuffer);
+
+                final ObjectNode resultNode = successNode("browser_get_console_errors");
+                resultNode.put("count", logs.size());
+                final ArrayNode logsArr = resultNode.putArray("logs");
+                for (final ConsoleLogEntry log : logs)
+                {
+                    final ObjectNode entry = logsArr.addObject();
+                    entry.put("level", log.level());
+                    entry.put("message", log.message());
+                    entry.put("source", log.source());
+                    entry.put("lineNumber", log.lineNumber());
+                    if (log.stackTrace() != null)
+                    {
+                        entry.put("stackTrace", log.stackTrace());
+                    }
+                    entry.put("timestamp", log.timestamp());
+                }
+
+                return ToolResult.success(call.callId(), resultNode.toString());
+            }
+        };
+    }
 }
+

@@ -119,6 +119,80 @@
         <!-- Central Visual Editor Area -->
         <main class="editor-main-area" id="visualEditorMain">
 
+            <!-- Subtle Add '_properties:' Button Container (Only for test playbooks, not fragments) -->
+            <div id="addPropertiesBtnContainer" th:style="${(isFragment != null and isFragment) or ((propertiesList != null and !#lists.isEmpty(propertiesList)) or (propertiesYaml != null and !#strings.isEmpty(propertiesYaml))) ? 'display: none;' : 'display: block;'}">
+                <button class="btn-add-section-block" onclick="addPropertiesBlock()">
+                    <span class="material-symbols-outlined">tune</span>
+                    <span>Add '_properties:' Block</span>
+                </button>
+            </div>
+
+            <!-- _properties: Section Code Panel -->
+            <div class="editor-code-panel" id="playbookPropertiesPanel" th:style="${(propertiesList != null and !#lists.isEmpty(propertiesList)) or (propertiesYaml != null and !#strings.isEmpty(propertiesYaml)) ? 'display: flex;' : 'display: none;'}">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="material-symbols-outlined" style="font-size: 18px; color: var(--accent);">tune</span>
+                        Playbook Properties (_properties:)
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="font-size: 12px; color: var(--text-secondary);">
+                            Override token budgets, timeouts, or browser profiles
+                        </div>
+                        <button type="button" class="btn-remove-section-block" onclick="removePropertiesBlock()">
+                            <span class="material-symbols-outlined">delete</span>
+                            Remove Block
+                        </button>
+                    </div>
+                </div>
+                <div style="padding: 12px 16px;">
+                    <!-- Autocomplete suggestions for common Neodymium properties -->
+                    <datalist id="propertyKeySuggestions">
+                        <option value="neodymium.ai.tokenBudget.input">
+                        <option value="neodymium.ai.tokenBudget.output">
+                        <option value="neodymium.ai.maxStepsPerRun">
+                        <option value="skipReplay">
+                        <option value="browser">
+                        <option value="neodymium.url">
+                        <option value="neodymium.ai.model">
+                        <option value="neodymium.ai.temperature">
+                        <option value="neodymium.ai.timeout">
+                    </datalist>
+
+                    <div class="properties-table-container">
+                        <table class="properties-editor-table" id="playbookPropertiesTable">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50%;">Property Name (Key)</th>
+                                    <th style="width: 45%;">Value</th>
+                                    <th style="width: 5%; text-align: center;"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="propertiesTableBody">
+                                <th:block th:if="${propertiesList != null and !#lists.isEmpty(propertiesList)}">
+                                    <tr th:each="prop : ${propertiesList}" class="property-row">
+                                        <td>
+                                            <input type="text" class="property-key-input" th:value="${prop.get('key')}" placeholder="e.g. skipReplay" list="propertyKeySuggestions" oninput="compilePlaybookToYaml()" />
+                                        </td>
+                                        <td>
+                                            <input type="text" class="property-val-input" th:value="${prop.get('value')}" placeholder="Value" oninput="compilePlaybookToYaml()" />
+                                        </td>
+                                        <td class="property-action-col">
+                                            <button type="button" class="btn-remove-property" title="Remove Property" onclick="removePropertyRow(this)">
+                                                <span class="material-symbols-outlined">delete</span>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </th:block>
+                            </tbody>
+                        </table>
+                        <button type="button" class="btn-add-property-row" onclick="addPropertyRow('', '')">
+                            <span class="material-symbols-outlined" style="font-size: 15px;">add</span>
+                            <span>Add Property</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Subtle Add 'before:' Button Container -->
             <div id="addBeforeBtnContainer" th:style="${(isFragment != null and isFragment) or (beforeSteps != null and !#lists.isEmpty(beforeSteps)) ? 'display: none;' : 'display: block;'}">
                 <button class="btn-add-section-block" onclick="addBeforeBlock()">
@@ -149,20 +223,43 @@
                 </div>
                 <div class="steps-container" id="beforeStepsList" onclick="handleStepsContainerClick(event, this)">
                     <th:block th:if="${beforeSteps != null and !#lists.isEmpty(beforeSteps)}">
-                        <div class="step-row" th:each="step, iterStat : ${beforeSteps}" th:data-line="${iterStat.index + 1}">
-                            <span class="step-number" th:text="${iterStat.index + 1}">1</span>
-                            <div class="step-content" contenteditable="true" spellcheck="false"
-                                 th:data-raw="${step}"
-                                 th:text="${step}"
-                                 onkeydown="handleKeyDown(event, this)"
-                                 onfocus="handleStepFocus(this)"
-                                 onblur="handleStepBlur(this)"></div>
-                            <div class="step-actions">
-                                <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(this, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
-                                <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(this, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
-                                <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(this)"><span class="material-symbols-outlined">delete</span></button>
+                        <th:block th:each="step, iterStat : ${beforeSteps}">
+                            <div class="substeps-toggle-bar substeps-group-header" onclick="toggleSubsteps(this)"
+                                 th:if="${(step.startsWith('  - ') or step.startsWith('    - ')) and (iterStat.index == 0 or !(beforeSteps[iterStat.index - 1].startsWith('  - ') or beforeSteps[iterStat.index - 1].startsWith('    - ')))}">
+                                <div class="substeps-header-left">
+                                    <span class="material-symbols-outlined toggle-chevron">expand_more</span>
+                                    <span class="substeps-title"
+                                          contenteditable="true"
+                                          spellcheck="false"
+                                          title="Click to rename sub-steps block"
+                                          onclick="handleSubstepTitleClick(event, this)"
+                                          onkeydown="handleSubstepTitleKeyDown(event, this)"
+                                          onfocus="handleSubstepTitleFocus(this)"
+                                          oninput="handleSubstepTitleInput(this)"
+                                          onblur="handleSubstepTitleBlur(this)"
+                                          th:text="${iterStat.index > 0 and beforeSteps[iterStat.index - 1].startsWith('#') ? (beforeSteps[iterStat.index - 1].startsWith('# ') ? beforeSteps[iterStat.index - 1].substring(2) : beforeSteps[iterStat.index - 1].substring(1)) : 'Sub-steps'}">Sub-steps</span>
+                                </div>
+                                <span class="substeps-count-badge">Sub-steps</span>
                             </div>
-                        </div>
+                            <div class="step-row"
+                                 th:classappend="${step.startsWith('#') ? 'step-row-comment' : (step.startsWith('  - ') or step.startsWith('    - ') ? 'step-row-substep' : '')}"
+                                 th:data-line="${iterStat.index + 1}">
+                                <span class="step-number" th:if="${step.startsWith('#')}"><span class="comment-hash-badge">#</span></span>
+                                <span class="step-number" th:unless="${step.startsWith('#')}" th:text="${(step.startsWith('  - ') or step.startsWith('    - ')) ? '↳' : iterStat.index + 1}">1</span>
+                                <div class="step-content" contenteditable="true" spellcheck="false"
+                                     th:data-raw="${(step.startsWith('  - ') or step.startsWith('    - ')) ? (step.startsWith('  - ') ? step.substring(4) : step.substring(6)) : step}"
+                                     th:text="${(step.startsWith('  - ') or step.startsWith('    - ')) ? (step.startsWith('  - ') ? step.substring(4) : step.substring(6)) : step}"
+                                     onkeydown="handleKeyDown(event, this)"
+                                     onfocus="handleStepFocus(this)"
+                                     onblur="handleStepBlur(this)"
+                                     oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);"></div>
+                                <div class="step-actions">
+                                    <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(this, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                                    <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(this, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                                    <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(this)"><span class="material-symbols-outlined">delete</span></button>
+                                </div>
+                            </div>
+                        </th:block>
                     </th:block>
                     <th:block th:if="${beforeSteps == null or #lists.isEmpty(beforeSteps)}">
                         <div class="empty-steps-placeholder" onclick="addStepToContainer('beforeStepsList')">
@@ -191,20 +288,43 @@
                 </div>
                 <div class="steps-container" id="stepsList" onclick="handleStepsContainerClick(event, this)">
                     <th:block th:if="${mainSteps != null and !#lists.isEmpty(mainSteps)}">
-                        <div class="step-row" th:each="step, iterStat : ${mainSteps}" th:data-line="${iterStat.index + 1}">
-                            <span class="step-number" th:text="${iterStat.index + 1}">1</span>
-                            <div class="step-content" contenteditable="true" spellcheck="false"
-                                 th:data-raw="${step}"
-                                 th:text="${step}"
-                                 onkeydown="handleKeyDown(event, this)"
-                                 onfocus="handleStepFocus(this)"
-                                 onblur="handleStepBlur(this)"></div>
-                            <div class="step-actions">
-                                <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(this, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
-                                <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(this, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
-                                <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(this)"><span class="material-symbols-outlined">delete</span></button>
+                        <th:block th:each="step, iterStat : ${mainSteps}">
+                            <div class="substeps-toggle-bar substeps-group-header" onclick="toggleSubsteps(this)"
+                                 th:if="${(step.startsWith('  - ') or step.startsWith('    - ')) and (iterStat.index == 0 or !(mainSteps[iterStat.index - 1].startsWith('  - ') or mainSteps[iterStat.index - 1].startsWith('    - ')))}">
+                                <div class="substeps-header-left">
+                                    <span class="material-symbols-outlined toggle-chevron">expand_more</span>
+                                    <span class="substeps-title"
+                                          contenteditable="true"
+                                          spellcheck="false"
+                                          title="Click to rename sub-steps block"
+                                          onclick="handleSubstepTitleClick(event, this)"
+                                          onkeydown="handleSubstepTitleKeyDown(event, this)"
+                                          onfocus="handleSubstepTitleFocus(this)"
+                                          oninput="handleSubstepTitleInput(this)"
+                                          onblur="handleSubstepTitleBlur(this)"
+                                          th:text="${iterStat.index > 0 and mainSteps[iterStat.index - 1].startsWith('#') ? (mainSteps[iterStat.index - 1].startsWith('# ') ? mainSteps[iterStat.index - 1].substring(2) : mainSteps[iterStat.index - 1].substring(1)) : 'Sub-steps'}">Sub-steps</span>
+                                </div>
+                                <span class="substeps-count-badge">Sub-steps</span>
                             </div>
-                        </div>
+                            <div class="step-row"
+                                  th:classappend="${step.startsWith('#') ? 'step-row-comment' : (step.startsWith('  - ') or step.startsWith('    - ') ? 'step-row-substep' : '')}"
+                                  th:data-line="${iterStat.index + 1}">
+                                <span class="step-number" th:if="${step.startsWith('#')}"><span class="comment-hash-badge">#</span></span>
+                                <span class="step-number" th:unless="${step.startsWith('#')}" th:text="${(step.startsWith('  - ') or step.startsWith('    - ')) ? '↳' : iterStat.index + 1}">1</span>
+                                <div class="step-content" contenteditable="true" spellcheck="false"
+                                     th:data-raw="${(step.startsWith('  - ') or step.startsWith('    - ')) ? (step.startsWith('  - ') ? step.substring(4) : step.substring(6)) : step}"
+                                     th:text="${(step.startsWith('  - ') or step.startsWith('    - ')) ? (step.startsWith('  - ') ? step.substring(4) : step.substring(6)) : step}"
+                                     onkeydown="handleKeyDown(event, this)"
+                                     onfocus="handleStepFocus(this)"
+                                     onblur="handleStepBlur(this)"
+                                     oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);"></div>
+                                <div class="step-actions">
+                                    <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(this, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                                    <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(this, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                                    <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(this)"><span class="material-symbols-outlined">delete</span></button>
+                                </div>
+                            </div>
+                        </th:block>
                     </th:block>
                     <th:block th:if="${mainSteps == null or #lists.isEmpty(mainSteps)}">
                         <div class="empty-steps-placeholder" onclick="addStepToContainer('stepsList')">
@@ -237,20 +357,43 @@
                 </div>
                 <div class="steps-container" id="afterStepsList" onclick="handleStepsContainerClick(event, this)">
                     <th:block th:if="${afterSteps != null and !#lists.isEmpty(afterSteps)}">
-                        <div class="step-row" th:each="step, iterStat : ${afterSteps}" th:data-line="${iterStat.index + 1}">
-                            <span class="step-number" th:text="${iterStat.index + 1}">1</span>
-                            <div class="step-content" contenteditable="true" spellcheck="false"
-                                 th:data-raw="${step}"
-                                 th:text="${step}"
-                                 onkeydown="handleKeyDown(event, this)"
-                                 onfocus="handleStepFocus(this)"
-                                 onblur="handleStepBlur(this)"></div>
-                            <div class="step-actions">
-                                <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(this, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
-                                <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(this, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
-                                <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(this)"><span class="material-symbols-outlined">delete</span></button>
+                        <th:block th:each="step, iterStat : ${afterSteps}">
+                            <div class="substeps-toggle-bar substeps-group-header" onclick="toggleSubsteps(this)"
+                                 th:if="${(step.startsWith('  - ') or step.startsWith('    - ')) and (iterStat.index == 0 or !(afterSteps[iterStat.index - 1].startsWith('  - ') or afterSteps[iterStat.index - 1].startsWith('    - ')))}">
+                                <div class="substeps-header-left">
+                                    <span class="material-symbols-outlined toggle-chevron">expand_more</span>
+                                    <span class="substeps-title"
+                                          contenteditable="true"
+                                          spellcheck="false"
+                                          title="Click to rename sub-steps block"
+                                          onclick="handleSubstepTitleClick(event, this)"
+                                          onkeydown="handleSubstepTitleKeyDown(event, this)"
+                                          onfocus="handleSubstepTitleFocus(this)"
+                                          oninput="handleSubstepTitleInput(this)"
+                                          onblur="handleSubstepTitleBlur(this)"
+                                          th:text="${iterStat.index > 0 and afterSteps[iterStat.index - 1].startsWith('#') ? (afterSteps[iterStat.index - 1].startsWith('# ') ? afterSteps[iterStat.index - 1].substring(2) : afterSteps[iterStat.index - 1].substring(1)) : 'Sub-steps'}">Sub-steps</span>
+                                </div>
+                                <span class="substeps-count-badge">Sub-steps</span>
                             </div>
-                        </div>
+                            <div class="step-row"
+                                 th:classappend="${step.startsWith('#') ? 'step-row-comment' : (step.startsWith('  - ') or step.startsWith('    - ') ? 'step-row-substep' : '')}"
+                                 th:data-line="${iterStat.index + 1}">
+                                <span class="step-number" th:if="${step.startsWith('#')}"><span class="comment-hash-badge">#</span></span>
+                                <span class="step-number" th:unless="${step.startsWith('#')}" th:text="${(step.startsWith('  - ') or step.startsWith('    - ')) ? '↳' : iterStat.index + 1}">1</span>
+                                <div class="step-content" contenteditable="true" spellcheck="false"
+                                     th:data-raw="${(step.startsWith('  - ') or step.startsWith('    - ')) ? (step.startsWith('  - ') ? step.substring(4) : step.substring(6)) : step}"
+                                     th:text="${(step.startsWith('  - ') or step.startsWith('    - ')) ? (step.startsWith('  - ') ? step.substring(4) : step.substring(6)) : step}"
+                                     onkeydown="handleKeyDown(event, this)"
+                                     onfocus="handleStepFocus(this)"
+                                     onblur="handleStepBlur(this)"
+                                     oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);"></div>
+                                <div class="step-actions">
+                                    <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(this, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                                    <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(this, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                                    <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(this)"><span class="material-symbols-outlined">delete</span></button>
+                                </div>
+                            </div>
+                        </th:block>
                     </th:block>
                     <th:block th:if="${afterSteps == null or #lists.isEmpty(afterSteps)}">
                         <div class="empty-steps-placeholder" onclick="addStepToContainer('afterStepsList')">
@@ -543,8 +686,8 @@
                                             th:data-card-id="${cardId}"
                                             th:data-var="${v}"
                                             onclick="toggleIncludeTreeVarScope(this.getAttribute('data-card-id'), this.getAttribute('data-var'), 'required')"
-                                            title="Variable requires definition from test">
-                                        Required from test
+                                            title="Variable requires definition from using file">
+                                        Required from using file
                                     </button>
                                 </div>
                             </div>
@@ -553,6 +696,9 @@
                 </div>
                 <button class="btn-editor" style="font-size: 11px; padding: 3px 8px;" th:id="'btnEditInclude_' + ${cardId}" th:data-card-id="${cardId}" onclick="enableIncludeEdit(this.getAttribute('data-card-id'))">
                     <span class="material-symbols-outlined" style="font-size: 14px;">edit</span> Edit File
+                </button>
+                <button class="btn-editor" style="display: none; font-size: 11px; padding: 3px 8px;" th:id="'btnAddIncludeStep_' + ${cardId}" th:data-card-id="${cardId}" onclick="addNestedStep(this.getAttribute('data-card-id'))">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">add</span> Add Step
                 </button>
                 <button class="btn-editor save" th:id="'btnSaveInclude_' + ${cardId}" style="display: none; font-size: 11px; padding: 3px 8px;" th:data-card-id="${cardId}" onclick="saveIncludeInline(this.getAttribute('data-card-id'))">
                     <span class="material-symbols-outlined" style="font-size: 14px;">save</span> Save
@@ -567,10 +713,18 @@
             <span>Included file does not exist on disk. Edit steps below and save to create it.</span>
         </div>
         <div th:id="'includeInnerSteps_' + ${cardId}" style="display: flex; flex-direction: column; gap: 4px;">
-            <div class="nested-editable-step" contenteditable="false" th:each="step : ${includeSteps}" th:data-original="${step}" th:data-card-id="${cardId}" onfocus="handleNestedFocus(this, event)" onblur="handleNestedBlur(this)" onkeydown="handleNestedKeyDown(event, this.getAttribute('data-card-id'))" oninput="markIncludeUnsaved(this.getAttribute('data-card-id'))">
-                <span class="sub-line-num">-</span>
-                <span th:text="${step}">Step text</span>
-            </div>
+            <th:block th:if="${includeSteps != null and !#lists.isEmpty(includeSteps)}">
+                <div class="nested-editable-step" contenteditable="false" th:each="step : ${includeSteps}" th:data-original="${step}" th:data-card-id="${cardId}" onfocus="handleNestedFocus(this, event)" onblur="handleNestedBlur(this)" onkeydown="handleNestedKeyDown(event, this.getAttribute('data-card-id'))" oninput="markIncludeUnsaved(this.getAttribute('data-card-id'))">
+                    <span class="sub-line-num">-</span>
+                    <span th:text="${step}">Step text</span>
+                </div>
+            </th:block>
+            <th:block th:if="${includeSteps == null or #lists.isEmpty(includeSteps)}">
+                <div class="empty-steps-placeholder" th:data-card-id="${cardId}" onclick="addNestedStep(this.getAttribute('data-card-id'))">
+                    <span class="material-symbols-outlined" style="font-size: 20px; color: var(--accent, #2563eb);">add_circle</span>
+                    <span>No steps defined in this include. Click here to add a step.</span>
+                </div>
+            </th:block>
         </div>
     </div>
 </th:block>

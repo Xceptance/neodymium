@@ -18,6 +18,7 @@
  */
 package com.xceptance.neodymium.aura;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xceptance.neodymium.aura.dto.DatasetDto;
 import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import java.io.File;
@@ -28,8 +29,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -38,8 +43,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import org.neodymium.ai.util.AtomicFileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 
 /**
@@ -52,6 +59,31 @@ import org.yaml.snakeyaml.Yaml;
 public final class AuraFileService
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(AuraFileService.class);
+    private static final Pattern FOLDED_BLOCK_SCALAR_PATTERN = Pattern.compile(
+        "(?m)^([ \\t]*(?:-\\s+|(?:steps|_steps|before|beforeEach|_beforeEach|after|afterEach|_afterEach):\\s*))>(-\\s*(?:#.*)?|[ \\t]*(?:#.*)?)$"
+    );
+
+    /**
+     * Normalizes folded block scalars ({@code >} and {@code >-}) to literal block scalars
+     * ({@code |} and {@code |-}) for step lists and playbook lifecycle sections.
+     * <p>
+     * Under standard YAML 1.2 specifications, folded block scalars replace single line breaks
+     * with spaces, flattening multi-line verification or step blocks into a single run-on sentence.
+     * Normalizing to literal block scalars preserves line breaks across YAML parsers, allowing
+     * individual step statements to be decomposed cleanly into discrete steps.
+     * </p>
+     *
+     * @param content the raw YAML string content
+     * @return the normalized YAML content with preserved line break semantics for steps
+     */
+    public static String normalizeBlockScalars(final String content)
+    {
+        if (content == null || content.isEmpty())
+        {
+            return content;
+        }
+        return FOLDED_BLOCK_SCALAR_PATTERN.matcher(content).replaceAll("$1|$2");
+    }
 
     private final Set<String> expandedFiles = ConcurrentHashMap.newKeySet();
     private final File customResourcesDir;
@@ -99,7 +131,8 @@ public final class AuraFileService
         final List<File> candidates = List.of(
                 new File("src/test/resources").getAbsoluteFile(),
                 new File("neodymium-core/src/test/resources").getAbsoluteFile(),
-                new File("aura-manager/src/test/resources").getAbsoluteFile()
+                new File("aura-manager/src/test/resources").getAbsoluteFile(),
+                new File("neodymium-e2e-tests/src/test/resources").getAbsoluteFile()
         );
 
         for (final File candidate : candidates)
@@ -184,6 +217,17 @@ public final class AuraFileService
         }
     }
 
+    private record CachedYamlEntry(long lastModified, long length, YamlFileDto dto)
+    {
+    }
+
+    private final Map<String, CachedYamlEntry> yamlFilesCache = new ConcurrentHashMap<>();
+
+    public void clearYamlFilesCache()
+    {
+        yamlFilesCache.clear();
+    }
+
     public List<YamlFileDto> getYamlFilesList()
     {
         final List<String> yamlFiles = new ArrayList<>();
@@ -197,26 +241,581 @@ public final class AuraFileService
         for (final String file : yamlFiles)
         {
             final File yamlFile = new File(resourcesDir, file);
+            final long lastModified = yamlFile.lastModified();
+            final long length = yamlFile.length();
+            final CachedYamlEntry cached = yamlFilesCache.get(file);
+            if (cached != null && cached.lastModified() == lastModified && cached.length() == length)
+            {
+                responseList.add(cached.dto());
+                continue;
+            }
+
             final Map<String, Object> details = getFileDetails(yamlFile);
             @SuppressWarnings("unchecked")
             final List<DatasetDto> datasets = (List<DatasetDto>) details.get("datasets");
             final String error = (String) details.get("error");
             final boolean hasError = Boolean.TRUE.equals(details.get("hasError")) || (error != null && !error.isBlank());
-            responseList.add(new YamlFileDto(file, datasets != null ? datasets : new ArrayList<>(), hasError, error));
+
+            final List<DatasetDto> enrichedDatasets = new ArrayList<>();
+            boolean fileHasPlaybook = false;
+            if (datasets != null)
+            {
+                for (final DatasetDto ds : datasets)
+                {
+                    final File pbFile = findPlaybookFile(file, ds.id);
+                    final boolean dsHasPb = pbFile != null;
+                    if (dsHasPb)
+                    {
+                        fileHasPlaybook = true;
+                    }
+                    enrichedDatasets.add(new DatasetDto(ds.id, ds.label, ds.hasTestId, dsHasPb, pbFile != null ? pbFile.getPath() : null));
+                }
+            }
+            if (!fileHasPlaybook)
+            {
+                fileHasPlaybook = hasPlaybook(file, null);
+            }
+            final YamlFileDto dto = new YamlFileDto(file, enrichedDatasets, hasError, error, fileHasPlaybook);
+            yamlFilesCache.put(file, new CachedYamlEntry(lastModified, length, dto));
+            responseList.add(dto);
         }
+        yamlFilesCache.keySet().retainAll(yamlFiles);
         return responseList;
     }
 
-    public List<YamlFileDto> getFilteredYamlFilesList(final String query)
+    /**
+     * Resolves all test resources directories across all project modules.
+     *
+     * @return list of resource directories
+     */
+    public List<File> getAllResourceDirectories()
     {
-        final List<YamlFileDto> fullList = getYamlFilesList();
-        if (query == null || query.trim().isEmpty())
+        final List<File> dirs = new ArrayList<>();
+        final File primary = getResourcesDirectory();
+        if (primary != null && primary.exists() && primary.isDirectory())
         {
-            return fullList;
+            dirs.add(primary);
+        }
+        for (final String moduleName : List.of("neodymium-core", "aura-manager", "neodymium-e2e-tests"))
+        {
+            final File modDir = new File(moduleName, "src/test/resources").getAbsoluteFile();
+            if (modDir.exists() && modDir.isDirectory() && !dirs.contains(modDir))
+            {
+                dirs.add(modDir);
+            }
+        }
+        return dirs;
+    }
+
+    /**
+     * Resolves a recorded companion JSON playbook file matching the specified test file and dataset ID.
+     *
+     * @param file test file relative path (e.g. "verla/SearchTest.yaml")
+     * @param datasetId dataset ID (e.g. "normal")
+     * @return resolved File or null if not found
+     */
+    public File findPlaybookFile(final String file, final String datasetId)
+    {
+        if (file == null || file.isBlank())
+        {
+            return null;
+        }
+
+        final String cleanFileName;
+        final int lastSlash = file.lastIndexOf('/');
+        cleanFileName = lastSlash >= 0 ? file.substring(lastSlash + 1) : file;
+        final int lastDot = cleanFileName.lastIndexOf('.');
+        final String baseName = lastDot > 0 ? cleanFileName.substring(0, lastDot) : cleanFileName;
+
+        final List<File> resourceRoots = getAllResourceDirectories();
+        for (final File root : resourceRoots)
+        {
+            final List<File> jsonFiles = new ArrayList<>();
+            scanJsonFiles(root, jsonFiles);
+
+            // 1. Precise name match
+            for (final File jsonFile : jsonFiles)
+            {
+                final String nameLower = jsonFile.getName().toLowerCase();
+                final String baseLower = baseName.toLowerCase();
+
+                if (nameLower.contains(baseLower))
+                {
+                    if (datasetId != null && !datasetId.isBlank())
+                    {
+                        if (nameLower.contains(datasetId.toLowerCase()))
+                        {
+                            return jsonFile;
+                        }
+                    }
+                    else
+                    {
+                        return jsonFile;
+                    }
+                }
+            }
+
+            // 2. Content fallback match
+            for (final File jsonFile : jsonFiles)
+            {
+                try
+                {
+                    final String content = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
+                    if (content.contains(cleanFileName))
+                    {
+                        if (datasetId != null && !datasetId.isBlank())
+                        {
+                            if (jsonFile.getName().toLowerCase().contains(datasetId.toLowerCase()) || content.contains(datasetId))
+                            {
+                                return jsonFile;
+                            }
+                        }
+                        else
+                        {
+                            return jsonFile;
+                        }
+                    }
+                }
+                catch (final IOException ignored)
+                {
+                }
+            }
+        }
+        return null;
+    }
+
+    public File findSourceTestFile(final String file)
+    {
+        if (file == null || file.isBlank())
+        {
+            return null;
+        }
+        try
+        {
+            final File canonical = resolveCanonicalFile(file);
+            if (canonical != null && canonical.exists())
+            {
+                return canonical;
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+
+        final List<File> resourceRoots = getAllResourceDirectories();
+        for (final File root : resourceRoots)
+        {
+            try
+            {
+                final File candidate = new File(root, file).getCanonicalFile();
+                if (candidate.exists() && candidate.isFile())
+                {
+                    return candidate;
+                }
+                final File found = findFileRecursively(root, file);
+                if (found != null && found.exists())
+                {
+                    return found;
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+        return null;
+    }
+
+    public boolean hasPlaybook(final String file, final String datasetId)
+    {
+        return findPlaybookFile(file, datasetId) != null;
+    }
+
+    private void scanJsonFiles(final File dir, final List<File> results)
+    {
+        final File[] files = dir.listFiles();
+        if (files == null)
+        {
+            return;
+        }
+        for (final File f : files)
+        {
+            if (f.isDirectory())
+            {
+                scanJsonFiles(f, results);
+            }
+            else if (f.getName().endsWith(".json") && !f.getName().startsWith("package") && !f.getName().startsWith("pom"))
+            {
+                results.add(f);
+            }
+        }
+    }
+
+    /**
+     * Loads and parses recorded playbook details for a given test file and dataset ID.
+     *
+     * @param file test file relative path
+     * @param datasetId optional dataset ID
+     * @return map of playbook details for UI view, or null if no playbook found
+     */
+    public Map<String, Object> loadPlaybookDetails(final String file, final String datasetId)
+    {
+        final File pbFile = findPlaybookFile(file, datasetId);
+        if (pbFile == null || !pbFile.exists() || !pbFile.isFile())
+        {
+            return null;
+        }
+
+        final Map<String, Object> result = new HashMap<>();
+        result.put("file", file);
+        result.put("datasetId", datasetId != null ? datasetId : "");
+        result.put("playbookPath", pbFile.getPath());
+        result.put("playbookFileName", pbFile.getName());
+
+        final long lastModified = pbFile.lastModified();
+        result.put("lastModifiedEpoch", lastModified);
+        if (lastModified > 0)
+        {
+            final String formattedDate = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+                    .withZone(ZoneId.systemDefault())
+                    .format(Instant.ofEpochMilli(lastModified));
+            result.put("generatedAt", formattedDate);
+        }
+
+        final File sourceTestFile = findSourceTestFile(file);
+        if (sourceTestFile != null && sourceTestFile.exists())
+        {
+            final long sourceLastModified = sourceTestFile.lastModified();
+            result.put("testFileLastModifiedEpoch", sourceLastModified);
+            if (sourceLastModified > 0)
+            {
+                final String formattedSourceDate = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+                        .withZone(ZoneId.systemDefault())
+                        .format(Instant.ofEpochMilli(sourceLastModified));
+                result.put("testFileLastEdited", formattedSourceDate);
+            }
+        }
+
+        try
+        {
+            final String rawContent = Files.readString(pbFile.toPath(), StandardCharsets.UTF_8);
+            result.put("rawJson", rawContent);
+
+            final ObjectMapper mapper = new ObjectMapper();
+            final List<?> stepsList = mapper.readValue(rawContent, List.class);
+            result.put("steps", stepsList);
+            result.put("totalSteps", stepsList.size());
+
+            int passedCount = 0;
+            int healedCount = 0;
+            int failedCount = 0;
+            long totalDur = 0;
+
+            for (final Object stepObj : stepsList)
+            {
+                if (stepObj instanceof Map)
+                {
+                    @SuppressWarnings("unchecked")
+                    final Map<String, Object> stepMap = (Map<String, Object>) stepObj;
+                    final Object statusObj = stepMap.get("status");
+                    final String status = statusObj != null ? String.valueOf(statusObj) : "SUCCESS";
+                    final boolean isStepHealed = "HEALED".equalsIgnoreCase(status);
+                    if (isStepHealed)
+                    {
+                        healedCount++;
+                    }
+                    else if ("FAILED".equalsIgnoreCase(status) || Boolean.TRUE.equals(stepMap.get("failed")))
+                    {
+                        failedCount++;
+                    }
+                    else
+                    {
+                        passedCount++;
+                    }
+
+                    final Object durObj = stepMap.get("durationMs");
+                    if (durObj instanceof Number)
+                    {
+                        totalDur += ((Number) durObj).longValue();
+                    }
+
+                    // Reconcile and surface healed targets for actions
+                    final Object actionsObj = stepMap.get("actions");
+                    final Object toolCallsObj = stepMap.get("toolCalls");
+                    if (actionsObj instanceof List)
+                    {
+                        final List<?> actions = (List<?>) actionsObj;
+                        final List<?> toolCalls = toolCallsObj instanceof List ? (List<?>) toolCallsObj : null;
+
+                        for (int actIdx = 0; actIdx < actions.size(); actIdx++)
+                        {
+                            final Object actObj = actions.get(actIdx);
+                            if (actObj instanceof Map)
+                            {
+                                @SuppressWarnings("unchecked")
+                                final Map<String, Object> actMap = (Map<String, Object>) actObj;
+                                Object expectedTargetObj = actMap.get("expectedTarget");
+                                if (expectedTargetObj == null || expectedTargetObj.toString().isBlank())
+                                {
+                                    expectedTargetObj = actMap.get("originalTarget");
+                                }
+                                if (expectedTargetObj == null || expectedTargetObj.toString().isBlank())
+                                {
+                                    expectedTargetObj = actMap.get("healedFrom");
+                                }
+
+                                final Object currentTargetObj = actMap.get("target");
+                                final String currentTarget = currentTargetObj != null ? currentTargetObj.toString().trim() : "";
+
+                                if ((expectedTargetObj == null || expectedTargetObj.toString().isBlank()) && toolCalls != null && actIdx < toolCalls.size())
+                                {
+                                    final Object toolCallObj = toolCalls.get(actIdx);
+                                    if (toolCallObj instanceof Map)
+                                    {
+                                        final Map<?, ?> toolCallMap = (Map<?, ?>) toolCallObj;
+                                        final Object argsObj = toolCallMap.get("arguments");
+                                        if (argsObj instanceof Map)
+                                        {
+                                            final Map<?, ?> argsMap = (Map<?, ?>) argsObj;
+                                            final Object selObj = argsMap.get("selector") != null ? argsMap.get("selector") : argsMap.get("target");
+                                            if (selObj != null && !selObj.toString().isBlank())
+                                            {
+                                                final String originalSelector = selObj.toString().trim();
+                                                if (isStepHealed || (!currentTarget.isEmpty() && !currentTarget.equals(originalSelector)))
+                                                {
+                                                    expectedTargetObj = originalSelector;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (expectedTargetObj != null && !expectedTargetObj.toString().isBlank())
+                                {
+                                    final String expectedTargetStr = expectedTargetObj.toString().trim();
+                                    actMap.put("expectedTarget", expectedTargetStr);
+                                    actMap.put("originalTarget", expectedTargetStr);
+                                    if (!currentTarget.isEmpty() && !currentTarget.equals(expectedTargetStr))
+                                    {
+                                        actMap.put("healed", true);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    boolean hasHealedAction = false;
+                    if (actionsObj instanceof List)
+                    {
+                        for (final Object actObj : (List<?>) actionsObj)
+                        {
+                            if (actObj instanceof Map && Boolean.TRUE.equals(((Map<?, ?>) actObj).get("healed")))
+                            {
+                                hasHealedAction = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    final boolean isStepActuallyHealed = isStepHealed || hasHealedAction;
+                    stepMap.put("healed", isStepActuallyHealed);
+                    final boolean isFailed = "FAILED".equalsIgnoreCase(status) || Boolean.TRUE.equals(stepMap.get("failed"));
+                    stepMap.put("failed", isFailed);
+                    if (isStepActuallyHealed && !isStepHealed)
+                    {
+                        healedCount++;
+                        if (passedCount > 0)
+                        {
+                            passedCount--;
+                        }
+                    }
+                }
+            }
+
+            result.put("passedSteps", passedCount);
+            result.put("healedSteps", healedCount);
+            result.put("failedSteps", failedCount);
+            result.put("totalDurationMs", totalDur);
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("Failed to parse playbook JSON {}: {}", pbFile.getAbsolutePath(), e.getMessage());
+            result.put("error", "Failed to parse playbook JSON: " + e.getMessage());
+        }
+
+        return result;
+    }
+
+    /**
+     * Accepts a self-healed locator change in a recorded playbook, updating the playbook JSON on disk
+     * so that the healed action becomes the canonical recorded action.
+     *
+     * @param file relative test file path
+     * @param datasetId optional dataset ID
+     * @param stepIndex 0-based index of the step to accept, or null to accept all healed steps
+     * @return true if playbook was found and updated successfully, false otherwise
+     */
+    public boolean acceptPlaybookHealing(final String file, final String datasetId, final Integer stepIndex)
+    {
+        return acceptPlaybookHealing(file, datasetId, stepIndex, null);
+    }
+
+    /**
+     * Accepts a self-healed locator change in a recorded playbook, updating the playbook JSON on disk
+     * so that the healed action becomes the canonical recorded action.
+     *
+     * @param file relative test file path
+     * @param datasetId optional dataset ID
+     * @param stepIndex 0-based index of the step to accept, or null to accept all healed steps
+     * @param actionIndex 0-based index of the action within the step to accept, or null for all actions in step
+     * @return true if playbook was found and updated successfully, false otherwise
+     */
+    public boolean acceptPlaybookHealing(final String file, final String datasetId, final Integer stepIndex, final Integer actionIndex)
+    {
+        final File pbFile = findPlaybookFile(file, datasetId);
+        if (pbFile == null || !pbFile.exists() || !pbFile.isFile())
+        {
+            LOGGER.warn("Cannot accept playbook healing: Playbook file not found for file='{}', datasetId='{}'", file, datasetId);
+            return false;
+        }
+
+        try
+        {
+            final String rawContent = Files.readString(pbFile.toPath(), StandardCharsets.UTF_8);
+            final ObjectMapper mapper = new ObjectMapper();
+            final List<?> rawStepsList = mapper.readValue(rawContent, List.class);
+            if (rawStepsList == null || rawStepsList.isEmpty())
+            {
+                return false;
+            }
+
+            @SuppressWarnings("unchecked")
+            final List<Map<String, Object>> stepsList = (List<Map<String, Object>>) rawStepsList;
+            boolean modified = false;
+
+            for (int sIdx = 0; sIdx < stepsList.size(); sIdx++)
+            {
+                if (stepIndex != null && stepIndex.intValue() != sIdx)
+                {
+                    continue;
+                }
+
+                final Map<String, Object> stepMap = stepsList.get(sIdx);
+                final Object actionsObj = stepMap.get("actions");
+                final Object toolCallsObj = stepMap.get("toolCalls");
+                final List<?> actions = actionsObj instanceof List ? (List<?>) actionsObj : null;
+                final List<?> toolCalls = toolCallsObj instanceof List ? (List<?>) toolCallsObj : null;
+
+                boolean stepModified = false;
+
+                if (actions != null)
+                {
+                    for (int actIdx = 0; actIdx < actions.size(); actIdx++)
+                    {
+                        if (actionIndex != null && actionIndex.intValue() != actIdx)
+                        {
+                            continue;
+                        }
+
+                        final Object actObj = actions.get(actIdx);
+                        if (actObj instanceof Map)
+                        {
+                            @SuppressWarnings("unchecked")
+                            final Map<String, Object> actMap = (Map<String, Object>) actObj;
+
+                            final Object currentTargetObj = actMap.get("target");
+                            final String currentTarget = currentTargetObj != null ? currentTargetObj.toString().trim() : "";
+
+                            // Clear healing flags
+                            actMap.remove("expectedTarget");
+                            actMap.remove("originalTarget");
+                            actMap.remove("healedFrom");
+                            actMap.remove("healed");
+
+                            if (!currentTarget.isEmpty())
+                            {
+                                actMap.put("bestCandidateLocator", currentTarget);
+                            }
+
+                            // Synchronize corresponding tool call
+                            if (toolCalls != null && actIdx < toolCalls.size())
+                            {
+                                final Object tcObj = toolCalls.get(actIdx);
+                                if (tcObj instanceof Map)
+                                {
+                                    @SuppressWarnings("unchecked")
+                                    final Map<String, Object> tcMap = (Map<String, Object>) tcObj;
+                                    final Object argsObj = tcMap.get("arguments");
+                                    if (argsObj instanceof Map)
+                                    {
+                                        @SuppressWarnings("unchecked")
+                                        final Map<String, Object> argsMap = (Map<String, Object>) argsObj;
+                                        if (argsMap.containsKey("selector") || argsMap.containsKey("target") || argsMap.containsKey("locator"))
+                                        {
+                                            if (argsMap.containsKey("selector"))
+                                            {
+                                                argsMap.put("selector", currentTarget);
+                                            }
+                                            if (argsMap.containsKey("target"))
+                                            {
+                                                argsMap.put("target", currentTarget);
+                                            }
+                                            if (argsMap.containsKey("locator"))
+                                            {
+                                                argsMap.put("locator", currentTarget);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            stepModified = true;
+                        }
+                    }
+                }
+
+                // If step actions were modified or step was HEALED, transition status to SUCCESS
+                final Object statusObj = stepMap.get("status");
+                final String status = statusObj != null ? String.valueOf(statusObj) : "";
+                if (stepModified || "HEALED".equalsIgnoreCase(status))
+                {
+                    stepMap.put("status", "SUCCESS");
+                    stepMap.put("failed", false);
+                    stepMap.remove("failureReason");
+                    stepModified = true;
+                }
+
+                if (stepModified)
+                {
+                    modified = true;
+                }
+            }
+
+            if (modified)
+            {
+                final String updatedJson = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(stepsList);
+                AtomicFileUtils.writeStringAtomic(pbFile.toPath(), updatedJson);
+                LOGGER.info("Successfully accepted healing and updated playbook JSON at {}", pbFile.getAbsolutePath());
+                return true;
+            }
+
+            return false;
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("Failed to accept playbook healing for file='{}', datasetId='{}': {}", file, datasetId, e.getMessage(), e);
+            return false;
+        }
+    }
+
+    public List<YamlFileDto> getFilteredYamlFilesList(final List<YamlFileDto> files, final String query)
+    {
+        if (files == null || files.isEmpty() || query == null || query.trim().isEmpty())
+        {
+            return files != null ? files : new ArrayList<>();
         }
         final String lowerQuery = query.toLowerCase().trim();
         final List<YamlFileDto> filtered = new ArrayList<>();
-        for (final YamlFileDto file : fullList)
+        for (final YamlFileDto file : files)
         {
             boolean match = file.file != null && file.file.toLowerCase().contains(lowerQuery);
             if (!match && file.datasets != null)
@@ -237,6 +836,11 @@ public final class AuraFileService
             }
         }
         return filtered;
+    }
+
+    public List<YamlFileDto> getFilteredYamlFilesList(final String query)
+    {
+        return getFilteredYamlFilesList(getYamlFilesList(), query);
     }
 
     public List<String> getStepsFilesList()
@@ -637,6 +1241,7 @@ public final class AuraFileService
             yamlFile.getParentFile().mkdirs();
         }
         Files.writeString(yamlFile.toPath(), content, StandardCharsets.UTF_8);
+        clearYamlFilesCache();
     }
 
     public void createYamlFile(final String name) throws IOException
@@ -652,6 +1257,7 @@ public final class AuraFileService
                 yamlFile.getParentFile().mkdirs();
             }
             Files.writeString(yamlFile.toPath(), "", StandardCharsets.UTF_8);
+            clearYamlFilesCache();
         }
     }
 
@@ -661,6 +1267,7 @@ public final class AuraFileService
         if (yamlFile.exists() && yamlFile.isFile())
         {
             Files.delete(yamlFile.toPath());
+            clearYamlFilesCache();
             return true;
         }
         return false;
@@ -731,6 +1338,7 @@ public final class AuraFileService
             expandedFiles.add(targetPath);
         }
 
+        clearYamlFilesCache();
         return true;
     }
 
@@ -836,6 +1444,10 @@ public final class AuraFileService
         }
 
         LOGGER.info("[Fragment Refs] Finished. {} file(s) updated.", updatedFiles.size());
+        if (!updatedFiles.isEmpty())
+        {
+            clearYamlFilesCache();
+        }
         return new UpdateFragmentRefsResult(updatedFiles.size(), List.copyOf(updatedFiles));
     }
 
@@ -854,25 +1466,34 @@ public final class AuraFileService
         {
             try
             {
-                final Yaml yaml = new Yaml();
-                final Object loaded = yaml.load(content);
+                final String normalizedContent = normalizeBlockScalars(content);
+                final DumperOptions dumperOptions = new DumperOptions();
+                dumperOptions.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+                dumperOptions.setPrettyFlow(true);
+                final Yaml yaml = new Yaml(dumperOptions);
+                final Object loaded = yaml.load(normalizedContent);
                 if (loaded instanceof Map)
                 {
                     final Map<String, Object> root = (Map<String, Object>) loaded;
 
-                    if (root.containsKey("before"))
+                    final String[] beforeAliases = {"before", "beforeEach", "_beforeEach", "_beforeAll", "beforeAll"};
+                    for (final String alias : beforeAliases)
                     {
-                        final String beforeStr = String.valueOf(root.get("before"));
-                        for (final String line : beforeStr.split("\n"))
+                        if (beforeSteps.isEmpty())
                         {
-                            if (!line.trim().isEmpty())
+                            final List<String> extractedBefore = extractSectionStepsWithComments(content, alias);
+                            if (!extractedBefore.isEmpty())
                             {
-                                beforeSteps.add(line.trim());
+                                beforeSteps.addAll(extractedBefore);
+                            }
+                            else if (root.containsKey(alias))
+                            {
+                                parseSectionSteps(root.get(alias), beforeSteps);
                             }
                         }
                     }
 
-                    if (!root.containsKey("steps") && !root.containsKey("before") && !root.containsKey("after")
+                    if (!root.containsKey("steps") && !root.containsKey("_steps") && beforeSteps.isEmpty() && afterSteps.isEmpty()
                             && (root.containsKey("_include") || root.containsKey("include")))
                     {
                         final String incPath = root.containsKey("_include")
@@ -881,85 +1502,130 @@ public final class AuraFileService
                         mainSteps.add("_include: " + incPath);
                     }
 
-                    if (root.containsKey("steps"))
+                    final String[] stepsAliases = {"steps", "_steps"};
+                    for (final String alias : stepsAliases)
                     {
-                        final Object stepsObj = root.get("steps");
-                        if (stepsObj instanceof List)
+                        if (mainSteps.isEmpty())
                         {
-                            for (final Object stepItem : (List<?>) stepsObj)
+                            final List<String> extractedSteps = extractSectionStepsWithComments(content, alias);
+                            if (!extractedSteps.isEmpty())
                             {
-                                if (stepItem instanceof Map)
-                                {
-                                    final Map<?, ?> mapStep = (Map<?, ?>) stepItem;
-                                    if (mapStep.containsKey("_include") || mapStep.containsKey("include"))
-                                    {
-                                        final String incPath = mapStep.containsKey("_include")
-                                                ? String.valueOf(mapStep.get("_include"))
-                                                : String.valueOf(mapStep.get("include"));
-                                        mainSteps.add("_include: " + incPath);
-                                    }
-                                    else if (mapStep.containsKey("instruction"))
-                                    {
-                                        final String inst = String.valueOf(mapStep.get("instruction")).trim();
-                                        if (!inst.isEmpty())
-                                        {
-                                            mainSteps.add(inst);
-                                        }
-                                    }
-                                    else if (mapStep.size() == 1)
-                                    {
-                                        final Map.Entry<?, ?> entry = mapStep.entrySet().iterator().next();
-                                        final String keyStr = String.valueOf(entry.getKey()).trim();
-                                        final Object valObj = entry.getValue();
-                                        if (valObj == null || "null".equals(String.valueOf(valObj).trim()))
-                                        {
-                                            mainSteps.add(keyStr);
-                                        }
-                                        else
-                                        {
-                                            final String valStr = String.valueOf(valObj).trim();
-                                            mainSteps.add(valStr.isEmpty() ? keyStr : keyStr + ": " + valStr);
-                                        }
-                                    }
-                                    else
-                                    {
-                                        final String sMap = String.valueOf(mapStep).trim();
-                                        if (!sMap.isEmpty())
-                                        {
-                                            mainSteps.add(sMap);
-                                        }
-                                    }
-                                }
-                                else if (stepItem != null && !String.valueOf(stepItem).trim().isEmpty())
-                                {
-                                    mainSteps.add(String.valueOf(stepItem).trim());
-                                }
+                                mainSteps.addAll(extractedSteps);
                             }
-                        }
-                        else
-                        {
-                            final String stepsStr = String.valueOf(stepsObj);
-                            for (final String line : stepsStr.split("\n"))
+                            else if (root.containsKey(alias))
                             {
-                                if (!line.trim().isEmpty())
-                                {
-                                    mainSteps.add(line.trim());
-                                }
+                                parseSectionSteps(root.get(alias), mainSteps);
                             }
                         }
                     }
 
-                    if (root.containsKey("after"))
+                    final String[] afterAliases = {"after", "afterEach", "_afterEach", "_afterAll", "afterAll"};
+                    for (final String alias : afterAliases)
                     {
-                        final String afterStr = String.valueOf(root.get("after"));
-                        for (final String line : afterStr.split("\n"))
+                        if (afterSteps.isEmpty())
                         {
-                            if (!line.trim().isEmpty())
+                            final List<String> extractedAfter = extractSectionStepsWithComments(content, alias);
+                            if (!extractedAfter.isEmpty())
                             {
-                                afterSteps.add(line.trim());
+                                afterSteps.addAll(extractedAfter);
+                            }
+                            else if (root.containsKey(alias))
+                            {
+                                parseSectionSteps(root.get(alias), afterSteps);
                             }
                         }
                     }
+
+                    // Root properties (_properties or properties)
+                    final Object rawProperties = root.containsKey("_properties") ? root.get("_properties") : root.get("properties");
+                    final List<Map<String, String>> propertiesList = new ArrayList<>();
+                    if (rawProperties != null)
+                    {
+                        result.put("properties", rawProperties);
+                        if (rawProperties instanceof Map<?, ?> map)
+                        {
+                            for (final Map.Entry<?, ?> entry : map.entrySet())
+                            {
+                                if (entry.getKey() != null)
+                                {
+                                    final Map<String, String> propEntry = new LinkedHashMap<>();
+                                    propEntry.put("key", String.valueOf(entry.getKey()));
+                                    propEntry.put("value", entry.getValue() != null ? String.valueOf(entry.getValue()) : "");
+                                    propertiesList.add(propEntry);
+                                }
+                            }
+                            result.put("propertiesYaml", yaml.dump(rawProperties).trim());
+                        }
+                        else if (rawProperties instanceof List<?>)
+                        {
+                            result.put("propertiesYaml", yaml.dump(rawProperties).trim());
+                        }
+                        else
+                        {
+                            result.put("propertiesYaml", String.valueOf(rawProperties).trim());
+                        }
+                    }
+                    result.put("propertiesList", propertiesList);
+
+                    // Root metadata (_meta or meta)
+                    final Object rawMeta = root.containsKey("_meta") ? root.get("_meta") : root.get("meta");
+                    if (rawMeta != null)
+                    {
+                        result.put("meta", rawMeta);
+                        if (rawMeta instanceof Map<?, ?> || rawMeta instanceof List<?>)
+                        {
+                            result.put("metaYaml", yaml.dump(rawMeta).trim());
+                        }
+                        else
+                        {
+                            result.put("metaYaml", String.valueOf(rawMeta).trim());
+                        }
+                    }
+
+                    // Playbook description
+                    if (root.get("description") instanceof String desc && !desc.isBlank())
+                    {
+                        result.put("description", desc.trim());
+                    }
+
+                    // Prompt addon
+                    final Object rawPromptAddon = root.get("promptAddon");
+                    if (rawPromptAddon != null)
+                    {
+                        result.put("promptAddon", rawPromptAddon);
+                        if (rawPromptAddon instanceof Map<?, ?> || rawPromptAddon instanceof List<?>)
+                        {
+                            result.put("promptAddonYaml", yaml.dump(rawPromptAddon).trim());
+                        }
+                        else
+                        {
+                            result.put("promptAddonYaml", String.valueOf(rawPromptAddon).trim());
+                        }
+                    }
+
+                    // Top-level variables (unreserved keys)
+                    final Set<String> reservedKeys = Set.of(
+                        "before", "beforeEach", "_beforeEach", "_beforeAll", "beforeAll",
+                        "steps", "_steps",
+                        "after", "afterEach", "_afterEach", "_afterAll", "afterAll",
+                        "variables", "data", "_data",
+                        "_properties", "properties",
+                        "_meta", "meta",
+                        "description", "promptAddon",
+                        "_include", "include",
+                        "_onSuccess", "_onSuccessEach", "_onSuccessAll", "onSuccessAll",
+                        "_onFailure", "_onFailureEach", "_onFailureAll", "onFailureAll"
+                    );
+                    final Map<String, Object> rootVariables = new LinkedHashMap<>();
+                    for (final Map.Entry<String, Object> entry : root.entrySet())
+                    {
+                        final String k = entry.getKey();
+                        if (!reservedKeys.contains(k) && entry.getValue() != null)
+                        {
+                            rootVariables.put(k, entry.getValue());
+                        }
+                    }
+                    result.put("rootVariables", rootVariables);
 
                     if (root.containsKey("variables") && root.get("variables") instanceof Map)
                     {
@@ -970,9 +1636,10 @@ public final class AuraFileService
                         }
                     }
 
-                    if (root.containsKey("data") && root.get("data") instanceof List)
+                    final Object rawData = root.containsKey("data") ? root.get("data") : root.get("_data");
+                    if (rawData instanceof List)
                     {
-                        final List<?> dataList = (List<?>) root.get("data");
+                        final List<?> dataList = (List<?>) rawData;
                         for (final Object item : dataList)
                         {
                             if (item instanceof Map)
@@ -996,63 +1663,7 @@ public final class AuraFileService
                 }
                 else if (loaded instanceof List)
                 {
-                    for (final Object stepItem : (List<?>) loaded)
-                    {
-                        if (stepItem instanceof Map)
-                        {
-                            final Map<?, ?> mapStep = (Map<?, ?>) stepItem;
-                            if (mapStep.containsKey("_include") || mapStep.containsKey("include"))
-                            {
-                                final String incPath = mapStep.containsKey("_include")
-                                        ? String.valueOf(mapStep.get("_include"))
-                                        : String.valueOf(mapStep.get("include"));
-                                mainSteps.add("_include: " + incPath);
-                            }
-                            else if (mapStep.containsKey("instruction"))
-                            {
-                                final String inst = String.valueOf(mapStep.get("instruction")).trim();
-                                if (!inst.isEmpty())
-                                {
-                                    mainSteps.add(inst);
-                                }
-                            }
-                            else if (mapStep.size() == 1)
-                            {
-                                final Map.Entry<?, ?> entry = mapStep.entrySet().iterator().next();
-                                final String keyStr = String.valueOf(entry.getKey()).trim();
-                                final Object valObj = entry.getValue();
-                                if (valObj == null || "null".equals(String.valueOf(valObj).trim()))
-                                {
-                                    mainSteps.add(keyStr);
-                                }
-                                else
-                                {
-                                    final String valStr = String.valueOf(valObj).trim();
-                                    mainSteps.add(valStr.isEmpty() ? keyStr : keyStr + ": " + valStr);
-                                }
-                            }
-                            else
-                            {
-                                final String sMap = String.valueOf(mapStep).trim();
-                                if (!sMap.isEmpty())
-                                {
-                                    mainSteps.add(sMap);
-                                }
-                            }
-                        }
-                        else if (stepItem != null)
-                        {
-                            String s = String.valueOf(stepItem).trim();
-                            if (s.startsWith("-"))
-                            {
-                                s = s.substring(1).trim();
-                            }
-                            if (!s.isEmpty())
-                            {
-                                mainSteps.add(s);
-                            }
-                        }
-                    }
+                    parseSectionSteps(loaded, mainSteps);
                 }
 
                 // Fallback for raw text lines
@@ -1166,6 +1777,8 @@ public final class AuraFileService
             result.put("error", null);
         }
 
+        result.putIfAbsent("propertiesList", List.of());
+        result.putIfAbsent("propertiesYaml", "");
         result.put("beforeSteps", beforeSteps);
         result.put("mainSteps", mainSteps);
         result.put("afterSteps", afterSteps);
@@ -1173,6 +1786,242 @@ public final class AuraFileService
         result.put("varKeys", varKeys);
         result.put("fragmentVarScopes", fragmentVarScopes);
         return result;
+    }
+
+    private void parseSectionSteps(final Object stepsObj, final List<String> targetList)
+    {
+        if (stepsObj instanceof List<?> list)
+        {
+            for (final Object stepItem : list)
+            {
+                if (stepItem instanceof Map<?, ?> mapStep)
+                {
+                    if (mapStep.containsKey("_include") || mapStep.containsKey("include"))
+                    {
+                        final String incPath = mapStep.containsKey("_include")
+                                ? String.valueOf(mapStep.get("_include"))
+                                : String.valueOf(mapStep.get("include"));
+                        targetList.add("_include: " + incPath);
+                    }
+                    else if (mapStep.containsKey("instruction"))
+                    {
+                        final String inst = String.valueOf(mapStep.get("instruction")).trim();
+                        if (!inst.isEmpty())
+                        {
+                            targetList.add(inst);
+                        }
+                    }
+                    else if (mapStep.size() == 1)
+                    {
+                        final Map.Entry<?, ?> entry = mapStep.entrySet().iterator().next();
+                        final String keyStr = String.valueOf(entry.getKey()).trim();
+                        final Object valObj = entry.getValue();
+                        if (valObj == null || "null".equals(String.valueOf(valObj).trim()))
+                        {
+                            targetList.add(keyStr);
+                        }
+                        else if (valObj instanceof List<?> subList)
+                        {
+                            targetList.add(keyStr.endsWith(":") ? keyStr : keyStr + ":");
+                            for (final Object sub : subList)
+                            {
+                                if (sub != null && !String.valueOf(sub).trim().isEmpty())
+                                {
+                                    targetList.add(String.valueOf(sub).trim());
+                                }
+                            }
+                        }
+                        else
+                        {
+                            final String valStr = String.valueOf(valObj).trim();
+                            targetList.add(valStr.isEmpty() ? keyStr : keyStr + ": " + valStr);
+                        }
+                    }
+                    else
+                    {
+                        final String sMap = String.valueOf(mapStep).trim();
+                        if (!sMap.isEmpty())
+                        {
+                            targetList.add(sMap);
+                        }
+                    }
+                }
+                else if (stepItem instanceof String stepStr)
+                {
+                    if (stepStr.contains("\n"))
+                    {
+                        for (final String line : stepStr.split("\\r?\\n"))
+                        {
+                            final String trimmed = line.trim();
+                            if (!trimmed.isEmpty() && !trimmed.startsWith("#"))
+                            {
+                                final String unbulleted = (trimmed.startsWith("- ") || trimmed.startsWith("* "))
+                                        ? trimmed.substring(2).trim()
+                                        : trimmed;
+                                if (!unbulleted.isEmpty() && !unbulleted.startsWith("#"))
+                                {
+                                    targetList.add(unbulleted);
+                                }
+                            }
+                        }
+                    }
+                    else if (!stepStr.trim().isEmpty())
+                    {
+                        targetList.add(stepStr.trim());
+                    }
+                }
+                else if (stepItem != null && !String.valueOf(stepItem).trim().isEmpty())
+                {
+                    targetList.add(String.valueOf(stepItem).trim());
+                }
+            }
+        }
+        else if (stepsObj != null)
+        {
+            final String stepsStr = String.valueOf(stepsObj);
+            for (final String line : stepsStr.split("\n"))
+            {
+                if (!line.trim().isEmpty())
+                {
+                    targetList.add(line.trim());
+                }
+            }
+        }
+    }
+
+    /**
+     * Extracts steps from a named playbook section (e.g. {@code "steps"}, {@code "before"},
+     * {@code "after"}) while preserving line comments (starting with {@code '#'}) and marking
+     * folded/literal block scalar sub-steps with a leading sub-step prefix ({@code "  - "}).
+     *
+     * @param content the raw YAML string content
+     * @param sectionName the section key to extract ("before", "steps", or "after")
+     * @return list of preserved steps, comments, and substeps
+     */
+    public static List<String> extractSectionStepsWithComments(final String content, final String sectionName)
+    {
+        final List<String> steps = new ArrayList<>();
+        if (content == null || content.isBlank() || sectionName == null || sectionName.isBlank())
+        {
+            return steps;
+        }
+
+        final String[] lines = content.split("\\r?\\n");
+        boolean inTargetSection = false;
+        int sectionIndent = 0;
+        boolean inBlockScalar = false;
+        int foldedScalarIndent = -1;
+
+        final Pattern sectionPattern = Pattern.compile("(?i)^[ \\t]*\"?'?" + Pattern.quote(sectionName) + "\"?'?[ \\t]*:[ \\t]*(?:[|>]-?.*)?$");
+        final Pattern topLevelSectionPattern = Pattern.compile("^[a-zA-Z0-9_-]+[ \\t]*:.*$");
+
+        for (int i = 0; i < lines.length; i++)
+        {
+            final String line = lines[i];
+            final String trimmed = line.trim();
+
+            if (!inTargetSection)
+            {
+                if (sectionPattern.matcher(line).matches())
+                {
+                    inTargetSection = true;
+                    int indent = 0;
+                    while (indent < line.length() && (line.charAt(indent) == ' ' || line.charAt(indent) == '\t'))
+                    {
+                        indent++;
+                    }
+                    sectionIndent = indent;
+                    inBlockScalar = false;
+                    foldedScalarIndent = -1;
+                }
+                continue;
+            }
+
+            int currentIndent = 0;
+            while (currentIndent < line.length() && (line.charAt(currentIndent) == ' ' || line.charAt(currentIndent) == '\t'))
+            {
+                currentIndent++;
+            }
+
+            if (!trimmed.isEmpty() && !trimmed.startsWith("#"))
+            {
+                if (currentIndent <= sectionIndent && topLevelSectionPattern.matcher(line).matches())
+                {
+                    break;
+                }
+            }
+
+            if (trimmed.isEmpty())
+            {
+                continue;
+            }
+
+            if (trimmed.startsWith("#"))
+            {
+                if (inBlockScalar && currentIndent <= foldedScalarIndent)
+                {
+                    inBlockScalar = false;
+                    foldedScalarIndent = -1;
+                }
+                steps.add(trimmed);
+                continue;
+            }
+
+            if (inBlockScalar && currentIndent <= foldedScalarIndent)
+            {
+                inBlockScalar = false;
+                foldedScalarIndent = -1;
+            }
+
+            final Matcher foldedMatcher = Pattern.compile("^-\\s*>-[ \\t]*(.*)$").matcher(trimmed);
+            if (foldedMatcher.matches())
+            {
+                inBlockScalar = true;
+                foldedScalarIndent = currentIndent;
+                final String inlineText = foldedMatcher.group(1).trim();
+                if (!inlineText.isEmpty() && !inlineText.startsWith("#"))
+                {
+                    steps.add("  - " + inlineText);
+                }
+                continue;
+            }
+
+            if (trimmed.matches("^-\\s*[|>][^\r\n]*$"))
+            {
+                inBlockScalar = false;
+                foldedScalarIndent = -1;
+                continue;
+            }
+
+            if (trimmed.startsWith("- ") || trimmed.startsWith("-\t"))
+            {
+                inBlockScalar = false;
+                foldedScalarIndent = -1;
+                final String itemContent = trimmed.substring(1).trim();
+                steps.add(itemContent);
+                continue;
+            }
+
+            if (inBlockScalar)
+            {
+                final String clean = (trimmed.startsWith("- ") || trimmed.startsWith("* "))
+                    ? trimmed.substring(2).trim()
+                    : trimmed;
+                if (!clean.isEmpty())
+                {
+                    steps.add("  - " + clean);
+                }
+            }
+            else
+            {
+                final String clean = (trimmed.startsWith("- ") || trimmed.startsWith("* "))
+                    ? trimmed.substring(2).trim()
+                    : trimmed;
+                steps.add(clean);
+            }
+        }
+
+        return steps;
     }
 
     /**
@@ -1339,10 +2188,15 @@ public final class AuraFileService
                 }
             }
 
+            @SuppressWarnings("unchecked")
+            final Map<String, Object> rootVariables = sections.get("rootVariables") instanceof Map
+                    ? (Map<String, Object>) sections.get("rootVariables")
+                    : Map.of();
+
             final List<String> undefinedVars = new ArrayList<>();
             for (final String usedVar : usedVars)
             {
-                if (!definedVarKeys.contains(usedVar) && !includedDefinedVars.contains(usedVar))
+                if (!definedVarKeys.contains(usedVar) && !includedDefinedVars.contains(usedVar) && !rootVariables.containsKey(usedVar))
                 {
                     undefinedVars.add(usedVar);
                 }

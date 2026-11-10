@@ -125,25 +125,26 @@ public final class PlaybookParserTest
         assertNotNull(playbook);
         
         final List<PlaybookStep> steps = playbook.getSteps();
-        assertEquals(2, steps.size());
+        assertEquals(3, steps.size());
 
-        // First step should be the include step: 'common/setup.yaml'
-        final PlaybookStep setupInclude = steps.get(0);
-        assertEquals("_include: common/setup.yaml", setupInclude.getInstruction());
-        assertTrue(setupInclude.isComposite());
-        assertEquals(2, setupInclude.getSubSteps().size());
+        // Inlined steps from common/setup.yaml -> common/login.yaml -> main.yaml
+        final PlaybookStep step0 = steps.get(0);
+        assertEquals("Open homepage", step0.getInstruction());
+        assertEquals("setup.yaml", step0.getSourceFile());
+        assertFalse(step0.isComposite());
+        assertFalse(step0.hasSubSteps());
 
-        // Sub-steps of setup.yaml
-        assertEquals("Open homepage", setupInclude.getSubSteps().get(0).getInstruction());
-        
-        final PlaybookStep loginInclude = setupInclude.getSubSteps().get(1);
-        assertEquals("_include: login.yaml", loginInclude.getInstruction());
-        assertTrue(loginInclude.isComposite());
-        assertEquals(1, loginInclude.getSubSteps().size());
-        assertEquals("Enter credentials", loginInclude.getSubSteps().get(0).getInstruction());
+        final PlaybookStep step1 = steps.get(1);
+        assertEquals("Enter credentials", step1.getInstruction());
+        assertEquals("login.yaml", step1.getSourceFile());
+        assertFalse(step1.isComposite());
+        assertFalse(step1.hasSubSteps());
 
-        // Second step of main.yaml
-        assertEquals("Click continue", steps.get(1).getInstruction());
+        final PlaybookStep step2 = steps.get(2);
+        assertEquals("Click continue", step2.getInstruction());
+        assertEquals("main.yaml", step2.getSourceFile());
+        assertFalse(step2.isComposite());
+        assertFalse(step2.hasSubSteps());
     }
 
     /**
@@ -303,9 +304,11 @@ public final class PlaybookParserTest
         final Playbook beforePlaybook = parser.parseString(beforeYaml);
 
         assertNotNull(beforePlaybook);
-        assertEquals(2, beforePlaybook.getSteps().size());
-        assertEquals("Open login page", beforePlaybook.getSteps().get(0).getInstruction());
-        assertEquals("Submit form", beforePlaybook.getSteps().get(1).getInstruction());
+        assertEquals(1, beforePlaybook.getBeforeSteps().size());
+        assertEquals("Open login page", beforePlaybook.getBeforeSteps().get(0).getInstruction());
+        assertEquals(1, beforePlaybook.getSteps().size());
+        assertEquals("Submit form", beforePlaybook.getSteps().get(0).getInstruction());
+        assertEquals(2, beforePlaybook.getAllSteps().size());
     }
 
     /**

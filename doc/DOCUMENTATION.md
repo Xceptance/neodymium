@@ -11,6 +11,7 @@ Neodymium AI (contained in `org.neodymium.ai.*`) is an intelligent, domain-neutr
    - [1.2 Session-Centric Architecture, Thread Isolation & Lifecycle Hooks](#12-session-centric-architecture-thread-isolation--lifecycle-hooks)
    - [1.3 Target Framework Inscription & Cross-Framework Fast-Fail Lock](#13-target-framework-inscription--cross-framework-fast-fail-lock)
    - [1.4 Session-Level Authentication Setup](#14-session-level-authentication-setup)
+   - [1.5 Unified In-Process Tool Architecture & Complete Tool Catalog](#15-unified-in-process-tool-architecture--complete-tool-catalog)
 2. [Test Authoring & Execution Patterns](#2-test-authoring--execution-patterns)
    - [2.1 The Structured Playbook Model & Replay Cache](#21-the-structured-playbook-model--replay-cache)
    - [2.2 Execution Patterns & Developer APIs (The 9 Patterns)](#22-execution-patterns--developer-apis-the-9-patterns)
@@ -19,6 +20,7 @@ Neodymium AI (contained in `org.neodymium.ai.*`) is an intelligent, domain-neutr
    - [2.5 Dynamic Variable Parameterization & Outbound Secret Masking](#25-dynamic-variable-parameterization--outbound-secret-masking)
    - [2.6 Interactive Multi-Stage Instructions & Language-Agnostic `CONTINUE` Protocol](#26-interactive-multi-stage-instructions--language-agnostic-continue-protocol)
    - [2.7 Execution Timing Recording & Paced Replay Playback](#27-execution-timing-recording--paced-replay-playback)
+   - [2.8 Local Test Server & Aura Test Suite Hub (neodymium-test-server)](#28-local-test-server--aura-test-suite-hub-neodymium-test-server)
 3. [Unified Perception & 5-Tier Locator Engine](#3-unified-perception--5-tier-locator-engine)
    - [3.1 Unified Perception Model (UPM) & `DomFeatureVector`](#31-unified-perception-model-upm--domfeaturevector)
    - [3.2 The 5-Tier Cascading Locator Engine (`LocatorCascadeResolver`)](#32-the-5-tier-cascading-locator-engine-locatorcascaderesolver)
@@ -47,12 +49,13 @@ Neodymium AI (contained in `org.neodymium.ai.*`) is an intelligent, domain-neutr
    - [6.3 Post-Action AI Outcome Verification](#63-post-action-ai-outcome-verification)
    - [6.4 Universal Candidate Playbook Capture & Invalidation Lifecycle](#64-universal-candidate-playbook-capture--invalidation-lifecycle)
    - [6.5 Visual Root Cause Analysis (RCA) & Failure Diagnostics](#65-visual-root-cause-analysis-rca--failure-diagnostics)
-7. [Performance, Caching, Telemetry & Assertions](#7-performance-caching-telemetry--assertions)
-   - [7.1 In-Memory LLM Request Caching (`@AiLlmCache`)](#71-in-memory-llm-request-caching-aillmcache)
-   - [7.2 Event-Driven Architecture, EventBus & HUD Overlays](#72-event-driven-architecture-eventbus--hud-overlays)
-   - [7.3 Real-Time Token Budget Guard & Limits](#73-real-time-token-budget-guard--limits)
-   - [7.4 Per-Call-Type Telemetry Breakdown](#74-per-call-type-telemetry-breakdown)
-   - [7.5 Execution Data Access, Telemetry Metrics & Mode-Conditional Asserters (`verifyMetrics()`)](#75-execution-data-access-telemetry-metrics--mode-conditional-asserters-verifymetrics)
+   - [6.6 Fuzzy Layout Snapshot Testing ((layout) & (layout: full))](#66-fuzzy-layout-snapshot-testing-layout--layout-full)
+   - [6.7 Protocol-Level Introspection & Active Diagnostics (Network & Console)](#67-protocol-level-introspection--active-diagnostics-network--console)
+7. [Performance, Telemetry & Assertions](#7-performance-telemetry--assertions)
+   - [7.1 Event-Driven Architecture, EventBus & HUD Overlays](#71-event-driven-architecture-eventbus--hud-overlays)
+   - [7.2 Real-Time Token Budget Guard, Step Limits & Turn Bounds](#72-real-time-token-budget-guard-step-limits--turn-bounds)
+   - [7.3 Per-Call-Type Telemetry Breakdown](#73-per-call-type-telemetry-breakdown)
+   - [7.4 Execution Data Access, Telemetry Metrics & Mode-Conditional Asserters (`verifyMetrics()`)](#74-execution-data-access-telemetry-metrics--mode-conditional-asserters-verifymetrics)
 8. [Configuration Reference](#8-configuration-reference)
    - [8.1 Core Execution Settings](#81-core-execution-settings)
    - [8.2 Provider and Model Configuration](#82-provider-and-model-configuration)
@@ -99,6 +102,123 @@ To prevent cross-framework execution hazards (e.g. attempting to execute unsuppo
 * **`TargetExecutor.registerBasicAuth(user, pass)`**: Registers credentials (username/password) dynamically on `AiSession` setup on the active execution target.
 * **CDP Interception**: Intercepts basic auth browser challenges via low-level Chrome DevTools Protocol mechanisms, ensuring seamless authentication setup for headless SUT environments.
 
+### 1.5 Unified In-Process Tool Architecture & Complete Tool Catalog
+
+Neodymium AI executes all interactions, assertions, and diagnostic inspections via a strictly typed, in-process tool calling architecture (`org.neodymium.ai.tool.*`). Rather than spawning external subprocesses or separate server instances, tools execute directly inside the JVM on the active Selenide/Selenium thread, providing sub-millisecond execution latency and zero inter-process overhead.
+
+#### A. Standard In-Process Tool Contract
+Every executable tool implements the `AiTool` interface and registers a typed `ToolDefinition` with an OpenAPI/JSON Schema:
+* **`AiTool`**: Core interface providing `getDefinition()` and `execute(ToolCall call, ToolContext context) -> ToolResult`.
+* **`ToolDefinition`**: Encapsulates the tool name, human-readable description for LLM guidance, and an OpenAPI 3.0 schema specifying parameter types, required fields, and constraints.
+* **`ToolContext`**: Carries the thread-isolated `AiSession`, active `WebDriver`, and execution state.
+* **`ToolResult`**: Immutable container returning `callId`, execution `status` (`SUCCESS`, `ERROR`, `RETRY_WITH_FEEDBACK`), and payload string.
+* **`ToolRegistry`**: Session-scoped registry populated at session initialization. Tool providers register their definitions into the registry, which formats them dynamically into Gemini, Mistral, and OpenAI tool declaration schemas.
+
+#### B. The Complete Built-in Browser Tool Catalog (40 Tools)
+
+The framework bundles 40 built-in browser automation tools registered via `BrowserToolProvider.registerBrowserTools(ToolRegistry)`:
+
+##### 1. Interaction Tools (12 Tools)
+| Tool Name | Parameters | Description |
+| :--- | :--- | :--- |
+| **`click`** | • `selector` (string, optional)<br>• `x`, `y` (integer, optional)<br>• `button` (string: `"left"`, `"right"`, `"middle"`)<br>• `click_count` (integer: 1 or 2)<br>• `modifiers` (array of strings) | Clicks an interactive element or viewport coordinate in the browser. Supports marker indices (`marker:3`), CSS/XPath locators, or spatial anchor coordinates. |
+| **`fill`** | • `selector` (string, required)<br>• `value` (string, required) | Clears existing text and enters new text into an input or textarea element. Default tool for entering, typing, or setting form field values. |
+| **`fill_form`** | • `fields` (array of objects, required: `selector`, `value`, optional `type`) | Fills multiple form fields (inputs, textareas, selects) in a single operation. Use to fill entire forms (e.g. checkout, registration) efficiently without multiple sequential turns. |
+| **`type`** | • `selector` (string, required)<br>• `text` (string, required) | Types text into an input or textarea element without clearing existing text (appends text). Use only when intentionally appending to existing content. |
+| **`press_key`** | • `key` (string, required)<br>• `selector` (string, optional)<br>• `modifiers` (array of strings) | Presses a keyboard key (e.g. `Enter`, `Tab`, `Escape`, `ArrowDown`) on the active element or specified element. |
+| **`clear`** | • `selector` (string, required) | Clears text in an input or textarea element, or unchecks a checkbox element. |
+| **`select`** | • `selector` (string, required)<br>• `value`, `text`, `index` (optional) | Selects an option from a dropdown `<select>` element by value, visible text, or index. |
+| **`check`** | • `selector` (string, required)<br>• `checked` (boolean, optional, default: true) | Checks or unchecks a checkbox or radio button element, ensuring it reaches the desired state. Idempotent: does nothing if already in target state. |
+| **`hover`** | • `selector` (string, required) | Hovers the mouse cursor over an element to reveal hover menus, tooltips, or trigger CSS `:hover` states. |
+| **`drag`** | • `selector` (string, required)<br>• `delta_x`, `delta_y` (integer, required) | Drags an interactive element by horizontal and vertical pixel offsets. |
+| **`drag_to`** | • `source_selector` (string, required)<br>• `target_selector` (string, required) | Drags a source element and drops it onto a target destination element. |
+| **`upload_file`** | • `selector` (string, required)<br>• `file_path` (string, required) | Uploads a local file to the targeted file input element or styled dropzone container without opening native OS dialogs. Automatically discovers nested or associated `<input type='file'>` elements. |
+
+##### 2. Navigation & Browser State Tools (7 Tools)
+| Tool Name | Parameters | Description |
+| :--- | :--- | :--- |
+| **`navigate`** | • `url` (string, required) | Navigates the browser to the specified URL. |
+| **`back`** | *(none)* | Navigates back in browser history. |
+| **`forward`** | *(none)* | Navigates forward in browser history. |
+| **`refresh`** | *(none)* | Refreshes the current browser page. |
+| **`clear_cookies`** | *(none)* | Clears all browser cookies for the current domain. |
+| **`handle_alert`** | • `action` (string: `"accept"`, `"dismiss"`, default: `"accept"`)<br>• `prompt_text` (string, optional) | Interacts with and resolves native browser modal dialogs (`window.alert`, `window.confirm`, `window.prompt`). |
+| **`wait`** | • `duration_ms` (integer, required) | Pauses execution for a specified duration in milliseconds to allow animations or background tasks to complete. |
+
+##### 3. Window & Tab Management Tools (3 Tools)
+| Tool Name | Parameters | Description |
+| :--- | :--- | :--- |
+| **`list_tabs`** | *(none)* | Lists all open browser tabs/windows with their handle ID, index, title, URL, and whether it is currently active. |
+| **`switch_tab`** | • `target` (string, optional) | Switches the active browser focus to another tab or window by handle, index, or title/URL substring. If target is omitted, switches to the newest window. |
+| **`close_tab`** | *(none)* | Closes the current active browser tab or window, and automatically switches focus back to the parent/primary tab. |
+
+##### 4. Active Discovery & Visual Inspection Tools (7 Tools)
+| Tool Name | Parameters | Description |
+| :--- | :--- | :--- |
+| **`query_dom`** | • `selector` (string, optional)<br>• `text` (string, optional)<br>• `limit` (integer, optional, default: 20)<br>• `attributes` (array of strings, optional) | Searches the live DOM for elements matching a selector or text, returning clean subtrees with attributes and visibility. |
+| **`inspect`** | • `selector` (string, required) | Inspects a specific DOM element, returning its full outerHTML, attributes, and visibility. |
+| **`request_context`** | • `level` (string, required: `"STANDARD"`, `"RICH"`, `"VISUAL_LEAN"`, `"VISUAL_RICH"`)<br>• `fullPage` (boolean, optional, default: false) | Requests a fresh page DOM snapshot at a specified depth and scope, including full-page screenshots. |
+| **`screenshot`** | • `full_page` (boolean, optional, default: false)<br>• `mark_elements` (boolean, optional, default: false) | Captures a screenshot of the browser viewport with optional Set-of-Marks visual badges. |
+| **`mark_elements`** | • `active` (boolean, optional, default: true)<br>• `filter` (string, optional) | Activates or deactivates high-contrast visual marker overlays on screen and stamps compact `[data-m="N"]` attributes into the DOM for visual multimodal grounding. |
+| **`inspect_visual`** | • `selector` (string, required)<br>• `padding` (integer, optional, default: 0) | Captures a targeted visual crop of a specific element or container for multimodal inspection. |
+| **`scroll`** | • `direction` (string: `"up"`, `"down"`, `"left"`, `"right"`)<br>• `amount` (integer, optional)<br>• `selector` (string, optional)<br>• `x`, `y` (integer, optional) | Scrolls the viewport, an element, or inside a container. Note: browser actions automatically scroll elements into view; use scroll only for lazy loading or visual repositioning. |
+
+##### 5. Assertions (6 Tools)
+| Tool Name | Parameters | Description |
+| :--- | :--- | :--- |
+| **`assert_text`** | • `selector` (string, required)<br>• `expected` (string, optional)<br>• `pattern` (string, optional)<br>• `case_sensitive` (boolean, optional, default: true)<br>• `negate` (boolean, optional, default: false) | Asserts that an element contains or matches the expected text or regular expression pattern. |
+| **`assert_count`** | • `selector` (string, required)<br>• `expected` / `count` (integer, required)<br>• `comparison` (string: `"EQUALS"`, `"GREATER_THAN"`, `"LESS_THAN"`, `"NOT_EQUALS"`, default: `"EQUALS"`) | Asserts that the count of elements matching a selector satisfies expected criteria. |
+| **`assert_url`** | • `expected` (string, optional)<br>• `pattern` (string, optional)<br>• `case_sensitive` (boolean, optional, default: true)<br>• `negate` (boolean, optional, default: false) | Asserts that the current browser page URL contains or matches the expected URL or pattern. |
+| **`assert_title`** | • `expected` (string, optional)<br>• `pattern` (string, optional)<br>• `case_sensitive` (boolean, optional, default: true)<br>• `negate` (boolean, optional, default: false) | Asserts that the current browser page title contains or matches the expected title or pattern. |
+| **`assert_element_state`** | • `selector` (string, required)<br>• `state` (string, required: e.g. `"visible"`, `"hidden"`, `"enabled"`, `"disabled"`, `"checked"`, `"unchecked"`, `"focused"`, `"exists"`, `"absent"`, or compound `"visible, enabled"`) | Asserts that an element satisfies one or more states. |
+| **`assert_attribute`** | • `selector` (string, required)<br>• `attribute` (string, required)<br>• `expected` (string, optional)<br>• `pattern` (string, optional)<br>• `negate` (boolean, optional, default: false) | Asserts that an element has a specified attribute and optionally verifies its value (exact, substring, or regex). |
+
+##### 6. Scripting & Test State Tools (3 Tools)
+| Tool Name | Parameters | Description |
+| :--- | :--- | :--- |
+| **`execute_script`** | • `script` (string, required)<br>• `args` (array, optional) | Executes JavaScript in the browser context and returns the evaluation result. |
+| **`store`** | • `name` (string, required)<br>• `selector` (string, optional)<br>• `value` (string, optional)<br>• `attribute` (string, optional) | Captures text or an attribute value from a DOM element, or stores a specified value into an execution session variable for later use in subsequent steps (`${varName}`). |
+| **`include`** | • `playbook_path` (string, required) | Includes and executes steps from an external playbook file into the current execution flow. |
+
+##### 7. Protocol Introspection Tools (2 Tools)
+| Tool Name | Parameters | Description |
+| :--- | :--- | :--- |
+| **`browser_get_network_failures`** | • `status_filter` (string: `"all_failures"`, `"4xx"`, `"5xx"`, `"blocked"`, default: `"all_failures"`)<br>• `limit` (integer, optional, default: 20)<br>• `clear_buffer` (boolean, optional, default: true) | Queries recent failed HTTP network requests and network-level aborts. Returns structured JSON containing URL, HTTP status code, method, timestamp, and failure description. *(See Section 6.7 for architectural details)*. |
+| **`browser_get_console_errors`** | • `min_level` (string: `"SEVERE"`, `"WARNING"`, `"INFO"`, default: `"SEVERE"`)<br>• `limit` (integer, optional, default: 20)<br>• `clear_buffer` (boolean, optional, default: true) | Queries recent browser console log entries and unhandled JavaScript exceptions. Returns structured JSON containing log level, error message, source script URL, line number, and stack trace. *(See Section 6.7 for architectural details)*. |
+
+#### C. Terminal Milestone Tool (`complete_step`)
+During autonomous multi-turn loops (`AgentToolLoopStep`), the LLM signals completion of the current milestone step by invoking:
+* **`complete_step`**:
+  - Parameters: `summary` (string, description of what was accomplished), `status` (string, default `"SUCCESS"`).
+  - Calling `complete_step` cleanly terminates the step loop and commits the extracted action sequence to the companion JSON replay cache.
+
+#### D. Reflective Java Method Extension Tools (`@Tool` & `JavaToolFactory`)
+Teams can expose domain-specific Java helper methods directly to the LLM agent as in-process tools using `JavaToolFactory`:
+```java
+public class CustomDatabaseTools
+{
+    @Tool(name = "reset_test_user", description = "Resets user password and cart state in the test database")
+    public static boolean resetUser(
+        @ToolParam(name = "email", description = "Target test user email") final String email)
+    {
+        // Execute direct database query or microservice call
+        return DatabaseClient.resetUser(email);
+    }
+}
+```
+* **Dynamic Schema Generation**: `JavaToolFactory.createToolsFromClass(...)` or `createToolsFromInstance(...)` reflectively generates the OpenAPI JSON Schema from Java method signatures and `@ToolParam` annotations.
+* **Registration**: Register the created tools on the session registry before execution:
+  ```java
+  session.getToolRegistry().registerAll(JavaToolFactory.createToolsFromClass(CustomDatabaseTools.class));
+  ```
+* **Zero Overhead**: Calls to custom Java tools execute synchronously in-process on the test thread with typed parameter conversion.
+
+#### E. Domain Plugin Tools (`wcag_accessibility_audit`)
+Modular domain tools implement the `AiTool` contract as optional plugins:
+* **`wcag_accessibility_audit`** (`WcagAccessibilityTool`):
+  - Parameters: `standard` (string: `"WCAG2AA"`, `"WCAG2AAA"`, default: `"WCAG2AA"`), `impact` (string: `"critical"`, `"serious"`, `"moderate"`, `"minor"`), `run_only` (array of strings, specific rule tags).
+  - Evaluates WCAG compliance against the live DOM and returns structured violation reports with element selectors, failure impact, and remediation guidance.
+
 ---
 
 ## 2. Test Authoring & Execution Patterns
@@ -125,6 +245,19 @@ Instead of executing LLM calls dynamically on every run, the framework uses **St
       - "Click login button"
       - "Type \"${username}\" into the email input field"
     ```
+
+  - **Folded Scalar Format (`- >-`) for Single-Turn Batch Assertions**:
+    Standard YAML folded block scalar with strip chomping (`>-`). It folds consecutive lines of text into a single space-separated string, stripping any trailing newline:
+    ```yaml
+    steps:
+      - "Open ${verla.url}/verla-${quality}/index.html in the browser"
+      - >-
+        Verify the brand logo is displayed in the header.
+        Verify the search bar is visible.
+        Verify the navigation bar contains "Products".
+      - "Click login button"
+    ```
+    *Use this format to bundle multiple related verifications, assertions, or visual checks on the same page into a single LLM agent turn.* Instead of incurring the latency, cost, and round-trip overhead of multiple separate turns, the LLM processes all folded checks in one prompt turn and verifies them concurrently.
 
   #### B. Intra-File YAML References & Anchors (`&anchor` / `*alias`)
   To avoid repeating common sequences of steps across multiple sections of the same playbook, you can define standard YAML anchors and reference them as aliases. Neodymium automatically flattens nested lists and multiline blocks into sequential test steps:
@@ -227,6 +360,9 @@ Instead of executing LLM calls dynamically on every run, the framework uses **St
 
 * **JSON Companion**: A recording compiled automatically during the initial `FORCE_RECORDING` run. It maps each natural language step to a list of concrete structured SUT actions (e.g., `NAVIGATE`, `CLICK`, `TYPE`, `ASSERT`) along with visual `screenshotHash` baselines.
 * **Offline Replay**: Subsequent test runs (`REPLAY_STRICT` or `REPLAY_WITH_HEALING`) load the companion JSON file directly, executing recorded browser interactions in milliseconds without making any LLM calls.
+* **Automatic / Hybrid Execution (`AUTO`)**: Smart execution mode that inspects the filesystem/classpath for an existing companion JSON recording:
+  - If a recording exists, it executes dynamically in `REPLAY_WITH_HEALING` mode (fast offline replay, triggering LLM healing and persisting updates only if a step heals).
+  - If no recording exists, it automatically executes in live `LLM_RECORDING` mode to discover elements via LLM and write the companion JSON recording upon success.
 * **Recording Directory Configuration**: Companion `.json` recording output locations can be configured at the test class/method level or globally:
   - **Annotation-driven (`@AiPlaybook`)**: `@AiPlaybook(recordingDirectory = "target/playbooks/integration")` directs generated companion recordings to build output target directories to keep `src/` clean.
   - **Property-driven (`neodymium.ai.playbook.recordingDirectory`)**: Configured in `ai.properties` or JVM arguments (`-Dneodymium.ai.playbook.recordingDirectory=...`).
@@ -554,18 +690,69 @@ Specifies a custom execution timeout for a specific playbook step.
 * **Behavior**: Overrides the default action timeout for slow-loading asynchronous widgets or dynamic modals.
 * **Syntax Examples**: `(timeout: 10s)`, `(timeout: 5000ms)`, `(timeout: 30s)`
 
-##### `(visual)` / `(visual: full)` / `(layout)`
-Triggers visual execution mode with a page screenshot payload.
-* **`(visual)`**: Triggers standard visual execution at `ContextLevel.VISUAL` (URL + Title header only, 0 DOM element nodes), capturing a standard viewport screenshot matching the active browser window size on the initial attempt (~2,800 tokens).
-* **`(visual: full)`**: Triggers visual execution starting at ultra-lean `ContextLevel.VISUAL` (URL + Title header only, 0 DOM element nodes) while forcing full-page screenshot capture (full scrollable document height beyond the fold with a visual viewport border overlay) immediately on the initial attempt (~5,000–8,000 tokens).
-* **`(layout)`**: Triggers maximum multimodal execution starting directly at `ContextLevel.VISUAL_RICH` (full DOM tree context) while forcing full-page screenshot capture on the initial attempt.
-* **Persistent Full-Page Flag During Escalation**: Stored in step transient data as `KEY_IS_FULL_PAGE_SCREENSHOT = true`. If visual evaluation fails or requires element interaction, escalation (`VISUAL` $\rightarrow$ `VISUAL_LEAN` $\rightarrow$ `VISUAL_RICH`) **continuously preserves full-page screenshot capture**. It will **never** revert to a small viewport screenshot during escalations.
-* **Author Tag Protection**: Explicit `(visual)`, `(visual: full)`, and `(layout)` tags set by the test author are protected from being overwritten or downgraded.
+##### `(contextlevel=<level>)` / `(context: <level>)`
+Explicitly sets the initial DOM context fidelity level for this specific playbook step.
+* **Behavior**: Overrides the global default context level (`neodymium.ai.contextLevel`) for Turn 1 of this step.
+* **Supported Prefixes**: Both `context` and `contextlevel` using either `:` or `=` (e.g., `(context: ...)`, `(contextlevel=...)`).
+* **Supported Levels & Aliases**:
+  * `none` / `zero` / `hint`: **Zero DOM elements** (only Page URL and Title, ~20 characters). Used for blind viewport scrolls (`Scroll to footer`), waits, and history navigation.
+  * `minimal`: Form controls, links, and buttons only (excludes layout containers and headings).
+  * `lean`: Interactive elements and headings (excludes body copy paragraphs).
+  * `standard`: Interactive elements + standard text copy (`p`, `span`, `div`, `td` copy).
+  * `rich`: Complete text nodes, ARIA attributes, custom data attributes, and deep parent ancestry.
+  * `visual` / `visual_lean` / `visual_rich`: Visual screenshot contexts.
+* **Syntax Examples**: `(context: none)`, `(context: lean)`, `(context: minimal)`, `(contextlevel=standard)`, `(contextlevel: rich)`
+* **LLM Payload Cleanliness**: Dynamically parsed and stripped at step parsing time (`PlaybookStep`), ensuring the natural language prompt sent to the LLM remains clean.
+
+##### `(visual)` vs `(layout)` Directives
+
+Neodymium AI provides two complementary visual snapshot testing modes: **pixel-exact visual verification** (`(visual)`) and **content-agnostic structural layout verification** (`(layout)`).
+
+| Directive | Scope | Inspection Mode | SSIM Matrix Format | Default Threshold |
+| :--- | :--- | :--- | :--- | :--- |
+| **`(visual)`** | Viewport | Pixel-exact | $128 \times 128$ 8-bit Luminance | `0.99` |
+| **`(visual: full)`**, `(visual-full)`, `(visual_full)` | Full Page | Pixel-exact | $128 \times 128$ 8-bit Luminance | `0.99` |
+| **`(layout)`** | Viewport | Color wireframe | $128 \times 128 \times 3$ RGB Channels | `0.92` |
+| **`(layout: full)`**, `(layout-full)`, `(layout_full)` | Full Page | Color wireframe | $128 \times 128 \times 3$ RGB Channels | `0.92` |
+
+* **`(visual)`**: Captures a standard viewport screenshot matching the active browser window size and records a $128 \times 128$ luminance SSIM baseline matrix. Intended for strict, pixel-exact visual regression testing.
+* **`(visual: full)` / `(visual-full)` / `(visual_full)`**: Captures the complete scrollable page height beyond the fold and records a full-page luminance SSIM baseline matrix.
+* **`(layout)`**: Injects a client-side color wireframe transformation (`neodymium-color-wireframe.js`), turning text into solid skeleton bars and images into geometric placeholders while preserving computed brand styling, typography colors, margins, and alignments. Records a $128 \times 128 \times 3$ (49,152-byte) RGB color SSIM matrix.
+* **`(layout: full)` / `(layout-full)` / `(layout_full)`**: Applies the color wireframe transformation across the full scrollable page height and records a full-page color SSIM matrix baseline.
+* **Custom Tolerance Thresholds**: Authors can override default thresholds directly in the directive or via standalone threshold tags:
+  - `Verify homepage header (layout: threshold=0.90)`
+  - `Verify hero layout (layout: 95%)`
+  - `Verify product catalog layout (layout: full, minScore=0.88)`
+  - `Verify status badge (visual: min-score=0.98)`
+> [!TIP]
+> **YAML Syntax Rule for Key-Value Directive Parameters:**
+> When writing steps as unquoted YAML list items (`- Verify ...`), always use `=` instead of `: ` for parameter values (e.g. `min-score=0.98` or `threshold=0.90`). In YAML plain scalars, a colon followed by space (`: `) is treated as a YAML mapping indicator, which causes SnakeYAML to abort parsing with `mapping values are not allowed here`. Alternatively, enclose the full instruction in double quotes (e.g. `"- Verify status badge (visual: min-score: 0.98)"`).
+* **Persistent Full-Page Flag During Escalation**: Stored in step transient data as `KEY_IS_FULL_PAGE_SCREENSHOT = true`. Escalation (`VISUAL` $\rightarrow$ `VISUAL_LEAN` $\rightarrow$ `VISUAL_RICH`) **continuously preserves full-page screenshot capture**.
+* **Author Tag Protection**: Explicit `(visual)`, `(visual: full)`, and `(layout)` tags set by the test author are strictly protected from being overwritten or downgraded.
+
+##### `(marker)` Visual Marker Grounding Directive
+
+The `(marker)` directive activates Neodymium's proactive **Set-of-Marks (SoM) visual grounding engine** for the annotated step.
+
+* **Purpose**: Solves interaction challenges on modern web interfaces where standard CSS/XPath selectors are brittle, volatile, or completely absent—such as textless icon buttons, anonymous container hierarchies, complex toolbars, canvas components, or obfuscated CSS-in-JS classes (`.css-1a2b3c`, `.emotion-rt8oam`).
+* **Syntax**: Append `(marker)` case-insensitively to any playbook step instruction:
+  - `Click the shopping cart icon (marker)`
+  - `Click the user avatar profile button (MARKER)`
+  - `Click the filter toggle button ( marker )`
+* **Execution Lifecycle**:
+  1. **Visual Context Escalation**: Automatically ensures visual perception by elevating initial step context to at least `ContextLevel.VISUAL_LEAN` so the model receives both DOM and screenshot.
+  2. **Proactive Badge Superimposition**: Invokes `VisualBadgeInjector.injectMarkers(driver)` on Turn 1, superimposing high-contrast, numbered visual badges (`[1..N]`) over interactive elements currently in the viewport.
+  3. **Universal Visual Marker Targeting**: The model receives the marked screenshot and can target the intended element by its marker index (`marker:3` or `badge:3`) across any interactive tool (`click`, `type`, `fill`, `enter`, `press_key`, `select`, `check`, `hover`, `clear`).
+  4. **Interactive Ancestor Normalization & Spatial Anchor Pinning**: `ReanchoringBridge` normalizes child graphic nodes (`svg`, `path`, `img`, `span`) up to their interactive ancestor, strips ephemeral `data-m` and `data-ai*` attributes, and captures a full `DomFeatureVector` (including `role`, `accessibleName`, `parentTag`, `siblingIndex`, and deterministic SVG/image `data-graphic-sig` FNV-1a fingerprints). If a stable CSS selector (`score >= 40`) exists, the recorded action is promoted to that selector; otherwise, `PageAnalyzer.resolveAnchorCoordinate` serializes a container-anchored coordinate (`coord:<container-selector>@relX,relY`), including heading-scoped repeating containers (`coord:article:has-text("...")@relX,relY`).
+  5. **Pre-Click DOM Hygiene & Clean Visual Baseline Capture**: Immediately after resolving `marker:N` and **before** capturing visual signatures or dispatching the action, `VisualBadgeInjector.clearMarkers(driver)` purges all marker overlays from the DOM. The framework then captures a clean pre-click `visualHash` (dHash) and 64x64 `tileSsim` matrix so both action-level and step-level (`screenshotHash`) baselines reflect the clean pre-click target.
+  6. **Zero-Token Deterministic Replay & Multi-Modal Self-Healing**: During `REPLAY_STRICT` and `REPLAY_WITH_HEALING`, the step verifies the pre-click 64x64 visual tile SSIM before dispatching the click, and self-heals shifted or textless icon targets using structural ancestry, `data-graphic-sig`, and cropped visual signatures while preserving container anchors.
+  7. **Reporting**: Displays the `🎯 MARKER` badge in HTML and Markdown test reports.
+* **Autonomous Escalation**: Even without an explicit `(marker)` tag, when `neodymium.ai.judge.recommendMarker=true` (default: `true`), if the agent proposes a fragile or volatile locator (`score < 4`) and no resilient DOM alternative exists, `QualityJudgeToolInterceptor` interceptively advises the agent via soft retry (`RETRY_WITH_FEEDBACK`) to invoke `mark_elements` to visually ground the element instead of guessing fragile selectors.
 
 #### Runtime Instruction Preparation
-Before compiling prompts or sending request payloads to the LLM, the framework executes a dedicated instruction preparation step (`ExecuteActionsStep.prepareInstruction`). It dynamically strips most explicit control tags case-insensitively (`(no-replay)`, `(bug)`, `(continue-on-error)`, `(no-healing)`, `(optional)`, `(timeout: ...)`, `(visual)`, `(visual: full)`), preventing internal test configurations from polluting the natural language prompts sent to the LLM.
+Before compiling prompts or sending request payloads to the LLM, the framework executes a dedicated instruction preparation step (`ExecuteActionsStep.prepareInstruction`). It dynamically strips internal runtime control tags case-insensitively (`(no-replay)`, `(bug)`, `(continue-on-error)`, `(no-healing)`, `(marker)`, `(optional)`, `(timeout: ...)`, `(contextlevel=...)`, `(context: ...)`, `(visual)`, `(visual: full)`, `(visual-full)`), preventing internal test configurations from polluting natural language prompts sent to the LLM.
 
-*(Note: The `(hint: <selector>)` and `(layout)` tags are intentionally **not** stripped, as the LLM requires their embedded string content and context to generate the correct structural actions.)*
+*(Note: The `(hint: <selector>)` and `(layout)` / `(layout: full)` directives are intentionally **not** stripped, as the LLM uses their presence and context to verify structural composition and avoid DOM micro-assertions.)*
 
 ---
 
@@ -629,6 +816,48 @@ To ensure faithful replay execution for asynchronous Single Page Applications (S
 | `neodymium.ai.replay.delayScale` | `0.0` | Multiplier applied to recorded delays (`0.0` = off / instant execution for fast CI/CD builds; `1.0` = real-time pacing; `0.5` = 2x speed). |
 | `neodymium.ai.replay.useRecordedDelays` | `false` | (Legacy) When `true` without `delayScale`, enables replay pacing at scale `1.0`. |
 | `neodymium.ai.visual.postActionSettleMs` | `1000` | Minimum settling pause in milliseconds before capturing visual screenshots for SSIM baseline checks. |
+
+---
+
+### 2.8 Local Test Server & Aura Test Suite Hub (neodymium-test-server)
+
+To enable 100% self-contained, deterministic integration testing without external web dependencies or live third-party sites, the repository provides the `neodymium-test-server` module.
+
+#### A. Architecture & Dynamic Dual-Port Lifecycle
+`JavalinTestServer` embeds a lightweight Javalin / Jetty engine serving both plain HTTP and encrypted HTTPS contexts:
+* **Zero Port Collisions**: Ports are allocated dynamically at runtime via OS-assigned ephemeral free ports (or configured via system properties), allowing multiple Maven test runs to execute concurrently in CI/CD without `BindException` failures.
+* **HTTPS & Keystore Configuration**: An embedded self-signed PKCS12 certificate (`keystore.p12`) serves SSL traffic on `https://localhost:<httpsPort>`. Chrome is automatically configured with `-ignore-certificate-errors` via Neodymium's browser profile properties to bypass SSL warnings.
+* **Automated Test Lifecycle via `BaseAiTest`**: Integration tests in `neodymium-e2e-tests` extend `BaseAiTest`, which automatically boots `JavalinTestServer` before the test suite and terminates it on JVM shutdown:
+  ```java
+  public class ProtocolIntrospectionSandboxLiveTest extends BaseAiTest
+  {
+      @Test
+      public void testNetworkFailureIntrospection()
+      {
+          final String url = getSandboxUrl("AuraGlanceTest/shop/sandbox/protocol-introspection.html");
+          Selenide.open(url);
+          // Execute AI playbook or programmatic session
+      }
+  }
+  ```
+  - `getSandboxUrl(path)`: Resolves an HTTP URL targeting the dynamic local port.
+  - `getSandboxHttpsUrl(path)`: Resolves an HTTPS URL targeting the secure local port.
+
+#### B. Aura Test Suite Hub
+All sandbox pages are bundled in `neodymium-test-server/src/main/resources/ai-test-pages/AuraGlanceTest/`:
+* **Apparel Storefront (`shop/`)**: Multi-quality implementations (`homepage-perfect.html`, `homepage-normal.html`, `homepage-bad.html`, `plp-*.html`) to benchmark selector stability and self-healing locators.
+* **SaaS Dashboard (`dashboard/`)**: Dynamic SVG charts, iframe content, and metric widgets.
+* **Chaos Drawer (`controls.js`)**: Sliding drawer UI allowing live programmatic injection of visual anomalies (contrast degradation, layout shifts, clipped text).
+* **Escalation Playground (`shop/escalation.html`, `visual-escalation.html`)**: Interactive challenges testing context escalation from `AXTREE` to `LEAN`, `STANDARD`, and `VISUAL`.
+* **Scenario Challenges (`shop/sandbox/`)**: Isolated test grounds for Shadow DOM, canvas clicks, SVG icon naming, click interception, dynamic reveal timing, and protocol introspection.
+
+#### C. Standalone Server Execution
+For manual browser testing, visual inspection, or exploratory playbook development, developers can launch `JavalinTestServer` indefinitely from the terminal:
+```bash
+mvn exec:java -pl neodymium-test-server
+# Optional custom ports:
+mvn exec:java -pl neodymium-test-server -Dexec.args="--port 8542 --httpsPort 8543"
+```
 
 ---
 
@@ -931,6 +1160,14 @@ steps: |
   * The agent retains complete conversation history across all milestones, allowing the LLM to naturally resolve anaphora ("its", "the button") and reference earlier tool actions.
   * Turn limits dynamically scale with the number of milestones (`baseTurns + milestones.size() * 3`).
 
+#### Comparison: Individual Steps vs. Folded Steps (`>-`) vs. Compound Milestones
+
+| Format | YAML Syntax | Internal Model | Execution Behavior | Reporting Representation |
+| :--- | :--- | :--- | :--- | :--- |
+| **Individual Steps** | `steps:`<br>`  - "Step 1"`<br>`  - "Step 2"` | Multiple independent `PlaybookStep` items | Each step runs in its own pipeline turn; fresh context per step. | Rendered as separate numbered test steps (e.g. `Step 1`, `Step 2`). |
+| **Folded Step (`>-`)** | `steps:`<br>`  - >-`<br>`      Check A.`<br>`      Check B.` | 1 `PlaybookStep` with text `"Check A. Check B."` (0 `subSteps`) | Folds lines into a single sentence. Executes in a single LLM turn without sub-step orchestration. | Rendered as 1 single test step containing the combined text. |
+| **Compound Milestones** | `steps: \|`<br>`  Goal:`<br>`    Milestone 1`<br>`    Milestone 2` | 1 parent `PlaybookStep` with `subSteps` | Executes as 1 compound `AgentToolLoopStep`. Sub-steps injected into prompt context as ordered `milestones`. | Rendered as parent step with child sub-step milestones (e.g. `1.1`, `1.2`). |
+
 ---
 
 ### 4.3 Tiered Context Escalation Ladder & Payload Modes
@@ -954,7 +1191,7 @@ $$\textbf{Track B (Visual Track): } \mathbf{VISUAL} \longrightarrow \mathbf{VISU
 | **`VISUAL_RICH`** | Visual | **Full-Page Screenshot + `RICH` DOM.** Maximum multimodal context. Strictly preserves all DOM text and attributes. | Triggered by `(layout)` checks or cross-track escalation from `RICH`; uses full-page screenshot. |
 
 #### Dynamic Escalation Flow
-1. **Initial Step**: Starts at **`MINIMAL`** (or `LEAN` / `VISUAL` based on explicit tags).
+1. **Initial Step**: Starts at **`LEAN`** by default (configurable via `neodymium.ai.contextLevel = LEAN|STANDARD|RICH` in `ai.properties`, or overridden on individual steps via `(context: standard)` or `(contextlevel=standard)`).
 2. **Escalation 1 (`MINIMAL` $\rightarrow$ `LEAN`)**: Expands to all interactive elements, navigation links, and section headings.
 3. **Escalation 2 (`LEAN` $\rightarrow$ `STANDARD`)**: Expands to static text, paragraphs, and order summary totals.
 4. **Escalation 3 (`STANDARD` $\rightarrow$ `RICH`)**: Expands to all `data-*` attributes, ARIA descriptions, tables, and deep parent ancestry.
@@ -1204,54 +1441,275 @@ After executing SUT actions for a step, the framework performs a **Post-Action O
 
 ---
 
-### 6.5 Visual Root Cause Analysis (RCA) & Failure Diagnostics
+### 6.5 Visual Root Cause Analysis (RCA) & Rubric-Based Failure Diagnostics
 
-When a test step fails during execution, Neodymium AI automatically captures the final SUT page state and invokes the Vision LLM (`LlmCapability.VISION`) to generate a plain-English **Visual Root Cause Analysis (RCA)**:
-* **Post-Mortem Failure Diagnostic**: Attaches root cause explanations to Allure reports, telemetry sinks, and log files.
+When an automated test step fails during execution (e.g. an assertion timeout, missing element, or unprogressed flow), Neodymium AI automatically triggers **Visual Root Cause Analysis (RCA)**.
+
+Instead of stopping at cryptic framework exceptions like `TimeoutException: Expected text 'Merci pour votre achat !' was not found within 3000ms`, Neodymium captures the final SUT page state, active URL, page title, recent tool interactions, and the trace of preceding executed steps, and invokes the multimodal Vision LLM (`LlmCapability.VISION`) using a structured rubric evaluation engine.
 
 ```properties
 neodymium.ai.visualRca.enabled=true
 ```
 
+#### A. Structured Diagnostic Rubrics
+
+Visual RCA evaluates the failure against four mandatory, specialized rubrics before synthesizing the root cause:
+
+1. **Target Presence Check (`targetPresence`)**:
+   - **Zero-Premise Bias**: Verifies objectively whether the expected target text, values, or elements are visually present on screen.
+   - If the content is visibly present, Visual RCA classifies the failure as an automated selector, locator syntax, or synchronization timeout mismatch rather than a real application defect.
+   - **Score**: `FOUND` | `MISSING` | `UNKNOWN`
+
+2. **Form & Validation Check (`formValidation`)**:
+   - Scrutinizes all visible inputs, dropdowns, and checkboxes on the screen for:
+     - **Browser-Native HTML5 Validation Bubbles**: Detects native tooltips pointing to empty required inputs (e.g., `! Please fill out this field.` or `! Please select an item in the list.`).
+     - **Form Error Messages & Borders**: Identifies red borders, field-level error messages, and asterisks (`*`) on omitted mandatory inputs (e.g. Province, State, Postal Code, Phone, Terms).
+     - Identifies when a form submission action (such as clicking 'Acheter' or 'Submit') was blocked because an unfilled required field prevented navigation.
+   - **Score**: `ERROR_PRESENT` | `CLEAN` | `UNKNOWN`
+
+3. **Navigation & Flow State (`flowState`)**:
+   - Correlates the current URL, page title, and visible view with preceding executed actions (e.g. submit button clicked in the previous step).
+   - Identifies if the application navigated successfully or remained stuck on the previous form or view.
+   - **Score**: `STUCK` | `PROGRESSING` | `UNKNOWN`
+
+4. **Action Obstruction Check (`obstruction`)**:
+   - Detects visual blockers preventing user interaction, such as modal overlays, cookie consent banners, loading spinners, disabled buttons, or off-screen elements.
+   - **Score**: `OBSTRUCTED` | `CLEAR` | `UNKNOWN`
+
+#### B. The `VisualRcaResult` Model & Report Rendering
+
+The diagnosis produces a typed `VisualRcaResult` object containing:
+- `rootCause`: Clear, natural-language engineering synthesis explaining the root cause based on visual evidence.
+- `rubrics`: Structured breakdown containing scores and detailed analysis for each of the 4 diagnostic checks.
+
+Both HTML and Markdown reports render dedicated diagnostic cards:
+- **HTML Report**: Displays a styled `.visual-rca-box` in the failure details section with a prominent Root Cause summary and a `.rubrics-grid` showing individual rubric cards with status pills (`MISSING`, `ERROR_PRESENT`, `STUCK`, `CLEAR`).
+- **Markdown Report**: Includes a dedicated `### 🔍 Visual Root Cause Analysis (RCA)` block with the root cause explanation and a bulleted `Diagnostic Rubrics` scorecard.
+
 ---
 
-## 7. Performance, Caching, Telemetry & Assertions
+### 6.6 Fuzzy Layout Snapshot Testing (`(layout)` & `(layout: full)`)
 
-### 7.1 In-Memory LLM Request Caching (`@AiLlmCache`)
+Traditional visual regression testing tools perform pixel-by-pixel image comparisons (`toMatchSnapshot()`). While effective for static design systems, pixel-diffing is notoriously brittle in modern web applications where:
+* Content changes regularly (promotional copy, banner headlines, articles, blog posts).
+* Dynamic data fluctuates (stock levels, cart counts, live currency conversions, dates).
+* Images and avatars vary per environment, user session, or product category.
 
-Provides an in-memory key-value prompt response caching mechanism (`@AiLlmCache`) to eliminate LLM API costs during replay verification and speed up integration tests:
+Such changes cause pixel-diff tests to fail continually, even though the page layout, component hierarchy, brand styling, and grid alignment remain 100% correct.
 
+**Fuzzy Layout Snapshot Testing** solves this fundamental problem. Instead of comparing raw pixels, Neodymium AI captures and compares the **underlying spatial and stylistic structure** of the page.
+
+#### A. Client-Side Color Wireframing Engine (`neodymium-color-wireframe.js`)
+
+When a step commands `(layout)` or `(layout: full)`, Neodymium AI executes a client-side JavaScript injection (`neodymium-color-wireframe.js`) immediately prior to screenshot capture:
+
+```mermaid
+flowchart LR
+    LivePage["Live Web Page<br/>(Dynamic Text & Images)"] --> Inject["Wireframe Injection<br/>(neodymium-color-wireframe.js)"]
+    Inject --> Skeleton["Color Skeleton<br/>(currentColor Bars & Placeholders)"]
+    Skeleton --> Capture["Capture Screenshot<br/>(Viewport or Full-Page)"]
+    Capture --> Matrix["Color SSIM Matrix<br/>(128x128x3 RGB Bytes)"]
+```
+
+1. **Text Redaction via `currentColor`**:
+   All typography and text nodes (`p`, `span`, `h1`-`h6`, `a`, `button`, `label`, `li`, `td`) are styled with:
+   ```css
+   -webkit-text-fill-color: transparent !important;
+   background-color: currentColor !important;
+   border-radius: 3px !important;
+   box-decoration-break: clone !important;
+   -webkit-box-decoration-break: clone !important;
+   ```
+   This transforms text lines into solid skeleton bars matching their exact rendered width and height while **preserving the computed CSS brand color** of the element (e.g., navy headers, terracotta subheadings, dark neutral body copy). Changing the text from `"Summer Sale - 20% Off"` to `"Autumn Arrivals - Shop Now"` preserves the structural block width and color without triggering a visual defect.
+
+2. **Media Neutralization**:
+   All raster images (`img`, `picture`, `video`, `canvas`, `iframe`, and elements with CSS `background-image`) have their content replaced with uniform neutral placeholder boxes (`#E5E7EB` with subtle borders) using `object-position: -99999px !important;`. The bounding box, aspect ratio, and layout footprint are fully tested, but image asset changes do not cause false positives.
+
+3. **SVG & Icon Wireframing**:
+   Inline SVG elements, icon fonts, and decorative vectors are rendered as simplified wireframe shapes with consistent stroke/fill neutralization.
+
+4. **DOM Restoration**:
+   The injected stylesheet and modifications are scoped and cleanly removed immediately after capture, leaving the browser session in its original state.
+
+#### B. 3-Channel Color SSIM Matrix ($128 \times 128 \times 3$)
+
+Standard visual testing computes an 8-bit luminance matrix (grayscale brightness). For layout testing, Neodymium AI employs a 3-channel RGB matrix via `ScreenshotHasher.computeColorSsimMatrix`:
+
+1. **Progressive Bilinear Downsampling**: Downsamples the wireframed screenshot progressively to a $128 \times 128$ grid.
+2. **49,152-Byte RGB Vector**: Extracts 3 bytes per cell ($R, G, B \in [0..255]$), serializing the result as a compact Base64 string into `step.setScreenshotHash()`.
+3. **Dual Spatial-Color Sensitivity**: The resulting matrix verifies both:
+   * **Spatial Structure**: Grid column counts, section margins, card dimensions, button placements, flexbox wrapping, and responsive breakpoints.
+   * **Brand Color Palette**: Background card fills, header bar tints, navigation accents, and hero section gradients.
+
+#### C. Tolerance Thresholds & Gating
+
+Layout steps use a default SSIM acceptance threshold of **`0.92`** (`PlaybookStep.DEFAULT_LAYOUT_SSIM_MIN_SCORE`), compared to `0.99` for pixel-exact `(visual)`:
+
+* **Tolerant to Minor Flow Variations**: Minor differences in character wrap, font metrics across operating systems, or line count adjustments pass comfortably ($\text{SSIM} \approx 0.94 - 0.98$).
+* **Intolerant to Structural Defects**: Missing navigation bars, collapsed multi-column grids, missing footer sections, broken flex layouts, or dropped CSS stylesheets cause catastrophic structural divergence ($\text{SSIM} < 0.85$), failing the test conclusively.
+
+Authors can override the threshold per step:
+```yaml
+steps: |
+  Open ${app.url}/catalog
+  Verify product grid layout (layout: threshold=0.90)
+  Verify checkout summary styling (layout: full, min-score=0.95)
+```
+
+#### D. Deterministic Zero-Token Replay ($< 15\text{ms}$)
+
+During test authoring or recording (`FORCE_RECORDING`), the LLM inspects the page and validates the layout visually. Once recorded, the color SSIM matrix is stored in the companion JSON file.
+
+On subsequent runs (`REPLAY_STRICT`, `REPLAY_WITH_HEALING`):
+1. `VisualBaselineGateStep` executes before any LLM invocation.
+2. The browser renders the page, injects the color wireframe, captures the screenshot, and computes the color SSIM matrix.
+3. Neodymium compares the live matrix against the recorded baseline in memory across local $8 \times 8$ blocks.
+4. **Execution completes in $< 15\text{ms}$ with 0 LLM calls, 0 token costs, and 0 network roundtrips.**
+
+#### E. Playbook Authoring Examples
+
+##### 1. Plain-Text Playbook (YAML)
+```yaml
+name: Homepage Layout Regression Test
+steps: |
+  Open https://example.com in the browser
+  Verify header navigation, hero banner, and featured categories (layout)
+  Scroll window to bottom
+  Verify full page structure from top to bottom (layout: full)
+```
+
+##### 2. Programmatic Execution (Java)
 ```java
-@Browser("Chrome_1500x1000")
-@AiLlmCache
-@NeodymiumAiTest
-public final class VerlaProgrammaticDemoTest
+@AiPlaybook("/playbooks/integration/programmatic/HomepageLayoutTest.yaml")
+@AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+public void testHomepageLayout(final AiSession session) throws Exception
 {
-    @Test
-    @AiLlmCache
-    public void test1_CachedExecution() throws Exception
-    {
-        // First execution populates in-memory cache on MISS; subsequent calls HIT cache instantly
-    }
+    session.execute("""
+        steps: |
+          Open ${test.page.url} in the browser
+          Verify homepage layout and brand styling (layout)
+          Verify entire page structure from header to footer (layout: full)
+        """)
+        .verifyMetrics()
+        .hasStepCount(3)
+        .hasNoSoftFailures()
+        .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 }
 ```
 
 ---
 
-### 7.2 Event-Driven Architecture, EventBus & HUD Overlays
+### 6.7 Protocol-Level Introspection & Active Diagnostics (Network & Console)
+
+When web application interactions fail due to asynchronous backend API errors (e.g. HTTP 500) or unhandled client-side JavaScript crashes (e.g. `TypeError`), standard UI test runners often enter wasteful 10–15 turn locator thrashing loops assuming the element locator was flawed. Neodymium AI solves this by introducing protocol-level network and console monitoring alongside dedicated introspection tools and passive diagnostic enrichment.
+
+```mermaid
+flowchart TD
+    Browser["Browser Execution Context<br/>(Chromium / WebKit / Gecko)"] --> CDP["CDP Event Interceptors<br/>(Network & Runtime Domains)"]
+    Browser --> Fallback["W3C & Performance API Fallback<br/>(getEntriesByType / LogType.BROWSER)"]
+    CDP --> Monitors["Bounded Ring Monitors<br/>(NetworkTrafficMonitor & ConsoleLogMonitor)"]
+    Fallback --> Monitors
+    Monitors --> ActiveTools["Active Introspection Tools<br/>(browser_get_network_failures / browser_get_console_errors)"]
+    Monitors --> PassiveAlerts["Passive Diagnostic Alert Injection<br/>(AgentToolLoopStep Failure Handler)"]
+    PassiveAlerts --> Agent["LLM Agent / Diagnostic Report<br/>(Instant Root Cause Discovery)"]
+```
+
+#### A. Dual-Engine Capture & Bounded Ring Buffering
+
+1. **Chromium DevTools Protocol (CDP)**:
+   When running on Chromium-based drivers (Chrome, Edge), Neodymium attaches asynchronous CDP listeners directly to the browser protocol:
+   - `Network.responseReceived` and `Network.loadingFailed`: Captures failed HTTP requests ($\ge 400$), network aborts, and CORS errors.
+   - `Runtime.exceptionThrown` and `Runtime.consoleAPICalled`: Captures unhandled JavaScript exceptions, runtime stack traces, and console logs.
+2. **Universal W3C & JavaScript Performance Fallback**:
+   On non-CDP environments (Firefox, Safari, remote grids with restricted protocol access), Neodymium transparently synchronizes:
+   - Browser logs via `driver.manage().logs().get(LogType.BROWSER)`.
+   - Network failure timing via `window.performance.getEntriesByType('resource')`.
+3. **Thread-Safe Ring Buffering & Deduplication**:
+   - Captured entries are buffered in memory-bounded circular FIFO queues (capacity: 100 entries per driver session) ensuring zero memory leak hazard.
+   - Dual-source deduplication applies a 2-second timestamp window to prevent duplicate records when both CDP and fallback synchronization are active.
+
+#### B. Tool Catalog: Active Protocol Introspection Tools
+
+Neodymium AI exposes two standard in-process tools in `BrowserToolProvider`:
+
+| Tool Name | Parameters | Description |
+| :--- | :--- | :--- |
+| **`browser_get_network_failures`** | • `status_filter` (string, optional: `"all_failures"`, `"4xx"`, `"5xx"`, `"blocked"`, default: `"all_failures"`)<br>• `limit` (integer, optional, default: 20)<br>• `clear_buffer` (boolean, optional, default: true) | Queries recent failed HTTP network requests and network-level aborts. Returns structured JSON containing URL, HTTP status code, method, timestamp, and failure description. |
+| **`browser_get_console_errors`** | • `min_level` (string, optional: `"SEVERE"`, `"WARNING"`, `"INFO"`, default: `"SEVERE"`)<br>• `limit` (integer, optional, default: 20)<br>• `clear_buffer` (boolean, optional, default: true) | Queries recent browser console log entries and unhandled JavaScript exceptions. Returns structured JSON containing log level, error message, source script URL, line number, and stack trace. |
+
+#### C. Passive Diagnostic Alert Enrichment (`AgentToolLoopStep`)
+
+To eliminate the cognitive burden on the LLM to remember to call introspection tools after an unexpected failure:
+* When any interactive browser action (such as `click` or `fill`) fails repeatedly, `AgentToolLoopStep` inspects the active session's `NetworkTrafficMonitor` and `ConsoleLogMonitor`.
+* If recent HTTP 5xx errors or `SEVERE` runtime JavaScript exceptions occurred during the turn window, Neodymium injects a concise one-line alert into the assistant conversation:
+  ```text
+  [Diagnostic Alert]: Detected 1 HTTP 500 error(s) during this turn:
+    - 500 POST /api/cart/add (Internal Server Error)
+  If the application UI did not update due to a backend or script failure, report the defect rather than retrying alternate element locators.
+  ```
+* **Thrashing Prevention**: Upon receiving this passive notice, autonomous agents immediately halt locator exploration and output an accurate defect diagnosis.
+* **Clean Suppression**: If no protocol-level network or console failures occurred, the alert is suppressed, preserving minimal token context.
+
+#### D. Non-Mutating Replay Fidelity in Playbooks
+
+- Calls to `browser_get_network_failures` and `browser_get_console_errors` are classified as non-mutating query inspections.
+- During offline playback (`REPLAY_STRICT`, `REPLAY_WITH_HEALING`), introspection tool calls execute as fast query operations without causing test failures or network side effects.
+
+#### E. Sandbox Infrastructure & Simulation Endpoints
+
+To test active protocol introspection and passive diagnostic enrichment under real browser conditions, `neodymium-test-server` provides dedicated REST simulation endpoints and an interactive test page:
+
+##### 1. Synthetic REST Simulation Endpoints (`JavalinTestServer`)
+| Endpoint | Method | Status | Behavior / Payload |
+| :--- | :--- | :--- | :--- |
+| **`/api/faulty-backend`** | `POST` / `GET` | **500 Internal Server Error** | Returns `{"error": "Simulated backend failure"}`. Simulates a failing order placement, crash in downstream microservice, or database deadlock. |
+| **`/api/missing-endpoint`** | `GET` | **404 Not Found** | Returns `{"error": "Route not found"}`. Simulates broken links or removed backend routes. |
+| **`/api/analytics`** | `POST` | **400 Bad Request** | Returns `{"error": "Invalid payload format"}`. Simulates bad request tracking or client payload validation failures. |
+
+##### 2. Interactive Protocol Challenge Page (`protocol-introspection.html`)
+Located at `AuraGlanceTest/shop/sandbox/protocol-introspection.html`, this page provides interactive trigger buttons:
+* **Trigger 500 Network Error**: Dispatches `fetch('/api/faulty-backend', { method: 'POST' })`, recording an HTTP 500 failure in `NetworkTrafficMonitor`.
+* **Trigger 404 Network Error**: Dispatches `fetch('/api/missing-endpoint')`, recording an HTTP 404 failure.
+* **Trigger Console Error**: Calls `console.error("CartService: checkout pipeline halted due to missing authentication token")`, recording a `SEVERE` entry in `ConsoleLogMonitor`.
+* **Trigger Unhandled Exception**: Throws an unhandled runtime error `new Error("Uncaught TypeError: Cannot read properties of undefined (reading 'cartId')")`, captured via CDP `Runtime.exceptionThrown`.
+* **Simulate Failing Checkout Action**: A button that looks like a normal "Place Order" button, but on click triggers a 500 error while the UI spinner spins forever without updating.
+
+##### 3. Integration Testing Patterns with `BaseAiTest`
+Tests in `neodymium-e2e-tests` validate both active inspection and passive thrashing enrichment:
+* **`ProtocolIntrospectionSandboxMockTest`**: Validates agent tool handling, filtering (`4xx`, `5xx`, `SEVERE`), and turn-level memory bounds using recorded tool executions.
+* **`ProtocolIntrospectionSandboxLiveTest`**: Boots Chrome, opens `protocol-introspection.html`, triggers simulated network and console failures, and asserts that `browser_get_network_failures` and `browser_get_console_errors` query and clear the real-time buffer accurately.
+
+---
+
+## 7. Performance, Telemetry & Assertions
+
+### 7.1 Event-Driven Architecture, EventBus & HUD Overlays
 
 * **`EventBus`**: Centrally coordinates all framework execution events (e.g., `ActionExecutedEvent`, `SessionFinishedEvent`).
 * **Heads-Up Display (HUD)**: Decoupled HUD listeners observe event streams to render interactive overlays and debug windows.
 
 ---
 
-### 7.3 Real-Time Token Budget Guard & Limits
+### 7.2 Real-Time Token Budget Guard, Step Limits & Turn Bounds
 
-Supports real-time input (prompt) and output (completion) token budget limits per test run:
+Neodymium AI enforces two layers of budget protection during agent execution:
+
+#### 1. Step-Level Token, Turn & Timeout Bounds
+Guards individual step execution loops against infinite tool-calling loops and runaway token consumption:
+* **`neodymium.ai.step.maxTokens`**: Maximum cumulative tokens across all turns in a single step (default: `100000`). If cumulative tokens breach this limit, the step halts with `TokenBudgetExceededException`.
+* **`neodymium.ai.step.maxTurns`**: Maximum tool-execution turns allowed per step loop (default: `15`).
+* **`neodymium.ai.step.timeoutSeconds`**: Wall-clock timeout in seconds for an individual step loop (default: `120`).
+
+> [!NOTE]
+> When `neodymium.ai.contextLevel` is set to `STANDARD` (or higher), DOM payloads per turn are ~2-3x larger due to static copy inclusion (`p, span, li, td, div`). It is strongly recommended to increase `neodymium.ai.step.maxTokens` to `200000` - `250000` to prevent compound multi-turn steps from prematurely exhausting the default budget.
+
+#### 2. Test-Run Cumulative Token Budgets
+Guards total input (prompt) and output (completion) token consumption across the entire test case lifecycle:
 
 ```properties
-neodymium.ai.tokenBudget.input=50000
-neodymium.ai.tokenBudget.output=10000
+# Global per-test-run token ceilings (ai.properties)
+neodymium.ai.tokenBudget.input=1000000
+neodymium.ai.tokenBudget.output=100000
 ```
 
 ```java
@@ -1265,7 +1723,7 @@ public void testWithStrictTokenLimits()
 
 ---
 
-### 7.4 Per-Call-Type Telemetry Breakdown
+### 7.3 Per-Call-Type Telemetry Breakdown
 
 Test completion stats report an exact breakdown across all pipeline call types:
 
@@ -1279,7 +1737,7 @@ Test completion stats report an exact breakdown across all pipeline call types:
 
 ---
 
-### 7.5 Execution Data Access, Telemetry Metrics & Mode-Conditional Asserters (`verifyMetrics()`)
+### 7.4 Execution Data Access, Telemetry Metrics & Mode-Conditional Asserters (`verifyMetrics()`)
 
 To validate execution invariants across different `@AiMode` parameterized test runs, `PlaybookRecording` provides a fluent `MetricsAsserter`:
 
@@ -1368,17 +1826,19 @@ Neodymium AI uses hierarchical property loading (`AiConfiguration`):
 6. `config/neodymium.properties`
 
 ### 8.1 Core Execution Settings
-* `neodymium.ai.executionMode` - Defines global fallback execution mode (`REPLAY_WITH_HEALING`, `LIVE`, `REPLAY_STRICT`, `LLM_ONLY`, `FORCE_RECORDING`, `LINTER_ONLY`). (Default: `REPLAY_WITH_HEALING`)
+* `neodymium.ai.executionMode` - Defines global fallback execution mode (`AUTO`, `REPLAY_WITH_HEALING`, `LIVE`, `REPLAY_STRICT`, `LLM_ONLY`, `FORCE_RECORDING`, `LINTER_ONLY`). (Default: `REPLAY_WITH_HEALING`)
 * `neodymium.ai.playbook.recordingDirectory` - Primary directory for saving and loading Playbook JSON execution recordings.
 * `neodymium.ai.replay.delayScale` - (Double) Scale multiplier applied to recorded delays. When `0.0`, pacing is disabled for maximum CI/CD speed. (Default: `0.0`)
 * `neodymium.ai.replay.useRecordedDelays` - (Boolean, Legacy) Replay actions at human speed utilizing recorded sleep intervals. (Default: `false`)
+* `neodymium.ai.contextLevel` - Controls default DOM fidelity level sent to the LLM during turn 1 of agent execution (`LEAN`, `STANDARD`, `RICH`). Individual playbook steps can override this via tags: `(context: standard)`, `(context: none)`, or `(contextlevel=standard)`. (Default: `LEAN`)
 
 ### 8.2 Provider and Model Configuration
 * `neodymium.ai.provider` - Global active LLM provider (`gemini`, `openai`, `vertex`, `mistral`, `mock`). (Default: `gemini`)
 * `neodymium.ai.model` - Global active model. (Default: `gemini-3.5-flash-lite`)
 * `neodymium.ai.apiKey` - Global API Key (`${GEMINI_API_KEY}`). All API keys must be injected dynamically via environment variables (such as `GEMINI_API_KEY`, `OPENAI_API_KEY`) or passed at run-time as JVM arguments (e.g., `-Dneodymium.ai.apiKey=...`). Never commit API keys to git or configuration files.
-* `neodymium.ai.timeoutSeconds` - Global network timeout for LLM HTTP calls. (Default: `180`)
+* `neodymium.ai.timeoutSeconds` - Global network timeout for LLM HTTP calls on one-shot batch tasks (such as verification and linter). (Default: `180`)
 * `neodymium.ai.temperature` - Global LLM temperature. (Default: `0.0`)
+* `neodymium.ai.execution.timeoutSeconds` - Per-turn LLM HTTP call timeout during agent step execution. (Default: `30`)
 
 #### CLI Test Execution & API Key Injection Examples
 
@@ -1400,9 +1860,16 @@ mvn test -Dtest=AddToCartJudgeAndVerificationsTest -Dneodymium.ai.apiKey="your-g
 * `neodymium.ai.locatorImprover.enabled` - (Boolean) Automatic locator upgrading for recorded playbooks. (Default: `true`)
 * `neodymium.ai.judge.enabled` - (Boolean) LLM Quality Judge second-opinion evaluation. (Default: `false`)
 * `neodymium.ai.judge.mode` - Mode of Quality Judge (`ON_AMBIGUITY`, `ALWAYS`, `ON_FAIL`). (Default: `ON_AMBIGUITY`)
+* `neodymium.ai.judge.recommendMarker` - (Boolean) Whether Quality Judge and selector evaluation recommend invoking visual element markers (`mark_elements`) when proposed locators are fragile with no resilient DOM alternatives. (Default: `true`)
+* `neodymium.ai.network.monitorEnabled` - (Boolean) Protocol-level network traffic and console log monitoring for introspection tools and passive diagnostic enrichment. (Default: `true`)
+* `neodymium.ai.network.ignorePattern` - (String, Regex) Regular expression matching URLs of benign background requests (e.g. analytics, telemetry, tracking pixels) to exclude from captured network failure buffers. (Default: `""`)
 
 ### 8.4 Network and Budget Limits
+* `neodymium.ai.step.maxTokens` - Maximum cumulative token budget per individual step loop. Throws `TokenBudgetExceededException` if exceeded. Aliases: `neodymium.ai.tokenBudget.step`, `neodymium.ai.step.tokenBudget`, `tokenBudget.step`. (Default: `100000`, recommended `250000` when `contextLevel = STANDARD`)
+* `neodymium.ai.step.maxTurns` - Maximum tool execution turns allowed per individual step loop. (Default: `15`)
+* `neodymium.ai.step.timeoutSeconds` - Per-step execution wall-clock timeout in seconds across all turns and tool calls. (Default: `120`, fallback: `neodymium.ai.timeoutSeconds`)
+* `neodymium.ai.judge.discussion.maxTurns` - Maximum turns allowed in multi-agent consensus judge deliberation. (Default: `3`)
 * `neodymium.ai.maxRetriesAtMaxLevel` - Number of LLM self-healing iterations allowed after reaching maximum context level. (Default: `1`)
 * `neodymium.ai.llm.maxRetries` - Maximum network retries for 429/500 LLM API failures.
-* `neodymium.ai.tokenBudget.input` - Hard limit on input context tokens per execution. (Default: `-1` disabled)
-* `neodymium.ai.tokenBudget.output` - Hard limit on output response tokens per execution. (Default: `-1` disabled)
+* `neodymium.ai.tokenBudget.input` - Cumulative input context token limit per entire test run. Aliases: `neodymium.ai.tokenBudgetInput`, `tokenBudget.input`. (Default: `500000`)
+* `neodymium.ai.tokenBudget.output` - Cumulative output response token limit per entire test run. Aliases: `neodymium.ai.tokenBudgetOutput`, `tokenBudget.output`. (Default: `50000`)

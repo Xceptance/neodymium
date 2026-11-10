@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Protocol Introspection Challenge - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+</head>
+<body class="aura-theme-dark">
+    <div class="aura-container">
+        <header class="aura-header">
+            <div class="aura-logo">Aura AI <span>Sandbox</span></div>
+            <nav class="aura-nav">
+                <a href="../index.html">← Back to Storefront</a>
+            </nav>
+        </header>
+
+        <main class="aura-main">
+            <section class="aura-card">
+                <h1>Protocol & Console Introspection Challenge</h1>
+                <p class="aura-desc">
+                    This sandbox page simulates asynchronous backend failures, unhandled client-side runtime errors, 
+                    console diagnostics, and background telemetry requests. Test agents use protocol-level introspection 
+                    tools to inspect network failures and console stacks instead of locator thrashing.
+                </p>
+
+                <div style="display: flex; flex-direction: column; align-items: center; margin: 2rem 0; gap: 1rem; width: 100%;">
+                    <div style="display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center;">
+                        <button id="trigger500Btn" class="aura-btn" style="background: #e63946; color: #fff;">
+                            Trigger HTTP 500 Backend Fault
+                        </button>
+                        <button id="trigger404Btn" class="aura-btn" style="background: #f77f00; color: #fff;">
+                            Trigger HTTP 404 Missing Endpoint
+                        </button>
+                        <button id="triggerAnalyticsBtn" class="aura-btn" style="background: #457b9d; color: #fff;">
+                            Trigger Ignored Analytics Telemetry
+                        </button>
+                    </div>
+
+                    <div style="display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; margin-top: 0.5rem;">
+                        <button id="triggerJsErrorBtn" class="aura-btn" style="background: #9d0208; color: #fff;">
+                            Throw Uncaught JS Exception
+                        </button>
+                        <button id="triggerConsoleErrorBtn" class="aura-btn" style="background: #d62828; color: #fff;">
+                            Trigger console.error()
+                        </button>
+                        <button id="triggerConsoleWarnBtn" class="aura-btn" style="background: #fcbf49; color: #000;">
+                            Trigger console.warn()
+                        </button>
+                    </div>
+                </div>
+
+                <div class="aura-status-box" style="margin-top: 1.5rem; padding: 1.5rem; background: rgba(0,0,0,0.3); border-radius: 8px; text-align: center;">
+                    Introspection Event Log: <span id="eventStatus" style="font-weight: bold; color: #00ffcc;">Ready</span>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const statusSpan = document.getElementById('eventStatus');
+
+        document.getElementById('trigger500Btn').addEventListener('click', function() {
+            statusSpan.innerText = 'Dispatching fetch to /AuraGlanceTest/api/faulty-backend...';
+            statusSpan.style.color = '#ffcc00';
+            fetch('/AuraGlanceTest/api/faulty-backend')
+                .then(res => {
+                    statusSpan.innerText = 'HTTP 500 received from /AuraGlanceTest/api/faulty-backend';
+                    statusSpan.style.color = '#e63946';
+                })
+                .catch(err => {
+                    statusSpan.innerText = 'Fetch error on /api/faulty-backend: ' + err.message;
+                    statusSpan.style.color = '#e63946';
+                });
+        });
+
+        document.getElementById('trigger404Btn').addEventListener('click', function() {
+            statusSpan.innerText = 'Dispatching fetch to /AuraGlanceTest/api/missing-endpoint...';
+            statusSpan.style.color = '#ffcc00';
+            fetch('/AuraGlanceTest/api/missing-endpoint')
+                .then(res => {
+                    statusSpan.innerText = 'HTTP 404 received from /AuraGlanceTest/api/missing-endpoint';
+                    statusSpan.style.color = '#f77f00';
+                })
+                .catch(err => {
+                    statusSpan.innerText = 'Fetch error on /api/missing-endpoint: ' + err.message;
+                    statusSpan.style.color = '#f77f00';
+                });
+        });
+
+        document.getElementById('triggerAnalyticsBtn').addEventListener('click', function() {
+            statusSpan.innerText = 'Dispatching fetch to /AuraGlanceTest/api/analytics...';
+            statusSpan.style.color = '#ffcc00';
+            fetch('/AuraGlanceTest/api/analytics')
+                .then(res => {
+                    statusSpan.innerText = 'Telemetry HTTP 404 received from /AuraGlanceTest/api/analytics';
+                    statusSpan.style.color = '#457b9d';
+                })
+                .catch(err => {
+                    statusSpan.innerText = 'Fetch error on /api/analytics: ' + err.message;
+                    statusSpan.style.color = '#457b9d';
+                });
+        });
+
+        document.getElementById('triggerJsErrorBtn').addEventListener('click', function() {
+            statusSpan.innerText = 'Triggering unhandled client-side TypeError...';
+            statusSpan.style.color = '#9d0208';
+            setTimeout(function() {
+                throw new TypeError("Uncaught simulated JavaScript exception in protocol-introspection.html");
+            }, 10);
+        });
+
+        document.getElementById('triggerConsoleErrorBtn').addEventListener('click', function() {
+            statusSpan.innerText = 'Logged console.error event';
+            statusSpan.style.color = '#d62828';
+            console.error("Simulated console error event in protocol-introspection.html", { timestamp: Date.now() });
+        });
+
+        document.getElementById('triggerConsoleWarnBtn').addEventListener('click', function() {
+            statusSpan.innerText = 'Logged console.warn event';
+            statusSpan.style.color = '#fcbf49';
+            console.warn("Simulated console warning event in protocol-introspection.html");
+        });
+    </script>
+    <script src="../../shared/controls.js"></script>
+</body>
+</html>

@@ -21,6 +21,9 @@ package org.neodymium.ai.pipeline.steps;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.codeborne.selenide.Selenide;
+import com.codeborne.selenide.WebDriverRunner;
+
 import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmProvider;
 import org.neodymium.ai.client.LlmRequest;
@@ -40,6 +43,7 @@ import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.prompt.VisualRcaPrompt;
+import org.neodymium.ai.prompt.VisualRcaResult;
 import org.neodymium.ai.session.AiSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -128,8 +132,24 @@ public final class VisualRcaStep implements PipelineStep
         final String instruction = context.getSessionData() != null ? context.getSessionData().resolveAvailableVariables(rawInstruction) : rawInstruction;
         final String err = this.errorMessage != null ? this.errorMessage : "Execution error occurred";
 
-        // 3. Construct VisualRcaPrompt template with step instruction and error context
-        final VisualRcaPrompt rcaPrompt = new VisualRcaPrompt(instruction, err);
+        // 3. Extract page URL and title if browser is active to ground analysis in SUT state
+        String pageUrl = null;
+        String pageTitle = null;
+        if (WebDriverRunner.hasWebDriverStarted())
+        {
+            try
+            {
+                pageUrl = WebDriverRunner.url();
+                pageTitle = Selenide.title();
+            }
+            catch (final Exception e)
+            {
+                LOGGER.debug("Could not extract page URL/title for Visual RCA: {}", e.getMessage());
+            }
+        }
+
+        // 4. Construct VisualRcaPrompt template with step instruction, error context, and page grounding
+        final VisualRcaPrompt rcaPrompt = new VisualRcaPrompt(instruction, err, pageUrl, pageTitle);
         final String system = rcaPrompt.compileSystemMessage(context);
         final String user = rcaPrompt.compileUserMessage(context);
 
@@ -261,7 +281,8 @@ public final class VisualRcaStep implements PipelineStep
                 }
             }
 
-            final String diagnosis = rcaPrompt.parseResponse(response != null ? response.content() : null, context);
+            final VisualRcaResult rcaResult = rcaPrompt.parseResponse(response != null ? response.content() : null, context);
+            final String diagnosis = rcaResult != null ? rcaResult.toFormattedDiagnosis() : "";
 
             // 10. Enrich PlaybookStep failure reason if not already populated
             if (currentStep != null && currentStep.getFailureReason() == null)
@@ -271,7 +292,8 @@ public final class VisualRcaStep implements PipelineStep
 
             // 11. Log diagnosis warning and dispatch DiagnosticErrorEvent to event bus
             LOGGER.warn("🚨 [Visual RCA Diagnosis]: {}", diagnosis);
-            context.getTransientData().put(ExecutionContext.KEY_VISUAL_RCA_SUMMARY, diagnosis);
+            context.getTransientData().put(ExecutionContext.KEY_VISUAL_RCA_RESULT, rcaResult);
+            context.getTransientData().put(ExecutionContext.KEY_VISUAL_RCA_SUMMARY, rcaResult != null && rcaResult.getRootCause() != null ? rcaResult.getRootCause() : diagnosis);
             context.getTransientData().put(ExecutionContext.KEY_VISUAL_RCA_EXPLANATION, diagnosis);
             session.getEventBus().dispatch(new DiagnosticErrorEvent("Visual RCA Diagnosis: " + diagnosis, null));
         }

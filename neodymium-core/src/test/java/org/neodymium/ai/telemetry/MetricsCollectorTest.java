@@ -66,6 +66,10 @@ public class MetricsCollectorTest
         final double flashLite25Cost = MetricsCollector.calculateCost(usage, "gemini-2.5-flash-lite");
         assertEquals(0.1525, flashLite25Cost, 0.00001);
 
+        // gemini-3.8-flash: (1M * 0.75) + (0.1M * 3.75) + (0.5M * 0.1875) = 0.75 + 0.375 + 0.09375 = 1.21875
+        final double flash38Cost = MetricsCollector.calculateCost(usage, "gemini-3.8-flash");
+        assertEquals(1.21875, flash38Cost, 0.00001);
+
         // gemini-3.7-flash: (1M * 0.75) + (0.1M * 3.75) + (0.5M * 0.1875) = 0.75 + 0.375 + 0.09375 = 1.21875
         final double flash37Cost = MetricsCollector.calculateCost(usage, "gemini-3.7-flash");
         assertEquals(1.21875, flash37Cost, 0.00001);

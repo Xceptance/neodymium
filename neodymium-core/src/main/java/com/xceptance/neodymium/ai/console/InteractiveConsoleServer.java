@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 
 import org.slf4j.Logger;
@@ -214,6 +215,26 @@ public final class InteractiveConsoleServer
         LOG.info("[InteractiveConsoleServer] Stopped.");
     }
 
+    /**
+     * Retrieves the socket address this server is bound to.
+     *
+     * @return the bound socket address
+     */
+    public InetSocketAddress getAddress()
+    {
+        return this.server.getAddress();
+    }
+
+    /**
+     * Retrieves the local port this server is listening on.
+     *
+     * @return the port number
+     */
+    public int getPort()
+    {
+        return this.port;
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
@@ -232,11 +253,12 @@ public final class InteractiveConsoleServer
     {
         HttpServer httpServer = null;
         int port = DEFAULT_START_PORT;
+        final String bindHost = AiConfiguration.getInstance().getProperty("neodymium.ai.console.bindAddress", "127.0.0.1");
         while (port < DEFAULT_START_PORT + 100)
         {
             try
             {
-                httpServer = HttpServer.create(new InetSocketAddress("0.0.0.0", port), 0);
+                httpServer = HttpServer.create(new InetSocketAddress(bindHost, port), 0);
                 break;
             }
             catch (final IOException e)
@@ -274,6 +296,36 @@ public final class InteractiveConsoleServer
     // Inner handlers
     // -------------------------------------------------------------------------
 
+    static void applyCorsHeaders(final HttpExchange exchange, final String allowedMethods)
+    {
+        final String origin = exchange.getRequestHeaders().getFirst("Origin");
+        if (origin != null && isLocalhostOrigin(origin))
+        {
+            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", origin);
+            exchange.getResponseHeaders().set("Vary", "Origin");
+        }
+        exchange.getResponseHeaders().set("Access-Control-Allow-Methods", allowedMethods);
+        exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+    }
+
+    static boolean isLocalhostOrigin(final String origin)
+    {
+        if (origin == null)
+        {
+            return false;
+        }
+        if ("null".equalsIgnoreCase(origin))
+        {
+            return true;
+        }
+        return origin.startsWith("http://localhost:")
+            || origin.startsWith("https://localhost:")
+            || origin.startsWith("http://127.0.0.1:")
+            || origin.startsWith("https://127.0.0.1:")
+            || "http://localhost".equalsIgnoreCase(origin)
+            || "http://127.0.0.1".equalsIgnoreCase(origin);
+    }
+
     /**
      * Stop handler that terminates the local execution process.
      */
@@ -282,9 +334,7 @@ public final class InteractiveConsoleServer
         @Override
         public void handle(final HttpExchange exchange) throws IOException
         {
-            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
-            exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "POST, OPTIONS");
-            exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+            applyCorsHeaders(exchange, "POST, OPTIONS");
 
             if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod()))
             {
@@ -409,11 +459,9 @@ public final class InteractiveConsoleServer
         @Override
         public void handle(final HttpExchange exchange) throws IOException
         {
-            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+            applyCorsHeaders(exchange, "GET, OPTIONS");
             if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod()))
             {
-                exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, OPTIONS");
-                exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
                 exchange.sendResponseHeaders(204, -1);
                 return;
             }
@@ -474,7 +522,7 @@ public final class InteractiveConsoleServer
         @Override
         public void handle(final HttpExchange exchange) throws IOException
         {
-            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+            applyCorsHeaders(exchange, "GET, OPTIONS");
             exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
             final byte[] bytes = Files.readAllBytes(this.jsonPath);
             exchange.sendResponseHeaders(200, bytes.length);
@@ -496,7 +544,7 @@ public final class InteractiveConsoleServer
         @Override
         public void handle(final HttpExchange exchange) throws IOException
         {
-            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+            applyCorsHeaders(exchange, "GET, OPTIONS");
             exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
             try (final InputStream is = InteractiveConsoleServer.class.getClassLoader()
                                                                       .getResourceAsStream(JSON_RESOURCE))
@@ -1305,8 +1353,11 @@ public final class InteractiveConsoleServer
                 else if ("EDIT".equals(action))
                 {
                     activeState.addProperty("interactivePromptChanged", true);
-                    final int targetIdx = response.get("index").getAsInt();
+                    final int targetIdx = response.has("index") && !response.get("index").isJsonNull()
+                        ? response.get("index").getAsInt()
+                        : -1;
                     final String instruction = response.get("instruction").getAsString();
+                    final boolean isCurrent = !response.has("isCurrentStep") || response.get("isCurrentStep").getAsBoolean();
 
                     if (response.has("bindings") && response.get("bindings").isJsonObject())
                     {
@@ -1323,178 +1374,147 @@ public final class InteractiveConsoleServer
                         }
                     }
 
+                    final String targetBlock = response.has("block") && !response.get("block").isJsonNull()
+                        ? response.get("block").getAsString()
+                        : null;
                     final JsonObject blocksObj = activeState.getAsJsonObject("blocks");
+                    JsonObject matchedStep = null;
+
                     if (blocksObj != null)
                     {
-                        for (final String bKey : new String[]
-                        {
-                          "before", "steps", "after"
-                        })
+                        final String[] searchBlocks = (targetBlock != null && blocksObj.has(targetBlock))
+                            ? new String[]
+                            {
+                              targetBlock
+                            }
+                            : new String[]
+                            {
+                              "before", "steps", "after"
+                            };
+
+                        final int flatTargetIdx = response.has("flatIndex") && !response.get("flatIndex").isJsonNull()
+                            ? response.get("flatIndex").getAsInt()
+                            : (response.has("rawIndex") && !response.get("rawIndex").isJsonNull()
+                                ? response.get("rawIndex").getAsInt()
+                                : -1);
+
+                        final int blockTargetIdx = response.has("blockIndex") && !response.get("blockIndex").isJsonNull()
+                            ? response.get("blockIndex").getAsInt()
+                            : -1;
+
+                        for (final String bKey : searchBlocks)
                         {
                             final JsonArray array = blocksObj.getAsJsonArray(bKey);
                             if (array != null)
                             {
-                                for (final JsonElement el : array)
+                                if (flatTargetIdx >= 0)
                                 {
-                                    final JsonObject stepObj = el.getAsJsonObject();
-                                    if (stepObj.has("index") && stepObj.get("index").getAsInt() == targetIdx)
+                                    for (final JsonElement el : array)
                                     {
-                                        stepObj.addProperty("instruction", instruction);
-                                        break;
+                                        final JsonObject stepObj = el.getAsJsonObject();
+                                        if (stepObj.has("index") && stepObj.get("index").getAsInt() == flatTargetIdx)
+                                        {
+                                            matchedStep = stepObj;
+                                            break;
+                                        }
                                     }
+                                }
+
+                                if (matchedStep == null && blockTargetIdx >= 0 && blockTargetIdx < array.size() && targetBlock != null)
+                                {
+                                    matchedStep = array.get(blockTargetIdx).getAsJsonObject();
+                                }
+
+                                if (matchedStep == null && targetIdx >= 0)
+                                {
+                                    for (final JsonElement el : array)
+                                    {
+                                        final JsonObject stepObj = el.getAsJsonObject();
+                                        if (stepObj.has("index") && stepObj.get("index").getAsInt() == targetIdx)
+                                        {
+                                            matchedStep = stepObj;
+                                            break;
+                                        }
+                                    }
+                                    if (matchedStep == null && targetBlock != null && targetIdx < array.size())
+                                    {
+                                        matchedStep = array.get(targetIdx).getAsJsonObject();
+                                    }
+                                }
+
+                                if (matchedStep != null)
+                                {
+                                    matchedStep.addProperty("instruction", instruction);
+                                    if (isCurrent)
+                                    {
+                                        matchedStep.addProperty("status", "running");
+                                        matchedStep.remove("errorMessage");
+                                        matchedStep.remove("actions");
+                                        matchedStep.remove("reasoning");
+                                    }
+                                    break;
                                 }
                             }
                         }
                     }
 
-                    for (final JsonObject s : allSteps)
+                    if (matchedStep != null)
                     {
-                        if (s.has("index") && s.get("index").getAsInt() == targetIdx)
+                        for (final JsonObject s : allSteps)
                         {
-                            s.addProperty("instruction", instruction);
-                            break;
+                            if (s == matchedStep || (matchedStep.has("index") && s.has("index") && s.get("index").getAsInt() == matchedStep.get("index").getAsInt()))
+                            {
+                                s.addProperty("instruction", instruction);
+                                if (isCurrent)
+                                {
+                                    s.addProperty("status", "running");
+                                    s.remove("errorMessage");
+                                    s.remove("actions");
+                                    s.remove("reasoning");
+                                }
+                                break;
+                            }
                         }
+                    }
+                    else
+                    {
+                        for (final JsonObject s : allSteps)
+                        {
+                            if (s.has("index") && s.get("index").getAsInt() == targetIdx)
+                            {
+                                s.addProperty("instruction", instruction);
+                                if (isCurrent)
+                                {
+                                    s.addProperty("status", "running");
+                                    s.remove("errorMessage");
+                                    s.remove("actions");
+                                    s.remove("reasoning");
+                                }
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!isCurrent)
+                    {
+                        final String pauseId = "pause-" + UUID.randomUUID().toString();
+                        activeState.addProperty("pauseId", pauseId);
+                        engine.registerPauseId(pauseId);
+                        engine.pushState(gson.toJson(activeState));
+                        continue;
+                    }
+                    else
+                    {
+                        continue;
                     }
                 }
                 else if ("ADD".equals(action))
                 {
-                    activeState.addProperty("interactivePromptChanged", true);
-                    final String blockName = response.has("block") ? response.get("block").getAsString() : "steps";
-                    final String instruction = response.get("instruction").getAsString();
-
-                    final JsonObject blocksObj = activeState.getAsJsonObject("blocks");
-                    if (blocksObj != null && blocksObj.has(blockName))
-                    {
-                        final JsonArray array = blocksObj.getAsJsonArray(blockName);
-                        final JsonObject newStep = new JsonObject();
-                        newStep.addProperty("instruction", instruction);
-                        newStep.addProperty("status", "pending");
-                        newStep.addProperty("source", "llm");
-                        newStep.addProperty("includeLevel", 0);
-                        newStep.add("actions", new JsonArray());
-
-                        array.add(newStep);
-                    }
-
-                    allSteps.clear();
-                    final JsonObject blocksObjRef = activeState.getAsJsonObject("blocks");
-                    if (blocksObjRef != null)
-                    {
-                        for (final String bKey : new String[]
-                        {
-                          "before", "steps", "after"
-                        })
-                        {
-                            final JsonArray arr = blocksObjRef.getAsJsonArray(bKey);
-                            if (arr != null)
-                            {
-                                for (final JsonElement el : arr)
-                                {
-                                    allSteps.add(el.getAsJsonObject());
-                                }
-                            }
-                        }
-                    }
-
-                    int idx = 0;
-                    for (final JsonObject s : allSteps)
-                    {
-                        s.addProperty("index", idx++);
-                    }
-
-                    for (int i = 0; i < allSteps.size(); i++)
-                    {
-                        if ("running".equals(allSteps.get(i).get("status").getAsString()))
-                        {
-                            stepIndex = i;
-                            break;
-                        }
-                    }
+                    stepIndex = applyAddStep(activeState, allSteps, response, stepIndex);
                 }
                 else if ("REORDER".equals(action))
                 {
-                    activeState.addProperty("interactivePromptChanged", true);
-                    final String fromBlock = response.has("fromBlock") ? response.get("fromBlock").getAsString()
-                                                                       : response.get("block").getAsString();
-                    final int fromIndex = response.get("fromIndex").getAsInt();
-                    final String toBlock = response.has("toBlock") ? response.get("toBlock").getAsString() : fromBlock;
-                    final int toIndex = response.get("toIndex").getAsInt();
-
-                    final JsonObject blocksObj = activeState.getAsJsonObject("blocks");
-                    if (blocksObj != null && blocksObj.has(fromBlock) && blocksObj.has(toBlock))
-                    {
-                        final JsonArray fromArray = blocksObj.getAsJsonArray(fromBlock);
-                        final JsonArray toArray = blocksObj.getAsJsonArray(toBlock);
-
-                        if (fromIndex >= 0 && fromIndex < fromArray.size())
-                        {
-                            final JsonElement element = fromArray.remove(fromIndex);
-
-                            // Adjust target index if moving within the same block forward
-                            int adjustedToIndex = toIndex;
-                            if (fromBlock.equals(toBlock) && adjustedToIndex > fromIndex)
-                            {
-                                adjustedToIndex--;
-                            }
-
-                            // Ensure toIndex is within bounds for the target array (now potentially empty
-                            // or different)
-                            if (adjustedToIndex < 0)
-                                adjustedToIndex = 0;
-                            if (adjustedToIndex > toArray.size())
-                                adjustedToIndex = toArray.size();
-
-                            final JsonArray newToArray = new JsonArray();
-                            for (int i = 0; i < toArray.size(); i++)
-                            {
-                                if (i == adjustedToIndex)
-                                {
-                                    newToArray.add(element);
-                                }
-                                newToArray.add(toArray.get(i));
-                            }
-                            if (adjustedToIndex >= toArray.size())
-                            {
-                                newToArray.add(element);
-                            }
-                            blocksObj.add(toBlock, newToArray);
-                        }
-                    }
-
-                    allSteps.clear();
-                    final JsonObject blocksObjRef = activeState.getAsJsonObject("blocks");
-                    if (blocksObjRef != null)
-                    {
-                        for (final String bKey : new String[]
-                        {
-                          "before", "steps", "after"
-                        })
-                        {
-                            final JsonArray arr = blocksObjRef.getAsJsonArray(bKey);
-                            if (arr != null)
-                            {
-                                for (final JsonElement el : arr)
-                                {
-                                    allSteps.add(el.getAsJsonObject());
-                                }
-                            }
-                        }
-                    }
-
-                    int idx = 0;
-                    for (final JsonObject s : allSteps)
-                    {
-                        s.addProperty("index", idx++);
-                    }
-
-                    for (int i = 0; i < allSteps.size(); i++)
-                    {
-                        if ("running".equals(allSteps.get(i).get("status").getAsString()))
-                        {
-                            stepIndex = i;
-                            break;
-                        }
-                    }
+                    stepIndex = applyReorder(activeState, allSteps, response, stepIndex);
                 }
                 else if ("SAVE_EXIT".equals(action))
                 {
@@ -1505,11 +1525,32 @@ public final class InteractiveConsoleServer
             }
 
             // Final state push & final pause for overlay
-            if (!activeState.has("status") || !"failed".equals(activeState.get("status").getAsString()))
+            boolean anyStepFailed = false;
+            if (allSteps != null)
             {
-                activeState.addProperty("status", "finished");
+                for (final JsonObject s : allSteps)
+                {
+                    if (s.has("status") && s.get("status").isJsonPrimitive())
+                    {
+                        final String stepSt = s.get("status").getAsString();
+                        if ("failed".equalsIgnoreCase(stepSt) || "error".equalsIgnoreCase(stepSt) || "failure".equalsIgnoreCase(stepSt))
+                        {
+                            anyStepFailed = true;
+                            break;
+                        }
+                    }
+                }
             }
-            final String finalPauseId = "pause-final-" + java.util.UUID.randomUUID().toString();
+
+            if (anyStepFailed)
+            {
+                activeState.addProperty("status", "failed");
+            }
+            else if (!activeState.has("status") || !"failed".equals(activeState.get("status").getAsString()))
+            {
+                activeState.addProperty("status", "passed");
+            }
+            final String finalPauseId = "pause-final-" + UUID.randomUUID().toString();
             activeState.addProperty("pauseId", finalPauseId);
             engine.pushState(gson.toJson(activeState));
             final JsonObject finalResponse = engine.waitForAction(finalPauseId);
@@ -1522,6 +1563,209 @@ public final class InteractiveConsoleServer
         {
             LOG.error("[Simulation] Error in simulation loop: {}", e.getMessage(), e);
         }
+    }
+
+    /**
+     * Applies a step addition operation to the simulation state and all-steps list.
+     *
+     * @param activeState
+     *     the active simulation state
+     * @param allSteps
+     *     the flattened step list to synchronize
+     * @param response
+     *     the JSON action payload from the client
+     * @param currentStepIndex
+     *     the index of the current step prior to adding
+     * @return the updated active step index matching the running step, or the preserved index
+     */
+    static int applyAddStep(final JsonObject activeState, final List<JsonObject> allSteps, final JsonObject response,
+                            final int currentStepIndex)
+    {
+        activeState.addProperty("interactivePromptChanged", true);
+        final String blockName = response.has("block") ? response.get("block").getAsString() : "steps";
+        final String instruction = response.get("instruction").getAsString();
+
+        final JsonObject blocksObj = activeState.getAsJsonObject("blocks");
+        if (blocksObj != null && blocksObj.has(blockName))
+        {
+            final JsonArray array = blocksObj.getAsJsonArray(blockName);
+            final JsonObject newStep = new JsonObject();
+            newStep.addProperty("instruction", instruction);
+            newStep.addProperty("status", "pending");
+            newStep.addProperty("source", "llm");
+            newStep.addProperty("includeLevel", 0);
+            newStep.add("actions", new JsonArray());
+
+            int targetIdx = -1;
+            if (response.has("index") && !response.get("index").isJsonNull())
+            {
+                try
+                {
+                    targetIdx = response.get("index").getAsInt();
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
+
+            if (targetIdx >= 0 && targetIdx <= array.size())
+            {
+                final JsonArray newArray = new JsonArray();
+                for (int i = 0; i < array.size(); i++)
+                {
+                    if (i == targetIdx)
+                    {
+                        newArray.add(newStep);
+                    }
+                    newArray.add(array.get(i));
+                }
+                if (targetIdx == array.size())
+                {
+                    newArray.add(newStep);
+                }
+                blocksObj.add(blockName, newArray);
+            }
+            else
+            {
+                array.add(newStep);
+            }
+        }
+
+        allSteps.clear();
+        final JsonObject blocksObjRef = activeState.getAsJsonObject("blocks");
+        if (blocksObjRef != null)
+        {
+            for (final String bKey : new String[]
+            {
+              "before", "steps", "after"
+            })
+            {
+                final JsonArray arr = blocksObjRef.getAsJsonArray(bKey);
+                if (arr != null)
+                {
+                    for (final JsonElement el : arr)
+                    {
+                        allSteps.add(el.getAsJsonObject());
+                    }
+                }
+            }
+        }
+
+        int idx = 0;
+        for (final JsonObject s : allSteps)
+        {
+            s.addProperty("index", idx++);
+        }
+
+        int newStepIndex = currentStepIndex;
+        for (int i = 0; i < allSteps.size(); i++)
+        {
+            if ("running".equals(allSteps.get(i).get("status").getAsString()))
+            {
+                newStepIndex = i;
+                break;
+            }
+        }
+        return newStepIndex;
+    }
+
+    /**
+     * Applies a step reorder operation to the simulation state and all-steps list.
+     *
+     * @param activeState
+     *     the active simulation state
+     * @param allSteps
+     *     the flattened step list to synchronize
+     * @param response
+     *     the JSON action payload from the client
+     * @param currentStepIndex
+     *     the index of the current step prior to reordering
+     * @return the updated active step index matching the running step, or the preserved index
+     */
+    static int applyReorder(final JsonObject activeState, final List<JsonObject> allSteps, final JsonObject response,
+                            final int currentStepIndex)
+    {
+        activeState.addProperty("interactivePromptChanged", true);
+        final String fromBlock = response.has("fromBlock") ? response.get("fromBlock").getAsString()
+                                                           : response.get("block").getAsString();
+        final int fromIndex = response.get("fromIndex").getAsInt();
+        final String toBlock = response.has("toBlock") ? response.get("toBlock").getAsString() : fromBlock;
+        final int toIndex = response.get("toIndex").getAsInt();
+
+        final JsonObject blocksObj = activeState.getAsJsonObject("blocks");
+        if (blocksObj != null && blocksObj.has(fromBlock) && blocksObj.has(toBlock))
+        {
+            final JsonArray fromArray = blocksObj.getAsJsonArray(fromBlock);
+            final JsonArray toArray = blocksObj.getAsJsonArray(toBlock);
+
+            if (fromIndex >= 0 && fromIndex < fromArray.size())
+            {
+                final JsonElement element = fromArray.remove(fromIndex);
+
+                // Ensure target index is within bounds of the destination array
+                int adjustedToIndex = toIndex;
+                if (adjustedToIndex < 0)
+                {
+                    adjustedToIndex = 0;
+                }
+                if (adjustedToIndex > toArray.size())
+                {
+                    adjustedToIndex = toArray.size();
+                }
+
+                final JsonArray newToArray = new JsonArray();
+                for (int i = 0; i < toArray.size(); i++)
+                {
+                    if (i == adjustedToIndex)
+                    {
+                        newToArray.add(element);
+                    }
+                    newToArray.add(toArray.get(i));
+                }
+                if (adjustedToIndex >= toArray.size())
+                {
+                    newToArray.add(element);
+                }
+                blocksObj.add(toBlock, newToArray);
+            }
+        }
+
+        allSteps.clear();
+        final JsonObject blocksObjRef = activeState.getAsJsonObject("blocks");
+        if (blocksObjRef != null)
+        {
+            for (final String bKey : new String[]
+            {
+              "before", "steps", "after"
+            })
+            {
+                final JsonArray arr = blocksObjRef.getAsJsonArray(bKey);
+                if (arr != null)
+                {
+                    for (final JsonElement el : arr)
+                    {
+                        allSteps.add(el.getAsJsonObject());
+                    }
+                }
+            }
+        }
+
+        int idx = 0;
+        for (final JsonObject s : allSteps)
+        {
+            s.addProperty("index", idx++);
+        }
+
+        int newStepIndex = currentStepIndex;
+        for (int i = 0; i < allSteps.size(); i++)
+        {
+            if ("running".equals(allSteps.get(i).get("status").getAsString()))
+            {
+                newStepIndex = i;
+                break;
+            }
+        }
+        return newStepIndex;
     }
 
     private static void ensureBlocksExist(final JsonObject state)

@@ -35,7 +35,7 @@ public interface AiPrompt<T>
     /**
      * Retrieves the expected response schema type.
      *
-     * @return the expected response schema format (e.g. ACTIONS, ASSERTION, STEP_SPLITS, TEXT)
+     * @return the expected response schema format (e.g. ACTIONS, ASSERTION, JUDGE, LINTER, TEXT)
      */
     ResponseSchema getResponseSchema();
 

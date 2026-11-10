@@ -18,6 +18,7 @@
  */
 package com.xceptance.aura.report.entity;
 
+import com.xceptance.aura.report.service.AuraReportDataService;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -70,6 +71,12 @@ public class TestBaseVariationEntity
     @Column(name = "last_executed_at")
     private Long lastExecutedAt;
 
+    @Column(name = "healed")
+    private Boolean healed = false;
+
+    @Column(name = "execution_mode", length = 40)
+    private String executionMode;
+
     @Lob
     @Column(name = "history_links", columnDefinition = "CLOB")
     private String historyLinks;
@@ -90,8 +97,8 @@ public class TestBaseVariationEntity
         this.testMethodName = (testMethodName != null && !testMethodName.isBlank()) ? testMethodName.trim() : null;
         this.dataSetLabel = (dataSetLabel != null && !dataSetLabel.isBlank()) ? dataSetLabel.trim() : "Default";
         this.areaTag = areaTag;
-        this.location = com.xceptance.aura.report.service.AuraReportDataService.normalizeLocation(location);
-        this.browser = com.xceptance.aura.report.service.AuraReportDataService.normalizeBrowser(browser);
+        this.location = AuraReportDataService.normalizeLocation(location);
+        this.browser = AuraReportDataService.normalizeBrowser(browser);
     }
 
     public String getId()
@@ -202,5 +209,69 @@ public class TestBaseVariationEntity
     public void setHistoryLinks(final String historyLinks)
     {
         this.historyLinks = historyLinks;
+    }
+
+    public Boolean isHealed()
+    {
+        return healed != null && healed;
+    }
+
+    public Boolean getHealed()
+    {
+        return healed;
+    }
+
+    public void setHealed(final Boolean healed)
+    {
+        this.healed = healed != null ? healed : false;
+    }
+
+    public String getExecutionMode()
+    {
+        return executionMode;
+    }
+
+    public void setExecutionMode(final String executionMode)
+    {
+        this.executionMode = executionMode;
+    }
+
+    /**
+     * Resolves the display execution mode string (AI, HEALED, PLAYBOOK, or JAVA).
+     *
+     * @return display mode string
+     */
+    public String getDisplayMode()
+    {
+        final String rawMode = this.executionMode != null ? this.executionMode.trim() : "";
+        if ("AI".equalsIgnoreCase(rawMode) || "LLM_RECORDING".equalsIgnoreCase(rawMode) || "LLM_ONLY".equalsIgnoreCase(rawMode) || "FORCE_RECORDING".equalsIgnoreCase(rawMode))
+        {
+            return "AI";
+        }
+        if ("HEALED".equalsIgnoreCase(rawMode))
+        {
+            return "HEALED";
+        }
+        if ("PLAYBOOK".equalsIgnoreCase(rawMode) || "REPLAY_STRICT".equalsIgnoreCase(rawMode) || "REPLAY_WITH_HEALING".equalsIgnoreCase(rawMode))
+        {
+            return "PLAYBOOK";
+        }
+        if ("JAVA".equalsIgnoreCase(rawMode))
+        {
+            return "JAVA";
+        }
+        if (!rawMode.isEmpty())
+        {
+            return rawMode.toUpperCase();
+        }
+        if (isHealed())
+        {
+            return "HEALED";
+        }
+        if (testClassName != null && (testClassName.contains("_yaml_") || testClassName.contains("_yml_") || testClassName.endsWith("PlaybookTest")))
+        {
+            return "PLAYBOOK";
+        }
+        return "JAVA";
     }
 }

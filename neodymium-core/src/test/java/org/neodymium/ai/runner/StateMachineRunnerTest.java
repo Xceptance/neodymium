@@ -22,16 +22,20 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.LlmRegistry;
 import org.neodymium.ai.client.MockLlmProvider;
+import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.executor.MockTargetExecutor;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
@@ -124,9 +128,186 @@ public class StateMachineRunnerTest
         session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_SESSION, session);
         session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, new MockTargetExecutor());
         session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, recordedStep);
-        session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT);
+        session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
 
         final PipelineStep step = ExecuteActionsStep.mapPlaybookStepToPipelineStep(recordedStep, session, session.getExecutionContext());
         assertDoesNotThrow(() -> step.execute(session.getExecutionContext()));
     }
+
+    @Test
+    public void testStateMachineRunnerCapturesVisualRichOnFailureForVisualRca()
+    {
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(mockProvider);
+
+        final MockTargetExecutor mockExecutor = new MockTargetExecutor();
+        final AiSession session = AiSession.mock(new SessionData(), registry, new ExecutionEventBus(), mockExecutor);
+        final StateMachineRunner runner = new StateMachineRunner(session);
+
+        final ExecutionContext innerContext = session.getExecutionContext();
+        innerContext.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, mockExecutor);
+        innerContext.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify order summary shows $31.98");
+        innerContext.pushStep(ctx -> {
+            throw new ConclusiveFailureException("Verification assertion failed");
+        });
+
+        assertThrows(ConclusiveFailureException.class, () -> runner.run());
+
+        final List<ContextLevel> capturedLevels = mockExecutor.getCapturedContextLevels();
+        assertTrue(capturedLevels.contains(ContextLevel.VISUAL_RICH),
+                "StateMachineRunner must capture state with ContextLevel.VISUAL_RICH during failure Visual RCA analysis");
+    }
+
+    @Test
+    public void testUnexecutedStepsMarkedSkippedOnStepFailure()
+    {
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(mockProvider);
+
+        final MockTargetExecutor mockExecutor = new MockTargetExecutor();
+        final AiSession session = AiSession.mock(new SessionData(), registry, new ExecutionEventBus(), mockExecutor);
+        final StateMachineRunner runner = new StateMachineRunner(session);
+
+        final PlaybookStep step1 = new PlaybookStep("Step 1: Open website");
+        step1.setStatus(PlaybookStepStatus.SUCCESS);
+
+        final PlaybookStep step2 = new PlaybookStep("Step 2: Click button");
+        step2.setStatus(PlaybookStepStatus.RUNNING);
+
+        final PlaybookStep step3 = new PlaybookStep("Step 3: Verify text");
+        step3.setStatus(PlaybookStepStatus.PENDING);
+
+        final PlaybookStep step4 = new PlaybookStep("Step 4: Submit form");
+        step4.setStatus(PlaybookStepStatus.SUCCESS);
+
+        final List<PlaybookStep> playbookSteps = List.of(step1, step2, step3, step4);
+
+        final ExecutionContext innerContext = session.getExecutionContext();
+        innerContext.getTransientData().put("playbook.steps", new ArrayList<>(playbookSteps));
+        innerContext.getTransientData().put("playbook.flatSteps", new ArrayList<>(playbookSteps));
+        innerContext.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step2);
+
+        innerContext.pushStep(ctx -> {
+            throw new ConclusiveFailureException("Failed to click button");
+        });
+
+        assertThrows(ConclusiveFailureException.class, () -> runner.run());
+
+        assertEquals(PlaybookStepStatus.SUCCESS, step1.getStatus(), "Step 1 before failure should remain SUCCESS");
+        assertEquals(PlaybookStepStatus.NOT_RUN, step3.getStatus(), "Step 3 after failure should be NOT_RUN");
+        assertEquals("Not executed because step #2 failed.", step3.getNotRunReason());
+        assertEquals(PlaybookStepStatus.NOT_RUN, step4.getStatus(), "Step 4 after failure should be NOT_RUN even if stale status was present");
+        assertEquals("Not executed because step #2 failed.", step4.getNotRunReason());
+    }
+
+    @Test
+    public void testCompositeStepFailurePartitionsActionsAndSetsAccurateSubStepStatuses()
+    {
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(mockProvider);
+
+        final MockTargetExecutor mockExecutor = new MockTargetExecutor();
+        final AiSession session = AiSession.mock(new SessionData(), registry, new ExecutionEventBus(), mockExecutor);
+        final StateMachineRunner runner = new StateMachineRunner(session);
+
+        final PlaybookStep parent = new PlaybookStep("Add to cart");
+        final PlaybookStep sub1 = new PlaybookStep("Open search field");
+        final PlaybookStep sub2 = new PlaybookStep("Type searchTerm into search field");
+        final PlaybookStep sub3 = new PlaybookStep("Click first product");
+        final PlaybookStep sub4 = new PlaybookStep("Add to cart button");
+
+        parent.getSubSteps().addAll(List.of(sub1, sub2, sub3, sub4));
+        sub1.setParent(parent);
+        sub2.setParent(parent);
+        sub3.setParent(parent);
+        sub4.setParent(parent);
+
+        final Action act1 = new Action("CLICK", "#search-btn", "Open search");
+        final Action act2 = new Action("TYPE", "#search-input", List.of("yoyo"), "Type search term", "");
+        final List<Action> executedActions = new ArrayList<>(List.of(act1, act2));
+        parent.setActions(executedActions);
+
+        final ExecutionContext innerContext = session.getExecutionContext();
+        innerContext.getTransientData().put("playbook.steps", new ArrayList<>(List.of(parent)));
+        innerContext.getTransientData().put("playbook.flatSteps", new ArrayList<>(List.of(parent)));
+        innerContext.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, parent);
+
+        innerContext.pushStep(ctx -> {
+            throw new ConclusiveFailureException("Step timeout of 60s exceeded");
+        });
+
+        assertThrows(ConclusiveFailureException.class, () -> runner.run());
+
+        assertEquals(PlaybookStepStatus.FAILED, parent.getStatus());
+        assertEquals("Step timeout of 60s exceeded", parent.getFailureReason());
+
+        // Sub 1: Had action 1 -> SUCCESS
+        assertEquals(PlaybookStepStatus.SUCCESS, sub1.getStatus());
+        assertEquals(1, sub1.getActions().size());
+        assertEquals(act1, sub1.getActions().get(0));
+
+        // Sub 2: Had action 2 -> SUCCESS
+        assertEquals(PlaybookStepStatus.SUCCESS, sub2.getStatus());
+        assertEquals(1, sub2.getActions().size());
+        assertEquals(act2, sub2.getActions().get(0));
+
+        // Sub 3: First sub-step with no actions executed before timeout -> FAILED
+        assertEquals(PlaybookStepStatus.FAILED, sub3.getStatus());
+        assertEquals("Step timeout of 60s exceeded", sub3.getFailureReason());
+        assertTrue(sub3.getActions().isEmpty());
+
+        // Sub 4: Subsequent unreached sub-step -> NOT_RUN
+        assertEquals(PlaybookStepStatus.NOT_RUN, sub4.getStatus());
+        assertEquals("Not executed because sub-step #3 failed.", sub4.getNotRunReason());
+        assertTrue(sub4.getActions().isEmpty());
+
+        // Check attribution on parent actions
+        assertEquals(0, act1.getSubStepIndex());
+        assertEquals("Open search field", act1.getSubStepInstruction());
+        assertEquals(1, act2.getSubStepIndex());
+        assertEquals("Type searchTerm into search field", act2.getSubStepInstruction());
+    }
+
+    @Test
+    public void testCompositeSubStepFailureSetsSubStepSpecificLabelInNotRunReason()
+    {
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(mockProvider);
+
+        final MockTargetExecutor mockExecutor = new MockTargetExecutor();
+        final AiSession session = AiSession.mock(new SessionData(), registry, new ExecutionEventBus(), mockExecutor);
+        final StateMachineRunner runner = new StateMachineRunner(session);
+
+        final PlaybookStep parent = new PlaybookStep("Parent complex flow");
+        final PlaybookStep sub1 = new PlaybookStep("Sub 1: select category");
+        sub1.setStatus(PlaybookStepStatus.SUCCESS);
+        final PlaybookStep sub2 = new PlaybookStep("Sub 2: select filter");
+        sub2.setStatus(PlaybookStepStatus.RUNNING);
+        parent.setSubSteps(List.of(sub1, sub2));
+
+        final PlaybookStep downstreamStep = new PlaybookStep("Step 2: checkout");
+        downstreamStep.setStatus(PlaybookStepStatus.PENDING);
+
+        final List<PlaybookStep> playbookSteps = List.of(parent, downstreamStep);
+
+        final ExecutionContext innerContext = session.getExecutionContext();
+        innerContext.getTransientData().put("playbook.steps", new ArrayList<>(playbookSteps));
+        innerContext.getTransientData().put("playbook.flatSteps", new ArrayList<>(playbookSteps));
+        innerContext.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, sub2);
+
+        innerContext.pushStep(ctx -> {
+            throw new ConclusiveFailureException("Failed to select filter");
+        });
+
+        assertThrows(ConclusiveFailureException.class, () -> runner.run());
+
+        assertEquals(PlaybookStepStatus.NOT_RUN, downstreamStep.getStatus());
+        assertEquals("Not executed because step #1.2 failed.", downstreamStep.getNotRunReason(),
+            "Downstream step notRunReason must mention parent and sub-step index (#1.2)");
+    }
 }
+

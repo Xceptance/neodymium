@@ -42,6 +42,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
@@ -153,6 +155,17 @@ public class AuraInteractiveController
         }
         engine.broadcastSseEvent(event, payload);
         return ResponseEntity.ok(Map.of("status", "ok"));
+    }
+
+    @RequestMapping(value = "/api/console/events", method = RequestMethod.HEAD)
+    public ResponseEntity<Void> handleConsoleEventsHead()
+    {
+        final HttpHeaders headers = new HttpHeaders();
+        headers.set("Access-Control-Allow-Origin", "*");
+        headers.set("Cache-Control", "no-cache");
+        headers.set("Connection", "keep-alive");
+        headers.set("Content-Type", "text/event-stream; charset=UTF-8");
+        return ResponseEntity.ok().headers(headers).build();
     }
 
     @GetMapping(value = "/api/console/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)

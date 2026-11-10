@@ -30,6 +30,7 @@ import java.util.Locale;
 import java.util.Map;
 import org.neodymium.ai.playbook.linter.LinterSeverity;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
+import org.neodymium.ai.prompt.VisualRcaResult;
 
 /**
  * Report generator producing standalone, interactive, single-file HTML documents
@@ -107,6 +108,10 @@ public final class HtmlReportGenerator
         {
             sb.append("<span class=\"meta-badge\">Mode: ").append(escapeHtml(report.getExecutionMode())).append("</span>");
         }
+        if (report.isMarker())
+        {
+            sb.append("<span class=\"meta-badge highlight marker-meta-badge\" title=\"Test executed with visual element markers\">🎯 Markers</span>");
+        }
         if (report.getStartTimeMs() > 0)
         {
             sb.append("<span class=\"meta-badge\">").append(TIME_FORMATTER.format(Instant.ofEpochMilli(report.getStartTimeMs()))).append("</span>");
@@ -136,7 +141,16 @@ public final class HtmlReportGenerator
         sb.append("    <div class=\"metric-card\">\n");
         sb.append("      <div class=\"metric-label\">Playbook Steps</div>\n");
         sb.append("      <div class=\"metric-value\">").append(m.getTotalSteps()).append("</div>\n");
-        sb.append("      <div class=\"metric-sub\">✨ Healed: ").append(m.getHealedSteps()).append(" | ❌ Failed: ").append(m.getFailedSteps()).append("</div>\n");
+        sb.append("      <div class=\"metric-sub\">✨ Healed: ").append(m.getHealedSteps()).append(" | ❌ Failed: ").append(m.getFailedSteps());
+        if (m.getSkippedSteps() > 0)
+        {
+            sb.append(" | ⏭️ Skipped: ").append(m.getSkippedSteps());
+        }
+        if (m.getNotRunSteps() > 0)
+        {
+            sb.append(" | ⏹️ Not Run: ").append(m.getNotRunSteps());
+        }
+        sb.append("</div>\n");
         sb.append("    </div>\n");
 
         sb.append("    <div class=\"metric-card\">\n");
@@ -198,19 +212,68 @@ public final class HtmlReportGenerator
         sb.append("  </section>\n");
 
         // 4. Failure Diagnostic Box (STRICTLY rendered only if the test actually failed)
-        if (!isPassed && (report.getFailureReason() != null || report.getVisualRcaExplanation() != null || (report.getFailureStackTrace() != null && !report.getFailureStackTrace().isBlank())))
+        if (!isPassed && (report.getFailureReason() != null || report.getVisualRcaResult() != null || report.getVisualRcaExplanation() != null || (report.getFailureStackTrace() != null && !report.getFailureStackTrace().isBlank())))
         {
             sb.append("  <section class=\"diagnostic-box failure-box\">\n");
             sb.append("    <div class=\"box-header\">🚨 Execution Failure Details</div>\n");
-            if (report.getFailureReason() != null)
+            String failureReason = report.getFailureReason();
+            String embeddedRca = null;
+            if (failureReason != null)
             {
-                sb.append("    <div class=\"failure-reason\"><strong>Error:</strong> ").append(escapeHtml(report.getFailureReason())).append("</div>\n");
+                final int rcaMarkerIdx = Math.max(
+                    failureReason.indexOf("Visual Root Cause Analysis (RCA):"),
+                    failureReason.indexOf("**Root Cause Analysis:**")
+                );
+                if (rcaMarkerIdx >= 0)
+                {
+                    embeddedRca = failureReason.substring(rcaMarkerIdx).trim();
+                    failureReason = failureReason.substring(0, rcaMarkerIdx).trim();
+                }
             }
-            if (report.getVisualRcaExplanation() != null)
+
+            if (failureReason != null && !failureReason.isBlank())
+            {
+                sb.append("    <div class=\"failure-reason\"><strong>Error:</strong> ").append(escapeHtml(failureReason)).append("</div>\n");
+            }
+
+            VisualRcaResult rcaResult = report.getVisualRcaResult();
+            if (rcaResult == null)
+            {
+                final String rawRca = report.getVisualRcaExplanation() != null ? report.getVisualRcaExplanation() : embeddedRca;
+                if (rawRca != null && !rawRca.isBlank())
+                {
+                    rcaResult = VisualRcaResult.fromFormattedDiagnosis(rawRca);
+                }
+            }
+
+            if (rcaResult != null)
             {
                 sb.append("    <div class=\"visual-rca-box\">\n");
                 sb.append("      <div class=\"rca-title\">🔍 Visual Root Cause Analysis (RCA)</div>\n");
-                sb.append("      <div class=\"rca-content\">").append(escapeHtml(report.getVisualRcaExplanation())).append("</div>\n");
+                if (rcaResult.getRootCause() != null && !rcaResult.getRootCause().isBlank())
+                {
+                    sb.append("      <div class=\"rca-root-cause\" style=\"margin-bottom: 12px; font-size: 0.92rem; line-height: 1.5; color: var(--text);\">")
+                      .append("<strong>Root Cause Diagnosis:</strong> ").append(escapeHtml(rcaResult.getRootCause().trim()))
+                      .append("</div>\n");
+                }
+                if (rcaResult.getRubrics() != null)
+                {
+                    sb.append("      <div class=\"rubrics-grid\">\n");
+                    final VisualRcaResult.Rubrics rubrics = rcaResult.getRubrics();
+                    renderHtmlRubricCard(sb, "🎯 Target Presence Check", rubrics.targetPresence());
+                    renderHtmlRubricCard(sb, "📝 Form & Validation Check", rubrics.formValidation());
+                    renderHtmlRubricCard(sb, "🧭 Navigation & Flow State", rubrics.flowState());
+                    renderHtmlRubricCard(sb, "🚫 Action Obstruction Check", rubrics.obstruction());
+                    sb.append("      </div>\n");
+                }
+                sb.append("    </div>\n");
+            }
+            else if (report.getVisualRcaExplanation() != null || embeddedRca != null)
+            {
+                final String explanation = report.getVisualRcaExplanation() != null ? report.getVisualRcaExplanation() : embeddedRca;
+                sb.append("    <div class=\"visual-rca-box\">\n");
+                sb.append("      <div class=\"rca-title\">🔍 Visual Root Cause Analysis (RCA)</div>\n");
+                sb.append("      <div class=\"rca-content\">").append(escapeHtml(explanation)).append("</div>\n");
                 sb.append("    </div>\n");
             }
             if (report.getFailureStackTrace() != null && !report.getFailureStackTrace().isBlank())
@@ -383,9 +446,25 @@ public final class HtmlReportGenerator
 
             // Left Column: Full-Width Step List
             sb.append("      <div class=\"steps-master-pane\" id=\"stepsMasterList\">\n");
+            String currentBlock = null;
+            final boolean hasMultipleBlocks = steps.stream().map(s -> s.getBlock() != null ? s.getBlock().toLowerCase() : "steps").distinct().count() > 1;
             for (int i = 0; i < steps.size(); i++)
             {
                 final TestExecutionReport.ReportStepEntry step = steps.get(i);
+                if (hasMultipleBlocks)
+                {
+                    final String effBlock = (step.getBlock() != null && !step.getBlock().isBlank()) ? step.getBlock().toLowerCase() : "steps";
+                    if (!effBlock.equals(currentBlock))
+                    {
+                        currentBlock = effBlock;
+                        final String icon = "before".equals(effBlock) ? "⚡" : "after".equals(effBlock) ? "🧹" : "🎯";
+                        final String title = "before".equals(effBlock) ? "Before Block" : "after".equals(effBlock) ? "After Block" : "Core Steps";
+                        sb.append("        <div class=\"step-block-separator step-block-").append(escapeHtml(effBlock)).append("\" style=\"margin: 16px 0 8px 0; padding: 6px 12px; background: rgba(0,0,0,0.04); border-radius: 6px; font-weight: 600; font-size: 0.9rem; display: flex; align-items: center; gap: 6px;\">\n");
+                        sb.append("          <span>").append(icon).append("</span>\n");
+                        sb.append("          <span>").append(escapeHtml(title)).append("</span>\n");
+                        sb.append("        </div>\n");
+                    }
+                }
                 renderStepCardWithSubSteps(sb, step, i);
             }
             sb.append("      </div>\n");
@@ -403,6 +482,8 @@ public final class HtmlReportGenerator
             sb.append("                <span class=\"step-status-pill\" id=\"inspStatusPill\">SUCCESS</span>\n");
             sb.append("                <span class=\"inspector-meta\" id=\"inspDuration\">0 ms</span>\n");
             sb.append("                <span class=\"context-badge\" id=\"inspContextBadge\" style=\"display:none;\"></span>\n");
+            sb.append("                <span class=\"badge-flag\" id=\"inspModeBadge\" style=\"display:none;\"></span>\n");
+            sb.append("                <span class=\"badge-flag marker-badge\" id=\"inspMarkerBadge\" style=\"display:none;\" title=\"Step executed with proactive visual element markers\">🎯 MARKER</span>\n");
             sb.append("                <span class=\"badge-flag visual-badge\" id=\"inspVisualBadge\" style=\"display:none;\">📸 VISUAL</span>\n");
             sb.append("                <span class=\"badge-flag bug-badge\" id=\"inspBugBadge\" style=\"display:none;\">🐛 BUG EXPECTED</span>\n");
             sb.append("                <span class=\"badge-flag verification-badge-pass\" id=\"inspVerificationBadge\" style=\"display:none;\"></span>\n");
@@ -635,7 +716,44 @@ public final class HtmlReportGenerator
             sb.append("  </section>\n");
         }
 
-        // 9. Footer
+        // 9. Active Run Properties
+        final Map<String, String> activeProperties = report.getActiveProperties();
+        sb.append("  <section class=\"card-section properties-section\">\n");
+        sb.append("    <div class=\"section-header-row\">\n");
+        sb.append("      <h2 class=\"section-title\">⚙️ Active Run Properties (").append(activeProperties.size()).append(")</h2>\n");
+        if (!activeProperties.isEmpty())
+        {
+            sb.append("      <div class=\"section-header-actions\">\n");
+            sb.append("        <input type=\"text\" id=\"propSearchInput\" class=\"prop-filter-input\" placeholder=\"🔍 Search properties...\" onkeyup=\"filterProperties()\" />\n");
+            sb.append("      </div>\n");
+        }
+        sb.append("    </div>\n");
+        if (activeProperties.isEmpty())
+        {
+            sb.append("    <p class=\"properties-empty\">No active configuration properties were recorded for this execution.</p>\n");
+        }
+        else
+        {
+            sb.append("    <div class=\"table-container properties-table-container\">\n");
+            sb.append("      <table class=\"data-table\" id=\"propertiesTable\">\n");
+            sb.append("        <thead>\n");
+            sb.append("          <tr><th style=\"width: 40%;\">Property Name</th><th>Active Value</th></tr>\n");
+            sb.append("        </thead>\n");
+            sb.append("        <tbody id=\"propertiesTableBody\">\n");
+            for (final Map.Entry<String, String> prop : activeProperties.entrySet())
+            {
+                sb.append("          <tr>\n");
+                sb.append("            <td><code class=\"prop-key\">").append(escapeHtml(prop.getKey())).append("</code></td>\n");
+                sb.append("            <td><span class=\"prop-val\">").append(escapeHtml(prop.getValue())).append("</span></td>\n");
+                sb.append("          </tr>\n");
+            }
+            sb.append("        </tbody>\n");
+            sb.append("      </table>\n");
+            sb.append("    </div>\n");
+        }
+        sb.append("  </section>\n");
+
+        // 10. Footer
         sb.append("  <footer class=\"report-footer\">\n");
         sb.append("    Generated by <strong>Neodymium Aura AI</strong> Preliminary Disk Report Listener &bull; Xceptance GmbH 2026\n");
         sb.append("  </footer>\n");
@@ -688,10 +806,28 @@ public final class HtmlReportGenerator
 
     private static void appendStepBadges(final StringBuilder sb, final TestExecutionReport.ReportStepEntry step)
     {
+        if (step.getParent() == null)
+        {
+            final String stepMode = step.getStepMode();
+            if (stepMode != null)
+            {
+                final String modeClass = "LLM".equalsIgnoreCase(stepMode) ? "pill-mode-llm" : "pill-mode-replay";
+                final String modeIcon = "LLM".equalsIgnoreCase(stepMode) ? "🤖 " : "⚡ ";
+                sb.append("              <span class=\"badge-flag ").append(modeClass).append("\">").append(modeIcon).append(escapeHtml(stepMode)).append("</span>\n");
+            }
+        }
+        else if (step.getLlmCalls() != null && !step.getLlmCalls().isEmpty())
+        {
+            sb.append("              <span class=\"badge-flag pill-mode-llm\">🤖 LLM</span>\n");
+        }
         if (step.isBug())
         {
             final String tooltip = step.getBugDetails() != null ? "Expected bug: " + escapeHtml(step.getBugDetails()) : "Expected bug";
             sb.append("              <span class=\"badge-flag bug-badge\" title=\"").append(tooltip).append("\">🐛 BUG EXPECTED</span>\n");
+        }
+        if (step.isMarker())
+        {
+            sb.append("              <span class=\"badge-flag marker-badge\" title=\"Step executed with proactive visual element markers\">🎯 MARKER</span>\n");
         }
         if (step.isVisual())
         {
@@ -713,6 +849,14 @@ public final class HtmlReportGenerator
         {
             sb.append("              <span class=\"badge-flag continuation-badge\" title=\"Step required dynamic multi-stage continuation (CONTINUE)\">🔄 MULTI-STAGE</span>\n");
         }
+        if (step.getBlock() != null && "before".equalsIgnoreCase(step.getBlock()))
+        {
+            sb.append("              <span class=\"badge-flag before-badge\" style=\"background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;\">⚡ BEFORE</span>\n");
+        }
+        else if (step.getBlock() != null && "after".equalsIgnoreCase(step.getBlock()))
+        {
+            sb.append("              <span class=\"badge-flag after-badge\" style=\"background:#fef3c7;color:#b45309;border:1px solid #fde68a;\">🧹 AFTER</span>\n");
+        }
 
         if (step.getContextLevels() != null && !step.getContextLevels().isBlank())
         {
@@ -722,7 +866,7 @@ public final class HtmlReportGenerator
         {
             sb.append("              <span class=\"escalation-badge\">⚡ ").append(step.getEscalations()).append(" esc</span>\n");
         }
-        if (step.getVerificationResult() != null)
+        if (step.getVerificationResult() != null && !"FAILED".equalsIgnoreCase(step.getStatus()))
         {
             final boolean pass = step.getVerificationResult().passed();
             final String badgeCls = pass ? "verification-badge-pass" : "verification-badge-fail";
@@ -768,6 +912,22 @@ public final class HtmlReportGenerator
         int llmCount = !step.getLlmCalls().isEmpty() ? step.getLlmCalls().size() : (step.getStandardCalls() + step.getVerificationCalls() + step.getRcaCalls());
         int actionCount = step.getActions().size();
         int screenshotCount = step.getScreenshots().size();
+        long inTokens = 0;
+        long outTokens = 0;
+
+        if (!step.getLlmCalls().isEmpty())
+        {
+            for (final TestExecutionReport.ReportLlmCallEntry call : step.getLlmCalls())
+            {
+                inTokens += call.getInputTokens();
+                outTokens += call.getOutputTokens();
+            }
+        }
+        else
+        {
+            inTokens = step.getStandardInputTokens() + step.getVerificationInputTokens() + step.getRcaInputTokens();
+            outTokens = step.getStandardOutputTokens() + step.getVerificationOutputTokens() + step.getRcaOutputTokens();
+        }
 
         if (hasSubSteps && !isSub)
         {
@@ -788,15 +948,41 @@ public final class HtmlReportGenerator
             if (step.getLlmCalls().isEmpty())
             {
                 int aggregatedLlmCount = 0;
+                long aggregatedInTokens = 0;
+                long aggregatedOutTokens = 0;
                 for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
                 {
                     aggregatedLlmCount += !sub.getLlmCalls().isEmpty() ? sub.getLlmCalls().size() : (sub.getStandardCalls() + sub.getVerificationCalls() + sub.getRcaCalls());
+                    if (!sub.getLlmCalls().isEmpty())
+                    {
+                        for (final TestExecutionReport.ReportLlmCallEntry call : sub.getLlmCalls())
+                        {
+                            aggregatedInTokens += call.getInputTokens();
+                            aggregatedOutTokens += call.getOutputTokens();
+                        }
+                    }
+                    else
+                    {
+                        aggregatedInTokens += sub.getStandardInputTokens() + sub.getVerificationInputTokens() + sub.getRcaInputTokens();
+                        aggregatedOutTokens += sub.getStandardOutputTokens() + sub.getVerificationOutputTokens() + sub.getRcaOutputTokens();
+                    }
                 }
                 if (aggregatedLlmCount > 0)
                 {
                     llmCount = aggregatedLlmCount;
                 }
+                if (inTokens == 0 && outTokens == 0)
+                {
+                    inTokens = aggregatedInTokens;
+                    outTokens = aggregatedOutTokens;
+                }
             }
+        }
+
+        if (inTokens == 0 && outTokens == 0)
+        {
+            inTokens = step.getStandardInputTokens() + step.getVerificationInputTokens() + step.getRcaInputTokens();
+            outTokens = step.getStandardOutputTokens() + step.getVerificationOutputTokens() + step.getRcaOutputTokens();
         }
 
         if (actionCount > 0 || step.getStandardCalls() > 0 || step.getVerificationCalls() > 0 || step.getRcaCalls() > 0 || hasSubSteps || !step.getLlmCalls().isEmpty() || screenshotCount > 0 || step.getSsimScore() != null || step.getVerificationResult() != null)
@@ -832,7 +1018,12 @@ public final class HtmlReportGenerator
             }
             if (llmCount > 0)
             {
-                sb.append("            <span class=\"footer-tag\" onclick=\"event.stopPropagation(); openAndSelectStep(").append(parentIndex).append(", ").append(subIndex).append(", 'llm')\">🤖 ").append(llmCount).append(" LLM call(s)</span>\n");
+                final StringBuilder llmTag = new StringBuilder("🤖 ").append(llmCount).append(" LLM call(s)");
+                if (inTokens > 0 || outTokens > 0)
+                {
+                    llmTag.append(", ").append(NUMBER_FORMAT.format(inTokens)).append(" in/ ").append(NUMBER_FORMAT.format(outTokens)).append(" out");
+                }
+                sb.append("            <span class=\"footer-tag\" onclick=\"event.stopPropagation(); openAndSelectStep(").append(parentIndex).append(", ").append(subIndex).append(", 'llm')\">").append(llmTag).append("</span>\n");
             }
             if (hasSubSteps)
             {
@@ -845,14 +1036,17 @@ public final class HtmlReportGenerator
     private static void renderStepCardWithSubSteps(final StringBuilder sb, final TestExecutionReport.ReportStepEntry step, final int index)
     {
         final String stepStatus = step.getStatus() != null ? step.getStatus().toUpperCase() : "PENDING";
+        final boolean isNotRun = step.isNotRun();
         final String stepPillClass = "PASSED".equals(stepStatus) || "SUCCESS".equals(stepStatus) ? "pill-pass"
             : "HEALED".equals(stepStatus) ? "pill-heal"
             : "FAILED".equals(stepStatus) ? "pill-fail"
+            : isNotRun ? "pill-not-run"
             : "SKIPPED".equals(stepStatus) ? "pill-skip" : "pill-pending";
 
         final boolean hasSubSteps = !step.getSubSteps().isEmpty();
+        final String cardExtraClass = isNotRun ? " step-card-not-run" : "";
 
-        sb.append("        <div class=\"step-card step-select-item\" id=\"step-item-").append(index).append("\">\n");
+        sb.append("        <div class=\"step-card step-select-item").append(cardExtraClass).append("\" id=\"step-item-").append(index).append("\">\n");
         sb.append("          <div class=\"step-header\">\n");
         sb.append("            <div class=\"step-header-left\">\n");
         sb.append("              <span class=\"step-number\">#").append(index + 1).append("</span>\n");
@@ -888,6 +1082,11 @@ public final class HtmlReportGenerator
             sb.append("            <div class=\"step-card-error-banner\">❌ <strong>Error:</strong> ")
               .append(escapeHtml(step.getFailureReason())).append("</div>\n");
         }
+        if (step.getNotRunReason() != null && !step.getNotRunReason().isBlank())
+        {
+            sb.append("            <div class=\"step-card-not-run-banner\">⏹️ <em>")
+              .append(escapeHtml(step.getNotRunReason())).append("</em></div>\n");
+        }
         appendScreenshotPreviews(sb, step.getScreenshots(), "Step #" + (index + 1));
         sb.append("          </div>\n");
 
@@ -903,11 +1102,15 @@ public final class HtmlReportGenerator
             {
                 final TestExecutionReport.ReportStepEntry sub = step.getSubSteps().get(s);
                 final String subStatus = sub.getStatus() != null ? sub.getStatus().toUpperCase() : "SUCCESS";
+                final boolean isSubNotRun = sub.isNotRun();
                 final String subPillClass = "PASSED".equals(subStatus) || "SUCCESS".equals(subStatus) ? "pill-pass"
                     : "HEALED".equals(subStatus) ? "pill-heal"
-                    : "FAILED".equals(subStatus) ? "pill-fail" : "pill-pending";
+                    : "FAILED".equals(subStatus) ? "pill-fail"
+                    : isSubNotRun ? "pill-not-run"
+                    : "SKIPPED".equals(subStatus) ? "pill-skip" : "pill-pending";
+                final String subCardExtraClass = isSubNotRun ? " sub-step-card-not-run" : "";
 
-                sb.append("            <div class=\"sub-step-card\" id=\"substep-item-").append(index).append("-").append(s).append("\">\n");
+                sb.append("            <div class=\"sub-step-card").append(subCardExtraClass).append("\" id=\"substep-item-").append(index).append("-").append(s).append("\">\n");
                 sb.append("              <div class=\"sub-step-header\">\n");
                 sb.append("                <div class=\"sub-step-header-left\">\n");
                 sb.append("                  <span class=\"sub-step-number\">#").append(index + 1).append(".").append(s + 1).append("</span>\n");
@@ -928,6 +1131,11 @@ public final class HtmlReportGenerator
                 {
                     sb.append("              <div class=\"step-card-error-banner\">❌ <strong>Error:</strong> ")
                       .append(escapeHtml(sub.getFailureReason())).append("</div>\n");
+                }
+                if (sub.getNotRunReason() != null && !sub.getNotRunReason().isBlank())
+                {
+                    sb.append("              <div class=\"step-card-not-run-banner\">⏹️ <em>")
+                      .append(escapeHtml(sub.getNotRunReason())).append("</em></div>\n");
                 }
 
                 if (!sub.getScreenshots().isEmpty())
@@ -951,7 +1159,8 @@ public final class HtmlReportGenerator
         sb.append("<script id=\"stepDataPayload\" type=\"application/json\">\n");
         try
         {
-            sb.append(OBJECT_MAPPER.writeValueAsString(report.getSteps()));
+            final String json = OBJECT_MAPPER.writeValueAsString(report.getSteps());
+            sb.append(escapeJsonScriptPayload(json));
         }
         catch (final Exception e)
         {
@@ -1191,7 +1400,8 @@ public final class HtmlReportGenerator
                     status === 'SUCCESS' || status === 'PASSED' ? 'pill-pass' :
                     status === 'HEALED' ? 'pill-heal' :
                     status === 'FAILED' ? 'pill-fail' :
-                    status === 'SKIPPED' ? 'pill-skip' : 'pill-pending'
+                    status === 'SKIPPED' ? 'pill-skip' :
+                    status === 'NOT RUN' || status === 'NOT_RUN' || status === 'UNREACHED' ? 'pill-not-run' : 'pill-pending'
                 );
 
                 var duration = step.durationMs || 0;
@@ -1229,6 +1439,32 @@ public final class HtmlReportGenerator
                     bugBadge.style.display = 'none';
                 }
 
+                var modeBadge = document.getElementById('inspModeBadge');
+                if (modeBadge) {
+                    var isLlm = (step.llmCalls && step.llmCalls.length > 0) || (step.standardCalls > 0) || (step.verificationCalls > 0) || (step.rcaCalls > 0);
+                    var isReplay = !isLlm && ((step.actions && step.actions.length > 0) || step.replayed);
+                    if (isLlm) {
+                        modeBadge.style.display = 'inline-block';
+                        modeBadge.className = 'badge-flag pill-mode-llm';
+                        modeBadge.textContent = '🤖 LLM';
+                    } else if (isReplay) {
+                        modeBadge.style.display = 'inline-block';
+                        modeBadge.className = 'badge-flag pill-mode-replay';
+                        modeBadge.textContent = '⚡ REPLAY';
+                    } else {
+                        modeBadge.style.display = 'none';
+                    }
+                }
+
+                var markerBadge = document.getElementById('inspMarkerBadge');
+                if (markerBadge) {
+                    if (step.marker) {
+                        markerBadge.style.display = 'inline-block';
+                    } else {
+                        markerBadge.style.display = 'none';
+                    }
+                }
+
                 var visBadge = document.getElementById('inspVisualBadge');
                 if (step.visual) {
                     visBadge.style.display = 'inline-block';
@@ -1238,7 +1474,7 @@ public final class HtmlReportGenerator
 
                 var verifBadge = document.getElementById('inspVerificationBadge');
                 var tabVerifBadge = document.getElementById('tabVerifBadge');
-                if (step.verificationResult) {
+                if (step.verificationResult && step.status !== 'FAILED') {
                     var vPass = step.verificationResult.passed !== undefined ? step.verificationResult.passed : (step.verificationResult.overallVerdict ? step.verificationResult.overallVerdict.passed : false);
                     verifBadge.style.display = 'inline-block';
                     verifBadge.textContent = vPass ? '🔍 VERIFIED' : '⚠️ VERIF FAILED';
@@ -1271,6 +1507,11 @@ public final class HtmlReportGenerator
                 var errEl = document.getElementById('inspErrorBanner');
                 if (step.failureReason) {
                     errEl.innerHTML = '❌ <strong>Error:</strong> <span>' + escapeHtml(step.failureReason) + '</span>';
+                    errEl.className = 'inspector-error-banner';
+                    errEl.style.display = 'block';
+                } else if (step.notRunReason) {
+                    errEl.innerHTML = '⏹️ <em>' + escapeHtml(step.notRunReason) + '</em>';
+                    errEl.className = 'step-card-not-run-banner';
                     errEl.style.display = 'block';
                 } else {
                     errEl.style.display = 'none';
@@ -1433,6 +1674,12 @@ public final class HtmlReportGenerator
                             card.appendChild(promptsWrapper);
                         }
 
+                        if (call.thinking) {
+                            var tSec = createPromptSection('Model Thought / Reasoning:', call.thinking, ci, 'thinking', false);
+                            tSec.classList.add('thought-section');
+                            card.appendChild(tSec);
+                        }
+
                         if (call.responseContent) {
                             var sec = createPromptSection('Raw Model Response:', call.responseContent, ci, 'responseContent', false);
                             sec.classList.add('response-section');
@@ -1460,17 +1707,20 @@ public final class HtmlReportGenerator
                     var tbody = document.createElement('tbody');
                     actions.forEach(function(a, ai) {
                         var tr = document.createElement('tr');
-                        var resClass = a.success ? 'status-pass' : 'status-fail';
-                        var resText = a.success ? 'SUCCESS' : 'FAILED';
+                        var resClass = a.success ? (a.healed ? 'status-heal' : 'status-pass') : 'status-fail';
+                        var resText = a.success ? (a.healed ? 'HEALED' : 'SUCCESS') : 'FAILED';
 
                         var displayTarget = a.resolvedTarget || a.target || '-';
-                        var hasTargetTpl = a.target && a.resolvedTarget && a.target !== a.resolvedTarget;
+                        var origTarget = a.expectedTarget || a.originalTarget || a.healedFrom || (a.healed ? a.target : null);
+                        var hasTargetTpl = !a.healed && a.target && a.resolvedTarget && a.target !== a.resolvedTarget;
                         var targetHtml;
                         if (displayTarget === '-') {
                             targetHtml = '<span class="text-muted">-</span>';
                         } else {
                             targetHtml = '<code class="code-selector" onclick="copyActionTarget(' + ai + ', this)" title="Click to copy">' + escapeHtml(displayTarget) + '</code>';
-                            if (hasTargetTpl) {
+                            if (origTarget && origTarget !== displayTarget) {
+                                targetHtml += '<div class="action-healed-note" title="Original Recorded Selector">🧬 Healed from: <code>' + escapeHtml(origTarget) + '</code></div>';
+                            } else if (hasTargetTpl) {
                                 targetHtml += '<div class="action-tpl-note" title="Original Parameterized Template">Template: <code>' + escapeHtml(a.target) + '</code></div>';
                             }
                         }
@@ -1700,6 +1950,9 @@ public final class HtmlReportGenerator
                                     ? ' <span class="badge-phase prelude" title="Status: CONTINUE">PRELUDE</span>'
                                     : ' <span class="badge-phase continuation" title="Status: SUCCESS">CONTINUATION</span>';
                             }
+                            if (!rText && call.thinking) {
+                                rText = call.thinking;
+                            }
                             if (!rText && step.reasonings && step.reasonings[actionCallIdx]) {
                                 rText = step.reasonings[actionCallIdx];
                             }
@@ -1870,6 +2123,19 @@ public final class HtmlReportGenerator
                 var firstFail = steps.findIndex(function(s) { return (s.status || '').toUpperCase() === 'FAILED'; });
                 currentParentIdx = firstFail >= 0 ? firstFail : 0;
             }
+
+            window.filterProperties = function() {
+                var input = document.getElementById('propSearchInput');
+                if (!input) return;
+                var filter = input.value.toLowerCase().trim();
+                var table = document.getElementById('propertiesTable');
+                if (!table) return;
+                var trs = table.getElementsByTagName('tr');
+                for (var i = 1; i < trs.length; i++) {
+                    var text = trs[i].textContent || trs[i].innerText;
+                    trs[i].style.display = text.toLowerCase().indexOf(filter) > -1 ? '' : 'none';
+                }
+            };
         })();
         </script>
         """);
@@ -1966,6 +2232,12 @@ public final class HtmlReportGenerator
                 background: var(--accent-purple-light);
                 font-weight: 600;
             }
+            .meta-badge.marker-meta-badge {
+                color: #b45309;
+                border-color: #fde68a;
+                background: #fef3c7;
+                font-weight: 600;
+            }
             .status-pill {
                 font-size: 1rem;
                 font-weight: 800;
@@ -1976,6 +2248,7 @@ public final class HtmlReportGenerator
             }
             .status-pass { background: var(--accent-success-light); color: var(--accent-success); border: 1px solid var(--accent-success); }
             .status-fail { background: var(--accent-danger-light); color: var(--accent-danger); border: 1px solid var(--accent-danger); }
+            .status-heal { background: var(--accent-purple-light); color: var(--accent-purple); border: 1px solid rgba(124, 58, 237, 0.4); }
             .metrics-grid {
                 display: grid;
                 grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -2186,6 +2459,20 @@ public final class HtmlReportGenerator
                 border-color: var(--border-subtle);
                 box-shadow: 0 2px 4px rgba(0,0,0,0.06);
             }
+            .step-card.step-card-not-run {
+                opacity: 0.65;
+                transition: opacity 0.2s ease;
+            }
+            .step-card.step-card-not-run:hover {
+                opacity: 0.95;
+            }
+            .sub-step-card.sub-step-card-not-run {
+                opacity: 0.65;
+                transition: opacity 0.2s ease;
+            }
+            .sub-step-card.sub-step-card-not-run:hover {
+                opacity: 0.95;
+            }
             .step-select-item.active {
                 border-color: var(--accent-primary);
                 box-shadow: 0 0 0 2px var(--accent-primary-light), 0 2px 4px rgba(0,0,0,0.06);
@@ -2224,6 +2511,7 @@ public final class HtmlReportGenerator
             .pill-heal { background: var(--accent-purple-light); color: var(--accent-purple); border: 1px solid rgba(124, 58, 237, 0.3); }
             .pill-fail { background: var(--accent-danger-light); color: var(--accent-danger); border: 1px solid rgba(220, 38, 38, 0.3); }
             .pill-skip { background: #f1f5f9; color: var(--text-muted); border: 1px solid var(--border); }
+            .pill-not-run { background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
             .pill-pending { background: var(--accent-warning-light); color: var(--accent-warning); border: 1px solid rgba(217, 119, 6, 0.3); }
             .badge-flag {
                 font-size: 0.72rem;
@@ -2270,6 +2558,16 @@ public final class HtmlReportGenerator
                 white-space: nowrap;
                 display: inline-block;
                 vertical-align: middle;
+            }
+            .badge-flag.pill-mode-llm {
+                background: #eff6ff;
+                color: #1d4ed8;
+                border-color: #bfdbfe;
+            }
+            .badge-flag.pill-mode-replay {
+                background: #f1f5f9;
+                color: #475569;
+                border-color: #cbd5e1;
             }
             .inspector-scope-context {
                 font-size: 0.82rem;
@@ -2554,6 +2852,17 @@ public final class HtmlReportGenerator
                 margin-top: 0.5rem;
                 word-break: break-word;
             }
+            .step-card-not-run-banner {
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-left: 4px solid #94a3b8;
+                border-radius: 6px;
+                color: #64748b;
+                padding: 0.5rem 0.75rem;
+                font-size: 0.82rem;
+                margin-top: 0.5rem;
+                word-break: break-word;
+            }
             .inspector-error-banner {
                 background: #fef2f2;
                 border: 1px solid #fecaca;
@@ -2752,6 +3061,10 @@ public final class HtmlReportGenerator
             .llm-prompts-wrapper.collapsed .llm-prompts-body {
                 display: none;
             }
+            .thought-section {
+                background: #faf5ff;
+                border-left: 3px solid #c084fc;
+            }
             .response-section {
                 background: #ffffff;
             }
@@ -2790,6 +3103,21 @@ public final class HtmlReportGenerator
                 background: #f1f5f9;
                 padding: 1px 4px;
                 border-radius: 3px;
+            }
+            .action-healed-note {
+                font-size: 0.72rem;
+                color: var(--accent-purple, #7c3aed);
+                margin-top: 3px;
+                font-weight: 500;
+            }
+            .action-healed-note code {
+                font-size: 0.7rem;
+                background: var(--accent-purple-light, #f5f3ff);
+                color: var(--accent-purple, #7c3aed);
+                border: 1px solid rgba(124, 58, 237, 0.25);
+                padding: 1px 4px;
+                border-radius: 3px;
+                text-decoration: line-through;
             }
             .reasoning-card {
                 background: var(--accent-primary-light);
@@ -3160,6 +3488,11 @@ public final class HtmlReportGenerator
                 display: block;
                 cursor: pointer;
             }
+            .marker-badge {
+                background: #fef3c7;
+                color: #b45309;
+                border-color: #fde68a;
+            }
             .visual-badge {
                 background: #fdf2f8;
                 color: #db2777;
@@ -3368,7 +3701,70 @@ public final class HtmlReportGenerator
                 border-radius: 6px;
                 box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
             }
+            .properties-section {
+                margin-top: 0.5rem;
+            }
+            .properties-table-container {
+                max-height: 480px;
+                overflow-y: auto;
+            }
+            .prop-filter-input {
+                background: var(--card-bg);
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                padding: 0.4rem 0.8rem;
+                font-size: 0.85rem;
+                color: var(--text);
+                width: 250px;
+                transition: all 0.15s ease;
+            }
+            .prop-filter-input:focus {
+                outline: none;
+                border-color: var(--accent-primary);
+                box-shadow: 0 0 0 2px var(--accent-primary-light);
+            }
+            .prop-key {
+                font-family: var(--font-mono);
+                font-size: 0.85rem;
+                color: var(--text);
+                font-weight: 600;
+                word-break: break-all;
+            }
+            .prop-val {
+                font-family: var(--font-mono);
+                font-size: 0.85rem;
+                color: var(--text-sub);
+                word-break: break-all;
+            }
+            .properties-empty {
+                font-size: 0.9rem;
+                color: var(--text-muted);
+                font-style: italic;
+                padding: 0.5rem 0;
+            }
         """);
+    }
+
+    private static void renderHtmlRubricCard(final StringBuilder sb, final String title, final VisualRcaResult.RubricItem item)
+    {
+        if (item == null)
+        {
+            return;
+        }
+        final String score = item.score() != null ? item.score().trim().toUpperCase() : "UNKNOWN";
+        final String scoreClass = switch (score)
+        {
+            case "ERROR_PRESENT", "MISSING", "STUCK", "OBSTRUCTED", "FAIL", "FAILED" -> "pill-fail";
+            case "CLEAN", "FOUND", "PROGRESSING", "CLEAR", "PASS", "PASSED" -> "pill-pass";
+            default -> "pill-pending";
+        };
+        sb.append("        <div class=\"rubric-item-card\">\n");
+        sb.append("          <div class=\"rubric-item-header\">\n");
+        sb.append("            <span class=\"rubric-name\">").append(escapeHtml(title)).append("</span>\n");
+        sb.append("            <span class=\"rubric-score ").append(scoreClass).append("\">").append(escapeHtml(score)).append("</span>\n");
+        sb.append("          </div>\n");
+        sb.append("          <div class=\"rubric-analysis\">").append(escapeHtml(item.analysis() != null ? item.analysis() : "No detailed analysis provided.")).append("</div>\n");
+        sb.append("        </div>\n");
     }
 
     private static String escapeHtml(final String text)
@@ -3384,6 +3780,31 @@ public final class HtmlReportGenerator
                    .replace("'", "&#39;");
     }
 
+    /**
+     * Sanitizes a JSON string payload intended to be embedded inside an HTML
+     * {@code <script id="stepDataPayload" type="application/json">} element.
+     * <p>
+     * Under the HTML 5 specification (HTML Standard § 13.2.5.4.10 "Script data state"),
+     * an HTML parser terminates a {@code <script>} element immediately upon encountering
+     * the sequence {@code </script>}, even if nested within a JSON string literal.
+     * Replacing {@code <} with the standard RFC 8259 JSON Unicode escape sequence
+     * {@code \u003c} prevents the HTML parser from breaking out or treating embedded
+     * scripts/comments as executable HTML/JS, while {@code JSON.parse()} in the browser
+     * seamlessly decodes {@code \u003c} back into {@code <}.
+     * </p>
+     *
+     * @param json the raw serialized JSON string
+     * @return the safely escaped JSON string suitable for inline script embedding
+     */
+    static String escapeJsonScriptPayload(final String json)
+    {
+        if (json == null)
+        {
+            return "[]";
+        }
+        return json.replace("<", "\\u003c");
+    }
+
     private static String escapeAttr(final String text)
     {
         if (text == null)
@@ -3394,6 +3815,8 @@ public final class HtmlReportGenerator
                    .replace("\"", "&quot;")
                    .replace("'", "\\'")
                    .replace("<", "&lt;")
-                   .replace(">", "&gt;");
+                   .replace(">", "&gt;")
+                   .replace("\r", " ")
+                   .replace("\n", " ");
     }
 }

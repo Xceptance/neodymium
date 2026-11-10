@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Ordinal Challenges - Modern Non-Table Layouts</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 30px; }
+        .section-box { margin-bottom: 35px; }
+
+        /* ARIA DataGrid */
+        .aria-grid { display: flex; flex-direction: column; width: 650px; border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; }
+        .aria-grid .header .row { background: #f1f5f9; font-weight: 600; }
+        .aria-grid .row { display: flex; align-items: center; border-bottom: 1px solid #e2e8f0; padding: 10px 14px; cursor: pointer; }
+        .aria-grid .row:hover { background: #f8fafc; }
+        .aria-grid .cell { flex: 1; }
+
+        /* Tailwind Div Table */
+        .tw-table { width: 650px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; }
+        .tw-grid { display: grid; grid-template-columns: 120px 180px 140px 1fr; padding: 10px 14px; align-items: center; border-bottom: 1px solid #e2e8f0; }
+        .tw-header { background: #f8fafc; font-weight: 600; color: #475569; }
+        .tw-row { cursor: pointer; transition: background 0.15s; }
+        .tw-row:hover { background: #f1f5f9; }
+
+        /* Wrapped Grid of Cards (where CSS :nth-child on .card fails) */
+        .catalog-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-width: 700px; }
+        .col-wrapper { display: flex; }
+        .product-card { border: 1px solid #cbd5e1; border-radius: 6px; padding: 14px; width: 100%; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .product-card h3 { margin: 0 0 8px 0; font-size: 15px; }
+
+        button { padding: 6px 12px; border-radius: 4px; border: 1px solid #cbd5e1; background: #fff; cursor: pointer; }
+        button:hover { background: #f8fafc; }
+
+        #status-message { margin-top: 20px; padding: 12px 16px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; font-weight: 600; border-radius: 6px; display: inline-block; }
+    </style>
+</head>
+<body>
+    <h1>Modern Non-Table Grids & Wrapped Containers</h1>
+
+    <!-- 1. ARIA DataGrid -->
+    <div class="section-box">
+        <h2>1. ARIA DataGrid (role="table")</h2>
+        <div role="table" id="aria-orders" class="aria-grid" aria-label="Customer Orders">
+            <div role="rowgroup" class="header">
+                <div role="row">
+                    <div role="columnheader" class="cell">Order ID</div>
+                    <div role="columnheader" class="cell">Customer</div>
+                    <div role="columnheader" class="cell">Total</div>
+                    <div role="columnheader" class="cell">Action</div>
+                </div>
+            </div>
+            <div role="rowgroup" class="body">
+                <div role="row" class="row data-row" id="aria-row-1">
+                    <div role="cell" class="cell">#301</div>
+                    <div role="cell" class="cell">Order Alpha</div>
+                    <div role="cell" class="cell">$25.00</div>
+                    <div role="cell" class="cell"><button class="view-btn">View</button></div>
+                </div>
+                <div role="row" class="row data-row" id="aria-row-2">
+                    <div role="cell" class="cell">#302</div>
+                    <div role="cell" class="cell">Order Beta</div>
+                    <div role="cell" class="cell">$45.00</div>
+                    <div role="cell" class="cell"><button class="view-btn">View</button></div>
+                </div>
+                <div role="row" class="row data-row" id="aria-row-3">
+                    <div role="cell" class="cell">#303</div>
+                    <div role="cell" class="cell">Order Gamma</div>
+                    <div role="cell" class="cell">$65.00</div>
+                    <div role="cell" class="cell"><button class="view-btn">View</button></div>
+                </div>
+                <div role="row" class="row data-row" id="aria-row-4">
+                    <div role="cell" class="cell">#304</div>
+                    <div role="cell" class="cell">Order Delta</div>
+                    <div role="cell" class="cell">$85.00</div>
+                    <div role="cell" class="cell"><button class="view-btn">View</button></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Pure Tailwind CSS Grid Div-Table -->
+    <div class="section-box">
+        <h2>2. Tailwind CSS Grid Div-Table (Pure Divs, No Table/ARIA)</h2>
+        <div id="tailwind-order-table" class="tw-table">
+            <div class="tw-grid tw-header">
+                <div>Order Ref</div>
+                <div>Status</div>
+                <div>Amount</div>
+                <div>Operations</div>
+            </div>
+            <div class="tw-grid tw-row row-item">
+                <div class="order-ref">REF-101</div>
+                <div>Processing</div>
+                <div>$50.00</div>
+                <div><button class="action-btn">Inspect</button></div>
+            </div>
+            <div class="tw-grid tw-row row-item">
+                <div class="order-ref">REF-102</div>
+                <div>Shipped</div>
+                <div>$75.00</div>
+                <div><button class="action-btn">Inspect</button></div>
+            </div>
+            <div class="tw-grid tw-row row-item">
+                <div class="order-ref">REF-103</div>
+                <div>Delivered</div>
+                <div>$99.00</div>
+                <div><button class="action-btn">Inspect</button></div>
+            </div>
+            <div class="tw-grid tw-row row-item">
+                <div class="order-ref">REF-104</div>
+                <div>Completed</div>
+                <div>$120.00</div>
+                <div><button class="action-btn">Inspect</button></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Wrapped Responsive Grid (Cards inside solitary column containers) -->
+    <div class="section-box">
+        <h2>3. Catalog Grid (Wrapped Column Divs)</h2>
+        <div id="catalog-grid" class="catalog-grid">
+            <div class="col-wrapper"><div class="product-card"><h3>Premium Hoodie</h3><button class="buy-btn">Buy</button></div></div>
+            <div class="col-wrapper"><div class="product-card"><h3>Canvas Sneakers</h3><button class="buy-btn">Buy</button></div></div>
+            <div class="col-wrapper"><div class="product-card"><h3>Wool Sweater</h3><button class="buy-btn">Buy</button></div></div>
+            <div class="col-wrapper"><div class="product-card"><h3>Linen Shirt</h3><button class="buy-btn">Buy</button></div></div>
+            <div class="col-wrapper"><div class="product-card"><h3>Denim Jeans</h3><button class="buy-btn">Buy</button></div></div>
+            <div class="col-wrapper"><div class="product-card"><h3>Leather Jacket</h3><button class="buy-btn">Buy</button></div></div>
+        </div>
+    </div>
+
+    <div id="status-message">Ready</div>
+
+    <script>
+        const status = document.getElementById('status-message');
+
+        // 1. ARIA Grid Row Click
+        document.querySelectorAll('#aria-orders .data-row').forEach((row, idx) => {
+            row.addEventListener('click', function(e) {
+                if (e.target.tagName.toLowerCase() === 'button') return;
+                const id = this.querySelector('[role="cell"]').innerText.trim();
+                status.innerText = 'Order ' + id + ' selected';
+            });
+        });
+
+        // 1. ARIA Grid Row Button Click
+        document.querySelectorAll('#aria-orders .view-btn').forEach((btn) => {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const row = this.closest('[role="row"]');
+                const id = row.querySelector('[role="cell"]').innerText.trim();
+                status.innerText = 'Viewing Order ' + id;
+            });
+        });
+
+        // 2. Tailwind Row Click
+        document.querySelectorAll('#tailwind-order-table .row-item').forEach((row, idx) => {
+            row.addEventListener('click', function(e) {
+                if (e.target.tagName.toLowerCase() === 'button') return;
+                const ref = this.querySelector('.order-ref').innerText.trim();
+                status.innerText = 'Row ' + (idx + 1) + ' clicked: ' + ref;
+            });
+        });
+
+        // 2. Tailwind Inspect Button
+        document.querySelectorAll('#tailwind-order-table .action-btn').forEach((btn, idx) => {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const row = this.closest('.tw-row');
+                const ref = row.querySelector('.order-ref').innerText.trim();
+                status.innerText = 'Viewing ' + ref;
+            });
+        });
+
+        // 3. Wrapped Product Card Direct Click
+        document.querySelectorAll('#catalog-grid .product-card').forEach((card, idx) => {
+            card.addEventListener('click', function(e) {
+                if (e.target.tagName.toLowerCase() === 'button') return;
+                const title = this.querySelector('h3').innerText.trim();
+                status.innerText = 'Card ' + (idx + 1) + ' clicked: ' + title;
+            });
+        });
+
+        // 3. Wrapped Product Card Buy Button
+        document.querySelectorAll('#catalog-grid .product-card .buy-btn').forEach((btn, idx) => {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const card = this.closest('.product-card');
+                const title = card.querySelector('h3').innerText.trim();
+                status.innerText = 'Purchased ' + title;
+            });
+        });
+    </script>
+</body>
+</html>

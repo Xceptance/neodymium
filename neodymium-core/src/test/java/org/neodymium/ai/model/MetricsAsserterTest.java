@@ -102,6 +102,7 @@ public class MetricsAsserterTest
 
     @Test
     @DisplayName("MetricsAsserter boolean query helpers and overloaded range/breakdown assertions work cleanly")
+    @SuppressWarnings("removal")
     public void testBooleanHelpersAndOverloadedRangeAssertions()
     {
         final ExecutionMetrics metrics = new ExecutionMetrics(

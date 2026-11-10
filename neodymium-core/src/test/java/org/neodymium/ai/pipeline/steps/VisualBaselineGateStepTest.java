@@ -324,6 +324,90 @@ public class VisualBaselineGateStepTest
     }
 
     @Test
+    public void testReplayWithMutatingCoordinateAction_preActionGateDefersAndDoesNotThrowDivergence() throws IOException
+    {
+        final BufferedImage img1 = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g1 = img1.createGraphics();
+        g1.setColor(Color.WHITE);
+        g1.fillRect(0, 0, 200, 200);
+        g1.dispose();
+
+        final BufferedImage img2 = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g2 = img2.createGraphics();
+        g2.setColor(Color.BLACK);
+        g2.fillRect(0, 0, 200, 200);
+        g2.dispose();
+
+        final String base64Png1 = encodeToBase64(img1);
+        final String base64Png2 = encodeToBase64(img2);
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockSutState state2 = new MockSutState(
+            "<html></html>",
+            List.of(new SutAttachment("image/png", "screenshot.png", base64Png2)),
+            "content_hash");
+        executor.enqueueState(state2);
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, null, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        // Baseline tile SSIM hash from post-action state
+        final String tileHash1 = ScreenshotHasher.computeTileSsimMatrix(base64Png1, 100, 100, 32);
+        final PlaybookStep step = new PlaybookStep("Locate third card and add to cart");
+        step.setScreenshotHash(tileHash1);
+        step.setScreenshotHashDim(ScreenshotHasher.TILE_SSIM_MATRIX_DIM);
+        final Action coordClickAction = new Action("CLICK", "coord:100,100", null);
+        step.getActions().add(coordClickAction);
+
+        final VisualBaselineGateStep gateStep = new VisualBaselineGateStep(step, session);
+        assertFalse(gateStep.isPureVerification());
+        // Must defer and NOT throw DivergenceException pre-action despite pre-action state being black (different from baseline white)
+        final boolean bypassed = assertDoesNotThrow(() -> gateStep.executeGate(context));
+        assertFalse(bypassed);
+    }
+
+    @Test
+    public void testReplayWithMutatingCoordinateAction_postActionCheckWithMatchingBaseline_succeeds() throws IOException
+    {
+        final BufferedImage img = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g = img.createGraphics();
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, 200, 200);
+        g.dispose();
+
+        final String base64Png = encodeToBase64(img);
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockSutState state = new MockSutState(
+            "<html></html>",
+            List.of(new SutAttachment("image/png", "screenshot.png", base64Png)),
+            "content_hash");
+        executor.enqueueState(state);
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, null, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, state);
+
+        final String tileHash = ScreenshotHasher.computeTileSsimMatrix(base64Png, 100, 100, 32);
+        final PlaybookStep step = new PlaybookStep("Locate third card and add to cart");
+        step.setScreenshotHash(tileHash);
+        step.setScreenshotHashDim(ScreenshotHasher.TILE_SSIM_MATRIX_DIM);
+        final Action coordClickAction = new Action("CLICK", "coord:100,100", null);
+        step.getActions().add(coordClickAction);
+
+        final VisualBaselineGateStep gateStep = new VisualBaselineGateStep(step, session);
+        assertDoesNotThrow(() -> gateStep.executePostActionCheck(context));
+        assertNotNull(step.getSsimScore());
+        assertTrue(step.getSsimScore() >= 0.95);
+    }
+
+    @Test
     public void testReplayWithMutatingAction_postActionCheckWithMatchingBaseline_succeeds() throws IOException
     {
         final BufferedImage img = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
@@ -506,6 +590,260 @@ public class VisualBaselineGateStepTest
         assertEquals(0.85, customStep.getSsimMinScore(), 0.001, "Custom threshold must be retained");
         assertTrue(customStep.getSsimScore() < 0.99, "Score must be < 0.99 to prove override had effect");
         assertTrue(customStep.getSsimScore() >= 0.85, "Score must be >= custom threshold 0.85");
+    }
+
+    @Test
+    public void testReplayLayoutStep_passesOnMatchingLayout() throws Exception
+    {
+        final BufferedImage img1 = new BufferedImage(300, 300, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g1 = img1.createGraphics();
+        g1.setColor(Color.WHITE);
+        g1.fillRect(0, 0, 300, 300);
+        g1.setColor(new Color(37, 99, 235)); // Header
+        g1.fillRect(0, 0, 300, 60);
+        g1.setColor(Color.LIGHT_GRAY);
+        g1.fillRect(20, 80, 120, 100);
+        g1.fillRect(160, 80, 120, 100);
+        g1.dispose();
+
+        // Replay has subtle internal variation (e.g. wireframed text bar slightly different)
+        final BufferedImage img2 = new BufferedImage(300, 300, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g2 = img2.createGraphics();
+        g2.setColor(Color.WHITE);
+        g2.fillRect(0, 0, 300, 300);
+        g2.setColor(new Color(37, 99, 235));
+        g2.fillRect(0, 0, 300, 60);
+        g2.setColor(Color.LIGHT_GRAY);
+        g2.fillRect(20, 80, 120, 100);
+        g2.fillRect(160, 80, 125, 100);
+        g2.dispose();
+
+        final String base64Png1 = encodeToBase64(img1);
+        final String base64Png2 = encodeToBase64(img2);
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockSutState state = new MockSutState(
+            "<html></html>",
+            List.of(new SutAttachment("image/png", "screenshot.png", base64Png2)),
+            "content_hash");
+        for (int i = 0; i < 6; i++)
+        {
+            executor.enqueueState(state);
+        }
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, null, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final String colorMatrix = ScreenshotHasher.computeColorSsimMatrix(base64Png1);
+        final PlaybookStep layoutStep = new PlaybookStep("Check category page (layout)");
+        layoutStep.setScreenshotHash(colorMatrix);
+
+        final VisualBaselineGateStep gateStep = new VisualBaselineGateStep(layoutStep, session);
+        final boolean matched = gateStep.executeGate(context);
+
+        assertTrue(matched, "Layout step matching baseline must pass visual gate");
+        assertEquals(0.92, layoutStep.getSsimMinScore(), 0.001, "Default layout threshold must be 0.92");
+        assertNotNull(layoutStep.getSsimScore());
+        assertTrue(layoutStep.getSsimScore() >= 0.92, "Score must meet or exceed 0.92 threshold");
+        assertTrue(executor.getWireframeAppliedCount() >= 1, "applyColorWireframe must be invoked");
+        assertTrue(executor.getWireframeRemovedCount() >= 1, "removeColorWireframe must be invoked");
+        assertEquals(executor.getWireframeAppliedCount(), executor.getWireframeRemovedCount(), "Wireframe must be cleaned up");
+    }
+
+    @Test
+    public void testReplayLayoutStep_failsOnStructuralCollapse() throws IOException
+    {
+        // 3-column layout baseline
+        final BufferedImage imgColumns = new BufferedImage(300, 300, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g1 = imgColumns.createGraphics();
+        g1.setColor(Color.WHITE);
+        g1.fillRect(0, 0, 300, 300);
+        g1.setColor(Color.DARK_GRAY);
+        g1.fillRect(10, 10, 80, 280);
+        g1.fillRect(110, 10, 80, 280);
+        g1.fillRect(210, 10, 80, 280);
+        g1.dispose();
+
+        // Collapsed layout
+        final BufferedImage imgCollapsed = new BufferedImage(300, 300, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g2 = imgCollapsed.createGraphics();
+        g2.setColor(Color.WHITE);
+        g2.fillRect(0, 0, 300, 300);
+        g2.setColor(Color.DARK_GRAY);
+        g2.fillRect(10, 10, 280, 50);
+        g2.dispose();
+
+        final String base64Col = encodeToBase64(imgColumns);
+        final String base64Collapse = encodeToBase64(imgCollapsed);
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockSutState state = new MockSutState(
+            "<html></html>",
+            List.of(new SutAttachment("image/png", "screenshot.png", base64Collapse)),
+            "content_hash");
+        for (int i = 0; i < 6; i++)
+        {
+            executor.enqueueState(state);
+        }
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, null, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final String colorMatrix = ScreenshotHasher.computeColorSsimMatrix(base64Col);
+        final PlaybookStep layoutStep = new PlaybookStep("Check category grid (layout)");
+        layoutStep.setScreenshotHash(colorMatrix);
+
+        final VisualBaselineGateStep gateStep = new VisualBaselineGateStep(layoutStep, session);
+        final DivergenceException ex = assertThrows(DivergenceException.class, () -> gateStep.execute(context));
+        assertTrue(ex.getMessage().contains("Layout SSIM score below threshold"), "Message must mention layout SSIM: " + ex.getMessage());
+        assertTrue(executor.getWireframeAppliedCount() >= 1);
+        assertEquals(executor.getWireframeAppliedCount(), executor.getWireframeRemovedCount(), "Wireframe must be safely removed even on failure");
+    }
+
+    @Test
+    public void testReplayLayoutStep_failsOnBrandColorShift() throws IOException
+    {
+        // Blue themed wireframe page
+        final BufferedImage imgBlue = new BufferedImage(300, 300, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g1 = imgBlue.createGraphics();
+        g1.setColor(Color.WHITE);
+        g1.fillRect(0, 0, 300, 300);
+        g1.setColor(new Color(37, 99, 235));
+        g1.fillRect(0, 0, 300, 60);
+        g1.fillRect(20, 100, 100, 40);
+        g1.fillRect(140, 100, 100, 40);
+        g1.dispose();
+
+        // Red themed wireframe page (identical geometry, brand color regression)
+        final BufferedImage imgRed = new BufferedImage(300, 300, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g2 = imgRed.createGraphics();
+        g2.setColor(Color.WHITE);
+        g2.fillRect(0, 0, 300, 300);
+        g2.setColor(new Color(220, 38, 38));
+        g2.fillRect(0, 0, 300, 60);
+        g2.fillRect(20, 100, 100, 40);
+        g2.fillRect(140, 100, 100, 40);
+        g2.dispose();
+
+        final String base64Blue = encodeToBase64(imgBlue);
+        final String base64Red = encodeToBase64(imgRed);
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockSutState state = new MockSutState(
+            "<html></html>",
+            List.of(new SutAttachment("image/png", "screenshot.png", base64Red)),
+            "content_hash");
+        for (int i = 0; i < 6; i++)
+        {
+            executor.enqueueState(state);
+        }
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, null, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final String colorMatrix = ScreenshotHasher.computeColorSsimMatrix(base64Blue);
+        final PlaybookStep layoutStep = new PlaybookStep("Check category page styling (layout)");
+        layoutStep.setScreenshotHash(colorMatrix);
+
+        final VisualBaselineGateStep gateStep = new VisualBaselineGateStep(layoutStep, session);
+        final DivergenceException ex = assertThrows(DivergenceException.class, () -> gateStep.execute(context));
+        assertTrue(ex.getMessage().contains("Layout SSIM score below threshold"));
+    }
+
+    @Test
+    public void testMarkerCoordinateStep_preActionGateAbortsOnTileMismatch() throws IOException
+    {
+        final BufferedImage img1 = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g1 = img1.createGraphics();
+        g1.setColor(Color.WHITE);
+        g1.fillRect(0, 0, 200, 200);
+        g1.dispose();
+
+        final BufferedImage img2 = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g2 = img2.createGraphics();
+        g2.setColor(Color.BLACK);
+        g2.fillRect(0, 0, 200, 200);
+        g2.dispose();
+
+        final String base64Png1 = encodeToBase64(img1);
+        final String base64Png2 = encodeToBase64(img2);
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockSutState state2 = new MockSutState(
+            "<html></html>",
+            List.of(new SutAttachment("image/png", "screenshot.png", base64Png2)),
+            "content_hash");
+        for (int i = 0; i < 6; i++)
+        {
+            executor.enqueueState(state2);
+        }
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, null, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final String tileHash1 = ScreenshotHasher.computeTileSsimMatrix(base64Png1, 100, 100, 32);
+        final PlaybookStep step = new PlaybookStep("Click custom canvas icon (marker)");
+        step.setMarker(true);
+        step.setScreenshotHash(tileHash1);
+        step.setScreenshotHashDim(ScreenshotHasher.TILE_SSIM_MATRIX_DIM);
+        step.getActions().add(new Action("CLICK", "coord:100,100", null));
+
+        final VisualBaselineGateStep gateStep = new VisualBaselineGateStep(step, session);
+        final DivergenceException ex = assertThrows(DivergenceException.class, () -> gateStep.executeGate(context));
+        assertTrue(ex.getMessage().contains("Aborting coordinate click to prevent blind misclick"));
+    }
+
+    @Test
+    public void testMarkerCoordinateStep_preActionGateProceedsOnTileMatch() throws IOException
+    {
+        final BufferedImage img = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g = img.createGraphics();
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, 200, 200);
+        g.dispose();
+
+        final String base64Png = encodeToBase64(img);
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockSutState state = new MockSutState(
+            "<html></html>",
+            List.of(new SutAttachment("image/png", "screenshot.png", base64Png)),
+            "content_hash");
+        for (int i = 0; i < 4; i++)
+        {
+            executor.enqueueState(state);
+        }
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, null, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final String tileHash = ScreenshotHasher.computeTileSsimMatrix(base64Png, 100, 100, 32);
+        final PlaybookStep step = new PlaybookStep("Click custom canvas icon (marker)");
+        step.setMarker(true);
+        step.setScreenshotHash(tileHash);
+        step.setScreenshotHashDim(ScreenshotHasher.TILE_SSIM_MATRIX_DIM);
+        step.getActions().add(new Action("CLICK", "coord:100,100", null));
+
+        final VisualBaselineGateStep gateStep = new VisualBaselineGateStep(step, session);
+        final boolean bypassed = assertDoesNotThrow(() -> gateStep.executeGate(context));
+        assertFalse(bypassed, "Interactive marker step must still execute its action after pre-click tile check passes");
+        assertNotNull(step.getSsimScore());
+        assertTrue(step.getSsimScore() >= 0.95);
     }
 
     private static String encodeToBase64(final BufferedImage image) throws IOException

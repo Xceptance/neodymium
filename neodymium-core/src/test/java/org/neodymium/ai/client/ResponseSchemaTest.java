@@ -34,21 +34,21 @@ public class ResponseSchemaTest
     public void testResolveMaxOutputTokens()
     {
         assertEquals(2048, ResponseSchema.resolveMaxOutputTokens(null));
-        assertEquals(256, ResponseSchema.resolveMaxOutputTokens(ResponseSchema.STEP_SPLITS));
-        assertEquals(1024, ResponseSchema.resolveMaxOutputTokens(ResponseSchema.JUDGE));
-        assertEquals(4096, ResponseSchema.resolveMaxOutputTokens(ResponseSchema.ASSERTION));
-        assertEquals(4096, ResponseSchema.resolveMaxOutputTokens(ResponseSchema.ACTIONS));
-        assertEquals(2048, ResponseSchema.resolveMaxOutputTokens(ResponseSchema.TEXT));
+        assertEquals(2048, ResponseSchema.resolveMaxOutputTokens(ResponseSchema.JUDGE));
+        assertEquals(8192, ResponseSchema.resolveMaxOutputTokens(ResponseSchema.ASSERTION));
+        assertEquals(8192, ResponseSchema.resolveMaxOutputTokens(ResponseSchema.ACTIONS));
+        assertEquals(4096, ResponseSchema.resolveMaxOutputTokens(ResponseSchema.TEXT));
+        assertEquals(8192, ResponseSchema.resolveMaxOutputTokens(ResponseSchema.LINTER));
     }
 
     @Test
     public void testResolveReasoningEffort()
     {
         assertEquals(ReasoningEffort.MEDIUM, ResponseSchema.resolveReasoningEffort(null));
-        assertEquals(ReasoningEffort.LOW, ResponseSchema.resolveReasoningEffort(ResponseSchema.STEP_SPLITS));
         assertEquals(ReasoningEffort.MEDIUM, ResponseSchema.resolveReasoningEffort(ResponseSchema.JUDGE));
         assertEquals(ReasoningEffort.MEDIUM, ResponseSchema.resolveReasoningEffort(ResponseSchema.TEXT));
         assertEquals(ReasoningEffort.HIGH, ResponseSchema.resolveReasoningEffort(ResponseSchema.ACTIONS));
         assertEquals(ReasoningEffort.HIGH, ResponseSchema.resolveReasoningEffort(ResponseSchema.ASSERTION));
+        assertEquals(ReasoningEffort.MEDIUM, ResponseSchema.resolveReasoningEffort(ResponseSchema.LINTER));
     }
 }

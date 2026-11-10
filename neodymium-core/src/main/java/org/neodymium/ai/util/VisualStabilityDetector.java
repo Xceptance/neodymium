@@ -158,9 +158,10 @@ public final class VisualStabilityDetector
         final int effectiveMaxAttempts = Math.max(1, maxAttempts);
 
         // 1. Capture initial Frame 0
+        final boolean isColor = ScreenshotHasher.isColorMatrix(expectedBaselineMatrix);
         final ContextLevel captureLevel = isFullPage ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL;
         SutState previousState = executor.captureState(captureLevel, isFullPage);
-        String previousMatrix = extractSsimMatrix(previousState);
+        String previousMatrix = extractSsimMatrix(previousState, isColor);
 
         if (previousMatrix == null)
         {
@@ -197,7 +198,7 @@ public final class VisualStabilityDetector
             }
 
             currentState = executor.captureState(captureLevel, isFullPage);
-            currentMatrix = extractSsimMatrix(currentState);
+            currentMatrix = extractSsimMatrix(currentState, isColor);
 
             if (currentMatrix == null)
             {
@@ -251,12 +252,13 @@ public final class VisualStabilityDetector
     }
 
     /**
-     * Extracts the 64x64 SSIM luminance matrix from image attachments in the given {@link SutState}.
+     * Extracts the SSIM matrix (luminance or 3-channel color) from image attachments in the given {@link SutState}.
      *
      * @param state the SUT state
+     * @param isColor true to extract 3-channel RGB color matrix, false for grayscale luminance
      * @return Base64-encoded SSIM matrix string, or null if no image attachment is found
      */
-    public static String extractSsimMatrix(final SutState state)
+    public static String extractSsimMatrix(final SutState state, final boolean isColor)
     {
         if (state == null || state.getAttachments() == null)
         {
@@ -267,9 +269,22 @@ public final class VisualStabilityDetector
         {
             if (attachment.mediaType() != null && attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
             {
-                return ScreenshotHasher.computeSsimMatrix(attachment.base64Data());
+                return isColor
+                    ? ScreenshotHasher.computeColorSsimMatrix(attachment.base64Data())
+                    : ScreenshotHasher.computeSsimMatrix(attachment.base64Data());
             }
         }
         return null;
+    }
+
+    /**
+     * Extracts the 64x64 SSIM luminance matrix from image attachments in the given {@link SutState}.
+     *
+     * @param state the SUT state
+     * @return Base64-encoded SSIM matrix string, or null if no image attachment is found
+     */
+    public static String extractSsimMatrix(final SutState state)
+    {
+        return extractSsimMatrix(state, false);
     }
 }

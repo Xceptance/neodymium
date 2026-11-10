@@ -27,12 +27,15 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
+import java.util.function.Predicate;
 
 import javax.imageio.ImageIO;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 import org.neodymium.ai.prompt.VerificationResult;
+import org.neodymium.ai.prompt.VisualRcaResult;
 
 /**
  * Data model encapsulating full execution metadata, steps, actions, LLM calls,
@@ -52,12 +55,14 @@ public final class TestExecutionReport
     private String playbookFile;
     private String status = "UNKNOWN";
     private boolean success;
+    private boolean expectedFailure;
     private long startTimeMs;
     private long endTimeMs;
     private long durationMs;
     private String failureReason;
     private String failureStackTrace;
     private String visualRcaExplanation;
+    private VisualRcaResult visualRcaResult;
 
     private final List<String> tags = new ArrayList<>();
     private final List<String> warnings = new ArrayList<>();
@@ -66,6 +71,7 @@ public final class TestExecutionReport
     private final List<ReportStepEntry> steps = new ArrayList<>();
     private final List<ReportLlmCallEntry> llmCalls = new ArrayList<>();
     private final List<ReportScreenshotEntry> screenshots = new ArrayList<>();
+    private final Map<String, String> activeProperties = new TreeMap<>();
     private ReportMetrics metrics = new ReportMetrics();
 
     /**
@@ -155,6 +161,16 @@ public final class TestExecutionReport
         this.success = success;
     }
 
+    public boolean isExpectedFailure()
+    {
+        return this.expectedFailure;
+    }
+
+    public void setExpectedFailure(final boolean expectedFailure)
+    {
+        this.expectedFailure = expectedFailure;
+    }
+
     public long getStartTimeMs()
     {
         return this.startTimeMs;
@@ -213,6 +229,16 @@ public final class TestExecutionReport
     public void setVisualRcaExplanation(final String visualRcaExplanation)
     {
         this.visualRcaExplanation = visualRcaExplanation;
+    }
+
+    public VisualRcaResult getVisualRcaResult()
+    {
+        return this.visualRcaResult;
+    }
+
+    public void setVisualRcaResult(final VisualRcaResult visualRcaResult)
+    {
+        this.visualRcaResult = visualRcaResult;
     }
 
     public List<String> getWarnings()
@@ -285,6 +311,14 @@ public final class TestExecutionReport
         }
     }
 
+    public void removeStepIf(final Predicate<ReportStepEntry> filter)
+    {
+        if (filter != null)
+        {
+            this.steps.removeIf(filter);
+        }
+    }
+
     public List<ReportLlmCallEntry> getLlmCalls()
     {
         return Collections.unmodifiableList(this.llmCalls);
@@ -295,6 +329,14 @@ public final class TestExecutionReport
         if (call != null)
         {
             this.llmCalls.add(call);
+        }
+    }
+
+    public void removeLlmCallIf(final Predicate<ReportLlmCallEntry> filter)
+    {
+        if (filter != null)
+        {
+            this.llmCalls.removeIf(filter);
         }
     }
 
@@ -311,6 +353,14 @@ public final class TestExecutionReport
         }
     }
 
+    public void removeScreenshotIf(final Predicate<ReportScreenshotEntry> filter)
+    {
+        if (filter != null)
+        {
+            this.screenshots.removeIf(filter);
+        }
+    }
+
     public ReportMetrics getMetrics()
     {
         return this.metrics;
@@ -319,6 +369,64 @@ public final class TestExecutionReport
     public void setMetrics(final ReportMetrics metrics)
     {
         this.metrics = metrics != null ? metrics : new ReportMetrics();
+    }
+
+    /**
+     * Gets an unmodifiable map of active run properties.
+     *
+     * @return unmodifiable map of active properties
+     */
+    public Map<String, String> getActiveProperties()
+    {
+        return Collections.unmodifiableMap(this.activeProperties);
+    }
+
+    /**
+     * Sets the active run properties.
+     *
+     * @param properties the properties map to set
+     */
+    public void setActiveProperties(final Map<String, String> properties)
+    {
+        this.activeProperties.clear();
+        if (properties != null)
+        {
+            this.activeProperties.putAll(properties);
+        }
+    }
+
+    /**
+     * Adds an active property entry.
+     *
+     * @param key property name
+     * @param value property value
+     */
+    public void addActiveProperty(final String key, final String value)
+    {
+        if (key != null)
+        {
+            this.activeProperties.put(key, value != null ? value : "");
+        }
+    }
+
+    /**
+     * Checks if any step in this report executed with visual element markers.
+     *
+     * @return true if at least one step or sub-step used markers, false otherwise
+     */
+    public boolean isMarker()
+    {
+        if (this.steps != null)
+        {
+            for (final ReportStepEntry step : this.steps)
+            {
+                if (step.isMarker())
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**
@@ -334,9 +442,11 @@ public final class TestExecutionReport
         private long durationMs;
         private String sourceFile;
         private int lineNumber;
+        private String block = "steps";
         private String reasoning;
         private final List<String> reasonings = new ArrayList<>();
         private String failureReason;
+        private String notRunReason;
         private int escalations;
         private String contextLevels;
         private int standardCalls;
@@ -356,13 +466,17 @@ public final class TestExecutionReport
         private final List<ReportStepEntry> subSteps = new ArrayList<>();
         private final List<ReportLlmCallEntry> llmCalls = new ArrayList<>();
         private final List<ReportScreenshotEntry> screenshots = new ArrayList<>();
+        @JsonIgnore
+        private ReportStepEntry parent;
         private String rawInstruction;
         private boolean bug;
         private String bugDetails;
         private boolean optional;
         private boolean continueOnError;
         private boolean noHealing;
+        private boolean expectedFailure;
         private boolean visual;
+        private boolean marker;
         private boolean multiStage;
         private Double ssimScore;
         private Double ssimMinScore;
@@ -410,6 +524,11 @@ public final class TestExecutionReport
             this.status = status;
         }
 
+        public boolean isHealed()
+        {
+            return "HEALED".equalsIgnoreCase(this.status);
+        }
+
         public long getStartTimeMs()
         {
             return this.startTimeMs;
@@ -448,6 +567,16 @@ public final class TestExecutionReport
         public void setLineNumber(final int lineNumber)
         {
             this.lineNumber = lineNumber;
+        }
+
+        public String getBlock()
+        {
+            return this.block != null ? this.block : "steps";
+        }
+
+        public void setBlock(final String block)
+        {
+            this.block = block;
         }
 
         public String getReasoning()
@@ -490,6 +619,26 @@ public final class TestExecutionReport
         public void setFailureReason(final String failureReason)
         {
             this.failureReason = failureReason;
+        }
+
+        public String getNotRunReason()
+        {
+            return this.notRunReason;
+        }
+
+        public void setNotRunReason(final String notRunReason)
+        {
+            this.notRunReason = notRunReason;
+        }
+
+        public boolean isNotRun()
+        {
+            return "NOT RUN".equalsIgnoreCase(this.status) || "NOT_RUN".equalsIgnoreCase(this.status) || "UNREACHED".equalsIgnoreCase(this.status);
+        }
+
+        public boolean isSkipped()
+        {
+            return "SKIPPED".equalsIgnoreCase(this.status);
         }
 
         public int getEscalations()
@@ -574,11 +723,23 @@ public final class TestExecutionReport
         {
             if (subStep != null)
             {
+                subStep.setParent(this);
                 this.subSteps.add(subStep);
             }
         }
 
-        public void removeSubStepIf(final java.util.function.Predicate<ReportStepEntry> filter)
+        @JsonIgnore
+        public ReportStepEntry getParent()
+        {
+            return this.parent;
+        }
+
+        public void setParent(final ReportStepEntry parent)
+        {
+            this.parent = parent;
+        }
+
+        public void removeSubStepIf(final Predicate<ReportStepEntry> filter)
         {
             if (filter != null)
             {
@@ -677,15 +838,9 @@ public final class TestExecutionReport
             {
                 return true;
             }
-            if (this.subSteps != null)
+            if (this.parent != null && this.parent.isOptional())
             {
-                for (final ReportStepEntry sub : this.subSteps)
-                {
-                    if (sub.isOptional())
-                    {
-                        return true;
-                    }
-                }
+                return true;
             }
             return false;
         }
@@ -715,6 +870,16 @@ public final class TestExecutionReport
             this.noHealing = noHealing;
         }
 
+        public boolean isExpectedFailure()
+        {
+            return this.expectedFailure;
+        }
+
+        public void setExpectedFailure(final boolean expectedFailure)
+        {
+            this.expectedFailure = expectedFailure;
+        }
+
         public boolean isVisual()
         {
             return this.visual;
@@ -723,6 +888,56 @@ public final class TestExecutionReport
         public void setVisual(final boolean visual)
         {
             this.visual = visual;
+        }
+
+        public boolean isMarker()
+        {
+            if (this.marker)
+            {
+                return true;
+            }
+            if (this.parent != null && this.parent.isMarker())
+            {
+                return true;
+            }
+            return false;
+        }
+
+        public void setMarker(final boolean marker)
+        {
+            this.marker = marker;
+        }
+
+        /**
+         * Returns the execution mode for this step ("LLM" or "REPLAY"), or null if indeterminate.
+         *
+         * @return "LLM" if step executed LLM completion calls, "REPLAY" if actions were executed without LLM, or null
+         */
+        public String getStepMode()
+        {
+            if ((this.llmCalls != null && !this.llmCalls.isEmpty()) || this.standardCalls > 0 || this.verificationCalls > 0 || this.rcaCalls > 0)
+            {
+                return "LLM";
+            }
+            if (this.actions != null && !this.actions.isEmpty())
+            {
+                return "REPLAY";
+            }
+            if (this.subSteps != null && !this.subSteps.isEmpty())
+            {
+                for (final ReportStepEntry sub : this.subSteps)
+                {
+                    if ((sub.llmCalls != null && !sub.llmCalls.isEmpty()) || sub.standardCalls > 0 || sub.verificationCalls > 0 || sub.rcaCalls > 0)
+                    {
+                        return "LLM";
+                    }
+                    if (sub.actions != null && !sub.actions.isEmpty())
+                    {
+                        return "REPLAY";
+                    }
+                }
+            }
+            return null;
         }
 
         public boolean isMultiStage()
@@ -892,6 +1107,10 @@ public final class TestExecutionReport
         private String reasoning;
         private boolean success;
         private String phase;
+        private boolean healed;
+        private String expectedTarget;
+        private Integer subStepIndex;
+        private String subStepInstruction;
 
         public ReportActionEntry()
         {
@@ -926,6 +1145,21 @@ public final class TestExecutionReport
         {
             this(type, target, value, description, reasoning, success);
             this.phase = phase;
+        }
+
+        public ReportActionEntry(
+            final String type,
+            final String target,
+            final String value,
+            final String description,
+            final String reasoning,
+            final boolean success,
+            final String phase,
+            final boolean healed
+        )
+        {
+            this(type, target, value, description, reasoning, success, phase);
+            this.healed = healed;
         }
 
         public String getType()
@@ -1017,6 +1251,56 @@ public final class TestExecutionReport
         {
             this.phase = phase;
         }
+
+        public boolean isHealed()
+        {
+            return this.healed;
+        }
+
+        public void setHealed(final boolean healed)
+        {
+            this.healed = healed;
+        }
+
+        public String getExpectedTarget()
+        {
+            return this.expectedTarget;
+        }
+
+        public String getOriginalTarget()
+        {
+            return this.expectedTarget;
+        }
+
+        public String getHealedFrom()
+        {
+            return this.expectedTarget;
+        }
+
+        public void setExpectedTarget(final String expectedTarget)
+        {
+            this.expectedTarget = expectedTarget;
+        }
+
+        public Integer getSubStepIndex()
+        {
+            return this.subStepIndex;
+        }
+
+        public void setSubStepIndex(final Integer subStepIndex)
+        {
+            this.subStepIndex = subStepIndex;
+        }
+
+        public String getSubStepInstruction()
+        {
+            return this.subStepInstruction;
+        }
+
+        public void setSubStepInstruction(final String subStepInstruction)
+        {
+            this.subStepInstruction = subStepInstruction;
+        }
     }
 
     /**
@@ -1027,6 +1311,7 @@ public final class TestExecutionReport
     {
         private int stepIndex;
         private int subStepIndex = -1;
+        private String block;
         private String capability;
         private String modelName;
         private long durationMs;
@@ -1038,6 +1323,7 @@ public final class TestExecutionReport
         private String systemPrompt;
         private String userPrompt;
         private String responseContent;
+        private String thinking;
         private List<String> availableTools = new ArrayList<>();
 
         public ReportLlmCallEntry()
@@ -1062,6 +1348,16 @@ public final class TestExecutionReport
         public void setSubStepIndex(final int subStepIndex)
         {
             this.subStepIndex = subStepIndex;
+        }
+
+        public String getBlock()
+        {
+            return this.block != null ? this.block : "steps";
+        }
+
+        public void setBlock(final String block)
+        {
+            this.block = block;
         }
 
         public String getCapability()
@@ -1172,6 +1468,16 @@ public final class TestExecutionReport
         public void setResponseContent(final String responseContent)
         {
             this.responseContent = responseContent;
+        }
+
+        public String getThinking()
+        {
+            return this.thinking;
+        }
+
+        public void setThinking(final String thinking)
+        {
+            this.thinking = thinking;
         }
 
         public List<String> getAvailableTools()
@@ -1482,6 +1788,7 @@ public final class TestExecutionReport
         private int healedSteps;
         private int failedSteps;
         private int skippedSteps;
+        private int notRunSteps;
         private int totalLlmCalls;
         private long tokenUsageInput;
         private long tokenUsageOutput;
@@ -1543,6 +1850,16 @@ public final class TestExecutionReport
         public void setSkippedSteps(final int skippedSteps)
         {
             this.skippedSteps = skippedSteps;
+        }
+
+        public int getNotRunSteps()
+        {
+            return this.notRunSteps;
+        }
+
+        public void setNotRunSteps(final int notRunSteps)
+        {
+            this.notRunSteps = notRunSteps;
         }
 
         public int getTotalLlmCalls()

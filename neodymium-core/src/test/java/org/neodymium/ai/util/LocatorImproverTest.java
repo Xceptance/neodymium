@@ -82,7 +82,10 @@ public final class LocatorImproverTest
     public void testScoreLocator_testId()
     {
         assertEquals(10, LocatorImprover.scoreLocator("[data-testid='submit-btn']"));
+        assertEquals(10, LocatorImprover.scoreLocator("[data-test-id='submit-btn']"));
         assertEquals(10, LocatorImprover.scoreLocator("[data-test='checkout-link']"));
+        assertEquals(10, LocatorImprover.scoreLocator("[data-qa='order-summary']"));
+        assertEquals(10, LocatorImprover.scoreLocator("[data-cy='submit']"));
     }
 
     @Test
@@ -117,6 +120,52 @@ public final class LocatorImproverTest
     }
 
     @Test
+    public void testScoreLocator_exactTextPseudoSelectors()
+    {
+        assertEquals(7, LocatorImprover.scoreLocator(".plp-sidebar a:text-is(\"Tops\")"));
+        assertEquals(7, LocatorImprover.scoreLocator("a:exact-text('Tops')"));
+        assertEquals(7, LocatorImprover.scoreLocator("button:has-text-is(\"Apply\")"));
+        assertEquals(7, LocatorImprover.scoreLocator("button:text-is(\"Next > Step: 1\")"));
+    }
+
+    @Test
+    public void testScoreLocator_partialTextPseudoSelectors()
+    {
+        assertEquals(6, LocatorImprover.scoreLocator("button:has-text(\"Submit\")"));
+        assertEquals(6, LocatorImprover.scoreLocator("a:contains('More info')"));
+        assertEquals(6, LocatorImprover.scoreLocator("span:text(\"Hello\")"));
+    }
+
+    @Test
+    public void testScoreLocator_semanticXPath()
+    {
+        assertEquals(7, LocatorImprover.scoreLocator("//a[normalize-space()='Tops']"));
+        assertEquals(7, LocatorImprover.scoreLocator("//button[normalize-space(.)='Submit']"));
+        assertEquals(7, LocatorImprover.scoreLocator("//span[text()='Welcome']"));
+        assertEquals(6, LocatorImprover.scoreLocator("//button[contains(normalize-space(),'Submit')]"));
+        assertEquals(6, LocatorImprover.scoreLocator("//a[contains(text(),'Order')]"));
+        assertEquals(2, LocatorImprover.scoreLocator("//div/span/a"));
+    }
+
+    @Test
+    public void testScoreLocator_positionalFragilityOverridesTextAndIds()
+    {
+        assertEquals(2, LocatorImprover.scoreLocator("div:nth-child(2) > a:text-is(\"Tops\")"));
+        assertEquals(2, LocatorImprover.scoreLocator("#foo:nth-child(2)"));
+        assertEquals(2, LocatorImprover.scoreLocator("table >> nth=2 >> button"));
+        assertEquals(2, LocatorImprover.scoreLocator("//div[1]/input"));
+    }
+
+    @Test
+    public void testScoreLocator_chainedLocatorsAndContainers()
+    {
+        assertEquals(6, LocatorImprover.scoreLocator("table >> tr:has-text(\"Alice\") >> button"));
+        assertEquals(6, LocatorImprover.scoreLocator("div:has(> h3)"));
+        assertEquals(7, LocatorImprover.scoreLocator("div:has(> h3:text-is(\"Order Summary\"))"));
+        assertEquals(5, LocatorImprover.scoreLocator("a[href=\"https://example.com/c/tops.html\"]"));
+    }
+
+    @Test
     public void testScoreLocator_emptyAndNull()
     {
         assertEquals(0, LocatorImprover.scoreLocator(null));
@@ -130,7 +179,10 @@ public final class LocatorImproverTest
         final Map<String, String> attrs = new HashMap<>();
         attrs.put("id", "email-field");
         attrs.put("data-testid", "email-input");
+        attrs.put("data-test-id", "email-alt");
         attrs.put("data-test", "email-test");
+        attrs.put("data-qa", "email-qa");
+        attrs.put("data-cy", "email-cy");
         attrs.put("name", "email");
         attrs.put("aria-label", "Email Address");
         attrs.put("placeholder", "Enter your email");
@@ -138,13 +190,16 @@ public final class LocatorImproverTest
         final WebElement element = createMockElement("input", attrs);
         final List<String> candidates = LocatorImprover.generateCandidates(element);
 
-        assertEquals(6, candidates.size());
+        assertEquals(9, candidates.size());
         assertEquals("#email-field", candidates.get(0));
         assertEquals("[data-testid='email-input']", candidates.get(1));
-        assertEquals("[data-test='email-test']", candidates.get(2));
-        assertEquals("input[name='email']", candidates.get(3));
-        assertEquals("[aria-label='Email Address']", candidates.get(4));
-        assertEquals("[placeholder='Enter your email']", candidates.get(5));
+        assertEquals("[data-test-id='email-alt']", candidates.get(2));
+        assertEquals("[data-test='email-test']", candidates.get(3));
+        assertEquals("[data-qa='email-qa']", candidates.get(4));
+        assertEquals("[data-cy='email-cy']", candidates.get(5));
+        assertEquals("input[name='email']", candidates.get(6));
+        assertEquals("[aria-label='Email Address']", candidates.get(7));
+        assertEquals("[placeholder='Enter your email']", candidates.get(8));
     }
 
     @Test

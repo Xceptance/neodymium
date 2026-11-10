@@ -138,6 +138,68 @@ public class ActionTest
     }
 
     @Test
+    public void testFrameSerializationAndCopy() throws Exception
+    {
+        final Action action = new Action("TYPE", "#inp_val", List.of("Tea"), "Type Tea", "Fill input");
+        action.setFrame("#pact1 >>> #pact2");
+
+        assertEquals("#pact1 >>> #pact2", action.getFrame());
+
+        final Action copied = action.withValue("Coffee");
+        assertEquals("#pact1 >>> #pact2", copied.getFrame());
+        assertEquals("Coffee", copied.getValue());
+
+        final Action copiedTarget = action.withTarget("#other");
+        assertEquals("#pact1 >>> #pact2", copiedTarget.getFrame());
+
+        final String json = this.mapper.writeValueAsString(action);
+        assertTrue(json.contains("\"frame\":\"#pact1 >>> #pact2\"") || json.contains("\"frame\" : \"#pact1 >>> #pact2\""));
+
+        final Action deserialized = this.mapper.readValue(json, Action.class);
+        assertEquals("#pact1 >>> #pact2", deserialized.getFrame());
+    }
+
+    @Test
+    public void testFromToolCallExtractsFrameAndSplitsCompoundTarget() throws Exception
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("selector", "#pact1 >>> #inp_val");
+        args.put("text", "Tea");
+
+        final ToolCall call = new ToolCall("call-1", "fill", args);
+        final Action action = Action.fromToolCall(call);
+
+        assertNotNull(action);
+        assertEquals("#inp_val", action.getTarget());
+        assertEquals("#pact1", action.getFrame());
+        assertEquals("Tea", action.getValue());
+    }
+
+    @Test
+    public void testFromToolCallMergesExplicitFrameWithSelectorPrefix() throws Exception
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("frame", "#outer");
+        args.put("selector", "#inner >>> #btn");
+
+        final Action action = Action.fromToolCall(new ToolCall("call-2", "click", args));
+
+        assertEquals("#btn", action.getTarget());
+        assertEquals("#outer >>> #inner", action.getFrame());
+    }
+
+    @Test
+    public void testFromToolCallDoesNotSplitUrlOrNonSelectorTargets() throws Exception
+    {
+        final ObjectNode nav = this.mapper.createObjectNode();
+        nav.put("url", "https://example.com/a >>> b");
+        final Action navigate = Action.fromToolCall(new ToolCall("call-3", "navigate", nav));
+        assertNotNull(navigate);
+        assertEquals(null, navigate.getFrame());
+        assertTrue(navigate.getTarget().contains(">>>"), "Navigate target must stay untouched: " + navigate.getTarget());
+    }
+
+    @Test
     public void testCandidateLocatorsResolution()
     {
         final Action action = new Action("CLICK", "#primary-btn", "Click primary");
@@ -365,6 +427,38 @@ public class ActionTest
     }
 
     @Test
+    public void testFromToolCallAssertElementStateCompoundComma()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("selector", "#checkout-btn");
+        args.put("state", "visible, enabled");
+        final ToolCall call = new ToolCall("call-compound-1", "assert_element_state", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("ASSERT_ELEMENT_STATE", action.getType());
+        assertEquals("#checkout-btn", action.getTarget());
+        assertEquals("visible, enabled", action.getValue());
+        assertEquals("assert_element_state", action.toToolCall().toolName());
+    }
+
+    @Test
+    public void testFromToolCallAssertElementStateCompoundArray()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("selector", "#checkout-btn");
+        final ArrayNode states = args.putArray("states");
+        states.add("visible");
+        states.add("enabled");
+        final ToolCall call = new ToolCall("call-compound-2", "assert_element_state", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("ASSERT_ELEMENT_STATE", action.getType());
+        assertEquals("#checkout-btn", action.getTarget());
+        assertEquals("visible, enabled", action.getValue());
+        assertEquals("assert_element_state", action.toToolCall().toolName());
+    }
+
+    @Test
     public void testFromToolCallAssertCountNotEquals()
     {
         final ObjectNode args = this.mapper.createObjectNode();
@@ -479,5 +573,31 @@ public class ActionTest
         assertEquals(1, action.getThen().size());
         assertEquals("CLICK", action.getThen().get(0).getType());
         assertEquals("#accept", action.getThen().get(0).getTarget());
+    }
+
+    @Test
+    public void testFillFormFromToolCall()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        final ArrayNode fields = args.putArray("fields");
+        final ObjectNode f1 = fields.addObject();
+        f1.put("selector", "#firstName");
+        f1.put("value", "John");
+        final ObjectNode f2 = fields.addObject();
+        f2.put("selector", "#lastName");
+        f2.put("value", "Doe");
+
+        final ToolCall call = new ToolCall("call-fill-form", "fill_form", args);
+        final Action action = Action.fromToolCall(call);
+
+        assertNotNull(action);
+        assertEquals("FILL_FORM", action.getType());
+        assertEquals("form", action.getTarget());
+        assertTrue(action.getParameters().containsKey("fields"));
+
+        final ToolCall generatedCall = action.toToolCall();
+        assertEquals("fill_form", generatedCall.toolName());
+        assertTrue(generatedCall.arguments().hasNonNull("fields"));
+        assertEquals(2, generatedCall.arguments().path("fields").size());
     }
 }

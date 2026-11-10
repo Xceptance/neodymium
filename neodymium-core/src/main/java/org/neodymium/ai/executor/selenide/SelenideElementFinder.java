@@ -27,16 +27,19 @@ import com.codeborne.selenide.WebDriverRunner;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.action.LocatorCandidate;
+import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.executor.selenide.frame.FrameContextManager;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.util.SelectorSyntaxChecker;
 import org.openqa.selenium.By;
-import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.InvalidSelectorException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.slf4j.Logger;
@@ -64,275 +67,15 @@ public final class SelenideElementFinder
 {
     private static final Logger LOG = LoggerFactory.getLogger(SelenideElementFinder.class);
     private static final long RETRY_INTERVAL_MS = 100L;
+    private static final long DOM_STAMP_THROTTLE_MS = 1200L;
+    private static volatile long lastGlobalDomStampTime = 0L;
+    private static volatile String lastStampedUrl = "";
 
-    private static final String SHADOW_DOM_HELPER_JS = """
-                var allRoots = [document];
-                function collectAllRoots(root) {
-                    try {
-                        var els = root.querySelectorAll('*');
-                        for (var i = 0; i < els.length; i++) {
-                            if (els[i].shadowRoot) {
-                                allRoots.push(els[i].shadowRoot);
-                                collectAllRoots(els[i].shadowRoot);
-                            }
-                        }
-                    } catch(e) {}
-                }
-                collectAllRoots(document);
-
-                function isVisible(el) {
-                    if (!el || !el.isConnected) return false;
-                    try {
-                        var style = window.getComputedStyle(el);
-                        if (style.display === 'none' || style.visibility === 'hidden') return false;
-                        var rect = el.getBoundingClientRect();
-                        if (rect.width > 0 && rect.height > 0) return true;
-                        var tag = el.tagName ? el.tagName.toLowerCase() : '';
-                        if (['input', 'button', 'a', 'select', 'textarea'].indexOf(tag) !== -1) return true;
-                    } catch(e) {}
-                    return false;
-                }
-
-                function collectDescendantRoots(node) {
-                    var roots = [];
-                    if (node.shadowRoot) {
-                        roots.push(node.shadowRoot);
-                        collectInner(node.shadowRoot);
-                    }
-                    collectInner(node);
-                    function collectInner(parent) {
-                        try {
-                            var els = parent.querySelectorAll('*');
-                            for (var i = 0; i < els.length; i++) {
-                                if (els[i].shadowRoot) {
-                                    roots.push(els[i].shadowRoot);
-                                    collectInner(els[i].shadowRoot);
-                                }
-                            }
-                        } catch(e) {}
-                    }
-                    return roots;
-                }
-
-                function splitSelector(sel) {
-                    var parts = [];
-                    var current = '';
-                    var inQuotes = false;
-                    var quoteChar = '';
-                    var inBrackets = 0;
-                    var inParens = 0;
-                    for (var i = 0; i < sel.length; i++) {
-                        var c = sel[i];
-                        if (inQuotes) {
-                            current += c;
-                            if (c === quoteChar && sel[i - 1] !== '\\\\') {
-                                inQuotes = false;
-                            }
-                        } else if (c === '"' || c === "'") {
-                            inQuotes = true;
-                            quoteChar = c;
-                            current += c;
-                        } else if (c === '[') {
-                            inBrackets++;
-                            current += c;
-                        } else if (c === ']') {
-                            if (inBrackets > 0) inBrackets--;
-                            current += c;
-                        } else if (c === '(') {
-                            inParens++;
-                            current += c;
-                        } else if (c === ')') {
-                            if (inParens > 0) inParens--;
-                            current += c;
-                        } else if (/\\s/.test(c)) {
-                            if (inBrackets === 0 && inParens === 0) {
-                                if (current.length > 0) {
-                                    parts.push(current);
-                                    current = '';
-                                }
-                            } else {
-                                current += c;
-                            }
-                        } else {
-                            current += c;
-                        }
-                    }
-                    if (current.length > 0) {
-                        parts.push(current);
-                    }
-                    return parts;
-                }
-            """;
-
-    private static final String SHADOW_FIND_SCRIPT = """
-            return (function(selector) {
-            """
-        + SHADOW_DOM_HELPER_JS
-        + """
-                if (!selector) return null;
-                var clean = selector.trim();
-                if (clean.toLowerCase().indexOf('css=') === 0) {
-                    clean = clean.substring(4).trim();
-                }
-
-                // A. Automation ID resolution (data-ai / xc_...)
-                clean = clean.replace(/#(xc[a-zA-Z0-9_\\-]+)/g, '[data-ai="$1"]');
-                var isSimple = clean.indexOf(' ') === -1 && clean.indexOf('>') === -1 && clean.indexOf('+') === -1 && clean.indexOf('~') === -1 && clean.indexOf(',') === -1;
-                var aiMatch = isSimple ? clean.match(/(xc[a-zA-Z0-9_\\-]+)/) : null;
-                if (aiMatch) {
-                    var neoId = aiMatch[1];
-                    for (var i = 0; i < allRoots.length; i++) {
-                        try {
-                            var el = allRoots[i].querySelector('[data-ai="' + neoId + '"]');
-                            if (el && isVisible(el)) return el;
-                        } catch (e) {}
-                    }
-                }
-
-                // B. Handle Playwright text pseudo-selectors e.g. text="...", has-text="..."
-                var textMatch = clean.match(/^(?:text|has-text)=(?:"(.*)"|'(.*)'|(.*))$/i);
-                if (textMatch) {
-                    var rawText = (textMatch[1] || textMatch[2] || textMatch[3] || '').trim().toLowerCase();
-                    if (rawText) {
-                        for (var i = 0; i < allRoots.length; i++) {
-                            try {
-                                var candidates = allRoots[i].querySelectorAll('a, button, input, [role="button"], span, div, p, label');
-                                for (var j = 0; j < candidates.length; j++) {
-                                    var c = candidates[j];
-                                    var txt = (c.innerText || c.value || c.getAttribute('aria-label') || '').trim().toLowerCase();
-                                    if (txt === rawText || txt.indexOf(rawText) !== -1) {
-                                        if (isVisible(c)) return c;
-                                    }
-                                }
-                            } catch(e) {}
-                        }
-                    }
-                }
-
-                // C. Direct query across all roots first
-                for (var i = 0; i < allRoots.length; i++) {
-                    try {
-                        var els = allRoots[i].querySelectorAll(clean);
-                        for (var j = 0; j < els.length; j++) {
-                            if (isVisible(els[j])) return els[j];
-                        }
-                    } catch (e) {}
-                }
-
-                // D. Multi-segment shadow-piercing traversal (e.g. "c-community-input-email input")
-                var parts = splitSelector(clean);
-                if (parts.length > 1) {
-                    var currentNodes = [document];
-                    for (var p = 0; p < parts.length; p++) {
-                        var part = parts[p];
-                        if (part === '>') continue;
-                        var nextNodes = [];
-                        var seen = [];
-                        for (var n = 0; n < currentNodes.length; n++) {
-                            var node = currentNodes[n];
-                            var subRoots = (node === document) ? allRoots : collectDescendantRoots(node);
-                            for (var r = 0; r < subRoots.length; r++) {
-                                try {
-                                    var matches = subRoots[r].querySelectorAll(part);
-                                    for (var m = 0; m < matches.length; m++) {
-                                        var el = matches[m];
-                                        if (seen.indexOf(el) === -1) {
-                                            seen.push(el);
-                                            nextNodes.push(el);
-                                        }
-                                    }
-                                } catch (e) {}
-                            }
-                        }
-                        currentNodes = nextNodes;
-                        if (currentNodes.length === 0) break;
-                    }
-
-                    for (var i = 0; i < currentNodes.length; i++) {
-                        if (isVisible(currentNodes[i])) return currentNodes[i];
-                    }
-                    if (currentNodes.length > 0) return currentNodes[0];
-                }
-
-                // E. Plain text fallback in shadow roots
-                if (clean.indexOf('<') === -1 && clean.indexOf('>') === -1 && clean.length > 1 && clean.length < 100) {
-                    var lowerSearch = clean.toLowerCase();
-                    for (var i = 0; i < allRoots.length; i++) {
-                        try {
-                            var candidates = allRoots[i].querySelectorAll('a, button, input, [role="button"], span, div, p, label');
-                            for (var j = 0; j < candidates.length; j++) {
-                                var c = candidates[j];
-                                var txt = (c.innerText || c.value || c.getAttribute('aria-label') || '').trim().toLowerCase();
-                                if (txt === lowerSearch) {
-                                    if (isVisible(c)) return c;
-                                }
-                            }
-                        } catch(e) {}
-                    }
-                }
-
-                return null;
-            })(arguments[0]);
-            """;
-
-    private static final String SHADOW_FIND_ALL_SCRIPT = """
-            return (function(selector) {
-            """
-        + SHADOW_DOM_HELPER_JS
-        + """
-                if (!selector) return [];
-                var clean = selector.trim();
-                if (clean.toLowerCase().indexOf('css=') === 0) {
-                    clean = clean.substring(4).trim();
-                }
-
-                var parts = splitSelector(clean);
-                if (parts.length > 1) {
-                    var currentNodes = [document];
-                    for (var p = 0; p < parts.length; p++) {
-                        var part = parts[p];
-                        if (part === '>') continue;
-                        var nextNodes = [];
-                        var seen = [];
-                        for (var n = 0; n < currentNodes.length; n++) {
-                            var node = currentNodes[n];
-                            var subRoots = (node === document) ? allRoots : collectDescendantRoots(node);
-                            for (var r = 0; r < subRoots.length; r++) {
-                                try {
-                                    var matches = subRoots[r].querySelectorAll(part);
-                                    for (var m = 0; m < matches.length; m++) {
-                                        var el = matches[m];
-                                        if (seen.indexOf(el) === -1) {
-                                            seen.push(el);
-                                            nextNodes.push(el);
-                                        }
-                                    }
-                                } catch (e) {}
-                            }
-                        }
-                        currentNodes = nextNodes;
-                        if (currentNodes.length === 0) break;
-                    }
-                    return currentNodes.filter(isVisible);
-                }
-
-                var results = [];
-                var seen = [];
-                for (var i = 0; i < allRoots.length; i++) {
-                    try {
-                        var els = allRoots[i].querySelectorAll(clean);
-                        for (var j = 0; j < els.length; j++) {
-                            var el = els[j];
-                            if (seen.indexOf(el) === -1 && isVisible(el)) {
-                                seen.push(el);
-                                results.push(el);
-                            }
-                        }
-                    } catch (e) {}
-                }
-                return results;
-            })(arguments[0]);
-            """;
+    public static void resetDomStampCacheForTesting()
+    {
+        lastGlobalDomStampTime = 0L;
+        lastStampedUrl = "";
+    }
 
     /**
      * Private constructor to prevent instantiation of this static utility class.
@@ -369,6 +112,23 @@ public final class SelenideElementFinder
             throw new IllegalArgumentException("Action cannot be null");
         }
 
+        // A compound target ("#a >>> #btn") is merged with an explicit frame so neither information source is lost
+        final FrameContextManager.FrameTarget compound = FrameContextManager.splitFrameTarget(action.getTarget());
+        if (compound.frame() != null)
+        {
+            return findElement(action
+                .withFrame(FrameContextManager.combine(action.getFrame(), compound.frame()))
+                .withTarget(compound.target()));
+        }
+
+        if (action.getFrame() != null && !action.getFrame().isBlank()
+            && !FrameContextManager.isDefaultContent(action.getFrame())
+            && WebDriverRunner.hasWebDriverStarted())
+        {
+            // The enclosing FrameScope (executor / tool wrapper) restores the previous context
+            FrameContextManager.ensureEntered(WebDriverRunner.getWebDriver(), action.getFrame());
+        }
+
         final String target = action.getTarget();
         final String val = action.getValue();
         final String type = action.getType() != null ? action.getType().toUpperCase() : "";
@@ -391,6 +151,10 @@ public final class SelenideElementFinder
                         return visible;
                     }
                 }
+                catch (final InvalidSelectorException e)
+                {
+                    throw e;
+                }
                 catch (final AssertionError | Exception ignored)
                 {
                 }
@@ -404,7 +168,8 @@ public final class SelenideElementFinder
             {
                 if (candidate != null && candidate.getLocator() != null && !candidate.getLocator().isBlank())
                 {
-                    fallbacks.add(candidate.getLocator());
+                    final FrameContextManager.FrameTarget candSplit = FrameContextManager.splitFrameTarget(candidate.getLocator());
+                    fallbacks.add(candSplit.target());
                 }
             }
         }
@@ -425,7 +190,28 @@ public final class SelenideElementFinder
         {
             throw new IllegalArgumentException("Action and target cannot be null or blank");
         }
-        final ElementsCollection collection = Selenide.$$(LocatorResolver.resolveLocator(action.getTarget()));
+
+        // A compound target ("#a >>> #item") is merged with an explicit frame
+        final FrameContextManager.FrameTarget compound = FrameContextManager.splitFrameTarget(action.getTarget());
+        if (compound.frame() != null)
+        {
+            return findElements(action
+                .withFrame(FrameContextManager.combine(action.getFrame(), compound.frame()))
+                .withTarget(compound.target()));
+        }
+
+        if (action.getFrame() != null && !action.getFrame().isBlank()
+            && !FrameContextManager.isDefaultContent(action.getFrame())
+            && WebDriverRunner.hasWebDriverStarted())
+        {
+            FrameContextManager.ensureEntered(WebDriverRunner.getWebDriver(), action.getFrame());
+        }
+
+        if (isAutomationIdSelector(action.getTarget()))
+        {
+            ensureAutomationIdsStampedIfNeeded(action.getTarget());
+        }
+        final ElementsCollection collection = Selenide.$$(resolveLocator(action.getTarget()));
         if (collection.isEmpty())
         {
             final ElementsCollection shadowCollection = findAllInShadowRoots(action.getTarget());
@@ -469,6 +255,27 @@ public final class SelenideElementFinder
         if (target == null || target.isBlank())
         {
             throw new IllegalArgumentException("Target cannot be empty");
+        }
+
+        final FrameContextManager.FrameTarget compoundTarget = FrameContextManager.splitFrameTarget(target);
+        if (compoundTarget.frame() != null)
+        {
+            if (WebDriverRunner.hasWebDriverStarted())
+            {
+                FrameContextManager.ensureEntered(WebDriverRunner.getWebDriver(), compoundTarget.frame());
+            }
+            final List<String> cleanFallbacks = new ArrayList<>();
+            if (fallbackCandidates != null)
+            {
+                for (final String fb : fallbackCandidates)
+                {
+                    if (fb != null)
+                    {
+                        cleanFallbacks.add(FrameContextManager.splitFrameTarget(fb).target());
+                    }
+                }
+            }
+            return findElement(compoundTarget.target(), cleanFallbacks, recordedVector);
         }
 
         final List<String> allCandidates = new ArrayList<>();
@@ -527,6 +334,12 @@ public final class SelenideElementFinder
 
             if (System.currentTimeMillis() - start >= timeoutMs)
             {
+                // Opt-in last resort, only after the full timeout: search child iframes (see AiConfiguration)
+                final SelenideElement inChildFrame = findInChildFrames(allCandidates);
+                if (inChildFrame != null)
+                {
+                    return inChildFrame;
+                }
                 break;
             }
 
@@ -581,8 +394,33 @@ public final class SelenideElementFinder
         }
 
         final String clean = rawCandidate.trim();
+        final String lowerClean = clean.toLowerCase(Locale.ROOT);
+        if (lowerClean.startsWith("marker:") || lowerClean.startsWith("badge:"))
+        {
+            final int colonIdx = clean.indexOf(':');
+            final String markerNum = clean.substring(colonIdx + 1).trim();
+            if (!markerNum.isBlank())
+            {
+                try
+                {
+                    final ElementsCollection markedEls = Selenide.$$(By.cssSelector("[data-m='" + markerNum + "']"));
+                    final SelenideElement visibleMarked = findFirstVisible(markedEls, clean);
+                    if (visibleMarked != null)
+                    {
+                        return visibleMarked;
+                    }
+                    if (!markedEls.isEmpty())
+                    {
+                        return markedEls.first();
+                    }
+                }
+                catch (final AssertionError | Exception ignored)
+                {
+                }
+            }
+        }
 
-        if (clean.contains("data-ai=") || clean.startsWith("[data-ai=") || clean.matches(".*#xc[a-zA-Z0-9_\\-]+.*"))
+        if (isAutomationIdSelector(clean))
         {
             final SelenideElement el = tryResolveAutomationId(clean);
             if (el != null)
@@ -599,6 +437,23 @@ public final class SelenideElementFinder
             {
                 return visible;
             }
+            for (final SelenideElement el : els)
+            {
+                try
+                {
+                    if ("select".equalsIgnoreCase(el.getTagName()))
+                    {
+                        return el;
+                    }
+                }
+                catch (final AssertionError | Exception ignored)
+                {
+                }
+            }
+        }
+        catch (final InvalidSelectorException e)
+        {
+            throw e;
         }
         catch (final AssertionError | Exception ignored)
         {
@@ -678,22 +533,12 @@ public final class SelenideElementFinder
                 return visible;
             }
 
-            final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
-            if (driver != null)
+            ensureAutomationIdsStampedIfNeeded(clean);
+            els = Selenide.$$(By.cssSelector(transformedCss));
+            visible = findFirstVisible(els, clean);
+            if (visible != null)
             {
-                try
-                {
-                    new PageAnalyzer(driver).captureSimplifiedDom(ContextLevel.STANDARD);
-                    els = Selenide.$$(By.cssSelector(transformedCss));
-                    visible = findFirstVisible(els, clean);
-                    if (visible != null)
-                    {
-                        return visible;
-                    }
-                }
-                catch (final AssertionError | Exception ignored)
-                {
-                }
+                return visible;
             }
 
             final boolean isSimple = !clean.contains(" ") && !clean.contains(">") && !clean.contains("+") && !clean.contains("~") && !clean.contains(",");
@@ -706,11 +551,74 @@ public final class SelenideElementFinder
                     return visible;
                 }
             }
+
+            if (!els.isEmpty())
+            {
+                return els.first();
+            }
         }
         catch (final AssertionError | Exception ignored)
         {
         }
         return null;
+    }
+
+    /**
+     * Determines whether the given selector targets a Neodymium automation ID (data-ai or xc... signature).
+     *
+     * @param target the target selector string
+     * @return true if target contains or references an automation ID
+     */
+    public static boolean isAutomationIdSelector(final String target)
+    {
+        if (target == null || target.isBlank())
+        {
+            return false;
+        }
+        final String clean = target.trim();
+        return clean.contains("data-ai=")
+                || clean.startsWith("[data-ai=")
+                || clean.matches(".*#xc[a-zA-Z0-9_\\-]+.*")
+                || clean.matches("^xc[a-zA-Z0-9_\\-]+$");
+    }
+
+    /**
+     * Dynamically triggers DOM attribute stamping via {@link PageAnalyzer} if the target selector
+     * references an automation ID and the active page has not been stamped yet or the URL changed.
+     *
+     * @param target the target locator to inspect
+     */
+    public static void ensureAutomationIdsStampedIfNeeded(final String target)
+    {
+        if (target == null || target.isBlank() || !WebDriverRunner.hasWebDriverStarted())
+        {
+            return;
+        }
+
+        final String clean = target.trim();
+        if (isAutomationIdSelector(clean))
+        {
+            final WebDriver driver = WebDriverRunner.getWebDriver();
+            if (driver != null)
+            {
+                try
+                {
+                    final long now = System.currentTimeMillis();
+                    final String currentUrl = driver.getCurrentUrl();
+                    final boolean urlChanged = currentUrl != null && !currentUrl.equals(lastStampedUrl);
+                    final boolean neverStamped = !Selenide.$("[data-ai]").exists();
+                    if (urlChanged || neverStamped || (now - lastGlobalDomStampTime >= DOM_STAMP_THROTTLE_MS))
+                    {
+                        lastGlobalDomStampTime = now;
+                        lastStampedUrl = currentUrl != null ? currentUrl : "";
+                        new PageAnalyzer(driver).captureSimplifiedDom(ContextLevel.STANDARD);
+                    }
+                }
+                catch (final AssertionError | Exception ignored)
+                {
+                }
+            }
+        }
     }
 
     public static SelenideElement findFirstVisible(final ElementsCollection els, final String originalTarget)
@@ -777,56 +685,59 @@ public final class SelenideElementFinder
 
     private static SelenideElement findInShadowRoots(final String rawCandidate)
     {
-        final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
-        if (driver == null)
+        if (rawCandidate == null || rawCandidate.isBlank())
+        {
+            return null;
+        }
+
+        final By by = LocatorResolver.resolveLocator(rawCandidate);
+        if (!WebDriverRunner.hasWebDriverStarted())
         {
             return null;
         }
 
         try
         {
-            final Object result = ((JavascriptExecutor) driver).executeScript(SHADOW_FIND_SCRIPT, rawCandidate);
-            if (result instanceof WebElement webElement)
-            {
-                return Selenide.$(webElement);
-            }
+            final ElementsCollection els = Selenide.$$(by);
+            return findFirstVisible(els, rawCandidate);
+        }
+        catch (final InvalidSelectorException e)
+        {
+            throw e;
         }
         catch (final AssertionError | Exception e)
         {
             LOG.trace("Shadow DOM element lookup failed for '{}': {}", rawCandidate, e.getMessage());
+            return null;
         }
-        return null;
     }
 
     public static ElementsCollection findAllInShadowRoots(final String rawCandidate)
     {
-        final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
-        if (driver == null)
+        if (rawCandidate == null || rawCandidate.isBlank())
+        {
+            return Selenide.$$(List.of());
+        }
+
+        final By by = LocatorResolver.resolveLocator(rawCandidate);
+        if (!WebDriverRunner.hasWebDriverStarted())
         {
             return Selenide.$$(List.of());
         }
 
         try
         {
-            final Object result = ((JavascriptExecutor) driver).executeScript(SHADOW_FIND_ALL_SCRIPT, rawCandidate);
-            if (result instanceof List<?> list)
-            {
-                final List<WebElement> elements = new ArrayList<>();
-                for (final Object item : list)
-                {
-                    if (item instanceof WebElement webElement)
-                    {
-                        elements.add(webElement);
-                    }
-                }
-                return Selenide.$$(elements);
-            }
+            return Selenide.$$(by);
+        }
+        catch (final InvalidSelectorException e)
+        {
+            throw e;
         }
         catch (final AssertionError | Exception e)
         {
             LOG.trace("Shadow DOM elements lookup failed for '{}': {}", rawCandidate, e.getMessage());
+            return Selenide.$$(List.of());
         }
-        return Selenide.$$(List.of());
     }
 
     public static By resolveLocator(final String target)
@@ -873,5 +784,114 @@ public final class SelenideElementFinder
         catch (final Throwable ignored)
         {
         }
+    }
+
+    /**
+     * Opt-in last-resort lookup: recursively searches child iframes of the current browsing context for any of the
+     * given candidates. Only active if {@code neodymium.ai.frames.autoDiscovery.enabled=true}.
+     * On a hit the driver is left inside the matching frame and the tracked frame path is updated (the enclosing
+     * {@link FrameContextManager.FrameScope} restores the previous context); on a miss the original context is restored.
+     *
+     * @param candidates the candidate selectors, in priority order
+     * @return the resolved {@link SelenideElement} in a child frame, or {@code null} if disabled or not found
+     */
+    private static SelenideElement findInChildFrames(final List<String> candidates)
+    {
+        final AiConfiguration config = AiConfiguration.getInstance();
+        if (!config.isFrameAutoDiscoveryEnabled() || !WebDriverRunner.hasWebDriverStarted())
+        {
+            return null;
+        }
+        final WebDriver driver = WebDriverRunner.getWebDriver();
+        final String originalFrame = FrameContextManager.getActiveFramePath();
+        try
+        {
+            final SelenideElement found = searchChildFramesRecursively(driver, candidates, originalFrame, 1,
+                config.getFrameAutoDiscoveryMaxDepth());
+            if (found != null)
+            {
+                LOG.warn("   🖼️ Resolved {} via iframe auto-discovery in frame '{}'. Set an explicit 'frame' to make this deterministic.",
+                    candidates, FrameContextManager.getActiveFramePath());
+                return found;
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.debug("Iframe auto-discovery aborted: {}", e.getMessage());
+        }
+        FrameContextManager.restoreContext(driver, originalFrame);
+        return null;
+    }
+
+    /**
+     * Depth-first search through the child frames of the current context. Every frame is entered once and all
+     * candidates are tried inside it before descending further.
+     *
+     * @param driver      the WebDriver positioned in the frame whose children are searched
+     * @param candidates  the candidate selectors
+     * @param currentPath the tracked path of the current context (null for default content)
+     * @param depth       the current nesting depth (1 = direct children)
+     * @param maxDepth    the maximum nesting depth to search
+     * @return the element, with the driver left inside its frame, or {@code null}
+     */
+    private static SelenideElement searchChildFramesRecursively(
+        final WebDriver driver,
+        final List<String> candidates,
+        final String currentPath,
+        final int depth,
+        final int maxDepth)
+    {
+        if (depth > maxDepth)
+        {
+            return null;
+        }
+
+        final List<WebElement> iframes = driver.findElements(By.cssSelector("iframe, frame"));
+        for (final WebElement frameEl : iframes)
+        {
+            boolean switched = false;
+            try
+            {
+                final String frameSelector = FrameContextManager.describeFrame(driver, frameEl);
+                final String newPath = FrameContextManager.combine(currentPath, frameSelector);
+
+                driver.switchTo().frame(frameEl);
+                switched = true;
+
+                for (final String candidate : candidates)
+                {
+                    final SelenideElement direct = findDirect(candidate);
+                    if (direct != null)
+                    {
+                        FrameContextManager.setActiveFramePath(newPath);
+                        return direct;
+                    }
+                }
+
+                final SelenideElement deeper = searchChildFramesRecursively(driver, candidates, newPath, depth + 1, maxDepth);
+                if (deeper != null)
+                {
+                    return deeper;
+                }
+            }
+            catch (final Exception e)
+            {
+                LOG.debug("Skipping iframe during auto-discovery: {}", e.getMessage());
+            }
+            if (switched)
+            {
+                try
+                {
+                    driver.switchTo().parentFrame();
+                }
+                catch (final Exception e)
+                {
+                    // Cannot navigate back (e.g. frame detached): abort, the caller restores the original context
+                    LOG.debug("Could not return to parent frame: {}", e.getMessage());
+                    return null;
+                }
+            }
+        }
+        return null;
     }
 }

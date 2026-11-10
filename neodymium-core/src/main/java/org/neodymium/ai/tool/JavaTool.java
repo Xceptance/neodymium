@@ -20,10 +20,12 @@ package org.neodymium.ai.tool;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 
@@ -119,9 +121,43 @@ public class JavaTool implements AiTool
             final String paramName = this.parameterNames.get(i);
             final Class<?> paramType = param.getType();
 
-            if (callArgs != null && callArgs.has(paramName) && !callArgs.get(paramName).isNull())
+            JsonNode valueNode = null;
+            if (callArgs != null)
             {
-                final JsonNode valueNode = callArgs.get(paramName);
+                if (callArgs.has(paramName) && !callArgs.get(paramName).isNull())
+                {
+                    valueNode = callArgs.get(paramName);
+                }
+                else
+                {
+                    final Iterator<String> it = callArgs.fieldNames();
+                    while (it.hasNext())
+                    {
+                        final String field = it.next();
+                        if (field.equalsIgnoreCase(paramName)
+                                || field.replace("_", "").equalsIgnoreCase(paramName.replace("_", "")))
+                        {
+                            final JsonNode candidate = callArgs.get(field);
+                            if (candidate != null && !candidate.isNull())
+                            {
+                                valueNode = candidate;
+                                break;
+                            }
+                        }
+                    }
+                    if (valueNode == null && parameters.length == 1 && callArgs.size() == 1)
+                    {
+                        final JsonNode singleNode = callArgs.elements().next();
+                        if (singleNode != null && !singleNode.isNull())
+                        {
+                            valueNode = singleNode;
+                        }
+                    }
+                }
+            }
+
+            if (valueNode != null)
+            {
                 args[i] = this.mapper.convertValue(valueNode, paramType);
             }
             else
@@ -149,16 +185,32 @@ public class JavaTool implements AiTool
         }
         catch (final InvocationTargetException ite)
         {
-            final Throwable cause = ite.getCause();
+            final Throwable cause = ite.getCause() != null ? ite.getCause() : ite;
+            if (cause instanceof VirtualMachineError)
+            {
+                throw (VirtualMachineError) cause;
+            }
             if (cause instanceof AssertionError ae)
             {
                 throw ae;
             }
-            if (cause instanceof Exception e)
+            final Throwable root = ExceptionUtils.getRootCause(cause);
+            final Throwable effectiveRoot = root != null ? root : cause;
+            if (effectiveRoot instanceof VirtualMachineError)
             {
-                return ToolResult.error(call.callId(), e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+                throw (VirtualMachineError) effectiveRoot;
             }
-            throw new RuntimeException("Error executing method " + this.method.getName(), cause);
+            if (effectiveRoot instanceof AssertionError ae)
+            {
+                throw ae;
+            }
+            return ToolResult.error(call.callId(), formatErrorMessage(cause, effectiveRoot));
+        }
+        catch (final IllegalAccessException | IllegalArgumentException e)
+        {
+            final Throwable root = ExceptionUtils.getRootCause(e);
+            final Throwable effectiveRoot = root != null ? root : e;
+            return ToolResult.error(call.callId(), formatErrorMessage(e, effectiveRoot));
         }
 
         final ToolResult.Builder builder = ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS);
@@ -222,5 +274,27 @@ public class JavaTool implements AiTool
             return '\0';
         }
         return null;
+    }
+
+    private static String formatErrorMessage(final Throwable cause, final Throwable root)
+    {
+        final String causeName = !cause.getClass().getSimpleName().isBlank()
+                ? cause.getClass().getSimpleName()
+                : cause.getClass().getName();
+        final String causeMsg = cause.getMessage();
+        final String causeDesc = causeName + (causeMsg != null && !causeMsg.isBlank() ? ": " + causeMsg : "");
+
+        if (root == null || root == cause)
+        {
+            return causeDesc;
+        }
+
+        final String rootName = !root.getClass().getSimpleName().isBlank()
+                ? root.getClass().getSimpleName()
+                : root.getClass().getName();
+        final String rootMsg = root.getMessage();
+        final String rootDesc = rootName + (rootMsg != null && !rootMsg.isBlank() ? ": " + rootMsg : "");
+
+        return causeDesc + " (Root cause: " + rootDesc + ")";
     }
 }

@@ -27,6 +27,7 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -60,6 +61,8 @@ public class AuraTestFileController
         model.addAttribute("selectedKeys", queueController.getSelectedQueueKeys());
         model.addAttribute("selectedFileKeys", queueController.getFullySelectedFileKeys(files));
         model.addAttribute("partiallySelectedFileKeys", queueController.getPartiallySelectedFileKeys(files));
+        model.addAttribute("folderSelectionStatesJson", queueController.getFolderSelectionStatesJson());
+        model.addAttribute("folderTotalDatasetsJson", queueController.getFolderTotalDatasetsJson());
     }
 
     @GetMapping("/api/files/panel")
@@ -71,11 +74,43 @@ public class AuraTestFileController
     }
 
     @GetMapping({"/api/files", "/api/files/list", "/list"})
-    public String getFilesListFragment(final HttpServletResponse response, final Model model)
+    public String getFilesListFragment(@RequestParam(value = "q", required = false) final String query,
+                                       @CookieValue(value = "aura_test_search_query", required = false) final String cookieQuery,
+                                       final HttpServletResponse response,
+                                       final Model model)
     {
         response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-        populateFileModel(model, fileService.getYamlFilesList());
+        final String effectiveQuery;
+        if (query != null && !query.isBlank())
+        {
+            effectiveQuery = query.trim();
+        }
+        else if (query == null && cookieQuery != null && !cookieQuery.isBlank())
+        {
+            effectiveQuery = AuraTestDashboardController.decodeCookieQuery(cookieQuery);
+        }
+        else
+        {
+            effectiveQuery = null;
+        }
+
+        if (effectiveQuery != null && !effectiveQuery.isBlank())
+        {
+            final List<YamlFileDto> filteredYaml = fileService.getFilteredYamlFilesList(effectiveQuery);
+            final List<String> filteredSteps = fileService.getFilteredStepsFilesList(effectiveQuery);
+            populateFileModel(model, filteredYaml);
+            model.addAttribute("stepsFiles", filteredSteps);
+        }
+        else
+        {
+            populateFileModel(model, fileService.getYamlFilesList());
+        }
         return "fragments/test-selection :: yamlFileListContent";
+    }
+
+    public String getFilesListFragment(final String query, final HttpServletResponse response, final Model model)
+    {
+        return getFilesListFragment(query, null, response, model);
     }
 
     @GetMapping("/api/files/json")

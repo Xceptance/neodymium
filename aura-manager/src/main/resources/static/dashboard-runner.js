@@ -252,6 +252,7 @@ function prepareClientForExecution() {
     updateRunButtons();
     if (terminalConsole) terminalConsole.innerHTML = 'Connecting to run stream...\n';
     hasShownStartMessage = false;
+    lastLineWasAi = false;
 }
 window.prepareClientForExecution = prepareClientForExecution;
 
@@ -301,67 +302,191 @@ async function rerunSingleTest(payloadJson) {
 }
 window.rerunSingleTest = rerunSingleTest;
 
-function isAiLogLine(line) {
+var lastLineWasAi = false;
+window.lastLineWasAi = lastLineWasAi;
+
+const AI_LOG_EMOJIS_REGEX = /[🤖🧠💭🔧📥🎯🚀🎬🏁🏆👣🔮⚙✨🔍▶✅❌🛑⚠️⚖🔄📊🐞🐛🚨📸💾📜📂⏱🎟⚡💬📌💡🧬🚫•]/u;
+
+const MAVEN_EXCLUDE_PREFIXES = [
+    '[info] scanning for projects',
+    '[info] --<',
+    '[info] building ',
+    '[info] --- ',
+    '[info] nothing to compile',
+    '[info] recompiling the module',
+    '[info] compiling ',
+    '[info] copying ',
+    '[info] using \'utf-8\' encoding',
+    '[info] using auto detected provider',
+    '[info] running yaml test:',
+    '[info] running com.xceptance',
+    '[info] tests run:',
+    '[info] results:',
+    '[info] build success',
+    '[info] build failure',
+    '[info] total time:',
+    '[info] finished at:',
+    '[info] command: mvn',
+    '[info] skip non existing resource',
+    '[info] deleting ',
+    '[info] spawning maven subprocess',
+    '[info] active maven process',
+    '[info] queue execution completed',
+    'warning: a terminally deprecated method',
+    'warning: please consider reporting this',
+    'warning: sun.misc.unsafe',
+    'slf4j(w):',
+    'slf4j(i):',
+    'starting configuration org.apache.logging',
+    'stopping configuration org.apache.logging',
+    'configuration org.apache.logging',
+    'this test uses neodymium library',
+    'custom environment data was added'
+];
+
+const AI_SUPPRESS_CONTAINS = [
+    // Wire logs & HTTP client dumps
+    'request:',
+    'response:',
+    'logginghttpclient',
+    'llmcommunicationlogger',
+    'dev.langchain4j',
+    'org.neodymium.ai.client.communication',
+    'okhttp',
+    'http/1.',
+    'http/2',
+    // JSON wire body keys & structures
+    '"text" :',
+    '"contents" :',
+    '"role" :',
+    '"parts" :',
+    '"functiondeclarations"',
+    '"functioncall"',
+    '"toolresponse"',
+    '"systeminstruction"',
+    '"generationconfig"',
+    '"inline_data"',
+    '"inlinedata"',
+    '"mime_type"',
+    '"mimetype"',
+    '"thought_signature"',
+    '"thoughtsignature"',
+    '"candidates"',
+    '"usagemetadata"',
+    '"prompttokencount"',
+    '"candidatestokencount"',
+    '"totaltokencount"',
+    '"finishreason"',
+    '"safetyratings"',
+    // Internal dumps & class warnings
+    'available native tools',
+    'conversation context for turn',
+    'registered native tools',
+    'class path contains multiple slf4j',
+    'registered ai action plugin:'
+];
+
+const AI_SUPPRESS_PATTERNS = [
+    /^\s*"[a-zA-Z0-9_-]+"\s*:/,                                              // JSON object properties (e.g. "text" :, "role" :)
+    /^[{}[\],":\s]+$/,                                                      // Pure JSON structural punctuation
+    /^(?:request|response|content-type|content-length|accept|authorization|user-agent|host|date|transfer-encoding):\s*/i, // HTTP headers
+    /^-\s*(?:method|url|headers|body|status code):\s*/i,                     // LangChain4j/OkHttp request/response blocks
+    /^(?:->|<-)\s+(?:GET|POST|PUT|DELETE|\d{3}\b)/i                          // HTTP method & status lines
+];
+
+const AI_EXPLICIT_KEYWORDS = [
+    'step [',
+    'step 🧠',
+    '👣 step',
+    'step:',
+    'agent turn #',
+    'thought:',
+    'tool call:',
+    'result [',
+    'goal accomplished',
+    'starting agent tool loop',
+    'llm reasoning',
+    'llm proposed actions',
+    'all steps completed successfully',
+    'playbook saved',
+    'playbook loaded',
+    'loaded playbook',
+    'visual rca diagnosis',
+    'semantic verification',
+    'starting test case',
+    'test case completed',
+    'ai execution statistics',
+    'ai step execution statistics',
+    'executing action',
+    '[exec]',
+    '[replay]'
+];
+
+function allowsAiContinuation(line) {
     if (!line) return false;
+    const trimmed = line.trim();
+    const lower = trimmed.toLowerCase();
+    // Headlines that are strictly single-line headers should NEVER open an arbitrary indented continuation block:
+    if (lower.includes('agent turn #') || lower.includes('starting agent tool loop') ||
+        lower.includes('all steps completed') || lower.includes('goal accomplished') ||
+        lower.startsWith('🤖') || lower.startsWith('🚀') || lower.startsWith('🎯') || lower.startsWith('🏁')) {
+        return false;
+    }
+    // Genuine multiline blocks: thoughts, tool calls, tool results, banners, bullet items, findings
+    if (lower.includes('thought:') || lower.includes('tool call:') || lower.includes('result [') ||
+        lower.includes('llm reasoning') || lower.includes('llm proposed actions') ||
+        lower.includes('suggested rewrite') || lower.includes('advisory finding') ||
+        trimmed.startsWith('•') || trimmed.startsWith('║') || trimmed.startsWith('╔') ||
+        trimmed.startsWith('💭') || trimmed.startsWith('🔧') || trimmed.startsWith('📥')) {
+        return true;
+    }
+    // Indented lines that were themselves valid continuations (e.g. subsequent lines of a thought) can continue:
+    return line.startsWith('   ') || line.startsWith('\t');
+}
+window.allowsAiContinuation = allowsAiContinuation;
 
-    const lower = line.toLowerCase();
+function isAiLogLine(line, previousWasAi) {
+    if (!line) return false;
+    const trimmed = line.trim();
+    if (!trimmed) return false;
 
-    const isMavenLog = lower.includes('[info] command: mvn') ||
-        lower.includes('[info] --<') ||
-        lower.includes('[info] building ') ||
-        lower.includes('[info] --- maven-') ||
-        lower.includes('[info] skip non existing resource') ||
-        lower.includes('[info] deleting ');
-    if (isMavenLog) return false;
+    const lower = trimmed.toLowerCase();
 
-    const emojiPattern = /[🤖🧠👣🔮⚙️✨🔍║│├└─═▶✅❌\?]/u;
-    if (emojiPattern.test(line)) {
+    // Check explicit build / maven noise
+    if (MAVEN_EXCLUDE_PREFIXES.some(p => lower.startsWith(p))) {
+        return false;
+    }
+
+    // Check suppressed debug dumps
+    if (AI_SUPPRESS_CONTAINS.some(term => lower.includes(term))) {
+        return false;
+    }
+
+    // Strip leading timestamp / log level for pattern testing
+    const cleanContent = trimmed.replace(/^(?:\d{2}:\d{2}:\d{2}\s+)?(?:\[?[A-Z]{3,5}\]?\s*[-:]?\s*)?/, '');
+
+    // Check suppressed patterns (JSON properties, punctuation, HTTP wire headers)
+    if (AI_SUPPRESS_PATTERNS.some(p => p.test(cleanContent) || p.test(trimmed))) {
+        return false;
+    }
+
+    // Banner borders and dividers (stripping any leading timestamp/level)
+    if (/^[╔╚║═─]{5,}$/.test(cleanContent)) {
         return true;
     }
 
-    const aiKeywords = [
-        'aura',
-        'pesap',
-        'playbook',
-        'llmclient',
-        'aiagent',
-        'actionexecutor',
-        'aibrowser',
-        'aiassertion',
-        'reasoning',
-        'token usage',
-        'execution statistics',
-        'llm calls',
-        'input tokens',
-        'output tokens',
-        'total tokens',
-        'context levels',
-        'escalations',
-        'direct parses',
-        'step',
-        'open http',
-        'navigating to',
-        'capturing',
-        'sending prompt',
-        'sending multimodal',
-        'sending chat message',
-        'tokens:',
-        'llm response',
-        'llm reasoning',
-        'parsed',
-        'llm proposed actions',
-        'action{type=',
-        '[exec]',
-        'executing action',
-        'resolved using strategy',
-        'assertion passed',
-        'all steps completed successfully',
-        'playbook saved',
-        'navigating to:',
-        'simplified dom size'
-    ];
+    // Explicit AI emojis
+    if (AI_LOG_EMOJIS_REGEX.test(line)) {
+        return true;
+    }
 
-    if (aiKeywords.some(keyword => lower.includes(keyword))) {
+    // Explicit AI keywords / action patterns
+    if (AI_EXPLICIT_KEYWORDS.some(k => lower.includes(k))) {
+        return true;
+    }
+
+    // Continuation of previous AI block (e.g. multi-line thoughts, tool arguments, bullet items)
+    if (previousWasAi && (line.startsWith('   ') || line.startsWith('\t') || line.startsWith('║') || (line.startsWith(' ') && !line.startsWith(' [INFO]')))) {
         return true;
     }
 
@@ -383,16 +508,38 @@ function toggleErrorsOnly(checked) {
 }
 window.toggleErrorsOnly = toggleErrorsOnly;
 
+let consoleLogsSaveTimeout = null;
+
+function debouncedSaveConsoleLogs() {
+    if (consoleLogsSaveTimeout) return;
+    consoleLogsSaveTimeout = setTimeout(() => {
+        consoleLogsSaveTimeout = null;
+        const terminalConsole = document.getElementById('terminalConsole');
+        if (terminalConsole) {
+            try {
+                localStorage.setItem('aura_previous_console_logs', terminalConsole.innerHTML);
+            } catch (e) {
+                // ignore quota or storage errors
+            }
+        }
+    }, 1000);
+}
+
 function refreshLogFiltering() {
     const terminalConsole = document.getElementById('terminalConsole');
     if (!terminalConsole) return;
     const logLines = terminalConsole.querySelectorAll('.log-line');
+    let prevAi = false;
     logLines.forEach(line => {
-        const text = line.innerText;
-        const isErrorOrWarn = text.includes('[ERROR]') || text.includes('[WARN]') || text.includes('[FATAL]');
+        const text = line.textContent;
+        const isErrorOrWarn = text.includes('[ERROR]') || text.includes('[WARN]') || text.includes('[FATAL]') || text.includes('❌') || text.includes('🛑');
 
         const matchesErrorFilter = !logFilterErrorsOnly || isErrorOrWarn;
-        const matchesAiFilter = !logFilterAiOnly || isAiLogLine(text);
+        const matchesAiFilter = !logFilterAiOnly || isAiLogLine(text, prevAi);
+
+        if (logFilterAiOnly) {
+            prevAi = matchesAiFilter && !text.trim().startsWith('╚') && allowsAiContinuation(text);
+        }
 
         if (matchesErrorFilter && matchesAiFilter) {
             line.style.display = 'block';
@@ -400,14 +547,23 @@ function refreshLogFiltering() {
             line.style.display = 'none';
         }
     });
+    lastLineWasAi = prevAi;
 }
 window.refreshLogFiltering = refreshLogFiltering;
 
 function appendLog(line) {
+    appendLogsBatch([line]);
+}
+window.appendLog = appendLog;
+
+function appendLogsBatch(lines) {
+    if (!lines || lines.length === 0) return;
     const terminalConsole = document.getElementById('terminalConsole');
     if (!terminalConsole) return;
+
     if (terminalConsole.innerHTML.includes('Console idle.') || terminalConsole.innerHTML.includes('Connecting to run stream...')) {
         terminalConsole.innerHTML = '';
+        lastLineWasAi = false;
         if (logFilterAiOnly && !hasShownStartMessage) {
             hasShownStartMessage = true;
             window.hasShownStartMessage = true;
@@ -415,25 +571,31 @@ function appendLog(line) {
             terminalConsole.insertAdjacentHTML('beforeend', `<div class="log-line log-info" style="display: block; margin: 0; padding: 0;">${startLine}</div>`);
         }
     }
-    const isErrorOrWarn = line.includes('[ERROR]') || line.includes('[WARN]') || line.includes('[FATAL]');
 
-    const matchesErrorFilter = !logFilterErrorsOnly || isErrorOrWarn;
-    const matchesAiFilter = !logFilterAiOnly || isAiLogLine(line);
+    let batchHtml = '';
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const isErrorOrWarn = line.includes('[ERROR]') || line.includes('[WARN]') || line.includes('[FATAL]') || line.includes('❌') || line.includes('🛑');
 
-    const displayStyle = (matchesErrorFilter && matchesAiFilter) ? 'block' : 'none';
-    const escapedLine = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const cssClass = isErrorOrWarn ? 'log-error' : 'log-info';
+        const matchesAiFilter = !logFilterAiOnly || isAiLogLine(line, lastLineWasAi);
+        if (logFilterAiOnly) {
+            lastLineWasAi = matchesAiFilter && !line.trim().startsWith('╚') && allowsAiContinuation(line);
+        }
 
-    terminalConsole.insertAdjacentHTML('beforeend', `<div class="log-line ${cssClass}" style="display: ${displayStyle}; margin: 0; padding: 0;">${escapedLine}</div>`);
+        const matchesErrorFilter = !logFilterErrorsOnly || isErrorOrWarn;
+        const displayStyle = (matchesErrorFilter && matchesAiFilter) ? 'block' : 'none';
+        const escapedLine = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const cssClass = isErrorOrWarn ? 'log-error' : 'log-info';
+
+        batchHtml += `<div class="log-line ${cssClass}" style="display: ${displayStyle}; margin: 0; padding: 0;">${escapedLine}</div>`;
+    }
+
+    terminalConsole.insertAdjacentHTML('beforeend', batchHtml);
     terminalConsole.scrollTop = terminalConsole.scrollHeight;
 
-    try {
-        localStorage.setItem('aura_previous_console_logs', terminalConsole.innerHTML);
-    } catch (e) {
-        // ignore
-    }
+    debouncedSaveConsoleLogs();
 }
-window.appendLog = appendLog;
+window.appendLogsBatch = appendLogsBatch;
 
 function restorePreviousConsoleLogs() {
     const terminalConsole = document.getElementById('terminalConsole');
@@ -461,12 +623,12 @@ function copyTerminalOutput() {
         const visibleLines = [];
         logLines.forEach(line => {
             if (line.style.display !== 'none' && window.getComputedStyle(line).display !== 'none') {
-                visibleLines.push(line.innerText || line.textContent);
+                visibleLines.push(line.textContent);
             }
         });
         textToCopy = visibleLines.join('\n');
     } else {
-        textToCopy = terminalConsole.innerText || terminalConsole.textContent;
+        textToCopy = terminalConsole.textContent;
     }
 
     const copyIcon = document.getElementById('copyTerminalIcon');
@@ -529,7 +691,7 @@ async function pollStatus() {
             const data = await response.json();
 
             if (data.logs && data.logs.length > 0) {
-                data.logs.forEach(log => appendLog(log));
+                appendLogsBatch(data.logs);
             }
             if (data.newIndex !== undefined) {
                 lastLogIndex = data.newIndex;
@@ -1001,6 +1163,85 @@ function showRunFinishedPrompt(reportUrl, reportId) {
     modal.style.display = 'flex';
 }
 window.showRunFinishedPrompt = showRunFinishedPrompt;
+
+// Playbook Inspector Side Drawer Engine
+function openPlaybookInspector(file, datasetId) {
+    if (!file) return;
+    const url = `/api/playbook/view?file=${encodeURIComponent(file)}&id=${encodeURIComponent(datasetId || '')}`;
+    
+    const existing = document.getElementById('playbookInspectorContainer') || document.getElementById('playbookSidePagePanel');
+    if (existing) {
+        existing.remove();
+    }
+    
+    fetch(url, { headers: { 'HX-Request': 'true' } })
+        .then(res => {
+            if (!res.ok) throw new Error('Failed to load playbook inspector');
+            return res.text();
+        })
+        .then(html => {
+            const container = document.createElement('div');
+            container.id = 'playbookInspectorContainer';
+            container.innerHTML = html;
+            document.body.appendChild(container);
+            if (window.htmx) htmx.process(container);
+        })
+        .catch(err => {
+            console.error('Error loading playbook inspector:', err);
+        });
+}
+
+function closePlaybookInspector() {
+    const el = document.getElementById('playbookInspectorContainer') || document.getElementById('playbookSidePagePanel');
+    if (el) {
+        el.remove();
+    }
+}
+
+function acceptPlaybookHealing(btnOrFile, datasetId, stepIndex, actionIndex) {
+    let file = btnOrFile;
+    let dsId = datasetId;
+    let sIdx = stepIndex;
+    let aIdx = actionIndex;
+    if (typeof btnOrFile === 'object' && btnOrFile !== null) {
+        file = btnOrFile.getAttribute('data-file');
+        dsId = btnOrFile.getAttribute('data-id') || '';
+        sIdx = btnOrFile.getAttribute('data-step-index');
+        aIdx = btnOrFile.getAttribute('data-action-index');
+    }
+    let url = `/api/playbook/accept-healing?file=${encodeURIComponent(file || '')}&id=${encodeURIComponent(dsId || '')}`;
+    if (sIdx !== null && sIdx !== undefined && sIdx !== '') {
+        url += `&stepIndex=${encodeURIComponent(sIdx)}`;
+    }
+    if (aIdx !== null && aIdx !== undefined && aIdx !== '') {
+        url += `&actionIndex=${encodeURIComponent(aIdx)}`;
+    }
+    fetch(url, { method: 'POST', headers: { 'HX-Request': 'true' } })
+        .then(res => {
+            if (!res.ok) throw new Error('Failed to accept playbook healing');
+            return res.text();
+        })
+        .then(html => {
+            const currentPanel = document.getElementById('playbookSidePagePanel');
+            if (currentPanel) {
+                const temp = document.createElement('div');
+                temp.innerHTML = html;
+                const newPanel = temp.querySelector('#playbookSidePagePanel') || temp.firstElementChild;
+                if (newPanel) {
+                    currentPanel.replaceWith(newPanel);
+                    if (window.htmx) htmx.process(newPanel);
+                }
+            }
+        })
+        .catch(err => {
+            console.error('Error accepting playbook healing:', err);
+        });
+}
+
+window.openPlaybookInspector = openPlaybookInspector;
+window.closePlaybookInspector = closePlaybookInspector;
+window.acceptPlaybookHealing = acceptPlaybookHealing;
+
 
 
 

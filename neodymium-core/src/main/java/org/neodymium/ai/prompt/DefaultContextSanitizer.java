@@ -69,12 +69,10 @@ public final class DefaultContextSanitizer implements ContextSanitizer
                 {
                     final String maskPlaceholder = "[MASKED_VAR_" + varKey + "]";
                     maskToVariableMap.put(maskPlaceholder, "${" + varKey + "}");
-
-                    // Replace all occurrences in the prompt and state text
-                    cleanPrompt = cleanPrompt.replace(secretValue, maskPlaceholder);
-                    cleanStateText = cleanStateText.replace(secretValue, maskPlaceholder);
                 }
             }
+            cleanPrompt = LlmSanitizerHelper.maskSensitiveValues(cleanPrompt, sensitiveMap);
+            cleanStateText = LlmSanitizerHelper.maskSensitiveValues(cleanStateText, sensitiveMap);
         }
 
         return new SanitizedPayload(cleanPrompt, cleanStateText, maskToVariableMap);

@@ -46,6 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -78,6 +79,7 @@ public class AuraInteractiveControllerTest
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
         queueService.setManuallyStopped(false);
         interactiveService.resetExecutionIndexes();
+        interactiveService.setCurrentConsoleEngine(null);
     }
 
     @AfterEach
@@ -278,6 +280,18 @@ public class AuraInteractiveControllerTest
                 .andReturn();
 
         assertTrue(mvcResult.getResponse().getContentType().startsWith("text/event-stream"));
+    }
+
+    @Test
+    public void testConsoleEventsHeadRequestReturnsImmediately() throws Exception
+    {
+        final MvcResult mvcResult = mockMvc.perform(head("/api/console/events"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        assertTrue(mvcResult.getResponse().getContentType().startsWith("text/event-stream"));
+        assertEquals("no-cache", mvcResult.getResponse().getHeader("Cache-Control"));
+        assertEquals("keep-alive", mvcResult.getResponse().getHeader("Connection"));
     }
 
     @Test

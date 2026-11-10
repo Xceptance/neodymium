@@ -25,6 +25,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import org.neodymium.ai.config.AiConfiguration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Thread-safe registry for discovering, registering, and retrieving {@link AiTool} instances.
@@ -35,6 +38,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class ToolRegistry
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ToolRegistry.class);
     private final Map<String, AiTool> tools = new ConcurrentHashMap<>();
 
     /**
@@ -121,7 +125,73 @@ public class ToolRegistry
                 tool = this.tools.get("browser_screenshot");
             }
         }
+        if (tool == null)
+        {
+            for (final Map.Entry<String, AiTool> entry : this.tools.entrySet())
+            {
+                final String registeredName = entry.getKey();
+                if (registeredName.equalsIgnoreCase(toolName)
+                        || registeredName.replace("_", "").equalsIgnoreCase(toolName.replace("_", "")))
+                {
+                    tool = entry.getValue();
+                    break;
+                }
+            }
+        }
         return Optional.ofNullable(tool);
+    }
+
+    /**
+     * Discovers and registers custom Java tools configured in the {@code neodymium.ai.agent.methods.classes}
+     * configuration property.
+     *
+     * @param registry tool registry to populate
+     */
+    public static void registerConfiguredCustomTools(final ToolRegistry registry)
+    {
+        if (registry == null)
+        {
+            return;
+        }
+
+        final AiConfiguration config = AiConfiguration.getInstance();
+        final String classesStr = config.getProperty("neodymium.ai.agent.methods.classes", "");
+        if (classesStr == null || classesStr.isBlank())
+        {
+            return;
+        }
+
+        final ClassLoader cl = Thread.currentThread().getContextClassLoader() != null
+                ? Thread.currentThread().getContextClassLoader()
+                : ToolRegistry.class.getClassLoader();
+
+        for (final String rawClassName : classesStr.split(","))
+        {
+            final String className = rawClassName.trim();
+            if (className.isEmpty())
+            {
+                continue;
+            }
+
+            try
+            {
+                final Class<?> clazz = Class.forName(className, true, cl);
+                final List<AiTool> customTools = JavaToolFactory.createToolsFromClass(clazz);
+                for (final AiTool tool : customTools)
+                {
+                    registry.register(tool);
+                    LOGGER.debug("Registered custom AI tool '{}' from class '{}'", tool.getDefinition().name(), className);
+                }
+            }
+            catch (final ClassNotFoundException e)
+            {
+                LOGGER.warn("Configured custom tool class '{}' not found on classpath: {}", className, e.getMessage());
+            }
+            catch (final Exception e)
+            {
+                LOGGER.error("Failed to register custom AI tools from class '{}': {}", className, e.getMessage(), e);
+            }
+        }
     }
 
     /**

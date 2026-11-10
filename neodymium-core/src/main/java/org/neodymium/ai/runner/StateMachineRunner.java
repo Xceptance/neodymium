@@ -19,12 +19,20 @@
 package org.neodymium.ai.runner;
 
 import com.codeborne.selenide.Configuration;
+import com.codeborne.selenide.Selenide;
+import com.codeborne.selenide.WebDriverRunner;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmProvider;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
+import org.neodymium.ai.client.MockLlmProvider;
 import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.AiConfiguration;
@@ -37,6 +45,7 @@ import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.event.structural.StateCapturedEvent;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
+import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.model.ContextLevel;
@@ -51,11 +60,14 @@ import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.pipeline.TokenBudgetExceededException;
+import org.neodymium.ai.pipeline.steps.AgentToolLoopStep;
 import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.pipeline.structural.TryCatchStep;
 import org.neodymium.ai.playbook.linter.PlaybookLinter;
 import org.neodymium.ai.playbook.linter.PlaybookLinterException;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
+import org.neodymium.ai.prompt.VerificationIssue;
+import org.neodymium.ai.prompt.VisualRcaResult;
 import org.neodymium.ai.playbook.linter.PostFlightPlaybookLinter;
 import org.neodymium.ai.prompt.VisualRcaPrompt;
 import org.neodymium.ai.session.AiSession;
@@ -398,19 +410,12 @@ public final class StateMachineRunner
                             }
                         }
 
-                        if (playbookStep.getParent() != null)
-                        {
-                            playbookStep.getParent().setStatus(PlaybookStepStatus.FAILED);
-                            playbookStep.getParent().setFailed(true);
-                            playbookStep.getParent().setFailureReason(playbookStep.getFailureReason());
-                        }
-
                         context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
 
                         // Add failure to warnings/reporting list
                         @SuppressWarnings("unchecked")
                         final List<String> warnings = (List<String>) context.getTransientData()
-                            .computeIfAbsent("verificationWarnings", k -> new java.util.ArrayList<String>());
+                            .computeIfAbsent("verificationWarnings", k -> new ArrayList<String>());
 
                         final String resolvedOptInstruction = (context.getSessionData() != null && playbookStep.getInstruction() != null)
                             ? context.getSessionData().resolveAvailableVariables(playbookStep.getInstruction())
@@ -483,7 +488,20 @@ public final class StateMachineRunner
                                 if (playbookStep != null)
                                 {
                                     playbookStep.setStatus(PlaybookStepStatus.SKIPPED);
+                                    if (playbookStep.getParent() != null)
+                                    {
+                                        LOGGER.warn("   ⏭️ Sub-step marked as SKIPPED per user interactive request: \"{}\" (Parent include: \"{}\", includeFile={}). Note: Sub-steps cannot be skipped individually without skipping the parent include block.",
+                                            playbookStep.getInstruction(), playbookStep.getParent().getInstruction(), playbookStep.getSourceFile());
+                                    }
+                                    else
+                                    {
+                                        LOGGER.info("   ⏭️ Step marked as SKIPPED per user interactive request: \"{}\"", playbookStep.getInstruction());
+                                    }
                                 }
+                                continue mainLoop;
+                            }
+                            else if ("REWIND".equalsIgnoreCase(userAction) || "RESCHEDULE".equalsIgnoreCase(userAction))
+                            {
                                 continue mainLoop;
                             }
                             else if ("FINISH".equalsIgnoreCase(userAction) || "ACCEPT_FINISH".equalsIgnoreCase(userAction))
@@ -517,7 +535,10 @@ public final class StateMachineRunner
             }
             }
             success = true;
-            context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+            if (!Boolean.TRUE.equals(context.getTransientData().get("playbook.deferSessionFinished")))
+            {
+                context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+            }
         }
         catch (final PipelineException e)
         {
@@ -558,13 +579,46 @@ public final class StateMachineRunner
                     }
                     if (currentStep.hasSubSteps())
                     {
-                        for (final PlaybookStep sub : currentStep.getSubSteps())
+                        AgentToolLoopStep.partitionToolCallsAndActions(
+                            currentStep.getSubSteps(), currentStep.getToolCalls(), currentStep.getActions());
+
+                        int failedIndex = -1;
+                        for (int i = 0; i < currentStep.getSubSteps().size(); i++)
                         {
-                            if (sub.getStatus() == null || sub.getStatus() == PlaybookStepStatus.PENDING || sub.getStatus() == PlaybookStepStatus.RUNNING)
+                            final PlaybookStep sub = currentStep.getSubSteps().get(i);
+                            if (sub.getActions() == null || sub.getActions().isEmpty())
+                            {
+                                failedIndex = i;
+                                break;
+                            }
+                        }
+
+                        if (failedIndex < 0)
+                        {
+                            failedIndex = currentStep.getSubSteps().size() - 1;
+                        }
+
+                        for (int i = 0; i < currentStep.getSubSteps().size(); i++)
+                        {
+                            final PlaybookStep sub = currentStep.getSubSteps().get(i);
+                            if (i < failedIndex)
+                            {
+                                sub.setStatus(PlaybookStepStatus.SUCCESS);
+                                sub.setFailed(false);
+                                sub.setFailureReason(null);
+                            }
+                            else if (i == failedIndex)
                             {
                                 sub.setStatus(PlaybookStepStatus.FAILED);
                                 sub.setFailed(true);
                                 sub.setFailureReason(currentStep.getFailureReason());
+                            }
+                            else
+                            {
+                                sub.setStatus(PlaybookStepStatus.NOT_RUN);
+                                sub.setFailed(false);
+                                sub.setFailureReason(null);
+                                sub.setNotRunReason("Not executed because sub-step #" + (failedIndex + 1) + " failed.");
                             }
                         }
                     }
@@ -594,6 +648,7 @@ public final class StateMachineRunner
                         this.session.getEventBus().dispatch(new StepFinishedEvent(currentStep, PlaybookStepStatus.FAILED));
                     }
                 }
+                markRemainingStepsAsSkipped(context, currentStepObj);
             }
 
             // Empirical Post-Flight Playbook Linting
@@ -612,19 +667,29 @@ public final class StateMachineRunner
                 LOGGER.warn("⚠️ Post-flight empirical linter encountered an unexpected error: {}", t.getMessage(), t);
             }
 
-            @SuppressWarnings("unchecked")
-            final List<String> warningsList = (List<String>) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_WARNINGS);
-
-            try
+            final boolean isManagedLifecycle = Boolean.TRUE.equals(context.getTransientData().get(ExecutionContext.KEY_MANAGED_LIFECYCLE));
+            final boolean isDeferred = Boolean.TRUE.equals(context.getTransientData().get("playbook.deferSessionFinished"));
+            if (isManagedLifecycle || isDeferred)
             {
-                context.getTransientData().put("sessionFinishedHandled", true);
-                this.session.getEventBus().dispatch(new SessionFinishedEvent(durationMs, success, warningsList != null ? warningsList : Collections.emptyList()));
-                logFinalStatsSummary(context, durationMs, success, failureCause);
-                this.session.runPostHooks(success);
-            }
-            finally
-            {
+                LOGGER.debug("Playbook intermediate block finished; SessionFinishedEvent deferred until remaining blocks execute.");
                 ExecutionContext.setActiveContext(previousContext);
+            }
+            else
+            {
+                @SuppressWarnings("unchecked")
+                final List<String> warningsList = (List<String>) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_WARNINGS);
+
+                try
+                {
+                    context.getTransientData().put(ExecutionContext.KEY_SESSION_FINISHED_HANDLED, true);
+                    this.session.getEventBus().dispatch(new SessionFinishedEvent(durationMs, success, warningsList != null ? warningsList : Collections.emptyList()));
+                    logFinalStatsSummary(context, durationMs, success, failureCause);
+                    this.session.runPostHooks(success);
+                }
+                finally
+                {
+                    ExecutionContext.setActiveContext(previousContext);
+                }
             }
         }
     }
@@ -632,17 +697,17 @@ public final class StateMachineRunner
     /**
      * Logs both the cumulative AI execution statistics and the step-by-step trace statistics.
      */
-    private void logFinalStatsSummary(final ExecutionContext context, final long durationMs, final boolean success, final Throwable failureCause)
+    public static void logFinalStatsSummary(final ExecutionContext context, final long durationMs, final boolean success, final Throwable failureCause)
     {
         @SuppressWarnings("unchecked")
-        final List<org.neodymium.ai.pipeline.StepStats> stepStatsList = 
-            (List<org.neodymium.ai.pipeline.StepStats>) context.getTransientData().get("execution.stepStatsList");
+        final List<StepStats> stepStatsList = 
+            (List<StepStats>) context.getTransientData().get("execution.stepStatsList");
         
         if (stepStatsList != null && !stepStatsList.isEmpty())
         {
             if (!success && failureCause != null)
             {
-                final org.neodymium.ai.pipeline.StepStats lastStats = stepStatsList.get(stepStatsList.size() - 1);
+                final StepStats lastStats = stepStatsList.get(stepStatsList.size() - 1);
                 if (lastStats.getDurationMs() == 0)
                 {
                     lastStats.setDurationMs(System.currentTimeMillis() - lastStats.getStartTime());
@@ -654,8 +719,8 @@ public final class StateMachineRunner
                     lastStats.setFailureReason(root.getMessage() != null ? root.getMessage() : root.toString());
                     
                     @SuppressWarnings("unchecked")
-                    final List<org.neodymium.ai.action.Action> stepActions = 
-                        (List<org.neodymium.ai.action.Action>) context.getTransientData().get(ExecutionContext.KEY_CURRENT_STEP_ACTIONS);
+                    final List<Action> stepActions = 
+                        (List<Action>) context.getTransientData().get(ExecutionContext.KEY_CURRENT_STEP_ACTIONS);
                     if (stepActions != null)
                     {
                         lastStats.getActions().addAll(stepActions);
@@ -674,13 +739,13 @@ public final class StateMachineRunner
             }
 
             LOGGER.debug("======== 📊 AI Step Execution Statistics ========");
-            for (final org.neodymium.ai.pipeline.StepStats stats : stepStatsList)
+            for (final StepStats stats : stepStatsList)
             {
                 calculateDuration(stats);
             }
             for (int i = 0; i < stepStatsList.size(); i++)
             {
-                final org.neodymium.ai.pipeline.StepStats stats = stepStatsList.get(i);
+                final StepStats stats = stepStatsList.get(i);
                 if (stats.isExecuted())
                 {
                     logStats(stats, "  ", String.valueOf(i + 1));
@@ -778,7 +843,7 @@ public final class StateMachineRunner
                 final Object warnObj = warnings.get(i);
                 final int issueNum = i + 1;
 
-                if (warnObj instanceof org.neodymium.ai.prompt.VerificationIssue issue)
+                if (warnObj instanceof VerificationIssue issue)
                 {
                     LOGGER.warn("  📌 [Issue {}/{}] Step {}", issueNum, warnings.size(), issue.stepLocation());
                     if (issue.instruction() != null && !issue.instruction().isBlank())
@@ -853,7 +918,7 @@ public final class StateMachineRunner
                 return;
             }
 
-            final SutState state = executor.captureState();
+            final SutState state = executor.captureState(ContextLevel.VISUAL_RICH);
             if (state == null)
             {
                 return;
@@ -862,7 +927,22 @@ public final class StateMachineRunner
             final String failedInstruction = (String) context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
             final String errorMessage = exception != null ? exception.getMessage() : "Unknown execution error";
 
-            final VisualRcaPrompt rcaPrompt = new VisualRcaPrompt(failedInstruction, errorMessage);
+            String pageUrl = null;
+            String pageTitle = null;
+            if (WebDriverRunner.hasWebDriverStarted())
+            {
+                try
+                {
+                    pageUrl = WebDriverRunner.url();
+                    pageTitle = Selenide.title();
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.debug("Could not extract page URL/title for Visual RCA in StateMachineRunner: {}", e.getMessage());
+                }
+            }
+
+            final VisualRcaPrompt rcaPrompt = new VisualRcaPrompt(failedInstruction, errorMessage, pageUrl, pageTitle);
             final String system = rcaPrompt.compileSystemMessage(context);
             final String user = rcaPrompt.compileUserMessage(context);
 
@@ -870,26 +950,39 @@ public final class StateMachineRunner
             LOGGER.trace("System Prompt:\n{}", system);
             LOGGER.trace("User Prompt:\n{}", user);
 
-            final LlmRequest request = new LlmRequest(
-                system,
-                user,
-                state.getAttachments() != null ? state.getAttachments() : Collections.emptyList(),
-                ResponseSchema.TEXT,
-                0.0,
-                60
-            );
+            final List<SutAttachment> imageAttachments = new ArrayList<>();
+            if (state.getAttachments() != null)
+            {
+                for (final SutAttachment attachment : state.getAttachments())
+                {
+                    if (attachment.mediaType() != null && attachment.mediaType().startsWith("image/"))
+                    {
+                        imageAttachments.add(attachment);
+                    }
+                }
+            }
 
-            final LlmProvider provider = this.session.getLlmRegistry().getProvider(LlmCapability.VISION);
+            final LlmCapability requiredCap = imageAttachments.isEmpty() ? LlmCapability.TEXT_ONLY : LlmCapability.VISION;
+            final LlmProvider provider = this.session.getLlmRegistry().getProvider(requiredCap);
             if (provider == null)
             {
                 return;
             }
-            if (provider instanceof org.neodymium.ai.client.MockLlmProvider mlp && !mlp.hasQueuedResponses())
+            if (provider instanceof MockLlmProvider mlp && !mlp.hasQueuedResponses())
             {
                 return;
             }
 
-            LOGGER.debug("Calling LLM provider '{}' via capability: VISION (Visual RCA)", provider.getClass().getSimpleName());
+            final LlmRequest request = new LlmRequest(
+                system,
+                user,
+                imageAttachments,
+                rcaPrompt.getResponseSchema(),
+                0.0,
+                60
+            );
+
+            LOGGER.debug("Calling LLM provider '{}' via capability: {} (Visual RCA)", provider.getClass().getSimpleName(), requiredCap);
             this.session.getEventBus().dispatch(new LlmRequestSentEvent(request, "VISUAL_RCA"));
             final long startTime = System.currentTimeMillis();
             final ExecutionContext previousContext = ExecutionContext.getActiveContext();
@@ -961,11 +1054,13 @@ public final class StateMachineRunner
                 }
             }
 
-            final String rcaExplanation = rcaPrompt.parseResponse(response.content(), context);
+            final VisualRcaResult rcaResult = rcaPrompt.parseResponse(response.content(), context);
+            final String rcaExplanation = rcaResult != null ? rcaResult.toFormattedDiagnosis() : "";
 
             LOGGER.info("🚨 [Visual RCA Diagnosis]: {}", rcaExplanation);
+            context.getTransientData().put(ExecutionContext.KEY_VISUAL_RCA_RESULT, rcaResult);
             context.getTransientData().put(ExecutionContext.KEY_VISUAL_RCA_EXPLANATION, rcaExplanation);
-            context.getTransientData().put(ExecutionContext.KEY_VISUAL_RCA_SUMMARY, rcaExplanation);
+            context.getTransientData().put(ExecutionContext.KEY_VISUAL_RCA_SUMMARY, rcaResult != null && rcaResult.getRootCause() != null ? rcaResult.getRootCause() : rcaExplanation);
             this.session.getEventBus().dispatch(new DiagnosticErrorEvent("Visual RCA analysis: " + rcaExplanation, exception));
         }
         catch (final Exception e)
@@ -974,7 +1069,7 @@ public final class StateMachineRunner
         }
     }
 
-    private long calculateDuration(final org.neodymium.ai.pipeline.StepStats stats)
+    private static long calculateDuration(final StepStats stats)
     {
         if (stats.getDurationMs() > 0)
         {
@@ -983,7 +1078,7 @@ public final class StateMachineRunner
         if (stats.getSubStats() != null && !stats.getSubStats().isEmpty())
         {
             long sum = 0;
-            for (final org.neodymium.ai.pipeline.StepStats child : stats.getSubStats())
+            for (final StepStats child : stats.getSubStats())
             {
                 sum += calculateDuration(child);
             }
@@ -993,7 +1088,7 @@ public final class StateMachineRunner
         return 0;
     }
 
-    private void logStats(final org.neodymium.ai.pipeline.StepStats stats, final String prefix, final String stepNum)
+    private static void logStats(final StepStats stats, final String prefix, final String stepNum)
     {
         LOGGER.debug("{}Step {}: {}", prefix, stepNum, stats.getInstruction());
         final String indent = prefix + "    ";
@@ -1005,12 +1100,12 @@ public final class StateMachineRunner
             LOGGER.debug("{}Context Levels: {}", indent, String.join(" -> ", stats.getContextLevels()));
         }
         
-        final List<org.neodymium.ai.action.Action> actions = stats.getActions();
+        final List<Action> actions = stats.getActions();
         if (actions != null && !actions.isEmpty())
         {
             final String actionTypes = actions.stream()
                 .map(act -> act.getType())
-                .collect(java.util.stream.Collectors.joining(", "));
+                .collect(Collectors.joining(", "));
             LOGGER.debug("{}Actions:        {} ({})", indent, actions.size(), actionTypes);
         }
         else
@@ -1054,7 +1149,7 @@ public final class StateMachineRunner
         {
             for (int j = 0; j < stats.getSubStats().size(); j++)
             {
-                final org.neodymium.ai.pipeline.StepStats child = stats.getSubStats().get(j);
+                final StepStats child = stats.getSubStats().get(j);
                 if (child.isExecuted())
                 {
                     logStats(child, prefix + "  ", stepNum + "." + (j + 1));
@@ -1082,5 +1177,196 @@ public final class StateMachineRunner
         }
         final int prefixLen = Math.min(2, trimmed.length() - 4);
         return trimmed.substring(0, prefixLen) + "...." + trimmed.substring(trimmed.length() - 4);
+    }
+
+    /**
+     * Marks all unexecuted subsequent playbook steps as {@link PlaybookStepStatus#SKIPPED}
+     * when a test failure halts execution.
+     *
+     * @param context active execution context
+     * @param failedStepObj the step that failed
+     */
+    private void markRemainingStepsAsSkipped(final ExecutionContext context, final Object failedStepObj)
+    {
+        if (context == null)
+        {
+            return;
+        }
+
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> beforeSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.beforeSteps");
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> sessionSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> afterSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.afterSteps");
+
+        final boolean failedInAfter;
+        if (failedStepObj instanceof final PlaybookStep fs)
+        {
+            if ("after".equalsIgnoreCase(fs.getBlock()))
+            {
+                failedInAfter = true;
+            }
+            else if (afterSteps != null && !afterSteps.isEmpty())
+            {
+                failedInAfter = afterSteps.contains(fs)
+                    || afterSteps.stream().anyMatch(s -> s.hasSubSteps() && s.getSubSteps().contains(fs));
+            }
+            else
+            {
+                failedInAfter = false;
+            }
+        }
+        else
+        {
+            failedInAfter = false;
+        }
+
+        final List<PlaybookStep> targetSteps = new ArrayList<>();
+        if (failedInAfter)
+        {
+            if (afterSteps != null && !afterSteps.isEmpty())
+            {
+                targetSteps.addAll(afterSteps);
+            }
+        }
+        else
+        {
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
+            if (flatSteps != null && !flatSteps.isEmpty())
+            {
+                for (final PlaybookStep s : flatSteps)
+                {
+                    if (!"after".equalsIgnoreCase(s.getBlock()) && (afterSteps == null || !afterSteps.contains(s)))
+                    {
+                        targetSteps.add(s);
+                    }
+                }
+            }
+            final Set<PlaybookStep> targetSet = new HashSet<>(targetSteps);
+            final Set<PlaybookStep> afterSet = afterSteps != null ? new HashSet<>(afterSteps) : Collections.emptySet();
+            if (beforeSteps != null && !beforeSteps.isEmpty())
+            {
+                for (final PlaybookStep s : beforeSteps)
+                {
+                    if (targetSet.add(s))
+                    {
+                        targetSteps.add(s);
+                    }
+                }
+            }
+            if (sessionSteps != null && !sessionSteps.isEmpty())
+            {
+                for (final PlaybookStep s : sessionSteps)
+                {
+                    if (!"after".equalsIgnoreCase(s.getBlock()) && !afterSet.contains(s) && targetSet.add(s))
+                    {
+                        targetSteps.add(s);
+                    }
+                }
+            }
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> mainSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.mainSteps");
+            if (mainSteps != null && !mainSteps.isEmpty())
+            {
+                for (final PlaybookStep s : mainSteps)
+                {
+                    if (!"after".equalsIgnoreCase(s.getBlock()) && !afterSet.contains(s) && targetSet.add(s))
+                    {
+                        targetSteps.add(s);
+                    }
+                }
+            }
+        }
+
+        boolean foundFailed = (failedStepObj == null);
+        String failedStepLabel = null;
+        if (failedStepObj != null)
+        {
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> allFlat = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
+            if (allFlat != null)
+            {
+                for (int fi = 0; fi < allFlat.size(); fi++)
+                {
+                    final PlaybookStep s = allFlat.get(fi);
+                    if (s == failedStepObj)
+                    {
+                        failedStepLabel = "#" + (fi + 1);
+                        break;
+                    }
+                    else if (failedStepObj instanceof final PlaybookStep fs && (s.equals(fs) || (s.hasSubSteps() && s.getSubSteps().contains(fs))))
+                    {
+                        final int subIdx = s.hasSubSteps() ? s.getSubSteps().indexOf(fs) : -1;
+                        failedStepLabel = "#" + (fi + 1) + (subIdx >= 0 ? "." + (subIdx + 1) : "");
+                        break;
+                    }
+                }
+            }
+        }
+
+        for (int i = 0; i < targetSteps.size(); i++)
+        {
+            final PlaybookStep step = targetSteps.get(i);
+            if (!foundFailed)
+            {
+                if (step == failedStepObj)
+                {
+                    foundFailed = true;
+                    if (failedStepLabel == null)
+                    {
+                        failedStepLabel = "#" + (i + 1);
+                    }
+                }
+                else if (failedStepObj instanceof final PlaybookStep fs && (step.equals(fs) || (step.hasSubSteps() && step.getSubSteps().contains(fs))))
+                {
+                    foundFailed = true;
+                    if (failedStepLabel == null)
+                    {
+                        final int subIdx = step.hasSubSteps() ? step.getSubSteps().indexOf(fs) : -1;
+                        failedStepLabel = "#" + (i + 1) + (subIdx >= 0 ? "." + (subIdx + 1) : "");
+                    }
+                }
+                continue;
+            }
+
+            final PlaybookStepStatus st = step.getStatus();
+            if (st == null || st == PlaybookStepStatus.PENDING || st == PlaybookStepStatus.RUNNING || st == PlaybookStepStatus.SUCCESS)
+            {
+                step.setStatus(PlaybookStepStatus.NOT_RUN);
+                step.setFailed(false);
+                step.setStartTimeMs(null);
+                step.setDurationMs(null);
+                if (failedStepLabel != null && step.getNotRunReason() == null)
+                {
+                    step.setNotRunReason("Not executed because step " + failedStepLabel + " failed.");
+                }
+
+                if (step.hasSubSteps())
+                {
+                    for (final PlaybookStep sub : step.getSubSteps())
+                    {
+                        final PlaybookStepStatus subSt = sub.getStatus();
+                        if (subSt == null || subSt == PlaybookStepStatus.PENDING || subSt == PlaybookStepStatus.RUNNING || subSt == PlaybookStepStatus.SUCCESS)
+                        {
+                            sub.setStatus(PlaybookStepStatus.NOT_RUN);
+                            sub.setFailed(false);
+                            sub.setStartTimeMs(null);
+                            sub.setDurationMs(null);
+                            if (failedStepLabel != null && sub.getNotRunReason() == null)
+                            {
+                                sub.setNotRunReason("Not executed because step " + failedStepLabel + " failed.");
+                            }
+                        }
+                    }
+                }
+
+                if (this.session != null && this.session.getEventBus() != null)
+                {
+                    this.session.getEventBus().dispatch(new StepFinishedEvent(step, PlaybookStepStatus.NOT_RUN));
+                }
+            }
+        }
     }
 }

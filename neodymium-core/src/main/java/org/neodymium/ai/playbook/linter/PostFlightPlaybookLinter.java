@@ -302,7 +302,7 @@ public final class PostFlightPlaybookLinter
                 }
 
                 // Rule 4: UNTAGGED_VISUAL_DEPENDENCY (Visual or layout assertion lacking (visual) tag)
-                final boolean isVisualTagged = pbStep.isVisualStep();
+                final boolean isVisualTagged = pbStep.isVisualOrLayoutStep();
                 final boolean isAction = isActionStep(mutatingActions, resolvedInstruction);
                 final boolean hasVisualKeywords = VISUAL_KEYWORDS_PATTERN.matcher(resolvedInstruction).find();
                 final boolean usedVisualEscalation = stats != null && stats.getContextLevels().contains("VISUAL_RICH");

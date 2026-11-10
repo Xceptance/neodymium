@@ -18,12 +18,14 @@
  */
 package org.neodymium.ai.executor.selenide;
 
+import java.util.List;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.action.LocatorCandidate;
-
-import java.util.List;
+import org.neodymium.ai.executor.selenide.selector.PlaywrightBy;
+import org.openqa.selenium.By;
+import org.openqa.selenium.InvalidSelectorException;
 
 /**
  * Unit tests verifying target locator splitting and candidate resolution in {@link SelenideElementFinder}.
@@ -91,5 +93,88 @@ public class SelenideElementFinderTest
     {
         Assertions.assertFalse(SelenideElementFinder.isDirectlyPresent("article[data-ai=\"xcboo7um\"] button[data-ai=\"xcz0f8a5\"]"));
         Assertions.assertFalse(SelenideElementFinder.isDirectlyPresent("article#xcboo7um button#xcz0f8a5"));
+    }
+
+    @Test
+    public void testResetDomStampCacheForTesting()
+    {
+        SelenideElementFinder.resetDomStampCacheForTesting();
+        Assertions.assertFalse(SelenideElementFinder.isDirectlyPresent("#non-existent-after-reset"));
+    }
+
+    @Test
+    public void testIsAutomationIdSelector()
+    {
+        Assertions.assertTrue(SelenideElementFinder.isAutomationIdSelector("[data-ai='xc123']"));
+        Assertions.assertTrue(SelenideElementFinder.isAutomationIdSelector("[data-ai=\"xcrxcvi\"]"));
+        Assertions.assertTrue(SelenideElementFinder.isAutomationIdSelector("data-ai=xc123"));
+        Assertions.assertTrue(SelenideElementFinder.isAutomationIdSelector("#xc123"));
+        Assertions.assertTrue(SelenideElementFinder.isAutomationIdSelector("div > #xc4o48u"));
+        Assertions.assertTrue(SelenideElementFinder.isAutomationIdSelector("xc123"));
+        Assertions.assertTrue(SelenideElementFinder.isAutomationIdSelector("xcrxcvi"));
+
+        Assertions.assertFalse(SelenideElementFinder.isAutomationIdSelector(null));
+        Assertions.assertFalse(SelenideElementFinder.isAutomationIdSelector(""));
+        Assertions.assertFalse(SelenideElementFinder.isAutomationIdSelector("   "));
+        Assertions.assertFalse(SelenideElementFinder.isAutomationIdSelector(".btn-primary"));
+        Assertions.assertFalse(SelenideElementFinder.isAutomationIdSelector("#submit-btn"));
+        Assertions.assertFalse(SelenideElementFinder.isAutomationIdSelector("//button[@id='save']"));
+    }
+
+    @Test
+    public void testResolveLocatorTransformsHashAutomationId()
+    {
+        final By resolvedHash = SelenideElementFinder.resolveLocator("#xc123");
+        Assertions.assertEquals(PlaywrightBy.of("#xc123"), resolvedHash);
+
+        final By resolvedCompound = SelenideElementFinder.resolveLocator("div.order-summary > #xcrxcvi");
+        Assertions.assertEquals(PlaywrightBy.of("div.order-summary > #xcrxcvi"), resolvedCompound);
+    }
+
+    @Test
+    public void testFindElementThrowsOnInvalidSelectorSyntaxWithoutFallingBackToText()
+    {
+        // Unknown pseudo-class must throw InvalidSelectorException immediately
+        final InvalidSelectorException ex1 = Assertions.assertThrows(
+            InvalidSelectorException.class,
+            () -> SelenideElementFinder.findElement("button:frobnicate"));
+        Assertions.assertTrue(ex1.getMessage().contains(":frobnicate"));
+
+        // Unclosed attribute bracket must throw InvalidSelectorException immediately
+        final InvalidSelectorException ex2 = Assertions.assertThrows(
+            InvalidSelectorException.class,
+            () -> SelenideElementFinder.findElement("div[data-x=\"1\""));
+        Assertions.assertTrue(ex2.getMessage().contains("Unclosed attribute bracket"));
+    }
+
+    @Test
+    public void testFindAllInShadowRootsThrowsOnInvalidSelector()
+    {
+        final InvalidSelectorException ex = Assertions.assertThrows(
+            InvalidSelectorException.class,
+            () -> SelenideElementFinder.findAllInShadowRoots("button:frobnicate"));
+        Assertions.assertTrue(ex.getMessage().contains(":frobnicate"));
+    }
+
+    @Test
+    public void testActionWithFramePropertyPreservation()
+    {
+        final Action action = new Action("CLICK", "#button", "Click nested button")
+            .withFrame("#pact1 >>> #pact2");
+        Assertions.assertEquals("#pact1 >>> #pact2", action.getFrame());
+        Assertions.assertEquals("#button", action.getTarget());
+    }
+
+    @Test
+    public void testFindElementsRequiresValidTarget()
+    {
+        Assertions.assertThrows(
+            IllegalArgumentException.class,
+            () -> SelenideElementFinder.findElements(null));
+
+        final Action emptyAction = new Action("ASSERT_COUNT", "  ", "empty");
+        Assertions.assertThrows(
+            IllegalArgumentException.class,
+            () -> SelenideElementFinder.findElements(emptyAction));
     }
 }

@@ -24,6 +24,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -34,6 +35,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.neodymium.ai.executor.selenide.frame.FrameContextManager;
 import org.neodymium.ai.executor.selenide.plugins.ClickAction;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.tool.ToolCall;
@@ -47,6 +49,15 @@ import org.neodymium.ai.tool.ToolCall;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Action
 {
+    /**
+     * Action types whose {@code target} is not an element selector (URL, script, include path) and therefore must
+     * never be interpreted as a frame-prefixed compound selector.
+     */
+    private static final Set<String> FRAME_PREFIX_EXEMPT_TYPES = Set.of(
+        "NAVIGATE", "ASSERT_URL", "ASSERT_TITLE", "WAIT", "EXECUTE_SCRIPT", "SCRIPT", "INCLUDE",
+        "BACK", "FORWARD", "REFRESH", "SWITCH_TAB", "CLOSE_TAB", "HANDLE_ALERT",
+        "GET", "POST", "PUT", "DELETE");
+
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private List<Action> condition;
@@ -97,6 +108,14 @@ public class Action
     private Long durationMs;
     private Long delayMs;
 
+    @JsonProperty("subStepIndex")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Integer subStepIndex;
+
+    @JsonProperty("subStepInstruction")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String subStepInstruction;
+
     /**
      * Self-critique generated during recording for playbook quality tracking.
      */
@@ -121,6 +140,21 @@ public class Action
     @JsonProperty("toolCall")
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private ToolCall toolCall;
+
+    @JsonProperty("expectedTarget")
+    @JsonAlias({"expectedTarget", "originalTarget", "healedFrom"})
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String expectedTarget;
+
+    @JsonProperty("healed")
+    private boolean healed = false;
+
+    /**
+     * Hierarchical frame path (e.g. {@code "#pact1 >>> #pact2"}) indicating the iframe context.
+     */
+    @JsonProperty("frame")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String frame;
 
     /**
      * Dynamic parameter binding bindings for extensible runtime properties.
@@ -309,8 +343,104 @@ public class Action
         copy.toolCall = this.toolCall;
         copy.durationMs = this.durationMs;
         copy.delayMs = this.delayMs;
+        copy.expectedTarget = this.expectedTarget;
+        copy.healed = this.healed;
+        copy.frame = this.frame;
         copy.parameters.putAll(this.parameters);
         return copy;
+    }
+
+    /**
+     * Gets the hierarchical frame path (e.g. {@code "#pact1 >>> #pact2"}) indicating the iframe context.
+     *
+     * @return the frame path, or null if at default content
+     */
+    @JsonProperty("frame")
+    public final String getFrame()
+    {
+        return this.frame;
+    }
+
+    /**
+     * Sets the hierarchical frame path (e.g. {@code "#pact1 >>> #pact2"}) indicating the iframe context.
+     *
+     * @param frame the frame path
+     */
+    @JsonProperty("frame")
+    public final void setFrame(final String frame)
+    {
+        this.frame = frame;
+    }
+
+    /**
+     * Creates a new Action copy with an updated frame path.
+     *
+     * @param newFrame the new frame path
+     * @return a new Action instance with the updated frame
+     */
+    public Action withFrame(final String newFrame)
+    {
+        final Action copy = new Action(this.type, this.target, this.value, this.description, this.reasoning, this.isRegex, this.negated);
+        copy.condition = this.condition;
+        copy.then = this.then;
+        copy.elseActions = this.elseActions;
+        copy.hasElse = this.hasElse;
+        copy.adjust = this.adjust;
+        copy.stepInstruction = this.stepInstruction;
+        copy.stepLine = this.stepLine;
+        copy.stepFile = this.stepFile;
+        copy.stepScreenshotHash = this.stepScreenshotHash;
+        copy.selfCritique = this.selfCritique;
+        copy.candidateLocators = new ArrayList<>(this.candidateLocators);
+        copy.domFeatureVector = this.domFeatureVector;
+        copy.toolCall = this.toolCall;
+        copy.durationMs = this.durationMs;
+        copy.delayMs = this.delayMs;
+        copy.expectedTarget = this.expectedTarget;
+        copy.healed = this.healed;
+        copy.frame = newFrame;
+        copy.parameters.putAll(this.parameters);
+        return copy;
+    }
+
+    public String getExpectedTarget()
+    {
+        return this.expectedTarget;
+    }
+
+    public String getOriginalTarget()
+    {
+        return this.expectedTarget;
+    }
+
+    public String getHealedFrom()
+    {
+        return this.expectedTarget;
+    }
+
+    public void setExpectedTarget(final String expectedTarget)
+    {
+        this.expectedTarget = expectedTarget;
+    }
+
+    public void setOriginalTarget(final String originalTarget)
+    {
+        this.expectedTarget = originalTarget;
+    }
+
+    public void setHealedFrom(final String healedFrom)
+    {
+        this.expectedTarget = healedFrom;
+    }
+
+    public boolean isHealed()
+    {
+        return this.healed;
+    }
+
+    public void setHealed(final boolean healed)
+    {
+        this.healed = healed;
     }
 
     @JsonProperty("isRegex")
@@ -343,6 +473,7 @@ public class Action
         copy.toolCall = this.toolCall;
         copy.durationMs = this.durationMs;
         copy.delayMs = this.delayMs;
+        copy.frame = this.frame;
         copy.parameters.putAll(this.parameters);
         return copy;
     }
@@ -372,6 +503,7 @@ public class Action
         copy.toolCall = this.toolCall;
         copy.durationMs = this.durationMs;
         copy.delayMs = this.delayMs;
+        copy.frame = this.frame;
         copy.parameters.putAll(this.parameters);
         return copy;
     }
@@ -400,6 +532,7 @@ public class Action
         copy.toolCall = this.toolCall;
         copy.durationMs = this.durationMs;
         copy.delayMs = this.delayMs;
+        copy.frame = this.frame;
         copy.parameters.putAll(this.parameters);
         return copy;
     }
@@ -428,6 +561,7 @@ public class Action
         copy.toolCall = this.toolCall;
         copy.durationMs = this.durationMs;
         copy.delayMs = this.delayMs;
+        copy.frame = this.frame;
         copy.parameters.putAll(this.parameters);
         return copy;
     }
@@ -462,6 +596,7 @@ public class Action
         copy.toolCall = this.toolCall;
         copy.durationMs = this.durationMs;
         copy.delayMs = this.delayMs;
+        copy.frame = this.frame;
         copy.parameters.putAll(this.parameters);
         return copy;
     }
@@ -643,6 +778,26 @@ public class Action
         this.stepInstruction = stepInstruction;
     }
 
+    public final Integer getSubStepIndex()
+    {
+        return this.subStepIndex;
+    }
+
+    public final void setSubStepIndex(final Integer subStepIndex)
+    {
+        this.subStepIndex = subStepIndex;
+    }
+
+    public final String getSubStepInstruction()
+    {
+        return this.subStepInstruction;
+    }
+
+    public final void setSubStepInstruction(final String subStepInstruction)
+    {
+        this.subStepInstruction = subStepInstruction;
+    }
+
     public final int getStepLine()
     {
         return this.stepLine;
@@ -813,6 +968,28 @@ public class Action
         {
             case "CLICK" -> "click";
             case "FILL", "TYPE" -> "fill";
+            case "FILL_FORM" ->
+            {
+                if (this.parameters.containsKey("fields"))
+                {
+                    args.set("fields", MAPPER.valueToTree(this.parameters.get("fields")));
+                }
+                else
+                {
+                    final String valStr = getValue();
+                    if (valStr != null && (valStr.startsWith("[") || valStr.startsWith("{")))
+                    {
+                        try
+                        {
+                            args.set("fields", MAPPER.readTree(valStr));
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+                }
+                yield "fill_form";
+            }
             case "NAVIGATE", "OPEN" -> "navigate";
             case "SELECT" -> "select";
             case "CHECK" -> "check";
@@ -824,7 +1001,7 @@ public class Action
             case "ASSERT_VISIBLE", "ASSERT_HIDDEN", "ASSERT_ENABLED", "ASSERT_DISABLED",
                  "ASSERT_EDITABLE", "ASSERT_READONLY", "ASSERT_CHECKED", "ASSERT_UNCHECKED",
                  "ASSERT_SELECTED", "ASSERT_UNSELECTED", "ASSERT_FOCUSED", "ASSERT_UNFOCUSED", "ASSERT_EXISTS",
-                 "ASSERT_ABSENT" -> "assert_element_state";
+                 "ASSERT_ABSENT", "ASSERT_ELEMENT_STATE" -> "assert_element_state";
             case "ASSERT" -> {
                 if ("url".equalsIgnoreCase(this.target) || "currentUrl".equalsIgnoreCase(this.target) || "pageUrl".equalsIgnoreCase(this.target))
                 {
@@ -933,9 +1110,19 @@ public class Action
         else if ("assert_element_state".equals(toolName) || "browser_assert_element_state".equals(toolName))
         {
             args.put("selector", this.target != null ? this.target : "");
-            final String state = actionType.startsWith("ASSERT_")
-                    ? actionType.substring("ASSERT_".length()).toLowerCase(Locale.ROOT)
-                    : ((this.value != null && !this.value.isEmpty()) ? this.value.get(0).toLowerCase(Locale.ROOT) : "visible");
+            final String state;
+            if ("ASSERT_ELEMENT_STATE".equals(actionType))
+            {
+                state = (this.value != null && !this.value.isEmpty()) ? this.value.get(0).toLowerCase(Locale.ROOT) : "visible";
+            }
+            else if (actionType.startsWith("ASSERT_"))
+            {
+                state = actionType.substring("ASSERT_".length()).toLowerCase(Locale.ROOT);
+            }
+            else
+            {
+                state = (this.value != null && !this.value.isEmpty()) ? this.value.get(0).toLowerCase(Locale.ROOT) : "visible";
+            }
             args.put("state", state);
         }
         else if ("assert_attribute".equals(toolName) || "browser_assert_attribute".equals(toolName))
@@ -964,6 +1151,23 @@ public class Action
         else if ("execute_script".equals(toolName) || "browser_execute_script".equals(toolName))
         {
             args.put("script", this.target != null ? this.target : "");
+        }
+        else if ("store".equals(toolName) || "browser_store".equals(toolName))
+        {
+            if (this.value != null && !this.value.isEmpty())
+            {
+                final String varName = this.value.get(0);
+                args.put("variableName", varName);
+                if (this.value.size() >= 2)
+                {
+                    args.put("value", this.value.get(1));
+                }
+            }
+            if (this.target != null && !this.target.isBlank())
+            {
+                args.put("selector", this.target);
+                args.put("target", this.target);
+            }
         }
         else
         {
@@ -1058,6 +1262,7 @@ public class Action
             case "navigate" -> "NAVIGATE";
             case "click" -> "CLICK";
             case "fill", "type" -> "TYPE";
+            case "fill_form" -> "FILL_FORM";
             case "hover" -> "HOVER";
             case "scroll" -> "SCROLL";
             case "select" -> "SELECT";
@@ -1074,10 +1279,42 @@ public class Action
             case "assert_url" -> "ASSERT_URL";
             case "assert_title" -> "ASSERT_TITLE";
             case "assert_element_state", "assert_state" -> {
+                final List<String> statesList = new ArrayList<>();
+                if (args != null && args.hasNonNull("states") && args.path("states").isArray())
+                {
+                    for (final JsonNode s : args.path("states"))
+                    {
+                        if (s.isTextual() && !s.asText().isBlank())
+                        {
+                            statesList.add(s.asText().trim());
+                        }
+                    }
+                }
                 final String rawState = args != null && args.hasNonNull("state")
-                        ? args.path("state").asText().trim().toUpperCase(Locale.ROOT)
-                        : "";
-                final String baseType = switch (rawState)
+                        ? args.path("state").asText().trim()
+                        : (args != null && args.hasNonNull("expectedState")
+                                ? args.path("expectedState").asText().trim()
+                                : (args != null && args.hasNonNull("value") ? args.path("value").asText().trim() : ""));
+                if (statesList.isEmpty() && !rawState.isBlank())
+                {
+                    final String[] parts = rawState.split("[,&]|\\band\\b");
+                    for (final String part : parts)
+                    {
+                        final String trimmed = part.trim();
+                        if (!trimmed.isBlank())
+                        {
+                            statesList.add(trimmed);
+                        }
+                    }
+                }
+
+                if (statesList.size() > 1)
+                {
+                    yield "ASSERT_ELEMENT_STATE";
+                }
+
+                final String singleState = statesList.isEmpty() ? rawState.toUpperCase(Locale.ROOT) : statesList.get(0).toUpperCase(Locale.ROOT);
+                final String baseType = switch (singleState)
                 {
                     case "VISIBLE" -> "ASSERT_VISIBLE";
                     case "HIDDEN" -> "ASSERT_HIDDEN";
@@ -1093,7 +1330,7 @@ public class Action
                     case "UNFOCUSED", "NOT_FOCUSED" -> "ASSERT_UNFOCUSED";
                     case "EXISTS", "PRESENT" -> "ASSERT_EXISTS";
                     case "ABSENT", "NOT_EXIST", "NOT_EXISTS", "NON-EXISTENT" -> "ASSERT_ABSENT";
-                    default -> "ASSERT";
+                    default -> "ASSERT_ELEMENT_STATE";
                 };
                 if (negated)
                 {
@@ -1167,6 +1404,14 @@ public class Action
                 {
                     target = args.path("target").asText();
                 }
+            }
+            else if ("fill_form".equals(name))
+            {
+                target = args.hasNonNull("form") ? args.path("form").asText() : "form";
+            }
+            else if (args.hasNonNull("target") && args.path("target").asText().startsWith("coord:"))
+            {
+                target = args.path("target").asText();
             }
             else if (args.hasNonNull("selector") && !args.path("selector").asText().isBlank())
             {
@@ -1247,6 +1492,13 @@ public class Action
                     value = varName;
                 }
             }
+            else if ("fill_form".equals(name))
+            {
+                if (args.hasNonNull("fields"))
+                {
+                    value = args.path("fields").toString();
+                }
+            }
             else if (args.hasNonNull("text") && !args.path("text").asText().isBlank())
             {
                 value = args.path("text").asText();
@@ -1272,6 +1524,29 @@ public class Action
                 if (args.hasNonNull("state") && !args.path("state").asText().isBlank())
                 {
                     value = args.path("state").asText();
+                }
+                else if (args.hasNonNull("states") && args.path("states").isArray())
+                {
+                    final List<String> list = new ArrayList<>();
+                    for (final JsonNode n : args.path("states"))
+                    {
+                        if (n.isTextual() && !n.asText().isBlank())
+                        {
+                            list.add(n.asText().trim());
+                        }
+                    }
+                    if (!list.isEmpty())
+                    {
+                        value = String.join(", ", list);
+                    }
+                }
+                else if (args.hasNonNull("expectedState") && !args.path("expectedState").asText().isBlank())
+                {
+                    value = args.path("expectedState").asText();
+                }
+                else if (args.hasNonNull("value") && !args.path("value").asText().isBlank())
+                {
+                    value = args.path("value").asText();
                 }
             }
             else if ("assert_attribute".equals(name) || "assert_attr".equals(name))
@@ -1372,13 +1647,14 @@ public class Action
                 case "NAVIGATE" -> "Navigate to " + target;
                 case "CLICK" -> !target.isBlank() ? "Click " + target : "Click element";
                 case "TYPE" -> "Type '" + (value != null ? value : "") + "' into " + target;
+                case "FILL_FORM" -> "Fill form fields";
                 case "ASSERT_TEXT" -> "Assert text '" + (value != null ? value : "") + "'" + (!target.isBlank() ? " on " + target : "");
                 case "ASSERT_URL" -> "Assert URL '" + (value != null ? value : "") + "'";
                 case "ASSERT_TITLE" -> "Assert page title '" + (value != null ? value : "") + "'";
                 case "ASSERT_VISIBLE", "ASSERT_HIDDEN", "ASSERT_ENABLED", "ASSERT_DISABLED",
                      "ASSERT_EDITABLE", "ASSERT_READONLY", "ASSERT_CHECKED", "ASSERT_UNCHECKED",
                      "ASSERT_SELECTED", "ASSERT_UNSELECTED", "ASSERT_FOCUSED", "ASSERT_UNFOCUSED", "ASSERT_EXISTS",
-                     "ASSERT_ABSENT" -> "Assert " + (!target.isBlank() ? target + " " : "") + "is " + (value != null ? value : type.substring("ASSERT_".length()).toLowerCase(Locale.ROOT));
+                     "ASSERT_ABSENT", "ASSERT_ELEMENT_STATE" -> "Assert " + (!target.isBlank() ? target + " " : "") + "is " + (value != null ? value : type.substring("ASSERT_".length()).toLowerCase(Locale.ROOT));
                 case "ASSERT_ATTRIBUTE" -> "Assert attribute '" + (value != null ? value : "") + "'" + (!target.isBlank() ? " on " + target : "");
                 case "SELECT" -> "Select '" + (value != null ? value : "") + "' on " + target;
                 case "HOVER" -> "Hover over " + target;
@@ -1414,7 +1690,12 @@ public class Action
 
         final boolean adjust = args != null && args.path("adjust").asBoolean(false);
 
-        final Action action = new Action(type, target, value, description, reasoning, isRegex, negated);
+        // Selector-based actions may carry a frame prefix ("#a >>> #btn"); free-text/URL targets must stay untouched
+        final FrameContextManager.FrameTarget framed = !FRAME_PREFIX_EXEMPT_TYPES.contains(type) && !target.contains("://")
+            ? FrameContextManager.splitFrameTarget(target)
+            : new FrameContextManager.FrameTarget(null, target);
+
+        final Action action = new Action(type, framed.target(), value, description, reasoning, isRegex, negated);
         action.setAdjust(adjust);
         action.setToolCall(call);
 
@@ -1506,6 +1787,26 @@ public class Action
             {
                 action.setHasElse(true);
             }
+
+            if (args.hasNonNull("fields"))
+            {
+                action.getParameters().put("fields", args.get("fields"));
+            }
+
+            if (args.hasNonNull("frame"))
+            {
+                action.setFrame(args.path("frame").asText());
+            }
+            else if (args.hasNonNull("frameId"))
+            {
+                action.setFrame(args.path("frameId").asText());
+            }
+        }
+
+        if (framed.frame() != null)
+        {
+            // Merge (not replace) so an explicit 'frame' argument and a selector prefix both contribute
+            action.setFrame(FrameContextManager.combine(action.getFrame(), framed.frame()));
         }
 
         if (args != null && args.has("domFeatureVector") && !args.path("domFeatureVector").isNull())

@@ -32,18 +32,30 @@ public final class YamlFileDto
     public final List<DatasetDto> datasets;
     public final boolean hasError;
     public final String errorMessage;
+    public final boolean hasPlaybook;
 
     public YamlFileDto(final String file, final List<DatasetDto> datasets)
     {
-        this(file, datasets, false, null);
+        this(file, datasets, false, null, false);
     }
 
     public YamlFileDto(final String file, final List<DatasetDto> datasets, final boolean hasError, final String errorMessage)
+    {
+        this(file, datasets, hasError, errorMessage, false);
+    }
+
+    public YamlFileDto(final String file, final List<DatasetDto> datasets, final boolean hasError, final String errorMessage, final boolean hasPlaybook)
     {
         this.file = file;
         this.datasets = datasets;
         this.hasError = hasError;
         this.errorMessage = errorMessage;
+        this.hasPlaybook = hasPlaybook;
+    }
+
+    public boolean isHasPlaybook()
+    {
+        return hasPlaybook;
     }
 
     public boolean isHasError()

@@ -34,6 +34,14 @@ public final class AreaRunPointDto
     private final int unknownCount;
     private final int ignoredCount;
     private final int totalCount;
+    private final int passHealedCount;
+    private final int fixedHealedCount;
+    private final int knownHealedCount;
+    private final int unknownHealedCount;
+    private final int passAiCount;
+    private final int fixedAiCount;
+    private final int knownAiCount;
+    private final int unknownAiCount;
 
     public AreaRunPointDto(
         final String runId,
@@ -45,6 +53,45 @@ public final class AreaRunPointDto
         final int ignoredCount,
         final int totalCount)
     {
+        this(runId, timestampLabel, passCount, fixedCount, knownCount, unknownCount, ignoredCount, totalCount, 0, 0, 0, 0, 0, 0, 0, 0);
+    }
+
+    public AreaRunPointDto(
+        final String runId,
+        final String timestampLabel,
+        final int passCount,
+        final int fixedCount,
+        final int knownCount,
+        final int unknownCount,
+        final int ignoredCount,
+        final int totalCount,
+        final int passHealedCount,
+        final int fixedHealedCount,
+        final int knownHealedCount,
+        final int unknownHealedCount)
+    {
+        this(runId, timestampLabel, passCount, fixedCount, knownCount, unknownCount, ignoredCount, totalCount,
+             passHealedCount, fixedHealedCount, knownHealedCount, unknownHealedCount, 0, 0, 0, 0);
+    }
+
+    public AreaRunPointDto(
+        final String runId,
+        final String timestampLabel,
+        final int passCount,
+        final int fixedCount,
+        final int knownCount,
+        final int unknownCount,
+        final int ignoredCount,
+        final int totalCount,
+        final int passHealedCount,
+        final int fixedHealedCount,
+        final int knownHealedCount,
+        final int unknownHealedCount,
+        final int passAiCount,
+        final int fixedAiCount,
+        final int knownAiCount,
+        final int unknownAiCount)
+    {
         this.runId = runId;
         this.timestampLabel = timestampLabel;
         this.passCount = passCount;
@@ -53,6 +100,14 @@ public final class AreaRunPointDto
         this.unknownCount = unknownCount;
         this.ignoredCount = ignoredCount;
         this.totalCount = totalCount;
+        this.passHealedCount = passHealedCount;
+        this.fixedHealedCount = fixedHealedCount;
+        this.knownHealedCount = knownHealedCount;
+        this.unknownHealedCount = unknownHealedCount;
+        this.passAiCount = passAiCount;
+        this.fixedAiCount = fixedAiCount;
+        this.knownAiCount = knownAiCount;
+        this.unknownAiCount = unknownAiCount;
     }
 
     public String getRunId()
@@ -93,5 +148,70 @@ public final class AreaRunPointDto
     public int getTotalCount()
     {
         return totalCount;
+    }
+
+    public int getPassHealedCount()
+    {
+        return passHealedCount;
+    }
+
+    public int getFixedHealedCount()
+    {
+        return fixedHealedCount;
+    }
+
+    public int getKnownHealedCount()
+    {
+        return knownHealedCount;
+    }
+
+    public int getUnknownHealedCount()
+    {
+        return unknownHealedCount;
+    }
+
+    public int getPassAiCount()
+    {
+        return passAiCount;
+    }
+
+    public int getFixedAiCount()
+    {
+        return fixedAiCount;
+    }
+
+    public int getKnownAiCount()
+    {
+        return knownAiCount;
+    }
+
+    public int getUnknownAiCount()
+    {
+        return unknownAiCount;
+    }
+
+    public int getTotalAiCount()
+    {
+        return passAiCount + fixedAiCount + knownAiCount + unknownAiCount;
+    }
+
+    public int getPassCleanCount()
+    {
+        return Math.max(0, passCount - passHealedCount - passAiCount);
+    }
+
+    public int getFixedCleanCount()
+    {
+        return Math.max(0, fixedCount - fixedHealedCount - fixedAiCount);
+    }
+
+    public int getKnownCleanCount()
+    {
+        return Math.max(0, knownCount - knownHealedCount - knownAiCount);
+    }
+
+    public int getUnknownCleanCount()
+    {
+        return Math.max(0, unknownCount - unknownHealedCount - unknownAiCount);
     }
 }

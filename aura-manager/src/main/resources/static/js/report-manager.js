@@ -23,6 +23,10 @@ const batchRunStatsRegistry = {};
 const activeClassFilters = {};
 const activeAreaFilters = {};
 let activeWholeExecutionFilter = null;
+let currentExecutionStatusFilter = 'ALL';
+let currentExecutionModeFilter = 'ALL';
+let currentGlobalStatusBadgeFilter = 'ALL';
+let currentHealedFilter = 'ALL';
 
 function formatDurationInMinutes(durMs) {
     if (durMs === null || durMs === undefined) return '0 min 0 s';
@@ -180,6 +184,21 @@ function renderBatchSpecificRunsTable(batchName) {
     htmx.process(tbody);
 }
 
+function applyCustomBatchLimit() {
+    const input = document.getElementById('customBatchLimitInput');
+    if (!input) return;
+    const batchName = input.getAttribute('data-batch-name') || activeBatchName || 'Unknown';
+    const val = parseInt(input.value.trim(), 10);
+    const targetUrl = (!isNaN(val) && val > 0)
+        ? `/batch-history?batchName=${encodeURIComponent(batchName)}&limit=${val}`
+        : `/batch-history?batchName=${encodeURIComponent(batchName)}`;
+    if (window.htmx) {
+        htmx.ajax('GET', targetUrl, { target: '#mainViewContainer', pushUrl: true });
+    } else {
+        window.location.href = targetUrl;
+    }
+}
+
 function handleTrendChartHover(event) {
     const svg = document.getElementById('mainTrendSvg');
     const guide = document.getElementById('trendHoverGuide');
@@ -226,26 +245,110 @@ function handleTrendChartHover(event) {
         activeCircle.style.filter = 'url(#glow)';
     }
 
-    const runTitle = document.getElementById('ttRunTitle') || document.getElementById('trendTooltipTitle');
-    if (runTitle) runTitle.innerText = stat.title;
-    const passRate = document.getElementById('ttPassRate');
-    if (passRate) passRate.innerText = `${stat.rate} Pass`;
-    const totalVal = document.getElementById('ttTotalVal');
-    if (totalVal) totalVal.innerText = stat.total;
-    const passVal = document.getElementById('ttPassVal') || document.getElementById('trendTooltipPass');
-    if (passVal) passVal.innerText = stat.pass;
-    const fixedVal = document.getElementById('ttFixedVal') || document.getElementById('trendTooltipFixed');
-    if (fixedVal) fixedVal.innerText = stat.fixed;
-    const knownVal = document.getElementById('ttKnownVal') || document.getElementById('trendTooltipKnown');
-    if (knownVal) knownVal.innerText = stat.known;
-    const unknownVal = document.getElementById('ttUnknownVal') || document.getElementById('trendTooltipUnknown');
-    if (unknownVal) unknownVal.innerText = stat.unknown;
-    const ignoredVal = document.getElementById('ttIgnoredVal') || document.getElementById('trendTooltipIgnored');
-    if (ignoredVal) ignoredVal.innerText = stat.ignored;
+    const runIdEl = document.getElementById('ttRunId');
+    if (runIdEl) runIdEl.innerText = `#${stat.runId || closestRun}`;
 
+    const headerHealed = document.getElementById('ttHeaderHealed');
+    if (headerHealed) {
+        if (stat.totalHealed > 0) {
+            headerHealed.innerText = `✨ ${stat.totalHealed} healed`;
+            headerHealed.style.display = 'inline-flex';
+        } else {
+            headerHealed.style.display = 'none';
+        }
+    }
+
+    const headerAi = document.getElementById('ttHeaderAi');
+    if (headerAi) {
+        if (stat.totalAi > 0) {
+            headerAi.innerText = `${stat.totalAi} AI`;
+            headerAi.style.display = 'inline-flex';
+        } else {
+            headerAi.style.display = 'none';
+        }
+    }
+
+    const timestampEl = document.getElementById('ttTimestamp');
+    if (timestampEl) timestampEl.innerText = stat.time || 'Recently';
+
+    const runTitle = document.getElementById('ttRunTitle') || document.getElementById('trendTooltipTitle');
+    if (runTitle) {
+        let badgesHtml = '';
+        if (stat.totalHealed > 0) {
+            badgesHtml += ` <span class="badge-healed-inline badge-pass-healed" style="font-size: 0.68rem; padding: 0.05rem 0.35rem; margin-left: 0.35rem;">✨ ${stat.totalHealed} healed</span>`;
+        }
+        if (stat.totalAi > 0) {
+            badgesHtml += ` <span class="badge-ai-inline badge-pass-ai" style="font-size: 0.68rem; padding: 0.05rem 0.35rem; margin-left: 0.35rem;">${stat.totalAi} AI</span>`;
+        }
+        if (badgesHtml) {
+            runTitle.innerHTML = `${stat.title}${badgesHtml}`;
+        } else {
+            runTitle.innerText = stat.title;
+        }
+    }
+
+    const passRate = document.getElementById('ttPassRate') || document.getElementById('trendTooltipRate');
+    if (passRate) {
+        let rateText = (stat.rate || '0%').trim();
+        if (!rateText.toLowerCase().includes('pass')) {
+            rateText += ' PASS';
+        }
+        passRate.innerText = rateText.toUpperCase();
+    }
+
+    const totalVal = document.getElementById('ttTotalVal');
+    if (totalVal) {
+        totalVal.innerText = (stat.total && stat.total.includes('Tests')) ? stat.total : `${stat.total || 0} Tests`;
+    }
+
+    function updateTooltipRow(rowId, valId, healedId, aiId, count, healedCount, aiCount) {
+        const row = document.getElementById(rowId);
+        const val = document.getElementById(valId);
+        const healed = healedId ? document.getElementById(healedId) : null;
+        const ai = aiId ? document.getElementById(aiId) : null;
+        if (val) val.innerText = count;
+        if (healed) {
+            if (healedCount > 0) {
+                healed.innerText = `✨ ${healedCount} healed`;
+                healed.style.display = 'inline-flex';
+            } else {
+                healed.style.display = 'none';
+            }
+        }
+        if (ai) {
+            if (aiCount > 0) {
+                ai.innerText = `${aiCount} AI`;
+                ai.style.display = 'inline-flex';
+            } else {
+                ai.style.display = 'none';
+            }
+        }
+        if (row) {
+            row.style.display = count > 0 ? 'flex' : 'none';
+        }
+    }
+
+    updateTooltipRow('ttRowPass', 'ttPassVal', 'ttHealedPass', 'ttAiPass', stat.pass, stat.passHealed, stat.passAi);
+    updateTooltipRow('ttRowFixed', 'ttFixedVal', 'ttHealedFixed', 'ttAiFixed', stat.fixed, stat.fixedHealed, stat.fixedAi);
+    updateTooltipRow('ttRowKnown', 'ttKnownVal', 'ttHealedKnown', 'ttAiKnown', stat.known, stat.knownHealed, stat.knownAi);
+    updateTooltipRow('ttRowUnknown', 'ttUnknownVal', 'ttHealedUnknown', 'ttAiUnknown', stat.unknown, stat.unknownHealed, stat.unknownAi);
+    updateTooltipRow('ttRowIgnored', 'ttIgnoredVal', null, null, stat.ignored, 0, 0);
+
+    const legacyPass = document.getElementById('trendTooltipPass');
+    if (legacyPass) legacyPass.innerText = stat.pass;
+    const legacyFixed = document.getElementById('trendTooltipFixed');
+    if (legacyFixed) legacyFixed.innerText = stat.fixed;
+    const legacyKnown = document.getElementById('trendTooltipKnown');
+    if (legacyKnown) legacyKnown.innerText = stat.known;
+    const legacyUnknown = document.getElementById('trendTooltipUnknown');
+    if (legacyUnknown) legacyUnknown.innerText = stat.unknown;
+    const legacyIgnored = document.getElementById('trendTooltipIgnored');
+    if (legacyIgnored) legacyIgnored.innerText = stat.ignored;
+
+    const tooltipWidth = 265;
     let ttLeft = (stat.x / 800) * svgWidth + 15;
-    if (ttLeft + 220 > svgWidth) {
-        ttLeft = (stat.x / 800) * svgWidth - 225;
+    if (ttLeft + tooltipWidth + 10 > svgWidth) {
+        ttLeft = Math.max(10, (stat.x / 800) * svgWidth - tooltipWidth - 15);
     }
 
     tooltip.style.left = ttLeft + 'px';
@@ -299,16 +402,33 @@ function renderDynamicTrendChart(targetBatchName) {
         const known = parseInt(row.getAttribute('data-known') || row.querySelector('.seg-known')?.innerText.trim() || '0', 10) || 0;
         const unknown = parseInt(row.getAttribute('data-unknown') || row.querySelector('.seg-unknown')?.innerText.trim() || '0', 10) || 0;
         const ignored = parseInt(row.getAttribute('data-ignored') || row.querySelector('.seg-ignored')?.innerText.trim() || '0', 10) || 0;
+        const passHealed = parseInt(row.getAttribute('data-pass-healed') || '0', 10) || 0;
+        const fixedHealed = parseInt(row.getAttribute('data-fixed-healed') || '0', 10) || 0;
+        const knownHealed = parseInt(row.getAttribute('data-known-healed') || '0', 10) || 0;
+        const unknownHealed = parseInt(row.getAttribute('data-unknown-healed') || '0', 10) || 0;
+        const totalHealed = passHealed + fixedHealed + knownHealed + unknownHealed;
+        const passAi = parseInt(row.getAttribute('data-pass-ai') || '0', 10) || 0;
+        const fixedAi = parseInt(row.getAttribute('data-fixed-ai') || '0', 10) || 0;
+        const knownAi = parseInt(row.getAttribute('data-known-ai') || '0', 10) || 0;
+        const unknownAi = parseInt(row.getAttribute('data-unknown-ai') || '0', 10) || 0;
+        const totalAi = passAi + fixedAi + knownAi + unknownAi;
         const total = parseInt(row.getAttribute('data-total') || row.querySelector('td.text-mono:nth-of-type(4)')?.innerText.trim() || '0', 10) || (pass + fixed + known + unknown + ignored) || 1;
         const rate = row.getAttribute('data-rate') || (row.querySelector('.badge-status')?.innerText.trim() || '0%');
         const time = row.getAttribute('data-time') || row.querySelector('td.text-muted')?.innerText.trim() || 'Recently';
 
-        runsData.push({ runId, pass, fixed, known, unknown, ignored, total, rate, time });
+        runsData.push({ runId, pass, fixed, known, unknown, ignored, passHealed, fixedHealed, knownHealed, unknownHealed, totalHealed, passAi, fixedAi, knownAi, unknownAi, totalAi, total, rate, time });
     });
 
     if (runsData.length === 0) {
         batchRunStatsRegistry[batchName] = { runIds: [], maxTests: 0, stats: {} };
-        ['trendLayerIgnored', 'trendLayerUnknown', 'trendLayerKnown', 'trendLayerFixed', 'trendLayerPass', 'trendTopStroke'].forEach(id => {
+        [
+            'trendLayerIgnored',
+            'trendLayerUnknown', 'trendLayerUnknownHealed', 'trendLayerUnknownHealedPattern', 'trendLayerUnknownAi', 'trendLayerUnknownAiPattern',
+            'trendLayerKnown', 'trendLayerKnownHealed', 'trendLayerKnownHealedPattern', 'trendLayerKnownAi', 'trendLayerKnownAiPattern',
+            'trendLayerFixed', 'trendLayerFixedHealed', 'trendLayerFixedHealedPattern', 'trendLayerFixedAi', 'trendLayerFixedAiPattern',
+            'trendLayerPass', 'trendLayerPassHealed', 'trendLayerPassHealedPattern', 'trendLayerPassAi', 'trendLayerPassAiPattern',
+            'trendTopStroke'
+        ].forEach(id => {
             document.getElementById(id)?.setAttribute('d', '');
         });
         const dotsGroup = document.getElementById('trendSvgDots');
@@ -327,23 +447,76 @@ function renderDynamicTrendChart(targetBatchName) {
         const x = count === 1 ? 400 : 50 + (idx / (count - 1)) * 750;
         stats[r.runId] = {
             x,
+            runId: r.runId,
+            time: r.time,
             title: `Run #${r.runId} (${r.time})`,
             pass: r.pass,
             fixed: r.fixed,
             known: r.known,
             unknown: r.unknown,
             ignored: r.ignored,
+            passHealed: r.passHealed,
+            fixedHealed: r.fixedHealed,
+            knownHealed: r.knownHealed,
+            unknownHealed: r.unknownHealed,
+            totalHealed: r.totalHealed,
+            passAi: r.passAi,
+            fixedAi: r.fixedAi,
+            knownAi: r.knownAi,
+            unknownAi: r.unknownAi,
+            totalAi: r.totalAi,
             total: `${r.total} Tests`,
             rate: r.rate
         };
 
+        const cleanUnknown = Math.max(0, r.unknown - r.unknownHealed - r.unknownAi);
+        const cleanKnown = Math.max(0, r.known - r.knownHealed - r.knownAi);
+        const cleanFixed = Math.max(0, r.fixed - r.fixedHealed - r.fixedAi);
+        const cleanPass = Math.max(0, r.pass - r.passHealed - r.passAi);
+
         const y0 = 190;
         const y1 = y0 - (r.ignored * baseScale);
-        const y2 = y1 - (r.unknown * baseScale);
-        const y3 = y2 - (r.known * baseScale);
-        const y4 = y3 - (r.fixed * baseScale);
-        const y5 = y4 - (r.pass * baseScale);
-        return { x, y0, y1, y2, y3, y4, y5, id: r.runId };
+        const y2_clean = y1 - (cleanUnknown * baseScale);
+        const y2_healed = y2_clean - (r.unknownHealed * baseScale);
+        const y2 = y2_healed - (r.unknownAi * baseScale);
+        const y3_clean = y2 - (cleanKnown * baseScale);
+        const y3_healed = y3_clean - (r.knownHealed * baseScale);
+        const y3 = y3_healed - (r.knownAi * baseScale);
+        const y4_clean = y3 - (cleanFixed * baseScale);
+        const y4_healed = y4_clean - (r.fixedHealed * baseScale);
+        const y4 = y4_healed - (r.fixedAi * baseScale);
+        const y5_clean = y4 - (cleanPass * baseScale);
+        const y5_healed = y5_clean - (r.passHealed * baseScale);
+        const y5 = y5_healed - (r.passAi * baseScale);
+
+        return {
+            x,
+            y0,
+            y1,
+            y2_clean,
+            y2_healed,
+            y2,
+            y3_clean,
+            y3_healed,
+            y3,
+            y4_clean,
+            y4_healed,
+            y4,
+            y5_clean,
+            y5_healed,
+            y5,
+            id: r.runId,
+            passHealed: r.passHealed,
+            fixedHealed: r.fixedHealed,
+            knownHealed: r.knownHealed,
+            unknownHealed: r.unknownHealed,
+            totalHealed: r.totalHealed,
+            passAi: r.passAi,
+            fixedAi: r.fixedAi,
+            knownAi: r.knownAi,
+            unknownAi: r.unknownAi,
+            totalAi: r.totalAi
+        };
     });
 
     batchRunStatsRegistry[batchName] = { runIds, maxTests, stats };
@@ -355,16 +528,40 @@ function renderDynamicTrendChart(targetBatchName) {
         const rightX = Math.min(800, c.x + halfWidth);
 
         const pathL1 = `M ${leftX} ${c.y1} L ${rightX} ${c.y1} L ${rightX} 190 L ${leftX} 190 Z`;
-        const pathL2 = `M ${leftX} ${c.y2} L ${rightX} ${c.y2} L ${rightX} ${c.y1} L ${leftX} ${c.y1} Z`;
-        const pathL3 = `M ${leftX} ${c.y3} L ${rightX} ${c.y3} L ${rightX} ${c.y2} L ${leftX} ${c.y2} Z`;
-        const pathL4 = `M ${leftX} ${c.y4} L ${rightX} ${c.y4} L ${rightX} ${c.y3} L ${leftX} ${c.y3} Z`;
-        const pathL5 = `M ${leftX} ${c.y5} L ${rightX} ${c.y5} L ${rightX} ${c.y4} L ${leftX} ${c.y4} Z`;
+        const pathL2 = `M ${leftX} ${c.y2_clean} L ${rightX} ${c.y2_clean} L ${rightX} ${c.y1} L ${leftX} ${c.y1} Z`;
+        const pathL2H = `M ${leftX} ${c.y2_healed} L ${rightX} ${c.y2_healed} L ${rightX} ${c.y2_clean} L ${leftX} ${c.y2_clean} Z`;
+        const pathL2Ai = `M ${leftX} ${c.y2} L ${rightX} ${c.y2} L ${rightX} ${c.y2_healed} L ${leftX} ${c.y2_healed} Z`;
+        const pathL3 = `M ${leftX} ${c.y3_clean} L ${rightX} ${c.y3_clean} L ${rightX} ${c.y2} L ${leftX} ${c.y2} Z`;
+        const pathL3H = `M ${leftX} ${c.y3_healed} L ${rightX} ${c.y3_healed} L ${rightX} ${c.y3_clean} L ${leftX} ${c.y3_clean} Z`;
+        const pathL3Ai = `M ${leftX} ${c.y3} L ${rightX} ${c.y3} L ${rightX} ${c.y3_healed} L ${leftX} ${c.y3_healed} Z`;
+        const pathL4 = `M ${leftX} ${c.y4_clean} L ${rightX} ${c.y4_clean} L ${rightX} ${c.y3} L ${leftX} ${c.y3} Z`;
+        const pathL4H = `M ${leftX} ${c.y4_healed} L ${rightX} ${c.y4_healed} L ${rightX} ${c.y4_clean} L ${leftX} ${c.y4_clean} Z`;
+        const pathL4Ai = `M ${leftX} ${c.y4} L ${rightX} ${c.y4} L ${rightX} ${c.y4_healed} L ${leftX} ${c.y4_healed} Z`;
+        const pathL5 = `M ${leftX} ${c.y5_clean} L ${rightX} ${c.y5_clean} L ${rightX} ${c.y4} L ${leftX} ${c.y4} Z`;
+        const pathL5H = `M ${leftX} ${c.y5_healed} L ${rightX} ${c.y5_healed} L ${rightX} ${c.y5_clean} L ${leftX} ${c.y5_clean} Z`;
+        const pathL5Ai = `M ${leftX} ${c.y5} L ${rightX} ${c.y5} L ${rightX} ${c.y5_healed} L ${leftX} ${c.y5_healed} Z`;
 
         document.getElementById('trendLayerIgnored')?.setAttribute('d', pathL1);
         document.getElementById('trendLayerUnknown')?.setAttribute('d', pathL2);
+        document.getElementById('trendLayerUnknownHealed')?.setAttribute('d', c.unknownHealed > 0 ? pathL2H : '');
+        document.getElementById('trendLayerUnknownHealedPattern')?.setAttribute('d', c.unknownHealed > 0 ? pathL2H : '');
+        document.getElementById('trendLayerUnknownAi')?.setAttribute('d', c.unknownAi > 0 ? pathL2Ai : '');
+        document.getElementById('trendLayerUnknownAiPattern')?.setAttribute('d', c.unknownAi > 0 ? pathL2Ai : '');
         document.getElementById('trendLayerKnown')?.setAttribute('d', pathL3);
+        document.getElementById('trendLayerKnownHealed')?.setAttribute('d', c.knownHealed > 0 ? pathL3H : '');
+        document.getElementById('trendLayerKnownHealedPattern')?.setAttribute('d', c.knownHealed > 0 ? pathL3H : '');
+        document.getElementById('trendLayerKnownAi')?.setAttribute('d', c.knownAi > 0 ? pathL3Ai : '');
+        document.getElementById('trendLayerKnownAiPattern')?.setAttribute('d', c.knownAi > 0 ? pathL3Ai : '');
         document.getElementById('trendLayerFixed')?.setAttribute('d', pathL4);
+        document.getElementById('trendLayerFixedHealed')?.setAttribute('d', c.fixedHealed > 0 ? pathL4H : '');
+        document.getElementById('trendLayerFixedHealedPattern')?.setAttribute('d', c.fixedHealed > 0 ? pathL4H : '');
+        document.getElementById('trendLayerFixedAi')?.setAttribute('d', c.fixedAi > 0 ? pathL4Ai : '');
+        document.getElementById('trendLayerFixedAiPattern')?.setAttribute('d', c.fixedAi > 0 ? pathL4Ai : '');
         document.getElementById('trendLayerPass')?.setAttribute('d', pathL5);
+        document.getElementById('trendLayerPassHealed')?.setAttribute('d', c.passHealed > 0 ? pathL5H : '');
+        document.getElementById('trendLayerPassHealedPattern')?.setAttribute('d', c.passHealed > 0 ? pathL5H : '');
+        document.getElementById('trendLayerPassAi')?.setAttribute('d', c.passAi > 0 ? pathL5Ai : '');
+        document.getElementById('trendLayerPassAiPattern')?.setAttribute('d', c.passAi > 0 ? pathL5Ai : '');
         document.getElementById('trendTopStroke')?.setAttribute('d', `M ${leftX} ${c.y5} L ${rightX} ${c.y5}`);
 
         const dotsGroup = document.getElementById('trendSvgDots');
@@ -372,7 +569,7 @@ function renderDynamicTrendChart(targetBatchName) {
             dotsGroup.innerHTML = `
                 <g class="trend-click-col" id="trendPoint-${c.id}" 
                    hx-get="/run-report?runId=${encodeURIComponent(c.id)}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" style="cursor: pointer;">
-                    <circle cx="${c.x}" cy="${c.y5}" r="6" fill="#2563eb" stroke="#ffffff" stroke-width="2" class="trend-node-circle"/>
+                    <circle cx="${c.x}" cy="${c.y5}" r="6" fill="${c.totalHealed > 0 ? '#34d399' : (c.totalAi > 0 ? '#10b981' : '#2563eb')}" stroke="${c.totalHealed > 0 ? '#fef08a' : (c.totalAi > 0 ? '#6ee7b7' : '#ffffff')}" stroke-width="2" class="trend-node-circle"/>
                 </g>
             `;
             if (window.htmx) htmx.process(dotsGroup);
@@ -410,16 +607,49 @@ function renderDynamicTrendChart(targetBatchName) {
     const firstX = coords[0].x;
 
     const pathL1 = `${buildBezierTopPath('y1')} L ${lastX} 190 L ${firstX} 190 Z`;
-    const pathL2 = `${buildBezierTopPath('y2')} ${buildBezierReversePath('y1')} Z`;
-    const pathL3 = `${buildBezierTopPath('y3')} ${buildBezierReversePath('y2')} Z`;
-    const pathL4 = `${buildBezierTopPath('y4')} ${buildBezierReversePath('y3')} Z`;
-    const pathL5 = `${buildBezierTopPath('y5')} ${buildBezierReversePath('y4')} Z`;
+    const pathL2 = `${buildBezierTopPath('y2_clean')} ${buildBezierReversePath('y1')} Z`;
+    const pathL2H = `${buildBezierTopPath('y2_healed')} ${buildBezierReversePath('y2_clean')} Z`;
+    const pathL2Ai = `${buildBezierTopPath('y2')} ${buildBezierReversePath('y2_healed')} Z`;
+    const pathL3 = `${buildBezierTopPath('y3_clean')} ${buildBezierReversePath('y2')} Z`;
+    const pathL3H = `${buildBezierTopPath('y3_healed')} ${buildBezierReversePath('y3_clean')} Z`;
+    const pathL3Ai = `${buildBezierTopPath('y3')} ${buildBezierReversePath('y3_healed')} Z`;
+    const pathL4 = `${buildBezierTopPath('y4_clean')} ${buildBezierReversePath('y3')} Z`;
+    const pathL4H = `${buildBezierTopPath('y4_healed')} ${buildBezierReversePath('y4_clean')} Z`;
+    const pathL4Ai = `${buildBezierTopPath('y4')} ${buildBezierReversePath('y4_healed')} Z`;
+    const pathL5 = `${buildBezierTopPath('y5_clean')} ${buildBezierReversePath('y4')} Z`;
+    const pathL5H = `${buildBezierTopPath('y5_healed')} ${buildBezierReversePath('y5_clean')} Z`;
+    const pathL5Ai = `${buildBezierTopPath('y5')} ${buildBezierReversePath('y5_healed')} Z`;
+
+    const hasUnknownHealed = coords.some(c => c.unknownHealed > 0);
+    const hasUnknownAi = coords.some(c => c.unknownAi > 0);
+    const hasKnownHealed = coords.some(c => c.knownHealed > 0);
+    const hasKnownAi = coords.some(c => c.knownAi > 0);
+    const hasFixedHealed = coords.some(c => c.fixedHealed > 0);
+    const hasFixedAi = coords.some(c => c.fixedAi > 0);
+    const hasPassHealed = coords.some(c => c.passHealed > 0);
+    const hasPassAi = coords.some(c => c.passAi > 0);
 
     document.getElementById('trendLayerIgnored')?.setAttribute('d', pathL1);
     document.getElementById('trendLayerUnknown')?.setAttribute('d', pathL2);
+    document.getElementById('trendLayerUnknownHealed')?.setAttribute('d', hasUnknownHealed ? pathL2H : '');
+    document.getElementById('trendLayerUnknownHealedPattern')?.setAttribute('d', hasUnknownHealed ? pathL2H : '');
+    document.getElementById('trendLayerUnknownAi')?.setAttribute('d', hasUnknownAi ? pathL2Ai : '');
+    document.getElementById('trendLayerUnknownAiPattern')?.setAttribute('d', hasUnknownAi ? pathL2Ai : '');
     document.getElementById('trendLayerKnown')?.setAttribute('d', pathL3);
+    document.getElementById('trendLayerKnownHealed')?.setAttribute('d', hasKnownHealed ? pathL3H : '');
+    document.getElementById('trendLayerKnownHealedPattern')?.setAttribute('d', hasKnownHealed ? pathL3H : '');
+    document.getElementById('trendLayerKnownAi')?.setAttribute('d', hasKnownAi ? pathL3Ai : '');
+    document.getElementById('trendLayerKnownAiPattern')?.setAttribute('d', hasKnownAi ? pathL3Ai : '');
     document.getElementById('trendLayerFixed')?.setAttribute('d', pathL4);
+    document.getElementById('trendLayerFixedHealed')?.setAttribute('d', hasFixedHealed ? pathL4H : '');
+    document.getElementById('trendLayerFixedHealedPattern')?.setAttribute('d', hasFixedHealed ? pathL4H : '');
+    document.getElementById('trendLayerFixedAi')?.setAttribute('d', hasFixedAi ? pathL4Ai : '');
+    document.getElementById('trendLayerFixedAiPattern')?.setAttribute('d', hasFixedAi ? pathL4Ai : '');
     document.getElementById('trendLayerPass')?.setAttribute('d', pathL5);
+    document.getElementById('trendLayerPassHealed')?.setAttribute('d', hasPassHealed ? pathL5H : '');
+    document.getElementById('trendLayerPassHealedPattern')?.setAttribute('d', hasPassHealed ? pathL5H : '');
+    document.getElementById('trendLayerPassAi')?.setAttribute('d', hasPassAi ? pathL5Ai : '');
+    document.getElementById('trendLayerPassAiPattern')?.setAttribute('d', hasPassAi ? pathL5Ai : '');
     document.getElementById('trendTopStroke')?.setAttribute('d', buildBezierTopPath('y5'));
 
     const dotsGroup = document.getElementById('trendSvgDots');
@@ -427,7 +657,7 @@ function renderDynamicTrendChart(targetBatchName) {
         dotsGroup.innerHTML = coords.map(c => `
             <g class="trend-click-col" id="trendPoint-${c.id}" 
                hx-get="/run-report?runId=${encodeURIComponent(c.id)}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" style="cursor: pointer;">
-                <circle cx="${c.x}" cy="${c.y5}" r="6" fill="#2563eb" stroke="#ffffff" stroke-width="2" class="trend-node-circle"/>
+                <circle cx="${c.x}" cy="${c.y5}" r="6" fill="${c.totalHealed > 0 ? '#34d399' : (c.totalAi > 0 ? '#10b981' : '#2563eb')}" stroke="${c.totalHealed > 0 ? '#fef08a' : (c.totalAi > 0 ? '#6ee7b7' : '#ffffff')}" stroke-width="2" class="trend-node-circle"/>
             </g>
         `).join('');
         if (window.htmx) htmx.process(dotsGroup);
@@ -458,13 +688,66 @@ function renderDynamicAreaTrendCharts() {
 
         const coords = points.map((p, idx) => {
             const x = count === 1 ? 150 : 20 + (idx / (count - 1)) * 260;
+            const unknownCount = p.unknownCount || 0;
+            const unknownHealed = p.unknownHealedCount || 0;
+            const unknownAi = p.unknownAiCount || 0;
+            const cleanUnknown = Math.max(0, unknownCount - unknownHealed - unknownAi);
+
+            const knownCount = p.knownCount || 0;
+            const knownHealed = p.knownHealedCount || 0;
+            const knownAi = p.knownAiCount || 0;
+            const cleanKnown = Math.max(0, knownCount - knownHealed - knownAi);
+
+            const fixedCount = p.fixedCount || 0;
+            const fixedHealed = p.fixedHealedCount || 0;
+            const fixedAi = p.fixedAiCount || 0;
+            const cleanFixed = Math.max(0, fixedCount - fixedHealed - fixedAi);
+
+            const passCount = p.passCount || 0;
+            const passHealed = p.passHealedCount || 0;
+            const passAi = p.passAiCount || 0;
+            const cleanPass = Math.max(0, passCount - passHealed - passAi);
+
             const y0 = 80;
             const y1 = y0 - ((p.ignoredCount || 0) * scale);
-            const y2 = y1 - ((p.unknownCount || 0) * scale);
-            const y3 = y2 - ((p.knownCount || 0) * scale);
-            const y4 = y3 - ((p.fixedCount || 0) * scale);
-            const y5 = y4 - ((p.passCount || 0) * scale);
-            return { x, y0, y1, y2, y3, y4, y5 };
+            const y2_clean = y1 - (cleanUnknown * scale);
+            const y2_healed = y2_clean - (unknownHealed * scale);
+            const y2 = y2_healed - (unknownAi * scale);
+            const y3_clean = y2 - (cleanKnown * scale);
+            const y3_healed = y3_clean - (knownHealed * scale);
+            const y3 = y3_healed - (knownAi * scale);
+            const y4_clean = y3 - (cleanFixed * scale);
+            const y4_healed = y4_clean - (fixedHealed * scale);
+            const y4 = y4_healed - (fixedAi * scale);
+            const y5_clean = y4 - (cleanPass * scale);
+            const y5_healed = y5_clean - (passHealed * scale);
+            const y5 = y5_healed - (passAi * scale);
+
+            return {
+                x,
+                y0,
+                y1,
+                y2_clean,
+                y2_healed,
+                y2,
+                y3_clean,
+                y3_healed,
+                y3,
+                y4_clean,
+                y4_healed,
+                y4,
+                y5_clean,
+                y5_healed,
+                y5,
+                unknownHealed,
+                unknownAi,
+                knownHealed,
+                knownAi,
+                fixedHealed,
+                fixedAi,
+                passHealed,
+                passAi
+            };
         });
 
         function buildBezierTopPath(yProp) {
@@ -493,7 +776,7 @@ function renderDynamicAreaTrendCharts() {
             return d;
         }
 
-        let pathL1, pathL2, pathL3, pathL4, pathL5, topStroke;
+        let pathL1, pathL2, pathL2H, pathL2Ai, pathL3, pathL3H, pathL3Ai, pathL4, pathL4H, pathL4Ai, pathL5, pathL5H, pathL5Ai, topStroke;
 
         if (coords.length === 1) {
             const c = coords[0];
@@ -502,28 +785,69 @@ function renderDynamicAreaTrendCharts() {
             const rightX = Math.min(280, c.x + halfW);
 
             pathL1 = `M ${leftX} ${c.y1} L ${rightX} ${c.y1} L ${rightX} 80 L ${leftX} 80 Z`;
-            pathL2 = `M ${leftX} ${c.y2} L ${rightX} ${c.y2} L ${rightX} ${c.y1} L ${leftX} ${c.y1} Z`;
-            pathL3 = `M ${leftX} ${c.y3} L ${rightX} ${c.y3} L ${rightX} ${c.y2} L ${leftX} ${c.y2} Z`;
-            pathL4 = `M ${leftX} ${c.y4} L ${rightX} ${c.y4} L ${rightX} ${c.y3} L ${leftX} ${c.y3} Z`;
-            pathL5 = `M ${leftX} ${c.y5} L ${rightX} ${c.y5} L ${rightX} ${c.y4} L ${leftX} ${c.y4} Z`;
+            pathL2 = `M ${leftX} ${c.y2_clean} L ${rightX} ${c.y2_clean} L ${rightX} ${c.y1} L ${leftX} ${c.y1} Z`;
+            pathL2H = `M ${leftX} ${c.y2_healed} L ${rightX} ${c.y2_healed} L ${rightX} ${c.y2_clean} L ${leftX} ${c.y2_clean} Z`;
+            pathL2Ai = `M ${leftX} ${c.y2} L ${rightX} ${c.y2} L ${rightX} ${c.y2_healed} L ${leftX} ${c.y2_healed} Z`;
+            pathL3 = `M ${leftX} ${c.y3_clean} L ${rightX} ${c.y3_clean} L ${rightX} ${c.y2} L ${leftX} ${c.y2} Z`;
+            pathL3H = `M ${leftX} ${c.y3_healed} L ${rightX} ${c.y3_healed} L ${rightX} ${c.y3_clean} L ${leftX} ${c.y3_clean} Z`;
+            pathL3Ai = `M ${leftX} ${c.y3} L ${rightX} ${c.y3} L ${rightX} ${c.y3_healed} L ${leftX} ${c.y3_healed} Z`;
+            pathL4 = `M ${leftX} ${c.y4_clean} L ${rightX} ${c.y4_clean} L ${rightX} ${c.y3} L ${leftX} ${c.y3} Z`;
+            pathL4H = `M ${leftX} ${c.y4_healed} L ${rightX} ${c.y4_healed} L ${rightX} ${c.y4_clean} L ${leftX} ${c.y4_clean} Z`;
+            pathL4Ai = `M ${leftX} ${c.y4} L ${rightX} ${c.y4} L ${rightX} ${c.y4_healed} L ${leftX} ${c.y4_healed} Z`;
+            pathL5 = `M ${leftX} ${c.y5_clean} L ${rightX} ${c.y5_clean} L ${rightX} ${c.y4} L ${leftX} ${c.y4} Z`;
+            pathL5H = `M ${leftX} ${c.y5_healed} L ${rightX} ${c.y5_healed} L ${rightX} ${c.y5_clean} L ${leftX} ${c.y5_clean} Z`;
+            pathL5Ai = `M ${leftX} ${c.y5} L ${rightX} ${c.y5} L ${rightX} ${c.y5_healed} L ${leftX} ${c.y5_healed} Z`;
             topStroke = `M ${leftX} ${c.y5} L ${rightX} ${c.y5}`;
         } else {
             const lastX = coords[coords.length - 1].x;
             const firstX = coords[0].x;
 
             pathL1 = `${buildBezierTopPath('y1')} L ${lastX} 80 L ${firstX} 80 Z`;
-            pathL2 = `${buildBezierTopPath('y2')} ${buildBezierReversePath('y1')} Z`;
-            pathL3 = `${buildBezierTopPath('y3')} ${buildBezierReversePath('y2')} Z`;
-            pathL4 = `${buildBezierTopPath('y4')} ${buildBezierReversePath('y3')} Z`;
-            pathL5 = `${buildBezierTopPath('y5')} ${buildBezierReversePath('y4')} Z`;
+            pathL2 = `${buildBezierTopPath('y2_clean')} ${buildBezierReversePath('y1')} Z`;
+            pathL2H = `${buildBezierTopPath('y2_healed')} ${buildBezierReversePath('y2_clean')} Z`;
+            pathL2Ai = `${buildBezierTopPath('y2')} ${buildBezierReversePath('y2_healed')} Z`;
+            pathL3 = `${buildBezierTopPath('y3_clean')} ${buildBezierReversePath('y2')} Z`;
+            pathL3H = `${buildBezierTopPath('y3_healed')} ${buildBezierReversePath('y3_clean')} Z`;
+            pathL3Ai = `${buildBezierTopPath('y3')} ${buildBezierReversePath('y3_healed')} Z`;
+            pathL4 = `${buildBezierTopPath('y4_clean')} ${buildBezierReversePath('y3')} Z`;
+            pathL4H = `${buildBezierTopPath('y4_healed')} ${buildBezierReversePath('y4_clean')} Z`;
+            pathL4Ai = `${buildBezierTopPath('y4')} ${buildBezierReversePath('y4_healed')} Z`;
+            pathL5 = `${buildBezierTopPath('y5_clean')} ${buildBezierReversePath('y4')} Z`;
+            pathL5H = `${buildBezierTopPath('y5_healed')} ${buildBezierReversePath('y5_clean')} Z`;
+            pathL5Ai = `${buildBezierTopPath('y5')} ${buildBezierReversePath('y5_healed')} Z`;
             topStroke = buildBezierTopPath('y5');
         }
 
+        const hasUnknownHealed = coords.some(c => c.unknownHealed > 0);
+        const hasUnknownAi = coords.some(c => c.unknownAi > 0);
+        const hasKnownHealed = coords.some(c => c.knownHealed > 0);
+        const hasKnownAi = coords.some(c => c.knownAi > 0);
+        const hasFixedHealed = coords.some(c => c.fixedHealed > 0);
+        const hasFixedAi = coords.some(c => c.fixedAi > 0);
+        const hasPassHealed = coords.some(c => c.passHealed > 0);
+        const hasPassAi = coords.some(c => c.passAi > 0);
+
         svg.querySelector('.area-layer-ignored')?.setAttribute('d', pathL1);
         svg.querySelector('.area-layer-unknown')?.setAttribute('d', pathL2);
+        svg.querySelector('.area-layer-unknown-healed')?.setAttribute('d', hasUnknownHealed ? pathL2H : '');
+        svg.querySelector('.area-layer-unknown-healed-pat')?.setAttribute('d', hasUnknownHealed ? pathL2H : '');
+        svg.querySelector('.area-layer-unknown-ai')?.setAttribute('d', hasUnknownAi ? pathL2Ai : '');
+        svg.querySelector('.area-layer-unknown-ai-pat')?.setAttribute('d', hasUnknownAi ? pathL2Ai : '');
         svg.querySelector('.area-layer-known')?.setAttribute('d', pathL3);
+        svg.querySelector('.area-layer-known-healed')?.setAttribute('d', hasKnownHealed ? pathL3H : '');
+        svg.querySelector('.area-layer-known-healed-pat')?.setAttribute('d', hasKnownHealed ? pathL3H : '');
+        svg.querySelector('.area-layer-known-ai')?.setAttribute('d', hasKnownAi ? pathL3Ai : '');
+        svg.querySelector('.area-layer-known-ai-pat')?.setAttribute('d', hasKnownAi ? pathL3Ai : '');
         svg.querySelector('.area-layer-fixed')?.setAttribute('d', pathL4);
+        svg.querySelector('.area-layer-fixed-healed')?.setAttribute('d', hasFixedHealed ? pathL4H : '');
+        svg.querySelector('.area-layer-fixed-healed-pat')?.setAttribute('d', hasFixedHealed ? pathL4H : '');
+        svg.querySelector('.area-layer-fixed-ai')?.setAttribute('d', hasFixedAi ? pathL4Ai : '');
+        svg.querySelector('.area-layer-fixed-ai-pat')?.setAttribute('d', hasFixedAi ? pathL4Ai : '');
         svg.querySelector('.area-layer-pass')?.setAttribute('d', pathL5);
+        svg.querySelector('.area-layer-pass-healed')?.setAttribute('d', hasPassHealed ? pathL5H : '');
+        svg.querySelector('.area-layer-pass-healed-pat')?.setAttribute('d', hasPassHealed ? pathL5H : '');
+        svg.querySelector('.area-layer-pass-ai')?.setAttribute('d', hasPassAi ? pathL5Ai : '');
+        svg.querySelector('.area-layer-pass-ai-pat')?.setAttribute('d', hasPassAi ? pathL5Ai : '');
         svg.querySelector('.area-layer-top-stroke')?.setAttribute('d', topStroke);
     });
 }
@@ -617,6 +941,17 @@ function closeSidePanelInspector() {
     if (panel) panel.classList.remove('active');
     if (resizer) resizer.classList.remove('active');
 
+    const linterContainer = document.getElementById('sidePageLinterFindingsContainer');
+    if (linterContainer) {
+        linterContainer.innerHTML = '';
+        linterContainer.style.display = 'none';
+    }
+    const postFlightContainer = document.getElementById('sidePagePostFlightFindingsContainer');
+    if (postFlightContainer) {
+        postFlightContainer.innerHTML = '';
+        postFlightContainer.style.display = 'none';
+    }
+
     document.querySelectorAll('tr.clickable-row').forEach(r => {
         r.classList.remove('selected', 'active-selected-row');
         const marker = r.querySelector('.active-row-marker');
@@ -627,15 +962,27 @@ function closeSidePanelInspector() {
 function filterAllTestsByStatus(statusKey) {
     switchRunReportSubTab('runReportSubTabAllTests', document.getElementById('runReportTabBtnAllTests'));
 
-    if (activeWholeExecutionFilter === statusKey) {
+    // Clicking general status number or card resets healed filter to ALL
+    currentHealedFilter = 'ALL';
+    document.querySelectorAll('#healedFilterToggle .segment-btn').forEach(btn => {
+        if (btn.getAttribute('data-val') === 'ALL') {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    if (statusKey === 'ALL' || activeWholeExecutionFilter === statusKey || currentGlobalStatusBadgeFilter === statusKey) {
         activeWholeExecutionFilter = null;
+        currentGlobalStatusBadgeFilter = 'ALL';
         statusKey = null;
     } else {
         activeWholeExecutionFilter = statusKey;
+        currentGlobalStatusBadgeFilter = statusKey;
     }
 
     document.querySelectorAll('#runReportSubTabOverview .metric-card, #runReportSubTabOverview .kpi-card').forEach(card => card.classList.remove('active-filter'));
-    document.querySelectorAll('.js-filter-badge').forEach(badge => badge.classList.remove('active-filter'));
+    document.querySelectorAll('.js-filter-badge').forEach(badge => badge.classList.remove('active-filter', 'active-filter-badge'));
 
     if (statusKey) {
         const cardMap = {
@@ -645,6 +992,7 @@ function filterAllTestsByStatus(statusKey) {
             'FAILED_UNKNOWN': 'overviewKpiUnknown',
             'SKIPPED': 'overviewKpiIgnored',
             'IGNORED': 'overviewKpiIgnored',
+            'RUNNING': 'overviewKpiRunning',
             'passed-clean': 'metricValPassed',
             'succeeded-fixed': 'metricValSucceeded',
             'failed-known': 'metricValKnownFail',
@@ -655,22 +1003,29 @@ function filterAllTestsByStatus(statusKey) {
         if (cardValId) {
             document.getElementById(cardValId)?.closest('.metric-card, .kpi-card')?.classList.add('active-filter');
         }
-        document.querySelectorAll(`.js-filter-badge[data-status-key="${statusKey}"]`).forEach(b => b.classList.add('active-filter'));
+        document.querySelectorAll(`.js-filter-badge[data-status-key="${statusKey}"]`).forEach(b => b.classList.add('active-filter', 'active-filter-badge'));
     }
 
+    applyFilter();
     applyRunReportFilters();
 }
 
 function applyRunReportFilters() {
-    const locMenu = document.getElementById('locationMultiselectMenu');
-    const browserMenu = document.getElementById('browserMultiselectMenu');
-    const bugMenu = document.getElementById('bugMultiselectMenu');
-    const failureMenu = document.getElementById('failureMultiselectMenu');
+    const modeMenu = document.getElementById('reportModesMultiselectMenu');
+    const browserMenu = document.getElementById('reportBrowsersMultiselectMenu') || document.getElementById('browserMultiselectMenu');
+    const locMenu = document.getElementById('reportLocalesMultiselectMenu') || document.getElementById('locationMultiselectMenu');
+
+    const selectedModes = modeMenu ? Array.from(modeMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value.trim().toUpperCase()) : [];
+    const totalModes = modeMenu ? modeMenu.querySelectorAll('.js-chk-option').length : 0;
+
+    const selectedBrowsers = browserMenu ? Array.from(browserMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value.trim().toUpperCase()) : [];
+    const totalBrowsers = browserMenu ? browserMenu.querySelectorAll('.js-chk-option').length : 0;
 
     const selectedLocs = locMenu ? Array.from(locMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value.trim().toUpperCase()) : [];
-    const selectedBrowsers = browserMenu ? Array.from(browserMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value.trim().toUpperCase()) : [];
-    const selectedBugs = bugMenu ? Array.from(bugMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value) : [];
-    const selectedFailures = failureMenu ? Array.from(failureMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value) : [];
+    const totalLocs = locMenu ? locMenu.querySelectorAll('.js-chk-option').length : 0;
+
+    const searchInput = document.getElementById('searchInput');
+    const search = searchInput ? (searchInput.value || '').trim().toLowerCase() : '';
 
     document.querySelectorAll('#runReportSubTabAllTests .test-row').forEach(row => {
         let loc = (row.getAttribute('data-location') || '').trim().toUpperCase();
@@ -679,62 +1034,85 @@ function applyRunReportFilters() {
         let browser = (row.getAttribute('data-browser') || '').trim().toUpperCase();
         if (!browser) browser = 'UNKNOWN';
 
-        const bugs = (row.getAttribute('data-bugs') || '').split(',');
-        const failure = row.getAttribute('data-failure') || 'NONE';
+        let mode = (row.getAttribute('data-mode') || '').trim().toUpperCase();
+        if (!mode) mode = 'UNKNOWN';
 
-        const matchLoc = selectedLocs.length === 0 || selectedLocs.includes(loc);
-        const matchBrowser = selectedBrowsers.length === 0 || selectedBrowsers.includes(browser);
+        const rowSearch = (row.getAttribute('data-search') || (row.innerText || '')).toLowerCase();
 
-        let matchBug = selectedBugs.length === 0;
-        if (!matchBug) {
-            if (selectedBugs.includes('NONE') && (row.getAttribute('data-bugs') === 'NONE' || !row.getAttribute('data-bugs') || bugs.length === 0)) {
-                matchBug = true;
-            } else if (bugs.some(b => selectedBugs.includes(b))) {
-                matchBug = true;
-            }
-        }
-
-        let matchFailure = selectedFailures.length === 0;
-        if (!matchFailure) {
-            if (selectedFailures.includes('NONE') && (failure === 'NONE' || !failure)) {
-                matchFailure = true;
-            } else if (selectedFailures.some(f => failure.includes(f))) {
-                matchFailure = true;
-            }
-        }
+        const matchLoc = !locMenu || totalLocs === 0 ? true : selectedLocs.includes(loc);
+        const matchBrowser = !browserMenu || totalBrowsers === 0 ? true : selectedBrowsers.includes(browser);
+        const matchMode = !modeMenu || totalModes === 0 ? true : selectedModes.includes(mode);
+        const matchSearch = (!search || rowSearch.indexOf(search) !== -1);
 
         let matchStatus = true;
-        if (activeWholeExecutionFilter) {
-            if (activeWholeExecutionFilter === 'SKIPPED' || activeWholeExecutionFilter === 'IGNORED') {
-                const rowSt = row.getAttribute('data-status') || '';
-                const rowStRaw = row.getAttribute('data-status-raw') || '';
+        const statusFilter = (currentGlobalStatusBadgeFilter && currentGlobalStatusBadgeFilter !== 'ALL') ? currentGlobalStatusBadgeFilter : (activeWholeExecutionFilter && activeWholeExecutionFilter !== 'ALL' ? activeWholeExecutionFilter : null);
+        if (statusFilter) {
+            const rowSt = (row.getAttribute('data-status') || '').toUpperCase();
+            const rowStRaw = (row.getAttribute('data-status-raw') || '').toLowerCase();
+            if (statusFilter === 'SKIPPED' || statusFilter === 'IGNORED') {
                 matchStatus = rowSt === 'SKIPPED' || rowStRaw === 'ignored' || rowStRaw === 'skipped';
+            } else if (statusFilter === 'PASSED') {
+                matchStatus = rowSt === 'PASSED' || rowStRaw === 'passed-clean' || rowStRaw === 'passed' || rowStRaw === 'succeeded';
+            } else if (statusFilter === 'SUCCEEDED_FIXED' || statusFilter === 'FIXED') {
+                matchStatus = rowSt === 'SUCCEEDED_FIXED' || rowStRaw === 'succeeded-fixed' || rowStRaw === 'fixed';
+            } else if (statusFilter === 'FAILED_KNOWN' || statusFilter === 'KNOWN') {
+                matchStatus = rowSt === 'FAILED_KNOWN' || rowStRaw === 'failed-known' || rowStRaw === 'known';
+            } else if (statusFilter === 'FAILED_UNKNOWN' || statusFilter === 'UNKNOWN') {
+                matchStatus = rowSt === 'FAILED_UNKNOWN' || rowStRaw === 'failed-unknown' || rowStRaw === 'failed' || rowStRaw === 'error';
             } else {
-                matchStatus = row.getAttribute('data-status') === activeWholeExecutionFilter;
+                matchStatus = rowSt === statusFilter;
             }
         }
 
-        row.style.display = (matchLoc && matchBrowser && matchBug && matchFailure && matchStatus) ? '' : 'none';
+        const areaGroup = row.closest('.area-group');
+        const areaStatusFilter = areaGroup ? (areaGroup.getAttribute('data-active-status-filter') || 'ALL') : 'ALL';
+        const classContainer = row.closest('.test-class-container');
+        const classStatusFilter = classContainer ? (classContainer.getAttribute('data-active-status-filter') || 'ALL') : 'ALL';
+
+        function matchesBadge(filterKey) {
+            if (!filterKey || filterKey === 'ALL') return true;
+            const key = filterKey.toUpperCase();
+            const rowSt = (row.getAttribute('data-status') || '').toUpperCase();
+            const rowStRaw = (row.getAttribute('data-status-raw') || '').toLowerCase();
+            if (key === 'PASSED') return rowSt === 'PASSED' || rowStRaw === 'passed-clean' || rowStRaw === 'passed' || rowStRaw === 'succeeded';
+            if (key === 'SUCCEEDED_FIXED' || key === 'FIXED') return rowSt === 'SUCCEEDED_FIXED' || rowStRaw === 'succeeded-fixed' || rowStRaw === 'fixed';
+            if (key === 'FAILED_KNOWN' || key === 'KNOWN') return rowSt === 'FAILED_KNOWN' || rowStRaw === 'failed-known' || rowStRaw === 'known';
+            if (key === 'FAILED_UNKNOWN' || key === 'UNKNOWN') return rowSt === 'FAILED_UNKNOWN' || rowStRaw === 'failed-unknown' || rowStRaw === 'failed' || rowStRaw === 'error';
+            if (key === 'SKIPPED' || key === 'IGNORED') return rowSt === 'SKIPPED' || rowStRaw === 'ignored' || rowStRaw === 'skipped';
+            return rowSt.includes(key);
+        }
+
+        const matchArea = matchesBadge(areaStatusFilter);
+        const matchClass = matchesBadge(classStatusFilter);
+
+        row.style.display = (matchLoc && matchBrowser && matchMode && matchStatus && matchArea && matchClass && matchSearch) ? '' : 'none';
     });
 
     document.querySelectorAll('#runReportSubTabAllTests .test-class-container').forEach(classBox => {
-        const visibleRows = classBox.querySelectorAll('.test-row:not([style*="display: none"])');
+        const visibleRows = Array.from(classBox.querySelectorAll('.test-row')).filter(r => r.style.display !== 'none');
         classBox.style.display = visibleRows.length > 0 ? '' : 'none';
     });
 
     document.querySelectorAll('#runReportSubTabAllTests .area-group').forEach(areaBox => {
-        const visibleRows = areaBox.querySelectorAll('.test-row:not([style*="display: none"])');
+        const visibleRows = Array.from(areaBox.querySelectorAll('.test-row')).filter(r => r.style.display !== 'none');
         areaBox.style.display = visibleRows.length > 0 ? '' : 'none';
     });
+
+    const totalVisible = Array.from(document.querySelectorAll('#runReportSubTabAllTests .test-row')).filter(r => r.style.display !== 'none').length;
+    const emptyState = document.getElementById('runReportFilterEmptyState');
+    if (emptyState) {
+        emptyState.style.display = totalVisible === 0 ? 'block' : 'none';
+    }
 
     // Filter status badges on both area group headers AND test class headers
     document.querySelectorAll('#runReportSubTabAllTests .area-group-header .badge-status, #runReportSubTabAllTests .test-class-header .badge-status').forEach(badge => {
         const badgeType = badge.getAttribute('data-status-type') || badge.getAttribute('data-status-key');
-        if (activeWholeExecutionFilter) {
-            if (activeWholeExecutionFilter === 'SKIPPED' || activeWholeExecutionFilter === 'IGNORED') {
+        const stFilter = (currentGlobalStatusBadgeFilter && currentGlobalStatusBadgeFilter !== 'ALL') ? currentGlobalStatusBadgeFilter : (activeWholeExecutionFilter && activeWholeExecutionFilter !== 'ALL' ? activeWholeExecutionFilter : null);
+        if (stFilter) {
+            if (stFilter === 'SKIPPED' || stFilter === 'IGNORED') {
                 badge.style.display = (badgeType === 'SKIPPED' || badgeType === 'IGNORED') ? '' : 'none';
             } else {
-                badge.style.display = (badgeType === activeWholeExecutionFilter) ? '' : 'none';
+                badge.style.display = (badgeType === stFilter) ? '' : 'none';
             }
         } else {
             badge.style.display = '';
@@ -746,8 +1124,15 @@ function resetGlobalTestFilters() {
     document.querySelectorAll('#runReportSubTabAllTests .js-chk-all, #runReportSubTabAllTests .js-chk-option').forEach(c => c.checked = true);
     document.querySelectorAll('#runReportSubTabAllTests .js-selected-text').forEach(s => s.innerText = 'All Selected');
     activeWholeExecutionFilter = null;
+    currentGlobalStatusBadgeFilter = 'ALL';
+    currentExecutionStatusFilter = 'ALL';
+    currentExecutionModeFilter = 'ALL';
+    currentHealedFilter = 'ALL';
     document.querySelectorAll('#runReportSubTabOverview .metric-card').forEach(card => card.classList.remove('active-filter'));
-    document.querySelectorAll('.js-filter-badge').forEach(b => b.classList.remove('active-filter'));
+    document.querySelectorAll('.js-filter-badge').forEach(b => b.classList.remove('active-filter', 'active-filter-badge'));
+    document.querySelectorAll('.area-group, .test-class-container').forEach(el => el.removeAttribute('data-active-status-filter'));
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) searchInput.value = '';
     applyRunReportFilters();
 }
 
@@ -782,10 +1167,38 @@ function toggleRunCommentFormBox() {
     if (box) box.classList.toggle('active');
 }
 
+function resolveActiveRunId(preferredRunId, rowElement) {
+    let rid = preferredRunId;
+    if (!rid || rid === '#RUN_ID' || rid === 'RUN_ID') {
+        rid = rowElement?.getAttribute('data-run-id');
+    }
+    if (!rid || rid === '#RUN_ID' || rid === 'RUN_ID') {
+        const rootContainer = document.querySelector('[data-run-id]');
+        rid = rootContainer?.getAttribute('data-run-id');
+    }
+    if (!rid || rid === '#RUN_ID' || rid === 'RUN_ID') {
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            rid = urlParams.get('runId');
+        } catch (ignored) {}
+    }
+    if (!rid || rid === '#RUN_ID' || rid === 'RUN_ID') {
+        const labelText = document.querySelector('.run-id-label')?.innerText?.trim();
+        if (labelText && labelText !== '#RUN_ID' && labelText !== 'RUN_ID') {
+            rid = labelText;
+        }
+    }
+    if (rid && typeof rid === 'string') {
+        rid = rid.trim().replace(/^#+/, '');
+    }
+    return (rid && rid !== 'RUN_ID' && rid !== '#RUN_ID') ? rid : '#RUN_ID';
+}
+
 function saveBugTicketLink() {
     const inputVal = document.getElementById('bugTicketInput')?.value || '';
     const parsedBugs = inputVal.split(/[, ]+/).map(s => s.trim()).filter(s => s.length > 0);
-    const activeRunId = document.querySelector('.run-id-label')?.innerText.trim() || '#RUN_ID';
+    const activeRow = currentActiveRowId ? (document.getElementById(currentActiveRowId) || document.querySelector(`[data-row-id="${currentActiveRowId}"]`)) : null;
+    const activeRunId = resolveActiveRunId(null, activeRow);
 
     if (currentActiveRowId) {
         if (parsedBugs.length > 0) {
@@ -854,7 +1267,8 @@ function removeSpecificBugTicketLink(bugToRemove) {
         delete executionBugMap[currentActiveRowId];
     }
 
-    const activeRunId = document.querySelector('.run-id-label')?.innerText.trim() || '#RUN_ID';
+    const activeRow = currentActiveRowId ? (document.getElementById(currentActiveRowId) || document.querySelector(`[data-row-id="${currentActiveRowId}"]`)) : null;
+    const activeRunId = resolveActiveRunId(null, activeRow);
     fetch(`/fragments/test-side-panel/bugs?runId=${encodeURIComponent(activeRunId)}&rowId=${encodeURIComponent(currentActiveRowId)}&bugTicket=${encodeURIComponent(bugToRemove)}`, {
         method: 'DELETE',
         headers: { 'HX-Request': 'true' }
@@ -935,7 +1349,7 @@ function updateRowStatusAndMetrics(rowId) {
         if (newStatus === 'PASSED' || newStatus === 'passed-clean') {
             statusTd.innerHTML = `<span class="badge-status badge-pass"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">check_circle</span> PASSED</span>`;
         } else if (newStatus === 'SUCCEEDED_FIXED' || newStatus === 'succeeded-fixed') {
-            statusTd.innerHTML = `<span class="badge-status badge-healed"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">healing</span> SUCCEEDED-FIXED</span>`;
+            statusTd.innerHTML = `<span class="badge-status badge-fixed"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> SUCCEEDED-FIXED</span>`;
         } else if (newStatus === 'FAILED_KNOWN' || newStatus === 'failed-known') {
             statusTd.innerHTML = `<span class="badge-status badge-known-fail"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> KNOWN FAIL</span>`;
         } else if (newStatus === 'FAILED_UNKNOWN' || newStatus === 'failed-unknown') {
@@ -995,10 +1409,10 @@ function getRowStatusCategory(r) {
     if (st === 'RUNNING' || stRaw === 'running' || stRaw === 'in_progress' || stRaw === 'executing' || stRaw === 'pending') {
         return 'RUNNING';
     }
-    if (st === 'SUCCEEDED_FIXED' || st === 'HEALED' || stRaw === 'succeeded-fixed' || stRaw === 'fixed' || stRaw === 'healed') {
+    if (st === 'SUCCEEDED_FIXED' || stRaw === 'succeeded-fixed' || stRaw === 'fixed') {
         return hasBugs ? 'SUCCEEDED_FIXED' : 'PASSED';
     }
-    if (st === 'PASSED' || stRaw === 'passed-clean' || stRaw === 'passed' || stRaw === 'succeeded') {
+    if (st === 'PASSED' || st === 'HEALED' || stRaw === 'passed-clean' || stRaw === 'passed' || stRaw === 'succeeded' || stRaw === 'healed') {
         return hasBugs ? 'SUCCEEDED_FIXED' : 'PASSED';
     }
     if (st === 'FAILED_KNOWN' || stRaw === 'failed-known' || stRaw === 'known') {
@@ -1018,6 +1432,7 @@ function recalculateRunReportMetrics() {
     if (rows.length === 0) return;
 
     let pass = 0, fixed = 0, known = 0, unknown = 0, ignored = 0, running = 0;
+    let passHealed = 0, fixedHealed = 0, knownHealed = 0, unknownHealed = 0;
     let totalLlmCalls = 0;
     let totalLlmTokens = 0;
     let totalLlmCost = 0.0;
@@ -1030,6 +1445,14 @@ function recalculateRunReportMetrics() {
         else if (cat === 'FAILED_UNKNOWN') unknown++;
         else if (cat === 'SKIPPED') ignored++;
         else if (cat === 'RUNNING') running++;
+
+        const isHealed = r.getAttribute('data-healed') === 'true' || Number(r.getAttribute('data-healed-count') || 0) > 0 || (r.getAttribute('data-status-raw') || '').toLowerCase() === 'healed';
+        if (isHealed) {
+            if (cat === 'PASSED') passHealed++;
+            else if (cat === 'SUCCEEDED_FIXED') fixedHealed++;
+            else if (cat === 'FAILED_KNOWN') knownHealed++;
+            else if (cat === 'FAILED_UNKNOWN') unknownHealed++;
+        }
 
         const ai = syncRowAiUsage(r);
         if (ai) {
@@ -1073,10 +1496,47 @@ function recalculateRunReportMetrics() {
     const elOvLlmSub = document.getElementById('overviewKpiTotalLlmSub');
 
     if (elOvTotal) elOvTotal.innerText = totalExecutions;
-    if (elOvPass) elOvPass.innerText = pass;
-    if (elOvFixed) elOvFixed.innerText = fixed;
-    if (elOvKnown) elOvKnown.innerText = known;
-    if (elOvUnknown) elOvUnknown.innerText = unknown;
+
+    if (elOvPass) {
+        if (passHealed > 0) {
+            elOvPass.className = 'kpi-value-dual';
+            elOvPass.innerHTML = `<span class="kpi-healed-part text-pass-healed" onclick="event.stopPropagation(); filterAllTestsByHealedStatus('PASSED', 'HEALED')" title="Filter Passed Healed Tests"><span class="material-symbols-outlined kpi-sparkle-icon">auto_fix_high</span> ${passHealed} healed</span><span class="kpi-slash">/</span><span class="kpi-total-part text-pass" onclick="event.stopPropagation(); filterAllTestsByStatus('PASSED')" title="Filter All Passed Tests">${pass} passed</span>`;
+        } else {
+            elOvPass.className = 'kpi-value text-pass';
+            elOvPass.innerText = pass;
+        }
+    }
+
+    if (elOvFixed) {
+        if (fixedHealed > 0) {
+            elOvFixed.className = 'kpi-value-dual';
+            elOvFixed.innerHTML = `<span class="kpi-healed-part text-fixed-healed" onclick="event.stopPropagation(); filterAllTestsByHealedStatus('SUCCEEDED_FIXED', 'HEALED')" title="Filter Succeeded-Fixed Healed Tests"><span class="material-symbols-outlined kpi-sparkle-icon">auto_fix_high</span> ${fixedHealed} healed</span><span class="kpi-slash">/</span><span class="kpi-total-part text-fixed" onclick="event.stopPropagation(); filterAllTestsByStatus('SUCCEEDED_FIXED')" title="Filter All Succeeded-Fixed Tests">${fixed} fixed</span>`;
+        } else {
+            elOvFixed.className = 'kpi-value text-fixed';
+            elOvFixed.innerText = fixed;
+        }
+    }
+
+    if (elOvKnown) {
+        if (knownHealed > 0) {
+            elOvKnown.className = 'kpi-value-dual';
+            elOvKnown.innerHTML = `<span class="kpi-healed-part text-known-healed" onclick="event.stopPropagation(); filterAllTestsByHealedStatus('FAILED_KNOWN', 'HEALED')" title="Filter Known Fail Healed Tests"><span class="material-symbols-outlined kpi-sparkle-icon">auto_fix_high</span> ${knownHealed} healed</span><span class="kpi-slash">/</span><span class="kpi-total-part text-known" onclick="event.stopPropagation(); filterAllTestsByStatus('FAILED_KNOWN')" title="Filter All Known Fail Tests">${known} known fail</span>`;
+        } else {
+            elOvKnown.className = 'kpi-value text-known';
+            elOvKnown.innerText = known;
+        }
+    }
+
+    if (elOvUnknown) {
+        if (unknownHealed > 0) {
+            elOvUnknown.className = 'kpi-value-dual';
+            elOvUnknown.innerHTML = `<span class="kpi-healed-part text-unknown-healed" onclick="event.stopPropagation(); filterAllTestsByHealedStatus('FAILED_UNKNOWN', 'HEALED')" title="Filter Unknown Fail Healed Tests"><span class="material-symbols-outlined kpi-sparkle-icon">auto_fix_high</span> ${unknownHealed} healed</span><span class="kpi-slash">/</span><span class="kpi-total-part text-fail" onclick="event.stopPropagation(); filterAllTestsByStatus('FAILED_UNKNOWN')" title="Filter All Unknown Fail Tests">${unknown} unknown fail</span>`;
+        } else {
+            elOvUnknown.className = 'kpi-value text-fail';
+            elOvUnknown.innerText = unknown;
+        }
+    }
+
     if (elOvIgnored) elOvIgnored.innerText = ignored;
     if (elOvRunning) elOvRunning.innerText = running;
 
@@ -1100,7 +1560,7 @@ function recalculateRunReportMetrics() {
 
         wholeBadges.innerHTML = `
             <span class="badge-status badge-pass clickable-badge js-filter-badge${isPassActive}" onclick="filterByGlobalStatusBadge('PASSED', this)" data-status-key="PASSED" title="Filter Passed">Passed: ${pass}</span>
-            <span class="badge-status badge-healed clickable-badge js-filter-badge${isFixedActive}" onclick="filterByGlobalStatusBadge('SUCCEEDED_FIXED', this)" data-status-key="SUCCEEDED_FIXED" title="Filter Succeeded-Fixed">Succeeded-Fixed: ${fixed}</span>
+            <span class="badge-status badge-fixed clickable-badge js-filter-badge${isFixedActive}" onclick="filterByGlobalStatusBadge('SUCCEEDED_FIXED', this)" data-status-key="SUCCEEDED_FIXED" title="Filter Succeeded-Fixed">Succeeded-Fixed: ${fixed}</span>
             <span class="badge-status badge-known-fail clickable-badge js-filter-badge${isKnownActive}" onclick="filterByGlobalStatusBadge('FAILED_KNOWN', this)" data-status-key="FAILED_KNOWN" title="Filter Known Fail">Known Fail: ${known}</span>
             <span class="badge-status badge-unknown-fail clickable-badge js-filter-badge${isUnknownActive}" onclick="filterByGlobalStatusBadge('FAILED_UNKNOWN', this)" data-status-key="FAILED_UNKNOWN" title="Filter Unknown Fail">Unknown Fail: ${unknown}</span>
             <span class="badge-status badge-ignored clickable-badge js-filter-badge${isSkippedActive}" onclick="filterByGlobalStatusBadge('SKIPPED', this)" data-status-key="SKIPPED" title="Filter Ignored/Skipped">Ignored: ${ignored}</span>
@@ -1114,6 +1574,8 @@ function recalculateRunReportMetrics() {
         const areaRows = areaGroup.querySelectorAll('.test-row, tr.execution-row');
 
         let aPass = 0, aFixed = 0, aKnown = 0, aUnknown = 0, aIgnored = 0, aRunning = 0;
+        let aPassHealed = 0, aFixedHealed = 0, aKnownHealed = 0, aUnknownHealed = 0;
+        let aPassAi = 0, aFixedAi = 0, aKnownAi = 0, aUnknownAi = 0;
         areaRows.forEach(r => {
             const cat = getRowStatusCategory(r);
             if (cat === 'PASSED') aPass++;
@@ -1122,6 +1584,22 @@ function recalculateRunReportMetrics() {
             else if (cat === 'FAILED_UNKNOWN') aUnknown++;
             else if (cat === 'SKIPPED') aIgnored++;
             else if (cat === 'RUNNING') aRunning++;
+
+            const isHealed = r.getAttribute('data-healed') === 'true' || Number(r.getAttribute('data-healed-count') || 0) > 0 || (r.getAttribute('data-status-raw') || '').toLowerCase() === 'healed';
+            if (isHealed) {
+                if (cat === 'PASSED') aPassHealed++;
+                else if (cat === 'SUCCEEDED_FIXED') aFixedHealed++;
+                else if (cat === 'FAILED_KNOWN') aKnownHealed++;
+                else if (cat === 'FAILED_UNKNOWN') aUnknownHealed++;
+            }
+
+            const isAi = r.getAttribute('data-ai') === 'true' || (r.getAttribute('data-mode') || '').toUpperCase() === 'AI' || Number(r.getAttribute('data-llm-calls') || 0) > 0;
+            if (isAi) {
+                if (cat === 'PASSED') aPassAi++;
+                else if (cat === 'SUCCEEDED_FIXED') aFixedAi++;
+                else if (cat === 'FAILED_KNOWN') aKnownAi++;
+                else if (cat === 'FAILED_UNKNOWN') aUnknownAi++;
+            }
         });
 
         const totalArea = aPass + aFixed + aKnown + aUnknown + aIgnored + aRunning;
@@ -1136,7 +1614,7 @@ function recalculateRunReportMetrics() {
             const activeFilter = areaGroup.getAttribute('data-active-status-filter') || 'ALL';
             let badgesHtml = '';
             if (aPass > 0) badgesHtml += `<span class="badge-status badge-pass clickable-badge${activeFilter === 'PASSED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'PASSED');" title="Filter Passed in Area">Passed: ${aPass}</span>`;
-            if (aFixed > 0) badgesHtml += `<span class="badge-status badge-healed clickable-badge${activeFilter === 'SUCCEEDED_FIXED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'SUCCEEDED_FIXED');" title="Filter Succeeded-Fixed in Area">Succeeded-Fixed: ${aFixed}</span>`;
+            if (aFixed > 0) badgesHtml += `<span class="badge-status badge-fixed clickable-badge${activeFilter === 'SUCCEEDED_FIXED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'SUCCEEDED_FIXED');" title="Filter Succeeded-Fixed in Area">Succeeded-Fixed: ${aFixed}</span>`;
             if (aKnown > 0) badgesHtml += `<span class="badge-status badge-known-fail clickable-badge${activeFilter === 'FAILED_KNOWN' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'FAILED_KNOWN');" title="Filter Known Fail in Area">Known: ${aKnown}</span>`;
             if (aUnknown > 0) badgesHtml += `<span class="badge-status badge-unknown-fail clickable-badge${activeFilter === 'FAILED_UNKNOWN' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'FAILED_UNKNOWN');" title="Filter Unknown Fail in Area">Unknown: ${aUnknown}</span>`;
             if (aIgnored > 0) badgesHtml += `<span class="badge-status badge-ignored clickable-badge${activeFilter === 'SKIPPED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'SKIPPED');" title="Filter Ignored in Area">Ignored: ${aIgnored}</span>`;
@@ -1160,33 +1638,116 @@ function recalculateRunReportMetrics() {
             if (valIgnored) valIgnored.innerText = aIgnored;
             if (valRunning) valRunning.innerText = aRunning;
 
+            const syncInlineHealedBadge = (valElement, badgeClass, count) => {
+                if (!valElement) return;
+                const parentGroup = valElement.closest('.val-group') || valElement.parentElement;
+                if (!parentGroup) return;
+                let badge = parentGroup.querySelector(`.${badgeClass}`);
+                if (count > 0) {
+                    if (!badge) {
+                        badge = document.createElement('span');
+                        badge.className = `badge-healed-inline ${badgeClass}`;
+                        parentGroup.appendChild(badge);
+                    }
+                    badge.innerText = `✨ ${count} healed`;
+                    badge.style.display = 'inline-flex';
+                } else if (badge) {
+                    badge.style.display = 'none';
+                }
+            };
+
+            const syncInlineAiBadge = (valElement, badgeClass, count) => {
+                if (!valElement) return;
+                const parentGroup = valElement.closest('.val-group') || valElement.parentElement;
+                if (!parentGroup) return;
+                let badge = parentGroup.querySelector(`.${badgeClass}`);
+                if (count > 0) {
+                    if (!badge) {
+                        badge = document.createElement('span');
+                        badge.className = `badge-ai-inline ${badgeClass}`;
+                        parentGroup.appendChild(badge);
+                    }
+                    badge.innerText = `${count} AI`;
+                    badge.style.display = 'inline-flex';
+                } else if (badge) {
+                    badge.style.display = 'none';
+                }
+            };
+
+            syncInlineHealedBadge(valPass, 'badge-pass-healed', aPassHealed);
+            syncInlineAiBadge(valPass, 'badge-pass-ai', aPassAi);
+            syncInlineHealedBadge(valFixed, 'badge-fixed-healed', aFixedHealed);
+            syncInlineAiBadge(valFixed, 'badge-fixed-ai', aFixedAi);
+            syncInlineHealedBadge(valKnown, 'badge-known-healed', aKnownHealed);
+            syncInlineAiBadge(valKnown, 'badge-known-ai', aKnownAi);
+            syncInlineHealedBadge(valUnknown, 'badge-unknown-healed', aUnknownHealed);
+            syncInlineAiBadge(valUnknown, 'badge-unknown-ai', aUnknownAi);
+
             const svgWrapper = pieCard.querySelector('.pie-chart-wrapper');
             if (svgWrapper && totalArea > 0) {
-                const pPass = (aPass / totalArea) * 100;
-                const pFixed = (aFixed / totalArea) * 100;
-                const pKnown = (aKnown / totalArea) * 100;
-                const pUnknown = (aUnknown / totalArea) * 100;
-                const pIgnored = (aIgnored / totalArea) * 100;
-                const pRunning = (aRunning / totalArea) * 100;
-
-                const cPass = `${pPass} ${100 - pPass}`;
-                const cFixed = `${pFixed} ${100 - pFixed}`;
-                const cKnown = `${pKnown} ${100 - pKnown}`;
-                const cUnknown = `${pUnknown} ${100 - pUnknown}`;
-                const cIgnored = `${pIgnored} ${100 - pIgnored}`;
-                const cRunning = `${pRunning} ${100 - pRunning}`;
-
-                svgWrapper.innerHTML = `
+                const patId = 'sparkle-pat-' + encodeURIComponent(areaName).replace(/[^a-zA-Z0-9_-]/g, '_');
+                const aiPatId = 'ai-pat-' + encodeURIComponent(areaName).replace(/[^a-zA-Z0-9_-]/g, '_');
+                let currentOffset = 25;
+                let circlesHtml = `
                     <svg width="100%" height="100%" viewBox="0 0 36 36">
+                        <defs>
+                            <pattern id="${patId}" width="4.5" height="4.5" patternUnits="userSpaceOnUse" patternTransform="rotate(25)">
+                                <path d="M 2.25, 0.7 Q 2.25, 2.25 3.8, 2.25 Q 2.25, 2.25 2.25, 3.8 Q 2.25, 2.25 0.7, 2.25 Q 2.25, 2.25 2.25, 0.7 Z" fill="#ffffff" opacity="0.9"/>
+                                <circle cx="3.8" cy="0.9" r="0.4" fill="#fef08a" opacity="0.95"/>
+                            </pattern>
+                            <pattern id="${aiPatId}" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                                <line x1="0" y1="0" x2="0" y2="4" stroke="rgba(255,255,255,0.75)" stroke-width="1.2" />
+                            </pattern>
+                        </defs>
                         <circle cx="18" cy="18" r="15.915" fill="none" stroke="#e2e8f0" stroke-width="4"/>
-                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#059669" stroke-width="5" stroke-dasharray="${cPass}" stroke-dashoffset="25"/>
-                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#2563eb" stroke-width="5" stroke-dasharray="${cFixed}" stroke-dashoffset="${25 - pPass}"/>
-                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#ea580c" stroke-width="5" stroke-dasharray="${cKnown}" stroke-dashoffset="${25 - pPass - pFixed}"/>
-                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#dc2626" stroke-width="5" stroke-dasharray="${cUnknown}" stroke-dashoffset="${25 - pPass - pFixed - pKnown}"/>
-                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#64748b" stroke-width="5" stroke-dasharray="${cIgnored}" stroke-dashoffset="${25 - pPass - pFixed - pKnown - pUnknown}"/>
-                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#94a3b8" stroke-width="5" stroke-dasharray="${cRunning}" stroke-dashoffset="${25 - pPass - pFixed - pKnown - pUnknown - pIgnored}"/>
-                    </svg>
                 `;
+
+                const addSubSlice = (count, color, title, isHealed = false, isAi = false) => {
+                    if (count <= 0) return;
+                    const pct = (count / totalArea) * 100;
+                    const dashArray = `${pct} ${100 - pct}`;
+                    circlesHtml += `<circle cx="18" cy="18" r="15.915" fill="none" stroke="${color}" stroke-width="5" stroke-dasharray="${dashArray}" stroke-dashoffset="${currentOffset}"><title>${title}: ${count}</title></circle>`;
+                    if (isHealed) {
+                        circlesHtml += `<circle cx="18" cy="18" r="15.915" fill="none" stroke="url(#${patId})" stroke-width="5" stroke-dasharray="${dashArray}" stroke-dashoffset="${currentOffset}" pointer-events="none"></circle>`;
+                    }
+                    if (isAi) {
+                        circlesHtml += `<circle cx="18" cy="18" r="15.915" fill="none" stroke="url(#${aiPatId})" stroke-width="5" stroke-dasharray="${dashArray}" stroke-dashoffset="${currentOffset}" pointer-events="none"></circle>`;
+                    }
+                    currentOffset -= pct;
+                };
+
+                // 1. Successful: Clean (#059669) + Healed (#34d399 + sparkle) + AI (#059669 + pinstripe)
+                const cleanPass = Math.max(0, aPass - aPassHealed - aPassAi);
+                addSubSlice(cleanPass, '#059669', 'Clean Successful', false, false);
+                addSubSlice(aPassHealed, '#34d399', 'Healed Successful', true, false);
+                addSubSlice(aPassAi, '#059669', 'AI-Driven Successful', false, true);
+
+                // 2. Succeeded-Fixed: Clean (#2563eb) + Healed (#60a5fa + sparkle) + AI (#2563eb + pinstripe)
+                const cleanFixed = Math.max(0, aFixed - aFixedHealed - aFixedAi);
+                addSubSlice(cleanFixed, '#2563eb', 'Clean Succeeded-Fixed', false, false);
+                addSubSlice(aFixedHealed, '#60a5fa', 'Healed Succeeded-Fixed', true, false);
+                addSubSlice(aFixedAi, '#2563eb', 'AI-Driven Succeeded-Fixed', false, true);
+
+                // 3. Known Failed: Clean (#ea580c) + Healed (#fb923c + sparkle) + AI (#ea580c + pinstripe)
+                const cleanKnown = Math.max(0, aKnown - aKnownHealed - aKnownAi);
+                addSubSlice(cleanKnown, '#ea580c', 'Clean Known Fail', false, false);
+                addSubSlice(aKnownHealed, '#fb923c', 'Healed Known Fail', true, false);
+                addSubSlice(aKnownAi, '#ea580c', 'AI-Driven Known Fail', false, true);
+
+                // 4. Unknown Failed: Clean (#dc2626) + Healed (#f87171 + sparkle) + AI (#dc2626 + pinstripe)
+                const cleanUnknown = Math.max(0, aUnknown - aUnknownHealed - aUnknownAi);
+                addSubSlice(cleanUnknown, '#dc2626', 'Clean Unknown Fail', false, false);
+                addSubSlice(aUnknownHealed, '#f87171', 'Healed Unknown Fail', true, false);
+                addSubSlice(aUnknownAi, '#dc2626', 'AI-Driven Unknown Fail', false, true);
+
+                // 5. Ignored: (#64748b)
+                addSubSlice(aIgnored, '#64748b', 'Ignored / Skipped', false, false);
+
+                // 6. Running: (#94a3b8)
+                addSubSlice(aRunning, '#94a3b8', 'Running', false, false);
+
+                circlesHtml += '</svg>';
+                svgWrapper.innerHTML = circlesHtml;
             }
         }
     });
@@ -1210,7 +1771,7 @@ function recalculateRunReportMetrics() {
             const activeFilter = classBox.getAttribute('data-active-status-filter') || 'ALL';
             let html = '';
             if (cPass > 0) html += `<span class="badge-status badge-pass clickable-badge${activeFilter === 'PASSED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'PASSED');" title="Filter Passed in Class">Passed: ${cPass}</span>`;
-            if (cFixed > 0) html += `<span class="badge-status badge-healed clickable-badge${activeFilter === 'SUCCEEDED_FIXED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'SUCCEEDED_FIXED');" title="Filter Succeeded-Fixed in Class">Succeeded-Fixed: ${cFixed}</span>`;
+            if (cFixed > 0) html += `<span class="badge-status badge-fixed clickable-badge${activeFilter === 'SUCCEEDED_FIXED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'SUCCEEDED_FIXED');" title="Filter Succeeded-Fixed in Class">Succeeded-Fixed: ${cFixed}</span>`;
             if (cKnown > 0) html += `<span class="badge-status badge-known-fail clickable-badge${activeFilter === 'FAILED_KNOWN' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'FAILED_KNOWN');" title="Filter Known Fail in Class">Known: ${cKnown}</span>`;
             if (cUnknown > 0) html += `<span class="badge-status badge-unknown-fail clickable-badge${activeFilter === 'FAILED_UNKNOWN' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'FAILED_UNKNOWN');" title="Filter Unknown Fail in Class">Unknown: ${cUnknown}</span>`;
             if (cIgnored > 0) html += `<span class="badge-status badge-ignored clickable-badge${activeFilter === 'SKIPPED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'SKIPPED');" title="Filter Ignored in Class">Ignored: ${cIgnored}</span>`;
@@ -1337,6 +1898,7 @@ function resolveTestMethod(activeRow, blocksObj) {
 }
 
 function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, runId) {
+    stopLiveStepRefreshTimer();
     currentActiveRowId = rowId || null;
     currentTestNameStr = testName || '';
     currentDataSetRaw = dataSet || '';
@@ -1370,7 +1932,7 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
         }
     }
 
-    const activeRunId = runId || activeRow?.getAttribute('data-run-id') || document.querySelector('.run-id-label')?.innerText.trim() || '#RUN_ID';
+    const activeRunId = resolveActiveRunId(runId, activeRow);
     const activeRowId = rowId || activeRow?.getAttribute('data-row-id') || activeRow?.id || '';
     const isTestBaseRow = activeRow ? (activeRow.closest('#pageTestBase') !== null) : (document.getElementById('pageTestBase') !== null);
 
@@ -1447,7 +2009,13 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
 
         currentExecutionIsFailed = statusKey ? statusKey.includes('fail') : true;
         renderSidePanelStatusBugs();
+        const hasCachedSteps = activeRow && (activeRow.hasAttribute('data-steps-fetched') ||
+            (activeRow.getAttribute('data-blocks') && activeRow.getAttribute('data-blocks') !== '{}' && activeRow.getAttribute('data-blocks') !== 'null') ||
+            (activeRow.getAttribute('data-steps') && activeRow.getAttribute('data-steps') !== '{}' && activeRow.getAttribute('data-steps') !== 'null'));
         renderStepsForExecution(activeRow);
+        if (hasCachedSteps) {
+            startLiveStepRefreshTimer(activeRow);
+        }
     }
 
     const panel = document.getElementById('testSidePagePanel');
@@ -1513,16 +2081,39 @@ function syncRowAiUsage(row) {
 
     let allLlmCalls = [];
     if (blocksObj) {
-        if (Array.isArray(blocksObj.llmCalls) && blocksObj.llmCalls.length > 0) {
-            allLlmCalls = blocksObj.llmCalls;
-        } else {
-            const allSteps = [...(blocksObj.before || []), ...(blocksObj.steps || []), ...(blocksObj.after || [])];
-            allSteps.forEach(s => {
+        const seenCalls = new Set();
+        const addCall = (c) => {
+            if (!c || typeof c !== 'object') return;
+            const key = (c.id || '') + '|' + (c.stepIndex !== undefined ? c.stepIndex : '') + '|'
+                + (c.subStepIndex !== undefined ? c.subStepIndex : '') + '|' + (c.modelName || '') + '|'
+                + (c.capability || '') + '|' + (c.inputTokens || 0) + '|' + (c.outputTokens || 0) + '|'
+                + (c.durationMs || 0) + '|' + ((c.userPrompt || '').substring(0, 30));
+            if (!seenCalls.has(key)) {
+                seenCalls.add(key);
+                allLlmCalls.push(c);
+            }
+        };
+
+        if (Array.isArray(blocksObj.llmCalls)) {
+            blocksObj.llmCalls.forEach(addCall);
+        }
+
+        const collectFromSteps = (steps) => {
+            if (!Array.isArray(steps)) return;
+            steps.forEach(s => {
+                if (!s) return;
                 if (Array.isArray(s.llmCalls)) {
-                    allLlmCalls.push(...s.llmCalls);
+                    s.llmCalls.forEach(addCall);
+                }
+                if (Array.isArray(s.subSteps)) {
+                    collectFromSteps(s.subSteps);
                 }
             });
-        }
+        };
+
+        collectFromSteps(blocksObj.before);
+        collectFromSteps(blocksObj.steps);
+        collectFromSteps(blocksObj.after);
     }
 
     let calcLlmCalls = 0;
@@ -1595,24 +2186,60 @@ function syncAllRowsAiUsage() {
 }
 
 let liveStepRefreshTimer = null;
+let activeStepFetchId = 0;
+let activeStepAbortController = null;
+let isLiveStepFetchInFlight = false;
+
+function isTerminalStatus(status) {
+    if (!status) return false;
+    const s = String(status).toLowerCase().trim();
+    return s.startsWith('pass') ||
+           s.startsWith('fail') ||
+           s.startsWith('succeed') ||
+           s.startsWith('success') ||
+           s.startsWith('error') ||
+           s.startsWith('abort') ||
+           s.startsWith('cancel') ||
+           s.startsWith('stop') ||
+           s.startsWith('ignore') ||
+           s.startsWith('skip') ||
+           s === 'completed';
+}
 
 function stopLiveStepRefreshTimer() {
     if (liveStepRefreshTimer) {
+        clearTimeout(liveStepRefreshTimer);
         clearInterval(liveStepRefreshTimer);
         liveStepRefreshTimer = null;
     }
+    if (activeStepAbortController) {
+        try {
+            activeStepAbortController.abort();
+        } catch (e) {}
+        activeStepAbortController = null;
+    }
+    activeStepFetchId++;
+    isLiveStepFetchInFlight = false;
 }
 
 function extractBlocksJson(execDto) {
     if (!execDto) return null;
-    if (typeof execDto.blocksJson === 'string' && execDto.blocksJson !== '{}' && execDto.blocksJson !== 'null' && execDto.blocksJson.trim().length > 0) {
-        return execDto.blocksJson;
-    }
     if (execDto.blocks) {
         try {
-            const str = typeof execDto.blocks === 'string' ? execDto.blocks : JSON.stringify(execDto.blocks);
+            // Guard against Jackson ObjectNode POJO metadata leak (where nodeType/containerNode are serialized instead of step data)
+            if (typeof execDto.blocks === 'object' && execDto.blocks.nodeType && !execDto.blocks.steps && !execDto.blocks.before) {
+                return null;
+            }
+            let bObj = typeof execDto.blocks === 'string' ? JSON.parse(execDto.blocks) : Object.assign({}, execDto.blocks);
+            if (execDto.llmCalls && Array.isArray(execDto.llmCalls) && (!bObj.llmCalls || !bObj.llmCalls.length)) {
+                bObj.llmCalls = execDto.llmCalls;
+            }
+            const str = JSON.stringify(bObj);
             if (str && str !== '{}' && str !== 'null' && str.trim().length > 0) return str;
         } catch (e) {}
+    }
+    if (typeof execDto.blocksJson === 'string' && execDto.blocksJson !== '{}' && execDto.blocksJson !== 'null' && execDto.blocksJson.trim().length > 0) {
+        return execDto.blocksJson;
     }
     return null;
 }
@@ -1624,6 +2251,10 @@ function extractStepsJson(execDto) {
     }
     if (execDto.steps) {
         try {
+            // Guard against Jackson ArrayNode POJO metadata leak
+            if (typeof execDto.steps === 'object' && !Array.isArray(execDto.steps) && execDto.steps.nodeType) {
+                return null;
+            }
             const str = typeof execDto.steps === 'string' ? execDto.steps : JSON.stringify(execDto.steps);
             if (str && str !== '{}' && str !== 'null' && str.trim().length > 0) return str;
         } catch (e) {}
@@ -1631,16 +2262,44 @@ function extractStepsJson(execDto) {
     return null;
 }
 
+function extractFindingsArray(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === 'string' && raw.trim().length > 0) {
+        try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) return parsed;
+        } catch (e) {}
+    }
+    return [];
+}
+
 function startLiveStepRefreshTimer(activeRow) {
     stopLiveStepRefreshTimer();
     if (!activeRow) return;
+
+    const currentStatus = activeRow.getAttribute('data-status') || '';
+    const currentStatusRaw = activeRow.getAttribute('data-status-raw') || '';
+    if (isTerminalStatus(currentStatus) || isTerminalStatus(currentStatusRaw)) {
+        return;
+    }
 
     const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '#RUN_ID');
     const rowId = activeRow.getAttribute('data-row-id') || activeRow.id;
 
     if (!runId || !rowId) return;
 
-    liveStepRefreshTimer = setInterval(() => {
+    function poll() {
+        if (currentActiveRowId !== rowId) {
+            stopLiveStepRefreshTimer();
+            return;
+        }
+
+        if (isLiveStepFetchInFlight) {
+            liveStepRefreshTimer = setTimeout(poll, 1000);
+            return;
+        }
+
         let currentActiveEl = activeRow;
         if (!document.body.contains(currentActiveEl)) {
             const safeRowId = (rowId || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
@@ -1654,12 +2313,16 @@ function startLiveStepRefreshTimer(activeRow) {
             return;
         }
 
-        fetch(`/fragments/test-side-panel/steps?runId=${encodeURIComponent(runId)}&rowId=${encodeURIComponent(rowId)}`)
-            .then(res => {
-                if (!res.ok) return null;
-                return res.json();
-            })
+        const fetchId = ++activeStepFetchId;
+        isLiveStepFetchInFlight = true;
+        const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        activeStepAbortController = controller;
+        const opts = controller ? { signal: controller.signal } : {};
+
+        fetch(`/fragments/test-side-panel/steps?runId=${encodeURIComponent(runId)}&rowId=${encodeURIComponent(rowId)}`, opts)
+            .then(res => res.ok ? res.json() : null)
             .then(execDto => {
+                if (fetchId !== activeStepFetchId || currentActiveRowId !== rowId) return;
                 if (execDto) {
                     let changed = false;
                     const prevBlocks = currentActiveEl.getAttribute('data-blocks');
@@ -1698,8 +2361,36 @@ function startLiveStepRefreshTimer(activeRow) {
                     if (execDto.startTime) currentActiveEl.setAttribute('data-start-time', execDto.startTime);
                     if (execDto.dateFormatted) currentActiveEl.setAttribute('data-date-formatted', execDto.dateFormatted);
                     if (execDto.timeFormatted) currentActiveEl.setAttribute('data-time-formatted', execDto.timeFormatted);
+                    if (execDto.videoUrl) currentActiveEl.setAttribute('data-video-url', execDto.videoUrl);
+                    else if (execDto.videoPath) currentActiveEl.setAttribute('data-video-url', execDto.videoPath);
                     if (execDto.llmResponsibilityJson) currentActiveEl.setAttribute('data-llm-responsibility', execDto.llmResponsibilityJson);
                     if (execDto.contextLevelCountsJson) currentActiveEl.setAttribute('data-context-level-counts', execDto.contextLevelCountsJson);
+                    if (execDto.inputTokensCount !== undefined && execDto.inputTokensCount !== null) currentActiveEl.setAttribute('data-input-tokens', execDto.inputTokensCount);
+                    if (execDto.outputTokensCount !== undefined && execDto.outputTokensCount !== null) currentActiveEl.setAttribute('data-output-tokens', execDto.outputTokensCount);
+                    if (execDto.cachedTokensCount !== undefined && execDto.cachedTokensCount !== null) currentActiveEl.setAttribute('data-cached-tokens', execDto.cachedTokensCount);
+                    if (execDto.totalTokensCount !== undefined && execDto.totalTokensCount !== null) currentActiveEl.setAttribute('data-total-tokens', execDto.totalTokensCount);
+                    if (execDto.llmCallsCount !== undefined && execDto.llmCallsCount !== null) currentActiveEl.setAttribute('data-llm-calls', execDto.llmCallsCount);
+                    if (execDto.estimatedCostUsd) currentActiveEl.setAttribute('data-est-cost', execDto.estimatedCostUsd);
+
+                    const liveLinter = extractFindingsArray(execDto.linterFindings).length > 0
+                        ? extractFindingsArray(execDto.linterFindings)
+                        : extractFindingsArray(execDto.linterFindingsJson);
+                    const liveLinterJson = liveLinter.length > 0 ? JSON.stringify(liveLinter) : '';
+                    if ((currentActiveEl.getAttribute('data-linter-findings') || '') !== liveLinterJson) {
+                        if (liveLinterJson) currentActiveEl.setAttribute('data-linter-findings', liveLinterJson);
+                        else currentActiveEl.removeAttribute('data-linter-findings');
+                        changed = true;
+                    }
+
+                    const livePostFlight = extractFindingsArray(execDto.postFlightFindings).length > 0
+                        ? extractFindingsArray(execDto.postFlightFindings)
+                        : extractFindingsArray(execDto.postFlightFindingsJson);
+                    const livePostFlightJson = livePostFlight.length > 0 ? JSON.stringify(livePostFlight) : '';
+                    if ((currentActiveEl.getAttribute('data-post-flight-findings') || '') !== livePostFlightJson) {
+                        if (livePostFlightJson) currentActiveEl.setAttribute('data-post-flight-findings', livePostFlightJson);
+                        else currentActiveEl.removeAttribute('data-post-flight-findings');
+                        changed = true;
+                    }
 
                     if (changed) {
                         const savedScrollTop = stepListEl ? stepListEl.scrollTop : 0;
@@ -1709,17 +2400,1254 @@ function startLiveStepRefreshTimer(activeRow) {
                         }
                     }
 
-                    const updatedSt = (currentActiveEl.getAttribute('data-status') || execDto.status || '').toUpperCase();
-                    const updatedStRaw = (currentActiveEl.getAttribute('data-status-raw') || execDto.status || '').toLowerCase();
-                    const isTerminal = updatedSt === 'PASSED' || updatedSt === 'FAILED' || updatedSt === 'IGNORED' || updatedSt === 'SKIPPED' || updatedStRaw === 'passed' || updatedStRaw === 'failed' || updatedStRaw === 'ignored';
+                    const updatedSt = currentActiveEl.getAttribute('data-status') || execDto.status || '';
+                    const updatedStRaw = currentActiveEl.getAttribute('data-status-raw') || execDto.status || '';
+                    const isTerminal = isTerminalStatus(updatedSt) || isTerminalStatus(updatedStRaw);
 
                     if (isTerminal && !changed) {
                         stopLiveStepRefreshTimer();
                     }
                 }
             })
-            .catch(() => {});
-    }, 1000);
+            .catch(() => {})
+            .finally(() => {
+                if (activeStepAbortController === controller) {
+                    activeStepAbortController = null;
+                }
+                if (fetchId === activeStepFetchId) {
+                    isLiveStepFetchInFlight = false;
+                }
+                if (currentActiveRowId === rowId && liveStepRefreshTimer !== null) {
+                    const currentSt = currentActiveEl.getAttribute('data-status') || '';
+                    const currentStRaw = currentActiveEl.getAttribute('data-status-raw') || '';
+                    if (!isTerminalStatus(currentSt) && !isTerminalStatus(currentStRaw)) {
+                        liveStepRefreshTimer = setTimeout(poll, 2500);
+                    } else {
+                        stopLiveStepRefreshTimer();
+                    }
+                }
+            });
+    }
+
+    liveStepRefreshTimer = setTimeout(poll, 2500);
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function formatInlineMarkdown(text) {
+    if (!text) return '';
+    return text
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+        .replace(/`([^`]+)`/g, '<code class="text-mono" style="font-size: 0.85em; background: rgba(0,0,0,0.05); padding: 1px 4px; border-radius: 3px;">$1</code>');
+}
+
+function getScoreBadgeClass(score) {
+    const s = String(score || '').trim().toUpperCase();
+    switch (s) {
+        case 'ERROR_PRESENT':
+        case 'MISSING':
+        case 'STUCK':
+        case 'OBSTRUCTED':
+        case 'FAIL':
+        case 'FAILED':
+            return 'pill-fail';
+        case 'CLEAN':
+        case 'FOUND':
+        case 'PROGRESSING':
+        case 'CLEAR':
+        case 'PASS':
+        case 'PASSED':
+            return 'pill-pass';
+        default:
+            return 'pill-pending';
+    }
+}
+
+function extractRcaFromText(rawText) {
+    if (!rawText) return { cleanError: '', rcaText: null };
+    const str = String(rawText);
+
+    const marker1 = 'Visual Root Cause Analysis (RCA):';
+    const marker2 = '**Root Cause Analysis:**';
+    const marker3 = '### Diagnostic Rubrics';
+
+    const idx1 = str.indexOf(marker1);
+    const idx2 = str.indexOf(marker2);
+    const idx3 = str.indexOf(marker3);
+
+    const validIndices = [idx1, idx2, idx3].filter(idx => idx >= 0);
+    if (validIndices.length > 0) {
+        const markerIdx = Math.min(...validIndices);
+        return {
+            cleanError: str.substring(0, markerIdx).trim(),
+            rcaText: str.substring(markerIdx).trim()
+        };
+    }
+
+    return { cleanError: str.trim(), rcaText: null };
+}
+
+function parseVisualRca(rcaText) {
+    if (!rcaText) return null;
+    let text = String(rcaText).trim();
+
+    text = text.replace(/^Visual Root Cause Analysis \(RCA\):\s*/i, '').trim();
+
+    let rootCause = '';
+    const rcMatch = text.match(/(?:\*\*Root Cause (?:Analysis|Diagnosis):\*\*|Root Cause Diagnosis:)\s*\n*([\s\S]*?)(?=(?:###\s*Diagnostic Rubrics|-\s*\*\*)|$)/i);
+    if (rcMatch) {
+        rootCause = rcMatch[1].trim();
+    }
+
+    const rubrics = [];
+    const rubricDefs = [
+        { key: 'targetPresence', name: '🎯 Target Presence Check', pattern: /-\s*\*\*(?:🎯\s*)?Target Presence Check:\*\*\s*`?\[([^\]]+)\]`?\s*([\s\S]*?)(?=(?:-\s*\*\*)|$)/i },
+        { key: 'formValidation', name: '📝 Form & Validation Check', pattern: /-\s*\*\*(?:📝\s*)?Form & Validation Check:\*\*\s*`?\[([^\]]+)\]`?\s*([\s\S]*?)(?=(?:-\s*\*\*)|$)/i },
+        { key: 'flowState', name: '🧭 Navigation & Flow State', pattern: /-\s*\*\*(?:🧭\s*)?Navigation & Flow State:\*\*\s*`?\[([^\]]+)\]`?\s*([\s\S]*?)(?=(?:-\s*\*\*)|$)/i },
+        { key: 'obstruction', name: '🚫 Action Obstruction Check', pattern: /-\s*\*\*(?:🚫\s*)?Action Obstruction Check:\*\*\s*`?\[([^\]]+)\]`?\s*([\s\S]*?)(?=(?:-\s*\*\*)|$)/i }
+    ];
+
+    for (const def of rubricDefs) {
+        const m = text.match(def.pattern);
+        if (m) {
+            rubrics.push({
+                name: def.name,
+                score: m[1].trim(),
+                analysis: m[2].trim()
+            });
+        }
+    }
+
+    if (rubrics.length === 0) {
+        const genericRegex = /-\s*\*\*([^*]+):\*\*\s*`?\[([^\]]+)\]`?\s*([^\n]+)/g;
+        let gm;
+        while ((gm = genericRegex.exec(text)) !== null) {
+            rubrics.push({
+                name: gm[1].trim(),
+                score: gm[2].trim(),
+                analysis: gm[3].trim()
+            });
+        }
+    }
+
+    if (!rootCause) {
+        if (rubrics.length > 0) {
+            const rubricHeaderIdx = text.indexOf('### Diagnostic Rubrics');
+            if (rubricHeaderIdx > 0) {
+                rootCause = text.substring(0, rubricHeaderIdx).replace(/\*\*Root Cause Analysis:\*\*/i, '').trim();
+            } else {
+                const bulletIdx = text.indexOf('- **');
+                if (bulletIdx > 0) {
+                    rootCause = text.substring(0, bulletIdx).replace(/\*\*Root Cause Analysis:\*\*/i, '').trim();
+                }
+            }
+        } else {
+            rootCause = text;
+        }
+    }
+
+    return { rootCause, rubrics };
+}
+
+function renderVisualRcaHtml(rcaText) {
+    const parsed = parseVisualRca(rcaText);
+    if (!parsed) return '';
+
+    let html = '<div class="visual-rca-box">';
+    html += '<div class="rca-title"><span class="material-symbols-outlined" style="font-size: 1.05rem; vertical-align: middle;">search</span> Visual Root Cause Analysis (RCA)</div>';
+
+    if (parsed.rootCause) {
+        html += `<div class="rca-root-cause"><strong>Root Cause Diagnosis:</strong> ${formatInlineMarkdown(escapeHtml(parsed.rootCause))}</div>`;
+    }
+
+    if (parsed.rubrics && parsed.rubrics.length > 0) {
+        html += '<div class="rubrics-grid">';
+        for (const item of parsed.rubrics) {
+            const scoreClass = getScoreBadgeClass(item.score);
+            html += `
+                <div class="rubric-item-card">
+                    <div class="rubric-item-header">
+                        <span class="rubric-name">${escapeHtml(item.name)}</span>
+                        <span class="rubric-score ${scoreClass}">${escapeHtml(item.score)}</span>
+                    </div>
+                    <div class="rubric-analysis">${formatInlineMarkdown(escapeHtml(item.analysis))}</div>
+                </div>
+            `;
+        }
+        html += '</div>';
+    } else if (!parsed.rootCause) {
+        html += `<div class="rca-root-cause" style="white-space: pre-wrap;">${formatInlineMarkdown(escapeHtml(rcaText))}</div>`;
+    }
+
+    html += '</div>';
+    return html;
+}
+
+function renderErrorBoxContent(failureText, failureReason, visualRcaExplanation, allStackTraces) {
+    const rawFailure = (failureReason && failureReason.trim().length > 0) 
+        ? failureReason.trim() 
+        : (failureText && failureText !== 'NONE' && failureText.trim().length > 0 ? failureText.trim() : '');
+
+    let cleanFailure = rawFailure;
+    let effectiveRca = visualRcaExplanation && visualRcaExplanation.trim().length > 0 ? visualRcaExplanation.trim() : '';
+
+    if (rawFailure) {
+        const extracted = extractRcaFromText(rawFailure);
+        cleanFailure = extracted.cleanError;
+        if (!effectiveRca && extracted.rcaText) {
+            effectiveRca = extracted.rcaText;
+        }
+    }
+
+    if (!cleanFailure && !effectiveRca && (!allStackTraces || allStackTraces.length === 0)) {
+        return '';
+    }
+
+    let html = '';
+    if (cleanFailure) {
+        const displayFailure = cleanFailure.replace(/^(?:Failure Reason|Error):\s*/i, '');
+        html += `<div style="white-space: pre-wrap; word-break: break-word; color: #991b1b; font-family: var(--font-mono); font-size: 0.8rem; margin-bottom: 0.35rem;"><strong>Error:</strong> ${escapeHtml(displayFailure)}</div>`;
+    }
+
+    if (effectiveRca) {
+        html += renderVisualRcaHtml(effectiveRca);
+    }
+
+    if (allStackTraces && allStackTraces.length > 0) {
+        const combinedTrace = allStackTraces.join('\n\n');
+        html += `
+            <details class="error-stacktrace-collapsible">
+                <summary class="error-stacktrace-summary">
+                    <span class="material-symbols-outlined" style="font-size: 0.95rem;">terminal</span>
+                    Failure Stack Trace
+                </summary>
+                <pre class="error-stacktrace-pre">${escapeHtml(combinedTrace)}</pre>
+            </details>
+        `;
+    }
+
+    return html;
+}
+
+function renderLinterFindingsCard(findings, isPostFlight) {
+    if (!findings || !Array.isArray(findings) || findings.length === 0) {
+        return '';
+    }
+    const count = findings.length;
+    const borderLeftColor = isPostFlight ? '#8b5cf6' : '#6366f1';
+    const title = isPostFlight
+        ? `🔍 Empirical Playbook Findings (Post-Flight Telemetry) (${count})`
+        : `📋 Playbook Quality & Pre-Flight Findings (${count})`;
+    const col4Title = isPostFlight ? 'Telemetry & Suggested Rewrite' : 'Message & Suggested Rewrite';
+    const rewriteBg = isPostFlight ? 'rgba(139,92,246,0.06)' : 'rgba(99,102,241,0.06)';
+    const rewriteBorder = isPostFlight ? '#8b5cf6' : '#6366f1';
+    const rewriteLabelColor = isPostFlight ? '#6d28d9' : '#4338ca';
+    const rewriteCodeColor = isPostFlight ? '#4c1d95' : '#312e81';
+
+    let rowsHtml = '';
+    for (const f of findings) {
+        const lineLabel = (f.lineNumber && f.lineNumber > 0) ? `L${f.lineNumber}` : `Step ${f.stepIndex || 0}`;
+        const sev = (f.severity || 'INFO').toUpperCase();
+        let sevBadge = '';
+        if (sev === 'ERROR') {
+            sevBadge = '<span class="badge badge-error" style="background:#ef4444;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;">ERROR</span>';
+        } else if (sev === 'WARNING') {
+            sevBadge = '<span class="badge badge-warning" style="background:#f59e0b;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;">WARNING</span>';
+        } else {
+            sevBadge = '<span class="badge badge-info" style="background:#3b82f6;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;">INFO</span>';
+        }
+        const cat = f.category || 'GENERAL';
+
+        let stepTextHtml = '';
+        if (f.rawInstruction && f.resolvedInstruction && f.rawInstruction !== f.resolvedInstruction) {
+            stepTextHtml = `
+                <div style="margin:6px 0;font-size:0.85rem;background:var(--bg-muted,#f1f5f9);padding:6px 10px;border-radius:4px;border-left:3px solid #94a3b8;">
+                    <div style="font-size:0.72rem;font-weight:700;color:var(--text-muted,#475569);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Template Step:</div>
+                    <code style="white-space:pre-wrap;font-weight:500;color:var(--text-main,#1e293b);">${escapeHtml(f.rawInstruction)}</code>
+                    <div style="font-size:0.72rem;font-weight:700;color:var(--text-muted,#475569);text-transform:uppercase;letter-spacing:0.5px;margin-top:4px;margin-bottom:2px;">Resolved Step:</div>
+                    <code style="white-space:pre-wrap;font-weight:500;color:var(--text-main,#1e293b);">${escapeHtml(f.resolvedInstruction)}</code>
+                </div>
+            `;
+        } else if (f.rawInstruction && f.rawInstruction.trim()) {
+            stepTextHtml = `
+                <div style="margin:6px 0;font-size:0.85rem;background:var(--bg-muted,#f1f5f9);padding:6px 10px;border-radius:4px;border-left:3px solid #94a3b8;">
+                    <div style="font-size:0.72rem;font-weight:700;color:var(--text-muted,#475569);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Original Step:</div>
+                    <code style="white-space:pre-wrap;font-weight:500;color:var(--text-main,#1e293b);">${escapeHtml(f.rawInstruction)}</code>
+                </div>
+            `;
+        }
+
+        let rewriteHtml = '';
+        if (f.suggestedRewrite && f.suggestedRewrite.trim()) {
+            rewriteHtml = `
+                <div style="margin-top:6px;font-size:0.85rem;background:${rewriteBg};padding:6px 10px;border-radius:4px;border-left:3px solid ${rewriteBorder};">
+                    <div style="font-size:0.72rem;font-weight:700;color:${rewriteLabelColor};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">💡 Suggested Rewrite:</div>
+                    <code style="white-space:pre-wrap;font-weight:500;color:${rewriteCodeColor};">${escapeHtml(f.suggestedRewrite)}</code>
+                </div>
+            `;
+        }
+
+        rowsHtml += `
+            <tr style="border-bottom: 1px solid var(--border, #e2e8f0);">
+                <td style="vertical-align:top; padding: 8px 10px;"><code>${escapeHtml(lineLabel)}</code></td>
+                <td style="vertical-align:top; padding: 8px 10px;"><span style="font-weight:600;font-size:0.85rem;">${escapeHtml(cat)}</span></td>
+                <td style="vertical-align:top; padding: 8px 10px;">${sevBadge}</td>
+                <td style="padding: 8px 10px;">
+                    <div style="font-weight:600;margin-bottom:6px;color:var(--text-main,#1e293b);">${escapeHtml(f.message || '')}</div>
+                    ${stepTextHtml}
+                    ${rewriteHtml}
+                </td>
+            </tr>
+        `;
+    }
+
+    return `
+        <details open class="diagnostic-box ${isPostFlight ? 'postflight-linter-box' : 'linter-box'}" style="border-left: 4px solid ${borderLeftColor}; background: var(--bg-card, #ffffff); margin-bottom: 16px; padding: 14px 18px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid var(--border, #e2e8f0); border-left-width: 4px;">
+            <summary class="box-header" style="font-size: 0.95rem; font-weight: 700; color: var(--text-main, #1e293b); cursor: pointer; user-select: none; list-style: none; display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 8px;"><span>${title}</span></div>
+                <span class="linter-toggle-icon" style="font-size: 0.85rem; color: var(--text-muted); transition: transform 0.2s ease;">▼</span>
+            </summary>
+            <div class="linter-content" style="margin-top: 12px; overflow-x: auto;">
+                <table class="data-table" style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid var(--border, #cbd5e1); text-align: left; background: var(--bg-hover, #f8fafc);">
+                            <th style="padding: 8px 10px; font-weight: 700;">Line / Step</th>
+                            <th style="padding: 8px 10px; font-weight: 700;">Category</th>
+                            <th style="padding: 8px 10px; font-weight: 700;">Severity</th>
+                            <th style="padding: 8px 10px; font-weight: 700;">${col4Title}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsHtml}
+                    </tbody>
+                </table>
+            </div>
+        </details>
+    `;
+}
+
+function formatBytes(bytes) {
+    if (!bytes || bytes <= 0) return '0 B';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function splitChatMessages(text) {
+    if (!text || typeof text !== 'string') return [];
+
+    const regex = /(?:^|[\s\n]+)(?:ChatMessage\[([^\]]+)\]:\s*|(TOOL(?:\s*\([^)]*\))?:\s*))/g;
+    const matches = [];
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+        const fullMatch = match[0];
+        const role = (match[1] || match[2] || '').trim().replace(/^TOOL(?:\s*\(([^)]*)\))?:?$/i, (m, p1) => p1 ? `TOOL (${p1})` : 'TOOL');
+        const leadingWhitespaceLength = fullMatch.match(/^[\s\n]+/)?.[0].length || 0;
+        const headerStart = match.index + leadingWhitespaceLength;
+        const contentStart = match.index + fullMatch.length;
+
+        matches.push({
+            role: role,
+            headerStart: headerStart,
+            contentStart: contentStart
+        });
+    }
+
+    if (matches.length === 0) {
+        return [{ role: 'RAW', content: text.trim() }];
+    }
+
+    const result = [];
+    if (matches[0].headerStart > 0) {
+        const leading = text.substring(0, matches[0].headerStart).trim();
+        if (leading) {
+            result.push({ role: 'RAW', content: leading });
+        }
+    }
+
+    for (let i = 0; i < matches.length; i++) {
+        const current = matches[i];
+        const nextStart = (i + 1 < matches.length) ? matches[i + 1].headerStart : text.length;
+        const content = text.substring(current.contentStart, nextStart).trim();
+        result.push({
+            role: current.role,
+            content: content
+        });
+    }
+
+    return result;
+}
+
+function parseToolMessage(role, content) {
+    if (!role && !content) return null;
+    let toolName = '';
+    let toolId = '';
+
+    if (role) {
+        const toolAttrMatch = role.match(/tool=([^,)]+)/i);
+        if (toolAttrMatch) toolName = toolAttrMatch[1].trim();
+        const idAttrMatch = role.match(/id=([^,)]+)/i);
+        if (idAttrMatch) toolId = idAttrMatch[1].trim();
+
+        if (!toolName) {
+            const simpleToolMatch = role.match(/TOOL\s*\(([^,)]+)\)/i);
+            if (simpleToolMatch) toolName = simpleToolMatch[1].trim();
+        }
+    }
+
+    let payload = (content || '').trim();
+    const contentHeaderMatch = payload.match(/^TOOL(?:\s*\((?:tool=)?([^,)]+)(?:,\s*id=([^)]+))?\))?:\s*([\s\S]*)$/i);
+    if (contentHeaderMatch) {
+        if (!toolName) toolName = (contentHeaderMatch[1] || '').trim();
+        if (!toolId) toolId = (contentHeaderMatch[2] || '').trim();
+        payload = (contentHeaderMatch[3] || '').trim();
+    }
+
+    let parsedJson = null;
+    let formattedJson = '';
+    let summary = '';
+
+    if (payload.startsWith('{') || payload.startsWith('[')) {
+        try {
+            parsedJson = JSON.parse(payload);
+            formattedJson = JSON.stringify(parsedJson, null, 2);
+        } catch (e) {
+            formattedJson = payload;
+        }
+    } else {
+        formattedJson = payload;
+    }
+
+    if (parsedJson) {
+        const action = parsedJson.action || toolName || 'tool';
+        const status = parsedJson.status || (parsedJson.error ? 'ERROR' : 'SUCCESS');
+        if (action === 'query_dom' || parsedJson.matches !== undefined || parsedJson.matchCount !== undefined) {
+            const count = parsedJson.matchCount !== undefined ? parsedJson.matchCount : (Array.isArray(parsedJson.matches) ? parsedJson.matches.length : 0);
+            if (count > 0 && Array.isArray(parsedJson.matches) && parsedJson.matches[0]) {
+                const first = parsedJson.matches[0];
+                const sel = first.selector || first.tag || '';
+                summary = `query_dom ➔ ${status} (${count} match${count > 1 ? 'es' : ''}: ${sel})`;
+            } else {
+                summary = `query_dom ➔ ${status} (${count} matches)`;
+            }
+        } else if (parsedJson.error) {
+            summary = `${action} ➔ ERROR: ${parsedJson.error}`;
+        } else if (parsedJson.message) {
+            summary = `${action} ➔ ${status} (${parsedJson.message})`;
+        } else if (parsedJson.target) {
+            summary = `${action} ➔ ${status} ("${parsedJson.target}")`;
+        } else {
+            summary = `${action} ➔ ${status}`;
+        }
+    } else {
+        const effectiveName = toolName || 'tool';
+        const cleanText = payload.replace(/^Tool\s*(?:error|failure):\s*/i, '').trim();
+        let shortText = cleanText.split('\n')[0].trim();
+        if (shortText.length > 70) shortText = shortText.substring(0, 67) + '...';
+
+        const isError = /error|fail|exception/i.test(payload);
+        if (isError) {
+            summary = `${effectiveName} ➔ ERROR: ${shortText}`;
+        } else {
+            summary = `${effectiveName} ➔ ${shortText}`;
+        }
+    }
+
+    return {
+        toolName: toolName || (parsedJson && parsedJson.action) || 'tool',
+        toolId: toolId,
+        status: (parsedJson && parsedJson.status) || (parsedJson && parsedJson.error ? 'ERROR' : (/error|fail|exception/i.test(payload) ? 'ERROR' : 'SUCCESS')),
+        summary: summary ? `Tool Result: ${summary}` : '',
+        formattedJson: formattedJson,
+        parsedObj: parsedJson
+    };
+}
+
+function parseUserContinuation(content) {
+    if (!content) return { pageUrl: '', pageTitle: '', visualNote: '', guidanceText: '', domSnapshot: '', rawText: '' };
+
+    let text = content.trim();
+    let domSnapshot = '';
+
+    const domHeaderIdx = text.search(/===\s*Structural DOM Tree\s*===/i);
+    if (domHeaderIdx !== -1) {
+        domSnapshot = text.substring(domHeaderIdx).replace(/===\s*Structural DOM Tree\s*===\s*/i, '').trim();
+        text = text.substring(0, domHeaderIdx).trim();
+    } else {
+        const appRootIdx = text.search(/<(?:app-root|html|!DOCTYPE html)\b/i);
+        if (appRootIdx !== -1) {
+            domSnapshot = text.substring(appRootIdx).trim();
+            text = text.substring(0, appRootIdx).trim();
+        }
+    }
+
+    let pageUrl = '';
+    let pageTitle = '';
+    let visualNote = '';
+    let guidanceText = '';
+
+    const urlMatch = text.match(/URL:\s*(\S+)/i);
+    if (urlMatch) pageUrl = urlMatch[1];
+
+    const titleMatch = text.match(/Title:\s*([^.\n]+?)(?=\s+Note:|\n|$)/i);
+    if (titleMatch) pageTitle = titleMatch[1].trim();
+
+    const noteMatch = text.match(/Note:\s*([\s\S]*?)(?=\s+If\b|\n\n|$)/i);
+    if (noteMatch) visualNote = noteMatch[1].trim();
+
+    const guidanceMatch = text.match(/If\s+this\s+was\s+an\s+action[\s\S]*/i);
+    if (guidanceMatch) guidanceText = guidanceMatch[0].trim();
+
+    return {
+        pageUrl: pageUrl,
+        pageTitle: pageTitle,
+        visualNote: visualNote,
+        guidanceText: guidanceText,
+        domSnapshot: domSnapshot,
+        rawText: text
+    };
+}
+
+function parseToolAndUserTurns(text) {
+    if (!text) return null;
+    const messages = splitChatMessages(text);
+    let toolMsg = null;
+    let userMsg = null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role.toUpperCase().includes('TOOL')) {
+            toolMsg = messages[i];
+            for (let j = i + 1; j < messages.length; j++) {
+                if (messages[j].role.toUpperCase().includes('USER')) {
+                    userMsg = messages[j];
+                    break;
+                }
+            }
+            break;
+        }
+    }
+    const toolResult = toolMsg ? parseToolMessage(toolMsg.role, toolMsg.content) : null;
+    const continuationContext = userMsg ? parseUserContinuation(userMsg.content) : null;
+    return {
+        summary: (toolResult && toolResult.summary) || '',
+        toolResult: toolResult,
+        continuationContext: continuationContext
+    };
+}
+
+function parseLlmPromptContent(userPromptText) {
+    if (!userPromptText) {
+        return {
+            instruction: '',
+            sessionVariables: [],
+            domSnapshot: '',
+            domSnapshotBytes: 0,
+            turnInput: '',
+            turnInputSummary: '',
+            toolResult: null,
+            continuationContext: null,
+            otherContext: ''
+        };
+    }
+
+    const messages = splitChatMessages(userPromptText);
+    const hasToolMsg = messages.some(m => m.role.toUpperCase().includes('TOOL'));
+    const isMultiTurn = messages.length > 1 || hasToolMsg;
+
+    if (isMultiTurn && hasToolMsg) {
+        let lastToolIdx = -1;
+        for (let i = messages.length - 1; i >= 0; i--) {
+            if (messages[i].role.toUpperCase().includes('TOOL')) {
+                lastToolIdx = i;
+                break;
+            }
+        }
+
+        const toolMsg = lastToolIdx !== -1 ? messages[lastToolIdx] : null;
+        let userMsg = null;
+        if (lastToolIdx !== -1) {
+            for (let i = lastToolIdx + 1; i < messages.length; i++) {
+                if (messages[i].role.toUpperCase().includes('USER')) {
+                    userMsg = messages[i];
+                    break;
+                }
+            }
+        }
+
+        const parsedTool = toolMsg ? parseToolMessage(toolMsg.role, toolMsg.content) : null;
+        const parsedUser = userMsg ? parseUserContinuation(userMsg.content) : null;
+
+        const turnInputSummary = (parsedTool && parsedTool.summary) || '';
+        const domSnapshot = (parsedUser && parsedUser.domSnapshot) || '';
+        const domBytes = domSnapshot ? encodeURI(domSnapshot).split(/%..|./).length - 1 : 0;
+
+        return {
+            instruction: '',
+            sessionVariables: [],
+            domSnapshot: domSnapshot,
+            domSnapshotBytes: domBytes,
+            turnInput: turnInputSummary,
+            turnInputSummary: turnInputSummary,
+            toolResult: parsedTool,
+            continuationContext: parsedUser,
+            otherContext: ''
+        };
+    }
+
+    let targetText = userPromptText;
+    if (messages.length === 1 && (messages[0].role === 'USER' || messages[0].role === 'RAW')) {
+        targetText = messages[0].content;
+    } else if (messages.length > 0 && messages[0].role === 'USER') {
+        targetText = messages[0].content;
+    }
+
+    let instruction = '';
+    const sessionVariables = [];
+    let domSnapshot = '';
+    let otherContext = '';
+
+    const varsMatch = targetText.match(/###\s*Active Session Variables:\s*\n([\s\S]*?)(?=\n###|\n\n\n|$)/i);
+    if (varsMatch) {
+        const varLines = varsMatch[1].split('\n');
+        for (const line of varLines) {
+            const m = line.match(/^\s*-\s*([^:]+)\s*:\s*(.*)$/);
+            if (m) {
+                sessionVariables.push({ key: m[1].trim(), value: m[2].trim() });
+            }
+        }
+    }
+
+    const instrMatch = targetText.match(/###\s*Test Instruction:\s*\n([\s\S]*?)(?=\n###|$)/i);
+    if (instrMatch) {
+        instruction = instrMatch[1].trim();
+    }
+
+    const domMatch = targetText.match(/###\s*Current Page State & Interactive Elements:\s*\n([\s\S]*?)(?=\n###|$)/i);
+    if (domMatch) {
+        domSnapshot = domMatch[1].trim();
+    } else {
+        const pageUrlIdx = targetText.indexOf('Page URL:');
+        if (pageUrlIdx !== -1 && !instruction) {
+            domSnapshot = targetText.substring(pageUrlIdx).trim();
+        }
+    }
+
+    const hintMatch = targetText.match(/###\s*Target Selector Hint:\s*\n([\s\S]*?)(?=\n###|$)/i);
+    if (hintMatch) {
+        otherContext += (otherContext ? '\n' : '') + 'Selector Hint: ' + hintMatch[1].trim();
+    }
+    const visualMatch = targetText.match(/###\s*Visual Inspection Directive:\s*\n([\s\S]*?)(?=\n###|$)/i);
+    if (visualMatch) {
+        otherContext += (otherContext ? '\n' : '') + 'Visual Directive: ' + visualMatch[1].trim();
+    }
+
+    if (!instruction && !domSnapshot) {
+        instruction = targetText.trim();
+    }
+
+    const domBytes = domSnapshot ? encodeURI(domSnapshot).split(/%..|./).length - 1 : 0;
+
+    return {
+        instruction,
+        sessionVariables,
+        domSnapshot,
+        domSnapshotBytes: domBytes,
+        turnInput: '',
+        turnInputSummary: '',
+        toolResult: null,
+        continuationContext: null,
+        otherContext
+    };
+}
+
+function parseToolCallResponse(responseText) {
+    if (!responseText) return { primaryTool: '', paramPreview: '', formattedToolCall: '', rawText: '' };
+    
+    // Check for Tool Calls: [...]
+    const toolCallMatch = responseText.match(/Tool Calls:\s*(\[[\s\S]*\])/i);
+    if (toolCallMatch) {
+        try {
+            const parsed = JSON.parse(toolCallMatch[1]);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                const firstCall = parsed[0];
+                const toolName = firstCall.name || firstCall.tool || firstCall.type || 'tool_call';
+                const args = firstCall.arguments || firstCall.args || firstCall.parameters || {};
+                let paramPreview = '';
+                if (args.selector) paramPreview = `"${args.selector}"`;
+                else if (args.milliseconds !== undefined) paramPreview = `${args.milliseconds}`;
+                else if (args.target) paramPreview = `"${args.target}"`;
+                else if (args.text) paramPreview = `"${args.text}"`;
+                return {
+                    primaryTool: toolName,
+                    paramPreview: paramPreview,
+                    argsObj: args,
+                    formattedToolCall: `${toolName}(${JSON.stringify(args)})`,
+                    rawText: responseText
+                };
+            }
+        } catch (e) {}
+    }
+    
+    // Check for JSON array directly: [{"type":"..."},...]
+    if (responseText.trim().startsWith('[') || responseText.trim().startsWith('{')) {
+        try {
+            const parsed = JSON.parse(responseText.trim());
+            const first = Array.isArray(parsed) ? parsed[0] : parsed;
+            if (first && (first.type || first.action || first.name)) {
+                const toolName = first.type || first.action || first.name;
+                const args = first.arguments || first.args || first;
+                let paramPreview = '';
+                if (first.target) paramPreview = `"${first.target}"`;
+                else if (first.selector) paramPreview = `"${first.selector}"`;
+                else if (first.value) paramPreview = `"${first.value}"`;
+                return {
+                    primaryTool: toolName,
+                    paramPreview: paramPreview,
+                    argsObj: args,
+                    formattedToolCall: `${toolName}(${JSON.stringify(args)})`,
+                    rawText: responseText
+                };
+            }
+        } catch (e) {}
+    }
+
+    // Check for tool call regex like: query_dom(...)
+    const callMatch = responseText.match(/([a-zA-Z0-9_]+)\s*\(([\s\S]*?)\)/);
+    if (callMatch) {
+        let paramPreview = callMatch[2].trim();
+        if (paramPreview.length > 25) paramPreview = paramPreview.substring(0, 22) + '...';
+        return {
+            primaryTool: callMatch[1],
+            paramPreview: paramPreview,
+            argsObj: null,
+            formattedToolCall: callMatch[0].trim(),
+            rawText: responseText
+        };
+    }
+
+    return {
+        primaryTool: '',
+        paramPreview: '',
+        argsObj: null,
+        formattedToolCall: '',
+        rawText: responseText
+    };
+}
+
+function renderExecutionTimelineBar(calls, stepId, isStepFailed) {
+    if (!calls || calls.length <= 1) return '';
+
+    let chipsHtml = '';
+    calls.forEach((call, idx) => {
+        const rawResponse = call.responseContent || call.response_content || call.rawResponse || call.raw_response || call.response || call.output || call.completion || '';
+        const parsed = parseToolCallResponse(rawResponse);
+        const toolName = parsed.primaryTool || `Call #${idx + 1}`;
+        const param = parsed.paramPreview ? `(${parsed.paramPreview})` : '';
+        const isLastCall = idx === calls.length - 1;
+        const isFailed = isLastCall && isStepFailed;
+        const chipClass = isFailed ? 'llm-flow-chip failed' : 'llm-flow-chip';
+        const failIcon = isFailed ? ' ❌' : '';
+        const targetId = `${stepId}_llm_call_${idx}`;
+
+        chipsHtml += `
+            <a href="#${targetId}" class="${chipClass}" onclick="event.stopPropagation(); document.getElementById('${targetId}')?.scrollIntoView({ behavior: 'smooth', block: 'center' });">
+                <span>#${idx + 1} ${escapeHtml(toolName)}${escapeHtml(param)}${failIcon}</span>
+            </a>
+        `;
+        if (idx < calls.length - 1) {
+            chipsHtml += `<span class="llm-flow-arrow">➔</span>`;
+        }
+    });
+
+    return `
+        <div class="llm-timeline-bar">
+            <div class="llm-timeline-header">
+                <span>Execution Sequence Overview</span>
+                <span>${calls.length} Turns</span>
+            </div>
+            <div class="llm-timeline-steps">
+                ${chipsHtml}
+            </div>
+        </div>
+    `;
+}
+
+function renderStreamlinedLlmCallCard(call, cIdx, stepId, isStepFailed, isSubStep) {
+    const tokens = extractCallTokens(call);
+    const rawCost = extractCallCost(call);
+    let formattedCost = '$0.0000';
+    if (rawCost > 0) {
+        const roundedUp = Math.ceil(rawCost * 10000) / 10000;
+        formattedCost = '$' + roundedUp.toFixed(4);
+    }
+    const dur = (call.durationMs !== undefined && call.durationMs !== null) 
+        ? (isSubStep ? call.durationMs + ' ms' : formatDurationInMinutes(call.durationMs)) 
+        : (call.duration ? formatDurationInMinutes(call.duration) : '');
+    
+    const systemPromptText = call.systemPrompt || call.system_prompt || call.system || '';
+    const userPromptText = call.userPrompt || call.user_prompt || call.domContext || call.dom_context || call.prompt || '';
+    const rawResponseText = call.responseContent || call.response_content || call.rawResponse || call.raw_response || call.response || call.output || call.completion || '';
+
+    const metaParts = [];
+    if (tokens) metaParts.push(`Tokens: ${tokens}`);
+    metaParts.push(`Cost: ${formattedCost}`);
+    if (dur) metaParts.push(`Duration: ${dur}`);
+    const callMetaStr = metaParts.join(' | ');
+
+    const promptParsed = parseLlmPromptContent(userPromptText);
+    const respParsed = parseToolCallResponse(rawResponseText);
+    
+    const isLast = (call._isLastCall === true);
+    const isTurnFailed = isLast && isStepFailed;
+    const cardClass = isTurnFailed ? 'llm-turn-card failed-turn' : 'llm-turn-card';
+    const cardId = `${stepId}_llm_call_${cIdx}`;
+
+    // Request or Turn Input row
+    let requestRowHtml = '';
+    if (cIdx === 0 && promptParsed.instruction) {
+        requestRowHtml = `
+            <div class="llm-exchange-row">
+                <span class="llm-exchange-tag llm-tag-request">Request</span>
+                <div class="llm-instruction-text">${escapeHtml(promptParsed.instruction)}</div>
+            </div>
+        `;
+    } else if (promptParsed.turnInputSummary) {
+        requestRowHtml = `
+            <div class="llm-exchange-row">
+                <span class="llm-exchange-tag llm-tag-result">Turn Input</span>
+                <div class="llm-tool-result-text">
+                    <span>${escapeHtml(promptParsed.turnInputSummary)}</span>
+                </div>
+            </div>
+        `;
+    } else if (promptParsed.turnInput) {
+        requestRowHtml = `
+            <div class="llm-exchange-row">
+                <span class="llm-exchange-tag llm-tag-result">Turn Input</span>
+                <div class="llm-tool-result-text">${escapeHtml(promptParsed.turnInput)}</div>
+            </div>
+        `;
+    } else if (promptParsed.instruction) {
+        requestRowHtml = `
+            <div class="llm-exchange-row">
+                <span class="llm-exchange-tag llm-tag-request">Request</span>
+                <div class="llm-instruction-text">${escapeHtml(promptParsed.instruction)}</div>
+            </div>
+        `;
+    }
+
+    // Response row
+    let turnThinking = call.thinking || call.reasoning || call.thought || '';
+    if (Array.isArray(turnThinking)) {
+        turnThinking = turnThinking.filter(Boolean).map(t => typeof t === 'object' && t !== null ? (t.text || t.summary || t.thought || JSON.stringify(t)) : String(t)).join('\n\n');
+    } else if (typeof turnThinking === 'object' && turnThinking !== null) {
+        turnThinking = turnThinking.text || turnThinking.summary || turnThinking.thought || JSON.stringify(turnThinking);
+    }
+    let thinkingRowHtml = '';
+    if (turnThinking && String(turnThinking).trim().length > 0) {
+        thinkingRowHtml = `
+            <div class="llm-exchange-row">
+                <span class="llm-exchange-tag llm-tag-thinking">Thought</span>
+                <div class="llm-thinking-text">${escapeHtml(String(turnThinking).trim())}</div>
+            </div>
+        `;
+    }
+
+    let responseDisplay = respParsed.formattedToolCall || respParsed.rawText || 'No response payload recorded';
+    const failureMsg = isTurnFailed ? '<div style="margin-top: 0.35rem; font-size: 0.76rem; color: #dc2626; font-weight: 600;">❌ FAILED / TIMEOUT</div>' : '';
+    const responseRowHtml = `
+        <div class="llm-exchange-row">
+            <span class="llm-exchange-tag llm-tag-response">Response</span>
+            <div>
+                <code class="llm-tool-call-code">${escapeHtml(responseDisplay)}</code>
+                ${failureMsg}
+            </div>
+        </div>
+    `;
+
+    // Drawer Details (Session Variables, Tool Results, Page State & DOM, System Prompt)
+    let hasDetails = false;
+    let detailsInnerHtml = '';
+
+    // 1. Tool Result Payload (Pretty JSON)
+    if (promptParsed.toolResult && promptParsed.toolResult.formattedJson) {
+        hasDetails = true;
+        detailsInnerHtml += `
+            <div class="llm-drawer-section">
+                <div class="llm-drawer-subtitle">
+                    <span>Tool Result Payload: <code>${escapeHtml(promptParsed.toolResult.toolName || 'tool')}</code></span>
+                    ${promptParsed.toolResult.toolId ? `<span style="font-family: var(--font-mono); font-size: 0.68rem; color: var(--text-muted);">${escapeHtml(promptParsed.toolResult.toolId)}</span>` : ''}
+                </div>
+                <pre class="llm-code-block"><code>${escapeHtml(promptParsed.toolResult.formattedJson)}</code></pre>
+            </div>
+        `;
+    }
+
+    // 2. Continuation Context & Page State
+    if (promptParsed.continuationContext && (promptParsed.continuationContext.pageUrl || promptParsed.continuationContext.visualNote || promptParsed.continuationContext.guidanceText)) {
+        hasDetails = true;
+        const ctx = promptParsed.continuationContext;
+        let ctxBody = '';
+        if (ctx.pageUrl) {
+            ctxBody += `<div><strong style="color: var(--text-muted);">Page URL:</strong> <a href="${escapeHtml(ctx.pageUrl)}" target="_blank" rel="noopener" style="color: var(--accent); word-break: break-all;">${escapeHtml(ctx.pageUrl)}</a></div>`;
+        }
+        if (ctx.pageTitle) {
+            ctxBody += `<div><strong style="color: var(--text-muted);">Title:</strong> <span>${escapeHtml(ctx.pageTitle)}</span></div>`;
+        }
+        if (ctx.visualNote) {
+            ctxBody += `<div style="margin-top: 0.25rem;"><strong style="color: var(--text-muted);">Visual State:</strong> <span>${escapeHtml(ctx.visualNote)}</span></div>`;
+        }
+        if (ctx.guidanceText) {
+            ctxBody += `
+                <details class="llm-guidance-details" style="margin-top: 0.4rem;">
+                    <summary style="cursor: pointer; font-size: 0.72rem; color: var(--text-muted); font-weight: 600;">Framework Continuation Guidance</summary>
+                    <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.25rem; line-height: 1.4; padding: 0.4rem 0.6rem; background: var(--bg-card); border-radius: 4px; border: 1px solid var(--border);">
+                        ${escapeHtml(ctx.guidanceText)}
+                    </div>
+                </details>
+            `;
+        }
+        detailsInnerHtml += `
+            <div class="llm-drawer-section">
+                <div class="llm-drawer-subtitle">Page State & Continuation Context</div>
+                <div class="llm-context-box">${ctxBody}</div>
+            </div>
+        `;
+    }
+
+    if (promptParsed.sessionVariables && promptParsed.sessionVariables.length > 0) {
+        hasDetails = true;
+        let varRows = '';
+        promptParsed.sessionVariables.forEach(v => {
+            varRows += `<tr><td class="llm-var-key">${escapeHtml(v.key)}</td><td class="llm-var-val">${escapeHtml(v.value)}</td></tr>`;
+        });
+        detailsInnerHtml += `
+            <div style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">
+                Session Variables (${promptParsed.sessionVariables.length})
+            </div>
+            <table class="llm-var-table">
+                <thead><tr><th>Variable</th><th>Value</th></tr></thead>
+                <tbody>${varRows}</tbody>
+            </table>
+        `;
+    }
+
+    if (promptParsed.domSnapshot) {
+        hasDetails = true;
+        const domSize = formatBytes(promptParsed.domSnapshotBytes || promptParsed.domSnapshot.length);
+        detailsInnerHtml += `
+            <div>
+                <div class="llm-dom-toggle" onclick="toggleDomSnapshot(this, event)">
+                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">code</span>
+                    <span>Page State & DOM Snapshot (${domSize})</span>
+                    <span class="material-symbols-outlined llm-dom-chevron" style="font-size: 0.8rem;">chevron_right</span>
+                </div>
+                <pre class="llm-dom-body">${escapeHtml(promptParsed.domSnapshot)}</pre>
+            </div>
+        `;
+    }
+
+    if (systemPromptText) {
+        hasDetails = true;
+        detailsInnerHtml += `
+            <div>
+                <div class="llm-dom-toggle" onclick="toggleSystemPrompt(this, event)">
+                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">tune</span>
+                    <span>System Prompt</span>
+                    <span class="material-symbols-outlined llm-sys-chevron" style="font-size: 0.8rem;">chevron_right</span>
+                </div>
+                <pre class="llm-dom-body">${escapeHtml(systemPromptText)}</pre>
+            </div>
+        `;
+    }
+
+    if (promptParsed.otherContext) {
+        hasDetails = true;
+        detailsInnerHtml += `
+            <div style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono); white-space: pre-wrap;">${escapeHtml(promptParsed.otherContext)}</div>
+        `;
+    }
+
+    const detailsBtnHtml = hasDetails ? `
+        <button class="llm-header-details-btn" onclick="toggleCallDetails(this, event)">
+            <span>Details</span>
+            <span class="material-symbols-outlined" style="font-size: 0.75rem;">expand_more</span>
+        </button>
+    ` : '';
+
+    return `
+        <div class="${cardClass}" id="${cardId}">
+            <div class="llm-turn-header">
+                <div class="llm-turn-header-left">
+                    <span class="llm-turn-badge">Call #${cIdx + 1}</span>
+                    ${detailsBtnHtml}
+                </div>
+                <span class="llm-turn-meta">${callMetaStr}</span>
+            </div>
+            <div class="llm-turn-body">
+                ${requestRowHtml}
+                ${thinkingRowHtml}
+                ${responseRowHtml}
+            </div>
+            ${hasDetails ? `<div class="llm-details-drawer" style="display: none;">${detailsInnerHtml}</div>` : ''}
+        </div>
+    `;
+}
+
+function toggleCallDetails(btn, event) {
+    if (event) event.stopPropagation();
+    const card = btn.closest('.llm-turn-card');
+    if (!card) return;
+    const drawer = card.querySelector('.llm-details-drawer');
+    if (!drawer) return;
+    const isExpanded = btn.classList.toggle('expanded');
+    drawer.style.display = isExpanded ? 'flex' : 'none';
+    const icon = btn.querySelector('.material-symbols-outlined');
+    if (icon) {
+        icon.textContent = isExpanded ? 'expand_less' : 'expand_more';
+    }
+}
+
+function toggleAllCallDetails(stepId, expand) {
+    const container = document.getElementById(`${stepId}_tabLlm`) || document.getElementById(stepId);
+    if (!container) return;
+    const cards = container.querySelectorAll('.llm-turn-card');
+    cards.forEach(card => {
+        const btn = card.querySelector('.llm-header-details-btn:not(.llm-copy-btn)');
+        const drawer = card.querySelector('.llm-details-drawer');
+        if (btn && drawer) {
+            if (expand) {
+                btn.classList.add('expanded');
+                drawer.style.display = 'flex';
+                const icon = btn.querySelector('.material-symbols-outlined');
+                if (icon) icon.textContent = 'expand_less';
+            } else {
+                btn.classList.remove('expanded');
+                drawer.style.display = 'none';
+                const icon = btn.querySelector('.material-symbols-outlined');
+                if (icon) icon.textContent = 'expand_more';
+            }
+        }
+    });
+}
+
+function toggleDomSnapshot(toggleEl, event) {
+    if (event) event.stopPropagation();
+    const body = toggleEl.nextElementSibling;
+    if (!body) return;
+    const isHidden = body.style.display === 'none' || !body.style.display;
+    body.style.display = isHidden ? 'block' : 'none';
+    const chevron = toggleEl.querySelector('.llm-dom-chevron');
+    if (chevron) {
+        chevron.textContent = isHidden ? 'expand_more' : 'chevron_right';
+    }
+}
+
+function toggleSystemPrompt(toggleEl, event) {
+    if (event) event.stopPropagation();
+    const body = toggleEl.nextElementSibling;
+    if (!body) return;
+    const isHidden = body.style.display === 'none' || !body.style.display;
+    body.style.display = isHidden ? 'block' : 'none';
+    const chevron = toggleEl.querySelector('.llm-sys-chevron');
+    if (chevron) {
+        chevron.textContent = isHidden ? 'expand_more' : 'chevron_right';
+    }
+}
+
+function generateTurnConversationMarkdown(stepData, call, cIdx) {
+    const lines = [];
+    lines.push(`### Turn #${cIdx + 1}`);
+    if (call.durationMs || call.totalTokens || call.cost) {
+        const meta = [];
+        if (call.durationMs) meta.push(`Duration: ${call.durationMs}ms`);
+        if (call.totalTokens) meta.push(`Tokens: ${call.totalTokens}`);
+        if (call.cost) meta.push(`Cost: $${call.cost}`);
+        lines.push(`*(${meta.join(' | ')})*`);
+        lines.push('');
+    }
+
+    const promptText = call.userPrompt || call.user_prompt || call.prompt || '';
+    const parsed = parseLlmPromptContent(promptText);
+
+    if (cIdx === 0) {
+        lines.push('#### Request');
+        lines.push(parsed.instruction || promptText);
+        lines.push('');
+        if (parsed.sessionVariables && parsed.sessionVariables.length > 0) {
+            lines.push('##### Active Session Variables');
+            parsed.sessionVariables.forEach(v => lines.push(`- **${v.key}:** \`${v.value}\``));
+            lines.push('');
+        }
+        if (parsed.domSnapshot) {
+            const domSize = formatBytes(parsed.domSnapshotBytes || parsed.domSnapshot.length);
+            lines.push('<details>');
+            lines.push(`<summary>Initial DOM Snapshot / Page Context (${domSize})</summary>`);
+            lines.push('');
+            lines.push('```html');
+            lines.push(parsed.domSnapshot);
+            lines.push('```');
+            lines.push('</details>');
+            lines.push('');
+        }
+    } else {
+        lines.push('#### Turn Input');
+        if (parsed.turnInputSummary) {
+            lines.push(`**Summary:** ${parsed.turnInputSummary}`);
+            lines.push('');
+        }
+        if (parsed.toolResult && parsed.toolResult.formattedJson) {
+            lines.push('##### Tool Execution Payload');
+            lines.push('```json');
+            lines.push(parsed.toolResult.formattedJson);
+            lines.push('```');
+            lines.push('');
+        }
+        if (parsed.continuationContext) {
+            const ctx = parsed.continuationContext;
+            lines.push('##### Page State & Continuation');
+            if (ctx.pageUrl) lines.push(`- **URL:** ${ctx.pageUrl}`);
+            if (ctx.pageTitle) lines.push(`- **Title:** ${ctx.pageTitle}`);
+            if (ctx.visualNote) lines.push(`- **Visual State:** ${ctx.visualNote}`);
+            if (ctx.guidanceText) lines.push(`- **Guidance:** ${ctx.guidanceText}`);
+            lines.push('');
+        }
+        if (parsed.domSnapshot) {
+            const domSize = formatBytes(parsed.domSnapshotBytes || parsed.domSnapshot.length);
+            lines.push('<details>');
+            lines.push(`<summary>Page DOM Tree Snapshot (${domSize})</summary>`);
+            lines.push('');
+            lines.push('```html');
+            lines.push(parsed.domSnapshot);
+            lines.push('```');
+            lines.push('</details>');
+            lines.push('');
+        }
+        if (!parsed.turnInputSummary && !parsed.toolResult && promptText) {
+            lines.push('```');
+            lines.push(promptText);
+            lines.push('```');
+            lines.push('');
+        }
+    }
+
+    let turnThinking = call.thinking || call.reasoning || call.thought || '';
+    if (Array.isArray(turnThinking)) {
+        turnThinking = turnThinking.filter(Boolean).map(t => typeof t === 'object' && t !== null ? (t.text || t.summary || t.thought || JSON.stringify(t)) : String(t)).join('\n\n');
+    } else if (typeof turnThinking === 'object' && turnThinking !== null) {
+        turnThinking = turnThinking.text || turnThinking.summary || turnThinking.thought || JSON.stringify(turnThinking);
+    }
+    if (turnThinking && String(turnThinking).trim().length > 0) {
+        lines.push('#### Model Thought / Reasoning');
+        lines.push(String(turnThinking).trim());
+        lines.push('');
+    }
+
+    const respText = call.responseContent || call.response_content || call.rawResponse || call.raw_response || call.response || '';
+    const respParsed = parseToolCallResponse(respText);
+    lines.push('#### Model Response');
+    if (respParsed.formattedToolCall) {
+        lines.push('```json');
+        lines.push(respParsed.formattedToolCall);
+        lines.push('```');
+    } else if (respText) {
+        lines.push('```');
+        lines.push(respText);
+        lines.push('```');
+    } else {
+        lines.push('*(No response payload recorded)*');
+    }
+    return lines.join('\n');
+}
+
+function generateStepConversationMarkdown(stepId) {
+    const data = (window._neodymiumStepLlmData && window._neodymiumStepLlmData[stepId]) || null;
+    if (!data) return '';
+
+    const lines = [];
+    lines.push(`# LLM Conversation: Step #${data.stepNum || ''} - ${data.title || ''}`);
+    lines.push('');
+    lines.push(`- **Model:** ${data.model || 'Unknown'}`);
+    lines.push(`- **Total Tokens:** ${data.totalTokens || 0}`);
+    lines.push(`- **Estimated Cost:** ${data.totalCost || '$0.00'}`);
+    lines.push(`- **Recorded Turns:** ${(data.calls && data.calls.length) || 0}`);
+    lines.push('');
+
+    if (data.systemPrompt && data.systemPrompt.trim().length > 0) {
+        lines.push('---');
+        lines.push('## System Prompt');
+        lines.push('```');
+        lines.push(data.systemPrompt.trim());
+        lines.push('```');
+        lines.push('');
+    }
+
+    if (Array.isArray(data.calls)) {
+        data.calls.forEach((call, idx) => {
+            lines.push('---');
+            lines.push(generateTurnConversationMarkdown(data, call, idx));
+            lines.push('');
+        });
+    }
+
+    return lines.join('\n');
+}
+
+function copyTextToClipboardWithFeedback(text, btn, successMessage) {
+    if (!text) return;
+    const originalHtml = btn ? btn.innerHTML : '';
+    const originalClass = btn ? btn.className : '';
+
+    function setSuccess() {
+        if (!btn) return;
+        btn.classList.add('copied');
+        btn.innerHTML = `<span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">check</span> <span>${successMessage || 'Copied!'}</span>`;
+        setTimeout(() => {
+            btn.className = originalClass;
+            btn.innerHTML = originalHtml;
+        }, 2200);
+    }
+
+    function fallbackCopy(str) {
+        const ta = document.createElement('textarea');
+        ta.value = str;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try {
+            document.execCommand('copy');
+        } catch (e) {}
+        document.body.removeChild(ta);
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(setSuccess).catch(() => {
+            fallbackCopy(text);
+            setSuccess();
+        });
+    } else {
+        fallbackCopy(text);
+        setSuccess();
+    }
+}
+
+function copyStepConversation(stepId, btn) {
+    const md = generateStepConversationMarkdown(stepId);
+    if (!md) return;
+    copyTextToClipboardWithFeedback(md, btn, 'Copied Conversation!');
+}
+
+function copyTurnConversation(stepId, cIdx, btn) {
+    const data = (window._neodymiumStepLlmData && window._neodymiumStepLlmData[stepId]) || null;
+    if (!data || !data.calls || !data.calls[cIdx]) return;
+    const call = data.calls[cIdx];
+    const md = generateTurnConversationMarkdown(data, call, cIdx);
+    copyTextToClipboardWithFeedback(md, btn, 'Copied Turn!');
 }
 
 function renderStepsForExecution(activeRow) {
@@ -1728,29 +3656,49 @@ function renderStepsForExecution(activeRow) {
 
     if (!activeRow) {
         stepListEl.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem;">Select a test execution row to view steps.</div>';
+        const linterContainer = document.getElementById('sidePageLinterFindingsContainer');
+        if (linterContainer) {
+            linterContainer.innerHTML = '';
+            linterContainer.style.display = 'none';
+        }
+        const postFlightContainer = document.getElementById('sidePagePostFlightFindingsContainer');
+        if (postFlightContainer) {
+            postFlightContainer.innerHTML = '';
+            postFlightContainer.style.display = 'none';
+        }
         return;
     }
-
-    startLiveStepRefreshTimer(activeRow);
 
     const blocksAttr = activeRow.getAttribute('data-blocks');
     const stepsAttr = activeRow.getAttribute('data-steps');
     const stepsFetched = activeRow.hasAttribute('data-steps-fetched');
 
     if (!stepsFetched && (!blocksAttr || blocksAttr === 'null' || blocksAttr === '{}') && (!stepsAttr || stepsAttr === 'null' || stepsAttr === '{}')) {
-        activeRow.setAttribute('data-steps-fetched', 'true');
         const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '#RUN_ID');
         const rowId = activeRow.getAttribute('data-row-id') || activeRow.id;
+
+        // Another fetch for this row is already running; avoid duplicate requests (rowId must be declared first).
+        if (isLiveStepFetchInFlight && currentActiveRowId === rowId) {
+            return;
+        }
 
         if (rowId) {
             stepListEl.innerHTML = '<div style="padding: 1.5rem; text-align: center; color: var(--text-muted);"><span class="material-symbols-outlined" style="font-size: 1.5rem; vertical-align: middle; animation: spin 1s linear infinite;">sync</span> Loading steps and screenshots...</div>';
 
-            fetch(`/fragments/test-side-panel/steps?runId=${encodeURIComponent(runId)}&rowId=${encodeURIComponent(rowId)}`)
+            const fetchId = ++activeStepFetchId;
+            isLiveStepFetchInFlight = true;
+            const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+            activeStepAbortController = controller;
+            const opts = controller ? { signal: controller.signal } : {};
+
+            fetch(`/fragments/test-side-panel/steps?runId=${encodeURIComponent(runId)}&rowId=${encodeURIComponent(rowId)}`, opts)
                 .then(res => {
                     if (!res.ok) throw new Error('Network response was not ok');
                     return res.json();
                 })
                 .then(execDto => {
+                    if (fetchId !== activeStepFetchId || currentActiveRowId !== rowId) return;
+                    activeRow.setAttribute('data-steps-fetched', 'true');
                     if (execDto) {
                         const newBlocks = extractBlocksJson(execDto);
                         const newSteps = extractStepsJson(execDto);
@@ -1768,8 +3716,34 @@ function renderStepsForExecution(activeRow) {
                         if (execDto.startTime) activeRow.setAttribute('data-start-time', execDto.startTime);
                         if (execDto.dateFormatted) activeRow.setAttribute('data-date-formatted', execDto.dateFormatted);
                         if (execDto.timeFormatted) activeRow.setAttribute('data-time-formatted', execDto.timeFormatted);
+                        if (execDto.videoUrl) activeRow.setAttribute('data-video-url', execDto.videoUrl);
+                        else if (execDto.videoPath) activeRow.setAttribute('data-video-url', execDto.videoPath);
                         if (execDto.llmResponsibilityJson) activeRow.setAttribute('data-llm-responsibility', execDto.llmResponsibilityJson);
                         if (execDto.contextLevelCountsJson) activeRow.setAttribute('data-context-level-counts', execDto.contextLevelCountsJson);
+                        if (execDto.inputTokensCount !== undefined && execDto.inputTokensCount !== null) activeRow.setAttribute('data-input-tokens', execDto.inputTokensCount);
+                        if (execDto.outputTokensCount !== undefined && execDto.outputTokensCount !== null) activeRow.setAttribute('data-output-tokens', execDto.outputTokensCount);
+                        if (execDto.cachedTokensCount !== undefined && execDto.cachedTokensCount !== null) activeRow.setAttribute('data-cached-tokens', execDto.cachedTokensCount);
+                        if (execDto.totalTokensCount !== undefined && execDto.totalTokensCount !== null) activeRow.setAttribute('data-total-tokens', execDto.totalTokensCount);
+                        if (execDto.llmCallsCount !== undefined && execDto.llmCallsCount !== null) activeRow.setAttribute('data-llm-calls', execDto.llmCallsCount);
+                        if (execDto.estimatedCostUsd) activeRow.setAttribute('data-est-cost', execDto.estimatedCostUsd);
+
+                        const linterArray = extractFindingsArray(execDto.linterFindings).length > 0
+                            ? extractFindingsArray(execDto.linterFindings)
+                            : extractFindingsArray(execDto.linterFindingsJson);
+                        if (linterArray.length > 0) {
+                            activeRow.setAttribute('data-linter-findings', JSON.stringify(linterArray));
+                        } else {
+                            activeRow.removeAttribute('data-linter-findings');
+                        }
+
+                        const postFlightArray = extractFindingsArray(execDto.postFlightFindings).length > 0
+                            ? extractFindingsArray(execDto.postFlightFindings)
+                            : extractFindingsArray(execDto.postFlightFindingsJson);
+                        if (postFlightArray.length > 0) {
+                            activeRow.setAttribute('data-post-flight-findings', JSON.stringify(postFlightArray));
+                        } else {
+                            activeRow.removeAttribute('data-post-flight-findings');
+                        }
 
                         const startTimeEl = document.getElementById('sidePageTestStartTimeVal');
                         if (startTimeEl) {
@@ -1782,13 +3756,30 @@ function renderStepsForExecution(activeRow) {
                         }
 
                         renderStepsForExecution(activeRow);
+                        startLiveStepRefreshTimer(activeRow);
                     } else {
                         renderStepsForExecution(activeRow);
+                        startLiveStepRefreshTimer(activeRow);
                     }
                 })
                 .catch(err => {
+                    if (err.name === 'AbortError' || fetchId !== activeStepFetchId || currentActiveRowId !== rowId) {
+                        return;
+                    }
                     console.error('Error fetching execution details:', err);
-                    stepListEl.innerHTML = '<div style="padding: 1rem; color: #ef4444; font-size: 0.85rem;">Failed to load step details for this test execution.</div>';
+                    const isStillLoading = stepListEl.innerHTML.includes('Loading steps');
+                    const hasRenderedSteps = stepListEl.querySelector('.step-card') !== null || stepListEl.querySelector('.step-section') !== null;
+                    if (isStillLoading || !hasRenderedSteps) {
+                        stepListEl.innerHTML = '<div style="padding: 1rem; color: #ef4444; font-size: 0.85rem;">Failed to load step details for this test execution.</div>';
+                    }
+                })
+                .finally(() => {
+                    if (activeStepAbortController === controller) {
+                        activeStepAbortController = null;
+                    }
+                    if (fetchId === activeStepFetchId) {
+                        isLiveStepFetchInFlight = false;
+                    }
                 });
             return;
         }
@@ -1798,13 +3789,23 @@ function renderStepsForExecution(activeRow) {
     const playbookFile = activeRow.getAttribute('data-playbook-file') || '';
     const failureText = activeRow.getAttribute('data-failure') || '';
 
+    const stInitialVal = (activeRow.getAttribute('data-status') || '').toUpperCase();
+    const stInitialRawVal = (activeRow.getAttribute('data-status-raw') || '').toLowerCase();
+    const isInitialFailureState = stInitialVal === 'FAILED' || stInitialVal === 'FAILED_UNKNOWN' || stInitialVal === 'FAILED_KNOWN' || stInitialVal === 'ERROR'
+        || stInitialRawVal === 'failed' || stInitialRawVal === 'failed-unknown' || stInitialRawVal === 'failed-known' || stInitialRawVal === 'error' || stInitialRawVal === 'known';
+
     // Update Top Error Card (Initial check from row data-failure attribute)
     const errorCard = document.getElementById('sidePageErrorDisplayCard');
     const errorTextEl = document.getElementById('sidePageErrorText');
     if (errorCard && errorTextEl) {
-        if (failureText && failureText !== 'NONE' && failureText.trim().length > 0) {
-            errorTextEl.innerText = failureText.trim();
-            errorCard.style.display = 'flex';
+        if (isInitialFailureState) {
+            const initialHtml = renderErrorBoxContent(failureText, activeRow.getAttribute('data-failure-reason') || '', activeRow.getAttribute('data-visual-rca-explanation') || '', []);
+            if (initialHtml) {
+                errorTextEl.innerHTML = initialHtml;
+                errorCard.style.display = 'flex';
+            } else {
+                errorCard.style.display = 'none';
+            }
         } else {
             errorCard.style.display = 'none';
         }
@@ -1861,7 +3862,10 @@ function renderStepsForExecution(activeRow) {
     const outputTokens = aiMetrics ? aiMetrics.outputTokens : (activeRow.getAttribute('data-output-tokens') || '0');
     const cachedTokens = aiMetrics ? aiMetrics.cachedTokens : (activeRow.getAttribute('data-cached-tokens') || '0');
     const estCost = aiMetrics ? aiMetrics.costFormatted : (activeRow.getAttribute('data-est-cost') || '$0.0000');
-    const statusVal = activeRow.getAttribute('data-status') || 'PASSED';
+    let statusVal = activeRow.getAttribute('data-status') || 'PASSED';
+    if (statusVal === 'SUCCEEDED_FIXED' || statusVal === 'succeeded-fixed' || statusVal === 'healed' || ((statusVal === 'PASSED' || statusVal === 'passed') && Number(healedCount) > 0)) {
+        statusVal = 'HEALED';
+    }
 
     const sideDurEl = document.getElementById('sideMetricDuration');
     const sideStatusEl = document.getElementById('sideMetricStatus');
@@ -1885,7 +3889,7 @@ function renderStepsForExecution(activeRow) {
         }
         sideDurEl.innerHTML = `${durFormatted}`;
     }
-    if (sideStatusEl) sideStatusEl.innerHTML = `Status: <strong class="${statusVal === 'PASSED' ? 'status-pass' : (statusVal === 'HEALED' ? 'status-fixed' : (statusVal === 'RUNNING' ? 'status-running' : 'status-fail'))}">${statusVal}</strong>`;
+    if (sideStatusEl) sideStatusEl.innerHTML = `Status: <strong class="${statusVal === 'PASSED' ? 'status-pass' : (statusVal === 'HEALED' || statusVal === 'SUCCEEDED_FIXED' ? 'status-fixed' : (statusVal === 'RUNNING' ? 'status-running' : 'status-fail'))}">${statusVal === 'SUCCEEDED_FIXED' ? 'HEALED' : statusVal}</strong>`;
     if (sideStepsEl) sideStepsEl.innerText = stepsTotal;
     if (sideStepHealthEl) sideStepHealthEl.innerText = `✨ Healed: ${healedCount} | ❌ Failed: ${failedCount}`;
     if (sideLlmCallsEl) sideLlmCallsEl.innerText = llmCalls;
@@ -1952,57 +3956,58 @@ function renderStepsForExecution(activeRow) {
     const coreSteps = blocksObj ? (blocksObj.steps || []) : [];
     const afterSteps = blocksObj ? (blocksObj.after || []) : [];
 
-    const stVal = (activeRow.getAttribute('data-status') || '').toUpperCase();
-    const stRawVal = (activeRow.getAttribute('data-status-raw') || '').toLowerCase();
+    const stVal = (activeRow.getAttribute('data-status') || blocksObj?.status || '').toUpperCase();
+    const stRawVal = (activeRow.getAttribute('data-status-raw') || blocksObj?.status || '').toLowerCase();
     const isRunningState = stVal === 'RUNNING' || stRawVal === 'running' || stRawVal === 'in_progress' || stRawVal === 'executing' || stRawVal === 'pending';
-
-    function escapeHtml(str) {
-        if (!str) return '';
-        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
+    const isFailureState = stVal === 'FAILED' || stVal === 'FAILED_UNKNOWN' || stVal === 'FAILED_KNOWN' || stVal === 'ERROR'
+        || stRawVal === 'failed' || stRawVal === 'failed-unknown' || stRawVal === 'failed-known' || stRawVal === 'error' || stRawVal === 'known';
 
     const failureReason = activeRow.getAttribute('data-failure-reason') || blocksObj?.failureReason || '';
     const failureStackTrace = activeRow.getAttribute('data-failure-stack-trace') || blocksObj?.failureStackTrace || '';
     const visualRcaExplanation = activeRow.getAttribute('data-visual-rca-explanation') || blocksObj?.visualRcaExplanation || '';
 
     if (errorCard && errorTextEl) {
-        const errorParts = [];
-        if (failureText && failureText !== 'NONE' && failureText.trim().length > 0) {
-            errorParts.push(failureText.trim());
-        }
-        if (failureReason && failureReason.trim().length > 0) {
-            errorParts.push(`Failure Reason:\n${failureReason.trim()}`);
-        }
-        if (visualRcaExplanation && visualRcaExplanation.trim().length > 0) {
-            errorParts.push(`Visual Root Cause Analysis (RCA):\n${visualRcaExplanation.trim()}`);
-        }
-
-        const allStackTraces = [];
-        if (failureStackTrace && failureStackTrace.trim().length > 0) {
-            allStackTraces.push(failureStackTrace.trim());
-        }
-
-        if (errorParts.length > 0 || allStackTraces.length > 0) {
-            let htmlContent = '';
-            if (errorParts.length > 0) {
-                htmlContent += `<div style="white-space: pre-wrap; word-break: break-word;">${escapeHtml(errorParts.join('\n\n'))}</div>`;
+        if (isFailureState) {
+            const allStackTraces = [];
+            if (failureStackTrace && failureStackTrace.trim().length > 0) {
+                allStackTraces.push(failureStackTrace.trim());
             }
-            if (allStackTraces.length > 0) {
-                const combinedTrace = allStackTraces.join('\n\n');
-                htmlContent += `
-                    <details class="error-stacktrace-collapsible">
-                        <summary class="error-stacktrace-summary">
-                            <span class="material-symbols-outlined" style="font-size: 0.95rem;">terminal</span>
-                            Failure Stack Trace
-                        </summary>
-                        <pre class="error-stacktrace-pre">${escapeHtml(combinedTrace)}</pre>
-                    </details>
-                `;
+
+            const renderedHtml = renderErrorBoxContent(failureText, failureReason, visualRcaExplanation, allStackTraces);
+            if (renderedHtml) {
+                errorTextEl.innerHTML = renderedHtml;
+                errorCard.style.display = 'flex';
+            } else {
+                errorCard.style.display = 'none';
             }
-            errorTextEl.innerHTML = htmlContent;
-            errorCard.style.display = 'flex';
         } else {
             errorCard.style.display = 'none';
+        }
+    }
+
+    // Render Pre-Flight Findings Box
+    const linterContainer = document.getElementById('sidePageLinterFindingsContainer');
+    if (linterContainer) {
+        const linterFindings = extractFindingsArray(activeRow.getAttribute('data-linter-findings'));
+        if (linterFindings.length > 0) {
+            linterContainer.innerHTML = renderLinterFindingsCard(linterFindings, false);
+            linterContainer.style.display = 'block';
+        } else {
+            linterContainer.innerHTML = '';
+            linterContainer.style.display = 'none';
+        }
+    }
+
+    // Render Empirical Post-Flight Findings Box
+    const postFlightContainer = document.getElementById('sidePagePostFlightFindingsContainer');
+    if (postFlightContainer) {
+        const postFlightFindings = extractFindingsArray(activeRow.getAttribute('data-post-flight-findings'));
+        if (postFlightFindings.length > 0) {
+            postFlightContainer.innerHTML = renderLinterFindingsCard(postFlightFindings, true);
+            postFlightContainer.style.display = 'block';
+        } else {
+            postFlightContainer.innerHTML = '';
+            postFlightContainer.style.display = 'none';
         }
     }
 
@@ -2043,13 +4048,15 @@ function renderStepsForExecution(activeRow) {
                 <div class="step-section-body">
         `;
 
+        let hasEncounteredFailure = false;
+        let firstFailedStepIndex = null;
         stepsArray.forEach((s, idx) => {
             const stepNum = s.index || s.stepNum || (idx + 1);
             const title = s.instruction || s.name || s.title || `Step ${stepNum}`;
             let rawStatus = (s.status || (s.passed === false ? 'failed' : 'passed')).toLowerCase();
             const subsList = Array.isArray(s.subSteps) ? s.subSteps : (Array.isArray(s.sub_steps) ? s.sub_steps : []);
             if (subsList.length > 0) {
-                const executedSubs = subsList.filter(sub => sub.status && String(sub.status).toUpperCase() !== 'PENDING' && String(sub.status).toUpperCase() !== 'SKIPPED');
+                const executedSubs = subsList.filter(sub => sub.status && String(sub.status).toUpperCase() !== 'PENDING' && String(sub.status).toUpperCase() !== 'SKIPPED' && String(sub.status).toUpperCase() !== 'NOT RUN' && String(sub.status).toUpperCase() !== 'NOT_RUN');
                 const hasFailedSub = subsList.some(sub => String(sub.status || '').toUpperCase() === 'FAILED' || sub.failureReason || sub.error || sub.failure);
                 if (hasFailedSub) {
                     rawStatus = 'failed';
@@ -2065,20 +4072,33 @@ function renderStepsForExecution(activeRow) {
                     }
                 }
             }
+            if (hasEncounteredFailure && !isRunningState) {
+                rawStatus = 'not_run';
+            }
+            if (rawStatus === 'failed' || s.passed === false || s.error || s.failure) {
+                if (!s.optional && !s.continueOnError) {
+                    hasEncounteredFailure = true;
+                    if (!firstFailedStepIndex) {
+                        firstFailedStepIndex = stepNum;
+                    }
+                }
+            }
             const status = rawStatus;
-            const isPassed = status === 'passed' || status === 'passed-clean' || status === 'success' || s.passed === true;
+            const isHealed = status === 'healed' || status === 'succeeded-fixed' || status === 'fixed' || s.healed === true || (Array.isArray(s.actions) && s.actions.some(a => a.healed));
+            const isPassed = !isHealed && (status === 'passed' || status === 'passed-clean' || status === 'success' || s.passed === true);
             const isFailed = status === 'failed' || status === 'failed-unknown' || status === 'failed-known' || s.passed === false;
+            const isNotRun = status === 'not_run' || status === 'not run' || status === 'unreached' || (!isPassed && !isFailed && !isHealed && hasEncounteredFailure && !isRunningState);
             
-            const stepClass = isPassed ? 'step-passed' : (isFailed ? 'step-failed' : 'step-ignored');
+            const stepClass = isHealed ? 'step-healed' : (isPassed ? 'step-passed' : (isFailed ? 'step-failed' : (isNotRun ? 'step-not-run' : 'step-ignored')));
             const stepId = `stepCard_${sectionClass}_${idx}`;
-            const rawContextLevel = s.contextLevels || s.stats?.contextLevels || 'PENDING';
+            const rawContextLevel = s.contextLevel || s.contextLevels || s.stats?.contextLevels || s.stats?.contextLevel || 'PENDING';
             const isUnexecutedOrSkipped = !isPassed && !isFailed && status !== 'running';
             const contextLevel = isUnexecutedOrSkipped ? 'PENDING' : rawContextLevel;
 
             // Format Timing
             const rawStart = s.startTimestamp || s.startTime || s.startTimeMs;
             let formattedStart = '';
-            if (rawStart) {
+            if (rawStart && !isUnexecutedOrSkipped) {
                 if (typeof rawStart === 'number') {
                     formattedStart = new Date(rawStart).toLocaleTimeString();
                 } else if (typeof rawStart === 'string') {
@@ -2088,17 +4108,20 @@ function renderStepsForExecution(activeRow) {
 
             let rawDuration = s.duration !== undefined && s.duration !== null ? s.duration : (s.durationMs !== undefined ? s.durationMs : null);
             let formattedDuration = '0 min 0 s';
-            if (rawDuration !== null && rawDuration !== undefined) {
+            if (isUnexecutedOrSkipped) {
+                formattedDuration = '-';
+            } else if (rawDuration !== null && rawDuration !== undefined) {
                 formattedDuration = formatDurationInMinutes(rawDuration);
             }
 
             // Format Reasoning
             let reasoningHtml = '';
-            if (s.reasoning) {
+            const stepReasoning = s.reasoning || (Array.isArray(s.reasonings) && s.reasonings.length > 0 ? Array.from(new Set(s.reasonings.filter(Boolean))).join('\n\n') : '');
+            if (stepReasoning && String(stepReasoning).trim().length > 0) {
                 reasoningHtml = `
                     <div class="reasoning-card" style="margin-top: 0.5rem;">
                         <div class="reasoning-title">💡 AI Reasoning & Decisioning</div>
-                        <div class="reasoning-body">${s.reasoning}</div>
+                        <div class="reasoning-body">${escapeHtml(String(stepReasoning).trim())}</div>
                     </div>
                 `;
             }
@@ -2119,7 +4142,7 @@ function renderStepsForExecution(activeRow) {
                 return `data:${mime};base64,${rawSrc}`;
             }
 
-            // Format Screenshot (Ignore top-level transient screenshot, rely strictly on s.screenshots array)
+            // Format Screenshot (Rely on s.screenshots array, fallback to sub-step screenshots or transient s.screenshot)
             if (Array.isArray(s.screenshots) && s.screenshots.length > 0) {
                 s.screenshots.forEach((sc, scIdx) => {
                     let fullSrc = '';
@@ -2138,6 +4161,37 @@ function renderStepsForExecution(activeRow) {
                         });
                     }
                 });
+            } else if (isFailed && subsList.length > 0 && subsList.some(sub => Array.isArray(sub.screenshots) && sub.screenshots.length > 0)) {
+                const failedSubsWithSc = subsList.filter(sub => (String(sub.status || '').toUpperCase() === 'FAILED' || sub.failureReason || sub.error || sub.failure) && Array.isArray(sub.screenshots) && sub.screenshots.length > 0);
+                const targetSubs = failedSubsWithSc.length > 0 ? failedSubsWithSc : subsList;
+                targetSubs.forEach((sub, subIdx) => {
+                    if (Array.isArray(sub.screenshots)) {
+                        sub.screenshots.forEach((sc, scIdx) => {
+                            let fullSrc = '';
+                            if (sc.base64Data) {
+                                const mime = sc.mediaType || 'image/jpeg';
+                                fullSrc = sc.base64Data.startsWith('data:') ? sc.base64Data : `data:${mime};base64,${sc.base64Data}`;
+                            } else {
+                                const rawSrc = sc.src || sc.url || sc.path || sc.screenshot;
+                                fullSrc = formatScreenshotSrc(rawSrc, sc.mediaType);
+                            }
+                            if (fullSrc && !screenshotSources.some(item => item.src === fullSrc)) {
+                                screenshotSources.push({
+                                    src: fullSrc,
+                                    label: sc.label || sc.name || `Sub-step #${stepNum}.${subIdx + 1} Capture`
+                                });
+                            }
+                        });
+                    }
+                });
+            } else if (s.screenshot) {
+                const fullSrc = formatScreenshotSrc(s.screenshot, 'image/png');
+                if (fullSrc && !screenshotSources.some(item => item.src === fullSrc)) {
+                    screenshotSources.push({
+                        src: fullSrc,
+                        label: 'Step Capture'
+                    });
+                }
             }
 
             if (screenshotSources.length > 0) {
@@ -2215,8 +4269,8 @@ function renderStepsForExecution(activeRow) {
                 `;
                 actions.forEach(act => {
                     const actName = act.type || act.name || 'ACTION';
-                    const actTarget = act.target || '';
-                    const actVal = act.value ? ` ➔ ${act.value}` : '';
+                    const actTarget = act.resolvedTarget || act.target || '';
+                    const actVal = (act.resolvedValue || act.value) ? ` ➔ ${act.resolvedValue || act.value}` : '';
                     const actDesc = act.description ? ` (${act.description})` : '';
                     const hasSuccess = typeof act.success === 'boolean';
                     const successModifier = hasSuccess ? (act.success ? ' action-success' : ' action-failed') : '';
@@ -2224,14 +4278,30 @@ function renderStepsForExecution(activeRow) {
                         ? `<span class="action-status-badge ${act.success ? 'action-status-ok' : 'action-status-fail'}" title="${act.success ? 'Action succeeded' : 'Action failed'}"><span class="material-symbols-outlined">${act.success ? 'check_circle' : 'cancel'}</span></span>`
                         : '';
                     const actReasoning = act.reasoning
-                        ? `<div class="action-reasoning"><span class="material-symbols-outlined">psychology</span><span class="action-reasoning-text">${act.reasoning}</span></div>`
+                        ? `<div class="action-reasoning"><span class="material-symbols-outlined">psychology</span><span class="action-reasoning-text">${escapeHtml(act.reasoning)}</span></div>`
                         : '';
+                    const origTarget = act.expectedTarget || act.originalTarget || act.healedFrom || (act.healed && act.target && act.target !== actTarget ? act.target : null);
+                    let healedBadge = '';
+                    if (origTarget && origTarget !== actTarget) {
+                        healedBadge = `<div class="action-healed-from" style="width: 100%; display: flex; align-items: center; gap: 0.35rem; margin-top: 0.25rem; font-size: 0.78rem; color: #7e22ce;"><span>🧬 Healed from:</span> <span style="display: inline-block; padding: 0.1rem 0.4rem; background: #f3e8ff; border: 1px solid #d8b4fe; border-radius: 4px; text-decoration: line-through; color: #7e22ce; font-family: monospace;">${escapeHtml(origTarget)}</span></div>`;
+                    }
+
+                    let subStepBadge = '';
+                    if (act.subStepInstruction || (act.subStepIndex !== undefined && act.subStepIndex !== null)) {
+                        const subNum = (act.subStepIndex !== undefined && act.subStepIndex !== null)
+                            ? `#${stepNum}.${act.subStepIndex + 1}`
+                            : '';
+                        const subText = act.subStepInstruction ? escapeHtml(act.subStepInstruction) : '';
+                        subStepBadge = `<span class="substep-attribution-pill" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; padding: 1px 6px; border-radius: 4px; background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; font-weight: 600;" title="${subText}">${subNum ? `${subNum} ` : ''}${subText}</span>`;
+                    }
 
                     actionsHtml += `
                         <div class="action-item-pill-row${successModifier}">
                             ${successBadge}
+                            ${subStepBadge}
                             <span class="action-type-pill">${actName}</span>
-                            <span class="action-code-text">${actTarget}${actVal}${actDesc}</span>
+                            <span class="action-code-text">${escapeHtml(actTarget)}${escapeHtml(actVal)}${escapeHtml(actDesc)}</span>
+                            ${healedBadge}
                             ${actReasoning}
                         </div>
                     `;
@@ -2266,9 +4336,12 @@ function renderStepsForExecution(activeRow) {
                     const subTitle = sub.instruction || sub.action || `Sub-step ${subIdx + 1}`;
                     const subDur = (sub.durationMs !== undefined && sub.durationMs !== null) ? formatDurationInMinutes(sub.durationMs) : (sub.duration ? formatDurationInMinutes(sub.duration) : '');
                     const subStatus = (sub.status || 'SUCCESS').toUpperCase();
+                    const isSubNotRun = subStatus === 'NOT RUN' || subStatus === 'NOT_RUN' || subStatus === 'UNREACHED';
                     const subBadgeClass = (subStatus === 'PASSED' || subStatus === 'SUCCESS') ? 'badge-pass'
                         : subStatus === 'HEALED' ? 'badge-healed'
-                        : subStatus === 'FAILED' ? 'badge-unknown-fail' : 'badge-ignored';
+                        : subStatus === 'FAILED' ? 'badge-unknown-fail'
+                        : isSubNotRun ? 'badge-not-run' : 'badge-ignored';
+                    const subStatusLabel = isSubNotRun ? 'NOT RUN' : subStatus;
 
                     // Source line info
                     const subSource = sub.sourceFile ? `📄 ${sub.sourceFile}${sub.lineNumber > 0 ? ':L' + sub.lineNumber : ''}` : '';
@@ -2348,11 +4421,17 @@ function renderStepsForExecution(activeRow) {
                             const successBadge = hasSuccess
                                 ? `<span class="action-status-badge ${act.success ? 'action-status-ok' : 'action-status-fail'}" title="${act.success ? 'Action succeeded' : 'Action failed'}"><span class="material-symbols-outlined">${act.success ? 'check_circle' : 'cancel'}</span></span>`
                                 : '';
+                            const origTarget = act.expectedTarget || act.originalTarget || act.healedFrom || (act.healed && act.target && act.target !== actTarget ? act.target : null);
+                            let healedBadge = '';
+                            if (origTarget && origTarget !== actTarget) {
+                                healedBadge = `<div class="action-healed-from" style="width: 100%; display: flex; align-items: center; gap: 0.35rem; margin-top: 0.25rem; font-size: 0.78rem; color: #7e22ce;"><span>🧬 Healed from:</span> <span style="display: inline-block; padding: 0.1rem 0.4rem; background: #f3e8ff; border: 1px solid #d8b4fe; border-radius: 4px; text-decoration: line-through; color: #7e22ce; font-family: monospace;">${escapeHtml(origTarget)}</span></div>`;
+                            }
                             subActionsHtml += `
                                 <div class="action-item-pill-row${successModifier}">
                                     ${successBadge}
                                     <span class="action-type-pill">${actName}</span>
                                     <span class="action-code-text">${escapeHtml(actTarget)}${escapeHtml(actVal)}</span>
+                                    ${healedBadge}
                                 </div>
                             `;
                         });
@@ -2363,99 +4442,52 @@ function renderStepsForExecution(activeRow) {
                     let subLlmCallsHtml = '';
                     const subLlmList = Array.isArray(sub.llmCalls) ? sub.llmCalls : [];
                     if (subLlmList.length > 0) {
+                        const subStepKey = `${stepId}_sub_${subIdx}`;
+                        window._neodymiumStepLlmData = window._neodymiumStepLlmData || {};
+                        window._neodymiumStepLlmData[subStepKey] = {
+                            stepId: subStepKey,
+                            stepNum: `${stepNum}.${subIdx + 1}`,
+                            title: sub.instruction || sub.name || `Sub-step ${subIdx + 1}`,
+                            model: (subLlmList[0] && (subLlmList[0].model || subLlmList[0].modelName)) || '',
+                            totalTokens: 0,
+                            totalCost: '$0.0000',
+                            calls: subLlmList,
+                            systemPrompt: (subLlmList[0] && (subLlmList[0].systemPrompt || subLlmList[0].system_prompt)) || ''
+                        };
                         subLlmCallsHtml = `
                             <div style="margin-top: 0.4rem;">
-                                <div style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.25rem;">
-                                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">smart_toy</span>
-                                    <span>LLM Invocations (${subLlmList.length})</span>
+                                <div style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.2rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.4rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                        <span class="material-symbols-outlined" style="font-size: 0.85rem;">smart_toy</span>
+                                        <span>LLM Invocations (${subLlmList.length})</span>
+                                    </div>
+                                    <div class="llm-view-controls" style="margin-bottom: 0;">
+                                        <button class="llm-ctrl-btn" onclick="event.stopPropagation(); toggleAllCallDetails('${subStepKey}', true);">Expand All</button>
+                                        <button class="llm-ctrl-btn" onclick="event.stopPropagation(); toggleAllCallDetails('${subStepKey}', false);">Collapse All</button>
+                                        <button class="llm-ctrl-btn llm-copy-btn" onclick="event.stopPropagation(); copyStepConversation('${subStepKey}', this);" title="Copy sub-step conversation to clipboard">
+                                            <span class="material-symbols-outlined" style="font-size: 0.8rem; vertical-align: middle;">content_copy</span>
+                                            <span>Copy</span>
+                                        </button>
+                                    </div>
                                 </div>
-                                <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+                                <div id="${subStepKey}">
                         `;
+                        if (subLlmList.length > 1) {
+                            subLlmCallsHtml += renderExecutionTimelineBar(subLlmList, subStepKey, subStatus === 'FAILED');
+                        }
                         subLlmList.forEach((call, cIdx) => {
-                            const cap = call.capability || 'LLM Call';
-                            const model = call.modelName || call.model || call.llmModel || 'default';
-                            const tokens = extractCallTokens(call);
-                            const rawCost = extractCallCost(call);
-                            let formattedCost = '$0.0000';
-                            if (rawCost > 0) {
-                                const roundedUp = Math.ceil(rawCost * 10000) / 10000;
-                                formattedCost = '$' + roundedUp.toFixed(4);
-                            }
-                            const dur = (call.durationMs !== undefined && call.durationMs !== null) 
-                                ? (call.durationMs + ' ms') 
-                                : (call.duration ? formatDurationInMinutes(call.duration) : '');
-                            
-                            const systemPromptText = call.systemPrompt || call.system_prompt || call.system || '';
-                            const userPromptText = call.userPrompt || call.user_prompt || call.domContext || call.dom_context || call.prompt || '';
-                            const rawResponseText = call.responseContent || call.response_content || call.rawResponse || call.raw_response || call.response || call.output || call.completion || '';
-
-                            const metaParts = [];
-                            if (tokens) metaParts.push(`Tokens: ${tokens}`);
-                            if (rawCost > 0) metaParts.push(`Cost: ${formattedCost}`);
-                            if (dur) metaParts.push(dur);
-                            const callMetaStr = metaParts.join(' | ');
-
-                            subLlmCallsHtml += `
-                                <div class="llm-call-card" style="border: 1px solid var(--border); border-radius: 6px; margin-top: 0.3rem; overflow: hidden; background: var(--bg-card);">
-                                    <div class="llm-call-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');" style="background: var(--bg-panel); padding: 0.35rem 0.6rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; cursor: pointer; user-select: none;">
-                                        <div style="display: flex; align-items: center; gap: 0.35rem; font-weight: 700; color: #1e293b;">
-                                            <span class="material-symbols-outlined llm-subsection-chevron" style="font-size: 0.8rem;">chevron_right</span>
-                                            <span class="material-symbols-outlined" style="font-size: 0.85rem; color: #a855f7;">smart_toy</span>
-                                            <span><strong>${escapeHtml(cap)}</strong> <span style="color:var(--text-muted); font-weight: 400;">(${escapeHtml(model)})</span></span>
-                                        </div>
-                                        <span style="font-family: var(--font-mono); font-size: 0.7rem; color: #64748b;">${callMetaStr}</span>
-                                    </div>
-                                    <div class="llm-call-body" style="padding: 0.5rem; display: flex; flex-direction: column; gap: 0.4rem;">
-                                        
-                                        <div class="llm-subsection-card">
-                                            <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
-                                                <div class="llm-subsection-title">
-                                                    <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
-                                                    <span class="material-symbols-outlined" style="font-size: 0.85rem; color: #0284c7;">tune</span>
-                                                    <span>System Prompt</span>
-                                                </div>
-                                                <span style="font-size: 0.68rem; color: #94a3b8; font-weight: 500;">Instruction & Persona</span>
-                                            </div>
-                                            <div class="llm-subsection-body">${systemPromptText ? escapeHtml(systemPromptText) : '<em style="color: var(--text-muted);">No explicit system prompt recorded</em>'}</div>
-                                        </div>
-
-                                        <div class="llm-subsection-card">
-                                            <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
-                                                <div class="llm-subsection-title">
-                                                    <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
-                                                    <span class="material-symbols-outlined" style="font-size: 0.85rem; color: #d97706;">code</span>
-                                                    <span>User Prompt & DOM Context (Plain Text)</span>
-                                                </div>
-                                                <span style="font-size: 0.68rem; color: #94a3b8; font-weight: 500;">User Query & Page Snapshot</span>
-                                            </div>
-                                            <div class="llm-subsection-body">${userPromptText ? escapeHtml(userPromptText) : '<em style="color: var(--text-muted);">No user prompt/DOM context recorded</em>'}</div>
-                                        </div>
-
-                                        <div class="llm-subsection-card">
-                                            <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
-                                                <div class="llm-subsection-title">
-                                                    <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
-                                                    <span class="material-symbols-outlined" style="font-size: 0.85rem; color: #16a34a;">terminal</span>
-                                                    <span>Raw Model Response</span>
-                                                </div>
-                                                <span style="font-size: 0.68rem; color: #94a3b8; font-weight: 500;">AI Completion Payload</span>
-                                            </div>
-                                            <div class="llm-subsection-body">${rawResponseText ? escapeHtml(rawResponseText) : '<em style="color: var(--text-muted);">No raw response recorded</em>'}</div>
-                                        </div>
-
-                                    </div>
-                                </div>
-                            `;
+                            call._isLastCall = (cIdx === subLlmList.length - 1);
+                            subLlmCallsHtml += renderStreamlinedLlmCallCard(call, cIdx, subStepKey, subStatus === 'FAILED', true);
                         });
                         subLlmCallsHtml += `</div></div>`;
                     }
 
                     subStepsHtml += `
-                        <div class="sub-step-card" onclick="toggleSubStepInspector(this, event)">
+                        <div class="sub-step-card ${isSubNotRun ? 'sub-step-card-not-run' : ''}" onclick="toggleSubStepInspector(this, event)">
                             <div class="sub-step-card-header">
                                 <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
                                     <span class="sub-step-number">${subNum}</span>
-                                    <span class="badge-status ${subBadgeClass}" style="font-size: 0.65rem; padding: 0.1rem 0.35rem;">${subStatus}</span>
+                                    <span class="badge-status ${subBadgeClass}" style="font-size: 0.65rem; padding: 0.1rem 0.35rem;">${subStatusLabel}</span>
                                     <span class="sub-step-instruction">${escapeHtml(subTitle)}</span>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 0.4rem;">
@@ -2463,6 +4495,7 @@ function renderStepsForExecution(activeRow) {
                                     <span class="material-symbols-outlined sub-step-chevron">chevron_right</span>
                                 </div>
                             </div>
+                            ${sub.notRunReason ? `<div class="sub-step-not-run-banner" style="font-size: 0.72rem; color: var(--text-muted); font-style: italic; margin: 0.2rem 0.5rem 0.4rem;">⏹️ ${escapeHtml(sub.notRunReason)}</div>` : ''}
                             <div class="sub-step-inspector">
                                 ${subSource ? `<div style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono);">${subSource}</div>` : ''}
                                 ${subErrorHtml}
@@ -2498,14 +4531,28 @@ function renderStepsForExecution(activeRow) {
                 ? '$' + (Math.ceil(calcTotalCostNum * 10000) / 10000).toFixed(4)
                 : '$0.0000';
 
+            const firstModel = (calls.length > 0 && (calls[0].modelName || calls[0].model || calls[0].llmModel))
+                ? (calls[0].modelName || calls[0].model || calls[0].llmModel)
+                : (s.model || s.llmModel || stats.model || '');
+
             let statsHtml = '';
             if (s.stats || s.llmCalls) {
-                statsHtml = `
-                    <div class="stats-summary-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin-bottom: 0.75rem; background: var(--bg-card); padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid var(--border);">
-                        <div><span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Total Tokens Usage</span><br><strong style="font-size: 1.1rem; color: var(--text-main); font-family: var(--font-mono);">${calcTotalTokens}</strong></div>
-                        <div><span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Estimated Cost</span><br><strong style="font-size: 1.1rem; color: #0284c7; font-family: var(--font-mono);">${calcTotalCostFormatted}</strong></div>
-                    </div>
-                `;
+                if (firstModel) {
+                    statsHtml = `
+                        <div class="stats-summary-grid" style="display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem; background: var(--bg-card); padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid var(--border);">
+                            <div><span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Model</span><br><strong style="font-size: 0.95rem; color: var(--accent, #6366f1); font-family: var(--font-mono);">${escapeHtml(firstModel)}</strong></div>
+                            <div><span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Total Tokens Usage</span><br><strong style="font-size: 1.1rem; color: var(--text-main); font-family: var(--font-mono);">${calcTotalTokens}</strong></div>
+                            <div><span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Estimated Cost</span><br><strong style="font-size: 1.1rem; color: #0284c7; font-family: var(--font-mono);">${calcTotalCostFormatted}</strong></div>
+                        </div>
+                    `;
+                } else {
+                    statsHtml = `
+                        <div class="stats-summary-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin-bottom: 0.75rem; background: var(--bg-card); padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid var(--border);">
+                            <div><span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Total Tokens Usage</span><br><strong style="font-size: 1.1rem; color: var(--text-main); font-family: var(--font-mono);">${calcTotalTokens}</strong></div>
+                            <div><span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Estimated Cost</span><br><strong style="font-size: 1.1rem; color: #0284c7; font-family: var(--font-mono);">${calcTotalCostFormatted}</strong></div>
+                        </div>
+                    `;
+                }
             }
 
             function escapeHtml(str) {
@@ -2513,131 +4560,73 @@ function renderStepsForExecution(activeRow) {
                 return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
             }
 
+            const timelineHtml = renderExecutionTimelineBar(calls, stepId, isFailed);
+
             let llmCallsHtml = '';
             if (calls.length > 0) {
-                calls.forEach((call, cIdx) => {
-                    const model = call.modelName || call.model || call.llmModel || 'LLM Model';
-                    const tokens = extractCallTokens(call);
-                    const rawCost = extractCallCost(call);
-                    let formattedCost = '$0.0000';
-                    if (rawCost > 0) {
-                        const roundedUp = Math.ceil(rawCost * 10000) / 10000;
-                        formattedCost = '$' + roundedUp.toFixed(4);
-                    }
-                    const dur = (call.durationMs !== undefined && call.durationMs !== null) ? formatDurationInMinutes(call.durationMs) : (call.duration ? formatDurationInMinutes(call.duration) : '');
-                    
-                    const systemPromptText = call.systemPrompt || call.system_prompt || call.system || '';
-                    const userPromptText = call.userPrompt || call.user_prompt || call.domContext || call.dom_context || call.prompt || '';
-                    const rawResponseText = call.responseContent || call.response_content || call.rawResponse || call.raw_response || call.response || call.output || call.completion || '';
-
-                    const metaParts = [];
-                    if (tokens) metaParts.push(`Tokens: ${tokens}`);
-                    metaParts.push(`Cost: ${formattedCost}`);
-                    if (dur) metaParts.push(`Duration: ${dur}`);
-                    const callMetaStr = metaParts.join(' | ');
-
-                    llmCallsHtml += `
-                        <div class="llm-call-card expanded" style="border: 1px solid var(--border); border-radius: 8px; margin-top: 0.6rem; overflow: hidden; background: var(--bg-card);">
-                            <div class="llm-call-header" onclick="this.parentElement.classList.toggle('expanded')" style="background: #f1f5f9; padding: 0.5rem 0.75rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; cursor: pointer; user-select: none;">
-                                <div style="display: flex; align-items: center; gap: 0.4rem; font-weight: 700; color: #1e293b;">
-                                    <span class="material-symbols-outlined llm-subsection-chevron" style="font-size: 0.85rem;">chevron_right</span>
-                                    <span class="material-symbols-outlined" style="font-size: 0.95rem; color: #a855f7;">smart_toy</span>
-                                    <span>Call #${cIdx + 1}: ${model}</span>
-                                </div>
-                                <span style="font-family: var(--font-mono); font-size: 0.72rem; color: #64748b;">${callMetaStr}</span>
-                            </div>
-                            <div class="llm-call-body" style="padding: 0.6rem; display: flex; flex-direction: column; gap: 0.5rem;">
-                                
-                                <div class="llm-subsection-card">
-                                    <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
-                                        <div class="llm-subsection-title">
-                                            <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
-                                            <span class="material-symbols-outlined" style="font-size: 0.9rem; color: #0284c7;">tune</span>
-                                            <span>System Prompt</span>
-                                        </div>
-                                        <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 500;">Instruction & Persona</span>
-                                    </div>
-                                    <div class="llm-subsection-body">${systemPromptText ? escapeHtml(systemPromptText) : '<em style="color: var(--text-muted);">No explicit system prompt recorded</em>'}</div>
-                                </div>
-
-                                <div class="llm-subsection-card">
-                                    <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
-                                        <div class="llm-subsection-title">
-                                            <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
-                                            <span class="material-symbols-outlined" style="font-size: 0.9rem; color: #d97706;">code</span>
-                                            <span>User Prompt & DOM Context (Plain Text)</span>
-                                        </div>
-                                        <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 500;">User Query & Page Snapshot</span>
-                                    </div>
-                                    <div class="llm-subsection-body">${userPromptText ? escapeHtml(userPromptText) : '<em style="color: var(--text-muted);">No user prompt/DOM context recorded</em>'}</div>
-                                </div>
-
-                                <div class="llm-subsection-card">
-                                    <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
-                                        <div class="llm-subsection-title">
-                                            <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
-                                            <span class="material-symbols-outlined" style="font-size: 0.9rem; color: #16a34a;">terminal</span>
-                                            <span>Raw Model Response</span>
-                                        </div>
-                                        <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 500;">AI Completion Payload</span>
-                                    </div>
-                                    <div class="llm-subsection-body">${rawResponseText ? escapeHtml(rawResponseText) : '<em style="color: var(--text-muted);">No raw response recorded</em>'}</div>
-                                </div>
-
-                            </div>
+                window._neodymiumStepLlmData = window._neodymiumStepLlmData || {};
+                window._neodymiumStepLlmData[stepId] = {
+                    stepId: stepId,
+                    stepNum: stepNum,
+                    title: title,
+                    model: firstModel,
+                    totalTokens: calcTotalTokens,
+                    totalCost: calcTotalCostFormatted,
+                    calls: calls,
+                    systemPrompt: (calls.length > 0 && (calls[0].systemPrompt || calls[0].system_prompt)) || ''
+                };
+                const controlsHtml = `
+                    <div class="llm-view-controls">
+                        <div style="display: flex; gap: 0.4rem; align-items: center;">
+                            <button class="llm-ctrl-btn" onclick="event.stopPropagation(); toggleAllCallDetails('${stepId}', true);">Expand All Details</button>
+                            <button class="llm-ctrl-btn" onclick="event.stopPropagation(); toggleAllCallDetails('${stepId}', false);">Collapse All</button>
                         </div>
-                    `;
-                });
-            } else if (s.prompt || s.llmPrompt || s.llmResponse) {
-                const promptSnippet = s.prompt || s.llmPrompt || `[System Instruction for Step #${stepNum}]\nExecute: ${title}`;
-                const responseSnippet = s.llmResponse || s.response || JSON.stringify(actions, null, 2);
-                llmCallsHtml = `
-                    <div class="llm-call-card expanded" style="border: 1px solid var(--border); border-radius: 8px; margin-top: 0.6rem; overflow: hidden; background: var(--bg-card);">
-                        <div class="llm-call-header" onclick="this.parentElement.classList.toggle('expanded')" style="background: #f1f5f9; padding: 0.5rem 0.75rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; cursor: pointer; user-select: none;">
-                            <div style="display: flex; align-items: center; gap: 0.4rem; font-weight: 700; color: #1e293b;">
-                                <span class="material-symbols-outlined llm-subsection-chevron" style="font-size: 0.85rem;">chevron_right</span>
-                                <span class="material-symbols-outlined" style="font-size: 0.95rem; color: #a855f7;">smart_toy</span>
-                                <span>LLM Prompt & Response</span>
-                            </div>
-                        </div>
-                        <div class="llm-call-body" style="padding: 0.6rem; display: flex; flex-direction: column; gap: 0.5rem;">
-                            <div class="llm-subsection-card">
-                                <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
-                                    <div class="llm-subsection-title">
-                                        <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
-                                        <span class="material-symbols-outlined" style="font-size: 0.9rem; color: #d97706;">code</span>
-                                        <span>User Prompt & DOM Context (Plain Text)</span>
-                                    </div>
-                                </div>
-                                <div class="llm-subsection-body">${escapeHtml(promptSnippet)}</div>
-                            </div>
-                            <div class="llm-subsection-card">
-                                <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
-                                    <div class="llm-subsection-title">
-                                        <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
-                                        <span class="material-symbols-outlined" style="font-size: 0.9rem; color: #16a34a;">terminal</span>
-                                        <span>Raw Model Response</span>
-                                    </div>
-                                </div>
-                                <div class="llm-subsection-body">${escapeHtml(responseSnippet)}</div>
-                            </div>
-                        </div>
+                        <button class="llm-ctrl-btn llm-copy-btn" onclick="event.stopPropagation(); copyStepConversation('${stepId}', this);" title="Copy complete multi-turn conversation with formatted details to clipboard for AI diagnosis">
+                            <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">content_copy</span>
+                            <span>Copy Conversation</span>
+                        </button>
                     </div>
                 `;
+                llmCallsHtml += controlsHtml;
+                calls.forEach((call, cIdx) => {
+                    call._isLastCall = (cIdx === calls.length - 1);
+                    llmCallsHtml += renderStreamlinedLlmCallCard(call, cIdx, stepId, isFailed, false);
+                });
+            } else if (s.prompt || s.llmPrompt || s.llmResponse) {
+                const syntheticCall = {
+                    userPrompt: s.prompt || s.llmPrompt || `[System Instruction for Step #${stepNum}]\nExecute: ${title}`,
+                    responseContent: s.llmResponse || s.response || JSON.stringify(actions, null, 2)
+                };
+                llmCallsHtml = renderStreamlinedLlmCallCard(syntheticCall, 0, stepId, isFailed, false);
             } else {
                 llmCallsHtml = `<div style="font-size: 0.8rem; color: var(--text-muted); padding: 0.5rem;">No LLM call details recorded for this step.</div>`;
             }
 
             // Per-step totals (number of actions, screenshots and LLM calls) from console-log.json step data.
-            const stepActionsCount = Array.isArray(s.actions) ? s.actions.length : 0;
-            const stepScreenshotsCount = screenshotSources.length;
-            const stepLlmCallsCount = Array.isArray(calls) ? calls.length : 0;
+            const stepActionsCount = isUnexecutedOrSkipped ? 0 : (Array.isArray(s.actions) ? s.actions.length : 0);
+            const stepScreenshotsCount = isUnexecutedOrSkipped ? 0 : screenshotSources.length;
+            const stepLlmCallsCount = isUnexecutedOrSkipped ? 0 : (Array.isArray(calls) ? calls.length : 0);
+            let stepInTokens = 0;
+            let stepOutTokens = 0;
+            if (Array.isArray(calls)) {
+                for (const c of calls) {
+                    stepInTokens += Number(c.inputTokens || c.input_tokens || 0) || 0;
+                    stepOutTokens += Number(c.outputTokens || c.output_tokens || 0) || 0;
+                }
+            }
+            if (stepInTokens === 0 && stepOutTokens === 0) {
+                stepInTokens = Number(s.standardInputTokens || s.standard_input_tokens || 0) || 0;
+                stepOutTokens = Number(s.standardOutputTokens || s.standard_output_tokens || 0) || 0;
+            }
+            const tokensSuffix = (stepInTokens > 0 || stepOutTokens > 0)
+                ? `, ${stepInTokens.toLocaleString('en-US')} in/ ${stepOutTokens.toLocaleString('en-US')} out`
+                : '';
             const hasSsim = s.baselineMatrixPng || s.replayMatrixPng || s.ssimScore != null || s.ssimMinScore != null || s.screenshotHashDim;
             const countsSummaryHtml = `
                 <div class="step-exec-stats" style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; margin-top: 0.25rem;">
                     <span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #7e22ce;">terminal</span> ${stepActionsCount} action(s)</span>
                     <span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #2563eb;">image</span> ${stepScreenshotsCount} screenshot(s)</span>
-                    <span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #a855f7;">smart_toy</span> ${stepLlmCallsCount} LLM call(s)</span>
+                    <span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #a855f7;">smart_toy</span> ${stepLlmCallsCount} LLM call(s)${tokensSuffix}</span>
                     ${hasSsim ? `<span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: #0f766e; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #0d9488;">compare</span> Visual SSIM</span>` : ''}
                 </div>
             `;
@@ -2647,10 +4636,12 @@ function renderStepsForExecution(activeRow) {
                     <div class="step-header">
                         <div class="step-title-line" style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
                             <span class="step-num-box">#${stepNum}</span>
-                            ${isPassed ? '<span class="badge-status badge-pass" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">SUCCESS</span>' :
+                            ${isHealed ? '<span class="badge-status badge-healed" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">healing</span> HEALED</span>' :
+                              (isPassed ? '<span class="badge-status badge-pass" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">SUCCESS</span>' :
                               (isFailed ? '<span class="badge-status badge-unknown-fail" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">FAILED</span>' :
-                              '<span class="badge-status badge-ignored" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">SKIPPED</span>')}
-                            <span class="context-badge level-${contextLevel.toLowerCase()}">${contextLevel}</span>
+                              (isNotRun ? '<span class="badge-status badge-not-run" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">NOT RUN</span>' :
+                              '<span class="badge-status badge-ignored" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">SKIPPED</span>')))}
+                            ${isNotRun ? '' : `<span class="context-badge ${contextLevelClass(contextLevel)}">${contextLevel}</span>`}
                             <span style="color: var(--text-main); font-weight: 600; margin-left: 0.2rem;">${title}</span>
                         </div>
                         ${countsSummaryHtml}
@@ -2659,6 +4650,11 @@ function renderStepsForExecution(activeRow) {
                             <span class="material-symbols-outlined step-expand-chevron">chevron_right</span>
                         </div>
                     </div>
+
+                    ${isNotRun ? `
+                    <div style="padding: 0.15rem 0.85rem 0.35rem;">
+                        <div class="step-not-run-banner" style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">⏹️ ${escapeHtml(s.notRunReason || (firstFailedStepIndex ? `Not executed because step #${firstFailedStepIndex} failed.` : 'Not executed due to a preceding step failure.'))}</div>
+                    </div>` : ''}
 
                     <div style="padding: 0 0.85rem 0.5rem;">
                         <div style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 0.2rem;">📄 ${s.sourceMeta || s.playbookSource || s.file +':L'+ s.line || 'Playbook.yaml:L' + stepNum}</div>
@@ -2669,13 +4665,13 @@ function renderStepsForExecution(activeRow) {
                             <div class="inspector-header">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <span style="font-family: var(--font-mono); font-weight: 800; color: var(--status-fixed); font-size: 0.9rem;">#${stepNum}</span>
-                                    <span class="badge-status ${isPassed ? 'badge-pass' : 'badge-unknown-fail'}" style="font-size: 0.7rem;">${isPassed ? 'PASSED' : 'FAILED'}</span>
+                                    <span class="badge-status ${isHealed ? 'badge-healed' : (isPassed ? 'badge-pass' : (isFailed ? 'badge-unknown-fail' : (isNotRun ? 'badge-not-run' : 'badge-ignored')))}" style="font-size: 0.7rem;">${isHealed ? 'HEALED' : (isPassed ? 'PASSED' : (isFailed ? 'FAILED' : (isNotRun ? 'NOT RUN' : 'SKIPPED')))}</span>
                                 </div>
                                 <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-main); margin-top: 0.2rem;">${title}</div>
                             </div>
                             <div class="inspector-tabs">
                                 <button class="tab-btn active" onclick="switchInspectorTab(this, '${stepId}_tabOverview')">📋 Overview</button>
-                                <button class="tab-btn" onclick="switchInspectorTab(this, '${stepId}_tabLlm')">🤖 LLM Details</button>
+                                <button class="tab-btn" onclick="switchInspectorTab(this, '${stepId}_tabLlm')">🤖 LLM Details${calls.length > 0 ? ` (${calls.length} Call${calls.length > 1 ? 's' : ''})` : ''}</button>
                             </div>
                             <div class="inspector-content">
                                 <!-- TAB 1: OVERVIEW -->
@@ -2696,6 +4692,7 @@ function renderStepsForExecution(activeRow) {
                                 <!-- TAB 2: LLM DETAILS -->
                                 <div class="tab-panel" id="${stepId}_tabLlm">
                                     ${statsHtml}
+                                    ${timelineHtml}
                                     ${llmCallsHtml}
                                 </div>
                             </div>
@@ -2725,7 +4722,76 @@ function renderStepsForExecution(activeRow) {
     html += renderSection('AFTER STEPS / TEARDOWN', afterSteps, 'after', 'stop', 'var(--text-muted)');
 
     stepListEl.innerHTML = html;
+
+    const videoUrlAttr = activeRow.getAttribute('data-video-url') || activeRow.getAttribute('data-video');
+    const attachmentContainer = document.getElementById('attachmentSectionContainer');
+    const videoPreviewBox = document.getElementById('attachmentVideoBox') || (attachmentContainer ? attachmentContainer.querySelector('.attachment-video-mock')?.closest('.attachment-preview-box') : null);
+
+    const hasVideo = videoUrlAttr && videoUrlAttr.trim().length > 0 && videoUrlAttr !== 'null';
+
+    if (hasVideo && attachmentContainer) {
+        if (videoPreviewBox) {
+            videoPreviewBox.style.display = 'flex';
+        }
+        const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '');
+        const testClass = activeRow.getAttribute('data-test-class') || activeRow.getAttribute('data-test-name') || activeRow.getAttribute('data-class-name') || '';
+        const src = (videoUrlAttr.startsWith('http') || videoUrlAttr.startsWith('/'))
+            ? videoUrlAttr
+            : `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(videoUrlAttr)}`;
+
+        const videoBox = videoPreviewBox ? videoPreviewBox.querySelector('.attachment-video-mock') : attachmentContainer.querySelector('.attachment-video-mock');
+        if (videoBox) {
+            videoBox.style.height = 'auto';
+            videoBox.style.padding = '0.5rem';
+            videoBox.innerHTML = `<video controls style="width:100%; max-height:280px; border-radius:6px; background:#000;" src="${src}"></video>`;
+        }
+        const tagChip = videoPreviewBox ? videoPreviewBox.querySelector('.tag-chip') : null;
+        if (tagChip) {
+            tagChip.textContent = videoUrlAttr;
+        }
+        const openBtn = videoPreviewBox ? videoPreviewBox.querySelector('button[onclick*="openAttachmentWindow"]') : null;
+        if (openBtn) {
+            openBtn.setAttribute('onclick', `openAttachmentWindow('video', '${src}')`);
+        }
+    } else {
+        if (videoPreviewBox) {
+            videoPreviewBox.style.display = 'none';
+        }
+    }
+
+    if (attachmentContainer) {
+        const visibleAttachments = attachmentContainer.querySelectorAll('.attachment-preview-box:not([style*="display: none"])');
+        if (visibleAttachments.length === 0) {
+            attachmentContainer.style.display = 'none';
+        } else {
+            attachmentContainer.style.display = 'block';
+            const fileCountChip = attachmentContainer.querySelector('.step-section-header .tag-chip');
+            if (fileCountChip) {
+                fileCountChip.textContent = `${visibleAttachments.length} FILE${visibleAttachments.length > 1 ? 'S' : ''}`;
+            }
+        }
+    }
 }
+
+function openAttachmentWindow(type, url) {
+    if (!url) return;
+    let targetUrl = url;
+    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://') && !targetUrl.startsWith('/api/')) {
+        const activeRow = document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row');
+        if (activeRow) {
+            const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '');
+            const testClass = activeRow.getAttribute('data-test-class') || activeRow.getAttribute('data-test-name') || activeRow.getAttribute('data-class-name') || '';
+            const filename = activeRow.getAttribute('data-video-url') || url;
+            if (filename.startsWith('http') || filename.startsWith('/')) {
+                targetUrl = filename;
+            } else {
+                targetUrl = `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(filename)}`;
+            }
+        }
+    }
+    window.open(targetUrl, '_blank', 'width=1000,height=700,resizable=yes,scrollbars=yes');
+}
+window.openAttachmentWindow = openAttachmentWindow;
 
 function extractStepContextLevelCounts(activeRow) {
     if (!activeRow) return null;
@@ -2749,7 +4815,11 @@ function extractStepContextLevelCounts(activeRow) {
                 const stepsObj = JSON.parse(stepsAttr);
                 if (stepsObj && stepsObj.tries) {
                     const try1 = stepsObj.tries['1'] || Object.values(stepsObj.tries)[0];
-                    if (Array.isArray(try1)) stepsList = try1;
+                    if (Array.isArray(try1)) {
+                        stepsList = try1;
+                    } else if (try1 && typeof try1 === 'object') {
+                        stepsList = [...(try1.beforeSteps || []), ...(try1.coreSteps || []), ...(try1.afterSteps || [])];
+                    }
                 } else if (Array.isArray(stepsObj)) {
                     stepsList = stepsObj;
                 }
@@ -2760,39 +4830,45 @@ function extractStepContextLevelCounts(activeRow) {
     if (stepsList.length === 0) return null;
 
     const counts = {};
-    stepsList.forEach(s => {
+    function processStep(s) {
         if (!s) return;
         const st = (s.status || '').toUpperCase();
         if (st === 'SKIPPED' || st === 'PENDING' || st === 'UNEXECUTED') return;
 
         const rawContextLevel = s.contextLevel || s.contextLevels || s.stats?.contextLevels;
-        if (!rawContextLevel) return;
-
-        let highestLevel = null;
-        if (Array.isArray(rawContextLevel)) {
-            const validLevels = rawContextLevel.filter(lvl => lvl && typeof lvl === 'string' && lvl.trim().toUpperCase() !== 'PENDING');
-            if (validLevels.length > 0) {
-                highestLevel = validLevels[validLevels.length - 1].trim().toUpperCase();
+        if (rawContextLevel) {
+            let highestLevel = null;
+            if (Array.isArray(rawContextLevel)) {
+                const validLevels = rawContextLevel.filter(lvl => lvl && typeof lvl === 'string' && lvl.trim().toUpperCase() !== 'PENDING');
+                if (validLevels.length > 0) {
+                    highestLevel = validLevels[validLevels.length - 1].trim().toUpperCase();
+                }
+            } else if (typeof rawContextLevel === 'string') {
+                const parts = rawContextLevel.split(/\s*(?:→|->)\s*/).map(p => p.trim().toUpperCase()).filter(p => p && p !== 'PENDING');
+                if (parts.length > 0) {
+                    highestLevel = parts[parts.length - 1];
+                }
             }
-        } else if (typeof rawContextLevel === 'string') {
-            const parts = rawContextLevel.split('→').map(p => p.trim().toUpperCase()).filter(p => p && p !== 'PENDING');
-            if (parts.length > 0) {
-                highestLevel = parts[parts.length - 1];
+
+            if (highestLevel) {
+                counts[highestLevel] = (counts[highestLevel] || 0) + 1;
             }
         }
 
-        if (highestLevel) {
-            counts[highestLevel] = (counts[highestLevel] || 0) + 1;
+        if (Array.isArray(s.subSteps)) {
+            s.subSteps.forEach(processStep);
         }
-    });
+    }
+
+    stepsList.forEach(processStep);
 
     return Object.keys(counts).length > 0 ? counts : null;
 }
 
 function renderContextLevelBadges(ctxBadgesEl, countsJson, stepsTotal, activeRow) {
-    let counts = parseContextLevelCounts(countsJson);
-    if (!counts && activeRow) {
-        counts = extractStepContextLevelCounts(activeRow);
+    let counts = activeRow ? extractStepContextLevelCounts(activeRow) : null;
+    if (!counts) {
+        counts = parseContextLevelCounts(countsJson);
     }
 
     const defaultLevels = ['MINIMAL', 'LEAN', 'STANDARD', 'VISUAL'];
@@ -2828,11 +4904,14 @@ function parseContextLevelCounts(json) {
 }
 
 function contextLevelClass(key) {
-    const k = String(key || '').toUpperCase();
+    const raw = String(key || '').trim();
+    const parts = raw.split(/\s*(?:→|->)\s*/);
+    const k = (parts[parts.length - 1] || '').toUpperCase();
     if (k === 'MINIMAL') return 'level-minimal';
     if (k === 'LEAN') return 'level-lean';
     if (k === 'STANDARD') return 'level-standard';
     if (k.indexOf('VISUAL') === 0) return 'level-visual';
+    if (k === 'PENDING') return 'level-pending';
     return 'level-standard';
 }
 
@@ -2842,16 +4921,20 @@ window.contextLevelClass = contextLevelClass;
 
 function renderLlmResponsibilityRows(llmTbody, responsibilityJson, fallback) {
     const labels = [
-        { key: 'total',        label: 'Total',                                                       total: true  },
-        { key: 'action',       label: 'Action (Standard Generation)',                                total: false },
-        { key: 'pesap',        label: 'PESAP (Pre-Execution Semantic Anchor)',                        total: false },
-        { key: 'judge',        label: 'Self-Judging Validation',                                      total: false },
-        { key: 'verification', label: 'Semantic Outcome Verification',                                total: false },
-        { key: 'visualRca',    label: 'Visual Root Cause Analysis (RCA)',                             total: false }
+        { key: 'total',            label: 'Total',                                                       total: true  },
+        { key: 'action',           label: 'Action (Standard Generation)',                                total: false },
+        { key: 'judge',            label: 'Self-Judging Validation',                                      total: false },
+        { key: 'verification',     label: 'Semantic Outcome Verification',                                total: false },
+        { key: 'visualRca',        label: 'Visual Root Cause Analysis (RCA)',                             total: false },
+        { key: 'linter',           label: 'Playbook Pre-Flight Linter',                                  total: false },
+        { key: 'postFlightLinter', label: 'Playbook Post-Flight Linter',                                 total: false }
     ];
     const buckets = parseResponsibilityBuckets(responsibilityJson);
     if (buckets) {
-        llmTbody.innerHTML = labels.map(({ key, label, total }) => {
+        llmTbody.innerHTML = labels.filter(({ key, total }) => {
+            if (total || key === 'action' || key === 'judge' || key === 'verification' || key === 'visualRca') return true;
+            return buckets[key] && buckets[key].calls > 0;
+        }).map(({ key, label, total }) => {
             const b = buckets[key] || { calls: 0, inputTokens: 0, outputTokens: 0, cachedTokens: 0, totalTokens: 0, estimatedCostUsd: 0 };
             return renderResponsibilityRow(label, b, total);
         }).join('');
@@ -2863,25 +4946,71 @@ function renderLlmResponsibilityRows(llmTbody, responsibilityJson, fallback) {
 function parseResponsibilityBuckets(json) {
     if (!json) return null;
     try {
-        const obj = JSON.parse(json);
+        const obj = (typeof json === 'object') ? json : JSON.parse(json);
         if (!obj || typeof obj !== 'object') return null;
-        const required = ['total', 'action', 'pesap', 'judge', 'verification', 'visualRca'];
-        for (let i = 0; i < required.length; i++) {
-            if (!obj[required[i]] || typeof obj[required[i]] !== 'object') return null;
-        }
+
+        const target = (obj.categories && typeof obj.categories === 'object') ? obj.categories : obj;
+
+        const knownKeys = ['total', 'action', 'judge', 'verification', 'visualRca', 'linter', 'postFlightLinter'];
         const normalized = {};
-        for (let i = 0; i < required.length; i++) {
-            const k = required[i];
-            const src = obj[k];
-            normalized[k] = {
-                calls:           Number(src.calls)           || 0,
-                inputTokens:     Number(src.inputTokens)     || 0,
-                outputTokens:    Number(src.outputTokens)    || 0,
-                cachedTokens:    Number(src.cachedTokens)    || 0,
-                totalTokens:     Number(src.totalTokens)     || 0,
-                estimatedCostUsd:Number(src.estimatedCostUsd)|| 0
+        let foundAny = false;
+
+        knownKeys.forEach(k => {
+            if (target[k] && typeof target[k] === 'object') {
+                const src = target[k];
+                normalized[k] = {
+                    calls:           Number(src.calls)           || 0,
+                    inputTokens:     Number(src.inputTokens)     || 0,
+                    outputTokens:    Number(src.outputTokens)    || 0,
+                    cachedTokens:    Number(src.cachedTokens)    || 0,
+                    totalTokens:     Number(src.totalTokens)     || 0,
+                    estimatedCostUsd:Number(src.estimatedCostUsd)|| 0
+                };
+                foundAny = true;
+            }
+        });
+
+        Object.keys(target).forEach(k => {
+            if (!normalized[k] && target[k] && typeof target[k] === 'object' && k !== 'pesap') {
+                const src = target[k];
+                if (src.calls !== undefined || src.totalTokens !== undefined || src.inputTokens !== undefined) {
+                    normalized[k] = {
+                        calls:           Number(src.calls)           || 0,
+                        inputTokens:     Number(src.inputTokens)     || 0,
+                        outputTokens:    Number(src.outputTokens)    || 0,
+                        cachedTokens:    Number(src.cachedTokens)    || 0,
+                        totalTokens:     Number(src.totalTokens)     || 0,
+                        estimatedCostUsd:Number(src.estimatedCostUsd)|| 0
+                    };
+                    foundAny = true;
+                }
+            }
+        });
+
+        if (!foundAny) return null;
+
+        if (!normalized.total) {
+            let totCalls = 0, totIn = 0, totOut = 0, totCac = 0, totTok = 0, totCost = 0;
+            Object.keys(normalized).forEach(k => {
+                if (k !== 'total') {
+                    totCalls += normalized[k].calls;
+                    totIn += normalized[k].inputTokens;
+                    totOut += normalized[k].outputTokens;
+                    totCac += normalized[k].cachedTokens;
+                    totTok += normalized[k].totalTokens;
+                    totCost += normalized[k].estimatedCostUsd;
+                }
+            });
+            normalized.total = {
+                calls: totCalls,
+                inputTokens: totIn,
+                outputTokens: totOut,
+                cachedTokens: totCac,
+                totalTokens: totTok || (totIn + totOut),
+                estimatedCostUsd: totCost
             };
         }
+
         return normalized;
     } catch (e) {
         return null;
@@ -2908,7 +5037,7 @@ function renderResponsibilityRow(label, bucket, isTotal) {
 
 function renderHeuristicLlmRows(fallback) {
     const f = fallback || { totalCalls: 0, totalTokens: 0, inputTokens: 0, outputTokens: 0, cachedTokens: 0, cost: 0 };
-    const cost = Number(f.cost) || 0;
+    const cost = Number(f.cost !== undefined ? f.cost : (f.totalCost || 0)) || 0;
     return `
         <tr style="font-weight: 700; background: var(--bg-hover);">
             <td style="padding: 0.35rem 0.6rem;">Total</td>
@@ -2921,21 +5050,12 @@ function renderHeuristicLlmRows(fallback) {
         </tr>
         <tr>
             <td style="padding: 0.35rem 0.6rem;">Action (Standard Generation)</td>
-            <td style="text-align: center; padding: 0.35rem 0.6rem;">${Math.ceil((f.totalCalls || 0) * 0.5)}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.totalTokens || 0) * 0.92).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.inputTokens || 0) * 0.92).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.outputTokens || 0) * 0.92).toLocaleString()}</td>
+            <td style="text-align: center; padding: 0.35rem 0.6rem;">${(f.totalCalls || 0).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${(f.totalTokens || 0).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${(f.inputTokens || 0).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${(f.outputTokens || 0).toLocaleString()}</td>
             <td style="text-align: right; padding: 0.35rem 0.6rem;">${(f.cachedTokens || 0).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;" class="text-accent">$${(cost * 0.92).toFixed(4)}</td>
-        </tr>
-        <tr>
-            <td style="padding: 0.35rem 0.6rem;">PESAP (Pre-Execution Semantic Anchor)</td>
-            <td style="text-align: center; padding: 0.35rem 0.6rem;">${Math.floor((f.totalCalls || 0) * 0.5)}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.totalTokens || 0) * 0.08).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.inputTokens || 0) * 0.08).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.outputTokens || 0) * 0.08).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">0</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;" class="text-accent">$${(cost * 0.08).toFixed(4)}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;" class="text-accent">$${cost.toFixed(4)}</td>
         </tr>
     `;
 }
@@ -2996,6 +5116,19 @@ function closeTestSidePagePanel() {
 
 window.toggleSidePanelLlmTable = toggleSidePanelLlmTable;
 window.switchInspectorTab = switchInspectorTab;
+window.toggleCallDetails = toggleCallDetails;
+window.toggleAllCallDetails = toggleAllCallDetails;
+window.toggleDomSnapshot = toggleDomSnapshot;
+window.toggleSystemPrompt = toggleSystemPrompt;
+window.copyStepConversation = copyStepConversation;
+window.copyTurnConversation = copyTurnConversation;
+window.generateStepConversationMarkdown = generateStepConversationMarkdown;
+window.parseLlmPromptContent = parseLlmPromptContent;
+window.parseToolCallResponse = parseToolCallResponse;
+window.parseToolAndUserTurns = parseToolAndUserTurns;
+window.splitChatMessages = splitChatMessages;
+window.parseToolMessage = parseToolMessage;
+window.parseUserContinuation = parseUserContinuation;
 
 function setActiveNavBtn(btn) {
     document.querySelectorAll('#mainSidebar .nav-item-btn').forEach(b => b.classList.remove('active'));
@@ -3012,8 +5145,10 @@ document.addEventListener('click', (e) => {
         if (menu) {
             const isOpen = menu.classList.contains('show') || menu.classList.contains('active');
             document.querySelectorAll('.multiselect-menu').forEach(m => m.classList.remove('show', 'active'));
+            document.querySelectorAll('.multiselect-dropdown').forEach(d => d.classList.remove('active'));
             if (!isOpen) {
                 menu.classList.add('show', 'active');
+                toggleBtn.closest('.multiselect-dropdown')?.classList.add('active');
             }
         }
         return;
@@ -3021,6 +5156,7 @@ document.addEventListener('click', (e) => {
 
     if (!e.target.closest('.multiselect-dropdown')) {
         document.querySelectorAll('.multiselect-menu').forEach(m => m.classList.remove('show', 'active'));
+        document.querySelectorAll('.multiselect-dropdown').forEach(d => d.classList.remove('active'));
     }
 });
 
@@ -3253,6 +5389,7 @@ function bindGlobalListeners() {
         }
 
         recalculateRunReportMetrics();
+        applyRunReportFilters();
 
         const urlParams = new URLSearchParams(window.location.search);
         let storedSubTab = urlParams.get('subTab');
@@ -3412,7 +5549,7 @@ function focusAndInspectExecution(targetExecId) {
         const statusKey = rowEl.getAttribute('data-status') || 'passed-clean';
         const issueTag = rowEl.getAttribute('data-bugs') || '';
         const rowId = rowEl.getAttribute('data-row-id') || rowEl.id;
-        const runId = rowEl.getAttribute('data-run-id') || document.querySelector('.run-id-label')?.innerText.trim() || '#RUN_ID';
+        const runId = resolveActiveRunId(rowEl.getAttribute('data-run-id'), rowEl);
 
         openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, runId);
     }, 120);
@@ -3425,7 +5562,7 @@ function handleRowClick(e) {
     const statusKey = row.getAttribute('data-status') || 'passed-clean';
     const issueTag = row.getAttribute('data-bugs') || '';
     const rowId = row.getAttribute('data-row-id') || row.id;
-    const runId = row.getAttribute('data-run-id') || document.querySelector('.run-id-label')?.innerText.trim() || '#RUN_ID';
+    const runId = resolveActiveRunId(row.getAttribute('data-run-id'), row);
 
     const isTestBasePage = document.getElementById('pageTestBase') !== null || row.closest('#pageTestBase') !== null;
 
@@ -3478,21 +5615,37 @@ window.redirectToTestBaseVariationHistory = redirectToTestBaseVariationHistory;
 window.recalculateRunReportMetrics = recalculateRunReportMetrics;
 
 // Client-side Execution Index Filtering and Sorting matching index.html
-let currentExecutionStatusFilter = 'ALL';
-let currentExecutionModeFilter = 'ALL';
-let currentGlobalStatusBadgeFilter = 'ALL';
 
 function filterByGlobalStatusBadge(statusKey, btnEl) {
-    if (currentGlobalStatusBadgeFilter === statusKey) {
+    if (currentGlobalStatusBadgeFilter === statusKey || activeWholeExecutionFilter === statusKey) {
         currentGlobalStatusBadgeFilter = 'ALL';
+        activeWholeExecutionFilter = null;
     } else {
         currentGlobalStatusBadgeFilter = statusKey;
+        activeWholeExecutionFilter = statusKey;
     }
 
-    document.querySelectorAll('#wholeExecutionSummaryBadges .badge-status').forEach(b => b.classList.remove('active-filter-badge'));
+    document.querySelectorAll('#wholeExecutionSummaryBadges .badge-status').forEach(b => b.classList.remove('active-filter', 'active-filter-badge'));
 
     if (currentGlobalStatusBadgeFilter !== 'ALL') {
-        document.querySelectorAll(`#wholeExecutionSummaryBadges .badge-status[data-status-key="${statusKey}"]`).forEach(b => b.classList.add('active-filter-badge'));
+        document.querySelectorAll(`#wholeExecutionSummaryBadges .badge-status[data-status-key="${statusKey}"]`).forEach(b => b.classList.add('active-filter', 'active-filter-badge'));
+    }
+
+    document.querySelectorAll('#runReportSubTabOverview .metric-card, #runReportSubTabOverview .kpi-card').forEach(card => card.classList.remove('active-filter'));
+    if (activeWholeExecutionFilter) {
+        const cardMap = {
+            'PASSED': 'overviewKpiPassed',
+            'SUCCEEDED_FIXED': 'overviewKpiFixed',
+            'FAILED_KNOWN': 'overviewKpiKnown',
+            'FAILED_UNKNOWN': 'overviewKpiUnknown',
+            'SKIPPED': 'overviewKpiIgnored',
+            'IGNORED': 'overviewKpiIgnored',
+            'RUNNING': 'overviewKpiRunning'
+        };
+        const cardValId = cardMap[activeWholeExecutionFilter];
+        if (cardValId) {
+            document.getElementById(cardValId)?.closest('.metric-card, .kpi-card')?.classList.add('active-filter');
+        }
     }
 
     applyFilter();
@@ -3553,10 +5706,111 @@ function filterByMode(mode) {
     if (sel && sel.value !== currentExecutionModeFilter) {
         sel.value = currentExecutionModeFilter;
     }
+    const modeMenu = document.getElementById('reportModesMultiselectMenu');
+    if (modeMenu) {
+        const allChk = modeMenu.querySelector('.js-chk-all');
+        const optionChks = modeMenu.querySelectorAll('.js-chk-option');
+        if (mode === 'ALL' || !mode) {
+            if (allChk) allChk.checked = true;
+            optionChks.forEach(o => o.checked = true);
+        } else {
+            if (allChk) allChk.checked = false;
+            optionChks.forEach(o => o.checked = (o.value.toUpperCase() === mode.toUpperCase()));
+        }
+        const summaryEl = modeMenu.closest('.multiselect-dropdown')?.querySelector('.js-selected-text');
+        if (summaryEl) {
+            summaryEl.innerText = (mode === 'ALL' || !mode) ? 'All Selected' : '1 Selected';
+        }
+    }
     applyFilter();
 }
 
+function setHealedFilter(mode) {
+    currentHealedFilter = mode || 'ALL';
+    document.querySelectorAll('#healedFilterToggle .segment-btn').forEach(btn => {
+        if (btn.getAttribute('data-val') === currentHealedFilter) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+    applyFilter();
+}
+
+function filterAllTestsByHealedStatus(status, healedFilter) {
+    switchRunReportSubTab('runReportSubTabAllTests', document.getElementById('runReportTabBtnAllTests'));
+    if (healedFilter) {
+        setHealedFilter(healedFilter);
+    }
+    if (status) {
+        currentGlobalStatusBadgeFilter = status;
+        activeWholeExecutionFilter = status;
+        document.querySelectorAll('#wholeExecutionSummaryBadges .badge-status').forEach(b => b.classList.remove('active-filter', 'active-filter-badge'));
+        document.querySelectorAll(`#wholeExecutionSummaryBadges .badge-status[data-status-key="${status}"]`).forEach(b => b.classList.add('active-filter', 'active-filter-badge'));
+
+        document.querySelectorAll('#runReportSubTabOverview .metric-card, #runReportSubTabOverview .kpi-card').forEach(card => card.classList.remove('active-filter'));
+        const cardMap = {
+            'PASSED': 'overviewKpiPassed',
+            'SUCCEEDED_FIXED': 'overviewKpiFixed',
+            'FAILED_KNOWN': 'overviewKpiKnown',
+            'FAILED_UNKNOWN': 'overviewKpiUnknown',
+            'SKIPPED': 'overviewKpiIgnored',
+            'IGNORED': 'overviewKpiIgnored',
+            'RUNNING': 'overviewKpiRunning'
+        };
+        const cardValId = cardMap[status];
+        if (cardValId) {
+            document.getElementById(cardValId)?.closest('.metric-card, .kpi-card')?.classList.add('active-filter');
+        }
+
+        applyFilter();
+        if (typeof applyRunReportFilters === 'function') {
+            applyRunReportFilters();
+        }
+    } else {
+        applyFilter();
+    }
+}
+
 function populateBrowserAndLocaleFilters() {
+    const modeMenu = document.getElementById('reportModesMultiselectMenu');
+    const browserMenu = document.getElementById('reportBrowsersMultiselectMenu');
+    const localeMenu = document.getElementById('reportLocalesMultiselectMenu');
+
+    if (modeMenu || browserMenu || localeMenu) {
+        const rows = document.querySelectorAll('#runReportSubTabAllTests tr.execution-row, #runReportSubTabAllTests tr.test-row');
+        const modes = new Set();
+        const browsers = new Set();
+        const locales = new Set();
+
+        rows.forEach(r => {
+            const m = r.getAttribute('data-mode');
+            const b = r.getAttribute('data-browser');
+            const l = r.getAttribute('data-location');
+            if (m && m.trim() && m !== 'null') modes.add(m.trim());
+            if (b && b.trim() && b !== 'null') browsers.add(b.trim());
+            if (l && l.trim() && l !== 'null') locales.add(l.trim());
+        });
+
+        function syncMenu(menu, set, allLabel) {
+            if (!menu) return;
+            const existing = menu.querySelectorAll('.js-chk-option');
+            if (existing.length === 0 && set.size > 0) {
+                const menuId = menu.id;
+                let html = `<label class="multiselect-option"><input type="checkbox" class="js-chk-all" data-menu-id="${menuId}" value="ALL" checked> <strong>${allLabel}</strong></label><div class="multiselect-divider"></div>`;
+                Array.from(set).sort().forEach(val => {
+                    html += `<label class="multiselect-option"><input type="checkbox" class="js-chk-option" data-menu-id="${menuId}" value="${val}" checked> <span>${val}</span></label>`;
+                });
+                menu.innerHTML = html;
+            }
+        }
+
+        syncMenu(modeMenu, modes, 'Select All Modes');
+        syncMenu(browserMenu, browsers, 'Select All Browsers');
+        syncMenu(localeMenu, locales, 'Select All Locales');
+        return;
+    }
+
     const browserSelect = document.getElementById('browserFilter');
     const localeSelect = document.getElementById('localeFilter');
     if (!browserSelect && !localeSelect) return;
@@ -3598,6 +5852,11 @@ function populateBrowserAndLocaleFilters() {
 }
 
 function applyFilter() {
+    if (document.getElementById('runReportSubTabAllTests')) {
+        applyRunReportFilters();
+        return;
+    }
+
     const searchInput = document.getElementById('searchInput');
     const search = searchInput ? (searchInput.value || '').trim().toLowerCase() : '';
     const browserSelect = document.getElementById('browserFilter');
@@ -3625,7 +5884,7 @@ function applyFilter() {
             if (!filterKey || filterKey === 'ALL') return true;
             const key = filterKey.toUpperCase();
             if (key === 'PASSED') return rowStatus === 'PASSED' || rowStatusRaw === 'passed-clean' || rowStatusRaw === 'passed' || rowStatusRaw === 'succeeded';
-            if (key === 'HEALED' || key === 'SUCCEEDED_FIXED') return rowStatus === 'HEALED' || rowStatus === 'SUCCEEDED_FIXED' || rowStatusRaw === 'succeeded-fixed' || rowStatusRaw === 'fixed' || rowStatusRaw === 'healed';
+            if (key === 'SUCCEEDED_FIXED' || key === 'FIXED') return rowStatus === 'SUCCEEDED_FIXED' || rowStatusRaw === 'succeeded-fixed' || rowStatusRaw === 'fixed';
             if (key === 'FAILED_KNOWN' || key === 'KNOWN') return rowStatus === 'FAILED_KNOWN' || rowStatusRaw === 'failed-known' || rowStatusRaw === 'known';
             if (key === 'FAILED_UNKNOWN' || key === 'UNKNOWN') return rowStatus === 'FAILED_UNKNOWN' || rowStatusRaw === 'failed-unknown' || rowStatusRaw === 'failed' || rowStatusRaw === 'error';
             if (key === 'SKIPPED' || key === 'IGNORED') return rowStatus === 'SKIPPED' || rowStatusRaw === 'ignored' || rowStatusRaw === 'skipped';
@@ -3638,12 +5897,17 @@ function applyFilter() {
         const matchesClassBadge = matchesStatusKey(classStatusFilter);
         const matchesLegacyStatus = matchesStatusKey(currentExecutionStatusFilter);
 
+        const isHealed = row.getAttribute('data-healed') === 'true' || Number(row.getAttribute('data-healed-count') || 0) > 0 || rowStatusRaw === 'healed';
+        const matchesHealed = (currentHealedFilter === 'ALL') ||
+                              (currentHealedFilter === 'HEALED' && isHealed) ||
+                              (currentHealedFilter === 'NOT_HEALED' && !isHealed);
+
         const matchesMode = (currentExecutionModeFilter === 'ALL' || rowMode === currentExecutionModeFilter.toUpperCase() || rowMode.includes(currentExecutionModeFilter.toUpperCase()));
         const matchesBrowser = (selBrowser === 'ALL' || rowBrowser.toLowerCase() === selBrowser.toLowerCase());
         const matchesLocale = (selLocale === 'ALL' || rowLocale.toLowerCase() === selLocale.toLowerCase());
         const matchesSearch = (!search || rowSearch.indexOf(search) !== -1);
 
-        if (matchesGlobalBadge && matchesAreaBadge && matchesClassBadge && matchesLegacyStatus && matchesMode && matchesBrowser && matchesLocale && matchesSearch) {
+        if (matchesGlobalBadge && matchesAreaBadge && matchesClassBadge && matchesLegacyStatus && matchesMode && matchesHealed && matchesBrowser && matchesLocale && matchesSearch) {
             row.style.display = '';
         } else {
             row.style.display = 'none';
@@ -3900,10 +6164,125 @@ function initPanelResizer() {
     });
 }
 
+let variationHistorySortDirections = {};
+function sortVariationHistoryTable(colIndex) {
+    const tbody = document.getElementById('tbVariationHistoryTableBody');
+    if (!tbody) return;
+    const rows = Array.from(tbody.querySelectorAll('tr.history-var-row'));
+    if (rows.length <= 1) return;
+
+    const isAsc = variationHistorySortDirections[colIndex] = !variationHistorySortDirections[colIndex];
+
+    const table = tbody.closest('table');
+    if (table) {
+        const ths = table.querySelectorAll('thead th');
+        ths.forEach((th, idx) => {
+            const icon = th.querySelector('.sort-icon');
+            if (icon) {
+                if (idx === colIndex) {
+                    icon.textContent = isAsc ? 'arrow_upward' : 'arrow_downward';
+                } else {
+                    icon.textContent = 'unfold_more';
+                }
+            }
+        });
+    }
+
+    rows.sort(function(a, b) {
+        const aCell = a.children[colIndex];
+        const bCell = b.children[colIndex];
+        if (!aCell || !bCell) return 0;
+
+        const aVal = (aCell.getAttribute('data-sort') || aCell.textContent || '').trim();
+        const bVal = (bCell.getAttribute('data-sort') || bCell.textContent || '').trim();
+
+        if (colIndex === 3) {
+            const aEpoch = parseDateToEpochHelper(aVal);
+            const bEpoch = parseDateToEpochHelper(bVal);
+            return isAsc ? (aEpoch - bEpoch) : (bEpoch - aEpoch);
+        }
+
+        const aNum = parseFloat(aVal);
+        const bNum = parseFloat(bVal);
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+            return isAsc ? (aNum - bNum) : (bNum - aNum);
+        }
+        return isAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+    });
+
+    rows.forEach(function(row) {
+        tbody.appendChild(row);
+    });
+}
+
+function parseDateToEpochHelper(val) {
+    if (!val || val === 'Recently') return Number.MAX_SAFE_INTEGER;
+    const clean = val.trim();
+    const d = new Date(clean.replace(' ', 'T'));
+    if (!isNaN(d.getTime())) return d.getTime();
+    return 0;
+}
+
 window.loadTestBaseVariationHistory = loadTestBaseVariationHistory;
 window.populateTbSideBatchMultiselect = populateTbSideBatchMultiselect;
 window.filterTbVariationHistoryTable = filterTbVariationHistoryTable;
 window.initPanelResizer = initPanelResizer;
+window.sortVariationHistoryTable = sortVariationHistoryTable;
+
+function deleteRunFromHistory(runId, event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    if (!runId) return;
+
+    const cleanRunId = String(runId).replace(/^#+/, '');
+    if (!confirm(`Are you sure you want to remove run #${cleanRunId} from history?\n\nThis will remove it from all run tables, batch history, and Test Base variation history.`)) {
+        return;
+    }
+
+    const currentUrl = window.location.href;
+    fetch(`/runs/${encodeURIComponent(cleanRunId)}/delete`, {
+        method: 'POST',
+        headers: {
+            'HX-Request': 'true',
+            'HX-Current-URL': currentUrl
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Failed to remove run: HTTP ${response.status}`);
+        }
+        return response.text();
+    })
+    .then(html => {
+        const container = document.getElementById('mainViewContainer');
+        if (container) {
+            container.innerHTML = html;
+            if (window.htmx) {
+                htmx.process(container);
+            }
+        }
+        // If we are currently showing a side panel for variation history, reload it
+        const varDrawer = document.getElementById('variationHistoryDrawer');
+        if (varDrawer && varDrawer.classList.contains('active')) {
+            const activeRow = document.querySelector('.tb-entry-row.selected');
+            if (activeRow) {
+                const testClass = activeRow.getAttribute('data-test-name') || '';
+                const testMethod = activeRow.getAttribute('data-test-method') || '';
+                const dataSet = activeRow.getAttribute('data-dataset') || '';
+                const loc = activeRow.getAttribute('data-location') || '';
+                const browser = activeRow.getAttribute('data-browser') || '';
+                loadTestBaseVariationHistory(testClass, testMethod, dataSet, loc, browser);
+            }
+        }
+    })
+    .catch(err => {
+        alert('Could not remove run from history: ' + err.message);
+    });
+}
+
+window.deleteRunFromHistory = deleteRunFromHistory;
 
 
 

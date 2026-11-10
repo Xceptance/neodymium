@@ -23,12 +23,15 @@ import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.dto.ChatSessionDto;
 import com.xceptance.neodymium.aura.dto.YamlFileDto;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -66,9 +69,37 @@ public class AuraTestDashboardController
     public String renderDashboard(
         @RequestHeader(value = "HX-Request", required = false) final String hxRequest,
         @RequestParam(value = "file", required = false) final String file,
+        @RequestParam(value = "q", required = false) final String query,
+        @CookieValue(value = "aura_test_search_query", required = false) final String cookieQuery,
         final Model model)
     {
-        final List<YamlFileDto> testFiles = fileService.getYamlFilesList();
+        final String effectiveQuery;
+        if (query != null && !query.isBlank())
+        {
+            effectiveQuery = query.trim();
+        }
+        else if (query == null && cookieQuery != null && !cookieQuery.isBlank())
+        {
+            effectiveQuery = decodeCookieQuery(cookieQuery);
+        }
+        else
+        {
+            effectiveQuery = null;
+        }
+
+        final List<YamlFileDto> testFiles;
+        final List<String> stepsFiles;
+        if (effectiveQuery != null && !effectiveQuery.isBlank())
+        {
+            testFiles = fileService.getFilteredYamlFilesList(effectiveQuery);
+            stepsFiles = fileService.getFilteredStepsFilesList(effectiveQuery);
+            model.addAttribute("q", effectiveQuery);
+        }
+        else
+        {
+            testFiles = fileService.getYamlFilesList();
+            stepsFiles = fileService.getStepsFilesList();
+        }
 
         model.addAttribute("pageTitle", "Neodymium Aura Manager Dashboard");
         model.addAttribute("activeTab", "AuraTestManager");
@@ -78,7 +109,7 @@ public class AuraTestDashboardController
         model.addAttribute("theme", interactiveService != null ? interactiveService.getActiveTheme() : "dark");
         model.addAttribute("files", testFiles);
         model.addAttribute("testFiles", testFiles);
-        model.addAttribute("stepsFiles", fileService.getStepsFilesList());
+        model.addAttribute("stepsFiles", stepsFiles);
         model.addAttribute("fragmentRequiredVarsMap", fileService.getFragmentRequiredVariablesMap());
         model.addAttribute("expandedFiles", fileService.getExpandedFiles());
         model.addAttribute("queue", queueController.getSelectedQueue());
@@ -86,6 +117,8 @@ public class AuraTestDashboardController
         model.addAttribute("selectedKeys", queueController.getSelectedQueueKeys());
         model.addAttribute("selectedFileKeys", queueController.getFullySelectedFileKeys(testFiles));
         model.addAttribute("partiallySelectedFileKeys", queueController.getPartiallySelectedFileKeys(testFiles));
+        model.addAttribute("folderSelectionStatesJson", queueController.getFolderSelectionStatesJson());
+        model.addAttribute("folderTotalDatasetsJson", queueController.getFolderTotalDatasetsJson());
         model.addAttribute("selectedBrowser", queueController.getSelectedBrowser());
         model.addAttribute("headless", queueController.isHeadless());
         model.addAttribute("video", queueController.isVideo());
@@ -112,7 +145,8 @@ public class AuraTestDashboardController
         model.addAttribute("failed", queueController.getGlobalFailed());
         model.addAttribute("skipped", queueController.getGlobalSkipped());
 
-        final String activeFileToUse = (file != null && !file.isBlank()) ? file : fileService.getActiveEditingFile();
+        final String rawFile = (file != null && !file.isBlank()) ? file : fileService.getActiveEditingFile();
+        final String activeFileToUse = (rawFile != null && rawFile.contains(",")) ? rawFile.split(",")[0].trim() : rawFile;
         if (activeFileToUse != null && !activeFileToUse.isBlank())
         {
             fileService.setActiveEditingFile(activeFileToUse);
@@ -132,12 +166,23 @@ public class AuraTestDashboardController
             model.addAttribute("isFragment", isFragment);
 
             final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+            final boolean hasParseError = Boolean.TRUE.equals(sections.get("hasError"));
+            final String parseErrorMessage = (String) sections.get("error");
+            model.addAttribute("hasParseError", hasParseError);
+            model.addAttribute("parseErrorMessage", parseErrorMessage != null ? parseErrorMessage : "");
+            model.addAttribute("editorMode", hasParseError ? "raw" : "visual");
             model.addAttribute("beforeSteps", sections.get("beforeSteps"));
             model.addAttribute("mainSteps", sections.get("mainSteps"));
             model.addAttribute("afterSteps", sections.get("afterSteps"));
             model.addAttribute("dataMatrix", sections.get("dataMatrix"));
             model.addAttribute("varKeys", sections.get("varKeys"));
             model.addAttribute("fragmentVarScopes", sections.get("fragmentVarScopes"));
+            model.addAttribute("propertiesYaml", sections.get("propertiesYaml") != null ? sections.get("propertiesYaml") : "");
+            model.addAttribute("propertiesList", sections.get("propertiesList") != null ? sections.get("propertiesList") : List.of());
+            model.addAttribute("metaYaml", sections.get("metaYaml") != null ? sections.get("metaYaml") : "");
+            model.addAttribute("description", sections.get("description") != null ? sections.get("description") : "");
+            model.addAttribute("promptAddonYaml", sections.get("promptAddonYaml") != null ? sections.get("promptAddonYaml") : "");
+            model.addAttribute("rootVariables", sections.get("rootVariables") != null ? sections.get("rootVariables") : Map.of());
             model.addAttribute("yamlFiles", testFiles);
         }
         else
@@ -153,6 +198,12 @@ public class AuraTestDashboardController
             model.addAttribute("dataMatrix", List.of());
             model.addAttribute("varKeys", List.of());
             model.addAttribute("fragmentVarScopes", Map.of());
+            model.addAttribute("propertiesYaml", "");
+            model.addAttribute("propertiesList", List.of());
+            model.addAttribute("metaYaml", "");
+            model.addAttribute("description", "");
+            model.addAttribute("promptAddonYaml", "");
+            model.addAttribute("rootVariables", Map.of());
             model.addAttribute("yamlFiles", testFiles);
         }
 
@@ -173,6 +224,34 @@ public class AuraTestDashboardController
             return "fragments/aura-test-manager :: auraTestManager";
         }
         return "index";
+    }
+
+    public String renderDashboard(final String hxRequest, final String file, final String query, final Model model)
+    {
+        return renderDashboard(hxRequest, file, query, null, model);
+    }
+
+    public String renderDashboard(final String hxRequest, final String file, final Model model)
+    {
+        return renderDashboard(hxRequest, file, null, null, model);
+    }
+
+    static String decodeCookieQuery(final String rawCookie)
+    {
+        if (rawCookie == null || rawCookie.isBlank())
+        {
+            return null;
+        }
+        try
+        {
+            final String decoded = URLDecoder.decode(rawCookie.trim(), StandardCharsets.UTF_8).trim();
+            return decoded.isBlank() ? null : decoded;
+        }
+        catch (final Exception e)
+        {
+            final String trimmed = rawCookie.trim();
+            return trimmed.isBlank() ? null : trimmed;
+        }
     }
 
     @PostMapping("/api/theme")

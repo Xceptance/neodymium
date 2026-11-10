@@ -36,11 +36,15 @@ import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.RunStorageSyncService;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -48,11 +52,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -140,7 +148,69 @@ public class AuraReportViewController
             else if (targetUrl.contains("/batch-history"))
             {
                 final String batchName = extractQueryParam(targetUrl, "batchName");
-                return batchHistory(batchName != null && !batchName.isBlank() ? batchName : "Unknown", hxRequest, model);
+                final String limitParam = extractQueryParam(targetUrl, "limit");
+                Integer limit = null;
+                if (limitParam != null && !limitParam.isBlank())
+                {
+                    try
+                    {
+                        limit = Integer.parseInt(limitParam.trim());
+                    }
+                    catch (final NumberFormatException ignored)
+                    {
+                        // Fall back to no limit
+                    }
+                }
+                return batchHistory(batchName != null && !batchName.isBlank() ? batchName : "Unknown", limit, hxRequest, model);
+            }
+            else if (targetUrl.contains("/test-base"))
+            {
+                final String testName = extractQueryParam(targetUrl, "testName");
+                final String dataSet = extractQueryParam(targetUrl, "dataSet");
+                final String location = extractQueryParam(targetUrl, "location");
+                final String browser = extractQueryParam(targetUrl, "browser");
+                return testBase(testName, dataSet, location, browser, hxRequest, model);
+            }
+        }
+
+        return batchOverview(hxRequest, model);
+    }
+
+    @PostMapping({"/runs/{runId}/delete", "/runs/delete"})
+    @DeleteMapping({"/runs/{runId}", "/runs/{runId}/delete"})
+    public String deleteRun(
+        @PathVariable(value = "runId", required = false) final String pathRunId,
+        @RequestParam(value = "runId", required = false) final String paramRunId,
+        @RequestHeader(value = "HX-Request", required = false) final String hxRequest,
+        @RequestHeader(value = "HX-Current-URL", required = false) final String currentUrl,
+        @RequestHeader(value = "Referer", required = false) final String referer,
+        final Model model)
+    {
+        final String runId = (pathRunId != null && !pathRunId.isBlank()) ? pathRunId : paramRunId;
+        if (runId != null && !runId.isBlank())
+        {
+            dataService.removeRunFromHistory(runId);
+        }
+
+        final String targetUrl = currentUrl != null && !currentUrl.isBlank() ? currentUrl : referer;
+        if (targetUrl != null)
+        {
+            if (targetUrl.contains("/batch-history"))
+            {
+                final String batchName = extractQueryParam(targetUrl, "batchName");
+                final String limitParam = extractQueryParam(targetUrl, "limit");
+                Integer limit = null;
+                if (limitParam != null && !limitParam.isBlank())
+                {
+                    try
+                    {
+                        limit = Integer.parseInt(limitParam.trim());
+                    }
+                    catch (final NumberFormatException ignored)
+                    {
+                    }
+                }
+                return batchHistory(batchName != null && !batchName.isBlank() ? batchName : "Unknown", limit, hxRequest, model);
             }
             else if (targetUrl.contains("/test-base"))
             {
@@ -183,10 +253,23 @@ public class AuraReportViewController
     @GetMapping({"/batch-history", "/fragments/batch-history"})
     public String batchHistory(
         @RequestParam(name = "batchName", defaultValue = "Unknown") final String batchName,
+        @RequestParam(name = "limit", required = false) final Integer limit,
         @RequestHeader(value = "HX-Request", required = false) final String hxRequest,
         final Model model)
     {
-        final List<TestRunEntity> runs = runRepository.findByBatchNameAndIsDeletedFalseOrderByStartTimeMsDesc(batchName);
+        final List<TestRunEntity> allRuns = runRepository.findByBatchNameAndIsDeletedFalseOrderByStartTimeMsDesc(batchName);
+        final int totalRunsCount = allRuns.size();
+
+        final Integer effectiveLimit = (limit != null && limit > 0) ? limit : null;
+        final List<TestRunEntity> runs;
+        if (effectiveLimit != null && effectiveLimit < totalRunsCount)
+        {
+            runs = new ArrayList<>(allRuns.subList(0, effectiveLimit));
+        }
+        else
+        {
+            runs = new ArrayList<>(allRuns);
+        }
         final Optional<TestBatchEntity> batchOpt = batchRepository.findById(batchName);
 
         final List<String> batchLocales = runs.stream()
@@ -219,22 +302,109 @@ public class AuraReportViewController
         for (final TestRunEntity r : chronoRuns)
         {
             final RunReportDto rReport = dataService.getRunReport(r.getId());
-            if (rReport != null && rReport.getAreaSummaries() != null)
+            if (rReport != null)
             {
-                for (final AreaSummaryDto area : rReport.getAreaSummaries())
+                boolean changed = false;
+                if (!Objects.equals(r.getPassedHealedCount(), rReport.getPassHealedCount()))
                 {
-                    final String areaName = area.getAreaName() != null ? area.getAreaName() : "Browsing (default)";
-                    areaPointsMap.computeIfAbsent(areaName, k -> new ArrayList<>())
-                        .add(new AreaRunPointDto(
-                            r.getId(),
-                            r.getTimestampLabel(),
-                            area.getPassCount(),
-                            area.getFixedCount(),
-                            area.getKnownCount(),
-                            area.getUnknownCount(),
-                            area.getIgnoredCount(),
-                            area.getTotalCount()
-                        ));
+                    r.setPassedHealedCount(rReport.getPassHealedCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getSucceededFixedHealedCount(), rReport.getFixedHealedCount()))
+                {
+                    r.setSucceededFixedHealedCount(rReport.getFixedHealedCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getFailedKnownHealedCount(), rReport.getKnownHealedCount()))
+                {
+                    r.setFailedKnownHealedCount(rReport.getKnownHealedCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getFailedUnknownHealedCount(), rReport.getUnknownHealedCount()))
+                {
+                    r.setFailedUnknownHealedCount(rReport.getUnknownHealedCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getPassedAiCount(), rReport.getPassAiCount()))
+                {
+                    r.setPassedAiCount(rReport.getPassAiCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getSucceededFixedAiCount(), rReport.getFixedAiCount()))
+                {
+                    r.setSucceededFixedAiCount(rReport.getFixedAiCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getFailedKnownAiCount(), rReport.getKnownAiCount()))
+                {
+                    r.setFailedKnownAiCount(rReport.getKnownAiCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getFailedUnknownAiCount(), rReport.getUnknownAiCount()))
+                {
+                    r.setFailedUnknownAiCount(rReport.getUnknownAiCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getPassedCount(), rReport.getPassCount()))
+                {
+                    r.setPassedCount(rReport.getPassCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getSucceededFixedCount(), rReport.getFixedCount()))
+                {
+                    r.setSucceededFixedCount(rReport.getFixedCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getFailedKnownCount(), rReport.getKnownCount()))
+                {
+                    r.setFailedKnownCount(rReport.getKnownCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getFailedUnknownCount(), rReport.getUnknownCount()))
+                {
+                    r.setFailedUnknownCount(rReport.getUnknownCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getIgnoredCount(), rReport.getIgnoredCount()))
+                {
+                    r.setIgnoredCount(rReport.getIgnoredCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getTotalTests(), rReport.getTotalCount()))
+                {
+                    r.setTotalTests(rReport.getTotalCount());
+                    changed = true;
+                }
+                if (changed)
+                {
+                    r.recalculatePassRate();
+                    runRepository.save(r);
+                }
+                if (rReport.getAreaSummaries() != null)
+                {
+                    for (final AreaSummaryDto area : rReport.getAreaSummaries())
+                    {
+                        final String areaName = area.getAreaName() != null ? area.getAreaName() : "Browsing (default)";
+                        areaPointsMap.computeIfAbsent(areaName, k -> new ArrayList<>())
+                            .add(new AreaRunPointDto(
+                                r.getId(),
+                                r.getTimestampLabel(),
+                                area.getPassCount(),
+                                area.getFixedCount(),
+                                area.getKnownCount(),
+                                area.getUnknownCount(),
+                                area.getIgnoredCount(),
+                                area.getTotalCount(),
+                                area.getPassHealedCount(),
+                                area.getFixedHealedCount(),
+                                area.getKnownHealedCount(),
+                                area.getUnknownHealedCount(),
+                                area.getPassAiCount(),
+                                area.getFixedAiCount(),
+                                area.getKnownAiCount(),
+                                area.getUnknownAiCount()
+                            ));
+                    }
                 }
             }
         }
@@ -284,6 +454,9 @@ public class AuraReportViewController
         model.addAttribute("batch", batchOpt.orElse(null));
         model.addAttribute("batchEnvironment", batchEnvironment);
         model.addAttribute("runs", runs);
+        model.addAttribute("totalRunsCount", totalRunsCount);
+        model.addAttribute("currentLimit", effectiveLimit);
+        model.addAttribute("showingRunsCount", runs.size());
         model.addAttribute("batchLocales", batchLocales);
         model.addAttribute("batchBrowsers", batchBrowsers);
         model.addAttribute("areaTrends", areaTrends);
@@ -313,6 +486,9 @@ public class AuraReportViewController
         model.addAttribute("targetExecutionId", targetExecutionId);
         model.addAttribute("activeSubTab", activeSubTab);
         model.addAttribute("report", report);
+        model.addAttribute("filterModes", report.getFilterModes());
+        model.addAttribute("filterBrowsers", report.getFilterBrowsers());
+        model.addAttribute("filterLocales", report.getFilterLocales());
         model.addAttribute("pageTitle", "Run Report #" + report.getRunId());
         model.addAttribute("activeTab", "RunReport");
         model.addAttribute("viewFragment", "fragments/run-report :: runReport");
@@ -336,6 +512,9 @@ public class AuraReportViewController
         final RunReportDto filteredReport = dataService.getFilteredRunReport(runId, status, locations, browsers, bugs, failures);
         model.addAttribute("runId", runId);
         model.addAttribute("report", filteredReport);
+        model.addAttribute("filterModes", filteredReport.getFilterModes());
+        model.addAttribute("filterBrowsers", filteredReport.getFilterBrowsers());
+        model.addAttribute("filterLocales", filteredReport.getFilterLocales());
         model.addAttribute("activeStatusFilter", status);
 
         return "fragments/run-report :: allTestsContent";
@@ -396,9 +575,12 @@ public class AuraReportViewController
         @RequestParam(name = "rowId", defaultValue = "") final String rowId,
         @RequestParam(name = "testName", defaultValue = "") final String testName,
         @RequestParam(name = "dataSet", defaultValue = "") final String dataSet,
+        @RequestHeader(value = "HX-Current-URL", required = false) final String currentUrl,
+        @RequestHeader(value = "Referer", required = false) final String referer,
         final Model model)
     {
-        final RunReportDto report = dataService.getRunReport(runId);
+        final String effectiveRunId = resolveEffectiveRunId(runId, currentUrl, referer);
+        final RunReportDto report = dataService.getRunReport(effectiveRunId);
         TestExecutionDto currentExec = null;
         if (report != null && report.getExecutions() != null)
         {
@@ -413,10 +595,10 @@ public class AuraReportViewController
         }
         if (currentExec == null)
         {
-            currentExec = dataService.getExecutionDetails(runId, rowId);
+            currentExec = dataService.getExecutionDetails(effectiveRunId, rowId);
         }
 
-        model.addAttribute("runId", runId);
+        model.addAttribute("runId", effectiveRunId);
         model.addAttribute("rowId", rowId);
         model.addAttribute("testName", testName);
         model.addAttribute("dataSet", dataSet);
@@ -439,13 +621,72 @@ public class AuraReportViewController
         return ResponseEntity.ok(exec);
     }
 
+    @GetMapping("/api/runs/{runId}/{testClass}/{filename:.+}")
+    @ResponseBody
+    public ResponseEntity<Resource> serveRunFile(
+        @PathVariable("runId") final String runId,
+        @PathVariable("testClass") final String testClass,
+        @PathVariable("filename") final String filename)
+    {
+        final Path filePath = Paths.get("storage/runs", runId, testClass, filename);
+        if (!Files.exists(filePath) || !Files.isReadable(filePath))
+        {
+            final Path defaultPath = Paths.get("target/aura-sandbox/allure-results", filename);
+            if (Files.exists(defaultPath) && Files.isReadable(defaultPath))
+            {
+                return servePath(defaultPath, filename);
+            }
+            return ResponseEntity.notFound().build();
+        }
+        return servePath(filePath, filename);
+    }
+
+    private ResponseEntity<Resource> servePath(final Path path, final String filename)
+    {
+        try
+        {
+            final Resource resource = new UrlResource(path.toUri());
+            String contentType = "application/octet-stream";
+            if (filename.endsWith(".mp4"))
+            {
+                contentType = "video/mp4";
+            }
+            else if (filename.endsWith(".webm"))
+            {
+                contentType = "video/webm";
+            }
+            else if (filename.endsWith(".png"))
+            {
+                contentType = "image/png";
+            }
+            else if (filename.endsWith(".html"))
+            {
+                contentType = "text/html";
+            }
+            else if (filename.endsWith(".json"))
+            {
+                contentType = "application/json";
+            }
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .body(resource);
+        }
+        catch (final Exception e)
+        {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
     @GetMapping("/fragments/test-side-panel/bugs")
     public String getBugSection(
         @RequestParam(name = "runId", defaultValue = "#RUN_ID") final String runId,
         @RequestParam(name = "rowId", defaultValue = "") final String rowId,
+        @RequestHeader(value = "HX-Current-URL", required = false) final String currentUrl,
+        @RequestHeader(value = "Referer", required = false) final String referer,
         final Model model)
     {
-        final RunReportDto report = dataService.getRunReport(runId);
+        final String effectiveRunId = resolveEffectiveRunId(runId, currentUrl, referer);
+        final RunReportDto report = dataService.getRunReport(effectiveRunId);
         TestExecutionDto currentExec = null;
         if (report != null && report.getExecutions() != null)
         {
@@ -460,9 +701,9 @@ public class AuraReportViewController
         }
         if (currentExec == null)
         {
-            currentExec = dataService.getExecutionDetails(runId, rowId);
+            currentExec = dataService.getExecutionDetails(effectiveRunId, rowId);
         }
-        model.addAttribute("runId", runId);
+        model.addAttribute("runId", effectiveRunId);
         model.addAttribute("rowId", rowId);
         model.addAttribute("exec", currentExec);
         return "fragments/side-panel-step-list :: sidePanelBugSection";
@@ -473,24 +714,27 @@ public class AuraReportViewController
         @RequestParam("runId") final String runId,
         @RequestParam("rowId") final String rowId,
         @RequestParam("bugTicket") final String bugTicket,
+        @RequestHeader(value = "HX-Current-URL", required = false) final String currentUrl,
+        @RequestHeader(value = "Referer", required = false) final String referer,
         final Model model,
         final HttpServletResponse response)
     {
+        final String effectiveRunId = resolveEffectiveRunId(runId, currentUrl, referer);
         final long totalStart = System.currentTimeMillis();
 
         final long addStart = System.currentTimeMillis();
-        final TestExecutionDto updatedExec = dataService.addBugToExecution(runId, rowId, bugTicket);
+        final TestExecutionDto updatedExec = dataService.addBugToExecution(effectiveRunId, rowId, bugTicket);
         final long addDuration = System.currentTimeMillis() - addStart;
 
         final long reportStart = System.currentTimeMillis();
-        final RunReportDto report = dataService.getRunReport(runId);
+        final RunReportDto report = dataService.getRunReport(effectiveRunId);
         final long reportDuration = System.currentTimeMillis() - reportStart;
 
         try
         {
             final Map<String, Object> triggerMap = Map.of(
                 "bugUpdated", Map.of(
-                    "runId", runId,
+                    "runId", effectiveRunId,
                     "rowId", rowId,
                     "status", updatedExec.getStatus() != null ? updatedExec.getStatus() : "",
                     "bugs", updatedExec.getBugs() != null ? updatedExec.getBugs() : List.of(),
@@ -508,13 +752,13 @@ public class AuraReportViewController
             LOG.error("Failed to serialize HX-Trigger header: {}", e.getMessage());
         }
 
-        model.addAttribute("runId", runId);
+        model.addAttribute("runId", effectiveRunId);
         model.addAttribute("rowId", rowId);
         model.addAttribute("exec", updatedExec);
 
         final long totalDuration = System.currentTimeMillis() - totalStart;
         LOG.info("[PERF] Controller addBugToExecution total={} ms (addBug={} ms, getRunReport={} ms) runId={}, rowId={}, ticket={}",
-            totalDuration, addDuration, reportDuration, runId, rowId, bugTicket);
+            totalDuration, addDuration, reportDuration, effectiveRunId, rowId, bugTicket);
 
         return "fragments/side-panel-step-list :: sidePanelBugSection";
     }
@@ -526,29 +770,35 @@ public class AuraReportViewController
         @RequestParam(name = "amp;rowId", required = false) final String ampRowId,
         @RequestParam(name = "bugTicket", required = false) final String bugTicketParam,
         @RequestParam(name = "amp;bugTicket", required = false) final String ampBugTicket,
+        @RequestHeader(value = "HX-Current-URL", required = false) final String currentUrl,
+        @RequestHeader(value = "Referer", required = false) final String referer,
         final Model model,
         final HttpServletResponse response)
     {
+        final String effectiveRunId = resolveEffectiveRunId(runId, currentUrl, referer);
         final long totalStart = System.currentTimeMillis();
         final String effectiveRowId = rowIdParam != null ? rowIdParam : ampRowId;
         final String effectiveBugTicket = bugTicketParam != null ? bugTicketParam : ampBugTicket;
 
         final long removeStart = System.currentTimeMillis();
-        final TestExecutionDto updatedExec = dataService.removeBugFromExecution(runId, effectiveRowId, effectiveBugTicket);
+        final TestExecutionDto updatedExec = dataService.removeBugFromExecution(effectiveRunId, effectiveRowId, effectiveBugTicket);
+        final TestExecutionDto effectiveExec = (updatedExec != null && updatedExec.getId() != null && !updatedExec.getId().isBlank())
+            ? updatedExec
+            : Optional.ofNullable(dataService.getExecutionDetails(effectiveRunId, effectiveRowId)).orElse(updatedExec);
         final long removeDuration = System.currentTimeMillis() - removeStart;
 
         final long reportStart = System.currentTimeMillis();
-        final RunReportDto report = dataService.getRunReport(runId);
+        final RunReportDto report = dataService.getRunReport(effectiveRunId);
         final long reportDuration = System.currentTimeMillis() - reportStart;
 
         try
         {
             final Map<String, Object> triggerMap = Map.of(
                 "bugUpdated", Map.of(
-                    "runId", runId,
+                    "runId", effectiveRunId,
                     "rowId", effectiveRowId,
-                    "status", updatedExec.getStatus() != null ? updatedExec.getStatus() : "",
-                    "bugs", updatedExec.getBugs() != null ? updatedExec.getBugs() : List.of(),
+                    "status", effectiveExec.getStatus() != null ? effectiveExec.getStatus() : "",
+                    "bugs", effectiveExec.getBugs() != null ? effectiveExec.getBugs() : List.of(),
                     "pass", report.getPassCount(),
                     "fixed", report.getFixedCount(),
                     "known", report.getKnownCount(),
@@ -563,14 +813,40 @@ public class AuraReportViewController
             LOG.error("Failed to serialize HX-Trigger header: {}", e.getMessage());
         }
 
-        model.addAttribute("runId", runId);
+        model.addAttribute("runId", effectiveRunId);
         model.addAttribute("rowId", effectiveRowId);
-        model.addAttribute("exec", updatedExec);
+        model.addAttribute("exec", effectiveExec);
 
         final long totalDuration = System.currentTimeMillis() - totalStart;
         LOG.info("[PERF] Controller removeBugFromExecution total={} ms (removeBug={} ms, getRunReport={} ms) runId={}, rowId={}, ticket={}",
-            totalDuration, removeDuration, reportDuration, runId, effectiveRowId, effectiveBugTicket);
+            totalDuration, removeDuration, reportDuration, effectiveRunId, effectiveRowId, effectiveBugTicket);
 
         return "fragments/side-panel-step-list :: sidePanelBugSection";
+    }
+
+    private String resolveEffectiveRunId(final String runId, final String currentUrl, final String referer)
+    {
+        if (runId != null)
+        {
+            final String clean = runId.trim().replaceAll("^#+", "");
+            if (!clean.isEmpty() && !"RUN_ID".equalsIgnoreCase(clean))
+            {
+                return clean;
+            }
+        }
+        final String targetUrl = (currentUrl != null && !currentUrl.isBlank()) ? currentUrl : referer;
+        if (targetUrl != null)
+        {
+            final String extracted = extractQueryParam(targetUrl, "runId");
+            if (extracted != null)
+            {
+                final String clean = extracted.trim().replaceAll("^#+", "");
+                if (!clean.isEmpty() && !"RUN_ID".equalsIgnoreCase(clean))
+                {
+                    return clean;
+                }
+            }
+        }
+        return (runId != null && !runId.isBlank()) ? runId.trim().replaceAll("^#+", "") : "#RUN_ID";
     }
 }

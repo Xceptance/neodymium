@@ -10,8 +10,11 @@ import org.aeonbits.owner.Config.Sources;
  */
 @Sources(
 {
-  "${recording.temporaryConfigFile}", "system:env", "system:properties", "file:config/dev-gif-recording.properties", "file:config/dev-neodymium.properties",
-  "file:config/gif-recording.properties", "file:config/neodyium.properties"
+  "${recording.temporaryConfigFile}", "system:env", "system:properties",
+  "file:config/dev-gif-recording.properties", "file:../config/dev-gif-recording.properties",
+  "file:config/dev-neodymium.properties", "file:../config/dev-neodymium.properties",
+  "file:config/gif-recording.properties", "file:../config/gif-recording.properties",
+  "file:config/neodymium.properties", "file:../config/neodymium.properties"
 })
 public interface GifRecordingConfigurations extends RecordingConfigurations
 {

@@ -100,6 +100,7 @@ public final class JavaToolFactory
         return Collections.unmodifiableList(tools);
     }
 
+    @SuppressWarnings("removal")
     private static boolean isToolMethod(final Method method)
     {
         return method.isAnnotationPresent(Tool.class)
@@ -172,6 +173,7 @@ public final class JavaToolFactory
         return method.getName();
     }
 
+    @SuppressWarnings("removal")
     private static String resolveToolDescription(final Method method)
     {
         final Tool tool = method.getAnnotation(Tool.class);

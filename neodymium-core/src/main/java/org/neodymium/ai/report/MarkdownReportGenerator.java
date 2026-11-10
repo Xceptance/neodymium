@@ -28,6 +28,7 @@ import java.util.Map;
 import org.neodymium.ai.playbook.linter.LinterSeverity;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 import org.neodymium.ai.prompt.VerificationResult;
+import org.neodymium.ai.prompt.VisualRcaResult;
 
 /**
  * Report generator producing GitHub-flavored Markdown documents from {@link TestExecutionReport}.
@@ -80,7 +81,8 @@ public final class MarkdownReportGenerator
         }
         if (report.getExecutionMode() != null)
         {
-            sb.append("| **Execution Mode** | `").append(report.getExecutionMode()).append("` |\n");
+            final String markerTag = report.isMarker() ? " 🎯 `MARKER`" : "";
+            sb.append("| **Execution Mode** | `").append(report.getExecutionMode()).append("`").append(markerTag).append(" |\n");
         }
         if (report.getPlaybookFile() != null)
         {
@@ -102,8 +104,16 @@ public final class MarkdownReportGenerator
 
         // High-level execution stats
         sb.append("| Metric | Count / Volume |\n");
-        sb.append("| :--- | :--- |\n");
-        sb.append("| **Total Steps** | ").append(m.getTotalSteps()).append(" (Healed: ").append(m.getHealedSteps()).append(", Failed: ").append(m.getFailedSteps()).append(", Skipped: ").append(m.getSkippedSteps()).append(") |\n");
+        final StringBuilder stepBreakdown = new StringBuilder();
+        stepBreakdown.append(" (Healed: ").append(m.getHealedSteps())
+            .append(", Failed: ").append(m.getFailedSteps())
+            .append(", Skipped: ").append(m.getSkippedSteps());
+        if (m.getNotRunSteps() > 0)
+        {
+            stepBreakdown.append(", Not Run: ").append(m.getNotRunSteps());
+        }
+        stepBreakdown.append(")");
+        sb.append("| **Total Steps** | ").append(m.getTotalSteps()).append(stepBreakdown).append(" |\n");
         if (m.getTotalEscalations() > 0)
         {
             sb.append("| **Context Escalations** | ").append(m.getTotalEscalations()).append(" |\n");
@@ -146,17 +156,78 @@ public final class MarkdownReportGenerator
         }
 
         // 3. Diagnostics & Errors (strictly if test failed)
-        if (!report.isSuccess() && (report.getFailureReason() != null || report.getVisualRcaExplanation() != null || (report.getFailureStackTrace() != null && !report.getFailureStackTrace().isBlank())))
+        if (!report.isSuccess() && (report.getFailureReason() != null || report.getVisualRcaResult() != null || report.getVisualRcaExplanation() != null || (report.getFailureStackTrace() != null && !report.getFailureStackTrace().isBlank())))
         {
             sb.append("## 🚨 Failure Diagnostics\n\n");
-            if (report.getFailureReason() != null)
+            String failureReason = report.getFailureReason();
+            String embeddedRca = null;
+            if (failureReason != null)
             {
-                sb.append("> **Error**: ").append(report.getFailureReason()).append("\n\n");
+                final int rcaMarkerIdx = Math.max(
+                    failureReason.indexOf("Visual Root Cause Analysis (RCA):"),
+                    failureReason.indexOf("**Root Cause Analysis:**")
+                );
+                if (rcaMarkerIdx >= 0)
+                {
+                    embeddedRca = failureReason.substring(rcaMarkerIdx).trim();
+                    failureReason = failureReason.substring(0, rcaMarkerIdx).trim();
+                }
             }
-            if (report.getVisualRcaExplanation() != null)
+
+            if (failureReason != null && !failureReason.isBlank())
             {
-                sb.append("### Visual RCA Diagnosis\n\n");
-                sb.append("```\n").append(report.getVisualRcaExplanation()).append("\n```\n\n");
+                sb.append("> **Error**: ").append(failureReason).append("\n\n");
+            }
+
+            VisualRcaResult vr = report.getVisualRcaResult();
+            if (vr == null)
+            {
+                final String rawRca = report.getVisualRcaExplanation() != null ? report.getVisualRcaExplanation() : embeddedRca;
+                if (rawRca != null && !rawRca.isBlank())
+                {
+                    vr = VisualRcaResult.fromFormattedDiagnosis(rawRca);
+                }
+            }
+
+            if (vr != null)
+            {
+                sb.append("### 🔍 Visual Root Cause Analysis (RCA)\n\n");
+                if (vr.getRootCause() != null && !vr.getRootCause().isBlank())
+                {
+                    sb.append("**Root Cause Diagnosis:**\n").append(vr.getRootCause().trim()).append("\n\n");
+                }
+                if (vr.getRubrics() != null)
+                {
+                    sb.append("#### Diagnostic Rubrics\n\n");
+                    final VisualRcaResult.Rubrics rubrics = vr.getRubrics();
+                    if (rubrics.targetPresence() != null)
+                    {
+                        sb.append("- **🎯 Target Presence:** `[").append(rubrics.targetPresence().score()).append("]` ")
+                          .append(rubrics.targetPresence().analysis()).append("\n");
+                    }
+                    if (rubrics.formValidation() != null)
+                    {
+                        sb.append("- **📝 Form & Validation:** `[").append(rubrics.formValidation().score()).append("]` ")
+                          .append(rubrics.formValidation().analysis()).append("\n");
+                    }
+                    if (rubrics.flowState() != null)
+                    {
+                        sb.append("- **🧭 Navigation & Flow:** `[").append(rubrics.flowState().score()).append("]` ")
+                          .append(rubrics.flowState().analysis()).append("\n");
+                    }
+                    if (rubrics.obstruction() != null)
+                    {
+                        sb.append("- **🚫 Action Obstruction:** `[").append(rubrics.obstruction().score()).append("]` ")
+                          .append(rubrics.obstruction().analysis()).append("\n");
+                    }
+                    sb.append("\n");
+                }
+            }
+            else if (report.getVisualRcaExplanation() != null || embeddedRca != null)
+            {
+                final String explanation = report.getVisualRcaExplanation() != null ? report.getVisualRcaExplanation() : embeddedRca;
+                sb.append("### 🔍 Visual Root Cause Analysis (RCA)\n\n");
+                sb.append("```\n").append(explanation).append("\n```\n\n");
             }
             if (report.getFailureStackTrace() != null && !report.getFailureStackTrace().isBlank())
             {
@@ -256,10 +327,27 @@ public final class MarkdownReportGenerator
         if (!steps.isEmpty())
         {
             sb.append("## Step Details\n\n");
+            final boolean hasMultipleBlocks = steps.stream().map(s -> s.getBlock() != null ? s.getBlock().toLowerCase() : "steps").distinct().count() > 1;
+            String currentBlock = null;
             for (int i = 0; i < steps.size(); i++)
             {
                 final TestExecutionReport.ReportStepEntry step = steps.get(i);
-                renderStepMarkdown(sb, step, String.valueOf(i + 1), "###");
+                if (hasMultipleBlocks)
+                {
+                    final String effBlock = (step.getBlock() != null && !step.getBlock().isBlank()) ? step.getBlock().toLowerCase() : "steps";
+                    if (!effBlock.equals(currentBlock))
+                    {
+                        currentBlock = effBlock;
+                        final String icon = "before".equals(effBlock) ? "⚡" : "after".equals(effBlock) ? "🧹" : "🎯";
+                        final String title = "before".equals(effBlock) ? "Before Block" : "after".equals(effBlock) ? "After Block" : "Core Steps";
+                        sb.append("### ").append(icon).append(" ").append(title).append("\n\n");
+                    }
+                    renderStepMarkdown(sb, step, String.valueOf(i + 1), "####");
+                }
+                else
+                {
+                    renderStepMarkdown(sb, step, String.valueOf(i + 1), "###");
+                }
             }
         }
 
@@ -372,6 +460,25 @@ public final class MarkdownReportGenerator
             sb.append("\n");
         }
 
+        // Active Properties
+        final Map<String, String> activeProperties = report.getActiveProperties();
+        sb.append("## ⚙️ Active Properties\n\n");
+        if (activeProperties.isEmpty())
+        {
+            sb.append("_No active properties recorded._\n\n");
+        }
+        else
+        {
+            sb.append("| Property | Value |\n");
+            sb.append("| :--- | :--- |\n");
+            for (final Map.Entry<String, String> entry : activeProperties.entrySet())
+            {
+                sb.append("| `").append(escapeMarkdown(entry.getKey())).append("` | `")
+                  .append(escapeMarkdown(entry.getValue())).append("` |\n");
+            }
+            sb.append("\n");
+        }
+
         return sb.toString();
     }
 
@@ -394,13 +501,23 @@ public final class MarkdownReportGenerator
 
     private static void renderStepMarkdown(final StringBuilder sb, final TestExecutionReport.ReportStepEntry step, final String stepLabel, final String headingPrefix)
     {
+        final boolean isNotRun = step.isNotRun();
         final String stepStatusEmoji = "PASSED".equalsIgnoreCase(step.getStatus()) || "SUCCESS".equalsIgnoreCase(step.getStatus()) ? "✅"
             : "HEALED".equalsIgnoreCase(step.getStatus()) ? "✨"
             : "FAILED".equalsIgnoreCase(step.getStatus()) ? "❌"
+            : isNotRun ? "⏹️"
             : "SKIPPED".equalsIgnoreCase(step.getStatus()) ? "⏭️" : "⏳";
 
         sb.append(headingPrefix).append(" Step ").append(stepLabel).append(": ").append(stepStatusEmoji).append(" ").append(escapeMarkdown(step.getInstruction())).append("\n\n");
         sb.append("- **Status:** `").append(step.getStatus()).append("`\n");
+        if (step.getBlock() != null && !step.getBlock().isBlank())
+        {
+            sb.append("- **Block:** `").append(step.getBlock()).append("`\n");
+        }
+        if (step.getStepMode() != null)
+        {
+            sb.append("- **Step Mode:** `").append(step.getStepMode()).append("`\n");
+        }
         if (step.isBug())
         {
             sb.append("- **Expected Bug:** `true`").append(step.getBugDetails() != null ? " (" + escapeMarkdown(step.getBugDetails()) + ")" : "").append("\n");
@@ -412,6 +529,10 @@ public final class MarkdownReportGenerator
         if (step.isNoHealing())
         {
             sb.append("- **No Healing:** `true`\n");
+        }
+        if (step.isMarker())
+        {
+            sb.append("- **Visual Marker Step:** `🎯 true`\n");
         }
         if (step.isVisual())
         {
@@ -535,6 +656,10 @@ public final class MarkdownReportGenerator
         if (step.getFailureReason() != null)
         {
             sb.append("- **Failure Reason:** `").append(step.getFailureReason()).append("`\n");
+        }
+        if (step.getNotRunReason() != null && !step.getNotRunReason().isBlank())
+        {
+            sb.append("- **Note:** *").append(escapeMarkdown(step.getNotRunReason())).append("*\n");
         }
 
         // Actions Table

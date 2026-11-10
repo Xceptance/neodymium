@@ -1,0 +1,152 @@
+/*
+ * GNU Affero General Public License (AGPLv3)
+ *
+ * Copyright (c) 2026 Xceptance
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package org.neodymium.ai.integration.mock;
+
+import static com.codeborne.selenide.Condition.visible;
+import static com.codeborne.selenide.Selenide.$;
+
+import org.neodymium.ai.testing.BaseAiTest;
+import org.neodymium.common.browser.Browser;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.neodymium.ai.client.LlmCapability;
+import org.neodymium.ai.client.LlmResponse;
+import org.neodymium.ai.client.MockLlmProvider;
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.junit.AiMode;
+import org.neodymium.ai.junit.AiPlaybook;
+import org.neodymium.ai.junit.NeodymiumAiTest;
+import org.neodymium.ai.session.AiSession;
+import org.neodymium.util.Neodymium;
+
+/**
+ * Mock programmatic integration test for the WAIT action plugin.
+ *
+ * @author AI-generated: Gemini 2.5 Pro
+ * @author Xceptance GmbH 2026
+ */
+@Browser("Chrome_headless")
+@Tag("AuraIntegration")
+@NeodymiumAiTest
+@AiPlaybook(value = "programmatic", recordingFileName = "custom_wait_playbook")
+public class WaitIntegrationTest extends BaseAiTest
+{
+
+    /**
+     * Set up test page URL and queue LLM mock responses before each test.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @BeforeEach
+    public void setupPropertiesAndMock(final AiSession session) throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/WaitActionTest/testWaitHappyPath.html", server.getPort());
+        session.data().putDynamic("wait.test.url", pageUrl, false);
+
+        final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+
+        // Step 1: Open SUT
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "NAVIGATE",
+                  "locator": "",
+                  "value": "%s",
+                  "reasoning": "Navigate to wait test page"
+                }
+              ]
+            }
+            """.formatted(pageUrl), null, "mock"));
+
+        // Step 2: Click start button
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "CLICK",
+                  "locator": "#btn-start-1",
+                  "value": "",
+                  "reasoning": "Click to start the process"
+                }
+              ]
+            }
+            """, null, "mock"));
+
+        // Step 3: Wait
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "WAIT",
+                  "locator": "#success-1",
+                  "value": "visible",
+                  "reasoning": "Wait for success message to be visible"
+                }
+              ]
+            }
+            """, null, "mock"));
+    }
+
+    /**
+     * Tests Wait action.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+    public void testWaitMock(final AiSession session) throws Exception
+    {
+        session.execute( """
+            data:
+              - testId: waitData
+            steps: |
+              Open ${wait.test.url} in the browser
+              Click #btn-start-1
+              Wait for #success-1 to become visible
+            """);
+
+        $("#success-1").shouldBe(visible);
+
+        flushRecording(session);
+
+        // Verify parameterization
+        final String browserProfile = Neodymium.getBrowserProfileName();
+        final File recordingFile = getTestResourceFile("playbooks/integration/programmatic/custom_wait_playbook_" + browserProfile + ".json");
+        Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk: " + recordingFile.getPath());
+        try
+        {
+            final String content = Files.readString(recordingFile.toPath(), StandardCharsets.UTF_8);
+            Assertions.assertTrue(content.contains("\"target\" : \"${wait.test.url}\""), 
+                "Recorded target should be parameterized");
+            Assertions.assertFalse(content.contains("http://localhost:"), 
+                "Recorded playbook should not contain any hardcoded localhost URLs");
+        }
+        catch (final IOException e)
+        {
+            throw new RuntimeException(e);
+        }
+    }
+}

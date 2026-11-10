@@ -21,12 +21,15 @@ package com.xceptance.neodymium.ai.console;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
@@ -34,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -159,6 +163,36 @@ public final class InteractiveConsoleEngine {
         return "DefaultTestClass";
     }
 
+    public static String extractTestClassFolder(final String rawTestName)
+    {
+        if (rawTestName != null && !rawTestName.isBlank())
+        {
+            String tn = rawTestName;
+            if (tn.contains("#"))
+            {
+                tn = tn.substring(0, tn.indexOf('#'));
+            }
+            if (tn.contains(" · "))
+            {
+                tn = tn.substring(0, tn.indexOf(" · "));
+            }
+            else if (tn.contains(" "))
+            {
+                tn = tn.substring(0, tn.indexOf(' '));
+            }
+            if (tn.contains("."))
+            {
+                tn = tn.substring(tn.lastIndexOf('.') + 1);
+            }
+            final String safeFolder = tn.replaceAll("[^a-zA-Z0-9._-]", "_");
+            if (!safeFolder.isBlank())
+            {
+                return safeFolder;
+            }
+        }
+        return "DefaultTestClass";
+    }
+
     /** A unique identifier for the currently active test run. */
 
     private String runId;
@@ -168,14 +202,29 @@ public final class InteractiveConsoleEngine {
      */
     private final AtomicReference<String> currentPauseId = new AtomicReference<>(null);
 
+    /**
+     * The immediately preceding pause token. Retained to provide a graceful
+     * acceptance window when rapid UI actions (e.g. applying a fix suggestion)
+     * reference the token active when the dialog was launched before token rotation.
+     */
+    private final AtomicReference<String> previousPauseId = new AtomicReference<>(null);
+
     /** The actual LAN IP of this machine, detected on startup. */
     private final String lanIp;
 
     /**
      * The pending action deposited by a POST handler, picked up by the waiting
      * test-runner thread. {@code null} while paused and awaiting input.
+     * Retained for backward compatibility with reflection-based test fixtures.
      */
     private final AtomicReference<JsonObject> pendingAction = new AtomicReference<>(null);
+
+    /**
+     * Queue of pending actions awaiting execution by the test runner.
+     * Ensures multiple sequential structural operations (such as REORDER) are
+     * preserved and processed in FIFO order.
+     */
+    private final ConcurrentLinkedQueue<JsonObject> pendingActions = new ConcurrentLinkedQueue<>();
 
     /**
      * The current state snapshot that is broadcast to SSE clients.
@@ -183,8 +232,8 @@ public final class InteractiveConsoleEngine {
      */
     private volatile String currentStateJson = "{}";
 
-    private static final Map<String, Integer> EXECUTION_INDEX_MAP = new ConcurrentHashMap<>();
-    private static final AtomicInteger EXECUTION_INDEX_COUNTER = new AtomicInteger(0);
+    private static final Map<String, Map<String, Integer>> CLASS_EXECUTION_INDEX_MAP = new ConcurrentHashMap<>();
+    private static final Map<String, AtomicInteger> CLASS_EXECUTION_COUNTERS = new ConcurrentHashMap<>();
 
     /** Active SSE client output streams. */
     private final CopyOnWriteArrayList<OutputStream> sseClients = new CopyOnWriteArrayList<>();
@@ -259,17 +308,35 @@ public final class InteractiveConsoleEngine {
             // Inject the LAN IP so the UI can use it for QR codes/links
             state.addProperty("lanIp", this.lanIp);
 
-            if (state.has("pauseId") && !state.get("pauseId").isJsonNull())
+            final String statusStr = (state.has("status") && !state.get("status").isJsonNull())
+                ? state.get("status").getAsString()
+                : null;
+            final boolean isRunning = "running".equalsIgnoreCase(statusStr);
+
+            if (isRunning)
+            {
+                // Never retain or re-inject a pauseId when the state is actively executing
+                updatePauseId(null);
+                state.remove("pauseId");
+            }
+            else if (state.has("pauseId") && !state.get("pauseId").isJsonNull())
             {
                 final String pid = state.get("pauseId").getAsString();
                 if (pid != null && !pid.isEmpty())
                 {
-                    this.currentPauseId.set(pid);
+                    updatePauseId(pid);
+                }
+                else
+                {
+                    updatePauseId(null);
+                    state.remove("pauseId");
                 }
             }
-            else if (this.currentPauseId.get() != null)
+            else
             {
-                state.addProperty("pauseId", this.currentPauseId.get());
+                // If state does not provide an explicit pauseId, do not retain or re-inject stale tokens
+                updatePauseId(null);
+                state.remove("pauseId");
             }
 
             minified = GSON.toJson(state);
@@ -308,6 +375,75 @@ public final class InteractiveConsoleEngine {
             return;
         }
 
+        saveLocalExecutionLog(minified);
+        broadcastSseEvent("state", minified);
+    }
+
+    /**
+     * Reconciles the interactive console state with the test lifecycle outcome.
+     *
+     * @param testPassed true if JUnit completed the test method successfully
+     * @param uncaughtException uncaught exception if test failed, or null
+     */
+    public void reconcileTestOutcome(final boolean testPassed, final Throwable uncaughtException)
+    {
+        if (this.currentStateJson == null || this.currentStateJson.isBlank())
+        {
+            return;
+        }
+        try
+        {
+            final JsonObject parsedState = JsonParser.parseString(this.currentStateJson).getAsJsonObject();
+            final String currentStatus = parsedState.has("status") ? parsedState.get("status").getAsString() : "";
+
+            if (testPassed)
+            {
+                final boolean wasFailed = "failed".equalsIgnoreCase(currentStatus)
+                    || "error".equalsIgnoreCase(currentStatus)
+                    || "failed-unknown".equalsIgnoreCase(currentStatus)
+                    || "failed-known".equalsIgnoreCase(currentStatus);
+                if (wasFailed)
+                {
+                    parsedState.addProperty("status", "passed");
+                    parsedState.addProperty("expectedFailure", true);
+                    final String updatedJson = parsedState.toString();
+                    this.currentStateJson = updatedJson;
+                    saveLocalExecutionLog(updatedJson);
+                    broadcastSseEvent("state", updatedJson);
+                }
+            }
+            else
+            {
+                final boolean wasPassed = "passed".equalsIgnoreCase(currentStatus)
+                    || "passed-clean".equalsIgnoreCase(currentStatus)
+                    || "succeeded".equalsIgnoreCase(currentStatus)
+                    || "succeeded-fixed".equalsIgnoreCase(currentStatus);
+                if (wasPassed)
+                {
+                    parsedState.addProperty("status", "failed");
+                    parsedState.addProperty("expectedFailure", false);
+                    if (uncaughtException != null)
+                    {
+                        parsedState.addProperty("failureReason", uncaughtException.getMessage() != null ? uncaughtException.getMessage() : uncaughtException.toString());
+                        final StringWriter sw = new StringWriter();
+                        uncaughtException.printStackTrace(new PrintWriter(sw));
+                        parsedState.addProperty("failureStackTrace", sw.toString());
+                    }
+                    final String updatedJson = parsedState.toString();
+                    this.currentStateJson = updatedJson;
+                    saveLocalExecutionLog(updatedJson);
+                    broadcastSseEvent("state", updatedJson);
+                }
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("[InteractiveConsole] Failed to reconcile test outcome: {}", e.getMessage());
+        }
+    }
+
+    private void saveLocalExecutionLog(final String minified)
+    {
         if (AiConfiguration.getInstance().isConsoleExecutionLogsEnabled())
         {
             try
@@ -320,15 +456,56 @@ public final class InteractiveConsoleEngine {
                 }
                 final JsonObject parsedState = JsonParser.parseString(minified).getAsJsonObject();
                 final String executionKey = extractExecutionKey(parsedState);
-                final int index = getExecutionIndex(executionKey);
+                final String testClassFolder = extractTestClassFolder(parsedState);
+                final int index = getExecutionIndex(testClassFolder, executionKey);
+                String contentToSave = minified;
+
+                // Relocate video recording if generated in target/videos/
+                final File videosFolder = new File("target/videos");
+                if (videosFolder.exists() && videosFolder.isDirectory())
+                {
+                    final File[] videoFiles = videosFolder.listFiles((dir, name) -> name.endsWith(".mp4") || name.endsWith(".webm"));
+                    if (videoFiles != null && videoFiles.length > 0)
+                    {
+                        File newestVideo = videoFiles[0];
+                        for (final File vf : videoFiles)
+                        {
+                            if (vf.lastModified() > newestVideo.lastModified())
+                            {
+                                newestVideo = vf;
+                            }
+                        }
+                        final String videoName = "video-" + index + ".mp4";
+                        parsedState.addProperty("videoUrl", videoName);
+                        parsedState.addProperty("videoPath", videoName);
+                        contentToSave = parsedState.toString();
+
+                        final String configuredResultsDirPath = AiConfiguration.getInstance().getConsoleExecutionLogsDirectory();
+                        final String runFolder = getRunFolder();
+                        final File structuredDir = new File(configuredResultsDirPath, runFolder + "/" + testClassFolder);
+                        if (!structuredDir.exists())
+                        {
+                            structuredDir.mkdirs();
+                        }
+                        try
+                        {
+                            Files.copy(newestVideo.toPath(), new File(structuredDir, videoName).toPath(), StandardCopyOption.REPLACE_EXISTING);
+                            final File defaultVideoFile = new File(defaultResultsDir, videoName);
+                            Files.copy(newestVideo.toPath(), defaultVideoFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                        }
+                        catch (final Exception ve)
+                        {
+                            LOG.warn("[InteractiveConsole] Could not move video recording: {}", ve.getMessage());
+                        }
+                    }
+                }
 
                 // 1. Root file for compatibility in default allure.results.directory
                 final File executionJson = new File(defaultResultsDir, "console-execution-" + index + ".json");
-                Files.writeString(executionJson.toPath(), minified, StandardCharsets.UTF_8);
+                Files.writeString(executionJson.toPath(), contentToSave, StandardCharsets.UTF_8);
 
                 // 2. Structured run and test class folders in configured console logs directory
                 final String configuredResultsDirPath = AiConfiguration.getInstance().getConsoleExecutionLogsDirectory();
-                final String testClassFolder = extractTestClassFolder(parsedState);
                 final String runFolder = getRunFolder();
                 final File structuredDir = new File(configuredResultsDirPath, runFolder + "/" + testClassFolder);
                 if (!structuredDir.exists())
@@ -336,7 +513,7 @@ public final class InteractiveConsoleEngine {
                     structuredDir.mkdirs();
                 }
                 final File structuredJson = new File(structuredDir, "console-execution-" + index + ".json");
-                Files.writeString(structuredJson.toPath(), minified, StandardCharsets.UTF_8);
+                Files.writeString(structuredJson.toPath(), contentToSave, StandardCharsets.UTF_8);
 
                 // 3. Structured copy in configured target/ai-reports directory
                 final String reportsDirPath = AiConfiguration.getInstance().getDiskReportDirectory();
@@ -347,15 +524,170 @@ public final class InteractiveConsoleEngine {
                     reportsStructuredDir.mkdirs();
                 }
                 final File reportsStructuredJson = new File(reportsStructuredDir, "console-execution-" + index + ".json");
-                Files.writeString(reportsStructuredJson.toPath(), minified, StandardCharsets.UTF_8);
+                Files.writeString(reportsStructuredJson.toPath(), contentToSave, StandardCharsets.UTF_8);
+                if (parsedState.has("videoUrl"))
+                {
+                    final String videoName = parsedState.get("videoUrl").getAsString();
+                    final File srcVideo = new File(structuredDir, videoName);
+                    if (srcVideo.exists())
+                    {
+                        try
+                        {
+                            Files.copy(srcVideo.toPath(), new File(reportsStructuredDir, videoName).toPath(), StandardCopyOption.REPLACE_EXISTING);
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+                }
             }
             catch (final Exception e)
             {
                 LOG.warn("[InteractiveConsole] Failed to save local console execution log: {}", e.getMessage());
             }
         }
+    }
 
-        broadcastSseEvent("state", minified);
+    /**
+     * Relocates a completed video recording file into the active run storage directory
+     * and updates the corresponding execution log JSON with video reference attributes.
+     *
+     * @param videoFile the completed video file to relocate
+     * @param rawTestName the name of the test or recording target
+     * @author AI-generated: Gemini 3.6 Flash
+     * @author Xceptance GmbH 2026
+     */
+    public static void attachVideoToLatestExecutionLog(final File videoFile, final String rawTestName)
+    {
+        if (videoFile == null || !videoFile.exists())
+        {
+            return;
+        }
+        try
+        {
+            final String runFolder = getRunFolder();
+            final String testClassFolder = extractTestClassFolder(rawTestName);
+            final String ext = videoFile.getName().toLowerCase().endsWith(".gif") ? ".gif" : ".mp4";
+
+            final List<String> storageRoots = List.of(
+                "storage/runs",
+                AiConfiguration.getInstance().getConsoleExecutionLogsDirectory(),
+                AiConfiguration.getInstance().getDiskReportDirectory(),
+                System.getProperty("allure.results.directory", "target/aura-sandbox/allure-results")
+            );
+
+            for (final String rootPath : storageRoots)
+            {
+                if (rootPath == null || rootPath.isBlank())
+                {
+                    continue;
+                }
+                final File runDir = new File(rootPath, runFolder);
+                if (!runDir.exists() && !"storage/runs".equals(rootPath))
+                {
+                    continue;
+                }
+                if (!runDir.exists())
+                {
+                    runDir.mkdirs();
+                }
+
+                File targetTestDir = new File(runDir, testClassFolder);
+                File[] jsonFiles = targetTestDir.exists() ? targetTestDir.listFiles((dir, name) -> name.endsWith(".json") && !name.equals("index-data.json")) : null;
+
+                if ((jsonFiles == null || jsonFiles.length == 0) && runDir.exists())
+                {
+                    final File[] subDirs = runDir.listFiles(File::isDirectory);
+                    if (subDirs != null && subDirs.length > 0)
+                    {
+                        File bestDir = null;
+                        File[] bestJsons = null;
+                        long newestMod = -1;
+
+                        for (final File subDir : subDirs)
+                        {
+                            final File[] jsons = subDir.listFiles((dir, name) -> name.endsWith(".json") && !name.equals("index-data.json"));
+                            if (jsons != null && jsons.length > 0)
+                            {
+                                for (final File jf : jsons)
+                                {
+                                    if (jf.lastModified() > newestMod)
+                                    {
+                                        newestMod = jf.lastModified();
+                                        bestDir = subDir;
+                                        bestJsons = jsons;
+                                    }
+                                }
+                            }
+                        }
+                        if (bestDir != null)
+                        {
+                            targetTestDir = bestDir;
+                            jsonFiles = bestJsons;
+                        }
+                    }
+                }
+
+                if (!targetTestDir.exists())
+                {
+                    targetTestDir.mkdirs();
+                }
+
+                int index = 1;
+                if (jsonFiles != null && jsonFiles.length > 0)
+                {
+                    for (final File f : jsonFiles)
+                    {
+                        final String name = f.getName();
+                        if (name.startsWith("console-execution-"))
+                        {
+                            try
+                            {
+                                index = Integer.parseInt(name.substring("console-execution-".length(), name.length() - ".json".length()));
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+                        }
+                    }
+                }
+
+                final String videoName = "video-" + index + ext;
+                final File destVideo = new File(targetTestDir, videoName);
+                try
+                {
+                    Files.copy(videoFile.toPath(), destVideo.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                }
+                catch (final Exception e)
+                {
+                    LOG.warn("[InteractiveConsole] Could not copy video file to {}: {}", destVideo.getAbsolutePath(), e.getMessage());
+                }
+
+                if (jsonFiles != null && jsonFiles.length > 0)
+                {
+                    for (final File jsonFileToUpdate : jsonFiles)
+                    {
+                        try
+                        {
+                            final String jsonContent = Files.readString(jsonFileToUpdate.toPath(), StandardCharsets.UTF_8);
+                            final JsonObject parsedState = JsonParser.parseString(jsonContent).getAsJsonObject();
+                            parsedState.addProperty("videoUrl", videoName);
+                            parsedState.addProperty("videoPath", videoName);
+                            final String updatedJson = parsedState.toString();
+
+                            Files.writeString(jsonFileToUpdate.toPath(), updatedJson, StandardCharsets.UTF_8);
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+                }
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("[InteractiveConsole] Could not attach video to execution log: {}", e.getMessage());
+        }
     }
 
     private String extractExecutionKey(final JsonObject json)
@@ -408,19 +740,27 @@ public final class InteractiveConsoleEngine {
         return key.isEmpty() ? "default" : key;
     }
 
-    private int getExecutionIndex(final String executionKey)
+    private int getExecutionIndex(final String testClassFolder, final String executionKey)
     {
+        final String classKey = (testClassFolder != null && !testClassFolder.isBlank()) ? testClassFolder : "DefaultTestClass";
         if (executionKey == null || executionKey.isEmpty())
         {
             return 1;
         }
-        return EXECUTION_INDEX_MAP.computeIfAbsent(executionKey, k -> EXECUTION_INDEX_COUNTER.incrementAndGet());
+        final Map<String, Integer> classMap = CLASS_EXECUTION_INDEX_MAP.computeIfAbsent(classKey, k -> new ConcurrentHashMap<>());
+        final AtomicInteger classCounter = CLASS_EXECUTION_COUNTERS.computeIfAbsent(classKey, k -> new AtomicInteger(0));
+        return classMap.computeIfAbsent(executionKey, k -> classCounter.incrementAndGet());
+    }
+
+    public int getExecutionIndex(final String executionKey)
+    {
+        return getExecutionIndex("DefaultTestClass", executionKey);
     }
 
     public static void resetExecutionIndexes()
     {
-        EXECUTION_INDEX_MAP.clear();
-        EXECUTION_INDEX_COUNTER.set(0);
+        CLASS_EXECUTION_INDEX_MAP.clear();
+        CLASS_EXECUTION_COUNTERS.clear();
     }
     
     public String getCurrentStateJson() {
@@ -443,10 +783,22 @@ public final class InteractiveConsoleEngine {
      * on the state SSE event before waitForAction is fully invoked.
      * @param pauseId the expected pause token
      */
+    private void updatePauseId(final String newPauseId)
+    {
+        final String prev = this.currentPauseId.getAndSet(newPauseId);
+        if (prev != null && !prev.equals(newPauseId))
+        {
+            this.previousPauseId.set(prev);
+        }
+    }
+
     public void registerPauseId(final String pauseId)
     {
-        this.currentPauseId.set(pauseId);
-        this.pendingAction.set(null);
+        updatePauseId(pauseId);
+        if (this.pendingActions.isEmpty())
+        {
+            this.pendingAction.set(null);
+        }
     }
 
     /**
@@ -457,6 +809,16 @@ public final class InteractiveConsoleEngine {
     public String getCurrentPauseId()
     {
         return this.currentPauseId.get();
+    }
+
+    /**
+     * Returns the immediately preceding pause token, or null if none.
+     *
+     * @return the previous pause token string, or null
+     */
+    public String getPreviousPauseId()
+    {
+        return this.previousPauseId.get();
     }
 
     /**
@@ -471,82 +833,98 @@ public final class InteractiveConsoleEngine {
      */
     public JsonObject waitForAction(final String customPauseId, final long timeoutMs) throws InterruptedException
     {
-        if (AiConfiguration.getInstance().isManagerActive())
+        try
         {
-            try
+            if (AiConfiguration.getInstance().isManagerActive())
             {
-                final String managerUrl = AiConfiguration.getInstance().getProperty("neodymium.managerUrl", null);
-                final HttpClient client = HttpClient.newBuilder()
-                    .connectTimeout(java.time.Duration.ofSeconds(10))
-                    .build();
-                String uriStr = managerUrl + "/api/console/internal/waitForAction";
-                if (customPauseId != null && !customPauseId.isEmpty())
+                try
                 {
-                    uriStr += "?pauseId=" + URLEncoder.encode(customPauseId, StandardCharsets.UTF_8);
+                    final String managerUrl = AiConfiguration.getInstance().getProperty("neodymium.managerUrl", null);
+                    final HttpClient client = HttpClient.newBuilder()
+                        .connectTimeout(java.time.Duration.ofSeconds(10))
+                        .build();
+                    String uriStr = managerUrl + "/api/console/internal/waitForAction";
+                    if (customPauseId != null && !customPauseId.isEmpty())
+                    {
+                        uriStr += "?pauseId=" + URLEncoder.encode(customPauseId, StandardCharsets.UTF_8);
+                    }
+                    final HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(uriStr))
+                        .timeout(java.time.Duration.ofMillis(timeoutMs + 5000))
+                        .GET()
+                        .build();
+                    LOG.info("[InteractiveConsole] Proxying waitForAction to Manager at {}", managerUrl);
+                    final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                    if (response.statusCode() == 200)
+                    {
+                        final JsonObject action = JsonParser.parseString(response.body()).getAsJsonObject();
+                        LOG.info("[InteractiveConsole] Action received from Manager: {}", action);
+                        return action;
+                    }
+                    else
+                    {
+                        throw new RuntimeException("Manager returned error status: " + response.statusCode());
+                    }
                 }
-                final HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(uriStr))
-                    .timeout(java.time.Duration.ofMillis(timeoutMs + 5000))
-                    .GET()
-                    .build();
-                LOG.info("[InteractiveConsole] Proxying waitForAction to Manager at {}", managerUrl);
-                final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                if (response.statusCode() == 200)
+                catch (InterruptedException e)
                 {
-                    final JsonObject action = JsonParser.parseString(response.body()).getAsJsonObject();
-                    LOG.info("[InteractiveConsole] Action received from Manager: {}", action);
-                    return action;
+                    throw e;
                 }
-                else
+                catch (Exception e)
                 {
-                    throw new RuntimeException("Manager returned error status: " + response.statusCode());
+                    throw new RuntimeException("Failed to proxy waitForAction to Aura Manager", e);
                 }
             }
-            catch (InterruptedException e)
-            {
-                throw e;
-            }
-            catch (Exception e)
-            {
-                throw new RuntimeException("Failed to proxy waitForAction to Aura Manager", e);
-            }
-        }
 
-        // Generate a fresh pause token and clear any stale pending action,
-        // UNLESS the pauseId was already pre-registered.
-        final String pauseId = (customPauseId != null && !customPauseId.isEmpty()) ? customPauseId : UUID.randomUUID().toString();
-        if (!pauseId.equals(this.currentPauseId.get()))
+            // Generate a fresh pause token and clear any stale pending action,
+            // UNLESS the pauseId was already pre-registered.
+            final String pauseId = (customPauseId != null && !customPauseId.isEmpty()) ? customPauseId : UUID.randomUUID().toString();
+            if (!pauseId.equals(this.currentPauseId.get()))
+            {
+                updatePauseId(pauseId);
+                if (this.pendingActions.isEmpty())
+                {
+                    this.pendingAction.set(null);
+                }
+            }
+
+            // Broadcast the updated state including the new pauseId so all tabs know they can act.
+            broadcastSseEvent("pause", buildPausePayload(pauseId));
+
+            LOG.info("[InteractiveConsole] Paused — waiting for user action (runId={}, pauseId={})", this.runId, pauseId);
+
+            synchronized (this.lock)
+            {
+                final long deadline = System.currentTimeMillis() + timeoutMs;
+                while (this.pendingActions.isEmpty() && this.pendingAction.get() == null)
+                {
+                    final long remaining = deadline - System.currentTimeMillis();
+                    if (remaining <= 0)
+                    {
+                        throw new RuntimeException(
+                            "Interactive Console: no user action received within " + timeoutMs + " ms. Halting execution.");
+                    }
+                    this.lock.wait(Math.min(remaining, 5_000));
+                }
+            }
+
+            JsonObject action = this.pendingActions.poll();
+            if (action == null)
+            {
+                action = this.pendingAction.getAndSet(null);
+            }
+            else if (this.pendingAction.get() == action)
+            {
+                this.pendingAction.set(null);
+            }
+            LOG.info("[InteractiveConsole] Action received: {}", action);
+            return action;
+        }
+        finally
         {
-            this.currentPauseId.set(pauseId);
-            this.pendingAction.set(null);
+            // Invalidate the pause token so duplicate clicks are ignored and running state does not retain stale tokens.
+            updatePauseId(null);
         }
-
-        // Broadcast the updated state including the new pauseId so all tabs know they can act.
-        broadcastSseEvent("pause", buildPausePayload(pauseId));
-
-        LOG.info("[InteractiveConsole] Paused — waiting for user action (runId={}, pauseId={})", this.runId, pauseId);
-
-        synchronized (this.lock)
-        {
-            final long deadline = System.currentTimeMillis() + timeoutMs;
-            while (this.pendingAction.get() == null)
-            {
-                final long remaining = deadline - System.currentTimeMillis();
-                if (remaining <= 0)
-                {
-                    throw new RuntimeException(
-                        "Interactive Console: no user action received within " + timeoutMs + " ms. Halting execution.");
-                }
-                this.lock.wait(Math.min(remaining, 5_000));
-            }
-        }
-
-        // Invalidate the pause token so duplicate clicks are ignored.
-        this.currentPauseId.set(null);
-
-        final JsonObject action = this.pendingAction.getAndSet(null);
-        LOG.info("[InteractiveConsole] Action received: {}", action);
-        return action;
     }
 
     public JsonObject waitForAction(final String customPauseId) throws InterruptedException
@@ -574,6 +952,8 @@ public final class InteractiveConsoleEngine {
     {
         final JsonObject abortAction = new JsonObject();
         abortAction.addProperty("action", "ABORT");
+        this.pendingActions.clear();
+        this.pendingActions.offer(abortAction);
         this.pendingAction.set(abortAction);
         synchronized (this.lock)
         {
@@ -678,6 +1058,40 @@ public final class InteractiveConsoleEngine {
     }
 
     /**
+     * Checks if the given action represents a structural playbook modification
+     * rather than an execution-advancing operation.
+     *
+     * @param action the action string
+     * @param req the action JSON payload
+     * @return {@code true} if structural (REORDER, MOVE_STEP, ADD, EDIT on non-current step, etc.); {@code false} otherwise
+     * @author AI-generated: Gemini 3.8 Flash
+     * @author Xceptance GmbH 2026
+     */
+    public static boolean isStructuralAction(final String action, final JsonObject req)
+    {
+        if (action == null)
+        {
+            return false;
+        }
+        final String upper = action.trim().toUpperCase();
+        if ("REORDER".equals(upper) || "MOVE_STEP".equals(upper) || "ADD".equals(upper)
+                || "ADD_STEP".equals(upper) || "TOGGLE_BREAKPOINT".equals(upper)
+                || "DUMP".equals(upper) || "SUGGEST_FIX".equals(upper))
+        {
+            return true;
+        }
+        if ("EDIT".equals(upper) || "UPDATE_STEP".equals(upper) || "SAVE_STEP".equals(upper))
+        {
+            if (req != null && req.has("isCurrentStep") && !req.get("isCurrentStep").isJsonNull()
+                    && !req.get("isCurrentStep").getAsBoolean())
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Submits an action to the engine and deposits it to wake up any blocked test runner thread.
      *
      * @param req JSON object containing runId, pauseId, action, etc.
@@ -697,19 +1111,38 @@ public final class InteractiveConsoleEngine {
             return new ActionResult(409, hint);
         }
 
+        final String action = req != null && req.has("action") && !req.get("action").isJsonNull()
+                ? req.get("action").getAsString()
+                : "";
+
         final String incomingPauseId = req != null && req.has("pauseId") && !req.get("pauseId").isJsonNull()
                 ? req.get("pauseId").getAsString()
                 : null;
         final String activePauseId = this.currentPauseId.get();
+        final String prevPauseId = this.previousPauseId.get();
 
-        if (activePauseId == null || !activePauseId.equals(incomingPauseId))
+        final boolean structural = isStructuralAction(action, req);
+
+        final boolean matchesActive = activePauseId != null && activePauseId.equals(incomingPauseId);
+        final boolean matchesPrevious = prevPauseId != null && prevPauseId.equals(incomingPauseId);
+
+        if (!structural && !matchesActive && !matchesPrevious)
         {
-            LOG.info("[InteractiveConsole] Action rejected: inactive or mismatched pauseId. activePauseId={}, incomingPauseId={}",
-                    activePauseId, incomingPauseId);
+            LOG.info("[InteractiveConsole] Action rejected: inactive or mismatched pauseId. activePauseId={}, previousPauseId={}, incomingPauseId={}, action={}",
+                    activePauseId, prevPauseId, incomingPauseId, action);
             return new ActionResult(200, "{\"status\":\"already-handled\"}");
         }
 
-        LOG.info("[InteractiveConsole] Action accepted: pauseId={}, req={}", incomingPauseId, req);
+        if (matchesPrevious && !matchesActive)
+        {
+            LOG.info("[InteractiveConsole] Action accepted via preceding pause token grace window: incomingPauseId={}, activePauseId={}, action={}",
+                    incomingPauseId, activePauseId, action);
+        }
+        else
+        {
+            LOG.info("[InteractiveConsole] Action accepted: pauseId={}, action={}, req={}", incomingPauseId, action, req);
+        }
+        this.pendingActions.offer(req);
         this.pendingAction.set(req);
         synchronized (this.lock)
         {
@@ -750,6 +1183,18 @@ public final class InteractiveConsoleEngine {
     }
 
     /**
+     * Checks if at least one SSE client is actively connected to this engine.
+     *
+     * @return {@code true} if at least one client output stream is registered
+     * @author AI-generated: Antigravity
+     * @author Xceptance GmbH 2026
+     */
+    public boolean hasSseClients()
+    {
+        return !this.sseClients.isEmpty();
+    }
+
+    /**
      * Builds the JSON payload broadcast to all SSE clients when the runner pauses.
      *
      * @param pauseId the freshly generated pause token
@@ -773,8 +1218,7 @@ public final class InteractiveConsoleEngine {
         @Override
         public void handle(final HttpExchange exchange) throws IOException
         {
-            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
-            exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+            InteractiveConsoleServer.applyCorsHeaders(exchange, "GET, HEAD, OPTIONS");
 
             if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod()))
             {
@@ -877,9 +1321,7 @@ public final class InteractiveConsoleEngine {
     private final class ActionHandler implements HttpHandler {
         @Override
         public void handle(final HttpExchange exchange) throws IOException {
-            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
-            exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "POST, OPTIONS");
-            exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+            InteractiveConsoleServer.applyCorsHeaders(exchange, "POST, OPTIONS");
 
             if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
                 exchange.sendResponseHeaders(204, -1);

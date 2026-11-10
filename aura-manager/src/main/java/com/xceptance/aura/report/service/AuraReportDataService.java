@@ -18,9 +18,10 @@
  */
 package com.xceptance.aura.report.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.File;
 import java.nio.file.Files;
@@ -43,19 +44,24 @@ import com.xceptance.aura.report.repository.TestBaseBugRepository;
 import com.xceptance.aura.report.repository.TestBaseVariationRepository;
 import com.xceptance.aura.report.repository.TestBatchRepository;
 import com.xceptance.aura.report.repository.TestRunRepository;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
+import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -175,6 +181,14 @@ public class AuraReportDataService
             int latestUnknown = 0;
             int latestIgnored = 0;
             int latestTotal = 0;
+            int latestPassHealed = 0;
+            int latestFixedHealed = 0;
+            int latestKnownHealed = 0;
+            int latestUnknownHealed = 0;
+            int latestPassAi = 0;
+            int latestFixedAi = 0;
+            int latestKnownAi = 0;
+            int latestUnknownAi = 0;
 
             if (!batchRuns.isEmpty())
             {
@@ -186,6 +200,14 @@ public class AuraReportDataService
                 latestUnknown = latestRun.getFailedUnknownCount() != null ? latestRun.getFailedUnknownCount() : 0;
                 latestIgnored = latestRun.getIgnoredCount() != null ? latestRun.getIgnoredCount() : 0;
                 latestTotal = latestRun.getTotalTests() != null ? latestRun.getTotalTests() : 0;
+                latestPassHealed = latestRun.getPassedHealedCountSafe();
+                latestFixedHealed = latestRun.getFixedHealedCountSafe();
+                latestKnownHealed = latestRun.getKnownHealedCountSafe();
+                latestUnknownHealed = latestRun.getUnknownHealedCountSafe();
+                latestPassAi = latestRun.getPassedAiCountSafe();
+                latestFixedAi = latestRun.getFixedAiCountSafe();
+                latestKnownAi = latestRun.getKnownAiCountSafe();
+                latestUnknownAi = latestRun.getUnknownAiCountSafe();
 
                 lastExecutedText = latestRun.getTimestampLabel() != null ? latestRun.getTimestampLabel() : "Recently";
 
@@ -201,17 +223,52 @@ public class AuraReportDataService
                 try
                 {
                     final RunReportDto latestReport = getRunReport(latestRunId);
-                    if (latestReport != null && latestReport.getExecutions() != null)
+                    if (latestReport != null)
                     {
-                        for (final TestExecutionDto exec : latestReport.getExecutions())
+                        boolean needsSave = false;
+                        if (latestReport.getTotalHealedCount() > 0 && (latestPassHealed == 0 && latestFixedHealed == 0 && latestKnownHealed == 0 && latestUnknownHealed == 0))
                         {
-                            if (exec.getBugs() != null)
+                            latestPassHealed = latestReport.getPassHealedCount();
+                            latestFixedHealed = latestReport.getFixedHealedCount();
+                            latestKnownHealed = latestReport.getKnownHealedCount();
+                            latestUnknownHealed = latestReport.getUnknownHealedCount();
+                            latestRun.setPassedHealedCount(latestPassHealed);
+                            latestRun.setSucceededFixedHealedCount(latestFixedHealed);
+                            latestRun.setFailedKnownHealedCount(latestKnownHealed);
+                            latestRun.setFailedUnknownHealedCount(latestUnknownHealed);
+                            needsSave = true;
+                        }
+
+                        if (latestReport.getTotalAiCount() > 0 && (latestPassAi == 0 && latestFixedAi == 0 && latestKnownAi == 0 && latestUnknownAi == 0))
+                        {
+                            latestPassAi = latestReport.getPassAiCount();
+                            latestFixedAi = latestReport.getFixedAiCount();
+                            latestKnownAi = latestReport.getKnownAiCount();
+                            latestUnknownAi = latestReport.getUnknownAiCount();
+                            latestRun.setPassedAiCount(latestPassAi);
+                            latestRun.setSucceededFixedAiCount(latestFixedAi);
+                            latestRun.setFailedKnownAiCount(latestKnownAi);
+                            latestRun.setFailedUnknownAiCount(latestUnknownAi);
+                            needsSave = true;
+                        }
+
+                        if (needsSave)
+                        {
+                            runRepository.save(latestRun);
+                        }
+
+                        if (latestReport.getExecutions() != null)
+                        {
+                            for (final TestExecutionDto exec : latestReport.getExecutions())
                             {
-                                for (final String bug : exec.getBugs())
+                                if (exec.getBugs() != null)
                                 {
-                                    if (bug != null && !bug.trim().isEmpty())
+                                    for (final String bug : exec.getBugs())
                                     {
-                                        activeBatchBugs.add(bug.trim());
+                                        if (bug != null && !bug.trim().isEmpty())
+                                        {
+                                            activeBatchBugs.add(bug.trim());
+                                        }
                                     }
                                 }
                             }
@@ -243,7 +300,15 @@ public class AuraReportDataService
                 latestKnown,
                 latestUnknown,
                 latestIgnored,
-                latestTotal
+                latestTotal,
+                latestPassHealed,
+                latestFixedHealed,
+                latestKnownHealed,
+                latestUnknownHealed,
+                latestPassAi,
+                latestFixedAi,
+                latestKnownAi,
+                latestUnknownAi
             ));
         }
         return batches;
@@ -253,6 +318,96 @@ public class AuraReportDataService
     {
         final List<TestBatchEntity> allBatchEntities = batchRepository.findAll();
         final List<TestRunEntity> allRunEntities = runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc();
+
+        for (final TestRunEntity r : allRunEntities)
+        {
+            try
+            {
+                final RunReportDto report = getRunReport(r.getId());
+                if (report != null)
+                {
+                    boolean changed = false;
+                    if (!Objects.equals(r.getPassedHealedCount(), report.getPassHealedCount()))
+                    {
+                        r.setPassedHealedCount(report.getPassHealedCount());
+                        changed = true;
+                    }
+                    if (!Objects.equals(r.getSucceededFixedHealedCount(), report.getFixedHealedCount()))
+                    {
+                        r.setSucceededFixedHealedCount(report.getFixedHealedCount());
+                        changed = true;
+                    }
+                    if (!Objects.equals(r.getFailedKnownHealedCount(), report.getKnownHealedCount()))
+                    {
+                        r.setFailedKnownHealedCount(report.getKnownHealedCount());
+                        changed = true;
+                    }
+                    if (!Objects.equals(r.getFailedUnknownHealedCount(), report.getUnknownHealedCount()))
+                    {
+                        r.setFailedUnknownHealedCount(report.getUnknownHealedCount());
+                        changed = true;
+                    }
+                    if (!Objects.equals(r.getPassedAiCount(), report.getPassAiCount()))
+                    {
+                        r.setPassedAiCount(report.getPassAiCount());
+                        changed = true;
+                    }
+                    if (!Objects.equals(r.getSucceededFixedAiCount(), report.getFixedAiCount()))
+                    {
+                        r.setSucceededFixedAiCount(report.getFixedAiCount());
+                        changed = true;
+                    }
+                    if (!Objects.equals(r.getFailedKnownAiCount(), report.getKnownAiCount()))
+                    {
+                        r.setFailedKnownAiCount(report.getKnownAiCount());
+                        changed = true;
+                    }
+                    if (!Objects.equals(r.getFailedUnknownAiCount(), report.getUnknownAiCount()))
+                    {
+                        r.setFailedUnknownAiCount(report.getUnknownAiCount());
+                        changed = true;
+                    }
+                    if (!Objects.equals(r.getPassedCount(), report.getPassCount()))
+                    {
+                        r.setPassedCount(report.getPassCount());
+                        changed = true;
+                    }
+                    if (!Objects.equals(r.getSucceededFixedCount(), report.getFixedCount()))
+                    {
+                        r.setSucceededFixedCount(report.getFixedCount());
+                        changed = true;
+                    }
+                    if (!Objects.equals(r.getFailedKnownCount(), report.getKnownCount()))
+                    {
+                        r.setFailedKnownCount(report.getKnownCount());
+                        changed = true;
+                    }
+                    if (!Objects.equals(r.getFailedUnknownCount(), report.getUnknownCount()))
+                    {
+                        r.setFailedUnknownCount(report.getUnknownCount());
+                        changed = true;
+                    }
+                    if (!Objects.equals(r.getIgnoredCount(), report.getIgnoredCount()))
+                    {
+                        r.setIgnoredCount(report.getIgnoredCount());
+                        changed = true;
+                    }
+                    if (!Objects.equals(r.getTotalTests(), report.getTotalCount()))
+                    {
+                        r.setTotalTests(report.getTotalCount());
+                        changed = true;
+                    }
+                    if (changed)
+                    {
+                        r.recalculatePassRate();
+                        runRepository.save(r);
+                    }
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
 
         final List<BatchSummaryDto> batches = getAllBatches(allBatchEntities, allRunEntities);
 
@@ -351,7 +506,18 @@ public class AuraReportDataService
         for (final TestBaseVariationEntity var : rawVariations)
         {
             final String normLoc = normalizeLocation(var.getLocation());
-            final String normBr = normalizeBrowser(var.getBrowser());
+            String normBr = normalizeBrowser(var.getBrowser());
+            if ("Chrome".equalsIgnoreCase(normBr) && var.getHistoryLinks() != null && !var.getHistoryLinks().isBlank())
+            {
+                final String firstLink = var.getHistoryLinks().split(",")[0].trim();
+                final Map<String, String> params = parseQueryParams(firstLink);
+                final String linkExecId = params.get("executionId");
+                final String extracted = extractBrowserFromIdOrKey(linkExecId);
+                if (extracted != null && !extracted.isBlank() && !"Chrome".equalsIgnoreCase(extracted))
+                {
+                    normBr = normalizeBrowser(extracted);
+                }
+            }
             var.setLocation(normLoc);
             var.setBrowser(normBr);
 
@@ -360,19 +526,35 @@ public class AuraReportDataService
                                        (var.getDataSetLabel() != null ? var.getDataSetLabel().trim() : "") + "|" +
                                        normLoc + "|" + normBr;
 
+            final String canonicalId = generateVariationId(
+                var.getTestClassName(),
+                var.getTestMethodName(),
+                var.getDataSetLabel(),
+                normLoc,
+                normBr
+            );
+
             if (!mergedMap.containsKey(logicalKey))
             {
                 mergedMap.put(logicalKey, var);
             }
             else
             {
-                final TestBaseVariationEntity existing = mergedMap.get(logicalKey);
-                final int totalExecs = (existing.getTotalExecutionsCount() != null ? existing.getTotalExecutionsCount() : 0)
-                                     + (var.getTotalExecutionsCount() != null ? var.getTotalExecutionsCount() : 0);
-                existing.setTotalExecutionsCount(totalExecs);
+                TestBaseVariationEntity primary = mergedMap.get(logicalKey);
+                TestBaseVariationEntity secondary = var;
+                if (!primary.getId().equals(canonicalId) && secondary.getId().equals(canonicalId))
+                {
+                    primary = var;
+                    secondary = mergedMap.get(logicalKey);
+                    mergedMap.put(logicalKey, primary);
+                }
 
-                final String h1 = existing.getHistoryLinks();
-                final String h2 = var.getHistoryLinks();
+                final int totalExecs = (primary.getTotalExecutionsCount() != null ? primary.getTotalExecutionsCount() : 0)
+                                     + (secondary.getTotalExecutionsCount() != null ? secondary.getTotalExecutionsCount() : 0);
+                primary.setTotalExecutionsCount(totalExecs);
+
+                final String h1 = primary.getHistoryLinks();
+                final String h2 = secondary.getHistoryLinks();
                 final List<String> linksList = new ArrayList<>();
                 if (h1 != null && !h1.isBlank())
                 {
@@ -395,21 +577,29 @@ public class AuraReportDataService
                     }
                 }
                 final String mergedHistory = String.join(",", linksList);
-                existing.setHistoryLinks(mergedHistory);
-                existing.setTotalExecutionsCount(countHistoryLinks(mergedHistory));
+                primary.setHistoryLinks(mergedHistory);
+                final int countedLinks = countHistoryLinks(mergedHistory);
+                if (countedLinks > 0)
+                {
+                    primary.setTotalExecutionsCount(countedLinks);
+                }
 
-                final long t1 = existing.getLastExecutedAt() != null ? existing.getLastExecutedAt() : 0L;
-                final long t2 = var.getLastExecutedAt() != null ? var.getLastExecutedAt() : 0L;
+                final long t1 = primary.getLastExecutedAt() != null ? primary.getLastExecutedAt() : 0L;
+                final long t2 = secondary.getLastExecutedAt() != null ? secondary.getLastExecutedAt() : 0L;
                 if (t2 > t1)
                 {
-                    existing.setLastExecutedAt(t2);
-                    if (var.getLastStatus() != null)
+                    primary.setLastExecutedAt(t2);
+                    if (secondary.getLastStatus() != null)
                     {
-                        existing.setLastStatus(var.getLastStatus());
+                        primary.setLastStatus(secondary.getLastStatus());
+                    }
+                    if (secondary.getHealed() != null)
+                    {
+                        primary.setHealed(secondary.getHealed());
                     }
                 }
 
-                duplicatesToDelete.add(var);
+                duplicatesToDelete.add(secondary);
             }
         }
 
@@ -437,22 +627,85 @@ public class AuraReportDataService
 
         for (final TestBaseVariationEntity var : variations)
         {
-            final int actualHistoryCount = countHistoryLinks(var.getHistoryLinks());
+            final List<String> sortedLinks = sortHistoryLinksDescending(var.getHistoryLinks());
+            final int actualHistoryCount = sortedLinks.size();
             if (actualHistoryCount > 0)
             {
                 var.setTotalExecutionsCount(actualHistoryCount);
+                final String sortedLinksStr = String.join(",", sortedLinks);
+                if (!sortedLinksStr.equals(var.getHistoryLinks()))
+                {
+                    var.setHistoryLinks(sortedLinksStr);
+                }
             }
 
+            final String historyStr = var.getHistoryLinks();
             final boolean hasBugs = (bugsMap.containsKey(var.getId()) && !bugsMap.get(var.getId()).isEmpty())
-                                 || hasBugsInLatestHistoryLink(var.getHistoryLinks());
-            final String curStatus = var.getLastStatus() != null ? var.getLastStatus() : "passed-clean";
+                                 || hasBugsInLatestHistoryLink(historyStr);
+
+            final String curStatus;
+            final boolean isHealed;
+            if (!sortedLinks.isEmpty())
+            {
+                final String latestLink = sortedLinks.get(0);
+                final Map<String, String> latestParams = parseQueryParams(latestLink);
+                final String linkStatus = latestParams.get("status");
+                final String linkHealed = latestParams.get("healed");
+                String linkMode = latestParams.get("mode");
+                if (linkMode == null || linkMode.isBlank())
+                {
+                    final String rId = latestParams.get("runId");
+                    final String eId = latestParams.get("executionId");
+                    if (rId != null && !rId.isBlank())
+                    {
+                        final RunReportDto rpt = getRunReport(rId);
+                        if (rpt != null && rpt.getExecutions() != null)
+                        {
+                            for (final TestExecutionDto exec : rpt.getExecutions())
+                            {
+                                if (eId != null && !eId.isBlank() && eId.equals(exec.getId()))
+                                {
+                                    linkMode = exec.getDisplayMode();
+                                    break;
+                                }
+                            }
+                            if (linkMode == null || linkMode.isBlank())
+                            {
+                                for (final TestExecutionDto exec : rpt.getExecutions())
+                                {
+                                    if (exec.getTestClass() != null && exec.getTestClass().equals(var.getTestClassName()))
+                                    {
+                                        linkMode = exec.getDisplayMode();
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if (linkMode != null && !linkMode.isBlank())
+                {
+                    var.setExecutionMode(linkMode);
+                }
+                isHealed = "true".equalsIgnoreCase(linkHealed) || "healed".equalsIgnoreCase(linkStatus);
+                curStatus = (linkStatus != null && !linkStatus.isBlank())
+                    ? linkStatus
+                    : (var.getLastStatus() != null ? var.getLastStatus() : "passed-clean");
+            }
+            else
+            {
+                isHealed = (var.getHealed() != null && var.getHealed()) || isLatestHistoryLinkHealed(historyStr);
+                curStatus = var.getLastStatus() != null ? var.getLastStatus() : "passed-clean";
+            }
+            var.setHealed(isHealed);
+
             String effectiveLastStatus = curStatus;
 
             if ("failed".equalsIgnoreCase(curStatus) || "failed-unknown".equalsIgnoreCase(curStatus) || "failed-known".equalsIgnoreCase(curStatus) || "error".equalsIgnoreCase(curStatus))
             {
                 effectiveLastStatus = hasBugs ? "failed-known" : "failed-unknown";
             }
-            else if ("passed".equalsIgnoreCase(curStatus) || "succeeded-fixed".equalsIgnoreCase(curStatus) || "passed-clean".equalsIgnoreCase(curStatus) || "succeeded".equalsIgnoreCase(curStatus))
+            else if ("passed".equalsIgnoreCase(curStatus) || "succeeded-fixed".equalsIgnoreCase(curStatus) || "passed-clean".equalsIgnoreCase(curStatus) || "succeeded".equalsIgnoreCase(curStatus) || "healed".equalsIgnoreCase(curStatus))
             {
                 effectiveLastStatus = hasBugs ? "succeeded-fixed" : "passed-clean";
             }
@@ -628,13 +881,11 @@ public class AuraReportDataService
 
             final long getReportStartMs = System.currentTimeMillis();
 
-            if (isInProgress)
+            final Path runDir = localRunJsonStorageService.getRunDir(effectiveRunId);
+            final Path runJsonFile = (runDir != null) ? runDir.resolve("run.json") : null;
+            if (runDir != null && Files.exists(runDir) && Files.isDirectory(runDir) && (isInProgress || runJsonFile == null || !Files.exists(runJsonFile)))
             {
-                final Path runDir = localRunJsonStorageService.getRunDir(effectiveRunId);
-                if (Files.exists(runDir) && Files.isDirectory(runDir))
-                {
-                    localRunJsonStorageService.buildRunJsonContent(runDir.toFile(), effectiveRunId, true);
-                }
+                localRunJsonStorageService.buildRunJsonContent(runDir.toFile(), effectiveRunId, true, isInProgress);
             }
 
             final TestRunEntity runEntity = runOpt.orElseGet(() -> new TestRunEntity(
@@ -665,7 +916,22 @@ public class AuraReportDataService
                         execMetrics.fields().forEachRemaining(entry -> {
                             try
                             {
-                                final TestExecutionDto exec = objectMapper.treeToValue(entry.getValue(), TestExecutionDto.class);
+                                final JsonNode valueNode = entry.getValue();
+                                if (valueNode instanceof ObjectNode obj)
+                                {
+                                    final JsonNode bNode = obj.path("browser");
+                                    if (bNode.isMissingNode() || bNode.asText("").trim().isEmpty()
+                                            || "Chrome".equalsIgnoreCase(bNode.asText().trim())
+                                            || "Unknown".equalsIgnoreCase(bNode.asText().trim()))
+                                    {
+                                        final String fallbackBrowser = extractBrowserFromIdOrKey(entry.getKey());
+                                        if (fallbackBrowser != null && !fallbackBrowser.isBlank() && !"Chrome".equalsIgnoreCase(fallbackBrowser))
+                                        {
+                                            obj.put("browser", fallbackBrowser);
+                                        }
+                                    }
+                                }
+                                final TestExecutionDto exec = objectMapper.treeToValue(valueNode, TestExecutionDto.class);
                                 if (exec.getId() == null || exec.getId().isBlank() || seenIds.contains(exec.getId())
                                         || "bad".equalsIgnoreCase(exec.getId()) || "perfect".equalsIgnoreCase(exec.getId()) || "default".equalsIgnoreCase(exec.getId()))
                                 {
@@ -734,17 +1000,28 @@ public class AuraReportDataService
 
             for (final TestExecutionDto exec : rawExecutions)
             {
+                // Ensure healed steps count is computed and cached before omitting blocks
+                exec.getHealedStepsCount();
+
                 // Omit heavy step trees and screenshots on initial report opening (loaded on demand when clicked)
                 exec.setSteps(null);
                 exec.setBlocks(null);
 
                 final String varId = generateVariationId(exec.getTestClass(), exec.getTestMethod(), exec.getTitle(), exec.getLocation(), exec.getBrowser());
-                final List<String> dbBugTickets = dbBugsByVarId.getOrDefault(varId, List.of()).stream()
-                    .distinct()
-                    .collect(Collectors.toList());
+                final String varIdNoMethod = generateVariationId(exec.getTestClass(), null, exec.getTitle(), exec.getLocation(), exec.getBrowser());
+                final List<String> dbBugTickets = new ArrayList<>(dbBugsByVarId.getOrDefault(varId, List.of()));
+                for (final String t : dbBugsByVarId.getOrDefault(varIdNoMethod, List.of()))
+                {
+                    if (!dbBugTickets.contains(t))
+                    {
+                        dbBugTickets.add(t);
+                    }
+                }
 
-                final java.util.Set<String> removedTickets = removedBugsByVarId.getOrDefault(varId, java.util.Set.of());
-                final java.util.Set<String> combinedBugs = new java.util.LinkedHashSet<>();
+                final Set<String> removedTickets = new HashSet<>(removedBugsByVarId.getOrDefault(varId, Set.of()));
+                removedTickets.addAll(removedBugsByVarId.getOrDefault(varIdNoMethod, Set.of()));
+
+                final Set<String> combinedBugs = new LinkedHashSet<>();
                 if (exec.getBugs() != null)
                 {
                     for (final String b : exec.getBugs())
@@ -761,27 +1038,9 @@ public class AuraReportDataService
                 exec.setBugs(bugTickets);
 
                 final boolean hasBugs = !bugTickets.isEmpty();
-                final String raw = exec.getStatus() != null ? exec.getStatus() : (isInProgress ? "running" : "failed-unknown");
-                if ("running".equalsIgnoreCase(raw) || "in_progress".equalsIgnoreCase(raw) || "executing".equalsIgnoreCase(raw) || "pending".equalsIgnoreCase(raw))
-                {
-                    exec.setStatus(isInProgress ? "running" : (exec.getTotalStepsCount() == 0 ? "failed-unknown" : "skipped"));
-                }
-                else if ("failed".equalsIgnoreCase(raw) || "failed-known".equalsIgnoreCase(raw) || "failed-unknown".equalsIgnoreCase(raw) || "error".equalsIgnoreCase(raw) || "failure".equalsIgnoreCase(raw))
-                {
-                    exec.setStatus(hasBugs ? "failed-known" : "failed-unknown");
-                }
-                else if ("passed".equalsIgnoreCase(raw) || "succeeded-fixed".equalsIgnoreCase(raw) || "passed-clean".equalsIgnoreCase(raw))
-                {
-                    exec.setStatus(hasBugs ? "succeeded-fixed" : "passed-clean");
-                }
-                else if ("fixed".equalsIgnoreCase(raw) || "healed".equalsIgnoreCase(raw))
-                {
-                    exec.setStatus("succeeded-fixed");
-                }
-                else
-                {
-                    exec.setStatus(raw.toLowerCase());
-                }
+                final String failureText = extractFailureText(exec);
+                final String eff = computeEffectiveStatus(exec.getStatus(), exec.getTotalStepsCount(), exec.getFailedStepsCount(), hasBugs, failureText, isInProgress);
+                exec.setStatus(eff);
 
                 executions.add(exec);
             }
@@ -800,6 +1059,10 @@ public class AuraReportDataService
                 liveRun.setFailedKnownCount(report.getKnownCount());
                 liveRun.setFailedUnknownCount(report.getUnknownCount());
                 liveRun.setIgnoredCount(report.getIgnoredCount());
+                liveRun.setPassedHealedCount(report.getPassHealedCount());
+                liveRun.setSucceededFixedHealedCount(report.getFixedHealedCount());
+                liveRun.setFailedKnownHealedCount(report.getKnownHealedCount());
+                liveRun.setFailedUnknownHealedCount(report.getUnknownHealedCount());
                 if (report.getExecutions() != null && !report.getExecutions().isEmpty())
                 {
                     final String bCsv = report.getExecutions().stream()
@@ -835,6 +1098,37 @@ public class AuraReportDataService
         }
     }
 
+    private JsonNode readJsonNodeWithRetry(final File f)
+    {
+        for (int attempt = 0; attempt < 3; attempt++)
+        {
+            try
+            {
+                final JsonNode node = objectMapper.readTree(f);
+                if (node != null && !node.isEmpty())
+                {
+                    return node;
+                }
+            }
+            catch (final Exception e)
+            {
+                if (attempt < 2)
+                {
+                    try
+                    {
+                        Thread.sleep(20L * (attempt + 1));
+                    }
+                    catch (final InterruptedException ignored)
+                    {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     public TestExecutionDto getExecutionDetails(final String runId, final String executionId)
     {
         if (runId == null || executionId == null || executionId.isBlank())
@@ -842,57 +1136,109 @@ public class AuraReportDataService
             return null;
         }
 
-        final Path runDir = localRunJsonStorageService.getRunDir(runId);
+        final String cleanRunId = runId.trim().replaceAll("^#+", "");
+        final String effectiveRunId;
+        if (!cleanRunId.isEmpty() && !"RUN_ID".equalsIgnoreCase(cleanRunId))
+        {
+            effectiveRunId = cleanRunId;
+        }
+        else
+        {
+            effectiveRunId = runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc().stream()
+                .findFirst()
+                .map(TestRunEntity::getId)
+                .orElse("");
+            LOG.warn("Execution lookup received placeholder runId='{}'; falling back to latest run '{}'.", runId, effectiveRunId);
+        }
+
+        if (effectiveRunId.isEmpty())
+        {
+            return null;
+        }
+
+        final Path runDir = localRunJsonStorageService.getRunDir(effectiveRunId);
         if (Files.exists(runDir) && Files.isDirectory(runDir))
         {
             final List<File> files = new ArrayList<>();
             localRunJsonStorageService.scanForTestExecJsonFiles(runDir.toFile(), files);
+
+            // Pass 1: Scan for exact matches (FQCN keys, execution IDs, and specific file names). Simple-class-name
+            // matches are gathered as ambiguity-checked candidates.
+            final List<JsonNode> simpleKeyCandidates = new ArrayList<>();
             for (final File f : files)
             {
-                JsonNode node = null;
-                for (int attempt = 0; attempt < 3; attempt++)
-                {
-                    try
-                    {
-                        node = objectMapper.readTree(f);
-                        if (node != null && !node.isEmpty())
-                        {
-                            break;
-                        }
-                    }
-                    catch (final Exception e)
-                    {
-                        if (attempt < 2)
-                        {
-                            try
-                            {
-                                Thread.sleep(20L * (attempt + 1));
-                            }
-                            catch (final InterruptedException ignored)
-                            {
-                                Thread.currentThread().interrupt();
-                                break;
-                            }
-                        }
-                    }
-                }
-
+                final JsonNode node = readJsonNodeWithRetry(f);
                 if (node != null)
                 {
                     try
                     {
+                        final String parentFolder = (f.getParentFile() != null && !f.getParentFile().getName().equals(effectiveRunId))
+                                ? f.getParentFile().getName() : "";
+                        final String rawTestFile = node.path("testFile").asText("");
+                        final String testFileClass = rawTestFile.contains("#") ? rawTestFile.substring(0, rawTestFile.indexOf('#')) : rawTestFile;
+                        final String testFileMethod = rawTestFile.contains("#") ? rawTestFile.substring(rawTestFile.indexOf('#') + 1) : "";
+
+                        String testClass = node.path("testClass").asText("");
+                        if (testClass.isEmpty() || "DefaultClass".equalsIgnoreCase(testClass))
+                        {
+                            if (!parentFolder.isEmpty())
+                            {
+                                testClass = parentFolder;
+                            }
+                            else if (!testFileClass.isEmpty())
+                            {
+                                testClass = testFileClass;
+                            }
+                            else
+                            {
+                                testClass = "DefaultClass";
+                            }
+                        }
+
+                        String testMethod = LocalRunJsonStorageService.extractTestMethod(node);
+                        if (testMethod.isEmpty() && !testFileMethod.isEmpty())
+                        {
+                            testMethod = testFileMethod;
+                        }
+
+                        String title = node.path("title").asText("");
+                        if (title.isEmpty() || "Default".equalsIgnoreCase(title))
+                        {
+                            if (node.hasNonNull("datasetId"))
+                            {
+                                title = node.path("datasetId").asText();
+                            }
+                            else if (node.hasNonNull("dataSet"))
+                            {
+                                title = node.path("dataSet").asText();
+                            }
+                            else if (node.hasNonNull("testId"))
+                            {
+                                title = node.path("testId").asText();
+                            }
+                            else
+                            {
+                                title = "Default";
+                            }
+                        }
+
                         final String id = node.path("id").asText(f.getName().replaceAll("\\.json$", ""));
-                        final String testClass = node.path("testClass").asText("DefaultClass");
-                        final String testMethod = LocalRunJsonStorageService.extractTestMethod(node);
-                        final String title = node.path("title").asText("Default");
                         final String browser = node.path("browser").asText("Chrome");
 
+                        final String simpleClass = testClass.contains(".") ? testClass.substring(testClass.lastIndexOf('.') + 1) : testClass;
+
                         final String execKey = LocalRunJsonStorageService.buildExecutionKey(testClass, testMethod, title, browser);
+                        final String simpleExecKey = LocalRunJsonStorageService.buildExecutionKey(simpleClass, testMethod, title, browser);
                         final String fullKey = testClass + "#" + id + "#" + browser;
+                        final String simpleFullKey = simpleClass + "#" + id + "#" + browser;
                         final String execKeyWithId = execKey + "#" + id;
+                        final String simpleExecKeyWithId = simpleExecKey + "#" + id;
                         final String classMethodBrowser = testClass + "#" + testMethod + "#" + browser;
+                        final String simpleClassMethodBrowser = simpleClass + "#" + testMethod + "#" + browser;
                         final String fileName = f.getName();
                         final String fileNameNoExt = fileName.replaceAll("\\.json$", "");
+                        final String parentWithFileName = !parentFolder.isEmpty() ? parentFolder + "/" + fileName : "";
+                        final String parentWithId = !parentFolder.isEmpty() ? parentFolder + "#" + id : "";
 
                         if (executionId.equalsIgnoreCase(id)
                                 || executionId.equalsIgnoreCase(fullKey)
@@ -900,28 +1246,80 @@ public class AuraReportDataService
                                 || executionId.equalsIgnoreCase(execKeyWithId)
                                 || executionId.equalsIgnoreCase(classMethodBrowser)
                                 || executionId.equalsIgnoreCase(fileNameNoExt)
-                                || executionId.equalsIgnoreCase(fileName))
+                                || executionId.equalsIgnoreCase(fileName)
+                                || (!parentWithFileName.isEmpty() && executionId.equalsIgnoreCase(parentWithFileName))
+                                || (!parentWithId.isEmpty() && executionId.equalsIgnoreCase(parentWithId)))
                         {
-                            final TestExecutionDto dto = objectMapper.treeToValue(node, TestExecutionDto.class);
-                            if (dto.getId() == null || dto.getId().isBlank()
-                                    || "bad".equalsIgnoreCase(dto.getId())
-                                    || "perfect".equalsIgnoreCase(dto.getId())
-                                    || "default".equalsIgnoreCase(dto.getId()))
-                            {
-                                dto.setId(executionId);
-                            }
-                            resolveBugsForExecution(runId, dto);
-                            return dto;
+                            return buildExecutionDetailsDto(node, executionId, effectiveRunId);
+                        }
+
+                        // Simple-class-name keys are only a weaker match: two classes in different packages may share a
+                        // simple name, so such hits are collected and only used if they are unambiguous.
+                        if (executionId.equalsIgnoreCase(simpleFullKey)
+                                || executionId.equalsIgnoreCase(simpleExecKey)
+                                || executionId.equalsIgnoreCase(simpleExecKeyWithId)
+                                || executionId.equalsIgnoreCase(simpleClassMethodBrowser))
+                        {
+                            simpleKeyCandidates.add(node);
                         }
                     }
-                    catch (final Exception ignored)
+                    catch (final Exception e)
                     {
+                        LOG.debug("Skipping execution file {} while resolving execId={}: {}", f.getName(), executionId, e.getMessage());
+                    }
+                }
+            }
+
+            if (simpleKeyCandidates.size() == 1)
+            {
+                try
+                {
+                    return buildExecutionDetailsDto(simpleKeyCandidates.get(0), executionId, effectiveRunId);
+                }
+                catch (final Exception e)
+                {
+                    LOG.debug("Failed mapping simple-key candidate for execId={}: {}", executionId, e.getMessage());
+                }
+            }
+            else if (simpleKeyCandidates.size() > 1)
+            {
+                LOG.warn("Ambiguous simple-class execution key '{}' in runId={} matches {} executions; not guessing.",
+                         executionId, effectiveRunId, simpleKeyCandidates.size());
+            }
+
+            // Pass 2: Fuzzy fallback matching. Only executed if no file in the run had an exact match in Pass 1.
+            // Safely matches single-execution class folders where executionId shares the parent folder prefix.
+            for (final File f : files)
+            {
+                final String parentFolder = (f.getParentFile() != null && !f.getParentFile().getName().equals(effectiveRunId))
+                        ? f.getParentFile().getName() : "";
+                if (!parentFolder.isEmpty() && (executionId.startsWith(parentFolder + "#") || executionId.equalsIgnoreCase(parentFolder)))
+                {
+                    final long classFileCount = files.stream()
+                            .filter(file -> parentFolder.equals(file.getParentFile() != null ? file.getParentFile().getName() : ""))
+                            .count();
+                    if (classFileCount == 1)
+                    {
+                        final JsonNode node = readJsonNodeWithRetry(f);
+                        // Guard against hijacking: a lone file of a multi-dataset class (other datasets not yet written
+                        // during a live run) must not answer for a different dataset's execution id.
+                        if (node != null && isIdentityCompatible(node, executionId))
+                        {
+                            try
+                            {
+                                return buildExecutionDetailsDto(node, executionId, effectiveRunId);
+                            }
+                            catch (final Exception e)
+                            {
+                                LOG.debug("Fuzzy match mapping failed for {}: {}", f.getName(), e.getMessage());
+                            }
+                        }
                     }
                 }
             }
         }
 
-        final Optional<String> runJsonOpt = localRunJsonStorageService.readRunJson(runId);
+        final Optional<String> runJsonOpt = localRunJsonStorageService.readRunJson(effectiveRunId);
         if (runJsonOpt.isPresent())
         {
             try
@@ -930,35 +1328,51 @@ public class AuraReportDataService
                 final JsonNode execMetrics = root.path("executionMetrics");
                 if (execMetrics.isObject() && !execMetrics.isEmpty())
                 {
-                    for (final java.util.Map.Entry<String, JsonNode> entry : (Iterable<java.util.Map.Entry<String, JsonNode>>) () -> execMetrics.fields())
+                    final List<JsonNode> simpleKeyHits = new ArrayList<>();
+                    for (final Entry<String, JsonNode> entry : (Iterable<Entry<String, JsonNode>>) () -> execMetrics.fields())
                     {
                         final JsonNode node = entry.getValue();
-                        final String id = node.path("id").asText(entry.getKey());
-                        if (executionId.equalsIgnoreCase(id) || executionId.equalsIgnoreCase(entry.getKey()))
+                        final String key = entry.getKey();
+                        final String id = node.path("id").asText(key);
+                        final String simpleKey = extractSimpleExecutionKey(key);
+
+                        if (executionId.equalsIgnoreCase(id) || executionId.equalsIgnoreCase(key))
                         {
                             final TestExecutionDto dto = objectMapper.treeToValue(node, TestExecutionDto.class);
-                            resolveBugsForExecution(runId, dto);
+                            resolveBugsForExecution(effectiveRunId, dto);
                             return dto;
                         }
+                        if (!simpleKey.isEmpty() && executionId.equalsIgnoreCase(simpleKey))
+                        {
+                            simpleKeyHits.add(node);
+                        }
+                    }
+                    if (simpleKeyHits.size() == 1)
+                    {
+                        final TestExecutionDto dto = objectMapper.treeToValue(simpleKeyHits.get(0), TestExecutionDto.class);
+                        resolveBugsForExecution(effectiveRunId, dto);
+                        return dto;
                     }
                 }
                 final JsonNode execArray = root.path("executions");
                 if (execArray.isArray())
                 {
+                    final List<TestExecutionDto> parsed = new ArrayList<>();
                     for (final JsonNode execNode : execArray)
                     {
-                        if (executionId.equalsIgnoreCase(execNode.path("id").asText("")))
-                        {
-                            final TestExecutionDto dto = objectMapper.treeToValue(execNode, TestExecutionDto.class);
-                            resolveBugsForExecution(runId, dto);
-                            return dto;
-                        }
+                        parsed.add(objectMapper.treeToValue(execNode, TestExecutionDto.class));
+                    }
+                    final TestExecutionDto match = findUniqueExecution(parsed, executionId);
+                    if (match != null)
+                    {
+                        resolveBugsForExecution(effectiveRunId, match);
+                        return match;
                     }
                 }
             }
             catch (final Exception e)
             {
-                LOG.error("Failed reading execution details from run.json for runId={}, execId={}: {}", runId, executionId, e.getMessage());
+                LOG.error("Failed reading execution details from run.json for runId={}, execId={}: {}", effectiveRunId, executionId, e.getMessage());
             }
         }
 
@@ -971,10 +1385,16 @@ public class AuraReportDataService
                 {
                     final JsonNode node = objectMapper.readTree(liveJson);
                     final String liveRunId = node.path("runId").asText("");
-                    if (runId.equalsIgnoreCase(liveRunId) || liveRunId.isEmpty())
+                    if (effectiveRunId.equalsIgnoreCase(liveRunId) || runId.equalsIgnoreCase(liveRunId) || liveRunId.isEmpty())
                     {
                         final TestExecutionDto dto = objectMapper.treeToValue(node, TestExecutionDto.class);
-                        if (dto != null)
+                        final boolean matchesTarget = dto != null && (executionId.equalsIgnoreCase(dto.getId()) || matchesExecution(dto, executionId));
+                        final boolean isGenericId = "console-execution".equalsIgnoreCase(executionId)
+                                || "default".equalsIgnoreCase(executionId)
+                                || "live".equalsIgnoreCase(executionId)
+                                || executionId.equalsIgnoreCase(effectiveRunId);
+
+                        if (dto != null && (matchesTarget || isGenericId))
                         {
                             if (dto.getId() == null || dto.getId().isBlank()
                                     || "bad".equalsIgnoreCase(dto.getId())
@@ -983,7 +1403,7 @@ public class AuraReportDataService
                             {
                                 dto.setId(executionId);
                             }
-                            resolveBugsForExecution(runId, dto);
+                            resolveBugsForExecution(effectiveRunId, dto);
                             return dto;
                         }
                     }
@@ -994,36 +1414,113 @@ public class AuraReportDataService
             }
         }
 
-        final RunReportDto cachedReport = runReportCache.get(runId);
+        final RunReportDto cachedReport = runReportCache.get(effectiveRunId) != null ? runReportCache.get(effectiveRunId) : runReportCache.get(runId);
         if (cachedReport != null && cachedReport.getExecutions() != null)
         {
-            for (final TestExecutionDto dto : cachedReport.getExecutions())
+            final TestExecutionDto cachedMatch = findUniqueExecution(cachedReport.getExecutions(), executionId);
+            if (cachedMatch != null)
             {
-                if (matchesExecution(dto, executionId))
-                {
-                    resolveBugsForExecution(runId, dto);
-                    return dto;
-                }
+                resolveBugsForExecution(effectiveRunId, cachedMatch);
+                return cachedMatch;
             }
         }
 
-        final List<TestExecutionDto> liveList = liveRunBuffer.get(runId);
+        final List<TestExecutionDto> liveList = liveRunBuffer.get(effectiveRunId) != null ? liveRunBuffer.get(effectiveRunId) : liveRunBuffer.get(runId);
         if (liveList != null)
         {
-            for (final TestExecutionDto dto : liveList)
+            final TestExecutionDto liveMatch = findUniqueExecution(liveList, executionId);
+            if (liveMatch != null)
             {
-                if (matchesExecution(dto, executionId))
-                {
-                    resolveBugsForExecution(runId, dto);
-                    return dto;
-                }
+                resolveBugsForExecution(effectiveRunId, liveMatch);
+                return liveMatch;
             }
         }
 
         return null;
     }
 
+    /**
+     * Maps a raw execution JSON node to a {@link TestExecutionDto}, normalizing placeholder ids to the requested
+     * execution id and resolving linked bugs.
+     */
+    private TestExecutionDto buildExecutionDetailsDto(final JsonNode node, final String executionId, final String effectiveRunId)
+        throws JsonProcessingException
+    {
+        if (node.has("llmCalls") && node.path("blocks").isObject())
+        {
+            final ObjectNode blk = (ObjectNode) node.path("blocks");
+            if (!blk.has("llmCalls"))
+            {
+                blk.set("llmCalls", node.get("llmCalls"));
+            }
+        }
+        final TestExecutionDto dto = objectMapper.treeToValue(node, TestExecutionDto.class);
+        if (dto.getId() == null || dto.getId().isBlank()
+                || "bad".equalsIgnoreCase(dto.getId())
+                || "perfect".equalsIgnoreCase(dto.getId())
+                || "default".equalsIgnoreCase(dto.getId()))
+        {
+            dto.setId(executionId);
+        }
+        resolveBugsForExecution(effectiveRunId, dto);
+        return dto;
+    }
+
+    /**
+     * Checks that a fuzzily matched execution file does not contradict the requested execution id. If the file carries
+     * identifying values (id, title, dataset) that are not placeholders, at least one of them must occur in
+     * the requested id; otherwise the file belongs to a different dataset of the same class.
+     */
+    private static boolean isIdentityCompatible(final JsonNode node, final String executionId)
+    {
+        final String target = executionId.toLowerCase(Locale.ROOT);
+        boolean hasIdentity = false;
+        for (final String field : List.of("id", "title", "datasetId", "dataSet", "testId"))
+        {
+            final String value = node.path(field).asText("").trim();
+            if (value.isEmpty() || "default".equalsIgnoreCase(value) || "bad".equalsIgnoreCase(value)
+                    || "perfect".equalsIgnoreCase(value))
+            {
+                continue;
+            }
+            hasIdentity = true;
+            if (target.contains(value.toLowerCase(Locale.ROOT)))
+            {
+                return true;
+            }
+        }
+        return !hasIdentity;
+    }
+
+    private static String extractSimpleExecutionKey(final String key)
+    {
+        if (key == null || key.isBlank())
+        {
+            return "";
+        }
+        final int hashIdx = key.indexOf('#');
+        final String classPart = hashIdx >= 0 ? key.substring(0, hashIdx) : key;
+        final int dotIdx = classPart.lastIndexOf('.');
+        if (dotIdx >= 0)
+        {
+            return classPart.substring(dotIdx + 1) + (hashIdx >= 0 ? key.substring(hashIdx) : "");
+        }
+        return key;
+    }
+
     private boolean matchesExecution(final TestExecutionDto dto, final String targetId)
+    {
+        return matchesExecution(dto, targetId, true);
+    }
+
+    /**
+     * Matches an execution against an id or composite key.
+     *
+     * @param includeSimple
+     *            whether keys built from the simple (package-less) class name count as a match; those are weaker because
+     *            different packages may share a simple class name
+     */
+    private boolean matchesExecution(final TestExecutionDto dto, final String targetId, final boolean includeSimple)
     {
         if (dto == null || targetId == null || targetId.isBlank())
         {
@@ -1046,10 +1543,42 @@ public class AuraReportDataService
         final String execKeyWithId = execKey + "#" + id;
         final String classMethodBrowser = testClass + "#" + testMethod + "#" + browser;
 
+        final String simpleClass = testClass.contains(".") ? testClass.substring(testClass.lastIndexOf('.') + 1) : testClass;
+        final String simpleFullKey = simpleClass + "#" + id + "#" + browser;
+        final String simpleExecKey = LocalRunJsonStorageService.buildExecutionKey(simpleClass, testMethod, title, browser);
+        final String simpleExecKeyWithId = simpleExecKey + "#" + id;
+        final String simpleClassMethodBrowser = simpleClass + "#" + testMethod + "#" + browser;
+
         return targetId.equalsIgnoreCase(fullKey)
             || targetId.equalsIgnoreCase(execKey)
             || targetId.equalsIgnoreCase(execKeyWithId)
-            || targetId.equalsIgnoreCase(classMethodBrowser);
+            || targetId.equalsIgnoreCase(classMethodBrowser)
+            || (includeSimple
+                && (targetId.equalsIgnoreCase(simpleFullKey)
+                    || targetId.equalsIgnoreCase(simpleExecKey)
+                    || targetId.equalsIgnoreCase(simpleExecKeyWithId)
+                    || targetId.equalsIgnoreCase(simpleClassMethodBrowser)));
+    }
+
+    /**
+     * Finds an execution for the given id: the first exact match wins; a simple-class-key match is only accepted if it is
+     * unambiguous, so equally named classes of different packages are never mixed up.
+     */
+    private TestExecutionDto findUniqueExecution(final Iterable<TestExecutionDto> executions, final String executionId)
+    {
+        final List<TestExecutionDto> simpleHits = new ArrayList<>();
+        for (final TestExecutionDto dto : executions)
+        {
+            if (matchesExecution(dto, executionId, false))
+            {
+                return dto;
+            }
+            if (matchesExecution(dto, executionId, true))
+            {
+                simpleHits.add(dto);
+            }
+        }
+        return simpleHits.size() == 1 ? simpleHits.get(0) : null;
     }
 
     private void resolveBugsForExecution(final String runId, final TestExecutionDto dto)
@@ -1071,22 +1600,23 @@ public class AuraReportDataService
 
         final List<TestBaseBugEntity> allRunBugs = bugRepository.findByBatchNameInAndEnvironmentIn(List.of(runBatch, "ALL"), List.of(runEnv, "ALL"));
         final String varId = generateVariationId(dto.getTestClass(), dto.getTestMethod(), dto.getTitle(), dto.getLocation(), dto.getBrowser());
+        final String varIdNoMethod = generateVariationId(dto.getTestClass(), null, dto.getTitle(), dto.getLocation(), dto.getBrowser());
 
         final List<String> dbBugTickets = allRunBugs.stream()
             .filter(b -> (b.getLinkedRunId() == null || isRunAtOrAfter(runId, b.getLinkedRunId(), runStartTimes))
                       && (b.getRemovedRunId() == null || !isRunAtOrAfter(runId, b.getRemovedRunId(), runStartTimes)))
-            .filter(b -> varId.equals(b.getVariationId()))
+            .filter(b -> varId.equals(b.getVariationId()) || varIdNoMethod.equals(b.getVariationId()))
             .map(TestBaseBugEntity::getBugTicket)
             .distinct()
             .collect(Collectors.toList());
 
-        final java.util.Set<String> removedTickets = allRunBugs.stream()
+        final Set<String> removedTickets = allRunBugs.stream()
             .filter(b -> b.getRemovedRunId() != null && isRunAtOrAfter(runId, b.getRemovedRunId(), runStartTimes))
-            .filter(b -> varId.equals(b.getVariationId()))
+            .filter(b -> varId.equals(b.getVariationId()) || varIdNoMethod.equals(b.getVariationId()))
             .map(b -> normalizeTicket(b.getBugTicket()))
             .collect(Collectors.toSet());
 
-        final java.util.Set<String> combinedBugs = new java.util.LinkedHashSet<>();
+        final Set<String> combinedBugs = new LinkedHashSet<>();
         if (dto.getBugs() != null)
         {
             for (final String b : dto.getBugs())
@@ -1144,17 +1674,27 @@ public class AuraReportDataService
             ));
 
         int pass = 0, fixed = 0, known = 0, unknown = 0, ignored = 0, running = 0;
+        int passHealed = 0, fixedHealed = 0, knownHealed = 0, unknownHealed = 0;
+        int passAi = 0, fixedAi = 0, knownAi = 0, unknownAi = 0;
         final List<TestExecutionDto> updatedExecutions = new ArrayList<>();
 
         for (final TestExecutionDto exec : cachedReport.getExecutions())
         {
             final String varId = generateVariationId(exec.getTestClass(), exec.getTestMethod(), exec.getTitle(), exec.getLocation(), exec.getBrowser());
-            final List<String> dbBugTickets = dbBugsByVarId.getOrDefault(varId, List.of()).stream()
-                .distinct()
-                .collect(Collectors.toList());
+            final String varIdNoMethod = generateVariationId(exec.getTestClass(), null, exec.getTitle(), exec.getLocation(), exec.getBrowser());
+            final List<String> dbBugTickets = new ArrayList<>(dbBugsByVarId.getOrDefault(varId, List.of()));
+            for (final String t : dbBugsByVarId.getOrDefault(varIdNoMethod, List.of()))
+            {
+                if (!dbBugTickets.contains(t))
+                {
+                    dbBugTickets.add(t);
+                }
+            }
 
-            final java.util.Set<String> removedTickets = removedBugsByVarId.getOrDefault(varId, java.util.Set.of());
-            final java.util.Set<String> combinedBugs = new java.util.LinkedHashSet<>();
+            final Set<String> removedTickets = new HashSet<>(removedBugsByVarId.getOrDefault(varId, Set.of()));
+            removedTickets.addAll(removedBugsByVarId.getOrDefault(varIdNoMethod, Set.of()));
+
+            final Set<String> combinedBugs = new LinkedHashSet<>();
             if (exec.getBugs() != null)
             {
                 for (final String b : exec.getBugs())
@@ -1172,29 +1712,59 @@ public class AuraReportDataService
 
             final boolean hasBugs = !bugTickets.isEmpty();
             final boolean isRunActive = "IN_PROGRESS".equalsIgnoreCase(runEntity.getStatus());
-            final String raw = exec.getStatus() != null ? exec.getStatus() : (isRunActive ? "running" : "failed-unknown");
-            if ("running".equalsIgnoreCase(raw) || "in_progress".equalsIgnoreCase(raw) || "executing".equalsIgnoreCase(raw) || "pending".equalsIgnoreCase(raw))
-            {
-                exec.setStatus(isRunActive ? "running" : (exec.getTotalStepsCount() == 0 ? "failed-unknown" : "skipped"));
-            }
-            else if ("failed".equalsIgnoreCase(raw) || "failed-known".equalsIgnoreCase(raw) || "failed-unknown".equalsIgnoreCase(raw) || "error".equalsIgnoreCase(raw) || "failure".equalsIgnoreCase(raw))
-            {
-                exec.setStatus(hasBugs ? "failed-known" : "failed-unknown");
-            }
-            else if ("passed".equalsIgnoreCase(raw) || "succeeded-fixed".equalsIgnoreCase(raw) || "passed-clean".equalsIgnoreCase(raw))
-            {
-                exec.setStatus(hasBugs ? "succeeded-fixed" : "passed-clean");
-            }
-            else
-            {
-                exec.setStatus("ignored");
-            }
+            final String failureText = extractFailureText(exec);
+            final String eff = computeEffectiveStatus(exec.getStatus(), exec.getTotalStepsCount(), exec.getFailedStepsCount(), hasBugs, failureText, isRunActive);
+            exec.setStatus(eff);
 
             final String st = exec.getStatus();
-            if ("passed-clean".equalsIgnoreCase(st) || "passed".equalsIgnoreCase(st)) pass++;
-            else if ("succeeded-fixed".equalsIgnoreCase(st)) fixed++;
-            else if ("failed-known".equalsIgnoreCase(st)) known++;
-            else if ("failed-unknown".equalsIgnoreCase(st) || "failed".equalsIgnoreCase(st)) unknown++;
+            if ("passed-clean".equalsIgnoreCase(st) || "passed".equalsIgnoreCase(st))
+            {
+                pass++;
+                if (exec.isPassHealed())
+                {
+                    passHealed++;
+                }
+                if (exec.isPassAi())
+                {
+                    passAi++;
+                }
+            }
+            else if ("succeeded-fixed".equalsIgnoreCase(st))
+            {
+                fixed++;
+                if (exec.isFixedHealed())
+                {
+                    fixedHealed++;
+                }
+                if (exec.isFixedAi())
+                {
+                    fixedAi++;
+                }
+            }
+            else if ("failed-known".equalsIgnoreCase(st))
+            {
+                known++;
+                if (exec.isKnownHealed())
+                {
+                    knownHealed++;
+                }
+                if (exec.isKnownAi())
+                {
+                    knownAi++;
+                }
+            }
+            else if ("failed-unknown".equalsIgnoreCase(st) || "failed".equalsIgnoreCase(st))
+            {
+                unknown++;
+                if (exec.isUnknownHealed())
+                {
+                    unknownHealed++;
+                }
+                if (exec.isUnknownAi())
+                {
+                    unknownAi++;
+                }
+            }
             else if ("running".equalsIgnoreCase(st)) running++;
             else ignored++;
 
@@ -1227,6 +1797,14 @@ public class AuraReportDataService
         runEntity.setFailedKnownCount(known);
         runEntity.setFailedUnknownCount(unknown);
         runEntity.setIgnoredCount(ignored);
+        runEntity.setPassedHealedCount(passHealed);
+        runEntity.setSucceededFixedHealedCount(fixedHealed);
+        runEntity.setFailedKnownHealedCount(knownHealed);
+        runEntity.setFailedUnknownHealedCount(unknownHealed);
+        runEntity.setPassedAiCount(passAi);
+        runEntity.setSucceededFixedAiCount(fixedAi);
+        runEntity.setFailedKnownAiCount(knownAi);
+        runEntity.setFailedUnknownAiCount(unknownAi);
         runEntity.recalculatePassRate();
         runRepository.save(runEntity);
     }
@@ -1409,20 +1987,9 @@ public class AuraReportDataService
                 }
 
                 final boolean hasBugs = dto.getBugs() != null && !dto.getBugs().isEmpty();
-                final String raw = dto.getStatus() != null ? dto.getStatus() : (dto.getTotalStepsCount() == 0 ? "failed-unknown" : "passed-clean");
-                String effectiveStatus = raw;
-                if ("failed".equalsIgnoreCase(raw) || "failed-known".equalsIgnoreCase(raw) || "failed-unknown".equalsIgnoreCase(raw) || "error".equalsIgnoreCase(raw) || "failure".equalsIgnoreCase(raw))
-                {
-                    effectiveStatus = hasBugs ? "failed-known" : "failed-unknown";
-                }
-                else if ("passed".equalsIgnoreCase(raw) || "succeeded-fixed".equalsIgnoreCase(raw) || "passed-clean".equalsIgnoreCase(raw))
-                {
-                    effectiveStatus = hasBugs ? "succeeded-fixed" : "passed-clean";
-                }
-                else
-                {
-                    effectiveStatus = "ignored";
-                }
+                final String failureText = extractFailureText(dto);
+                final boolean isRunActive = "IN_PROGRESS".equalsIgnoreCase(run.getStatus());
+                final String effectiveStatus = computeEffectiveStatus(dto.getStatus(), dto.getTotalStepsCount(), dto.getFailedStepsCount(), hasBugs, failureText, isRunActive);
                 dto.setStatus(effectiveStatus);
 
                 if (dto.getTestClass() != null && !dto.getTestClass().isEmpty())
@@ -1443,20 +2010,60 @@ public class AuraReportDataService
                 int knownCount = 0;
                 int unknownCount = 0;
                 int ignoredCount = 0;
+                int passHealedCount = 0;
+                int fixedHealedCount = 0;
+                int knownHealedCount = 0;
+                int unknownHealedCount = 0;
                 final Set<String> browsersSet = new LinkedHashSet<>();
                 final Set<String> localesSet = new LinkedHashSet<>();
 
+                Long minStartTimeMs = null;
+                String earliestFormattedTime = null;
+
                 for (final TestExecutionDto item : list)
                 {
-                    final String st = item.getStatus() != null ? item.getStatus() : "passed-clean";
+                    final String st = item.getStatus() != null ? item.getStatus().trim().toLowerCase(Locale.ROOT) : "passed-clean";
                     switch (st)
                     {
-                        case "passed-clean", "passed" -> passCount++;
-                        case "succeeded-fixed", "fixed", "healed" -> fixedCount++;
-                        case "failed-known" -> knownCount++;
-                        case "failed-unknown", "failed", "error" -> unknownCount++;
+                        case "passed-clean", "passed" -> {
+                            passCount++;
+                            if (item.isPassHealed())
+                            {
+                                passHealedCount++;
+                            }
+                        }
+                        case "succeeded-fixed", "fixed", "healed" -> {
+                            fixedCount++;
+                            if (item.isFixedHealed())
+                            {
+                                fixedHealedCount++;
+                            }
+                        }
+                        case "failed-known" -> {
+                            knownCount++;
+                            if (item.isKnownHealed())
+                            {
+                                knownHealedCount++;
+                            }
+                        }
+                        case "failed-unknown", "failed", "error" -> {
+                            unknownCount++;
+                            if (item.isUnknownHealed())
+                            {
+                                unknownHealedCount++;
+                            }
+                        }
                         case "ignored", "skipped" -> ignoredCount++;
-                        default -> passCount++;
+                        case "running", "in_progress", "executing", "pending" -> {
+                            // In-flight execution during active run
+                        }
+                        default -> {
+                            unknownCount++;
+                            if (item.isUnknownHealed())
+                            {
+                                unknownHealedCount++;
+                            }
+                        }
                     }
                     if (item.getBrowser() != null && !item.getBrowser().isBlank() && !"Unknown".equalsIgnoreCase(item.getBrowser()))
                     {
@@ -1466,6 +2073,28 @@ public class AuraReportDataService
                     {
                         localesSet.add(item.getLocation().trim());
                     }
+
+                    long itemStartMs = item.getTimestampMs();
+                    if (itemStartMs <= 0L && item.getStartTime() != null && !item.getStartTime().isBlank())
+                    {
+                        final Long parsed = RunStorageSyncService.parseTimestampToMs(item.getStartTime());
+                        if (parsed != null && parsed > 0L)
+                        {
+                            itemStartMs = parsed;
+                        }
+                    }
+                    if (itemStartMs > 0L)
+                    {
+                        if (minStartTimeMs == null || itemStartMs < minStartTimeMs)
+                        {
+                            minStartTimeMs = itemStartMs;
+                            earliestFormattedTime = item.getFormattedTime();
+                            if (earliestFormattedTime == null || earliestFormattedTime.isBlank())
+                            {
+                                earliestFormattedTime = item.getStartTime();
+                            }
+                        }
+                    }
                 }
 
                 run.setTotalTests(totalCount);
@@ -1474,6 +2103,19 @@ public class AuraReportDataService
                 run.setFailedKnownCount(knownCount);
                 run.setFailedUnknownCount(unknownCount);
                 run.setIgnoredCount(ignoredCount);
+                run.setPassedHealedCount(passHealedCount);
+                run.setSucceededFixedHealedCount(fixedHealedCount);
+                run.setFailedKnownHealedCount(knownHealedCount);
+                run.setFailedUnknownHealedCount(unknownHealedCount);
+
+                if (minStartTimeMs != null && minStartTimeMs > 0L)
+                {
+                    run.setStartTimeMs(minStartTimeMs);
+                    if (earliestFormattedTime != null && !earliestFormattedTime.isBlank())
+                    {
+                        run.setTimestampLabel(earliestFormattedTime);
+                    }
+                }
 
                 if (!browsersSet.isEmpty())
                 {
@@ -1510,12 +2152,45 @@ public class AuraReportDataService
             }
 
             final List<TestExecutionDto> executions = liveRunBuffer.getOrDefault(runId, List.of());
+            Long minStartTimeMs = null;
+            String earliestFormattedTime = null;
+
             for (final TestExecutionDto exec : executions)
             {
                 final String st = exec.getStatus();
                 if (st == null || "running".equalsIgnoreCase(st) || "in_progress".equalsIgnoreCase(st) || "executing".equalsIgnoreCase(st) || "pending".equalsIgnoreCase(st))
                 {
                     exec.setStatus("skipped");
+                }
+                long execStartMs = exec.getTimestampMs();
+                if (execStartMs <= 0L && exec.getStartTime() != null && !exec.getStartTime().isBlank())
+                {
+                    final Long parsed = RunStorageSyncService.parseTimestampToMs(exec.getStartTime());
+                    if (parsed != null && parsed > 0L)
+                    {
+                        execStartMs = parsed;
+                    }
+                }
+                if (execStartMs > 0L)
+                {
+                    if (minStartTimeMs == null || execStartMs < minStartTimeMs)
+                    {
+                        minStartTimeMs = execStartMs;
+                        earliestFormattedTime = exec.getFormattedTime();
+                        if (earliestFormattedTime == null || earliestFormattedTime.isBlank())
+                        {
+                            earliestFormattedTime = exec.getStartTime();
+                        }
+                    }
+                }
+            }
+
+            if (minStartTimeMs != null && minStartTimeMs > 0L)
+            {
+                run.setStartTimeMs(minStartTimeMs);
+                if (earliestFormattedTime != null && !earliestFormattedTime.isBlank())
+                {
+                    run.setTimestampLabel(earliestFormattedTime);
                 }
             }
 
@@ -1580,22 +2255,29 @@ public class AuraReportDataService
         }
 
         final String cleanTicket = bugTicket.trim().replaceAll("^#+", "");
+        final String effectiveRunId = (runId != null) ? runId.trim().replaceAll("^#+", "") : "";
 
         try
         {
             final long step1Start = System.currentTimeMillis();
-            final RunReportDto report = getRunReport(runId);
+            final RunReportDto report = getRunReport(effectiveRunId);
             final long step1Ms = System.currentTimeMillis() - step1Start;
 
-            final Optional<TestExecutionDto> targetOpt = report.getExecutions().stream()
-                .filter(e -> rowId.equalsIgnoreCase(e.getId()))
+            Optional<TestExecutionDto> targetOpt = report.getExecutions().stream()
+                .filter(e -> rowId.equalsIgnoreCase(e.getId())
+                          || (e.getId() != null && e.getId().endsWith("#" + rowId))
+                          || (rowId != null && rowId.endsWith("#" + e.getId())))
                 .findFirst();
+            if (targetOpt.isEmpty())
+            {
+                targetOpt = Optional.ofNullable(getExecutionDetails(effectiveRunId, rowId));
+            }
 
             if (targetOpt.isPresent())
             {
                 final TestExecutionDto target = targetOpt.get();
                 final String varId = generateVariationId(target.getTestClass(), target.getTestMethod(), target.getTitle(), target.getLocation(), target.getBrowser());
-                final Optional<TestRunEntity> runOpt = runRepository.findById(runId);
+                final Optional<TestRunEntity> runOpt = runRepository.findById(effectiveRunId);
                 final String runBatch = runOpt.map(TestRunEntity::getBatchName).orElse("ALL");
                 final String runEnv = runOpt.map(TestRunEntity::getEnvironment).orElse("ALL");
                 final long runStartTime = runOpt.map(TestRunEntity::getStartTimeMs).orElse(System.currentTimeMillis());
@@ -1608,26 +2290,75 @@ public class AuraReportDataService
 
                 if (!existsActive)
                 {
-                    bugRepository.save(new TestBaseBugEntity(varId, cleanTicket, runBatch, runEnv, runStartTime, runId));
+                    bugRepository.save(new TestBaseBugEntity(varId, cleanTicket, runBatch, runEnv, runStartTime, effectiveRunId));
                 }
                 final long dbMs = System.currentTimeMillis() - dbStart;
 
+                localRunJsonStorageService.updateExecutionInRun(effectiveRunId, rowId, execNode -> {
+                    final ArrayNode bugsArray = objectMapper.createArrayNode();
+                    final Set<String> currentBugs = new LinkedHashSet<>();
+                    if (execNode.has("bugs") && execNode.path("bugs").isArray())
+                    {
+                        for (final JsonNode bNode : execNode.path("bugs"))
+                        {
+                            if (!bNode.asText().isBlank())
+                            {
+                                currentBugs.add(bNode.asText());
+                            }
+                        }
+                    }
+                    currentBugs.add(cleanTicket);
+                    for (final String b : currentBugs)
+                    {
+                        bugsArray.add(b);
+                    }
+                    execNode.set("bugs", bugsArray);
+                    final String raw = execNode.has("status") ? execNode.path("status").asText() : "failed-unknown";
+                    if ("failed".equalsIgnoreCase(raw) || "failed-known".equalsIgnoreCase(raw) || "failed-unknown".equalsIgnoreCase(raw) || "error".equalsIgnoreCase(raw) || "failure".equalsIgnoreCase(raw))
+                    {
+                        execNode.put("status", "failed-known");
+                    }
+                    else if ("passed".equalsIgnoreCase(raw) || "succeeded-fixed".equalsIgnoreCase(raw) || "passed-clean".equalsIgnoreCase(raw) || "succeeded".equalsIgnoreCase(raw) || "healed".equalsIgnoreCase(raw))
+                    {
+                        execNode.put("status", "succeeded-fixed");
+                    }
+                    else if ("finished".equalsIgnoreCase(raw))
+                    {
+                        final boolean isFinishedSuccess = LocalRunJsonStorageService.extractStepsFailed(execNode) <= 0
+                                && (extractFailureText(execNode) == null);
+                        execNode.put("status", isFinishedSuccess ? "succeeded-fixed" : "failed-known");
+                    }
+                });
+
+                final Path runDir = localRunJsonStorageService.getRunDir(effectiveRunId);
+                if (Files.isDirectory(runDir))
+                {
+                    final boolean isRunActive = runOpt.map(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus())).orElse(false);
+                    localRunJsonStorageService.buildRunJsonContent(runDir.toFile(), effectiveRunId, true, isRunActive);
+                }
+
                 final long reevalStart = System.currentTimeMillis();
-                reevaluateBatchRunsFrom(runBatch, runStartTime, varId);
+                reevaluateBatchRunsFrom(runBatch, runStartTime, varId, effectiveRunId);
                 final long syncMs = System.currentTimeMillis() - reevalStart;
 
+                runReportCache.remove(effectiveRunId);
                 final long finalReportStart = System.currentTimeMillis();
-                final RunReportDto updatedReport = getRunReport(runId);
+                final RunReportDto updatedReport = getRunReport(effectiveRunId);
                 final long finalReportMs = System.currentTimeMillis() - finalReportStart;
 
                 final long totalMs = System.currentTimeMillis() - startMs;
                 LOG.info("[PERF] addBugToExecution total={} ms (initialReport={} ms, dbSave={} ms, syncUpdate={} ms, finalReport={} ms) runId={}, rowId={}, ticket={}",
-                    totalMs, step1Ms, dbMs, syncMs, finalReportMs, runId, rowId, cleanTicket);
+                    totalMs, step1Ms, dbMs, syncMs, finalReportMs, effectiveRunId, rowId, cleanTicket);
 
+                final String targetExecId = target.getId();
                 return updatedReport.getExecutions().stream()
-                    .filter(e -> rowId.equalsIgnoreCase(e.getId()))
+                    .filter(e -> matchesExecution(e, rowId) || (targetExecId != null && targetExecId.equalsIgnoreCase(e.getId())))
                     .findFirst()
-                    .orElse(new TestExecutionDto());
+                    .orElseGet(() -> Optional.ofNullable(getExecutionDetails(effectiveRunId, rowId)).orElseGet(TestExecutionDto::new));
+            }
+            else
+            {
+                LOG.warn("Target execution id '{}' not found in run '{}' during addBugToExecution", rowId, effectiveRunId);
             }
         }
         catch (final Exception e)
@@ -1642,9 +2373,10 @@ public class AuraReportDataService
     public TestExecutionDto removeBugFromExecution(final String runId, final String rowId, final String bugTicket)
     {
         final long startMs = System.currentTimeMillis();
+        final String effectiveRunId = (runId != null) ? runId.trim().replaceAll("^#+", "") : "";
         if (bugTicket == null || bugTicket.trim().isEmpty())
         {
-            return new TestExecutionDto();
+            return Optional.ofNullable(getExecutionDetails(effectiveRunId, rowId)).orElseGet(TestExecutionDto::new);
         }
 
         final String cleanTicket = bugTicket.trim().replaceAll("^#+", "");
@@ -1652,62 +2384,205 @@ public class AuraReportDataService
         try
         {
             final long step1Start = System.currentTimeMillis();
-            final RunReportDto report = getRunReport(runId);
+            final RunReportDto report = getRunReport(effectiveRunId);
             final long step1Ms = System.currentTimeMillis() - step1Start;
 
-            final Optional<TestExecutionDto> targetOpt = report.getExecutions().stream()
-                .filter(e -> rowId.equalsIgnoreCase(e.getId()))
+            Optional<TestExecutionDto> targetOpt = report.getExecutions().stream()
+                .filter(e -> rowId.equalsIgnoreCase(e.getId())
+                          || (e.getId() != null && e.getId().endsWith("#" + rowId))
+                          || (rowId != null && rowId.endsWith("#" + e.getId())))
                 .findFirst();
+            if (targetOpt.isEmpty())
+            {
+                targetOpt = Optional.ofNullable(getExecutionDetails(effectiveRunId, rowId));
+            }
 
             if (targetOpt.isPresent())
             {
                 final TestExecutionDto target = targetOpt.get();
                 final String varId = generateVariationId(target.getTestClass(), target.getTestMethod(), target.getTitle(), target.getLocation(), target.getBrowser());
-                final Optional<TestRunEntity> runOpt = runRepository.findById(runId);
+                final String varIdNoMethod = generateVariationId(target.getTestClass(), null, target.getTitle(), target.getLocation(), target.getBrowser());
+                final Set<String> targetVarIds = new LinkedHashSet<>(List.of(varId, varIdNoMethod));
+                final Optional<TestRunEntity> runOpt = runRepository.findById(effectiveRunId);
                 final String runBatch = runOpt.map(TestRunEntity::getBatchName).orElse("ALL");
                 final String runEnv = runOpt.map(TestRunEntity::getEnvironment).orElse("ALL");
                 final long runStartTime = runOpt.map(TestRunEntity::getStartTimeMs).orElse(System.currentTimeMillis());
 
                 final long dbStart = System.currentTimeMillis();
-                final Map<String, Long> runStartTimes = runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc().stream()
-                    .collect(Collectors.toMap(
-                        TestRunEntity::getId,
-                        r -> r.getStartTimeMs() != null ? r.getStartTimeMs() : 0L,
-                        (a, b) -> a
-                    ));
-
-                final List<TestBaseBugEntity> existing = bugRepository.findByVariationIdAndBatchNameInAndEnvironmentIn(
-                    varId, List.of(runBatch, "ALL"), List.of(runEnv, "ALL"));
+                final List<TestBaseBugEntity> existing = bugRepository.findByVariationIdIn(new ArrayList<>(targetVarIds));
+                boolean matched = false;
                 for (final TestBaseBugEntity bug : existing)
                 {
-                    final boolean isActiveAtRun = (bug.getLinkedRunId() == null || isRunAtOrAfter(runId, bug.getLinkedRunId(), runStartTimes))
-                        && (bug.getRemovedRunId() == null || !isRunAtOrAfter(runId, bug.getRemovedRunId(), runStartTimes));
-
-                    if (normalizeTicket(bug.getBugTicket()).equals(normalizeTicket(cleanTicket)) && isActiveAtRun)
+                    if (normalizeTicket(bug.getBugTicket()).equals(normalizeTicket(cleanTicket)))
                     {
                         bug.setRemovedAtMs(runStartTime);
-                        bug.setRemovedRunId(runId);
+                        bug.setRemovedRunId(effectiveRunId);
                         bugRepository.save(bug);
+                        matched = true;
+                    }
+                }
+                if (!matched)
+                {
+                    for (final String vId : targetVarIds)
+                    {
+                        final TestBaseBugEntity tombstone = new TestBaseBugEntity(vId, cleanTicket, runBatch, runEnv, runStartTime, null);
+                        tombstone.setRemovedRunId(effectiveRunId);
+                        tombstone.setRemovedAtMs(runStartTime);
+                        bugRepository.save(tombstone);
                     }
                 }
                 final long dbMs = System.currentTimeMillis() - dbStart;
 
+                // Persist removal in disk execution JSON and run.json
+                localRunJsonStorageService.updateExecutionInRun(effectiveRunId, rowId, execNode -> {
+                    final ArrayNode newBugs = objectMapper.createArrayNode();
+                    if (execNode.has("bugs") && execNode.path("bugs").isArray())
+                    {
+                        for (final JsonNode bNode : execNode.path("bugs"))
+                        {
+                            if (!normalizeTicket(bNode.asText()).equals(normalizeTicket(cleanTicket)))
+                            {
+                                newBugs.add(bNode.asText());
+                            }
+                        }
+                    }
+                    execNode.set("bugs", newBugs);
+                    final boolean hasBugs = newBugs.size() > 0;
+                    final String raw = execNode.has("status") ? execNode.path("status").asText() : "failed-unknown";
+                    if ("failed".equalsIgnoreCase(raw) || "failed-known".equalsIgnoreCase(raw) || "failed-unknown".equalsIgnoreCase(raw) || "error".equalsIgnoreCase(raw) || "failure".equalsIgnoreCase(raw))
+                    {
+                        execNode.put("status", hasBugs ? "failed-known" : "failed-unknown");
+                    }
+                    else if ("passed".equalsIgnoreCase(raw) || "succeeded-fixed".equalsIgnoreCase(raw) || "passed-clean".equalsIgnoreCase(raw) || "succeeded".equalsIgnoreCase(raw) || "healed".equalsIgnoreCase(raw))
+                    {
+                        execNode.put("status", hasBugs ? "succeeded-fixed" : "passed-clean");
+                    }
+                    else if ("finished".equalsIgnoreCase(raw))
+                    {
+                        final boolean isFinishedSuccess = LocalRunJsonStorageService.extractStepsFailed(execNode) <= 0
+                                && (extractFailureText(execNode) == null);
+                        execNode.put("status", isFinishedSuccess
+                                ? (hasBugs ? "succeeded-fixed" : "passed-clean")
+                                : (hasBugs ? "failed-known" : "failed-unknown"));
+                    }
+                });
+
+                final Path runDir = localRunJsonStorageService.getRunDir(effectiveRunId);
+                if (Files.isDirectory(runDir))
+                {
+                    final boolean isRunActive = runOpt.map(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus())).orElse(false);
+                    localRunJsonStorageService.buildRunJsonContent(runDir.toFile(), effectiveRunId, true, isRunActive);
+                }
+
+                // Sanitize history links on variation entity
+                for (final String vId : targetVarIds)
+                {
+                    final Optional<TestBaseVariationEntity> varOpt = variationRepository.findById(vId);
+                    if (varOpt.isPresent())
+                    {
+                        final TestBaseVariationEntity varEntity = varOpt.get();
+                        final String historyLinks = varEntity.getHistoryLinks();
+                        if (historyLinks != null && !historyLinks.isBlank())
+                        {
+                            final String[] links = historyLinks.split(",");
+                            final List<String> updatedLinks = new ArrayList<>();
+                            boolean historyModified = false;
+                            for (final String link : links)
+                            {
+                                final String trimmed = link.trim();
+                                if (trimmed.isEmpty())
+                                {
+                                    continue;
+                                }
+                                final Map<String, String> params = parseQueryParams(trimmed);
+                                final String linkRunId = params.get("runId");
+                                if (effectiveRunId.equalsIgnoreCase(linkRunId))
+                                {
+                                    final String bugsParam = params.getOrDefault("bugs", "");
+                                    final List<String> remainingBugs = new ArrayList<>();
+                                    if (!bugsParam.isBlank())
+                                    {
+                                        for (final String b : bugsParam.split(";"))
+                                        {
+                                            if (!normalizeTicket(b).equals(normalizeTicket(cleanTicket)) && !b.isBlank())
+                                            {
+                                                remainingBugs.add(b);
+                                            }
+                                        }
+                                    }
+                                    final String oldStatus = params.get("status");
+                                    final boolean hasRemainingBugs = !remainingBugs.isEmpty();
+                                    final String newStatus;
+                                    if ("failed-known".equalsIgnoreCase(oldStatus) || "failed-unknown".equalsIgnoreCase(oldStatus) || "failed".equalsIgnoreCase(oldStatus))
+                                    {
+                                        newStatus = hasRemainingBugs ? "failed-known" : "failed-unknown";
+                                    }
+                                    else if ("succeeded-fixed".equalsIgnoreCase(oldStatus) || "passed-clean".equalsIgnoreCase(oldStatus) || "passed".equalsIgnoreCase(oldStatus))
+                                    {
+                                        newStatus = hasRemainingBugs ? "succeeded-fixed" : "passed-clean";
+                                    }
+                                    else
+                                    {
+                                        newStatus = oldStatus;
+                                    }
+
+                                    final Map<String, String> newParams = new LinkedHashMap<>(params);
+                                    if (remainingBugs.isEmpty())
+                                    {
+                                        newParams.remove("bugs");
+                                    }
+                                    else
+                                    {
+                                        newParams.put("bugs", String.join(";", remainingBugs));
+                                    }
+                                    if (newStatus != null)
+                                    {
+                                        newParams.put("status", newStatus);
+                                    }
+
+                                    final String reconstructed = reconstructUrlWithParams(trimmed, newParams);
+                                    updatedLinks.add(reconstructed);
+                                    historyModified = true;
+                                }
+                                else
+                                {
+                                    updatedLinks.add(trimmed);
+                                }
+                            }
+                            if (historyModified)
+                            {
+                                varEntity.setHistoryLinks(String.join(",", updatedLinks));
+                                variationRepository.save(varEntity);
+                            }
+                        }
+                    }
+                }
+
                 final long reevalStart = System.currentTimeMillis();
-                reevaluateBatchRunsFrom(runBatch, runStartTime, varId);
+                for (final String vId : targetVarIds)
+                {
+                    reevaluateBatchRunsFrom(runBatch, runStartTime, vId, effectiveRunId);
+                }
                 final long syncMs = System.currentTimeMillis() - reevalStart;
 
+                runReportCache.remove(effectiveRunId);
                 final long finalReportStart = System.currentTimeMillis();
-                final RunReportDto updatedReport = getRunReport(runId);
+                final RunReportDto updatedReport = getRunReport(effectiveRunId);
                 final long finalReportMs = System.currentTimeMillis() - finalReportStart;
 
                 final long totalMs = System.currentTimeMillis() - startMs;
                 LOG.info("[PERF] removeBugFromExecution total={} ms (initialReport={} ms, dbSave={} ms, syncUpdate={} ms, finalReport={} ms) runId={}, rowId={}, ticket={}",
-                    totalMs, step1Ms, dbMs, syncMs, finalReportMs, runId, rowId, cleanTicket);
+                    totalMs, step1Ms, dbMs, syncMs, finalReportMs, effectiveRunId, rowId, cleanTicket);
 
+                final String targetExecId = target.getId();
                 return updatedReport.getExecutions().stream()
-                    .filter(e -> rowId.equalsIgnoreCase(e.getId()))
+                    .filter(e -> matchesExecution(e, rowId) || (targetExecId != null && targetExecId.equalsIgnoreCase(e.getId())))
                     .findFirst()
-                    .orElse(new TestExecutionDto());
+                    .orElseGet(() -> Optional.ofNullable(getExecutionDetails(effectiveRunId, rowId)).orElseGet(TestExecutionDto::new));
+            }
+            else
+            {
+                LOG.warn("Target execution id '{}' not found in run '{}' during removeBugFromExecution", rowId, effectiveRunId);
             }
         }
         catch (final Exception e)
@@ -1720,15 +2595,21 @@ public class AuraReportDataService
 
     private void reevaluateBatchRunsFrom(final String batchName, final long startTimeMs)
     {
-        reevaluateBatchRunsFrom(batchName, startTimeMs, null);
+        reevaluateBatchRunsFrom(batchName, startTimeMs, null, null);
     }
 
     private void reevaluateBatchRunsFrom(final String batchName, final long startTimeMs, final String targetVariationId)
     {
+        reevaluateBatchRunsFrom(batchName, startTimeMs, targetVariationId, null);
+    }
+
+    private void reevaluateBatchRunsFrom(final String batchName, final long startTimeMs, final String targetVariationId, final String triggerRunId)
+    {
         final long reevalStart = System.currentTimeMillis();
         final List<TestRunEntity> affectedRuns = runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc().stream()
-            .filter(r -> (batchName.equalsIgnoreCase("ALL") || batchName.equalsIgnoreCase(r.getBatchName()))
-                      && r.getStartTimeMs() != null && r.getStartTimeMs() >= startTimeMs)
+            .filter(r -> (triggerRunId != null && triggerRunId.equalsIgnoreCase(r.getId()))
+                      || ((batchName.equalsIgnoreCase("ALL") || batchName.equalsIgnoreCase(r.getBatchName()))
+                          && r.getStartTimeMs() != null && r.getStartTimeMs() >= startTimeMs))
             .collect(Collectors.toList());
 
         LOG.info("[PERF] reevaluateBatchRunsFrom starting for batch='{}', startTimeMs={}, totalAffectedRuns={}",
@@ -1737,14 +2618,8 @@ public class AuraReportDataService
         for (final TestRunEntity run : affectedRuns)
         {
             final long runStart = System.currentTimeMillis();
-            if (runReportCache.containsKey(run.getId()))
-            {
-                updateCachedReportBugsAndStats(run.getId());
-            }
-            else
-            {
-                recalculateRunEntityStats(run.getId());
-            }
+            runReportCache.remove(run.getId());
+            recalculateRunEntityStats(run.getId());
             final long runMs = System.currentTimeMillis() - runStart;
             LOG.info("[PERF] reevaluateBatchRunsFrom recalculated runId={} in {} ms", run.getId(), runMs);
         }
@@ -1759,20 +2634,65 @@ public class AuraReportDataService
             batchName, affectedRuns.size(), totalReevalMs);
     }
 
+    public static List<String> sortHistoryLinksDescending(final String historyLinks)
+    {
+        if (historyLinks == null || historyLinks.trim().isEmpty())
+        {
+            return Collections.emptyList();
+        }
+        final List<String> linksList = new ArrayList<>(List.of(historyLinks.split(",")));
+        linksList.sort((final String u1, final String u2) -> {
+            final Map<String, String> p1 = parseQueryParams(u1);
+            final Map<String, String> p2 = parseQueryParams(u2);
+            final long t1 = TestBaseVariationHistoryDto.parseTimestampToEpoch(p1.get("ts"), p1.get("runId"));
+            final long t2 = TestBaseVariationHistoryDto.parseTimestampToEpoch(p2.get("ts"), p2.get("runId"));
+            final int cmp = Long.compare(t2, t1);
+            if (cmp != 0)
+            {
+                return cmp;
+            }
+            final String r1 = p1.getOrDefault("runId", "");
+            final String r2 = p2.getOrDefault("runId", "");
+            return r2.compareToIgnoreCase(r1);
+        });
+        return linksList;
+    }
+
     static boolean hasBugsInLatestHistoryLink(final String historyLinks)
     {
         if (historyLinks == null || historyLinks.trim().isEmpty())
         {
             return false;
         }
-        final String[] links = historyLinks.split(",");
-        if (links.length > 0)
+        final List<String> sorted = sortHistoryLinksDescending(historyLinks);
+        if (!sorted.isEmpty())
         {
-            final String first = links[0].trim();
+            final String first = sorted.get(0).trim();
             final Map<String, String> params = parseQueryParams(first);
             final String status = params.get("status");
             final String bugs = params.get("bugs");
             if ("failed-known".equalsIgnoreCase(status) || "succeeded-fixed".equalsIgnoreCase(status) || (bugs != null && !bugs.trim().isEmpty()))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static boolean isLatestHistoryLinkHealed(final String historyLinks)
+    {
+        if (historyLinks == null || historyLinks.trim().isEmpty())
+        {
+            return false;
+        }
+        final List<String> sorted = sortHistoryLinksDescending(historyLinks);
+        if (!sorted.isEmpty())
+        {
+            final String first = sorted.get(0).trim();
+            final Map<String, String> params = parseQueryParams(first);
+            final String status = params.get("status");
+            final String healed = params.get("healed");
+            if ("healed".equalsIgnoreCase(status) || "true".equalsIgnoreCase(healed))
             {
                 return true;
             }
@@ -1793,18 +2713,88 @@ public class AuraReportDataService
             final List<TestBaseBugEntity> activeBugs = bugRepository.findByVariationId(varId).stream()
                 .filter(b -> b.getRemovedRunId() == null)
                 .collect(Collectors.toList());
-            final boolean hasBugs = !activeBugs.isEmpty() || hasBugsInLatestHistoryLink(var.getHistoryLinks());
-            final String cur = var.getLastStatus() != null ? var.getLastStatus() : "passed-clean";
+            final List<String> sortedLinks = sortHistoryLinksDescending(var.getHistoryLinks());
+            if (!sortedLinks.isEmpty())
+            {
+                final String sortedLinksStr = String.join(",", sortedLinks);
+                if (!sortedLinksStr.equals(var.getHistoryLinks()))
+                {
+                    var.setHistoryLinks(sortedLinksStr);
+                }
+            }
+
+            final String historyStr = var.getHistoryLinks();
+            final boolean hasBugs = !activeBugs.isEmpty() || hasBugsInLatestHistoryLink(historyStr);
+
+            final String prevMode = var.getExecutionMode();
+            final String cur;
+            final boolean isHealed;
+            boolean modeChanged = false;
+            if (!sortedLinks.isEmpty())
+            {
+                final String latestLink = sortedLinks.get(0);
+                final Map<String, String> latestParams = parseQueryParams(latestLink);
+                final String linkStatus = latestParams.get("status");
+                final String linkHealed = latestParams.get("healed");
+                String linkMode = latestParams.get("mode");
+                if (linkMode == null || linkMode.isBlank())
+                {
+                    final String rId = latestParams.get("runId");
+                    final String eId = latestParams.get("executionId");
+                    if (rId != null && !rId.isBlank())
+                    {
+                        final RunReportDto rpt = getRunReport(rId);
+                        if (rpt != null && rpt.getExecutions() != null)
+                        {
+                            for (final TestExecutionDto exec : rpt.getExecutions())
+                            {
+                                if (eId != null && !eId.isBlank() && eId.equals(exec.getId()))
+                                {
+                                    linkMode = exec.getDisplayMode();
+                                    break;
+                                }
+                            }
+                            if (linkMode == null || linkMode.isBlank())
+                            {
+                                for (final TestExecutionDto exec : rpt.getExecutions())
+                                {
+                                    if (exec.getTestClass() != null && exec.getTestClass().equals(var.getTestClassName()))
+                                    {
+                                        linkMode = exec.getDisplayMode();
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if (linkMode != null && !linkMode.isBlank())
+                {
+                    var.setExecutionMode(linkMode);
+                    modeChanged = !Objects.equals(linkMode, prevMode);
+                }
+                isHealed = "true".equalsIgnoreCase(linkHealed) || "healed".equalsIgnoreCase(linkStatus);
+                cur = (linkStatus != null && !linkStatus.isBlank())
+                    ? linkStatus
+                    : (var.getLastStatus() != null ? var.getLastStatus() : "passed-clean");
+            }
+            else
+            {
+                isHealed = (var.getHealed() != null && var.getHealed()) || isLatestHistoryLinkHealed(historyStr);
+                cur = var.getLastStatus() != null ? var.getLastStatus() : "passed-clean";
+            }
+            var.setHealed(isHealed);
+
             String effective = cur;
             if ("failed".equalsIgnoreCase(cur) || "failed-unknown".equalsIgnoreCase(cur) || "failed-known".equalsIgnoreCase(cur) || "error".equalsIgnoreCase(cur))
             {
                 effective = hasBugs ? "failed-known" : "failed-unknown";
             }
-            else if ("passed".equalsIgnoreCase(cur) || "succeeded-fixed".equalsIgnoreCase(cur) || "passed-clean".equalsIgnoreCase(cur) || "succeeded".equalsIgnoreCase(cur))
+            else if ("passed".equalsIgnoreCase(cur) || "succeeded-fixed".equalsIgnoreCase(cur) || "passed-clean".equalsIgnoreCase(cur) || "succeeded".equalsIgnoreCase(cur) || "healed".equalsIgnoreCase(cur))
             {
                 effective = hasBugs ? "succeeded-fixed" : "passed-clean";
             }
-            if (!effective.equalsIgnoreCase(cur))
+            if (!effective.equalsIgnoreCase(var.getLastStatus()) || !Objects.equals(isHealed, var.getHealed()) || modeChanged)
             {
                 var.setLastStatus(effective);
                 variationRepository.save(var);
@@ -1962,6 +2952,14 @@ public class AuraReportDataService
             run.setFailedKnownCount(report.getKnownCount());
             run.setFailedUnknownCount(report.getUnknownCount());
             run.setIgnoredCount(report.getIgnoredCount());
+            run.setPassedHealedCount(report.getPassHealedCount());
+            run.setSucceededFixedHealedCount(report.getFixedHealedCount());
+            run.setFailedKnownHealedCount(report.getKnownHealedCount());
+            run.setFailedUnknownHealedCount(report.getUnknownHealedCount());
+            run.setPassedAiCount(report.getPassAiCount());
+            run.setSucceededFixedAiCount(report.getFixedAiCount());
+            run.setFailedKnownAiCount(report.getKnownAiCount());
+            run.setFailedUnknownAiCount(report.getUnknownAiCount());
             run.recalculatePassRate();
             runRepository.save(run);
             final long durationMs = System.currentTimeMillis() - startMs;
@@ -1972,13 +2970,204 @@ public class AuraReportDataService
     @Transactional
     public void removeRunFromHistory(final String runId)
     {
-        final Optional<TestRunEntity> runOpt = runRepository.findById(runId);
-        if (runOpt.isPresent())
+        if (runId == null || runId.trim().isEmpty())
         {
-            final TestRunEntity run = runOpt.get();
-            run.setIsDeleted(true);
-            runRepository.save(run);
-            LOG.info("Soft-deleted run runId={}", runId);
+            return;
+        }
+        final String cleanRunId = runId.trim().replaceAll("^#+", "");
+        final Optional<TestRunEntity> runOpt = runRepository.findById(cleanRunId);
+        if (runOpt.isEmpty())
+        {
+            LOG.warn("Cannot remove run {}: not found in repository", cleanRunId);
+            return;
+        }
+
+        final TestRunEntity run = runOpt.get();
+        final String batchName = run.getBatchName();
+
+        // 1. Mark run as deleted
+        run.setIsDeleted(true);
+        runRepository.save(run);
+        LOG.info("Soft-deleted run runId={}", cleanRunId);
+
+        // 2. Storage cleanup (disk JSON and attachments)
+        try
+        {
+            localRunJsonStorageService.deleteRunJson(cleanRunId);
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("Failed to delete local run JSON for runId={}: {}", cleanRunId, e.getMessage());
+        }
+
+        try
+        {
+            if (attachmentStorageService != null)
+            {
+                attachmentStorageService.deleteRunAttachments(cleanRunId);
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("Failed to delete attachments for runId={}: {}", cleanRunId, e.getMessage());
+        }
+
+        // 3. Evict cache
+        runReportCache.remove(cleanRunId);
+        clearCache();
+
+        // 4. Update parent batch's latestRunId
+        if (batchName != null && !batchName.isBlank())
+        {
+            final List<TestRunEntity> remainingBatchRuns = runRepository.findByBatchNameAndIsDeletedFalseOrderByStartTimeMsDesc(batchName);
+            final Optional<TestBatchEntity> batchOpt = batchRepository.findById(batchName);
+            if (batchOpt.isPresent())
+            {
+                final TestBatchEntity batch = batchOpt.get();
+                final String newLatestRunId = !remainingBatchRuns.isEmpty() ? remainingBatchRuns.get(0).getId() : null;
+                batch.setLatestRunId(newLatestRunId);
+                batchRepository.save(batch);
+                LOG.info("Updated batch '{}' latestRunId to '{}'", batchName, newLatestRunId);
+            }
+        }
+
+        // 5. Update Test Base variations and their history links
+        final List<TestBaseVariationEntity> allVariations = variationRepository.findAll();
+        final List<TestBaseVariationEntity> variationsToDelete = new ArrayList<>();
+
+        for (final TestBaseVariationEntity var : allVariations)
+        {
+            final String currentHistory = var.getHistoryLinks();
+            if (currentHistory == null || currentHistory.isBlank())
+            {
+                continue;
+            }
+
+            final List<String> sortedBefore = sortHistoryLinksDescending(currentHistory);
+            if (sortedBefore.isEmpty())
+            {
+                continue;
+            }
+
+            final boolean wasLastRun = cleanRunId.equalsIgnoreCase(parseQueryParams(sortedBefore.get(0)).get("runId"));
+
+            final List<String> filteredLinks = new ArrayList<>();
+            boolean removedAny = false;
+
+            for (final String link : sortedBefore)
+            {
+                final Map<String, String> params = parseQueryParams(link);
+                final String linkRunId = params.get("runId");
+                if (cleanRunId.equalsIgnoreCase(linkRunId))
+                {
+                    removedAny = true;
+                }
+                else
+                {
+                    filteredLinks.add(link);
+                }
+            }
+
+            if (!removedAny)
+            {
+                continue;
+            }
+
+            if (filteredLinks.isEmpty())
+            {
+                // No runs left for this variation - delete it from Test Base
+                variationsToDelete.add(var);
+                final List<TestBaseBugEntity> varBugs = bugRepository.findByVariationId(var.getId());
+                if (!varBugs.isEmpty())
+                {
+                    bugRepository.deleteAll(varBugs);
+                }
+                LOG.info("Pruned empty variation varId='{}' as all associated runs were removed", var.getId());
+            }
+            else
+            {
+                final String newHistoryStr = String.join(",", filteredLinks);
+                var.setHistoryLinks(newHistoryStr);
+                var.setTotalExecutionsCount(filteredLinks.size());
+
+                if (wasLastRun)
+                {
+                    // The deleted run was the last run of the variation - update variation to new last run
+                    final String newLastLink = filteredLinks.get(0);
+                    final Map<String, String> newLastParams = parseQueryParams(newLastLink);
+                    final String newLastStatus = newLastParams.get("status");
+                    final String newLastHealed = newLastParams.get("healed");
+                    final String newLastTs = newLastParams.get("ts");
+                    final String newLastRunId = newLastParams.get("runId");
+
+                    final boolean isHealed = "true".equalsIgnoreCase(newLastHealed) || "healed".equalsIgnoreCase(newLastStatus);
+                    var.setHealed(isHealed);
+
+                    // Re-evaluate bugs on variation
+                    final List<TestBaseBugEntity> activeBugs = bugRepository.findByVariationId(var.getId()).stream()
+                        .filter(b -> b.getRemovedRunId() == null)
+                        .collect(Collectors.toList());
+                    final boolean hasBugs = !activeBugs.isEmpty() || hasBugsInLatestHistoryLink(newHistoryStr);
+
+                    String effective = (newLastStatus != null && !newLastStatus.isBlank()) ? newLastStatus : "passed-clean";
+                    if ("failed".equalsIgnoreCase(effective) || "failed-unknown".equalsIgnoreCase(effective) || "failed-known".equalsIgnoreCase(effective) || "error".equalsIgnoreCase(effective))
+                    {
+                        effective = hasBugs ? "failed-known" : "failed-unknown";
+                    }
+                    else if ("passed".equalsIgnoreCase(effective) || "succeeded-fixed".equalsIgnoreCase(effective) || "passed-clean".equalsIgnoreCase(effective) || "succeeded".equalsIgnoreCase(effective) || "healed".equalsIgnoreCase(effective))
+                    {
+                        effective = hasBugs ? "succeeded-fixed" : "passed-clean";
+                    }
+                    var.setLastStatus(effective);
+
+                    if (newLastRunId != null)
+                    {
+                        final Optional<TestRunEntity> newLastRunOpt = runRepository.findById(newLastRunId);
+                        if (newLastRunOpt.isPresent() && newLastRunOpt.get().getStartTimeMs() != null)
+                        {
+                            var.setLastExecutedAt(newLastRunOpt.get().getStartTimeMs());
+                        }
+                        else if (newLastTs != null && !newLastTs.isBlank())
+                        {
+                            var.setLastExecutedAt(TestBaseVariationHistoryDto.parseTimestampToEpoch(newLastTs, newLastRunId));
+                        }
+                    }
+                }
+                else
+                {
+                    syncVariationLastStatus(var.getId());
+                }
+
+                variationRepository.save(var);
+            }
+        }
+
+        if (!variationsToDelete.isEmpty())
+        {
+            variationRepository.deleteAll(variationsToDelete);
+        }
+
+        // 6. Bug reconciliation under Option B:
+        // Clear linkedRunId on bugs linked during this run so they remain active on the variation
+        final List<TestBaseBugEntity> allBugs = bugRepository.findAll();
+        for (final TestBaseBugEntity bug : allBugs)
+        {
+            boolean bugChanged = false;
+            if (cleanRunId.equalsIgnoreCase(bug.getLinkedRunId()))
+            {
+                bug.setLinkedRunId(null);
+                bugChanged = true;
+            }
+            if (cleanRunId.equalsIgnoreCase(bug.getRemovedRunId()))
+            {
+                bug.setRemovedRunId(null);
+                bug.setRemovedAtMs(null);
+                bugChanged = true;
+            }
+            if (bugChanged)
+            {
+                bugRepository.save(bug);
+            }
         }
     }
 
@@ -2005,7 +3194,7 @@ public class AuraReportDataService
             int cPass = 0, cFixed = 0, cKnown = 0, cUnknown = 0, cIgnored = 0, cRunning = 0;
             for (final TestExecutionDto ce : classExecs)
             {
-                final String status = ce.getStatus() != null ? ce.getStatus() : "passed-clean";
+                final String status = ce.getStatus() != null ? ce.getStatus().trim().toLowerCase(Locale.ROOT) : "passed-clean";
                 switch (status)
                 {
                     case "passed-clean", "passed", "succeeded" -> cPass++;
@@ -2014,7 +3203,7 @@ public class AuraReportDataService
                     case "failed-unknown", "failed", "error", "unknown" -> cUnknown++;
                     case "ignored", "skipped" -> cIgnored++;
                     case "running", "in_progress", "executing", "pending" -> cRunning++;
-                    default -> cPass++;
+                    default -> cUnknown++;
                 }
             }
 
@@ -2084,16 +3273,16 @@ public class AuraReportDataService
         int pass = 0, fixed = 0, known = 0, unknown = 0, ignored = 0, running = 0;
         for (final TestExecutionDto e : executions)
         {
-            final String status = e.getStatus() != null ? e.getStatus() : "passed-clean";
+            final String status = e.getStatus() != null ? e.getStatus().trim().toLowerCase(Locale.ROOT) : "passed-clean";
             switch (status)
             {
-                case "passed-clean", "passed", "succeeded" -> pass++;
-                case "succeeded-fixed", "fixed", "healed" -> fixed++;
+                case "passed-clean", "passed", "succeeded", "healed" -> pass++;
+                case "succeeded-fixed", "fixed" -> fixed++;
                 case "failed-known", "known" -> known++;
                 case "failed-unknown", "failed", "error", "unknown" -> unknown++;
                 case "ignored", "skipped" -> ignored++;
                 case "running", "in_progress", "executing", "pending" -> running++;
-                default -> pass++;
+                default -> unknown++;
             }
         }
 
@@ -2130,6 +3319,125 @@ public class AuraReportDataService
             throw new IllegalStateException("SHA-256 unavailable", e);
         }
     });
+
+    /**
+     * Canonical normalizer resolving raw execution status and metadata into effective reporting outcomes.
+     *
+     * @param rawStatus raw status string from execution JSON or runner (e.g. "passed", "finished", "error")
+     * @param totalStepsCount total number of steps in execution
+     * @param failedStepsCount number of failed steps
+     * @param hasBugs whether open/linked bug tickets exist for this variation
+     * @param failureOrErrorMessage failure/error identifier or message, if any
+     * @param isRunActive whether the parent test run is currently active/in-progress
+     * @return canonical effective status: "passed-clean", "succeeded-fixed", "failed-known", "failed-unknown", "ignored", or "running"
+     */
+    public static String computeEffectiveStatus(
+            final String rawStatus,
+            final int totalStepsCount,
+            final int failedStepsCount,
+            final boolean hasBugs,
+            final String failureOrErrorMessage,
+            final boolean isRunActive)
+    {
+        final String st = (rawStatus != null && !rawStatus.isBlank())
+                ? rawStatus.trim().toLowerCase(Locale.ROOT)
+                : (isRunActive ? "running" : "failed-unknown");
+
+        final boolean hasFailure = failedStepsCount > 0
+                || (failureOrErrorMessage != null
+                    && !failureOrErrorMessage.isBlank()
+                    && !"NONE".equalsIgnoreCase(failureOrErrorMessage.trim()));
+
+        final boolean isKnown = hasBugs;
+        final boolean isFixed = hasBugs;
+
+        // 1. In-flight / transient states
+        if ("running".equals(st) || "in_progress".equals(st) || "executing".equals(st) || "pending".equals(st))
+        {
+            if (isRunActive)
+            {
+                return "running";
+            }
+            if (hasFailure || totalStepsCount == 0)
+            {
+                return isKnown ? "failed-known" : "failed-unknown";
+            }
+            return "ignored";
+        }
+
+        // 2. Explicitly skipped states
+        if ("ignored".equals(st) || "skipped".equals(st) || "cancelled".equals(st))
+        {
+            return "ignored";
+        }
+
+        // 3. Finished lifecycle resolution
+        if ("finished".equals(st))
+        {
+            final boolean isSuccess = !hasFailure && (totalStepsCount > 0
+                    || failureOrErrorMessage == null
+                    || failureOrErrorMessage.isBlank()
+                    || "NONE".equalsIgnoreCase(failureOrErrorMessage.trim()));
+            return isSuccess ? (isFixed ? "succeeded-fixed" : "passed-clean")
+                             : (isKnown ? "failed-known" : "failed-unknown");
+        }
+
+        // 4. Standard explicit failure verdicts
+        if ("failed".equals(st) || "failed-known".equals(st) || "failed-unknown".equals(st) || "error".equals(st) || "failure".equals(st))
+        {
+            return isKnown ? "failed-known" : "failed-unknown";
+        }
+
+        // 5. Standard explicit pass verdicts
+        if ("passed".equals(st) || "succeeded-fixed".equals(st) || "passed-clean".equals(st) || "succeeded".equals(st) || "healed".equals(st))
+        {
+            return isFixed ? "succeeded-fixed" : "passed-clean";
+        }
+
+        // 6. Unmapped / missing status fallback
+        if (hasFailure || totalStepsCount == 0)
+        {
+            return isKnown ? "failed-known" : "failed-unknown";
+        }
+        return isFixed ? "succeeded-fixed" : "passed-clean";
+    }
+
+    public static String extractFailureText(final TestExecutionDto dto)
+    {
+        if (dto == null)
+        {
+            return null;
+        }
+        if (dto.getFailureReason() != null && !dto.getFailureReason().isBlank() && !"NONE".equalsIgnoreCase(dto.getFailureReason().trim()))
+        {
+            return dto.getFailureReason().trim();
+        }
+        if (dto.getFailure() != null && !dto.getFailure().isBlank() && !"NONE".equalsIgnoreCase(dto.getFailure().trim()))
+        {
+            return dto.getFailure().trim();
+        }
+        return null;
+    }
+
+    public static String extractFailureText(final JsonNode node)
+    {
+        if (node == null)
+        {
+            return null;
+        }
+        for (final String field : List.of("failureReason", "errorMessage", "error", "exception", "failure"))
+        {
+            if (node.hasNonNull(field))
+            {
+                final String txt = node.get(field).asText().trim();
+                if (!txt.isBlank() && !"NONE".equalsIgnoreCase(txt))
+                {
+                    return txt;
+                }
+            }
+        }
+        return null;
+    }
 
     public static String normalizeLocation(final String raw)
     {
@@ -2227,10 +3535,10 @@ public class AuraReportDataService
             primaryVarId = generateVariationId(targetTestClass, targetDataSet, targetLocation, targetBrowser);
         }
 
+        final String legacyVarId = generateVariationId(targetTestClass, targetDataSet, targetLocation, targetBrowser);
         Optional<TestBaseVariationEntity> varOpt = variationRepository.findById(primaryVarId);
-        if (varOpt.isEmpty() && (targetTestMethod == null || targetTestMethod.trim().isEmpty()))
+        if (varOpt.isEmpty() && !primaryVarId.equals(legacyVarId))
         {
-            final String legacyVarId = generateVariationId(targetTestClass, targetDataSet, targetLocation, targetBrowser);
             varOpt = variationRepository.findById(legacyVarId);
         }
 
@@ -2274,10 +3582,11 @@ public class AuraReportDataService
                             (a, b) -> a
                         ));
 
-                    final List<TestBaseBugEntity> varBugs = bugRepository.findByVariationId(varId);
+                    final List<TestBaseBugEntity> varBugs = bugRepository.findByVariationIdIn(List.of(primaryVarId, legacyVarId));
 
                     final List<TestBaseVariationHistoryDto> historyList = new ArrayList<>();
                     final List<String> upgradedLinks = new ArrayList<>();
+                    final Map<String, String> linkByKey = new HashMap<>();
                     boolean modifiedAny = false;
 
                     for (final Map<String, String> params : parsedLinks)
@@ -2309,11 +3618,24 @@ public class AuraReportDataService
                                 .distinct()
                                 .collect(Collectors.toList());
 
-                            final java.util.Set<String> combinedBugsSet = new java.util.LinkedHashSet<>();
+                            final Set<String> removedTickets = varBugs.stream()
+                                .filter(b -> (b.getBatchName().equalsIgnoreCase("ALL") || b.getBatchName().equalsIgnoreCase(runBatch))
+                                          && (b.getEnvironment().equalsIgnoreCase("ALL") || b.getEnvironment().equalsIgnoreCase(runEnv))
+                                          && b.getRemovedRunId() != null && isRunAtOrAfter(runId, b.getRemovedRunId(), runStartTimes))
+                                .map(b -> normalizeTicket(b.getBugTicket()))
+                                .collect(Collectors.toSet());
+
+                            final Set<String> combinedBugsSet = new LinkedHashSet<>();
                             final String bugsParam = params.getOrDefault("bugs", "");
                             if (!bugsParam.isEmpty())
                             {
-                                combinedBugsSet.addAll(List.of(bugsParam.split(";")));
+                                for (final String b : bugsParam.split(";"))
+                                {
+                                    if (!b.isBlank() && !removedTickets.contains(normalizeTicket(b)))
+                                    {
+                                        combinedBugsSet.add(b);
+                                    }
+                                }
                             }
                             combinedBugsSet.addAll(activeDbBugs);
 
@@ -2368,6 +3690,10 @@ public class AuraReportDataService
                                     }
                                 }
                             }
+                            final boolean isHealed = "true".equalsIgnoreCase(params.get("healed")) || "healed".equalsIgnoreCase(rawStatus);
+                            final boolean isPassedHealed = isHealed && ("passed-clean".equalsIgnoreCase(effectiveStatus) || "passed".equalsIgnoreCase(effectiveStatus) || "succeeded".equalsIgnoreCase(effectiveStatus) || "succeeded-fixed".equalsIgnoreCase(effectiveStatus));
+                            final boolean isFailedHealed = isHealed && !isPassedHealed;
+
                             historyList.add(new TestBaseVariationHistoryDto(
                                 runId,
                                 execId != null ? execId : "",
@@ -2378,18 +3704,23 @@ public class AuraReportDataService
                                 effectiveStatus,
                                 badgeInfo[0],
                                 badgeInfo[1],
-                                bugsList
+                                bugsList,
+                                isHealed,
+                                isPassedHealed,
+                                isFailedHealed
                             ));
 
-                            final String relUrl = "/run-report?runId=" + java.net.URLEncoder.encode(runId, StandardCharsets.UTF_8)
-                                + (execId != null && !execId.trim().isEmpty() ? "&executionId=" + java.net.URLEncoder.encode(execId.trim(), StandardCharsets.UTF_8) : "")
-                                + "&batch=" + java.net.URLEncoder.encode(batchName, StandardCharsets.UTF_8)
-                                + "&engine=" + java.net.URLEncoder.encode(engine, StandardCharsets.UTF_8)
-                                + (legacyMode != null && !legacyMode.isBlank() ? "&mode=" + java.net.URLEncoder.encode(legacyMode, StandardCharsets.UTF_8) : "")
-                                + "&ts=" + java.net.URLEncoder.encode(timestamp, StandardCharsets.UTF_8)
-                                + "&status=" + java.net.URLEncoder.encode(effectiveStatus, StandardCharsets.UTF_8)
-                                + (!joinedBugs.isEmpty() ? "&bugs=" + java.net.URLEncoder.encode(joinedBugs, StandardCharsets.UTF_8) : "");
+                            final String relUrl = "/run-report?runId=" + URLEncoder.encode(runId, StandardCharsets.UTF_8)
+                                + (execId != null && !execId.trim().isEmpty() ? "&executionId=" + URLEncoder.encode(execId.trim(), StandardCharsets.UTF_8) : "")
+                                + "&batch=" + URLEncoder.encode(batchName, StandardCharsets.UTF_8)
+                                + "&engine=" + URLEncoder.encode(engine, StandardCharsets.UTF_8)
+                                + (legacyMode != null && !legacyMode.isBlank() ? "&mode=" + URLEncoder.encode(legacyMode, StandardCharsets.UTF_8) : "")
+                                + "&ts=" + URLEncoder.encode(timestamp, StandardCharsets.UTF_8)
+                                + "&status=" + URLEncoder.encode(effectiveStatus, StandardCharsets.UTF_8)
+                                + (isHealed ? "&healed=true" : "")
+                                + (!joinedBugs.isEmpty() ? "&bugs=" + URLEncoder.encode(joinedBugs, StandardCharsets.UTF_8) : "");
                             upgradedLinks.add(relUrl);
+                            linkByKey.put(runId + "::" + (execId != null ? execId : ""), relUrl);
                             modifiedAny = true;
                         }
                         else
@@ -2450,10 +3781,13 @@ public class AuraReportDataService
                                     final String execRawStatus = matchedExec.getStatus() != null ? matchedExec.getStatus() : "passed-clean";
                                     final String[] badgeInfo = getStatusBadgeInfo(execRawStatus);
                                     final String curEngine = matchedExec.getEngine() != null ? matchedExec.getEngine() : "Java";
-                                    final String curMode = matchedExec.getMode() != null && !matchedExec.getMode().isBlank() ? matchedExec.getMode() : "FORCE_RECORDING";
+                                    final String curMode = matchedExec.getMode() != null && !matchedExec.getMode().isBlank() ? matchedExec.getMode() : "JAVA";
                                     final String curTs = run.getTimestampLabel() != null ? run.getTimestampLabel() : "Recently";
                                     final List<String> curBugs = matchedExec.getBugs() != null ? matchedExec.getBugs() : List.of();
                                     final String bugsStr = !curBugs.isEmpty() ? String.join(";", curBugs) : "";
+                                    final boolean isHealed = matchedExec.isHealed();
+                                    final boolean isPassedHealed = matchedExec.isPassedHealed();
+                                    final boolean isFailedHealed = matchedExec.isFailedHealed();
 
                                     historyList.add(new TestBaseVariationHistoryDto(
                                         runId,
@@ -2465,19 +3799,24 @@ public class AuraReportDataService
                                         execRawStatus,
                                         badgeInfo[0],
                                         badgeInfo[1],
-                                        curBugs
+                                        curBugs,
+                                        isHealed,
+                                        isPassedHealed,
+                                        isFailedHealed
                                     ));
 
-                                    final String enrichedUrl = "/run-report?runId=" + java.net.URLEncoder.encode(runId, StandardCharsets.UTF_8)
-                                        + (matchedExec.getId() != null && !matchedExec.getId().trim().isEmpty() ? "&executionId=" + java.net.URLEncoder.encode(matchedExec.getId().trim(), StandardCharsets.UTF_8) : "")
-                                        + "&batch=" + java.net.URLEncoder.encode(run.getBatchName(), StandardCharsets.UTF_8)
-                                        + "&engine=" + java.net.URLEncoder.encode(curEngine, StandardCharsets.UTF_8)
-                                        + (curMode != null && !curMode.isBlank() ? "&mode=" + java.net.URLEncoder.encode(curMode, StandardCharsets.UTF_8) : "")
-                                        + "&ts=" + java.net.URLEncoder.encode(curTs, StandardCharsets.UTF_8)
-                                        + "&status=" + java.net.URLEncoder.encode(execRawStatus, StandardCharsets.UTF_8)
-                                        + (!bugsStr.isEmpty() ? "&bugs=" + java.net.URLEncoder.encode(bugsStr, StandardCharsets.UTF_8) : "");
+                                    final String enrichedUrl = "/run-report?runId=" + URLEncoder.encode(runId, StandardCharsets.UTF_8)
+                                        + (matchedExec.getId() != null && !matchedExec.getId().trim().isEmpty() ? "&executionId=" + URLEncoder.encode(matchedExec.getId().trim(), StandardCharsets.UTF_8) : "")
+                                        + "&batch=" + URLEncoder.encode(run.getBatchName(), StandardCharsets.UTF_8)
+                                        + "&engine=" + URLEncoder.encode(curEngine, StandardCharsets.UTF_8)
+                                        + (curMode != null && !curMode.isBlank() ? "&mode=" + URLEncoder.encode(curMode, StandardCharsets.UTF_8) : "")
+                                        + "&ts=" + URLEncoder.encode(curTs, StandardCharsets.UTF_8)
+                                        + "&status=" + URLEncoder.encode(execRawStatus, StandardCharsets.UTF_8)
+                                        + (isHealed ? "&healed=true" : "")
+                                        + (!bugsStr.isEmpty() ? "&bugs=" + URLEncoder.encode(bugsStr, StandardCharsets.UTF_8) : "");
 
                                     upgradedLinks.add(enrichedUrl);
+                                    linkByKey.put(runId + "::" + (matchedExec.getId() != null ? matchedExec.getId() : ""), enrichedUrl);
                                     modifiedAny = true;
                                 }
                             }
@@ -2486,19 +3825,50 @@ public class AuraReportDataService
 
                     if (!historyList.isEmpty())
                     {
-                        final String latestStatus = historyList.get(0).getStatus();
-                        if (latestStatus != null && !latestStatus.equalsIgnoreCase(varEntity.getLastStatus()))
+                        historyList.sort(TestBaseVariationHistoryDto.BY_TIMESTAMP_DESC);
+
+                        final List<String> sortedUpgradedLinks = new ArrayList<>();
+                        for (final TestBaseVariationHistoryDto dto : historyList)
+                        {
+                            final String key = dto.getRunId() + "::" + dto.getExecutionId();
+                            final String link = linkByKey.get(key);
+                            if (link != null && !sortedUpgradedLinks.contains(link))
+                            {
+                                sortedUpgradedLinks.add(link);
+                            }
+                        }
+
+                        final boolean needSaveLinks = !sortedUpgradedLinks.isEmpty() && (!sortedUpgradedLinks.equals(upgradedLinks) || modifiedAny);
+                        final String rawLatest = historyList.get(0).getStatus();
+                        final boolean isHealed = historyList.get(0).isHealed();
+                        final boolean hasBugs = historyList.get(0).getBugs() != null && !historyList.get(0).getBugs().isEmpty();
+                        final String latestStatus;
+                        if ("failed".equalsIgnoreCase(rawLatest) || "error".equalsIgnoreCase(rawLatest) || "failed-unknown".equalsIgnoreCase(rawLatest) || "failed-known".equalsIgnoreCase(rawLatest))
+                        {
+                            latestStatus = hasBugs ? "failed-known" : "failed-unknown";
+                        }
+                        else if ("passed".equalsIgnoreCase(rawLatest) || "succeeded".equalsIgnoreCase(rawLatest) || "passed-clean".equalsIgnoreCase(rawLatest) || "succeeded-fixed".equalsIgnoreCase(rawLatest) || "healed".equalsIgnoreCase(rawLatest))
+                        {
+                            latestStatus = hasBugs ? "succeeded-fixed" : "passed-clean";
+                        }
+                        else
+                        {
+                            latestStatus = rawLatest != null ? rawLatest : "passed-clean";
+                        }
+
+                        if (!latestStatus.equalsIgnoreCase(varEntity.getLastStatus()) || !Objects.equals(isHealed, varEntity.getHealed()))
                         {
                             varEntity.setLastStatus(latestStatus);
-                            if (modifiedAny && !upgradedLinks.isEmpty())
+                            varEntity.setHealed(isHealed);
+                            if (needSaveLinks)
                             {
-                                varEntity.setHistoryLinks(String.join(",", upgradedLinks));
+                                varEntity.setHistoryLinks(String.join(",", sortedUpgradedLinks));
                             }
                             variationRepository.save(varEntity);
                         }
-                        else if (modifiedAny && !upgradedLinks.isEmpty())
+                        else if (needSaveLinks)
                         {
-                            varEntity.setHistoryLinks(String.join(",", upgradedLinks));
+                            varEntity.setHistoryLinks(String.join(",", sortedUpgradedLinks));
                             variationRepository.save(varEntity);
                         }
                         return historyList;
@@ -2510,6 +3880,7 @@ public class AuraReportDataService
         final List<TestRunEntity> runs = runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc();
         final List<TestBaseVariationHistoryDto> historyList = new ArrayList<>();
         final List<String> newLinksList = new ArrayList<>();
+        final Map<String, String> fallbackLinkByKey = new HashMap<>();
 
         for (final TestRunEntity run : runs)
         {
@@ -2560,22 +3931,28 @@ public class AuraReportDataService
                 final String[] badgeInfo = getStatusBadgeInfo(rawStatus);
                 final String timestamp = run.getTimestampLabel() != null ? run.getTimestampLabel() : "Recently";
                 final String engine = exec.getEngine() != null ? exec.getEngine() : "Java";
-                final String mode = exec.getMode() != null && !exec.getMode().isBlank() ? exec.getMode() : "FORCE_RECORDING";
+                final String mode = exec.getMode() != null && !exec.getMode().isBlank() ? exec.getMode() : "JAVA";
                 final String bugsStr = exec.getBugs() != null && !exec.getBugs().isEmpty() ? String.join(";", exec.getBugs()) : "";
 
-                final String relUrl = "/run-report?runId=" + java.net.URLEncoder.encode(run.getId(), StandardCharsets.UTF_8)
-                    + (exec.getId() != null && !exec.getId().trim().isEmpty() ? "&executionId=" + java.net.URLEncoder.encode(exec.getId().trim(), StandardCharsets.UTF_8) : "")
-                    + "&batch=" + java.net.URLEncoder.encode(run.getBatchName(), StandardCharsets.UTF_8)
-                    + "&engine=" + java.net.URLEncoder.encode(engine, StandardCharsets.UTF_8)
-                    + (mode != null && !mode.isBlank() ? "&mode=" + java.net.URLEncoder.encode(mode, StandardCharsets.UTF_8) : "")
-                    + "&ts=" + java.net.URLEncoder.encode(timestamp, StandardCharsets.UTF_8)
-                    + "&status=" + java.net.URLEncoder.encode(rawStatus, StandardCharsets.UTF_8)
-                    + (!bugsStr.isEmpty() ? "&bugs=" + java.net.URLEncoder.encode(bugsStr, StandardCharsets.UTF_8) : "");
+                final boolean isHealed = exec.isHealed();
+                final boolean isPassedHealed = exec.isPassedHealed();
+                final boolean isFailedHealed = exec.isFailedHealed();
+
+                final String relUrl = "/run-report?runId=" + URLEncoder.encode(run.getId(), StandardCharsets.UTF_8)
+                    + (exec.getId() != null && !exec.getId().trim().isEmpty() ? "&executionId=" + URLEncoder.encode(exec.getId().trim(), StandardCharsets.UTF_8) : "")
+                    + "&batch=" + URLEncoder.encode(run.getBatchName(), StandardCharsets.UTF_8)
+                    + "&engine=" + URLEncoder.encode(engine, StandardCharsets.UTF_8)
+                    + (mode != null && !mode.isBlank() ? "&mode=" + URLEncoder.encode(mode, StandardCharsets.UTF_8) : "")
+                    + "&ts=" + URLEncoder.encode(timestamp, StandardCharsets.UTF_8)
+                    + "&status=" + URLEncoder.encode(rawStatus, StandardCharsets.UTF_8)
+                    + (isHealed ? "&healed=true" : "")
+                    + (!bugsStr.isEmpty() ? "&bugs=" + URLEncoder.encode(bugsStr, StandardCharsets.UTF_8) : "");
 
                 if (!newLinksList.contains(relUrl))
                 {
                     newLinksList.add(relUrl);
                 }
+                fallbackLinkByKey.put(run.getId() + "::" + (exec.getId() != null ? exec.getId() : ""), relUrl);
 
                 historyList.add(new TestBaseVariationHistoryDto(
                     run.getId(),
@@ -2587,12 +3964,55 @@ public class AuraReportDataService
                     rawStatus,
                     badgeInfo[0],
                     badgeInfo[1],
-                    exec.getBugs() != null ? exec.getBugs() : List.of()
+                    exec.getBugs() != null ? exec.getBugs() : List.of(),
+                    isHealed,
+                    isPassedHealed,
+                    isFailedHealed
                 ));
             }
         }
 
-        if (!newLinksList.isEmpty() && varOpt.isPresent())
+        if (!historyList.isEmpty())
+        {
+            historyList.sort(TestBaseVariationHistoryDto.BY_TIMESTAMP_DESC);
+
+            final List<String> sortedFallbackLinks = new ArrayList<>();
+            for (final TestBaseVariationHistoryDto dto : historyList)
+            {
+                final String key = dto.getRunId() + "::" + dto.getExecutionId();
+                final String link = fallbackLinkByKey.get(key);
+                if (link != null && !sortedFallbackLinks.contains(link))
+                {
+                    sortedFallbackLinks.add(link);
+                }
+            }
+
+            if (!sortedFallbackLinks.isEmpty() && varOpt.isPresent())
+            {
+                final TestBaseVariationEntity varEntity = varOpt.get();
+                varEntity.setHistoryLinks(String.join(",", sortedFallbackLinks));
+                final String rawLatest = historyList.get(0).getStatus();
+                final boolean isHealed = historyList.get(0).isHealed();
+                final boolean hasBugs = historyList.get(0).getBugs() != null && !historyList.get(0).getBugs().isEmpty();
+                final String latestStatus;
+                if ("failed".equalsIgnoreCase(rawLatest) || "error".equalsIgnoreCase(rawLatest) || "failed-unknown".equalsIgnoreCase(rawLatest) || "failed-known".equalsIgnoreCase(rawLatest))
+                {
+                    latestStatus = hasBugs ? "failed-known" : "failed-unknown";
+                }
+                else if ("passed".equalsIgnoreCase(rawLatest) || "succeeded".equalsIgnoreCase(rawLatest) || "passed-clean".equalsIgnoreCase(rawLatest) || "succeeded-fixed".equalsIgnoreCase(rawLatest) || "healed".equalsIgnoreCase(rawLatest))
+                {
+                    latestStatus = hasBugs ? "succeeded-fixed" : "passed-clean";
+                }
+                else
+                {
+                    latestStatus = rawLatest != null ? rawLatest : "passed-clean";
+                }
+                varEntity.setLastStatus(latestStatus);
+                varEntity.setHealed(isHealed);
+                variationRepository.save(varEntity);
+            }
+        }
+        else if (!newLinksList.isEmpty() && varOpt.isPresent())
         {
             final TestBaseVariationEntity varEntity = varOpt.get();
             varEntity.setHistoryLinks(String.join(",", newLinksList));
@@ -2615,8 +4035,8 @@ public class AuraReportDataService
                 {
                     try
                     {
-                        final String key = java.net.URLDecoder.decode(kv[0], StandardCharsets.UTF_8);
-                        final String value = java.net.URLDecoder.decode(kv[1], StandardCharsets.UTF_8);
+                        final String key = URLDecoder.decode(kv[0], StandardCharsets.UTF_8);
+                        final String value = URLDecoder.decode(kv[1], StandardCharsets.UTF_8);
                         map.put(key, value);
                     }
                     catch (final Exception e)
@@ -2627,6 +4047,28 @@ public class AuraReportDataService
             }
         }
         return map;
+    }
+
+    public static String reconstructUrlWithParams(final String originalUrl, final Map<String, String> params)
+    {
+        final String base = originalUrl != null && originalUrl.contains("?")
+            ? originalUrl.substring(0, originalUrl.indexOf("?"))
+            : (originalUrl != null ? originalUrl : "");
+        final StringBuilder sb = new StringBuilder(base);
+        boolean first = true;
+        for (final Map.Entry<String, String> entry : params.entrySet())
+        {
+            if (entry.getValue() == null || entry.getValue().isBlank())
+            {
+                continue;
+            }
+            sb.append(first ? "?" : "&");
+            sb.append(URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8));
+            sb.append("=");
+            sb.append(URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8));
+            first = false;
+        }
+        return sb.toString();
     }
 
     public static String[] getStatusBadgeInfo(final String rawStatus)
@@ -2642,12 +4084,12 @@ public class AuraReportDataService
                 statusClass = "badge-running";
                 statusLabel = "RUNNING";
             }
-            case "succeeded-fixed", "healed", "fixed" ->
+            case "succeeded-fixed", "fixed" ->
             {
-                statusClass = "badge-healed";
+                statusClass = "badge-fixed";
                 statusLabel = "SUCCEEDED-FIXED";
             }
-            case "passed-clean", "passed", "succeeded" ->
+            case "healed", "passed-clean", "passed", "succeeded" ->
             {
                 statusClass = "badge-pass";
                 statusLabel = "PASSED";
@@ -2666,6 +4108,11 @@ public class AuraReportDataService
             {
                 statusClass = "badge-ignored";
                 statusLabel = "SKIPPED";
+            }
+            case "not_run", "not run", "unreached" ->
+            {
+                statusClass = "badge-not-run";
+                statusLabel = "NOT RUN";
             }
             default ->
             {
@@ -2726,6 +4173,24 @@ public class AuraReportDataService
     public static String generateVariationId(final String testClass, final String dataSet, final String location, final String browser)
     {
         return generateVariationId(testClass, null, dataSet, location, browser);
+    }
+
+    public static String extractBrowserFromIdOrKey(final String idOrKey)
+    {
+        if (idOrKey == null || idOrKey.isBlank() || !idOrKey.contains("#"))
+        {
+            return null;
+        }
+        final String[] parts = idOrKey.split("#");
+        if (parts.length >= 4 && !parts[3].isBlank())
+        {
+            return parts[3].trim();
+        }
+        if (parts.length == 3 && !parts[2].isBlank())
+        {
+            return parts[2].trim();
+        }
+        return null;
     }
 }
 

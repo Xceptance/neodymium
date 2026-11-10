@@ -21,6 +21,7 @@ package org.neodymium.ai.model;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -48,6 +49,13 @@ public final class PlaybookStep
      * The natural language instruction describing what needs to be executed in this step.
      */
     private String instruction;
+
+    /**
+     * The raw, uncleaned natural language instruction including directive tags and templates.
+     */
+    @JsonProperty("rawInstruction")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String rawInstruction;
 
     /**
      * Flag indicating that this step should bypass the replay cache and execute live.
@@ -86,6 +94,19 @@ public final class PlaybookStep
     private boolean noHealing;
 
     /**
+     * Flag indicating that visual element markers should be activated proactively for this step.
+     */
+    @JsonProperty("marker")
+    private boolean marker;
+
+    /**
+     * The lifecycle block to which this step belongs (e.g. "before", "steps", "after").
+     */
+    @JsonProperty("block")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String block = "steps";
+
+    /**
      * Nested child steps in the composite hierarchy if this step was split or structured.
      */
     private final List<PlaybookStep> subSteps = new ArrayList<>();
@@ -122,6 +143,20 @@ public final class PlaybookStep
      * The error trace or failure message describing the cause of execution failure.
      */
     private String failureReason;
+
+    /**
+     * The recorded execution status from the companion JSON recording, if any.
+     */
+    @JsonProperty("recordedStatus")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private PlaybookStepStatus recordedStatus;
+
+    /**
+     * The recorded failure reason from the companion JSON recording, if any.
+     */
+    @JsonProperty("recordedFailureReason")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String recordedFailureReason;
 
     /**
      * The baseline state text content (e.g. HTML/DOM) recorded for this step.
@@ -208,6 +243,13 @@ public final class PlaybookStep
     private DomFeatureVector domFeatureVector;
 
     /**
+     * Explanation of why this step was not run (e.g. preceding step failed).
+     */
+    @JsonProperty("notRunReason")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String notRunReason;
+
+    /**
      * Current schema version for recorded playbook steps.
      */
     public static final String CURRENT_SCHEMA_VERSION = "4.0";
@@ -271,6 +313,26 @@ public final class PlaybookStep
     public void setContextLevel(final String contextLevel)
     {
         this.contextLevel = contextLevel;
+    }
+
+    /**
+     * Returns the lifecycle block to which this step belongs.
+     *
+     * @return the block name (e.g. "before", "steps", "after")
+     */
+    public String getBlock()
+    {
+        return this.block != null ? this.block : "steps";
+    }
+
+    /**
+     * Sets the lifecycle block to which this step belongs.
+     *
+     * @param block the block name (e.g. "before", "steps", "after")
+     */
+    public void setBlock(final String block)
+    {
+        this.block = block;
     }
 
     /**
@@ -349,6 +411,7 @@ public final class PlaybookStep
     {
         if (instruction != null)
         {
+            this.rawInstruction = instruction;
             String cleaned = instruction;
 
             if (NO_REPLAY_PATTERN.matcher(cleaned).find())
@@ -383,6 +446,12 @@ public final class PlaybookStep
                 cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*no-healing\\s*\\)\\s*", " ");
             }
 
+            if (MARKER_PATTERN.matcher(cleaned).find())
+            {
+                this.marker = true;
+                cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*marker\\s*\\)\\s*", " ");
+            }
+
             final Matcher timeoutMatcher = TIMEOUT_PATTERN.matcher(cleaned);
             if (timeoutMatcher.find())
             {
@@ -408,6 +477,15 @@ public final class PlaybookStep
                     this.ssimMinScore = parsed;
                 }
                 cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*(?:threshold|ssim|min-score|minScore)\\s*[:=]\\s*[0-9.]+%?\\s*\\)\\s*", " ");
+            }
+
+            final Matcher contextLevelMatcher = CONTEXT_LEVEL_PATTERN.matcher(cleaned);
+            if (contextLevelMatcher.find())
+            {
+                final String rawLevel = contextLevelMatcher.group(1).trim();
+                final ContextLevel parsed = ContextLevel.fromString(rawLevel, null);
+                this.contextLevel = parsed != null ? parsed.name() : rawLevel.toUpperCase(Locale.ROOT);
+                cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*(?:contextlevel|context)\\s*[:=]\\s*[a-zA-Z_-]+\\s*\\)\\s*", " ");
             }
 
             final Matcher visualMatcher = VISUAL_TAG_PARAM_PATTERN.matcher(cleaned);
@@ -446,6 +524,53 @@ public final class PlaybookStep
                         }
                     }
                 }
+            }
+
+            final Matcher layoutMatcher = LAYOUT_TAG_PARAM_PATTERN.matcher(cleaned);
+            if (layoutMatcher.find())
+            {
+                final String paramStr = layoutMatcher.group(1);
+                if (paramStr != null && !paramStr.isBlank())
+                {
+                    final String[] tokens = paramStr.split(",");
+                    for (final String rawToken : tokens)
+                    {
+                        final String token = rawToken.trim();
+                        if (token.equalsIgnoreCase("full"))
+                        {
+                            this.fullPage = true;
+                        }
+                        else
+                        {
+                            final Matcher threshMatcher = THRESHOLD_PARAM_PATTERN.matcher(token);
+                            if (threshMatcher.matches())
+                            {
+                                final Double parsed = parseThreshold(threshMatcher.group(1));
+                                if (parsed != null)
+                                {
+                                    this.ssimMinScore = parsed;
+                                }
+                            }
+                            else
+                            {
+                                final Double parsed = parseThreshold(token);
+                                if (parsed != null)
+                                {
+                                    this.ssimMinScore = parsed;
+                                }
+                            }
+                        }
+                    }
+                }
+                if (this.ssimMinScore == null)
+                {
+                    this.ssimMinScore = DEFAULT_LAYOUT_SSIM_MIN_SCORE;
+                }
+            }
+
+            if (VISUAL_FULL_PATTERN.matcher(cleaned).find() || LAYOUT_FULL_PATTERN.matcher(cleaned).find())
+            {
+                this.fullPage = true;
             }
 
             this.instruction = cleaned.trim();
@@ -503,14 +628,14 @@ public final class PlaybookStep
 
     /**
      * Checks if this step is marked as optional.
-     * If this step, any of its parent steps, or any child sub-step is optional, returns true.
+     * If this step or any of its parent steps is optional, returns true.
      *
      * @return true if optional, false otherwise
      */
     @JsonIgnore
     public boolean isOptional()
     {
-        return hasOptionalRecursive(true, true);
+        return hasOptionalRecursive(true, false);
     }
 
     private boolean hasOptionalRecursive(final boolean checkAncestors, final boolean checkDescendants)
@@ -732,6 +857,46 @@ public final class PlaybookStep
     }
 
     /**
+     * Returns true if visual element markers should be activated proactively for this step.
+     *
+     * @return true if marker is enabled, false otherwise
+     */
+    public boolean isMarker()
+    {
+        return this.marker;
+    }
+
+    /**
+     * Sets the marker flag.
+     *
+     * @param marker the marker flag to set
+     */
+    public void setMarker(final boolean marker)
+    {
+        this.marker = marker;
+    }
+
+    /**
+     * Returns the raw, uncleaned natural language instruction including directive tags.
+     *
+     * @return the raw instruction, or the cleaned instruction if raw is null
+     */
+    public String getRawInstruction()
+    {
+        return this.rawInstruction != null ? this.rawInstruction : this.instruction;
+    }
+
+    /**
+     * Sets the raw instruction.
+     *
+     * @param rawInstruction the raw instruction to set
+     */
+    public void setRawInstruction(final String rawInstruction)
+    {
+        this.rawInstruction = rawInstruction;
+    }
+
+    /**
      * Returns the nested sub-steps collection of this step.
      *
      * @return the nested sub-steps list
@@ -885,15 +1050,24 @@ public final class PlaybookStep
     private static final Pattern BUG_PATTERN = Pattern.compile("(?i)\\(\\s*bug(?:\\s*:\\s*([^)]+))?\\s*\\)");
     private static final Pattern CONTINUE_ON_ERROR_PATTERN = Pattern.compile("(?i)\\(\\s*continue-on-error\\s*\\)");
     private static final Pattern NO_HEALING_PATTERN = Pattern.compile("(?i)\\(\\s*no-healing\\s*\\)");
+    public static final Pattern MARKER_PATTERN = Pattern.compile("(?i)\\(\\s*marker\\s*\\)");
     private static final Pattern TIMEOUT_PATTERN = Pattern.compile("(?i)\\(\\s*timeout\\s*:\\s*(\\d+)(ms|s)?\\s*\\)");
 
-    public static final Pattern VISUAL_FULL_PATTERN = Pattern.compile("(?i)\\(\\s*visual\\s*:[^)]*\\bfull\\b[^)]*\\)");
-    public static final Pattern VISUAL_PATTERN = Pattern.compile("(?i)\\(\\s*visual(?:\\s*:[^)]+)?\\s*\\)");
+    public static final double DEFAULT_LAYOUT_SSIM_MIN_SCORE = 0.92;
+
+    public static final Pattern VISUAL_FULL_PATTERN = Pattern.compile("(?i)\\(\\s*(?:visual\\s*:[^)]*\\bfull\\b[^)]*|visual[-_]full)\\)");
+    public static final Pattern VISUAL_PATTERN = Pattern.compile("(?i)\\(\\s*(?:visual(?:\\s*:[^)]+)?|visual[-_]full)\\)");
     private static final Pattern VISUAL_TAG_PARAM_PATTERN = Pattern.compile("(?i)\\(\\s*visual(?:\\s*:\\s*([^)]+))?\\s*\\)");
     private static final Pattern THRESHOLD_PARAM_PATTERN = Pattern.compile("(?i)^(?:threshold|ssim|min-score|minScore)\\s*[:=]\\s*([0-9.]+%?)$");
     private static final Pattern STANDALONE_THRESHOLD_PATTERN = Pattern.compile("(?i)\\(\\s*(?:threshold|ssim|min-score|minScore)\\s*[:=]\\s*([0-9.]+%?)\\s*\\)");
-    public static final Pattern LAYOUT_PATTERN = Pattern.compile("(?i)\\(\\s*layout\\s*\\)");
+    public static final Pattern CONTEXT_LEVEL_PATTERN = Pattern.compile("(?i)\\(\\s*(?:contextlevel|context)\\s*[:=]\\s*([a-zA-Z_-]+)\\s*\\)");
+    public static final Pattern LAYOUT_PATTERN = Pattern.compile("(?i)\\(\\s*(?:layout(?:\\s*:[^)]+)?|layout[-_]full)\\)");
+    public static final Pattern LAYOUT_FULL_PATTERN = Pattern.compile("(?i)\\(\\s*(?:layout\\s*:[^)]*\\bfull\\b[^)]*|layout[-_]full)\\)");
+    private static final Pattern LAYOUT_TAG_PARAM_PATTERN = Pattern.compile("(?i)\\(\\s*layout(?:\\s*:\\s*([^)]+))?\\s*\\)");
     public static final Pattern HINT_PATTERN = Pattern.compile("(?i)\\(\\s*hint\\s*:\\s*[^)]+\\)");
+    public static final Pattern VERIFICATION_PREFIX_PATTERN =
+        Pattern.compile("(?i)^(assert|verify|confirm|validate|ensure|check\\s+that)\\b");
+
     public static final Pattern INTERACTIVE_ACTION_PATTERN =
         Pattern.compile("(?i)\\b(type|click|select|clear|submit|fill|press|enter|hover|drag|drop|scroll|check|uncheck|choose)\\b");
 
@@ -938,7 +1112,7 @@ public final class PlaybookStep
     /**
      * Checks if this step provides an explicit selector hint.
      *
-     * @return true if the instruction contains (hint: <selector>), false otherwise
+     * @return true if the instruction contains {@code (hint: <selector>)}, false otherwise
      */
     @JsonIgnore
     public boolean isHintStep()
@@ -951,24 +1125,58 @@ public final class PlaybookStep
     }
 
     /**
-     * Checks if this step is a visual-only or layout verification step.
+     * Checks if this step is a visual-only verification step.
      *
      * @return true if the instruction indicates a visual verification, false otherwise
      */
     @JsonIgnore
     public boolean isVisualStep()
     {
+        if (isLayoutStep())
+        {
+            return false;
+        }
+        if (Boolean.TRUE.equals(this.fullPage))
+        {
+            return true;
+        }
         if (this.instruction == null)
         {
             return false;
         }
-        return VISUAL_PATTERN.matcher(this.instruction).find() || LAYOUT_PATTERN.matcher(this.instruction).find();
+        return VISUAL_PATTERN.matcher(this.instruction).find();
     }
 
     /**
-     * Checks if this step explicitly requests full-page visual context.
+     * Checks if this step is a layout verification step.
      *
-     * @return true if the fullPage flag is true, or if the instruction contains (visual: full), (visual:full), false otherwise
+     * @return true if the instruction indicates a layout verification, false otherwise
+     */
+    @JsonIgnore
+    public boolean isLayoutStep()
+    {
+        if (this.instruction == null)
+        {
+            return false;
+        }
+        return LAYOUT_PATTERN.matcher(this.instruction).find();
+    }
+
+    /**
+     * Checks if this step is either a visual or layout verification step.
+     *
+     * @return true if the step has a visual or layout directive, false otherwise
+     */
+    @JsonIgnore
+    public boolean isVisualOrLayoutStep()
+    {
+        return isVisualStep() || isLayoutStep();
+    }
+
+    /**
+     * Checks if this step explicitly requests full-page visual or layout context.
+     *
+     * @return true if the fullPage flag is true, or if the instruction contains (visual: full) or (layout: full), false otherwise
      */
     @JsonIgnore
     public boolean isFullPageVisualStep()
@@ -981,7 +1189,51 @@ public final class PlaybookStep
         {
             return false;
         }
-        return VISUAL_FULL_PATTERN.matcher(this.instruction).find() || LAYOUT_PATTERN.matcher(this.instruction).find();
+        return VISUAL_FULL_PATTERN.matcher(this.instruction).find() || LAYOUT_FULL_PATTERN.matcher(this.instruction).find();
+    }
+
+    /**
+     * Checks if this step represents an assertion or verification milestone.
+     *
+     * @return true if the step has recorded assertion tool calls or its instruction indicates a verification
+     */
+    @JsonIgnore
+    public boolean isAssertionStep()
+    {
+        for (final ToolCall tc : this.toolCalls)
+        {
+            if (tc != null && isAssertionToolName(tc.toolName()))
+            {
+                return true;
+            }
+        }
+        if (this.instruction != null && VERIFICATION_PREFIX_PATTERN.matcher(this.instruction.trim()).find())
+        {
+            return true;
+        }
+        if (this.rawInstruction != null && VERIFICATION_PREFIX_PATTERN.matcher(this.rawInstruction.trim()).find())
+        {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Determines whether a given tool name is an assertion or verification tool.
+     *
+     * @param toolName the tool name to evaluate
+     * @return true if the tool represents an assertion
+     */
+    public static boolean isAssertionToolName(final String toolName)
+    {
+        if (toolName == null)
+        {
+            return false;
+        }
+        final int colonIdx = toolName.indexOf(':');
+        final String rawName = colonIdx >= 0 ? toolName.substring(colonIdx + 1) : toolName;
+        final String name = rawName.trim().toLowerCase(Locale.ROOT);
+        return name.startsWith("assert") || name.startsWith("browser_assert");
     }
 
     /**
@@ -1003,6 +1255,38 @@ public final class PlaybookStep
     {
         this.status = status;
     }
+
+    /**
+     * Returns the reason why this step was not run, if any.
+     *
+     * @return explanation why the step was not run, or null
+     */
+    public String getNotRunReason()
+    {
+        return this.notRunReason;
+    }
+
+    /**
+     * Sets the reason why this step was not run.
+     *
+     * @param notRunReason explanation why the step was not run
+     */
+    public void setNotRunReason(final String notRunReason)
+    {
+        this.notRunReason = notRunReason;
+    }
+
+    /**
+     * Checks if this step was not run due to a prior failure or error.
+     *
+     * @return true if the step status is NOT_RUN
+     */
+    @JsonIgnore
+    public boolean isNotRun()
+    {
+        return this.status == PlaybookStepStatus.NOT_RUN;
+    }
+
 
     /**
      * Checks if this step is a composite step containing sub-steps.
@@ -1130,6 +1414,46 @@ public final class PlaybookStep
     }
 
     /**
+     * Returns the recorded execution status from the companion JSON recording.
+     *
+     * @return the recorded status or null if not recorded
+     */
+    public PlaybookStepStatus getRecordedStatus()
+    {
+        return this.recordedStatus;
+    }
+
+    /**
+     * Sets the recorded execution status from the companion JSON recording.
+     *
+     * @param recordedStatus the recorded status to set
+     */
+    public void setRecordedStatus(final PlaybookStepStatus recordedStatus)
+    {
+        this.recordedStatus = recordedStatus;
+    }
+
+    /**
+     * Returns the recorded failure reason from the companion JSON recording.
+     *
+     * @return the recorded failure reason string or null
+     */
+    public String getRecordedFailureReason()
+    {
+        return this.recordedFailureReason;
+    }
+
+    /**
+     * Sets the recorded failure reason from the companion JSON recording.
+     *
+     * @param recordedFailureReason the recorded failure reason to set
+     */
+    public void setRecordedFailureReason(final String recordedFailureReason)
+    {
+        this.recordedFailureReason = recordedFailureReason;
+    }
+
+    /**
      * Returns the baseline state text content recorded for this step.
      *
      * @return the baseline state string or null
@@ -1226,7 +1550,15 @@ public final class PlaybookStep
      */
     public Double getSsimMinScore()
     {
-        return this.ssimMinScore;
+        if (this.ssimMinScore != null)
+        {
+            return this.ssimMinScore;
+        }
+        if (isLayoutStep())
+        {
+            return DEFAULT_LAYOUT_SSIM_MIN_SCORE;
+        }
+        return null;
     }
 
     /**
@@ -1456,6 +1788,20 @@ public final class PlaybookStep
         if (reasoning != null && !reasoning.isBlank())
         {
             this.reasonings.add(reasoning);
+        }
+    }
+
+    /**
+     * Sets all AI reasonings generated across execution stages for this step.
+     *
+     * @param reasonings the list of stage reasonings to set
+     */
+    public void setReasonings(final List<String> reasonings)
+    {
+        this.reasonings.clear();
+        if (reasonings != null)
+        {
+            this.reasonings.addAll(reasonings);
         }
     }
 

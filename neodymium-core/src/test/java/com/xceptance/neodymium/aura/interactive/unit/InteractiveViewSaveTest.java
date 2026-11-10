@@ -25,7 +25,6 @@ import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import org.neodymium.ai.client.MockLlmProvider;
-import org.neodymium.ai.testing.BaseAiTest;
 import com.xceptance.neodymium.aura.interactive.util.InteractiveHudTestUtils;
 import org.neodymium.common.browser.Browser;
 import org.neodymium.common.testdata.util.YamlFileReader;
@@ -41,18 +40,16 @@ import org.neodymium.util.Neodymium;
 @Tag("unit")
 @Tag("interactive-view")
 @Browser("Chrome_headless")
-public class InteractiveViewSaveTest extends BaseAiTest
+public class InteractiveViewSaveTest
 {
     private File tempDatasetYaml;
     private Thread bgThread;
 
-    @Override
     @BeforeEach
-    public void setupPageUrl(final org.junit.jupiter.api.TestInfo testInfo)
+    public void setupConfig()
     {
         System.clearProperty("neodymium.ai.interactive");
         org.neodymium.ai.config.AiConfiguration.resetInstance();
-        super.setupPageUrl(testInfo);
     }
 
     @BeforeEach
@@ -158,6 +155,10 @@ public class InteractiveViewSaveTest extends BaseAiTest
 
     private void runInteractiveConsoleTest(String sourceYamlName, Runnable uiActions, Consumer<String> resultAssertions, boolean local) throws Exception {
         File sourceDataset = new File("src/test/resources/com/xceptance/neodymium/ai/console/save_tests/" + sourceYamlName);
+        if (!sourceDataset.exists())
+        {
+            sourceDataset = new File("neodymium-core/src/test/resources/com/xceptance/neodymium/ai/console/save_tests/" + sourceYamlName);
+        }
         tempDatasetYaml = File.createTempFile(sourceYamlName.replace(".yaml", ""), ".yaml");
         Files.copy(sourceDataset.toPath(), tempDatasetYaml.toPath(), StandardCopyOption.REPLACE_EXISTING);
 
@@ -281,6 +282,21 @@ public class InteractiveViewSaveTest extends BaseAiTest
             uiEditStep(1, "steps step modified");
         }, (final String content) -> {
             assertGlobalBlock(content, "steps", "steps step modified");
+            Assertions.assertFalse(content.contains("raw_steps:"), "No raw steps");
+        }, false);
+    }
+
+    @NeodymiumTest
+    public void testEditPendingStepWithoutAdvancing_Global() throws Exception
+    {
+        System.out.println(">>> RUNNING TEST: " + "testEditPendingStepWithoutAdvancing_Global");
+        runInteractiveConsoleTest("save_dataset_global.yaml", () -> {
+            uiAdvanceToStep("before", 0);
+            uiEditStep(1, "steps step modified while pending");
+        }, (final String content) -> {
+            assertGlobalBlock(content, "before", "Before step 1");
+            assertGlobalBlock(content, "steps", "steps step modified while pending");
+            assertNoRandomKey(content);
             Assertions.assertFalse(content.contains("raw_steps:"), "No raw steps");
         }, false);
     }

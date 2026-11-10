@@ -70,6 +70,16 @@ public class ContextLevelTest
         Assertions.assertEquals(ContextLevel.VISUAL, ContextLevel.fromString("VISUAL", null));
         Assertions.assertEquals(ContextLevel.VISUAL_LEAN, ContextLevel.fromString("visual-lean", null));
         Assertions.assertEquals(ContextLevel.VISUAL_RICH, ContextLevel.fromString("VISUAL_RICH", null));
+        Assertions.assertEquals(ContextLevel.HINT, ContextLevel.fromString("NONE", null));
+        Assertions.assertEquals(ContextLevel.HINT, ContextLevel.fromString("none", null));
+        Assertions.assertEquals(ContextLevel.HINT, ContextLevel.fromString("ZERO", null));
+        Assertions.assertEquals(ContextLevel.HINT, ContextLevel.fromString("nodom", null));
+        Assertions.assertEquals(ContextLevel.HINT, ContextLevel.fromString("no-dom", null));
+        Assertions.assertEquals(ContextLevel.HINT, ContextLevel.fromString("HINT", null));
+        Assertions.assertEquals(ContextLevel.MINIMAL, ContextLevel.fromString("minimal", null));
+        Assertions.assertEquals(ContextLevel.LEAN, ContextLevel.fromString("LEAN", null));
+        Assertions.assertEquals(ContextLevel.STANDARD, ContextLevel.fromString("standard", null));
+        Assertions.assertEquals(ContextLevel.RICH, ContextLevel.fromString("rich", null));
     }
 
     @Test

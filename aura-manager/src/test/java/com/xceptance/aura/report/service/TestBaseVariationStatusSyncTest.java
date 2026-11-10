@@ -286,4 +286,43 @@ public class TestBaseVariationStatusSyncTest
         Assertions.assertEquals(1, vars.size());
         Assertions.assertEquals(5, vars.get(0).getTotalExecutionsCount());
     }
+
+    @Test
+    public void testDisplayModeResolutionAndDecoupledStatus()
+    {
+        // 1. AI Execution
+        final TestBaseVariationEntity varAi = new TestBaseVariationEntity(
+            "v_ai", "com.xceptance.neodymium.test.AiSearchTest", "testSearch", "Default", "@Search", "US", "Chrome"
+        );
+        varAi.setExecutionMode("LLM_RECORDING");
+        varAi.setLastStatus("passed-clean");
+        Assertions.assertEquals("AI", varAi.getDisplayMode());
+        Assertions.assertEquals("passed-clean", varAi.getLastStatus());
+
+        // 2. Healed Execution (Status is passed-clean, not healed; Mode is HEALED)
+        final TestBaseVariationEntity varHealed = new TestBaseVariationEntity(
+            "v_healed", "com.xceptance.neodymium.test.CheckoutTest", "testCheckout", "Default", "@Checkout", "DE", "Firefox"
+        );
+        varHealed.setHealed(true);
+        varHealed.setLastStatus("passed-clean");
+        Assertions.assertEquals("HEALED", varHealed.getDisplayMode());
+        Assertions.assertEquals("passed-clean", varHealed.getLastStatus());
+
+        // 3. Playbook / YAML Test
+        final TestBaseVariationEntity varPlaybook = new TestBaseVariationEntity(
+            "v_pb", "Aura_tests_stokke_order_yaml_Test", "executeYamlTest", "Default", "@Orders", "Unknown", "Chrome_1920x1080"
+        );
+        varPlaybook.setExecutionMode("REPLAY_STRICT");
+        varPlaybook.setLastStatus("failed-unknown");
+        Assertions.assertEquals("PLAYBOOK", varPlaybook.getDisplayMode());
+        Assertions.assertEquals("failed-unknown", varPlaybook.getLastStatus());
+
+        // 4. Default Java Test
+        final TestBaseVariationEntity varJava = new TestBaseVariationEntity(
+            "v_java", "com.xceptance.neodymium.test.StandardJavaTest", "testMethod", "Default", "@General", "US", "Chrome"
+        );
+        varJava.setLastStatus("passed-clean");
+        Assertions.assertEquals("JAVA", varJava.getDisplayMode());
+        Assertions.assertEquals("passed-clean", varJava.getLastStatus());
+    }
 }

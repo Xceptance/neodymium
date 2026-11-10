@@ -53,8 +53,8 @@ public final class AuraInteractiveService
     private final AtomicReference<InteractiveConsoleEngine> currentConsoleEngine = new AtomicReference<>(null);
     private final AtomicReference<String> lastProcessedRunId = new AtomicReference<>(null);
     private final AtomicReference<String> activeTheme = new AtomicReference<>("system");
-    private final Map<String, Integer> executionIndexMap = new ConcurrentHashMap<>();
-    private final AtomicInteger executionIndexCounter = new AtomicInteger(0);
+    private final Map<String, Map<String, Integer>> classExecutionIndexMap = new ConcurrentHashMap<>();
+    private final Map<String, AtomicInteger> classExecutionCounters = new ConcurrentHashMap<>();
     private volatile Consumer<String> statePushListener;
 
     public AuraInteractiveService()
@@ -117,19 +117,27 @@ public final class AuraInteractiveService
         activeTheme.set(theme);
     }
 
-    public int getExecutionIndex(final String executionKey)
+    public int getExecutionIndex(final String testClassFolder, final String executionKey)
     {
+        final String classKey = (testClassFolder != null && !testClassFolder.isBlank()) ? testClassFolder : "DefaultTestClass";
         if (executionKey == null || executionKey.isEmpty())
         {
             return 1;
         }
-        return executionIndexMap.computeIfAbsent(executionKey, k -> executionIndexCounter.incrementAndGet());
+        final Map<String, Integer> classMap = classExecutionIndexMap.computeIfAbsent(classKey, k -> new ConcurrentHashMap<>());
+        final AtomicInteger classCounter = classExecutionCounters.computeIfAbsent(classKey, k -> new AtomicInteger(0));
+        return classMap.computeIfAbsent(executionKey, k -> classCounter.incrementAndGet());
+    }
+
+    public int getExecutionIndex(final String executionKey)
+    {
+        return getExecutionIndex("DefaultTestClass", executionKey);
     }
 
     public void resetExecutionIndexes()
     {
-        executionIndexMap.clear();
-        executionIndexCounter.set(0);
+        classExecutionIndexMap.clear();
+        classExecutionCounters.clear();
     }
 
     /**
@@ -168,13 +176,13 @@ public final class AuraInteractiveService
 
         try
         {
+            final String testClassFolder = InteractiveConsoleEngine.extractTestClassFolder(json);
             final String executionKey = extractExecutionKey(json);
-            final int index = getExecutionIndex(executionKey);
+            final int index = getExecutionIndex(testClassFolder, executionKey);
 
             final String runFolder = (engine.getRunId() != null && !engine.getRunId().isBlank())
                 ? (engine.getRunId().startsWith("run_") || engine.getRunId().startsWith("run-") ? engine.getRunId() : "run_" + engine.getRunId())
                 : InteractiveConsoleEngine.getRunFolder();
-            final String testClassFolder = InteractiveConsoleEngine.extractTestClassFolder(json);
 
             final List<File> baseDirs = List.of(
                 new File("storage/runs"),
