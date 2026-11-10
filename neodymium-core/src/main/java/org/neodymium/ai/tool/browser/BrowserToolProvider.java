@@ -3312,18 +3312,23 @@ public final class BrowserToolProvider
         {
             s = s.substring(6).trim();
         }
+        if (s.startsWith("(") && s.endsWith(")[1]"))
+        {
+            s = s.substring(1, s.length() - 4).trim();
+        }
+        s = s.replaceAll("\\[\\s*1\\s*\\]", "");
+        s = s.replaceAll("\\s*>\\s*", ">");
         s = s.replaceAll("\\s+", " ");
         return ":root".equals(s)
                 || "body".equals(s)
                 || "html".equals(s)
                 || "/html".equals(s)
                 || "/html/body".equals(s)
-                || "/html/body[1]".equals(s)
+                || "/html//body".equals(s)
                 || "//body".equals(s)
-                || "//body[1]".equals(s)
                 || "//html".equals(s)
+                || "//html/body".equals(s)
                 || "//html//body".equals(s)
-                || "html > body".equals(s)
                 || "html>body".equals(s)
                 || "html body".equals(s);
     }

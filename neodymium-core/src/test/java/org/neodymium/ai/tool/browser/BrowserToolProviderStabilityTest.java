@@ -3019,6 +3019,67 @@ public class BrowserToolProviderStabilityTest
         Assertions.assertEquals(ToolResult.Status.ERROR, result9.status());
         Assertions.assertTrue(result9.content().contains("cannot be performed against root document containers ('body', 'html') or without a target selector"),
                 "Error result must instruct caller to provide selector for xpath=/html/body[1]");
+
+        // '//html/body' standard XPath selector with empty expected text
+        final ObjectNode args10 = MAPPER.createObjectNode();
+        args10.put("selector", "//html/body");
+        args10.put("expectedText", "");
+        final ToolResult result10 = tool.execute(new ToolCall("call-xpath-standard-html-body-sel", "browser_assert_text", args10), null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result10.status());
+        Assertions.assertTrue(result10.content().contains("cannot be performed against root document containers ('body', 'html') or without a target selector"),
+                "Error result must instruct caller to provide selector for //html/body");
+
+        // 'html >body' with unbalanced spacing and empty expected text
+        final ObjectNode args11 = MAPPER.createObjectNode();
+        args11.put("selector", "html >body");
+        args11.put("expectedText", "");
+        final ToolResult result11 = tool.execute(new ToolCall("call-css-unbalanced-body-sel", "browser_assert_text", args11), null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result11.status());
+        Assertions.assertTrue(result11.content().contains("cannot be performed against root document containers ('body', 'html') or without a target selector"),
+                "Error result must instruct caller to provide selector for html >body");
+    }
+
+    @Test
+    public void testIsRootElementSelector()
+    {
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("html"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector(":root"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("/html"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("//html"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("//body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("/html/body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("//html/body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("//html//body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("/html/body[1]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("//html/body[1]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("/html[1]/body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("//html[1]/body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("/html[1]/body[1]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("//html[1]/body[1]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("body[1]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("//body[1]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("//body[ 1 ]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("(//body)[1]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("(//html/body)[1]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("html[1]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("/html[1]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("//html[1]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("html>body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("html > body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("html >body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("html> body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("html body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("css=body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("xpath=//html/body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("xpath=/html/body[1]"));
+
+        Assertions.assertFalse(BrowserToolProvider.isRootElementSelector(null));
+        Assertions.assertFalse(BrowserToolProvider.isRootElementSelector(""));
+        Assertions.assertFalse(BrowserToolProvider.isRootElementSelector("   "));
+        Assertions.assertFalse(BrowserToolProvider.isRootElementSelector("#main"));
+        Assertions.assertFalse(BrowserToolProvider.isRootElementSelector("div"));
+        Assertions.assertFalse(BrowserToolProvider.isRootElementSelector("input"));
     }
 
     @Test

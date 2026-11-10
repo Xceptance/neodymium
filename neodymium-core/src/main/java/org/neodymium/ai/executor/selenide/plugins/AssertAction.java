@@ -18,10 +18,12 @@
  */
 package org.neodymium.ai.executor.selenide.plugins;
 
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
+import org.openqa.selenium.JavascriptException;
 import org.openqa.selenium.StaleElementReferenceException;
 import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebElement;
@@ -92,11 +94,21 @@ public final class AssertAction implements BrowserActionPlugin
             {
                 throw e;
             }
+            catch (final JavascriptException e)
+            {
+                final String msg = e.getMessage() != null ? e.getMessage().toLowerCase(Locale.ROOT) : "";
+                if (e.getCause() instanceof StaleElementReferenceException
+                        || msg.contains("stale")
+                        || msg.contains("not attached"))
+                {
+                    throw new StaleElementReferenceException(e.getMessage(), e);
+                }
+            }
             catch (final Exception ignored)
             {
             }
 
-            return new CheckResult(false, "focused");
+            return new CheckResult(false, "not focused");
         }
     };
 
@@ -138,6 +150,16 @@ public final class AssertAction implements BrowserActionPlugin
             catch (final StaleElementReferenceException e)
             {
                 throw e;
+            }
+            catch (final JavascriptException e)
+            {
+                final String msg = e.getMessage() != null ? e.getMessage().toLowerCase(Locale.ROOT) : "";
+                if (e.getCause() instanceof StaleElementReferenceException
+                        || msg.contains("stale")
+                        || msg.contains("not attached"))
+                {
+                    throw new StaleElementReferenceException(e.getMessage(), e);
+                }
             }
             catch (final Exception ignored)
             {

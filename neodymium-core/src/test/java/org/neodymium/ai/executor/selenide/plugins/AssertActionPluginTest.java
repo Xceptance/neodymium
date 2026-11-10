@@ -18,8 +18,11 @@
  */
 package org.neodymium.ai.executor.selenide.plugins;
 
+import com.codeborne.selenide.CheckResult;
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Driver;
+import com.codeborne.selenide.SelenideConfig;
+import com.codeborne.selenide.SelenideTargetLocator;
 import com.codeborne.selenide.WebDriverRunner;
 import java.lang.reflect.Proxy;
 import java.util.Collections;
@@ -30,6 +33,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
+import org.openqa.selenium.JavascriptException;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.StaleElementReferenceException;
 import org.openqa.selenium.WebDriver;
@@ -587,7 +591,7 @@ public class AssertActionPluginTest
     }
 
     @Test
-    public void testFocusedAndUnfocusedRethrowStaleElementReferenceException()
+    public void testFocusedAndUnfocusedRethrowStaleElementReferenceExceptionFromSwitchTo()
     {
         final WebElement staleElement = (WebElement) Proxy.newProxyInstance(
                 AssertActionPluginTest.class.getClassLoader(),
@@ -629,9 +633,13 @@ public class AssertActionPluginTest
                     {
                         return mockDriver;
                     }
-                    if ("executeJavaScript".equals(name))
+                    if ("config".equals(name))
                     {
-                        throw new StaleElementReferenceException("Script execution element is stale");
+                        return new SelenideConfig();
+                    }
+                    if ("switchTo".equals(name))
+                    {
+                        return new SelenideTargetLocator((Driver) proxy);
                     }
                     return null;
                 }
@@ -646,5 +654,255 @@ public class AssertActionPluginTest
         {
             AssertAction.FOCUSED.check(selenideDriver, staleElement);
         });
+    }
+
+    @Test
+    public void testFocusedAndUnfocusedRethrowStaleElementReferenceExceptionFromExecuteJavaScript()
+    {
+        final WebElement normalElement = (WebElement) Proxy.newProxyInstance(
+                AssertActionPluginTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("equals".equals(name))
+                    {
+                        return false;
+                    }
+                    return null;
+                }
+        );
+
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                AssertActionPluginTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("switchTo".equals(name))
+                    {
+                        return (WebDriver.TargetLocator) Proxy.newProxyInstance(
+                                AssertActionPluginTest.class.getClassLoader(),
+                                new Class<?>[]{WebDriver.TargetLocator.class},
+                                (p, m, a) -> null
+                        );
+                    }
+                    return null;
+                }
+        );
+
+        // Driver throwing direct StaleElementReferenceException from executeJavaScript
+        final Driver selenideDriver = (Driver) Proxy.newProxyInstance(
+                AssertActionPluginTest.class.getClassLoader(),
+                new Class<?>[]{Driver.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("getWebDriver".equals(name))
+                    {
+                        return mockDriver;
+                    }
+                    if ("config".equals(name))
+                    {
+                        return new SelenideConfig();
+                    }
+                    if ("switchTo".equals(name))
+                    {
+                        return new SelenideTargetLocator((Driver) proxy);
+                    }
+                    if ("executeJavaScript".equals(name))
+                    {
+                        throw new StaleElementReferenceException("Script execution element is stale");
+                    }
+                    return null;
+                }
+        );
+
+        Assertions.assertThrows(StaleElementReferenceException.class, () ->
+        {
+            AssertAction.UNFOCUSED.check(selenideDriver, normalElement);
+        });
+
+        Assertions.assertThrows(StaleElementReferenceException.class, () ->
+        {
+            AssertAction.FOCUSED.check(selenideDriver, normalElement);
+        });
+
+        // Driver throwing wrapped JavascriptException with stale message
+        final Driver selenideDriverWrapped = (Driver) Proxy.newProxyInstance(
+                AssertActionPluginTest.class.getClassLoader(),
+                new Class<?>[]{Driver.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("getWebDriver".equals(name))
+                    {
+                        return mockDriver;
+                    }
+                    if ("config".equals(name))
+                    {
+                        return new SelenideConfig();
+                    }
+                    if ("switchTo".equals(name))
+                    {
+                        return new SelenideTargetLocator((Driver) proxy);
+                    }
+                    if ("executeJavaScript".equals(name))
+                    {
+                        throw new JavascriptException("javascript error: stale element reference in document");
+                    }
+                    return null;
+                }
+        );
+
+        Assertions.assertThrows(StaleElementReferenceException.class, () ->
+        {
+            AssertAction.UNFOCUSED.check(selenideDriverWrapped, normalElement);
+        });
+
+        Assertions.assertThrows(StaleElementReferenceException.class, () ->
+        {
+            AssertAction.FOCUSED.check(selenideDriverWrapped, normalElement);
+        });
+
+        // Driver throwing wrapped JavascriptException with uppercase Stale message
+        final Driver selenideDriverUppercaseStale = (Driver) Proxy.newProxyInstance(
+                AssertActionPluginTest.class.getClassLoader(),
+                new Class<?>[]{Driver.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("getWebDriver".equals(name))
+                    {
+                        return mockDriver;
+                    }
+                    if ("config".equals(name))
+                    {
+                        return new SelenideConfig();
+                    }
+                    if ("switchTo".equals(name))
+                    {
+                        return new SelenideTargetLocator((Driver) proxy);
+                    }
+                    if ("executeJavaScript".equals(name))
+                    {
+                        throw new JavascriptException("JavaScript error: StaleElementReferenceError: The element is stale");
+                    }
+                    return null;
+                }
+        );
+
+        Assertions.assertThrows(StaleElementReferenceException.class, () ->
+        {
+            AssertAction.UNFOCUSED.check(selenideDriverUppercaseStale, normalElement);
+        });
+
+        Assertions.assertThrows(StaleElementReferenceException.class, () ->
+        {
+            AssertAction.FOCUSED.check(selenideDriverUppercaseStale, normalElement);
+        });
+
+        // Driver throwing wrapped JavascriptException with "not attached" message
+        final Driver selenideDriverNotAttached = (Driver) Proxy.newProxyInstance(
+                AssertActionPluginTest.class.getClassLoader(),
+                new Class<?>[]{Driver.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("getWebDriver".equals(name))
+                    {
+                        return mockDriver;
+                    }
+                    if ("config".equals(name))
+                    {
+                        return new SelenideConfig();
+                    }
+                    if ("switchTo".equals(name))
+                    {
+                        return new SelenideTargetLocator((Driver) proxy);
+                    }
+                    if ("executeJavaScript".equals(name))
+                    {
+                        throw new JavascriptException("javascript error: element is not attached to the page document");
+                    }
+                    return null;
+                }
+        );
+
+        Assertions.assertThrows(StaleElementReferenceException.class, () ->
+        {
+            AssertAction.UNFOCUSED.check(selenideDriverNotAttached, normalElement);
+        });
+
+        Assertions.assertThrows(StaleElementReferenceException.class, () ->
+        {
+            AssertAction.FOCUSED.check(selenideDriverNotAttached, normalElement);
+        });
+    }
+
+    @Test
+    public void testFocusedConditionFailureMessageReturnsNotFocused()
+    {
+        final WebElement normalElement = (WebElement) Proxy.newProxyInstance(
+                AssertActionPluginTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("equals".equals(name))
+                    {
+                        return false;
+                    }
+                    return null;
+                }
+        );
+
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                AssertActionPluginTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("switchTo".equals(name))
+                    {
+                        return (WebDriver.TargetLocator) Proxy.newProxyInstance(
+                                AssertActionPluginTest.class.getClassLoader(),
+                                new Class<?>[]{WebDriver.TargetLocator.class},
+                                (p, m, a) -> null
+                        );
+                    }
+                    return null;
+                }
+        );
+
+        final Driver selenideDriver = (Driver) Proxy.newProxyInstance(
+                AssertActionPluginTest.class.getClassLoader(),
+                new Class<?>[]{Driver.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("getWebDriver".equals(name))
+                    {
+                        return mockDriver;
+                    }
+                    if ("config".equals(name))
+                    {
+                        return new SelenideConfig();
+                    }
+                    if ("switchTo".equals(name))
+                    {
+                        return new SelenideTargetLocator((Driver) proxy);
+                    }
+                    if ("executeJavaScript".equals(name))
+                    {
+                        return Boolean.FALSE;
+                    }
+                    return null;
+                }
+        );
+
+        final CheckResult result = AssertAction.FOCUSED.check(selenideDriver, normalElement);
+        Assertions.assertEquals(CheckResult.Verdict.REJECT, result.verdict(), "FOCUSED must be rejected when element is unfocused");
+        Assertions.assertEquals("not focused", result.actualValue(), "Failure actual value must be 'not focused'");
     }
 }
