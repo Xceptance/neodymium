@@ -3172,7 +3172,7 @@ function deleteStep(lineNumOrElement) {
         }
         const treeCard = document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`);
         if (treeCard) treeCard.remove();
-        if (row.nextElementSibling && row.nextElementSibling.classList.contains('review-suggestion-card')) {
+        while (row.nextElementSibling && row.nextElementSibling.classList.contains('review-suggestion-card')) {
             row.nextElementSibling.remove();
         }
 
@@ -3185,7 +3185,7 @@ function deleteStep(lineNumOrElement) {
 
     const treeCard = document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`);
     if (treeCard) treeCard.remove();
-    if (row.nextElementSibling && row.nextElementSibling.classList.contains('review-suggestion-card')) {
+    while (row.nextElementSibling && row.nextElementSibling.classList.contains('review-suggestion-card')) {
         row.nextElementSibling.remove();
     }
 
@@ -5785,7 +5785,14 @@ function applySuggestionRewrite(btnOrLine, newInstruction) {
     if (btnOrLine && typeof btnOrLine === 'object' && btnOrLine.nodeType) {
         card = btnOrLine.closest('.review-suggestion-card');
         if (card) {
-            row = card.previousElementSibling;
+            let prev = card.previousElementSibling;
+            while (prev && !prev.classList.contains('step-row')) {
+                prev = prev.previousElementSibling;
+            }
+            row = prev;
+        }
+        if (!newInstruction && btnOrLine.hasAttribute && btnOrLine.hasAttribute('data-rewrite')) {
+            newInstruction = btnOrLine.getAttribute('data-rewrite');
         }
     } else if (typeof btnOrLine === 'number' || typeof btnOrLine === 'string') {
         row = document.querySelector(`.step-row[data-line="${btnOrLine}"]`);
@@ -5799,9 +5806,8 @@ function applySuggestionRewrite(btnOrLine, newInstruction) {
         if (contentEl) {
             contentEl.setAttribute('data-raw', newInstruction);
             contentEl.innerText = newInstruction;
-            const lineNum = row.getAttribute('data-line');
             if (typeof formatStepToTokens === 'function') {
-                formatStepToTokens(lineNum || row);
+                formatStepToTokens(row);
             }
             if (typeof compilePlaybookToYaml === 'function') {
                 compilePlaybookToYaml();
@@ -5923,31 +5929,42 @@ function renderStepSuggestionCards(findings) {
 
     findings.forEach(f => {
         let targetRow = null;
+        const allRows = document.querySelectorAll('#beforeStepsList .step-row, #stepsList .step-row, #afterStepsList .step-row');
 
-        // 1. Try anchoring by rawInstruction matching
-        if (f.rawInstruction && f.rawInstruction.trim()) {
+        // 1. Try exact match by stepIndex (if rawInstruction matches or is blank)
+        if (f.stepIndex > 0 && f.stepIndex <= allRows.length) {
+            const candidate = allRows[f.stepIndex - 1];
+            if (!f.rawInstruction || !f.rawInstruction.trim()) {
+                targetRow = candidate;
+            } else {
+                const c = candidate.querySelector('.step-content');
+                const candidateRaw = c ? (c.getAttribute('data-raw') || c.innerText || '').trim() : '';
+                if (candidateRaw === f.rawInstruction.trim()) {
+                    targetRow = candidate;
+                }
+            }
+        }
+
+        // 2. If index didn't match rawInstruction, search all rows by rawInstruction
+        if (!targetRow && f.rawInstruction && f.rawInstruction.trim()) {
             const rawTarget = f.rawInstruction.trim();
-            const candidates = document.querySelectorAll('.step-row');
-            for (const r of candidates) {
+            for (const r of allRows) {
                 const c = r.querySelector('.step-content');
-                if (c && (c.getAttribute('data-raw') === rawTarget || c.innerText.trim() === rawTarget)) {
+                if (c && ((c.getAttribute('data-raw') || '').trim() === rawTarget || (c.innerText || '').trim() === rawTarget)) {
                     targetRow = r;
                     break;
                 }
             }
         }
 
-        // 2. Fall back to lineNumber
+        // 3. Fall back to lineNumber
         if (!targetRow && f.lineNumber > 0) {
             targetRow = document.querySelector(`.step-row[data-line="${f.lineNumber}"]`);
         }
 
-        // 3. Fall back to stepIndex
-        if (!targetRow && f.stepIndex > 0) {
-            const allRows = document.querySelectorAll('#stepsList .step-row, .step-row');
-            if (f.stepIndex <= allRows.length) {
-                targetRow = allRows[f.stepIndex - 1];
-            }
+        // 4. Fall back to stepIndex directly
+        if (!targetRow && f.stepIndex > 0 && f.stepIndex <= allRows.length) {
+            targetRow = allRows[f.stepIndex - 1];
         }
 
         if (!targetRow) {
@@ -5964,10 +5981,10 @@ function renderStepSuggestionCards(findings) {
         let rewriteHtml = '';
         if (f.suggestedRewrite && f.suggestedRewrite.trim().length > 0) {
             const safeRewrite = escapeHtml(f.suggestedRewrite);
-            const encodedRewrite = encodeURIComponent(f.suggestedRewrite);
             rewriteHtml = `
                 <button type="button" class="btn-apply-suggestion"
-                        onclick="applySuggestionRewrite(this, decodeURIComponent('${encodedRewrite}'))"
+                        data-rewrite="${safeRewrite}"
+                        onclick="applySuggestionRewrite(this)"
                         title="Replace step instruction with suggested rewrite: &quot;${safeRewrite}&quot;">
                     Apply Rewrite
                 </button>
@@ -5987,7 +6004,11 @@ function renderStepSuggestionCards(findings) {
             </div>
         `;
 
-        targetRow.parentNode.insertBefore(card, targetRow.nextSibling);
+        let insertAfterEl = targetRow;
+        while (insertAfterEl.nextElementSibling && insertAfterEl.nextElementSibling.classList.contains('review-suggestion-card')) {
+            insertAfterEl = insertAfterEl.nextElementSibling;
+        }
+        insertAfterEl.parentNode.insertBefore(card, insertAfterEl.nextSibling);
     });
 
     if (unanchoredFindings.length > 0) {
