@@ -92,22 +92,16 @@ public class AuraDiagnosticServiceTest
     @Test
     public void testGetTestFailuresPagination()
     {
-        final TestExecutionDto exec1 = new TestExecutionDto(
-            "1", "run_123", "TestClass", "test1", "LoginTest", "LoginTest",
-            "tests/Login.yaml", "tests/Login.yaml", "FAILED", "Java", "UNKNOWN", null,
-            "Chrome", "org.openqa.selenium.NoSuchElementException: Cannot locate element with locator: By.id: login-btn",
-            new ArrayList<>(), null, "Area", new ArrayList<>(), null, null,
-            null, null, null, null, "MODE", null, null, null, null, 0L, 1, 1, 100L, "100ms", 0, 0L, 0.0,
-            null, "Cannot locate element", null, null, null, null
+        final TestExecutionDto exec1 = createExecution(
+            "1", "run_123", "LoginTest",
+            "org.openqa.selenium.NoSuchElementException: Cannot locate element with locator: By.id: login-btn",
+            "Cannot locate element"
         );
 
-        final TestExecutionDto exec2 = new TestExecutionDto(
-            "2", "run_123", "TestClass", "test2", "CartTest", "CartTest",
-            "tests/Cart.yaml", "tests/Cart.yaml", "FAILED", "Java", "UNKNOWN", null,
-            "Chrome", "org.openqa.selenium.TimeoutException: Expected condition failed: waiting for visibility of element located by By.cssSelector: .cart-item",
-            new ArrayList<>(), null, "Area", new ArrayList<>(), null, null,
-            null, null, null, null, "MODE", null, null, null, null, 0L, 1, 1, 200L, "200ms", 0, 0L, 0.0,
-            null, "Timeout waiting for element", null, null, null, null
+        final TestExecutionDto exec2 = createExecution(
+            "2", "run_123", "CartTest",
+            "org.openqa.selenium.TimeoutException: Expected condition failed: waiting for visibility of element located by By.cssSelector: .cart-item",
+            "Timeout waiting for element"
         );
 
         final RunReportDto report = new RunReportDto(
@@ -194,13 +188,10 @@ public class AuraDiagnosticServiceTest
     @Test
     public void testGetRunFailuresFilteringByUnclassifiedWithLocator()
     {
-        final TestExecutionDto exec = new TestExecutionDto(
-            "1", "run_123", "TestClass", "test1", "UnclassifiedTest", "UnclassifiedTest",
-            "tests/Unclassified.yaml", "tests/Unclassified.yaml", "FAILED", "Java", "UNKNOWN", null,
-            "Chrome", "Some custom error occurred with locator: By.id: custom-btn",
-            new ArrayList<>(), null, "Area", new ArrayList<>(), null, null,
-            null, null, null, null, "MODE", null, null, null, null, 0L, 1, 1, 100L, "100ms", 0, 0L, 0.0,
-            null, "Custom error", null, null, null, null
+        final TestExecutionDto exec = createExecution(
+            "1", "run_123", "UnclassifiedTest",
+            "Some custom error occurred with locator: By.id: custom-btn",
+            "Custom error"
         );
         final RunReportDto report = new RunReportDto(
             "run_123", "Batch", "2026-10-02T10:00:00Z", "100ms",
@@ -216,5 +207,22 @@ public class AuraDiagnosticServiceTest
         final FailurePageResultDto<DistilledFailureDto> failuresUnknown = diagnosticService.getRunFailures("run_123", "UNKNOWN", "0", 10);
         Assertions.assertEquals(1, failuresUnknown.getTotalCount());
         Assertions.assertEquals(1, failuresUnknown.getFailures().size());
+    }
+
+    private static TestExecutionDto createExecution(
+            final String id,
+            final String runId,
+            final String testName,
+            final String failure,
+            final String failureReason)
+    {
+        return new TestExecutionDto(
+            id, runId, "TestClass", testName, testName,
+            "tests/" + testName + ".yaml", "tests/" + testName + ".yaml", "FAILED", "Java", "UNKNOWN", null,
+            "Chrome", failure,
+            new ArrayList<>(), null, "Area", new ArrayList<>(), null, null,
+            null, null, null, null, "MODE", null, null, null, null, 0L, 1, 1, 100L, "100ms", 0, 0L, 0.0,
+            null, failureReason, null, null
+        );
     }
 }
