@@ -3228,4 +3228,99 @@ public class PreliminaryReportListenerTest
         assertTrue(indexHtml.contains("1 not run"), "Index HTML must display not run count in steps column");
         assertTrue(indexHtml.contains(".pill-not-run"), "Index HTML must include pill-not-run CSS style");
     }
+
+    @Test
+    @DisplayName("Verify StepFinishedEvent with NOT_RUN copies notRunReason and resolveUnfinishedSteps preserves it")
+    public void testStepFinishedEventWithNotRunStatusPreservesNotRunReason(@TempDir final Path tempDir)
+    {
+        final PreliminaryReportListener listener = new PreliminaryReportListener(tempDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final TestExecutionReport report = listener.getReport();
+        report.setStatus("FAILED");
+        report.setSuccess(false);
+        report.setFailureReason("Button disabled");
+
+        final PlaybookStep pbStep1 = new PlaybookStep("Open home");
+        final PlaybookStep pbStep2 = new PlaybookStep("Click button");
+        final PlaybookStep pbStep3 = new PlaybookStep("Proceed to payment");
+        pbStep3.setStatus(PlaybookStepStatus.NOT_RUN);
+        pbStep3.setNotRunReason("Not executed because step #2 failed.");
+
+        final TestExecutionReport.ReportStepEntry step1 = new TestExecutionReport.ReportStepEntry(0, "Open home");
+        step1.setStatus("SUCCESS");
+        final TestExecutionReport.ReportStepEntry step2 = new TestExecutionReport.ReportStepEntry(1, "Click button");
+        step2.setStatus("FAILED");
+        step2.setFailureReason("Button disabled");
+        final TestExecutionReport.ReportStepEntry step3 = new TestExecutionReport.ReportStepEntry(2, "Proceed to payment");
+        step3.setStatus("PENDING");
+
+        report.addStep(step1);
+        report.addStep(step2);
+        report.addStep(step3);
+
+        // Simulate StateMachineRunner dispatching StepFinishedEvent for unreached step 3
+        listener.onEvent(new StepFinishedEvent(pbStep3, PlaybookStepStatus.NOT_RUN));
+
+        assertEquals("NOT_RUN", step3.getStatus());
+        assertEquals("Not executed because step #2 failed.", step3.getNotRunReason(),
+            "onEvent(StepFinishedEvent) must copy notRunReason from PlaybookStep");
+
+        // Now finalize via resolveUnfinishedSteps
+        listener.resolveUnfinishedSteps();
+
+        assertEquals("NOT RUN", step3.getStatus());
+        assertEquals("Not executed because step #2 failed.", step3.getNotRunReason(),
+            "resolveUnfinishedSteps must preserve existing notRunReason");
+    }
+
+    @Test
+    @DisplayName("Verify composite step with SUCCESS and SKIPPED sub-steps remains SUCCESS when a downstream step fails")
+    public void testCompositeStepWithPassedAndSkippedSubstepsRemainsSuccessWhenDownstreamStepFails(@TempDir final Path tempDir)
+    {
+        final PreliminaryReportListener listener = new PreliminaryReportListener(tempDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final TestExecutionReport report = listener.getReport();
+        report.setStatus("FAILED");
+        report.setSuccess(false);
+        report.setFailureReason("Downstream step failed");
+
+        final TestExecutionReport.ReportStepEntry root0 = new TestExecutionReport.ReportStepEntry(0, "Initialize Account");
+        final TestExecutionReport.ReportStepEntry sub0 = new TestExecutionReport.ReportStepEntry(0, "Create profile");
+        sub0.setStatus("SUCCESS");
+        final TestExecutionReport.ReportStepEntry sub1 = new TestExecutionReport.ReportStepEntry(1, "Optional survey banner");
+        sub1.setStatus("SKIPPED");
+        root0.addSubStep(sub0);
+        root0.addSubStep(sub1);
+
+        final TestExecutionReport.ReportStepEntry root1 = new TestExecutionReport.ReportStepEntry(1, "Checkout");
+        root1.setStatus("FAILED");
+        root1.setFailureReason("Checkout service unavailable");
+
+        final TestExecutionReport.ReportStepEntry root2 = new TestExecutionReport.ReportStepEntry(2, "Order Confirmation");
+        root2.setStatus("PENDING");
+
+        report.addStep(root0);
+        report.addStep(root1);
+        report.addStep(root2);
+
+        listener.resolveUnfinishedSteps();
+        listener.recalculateMetrics();
+
+        // Root 0 completed before Root 1 failed, so it must remain SUCCESS, NOT NOT RUN
+        assertEquals("SUCCESS", root0.getStatus(), "Completed composite step must be SUCCESS");
+        assertNull(root0.getNotRunReason(), "Completed composite step must not have notRunReason");
+
+        // Root 1 is the failing step
+        assertEquals("FAILED", root1.getStatus());
+
+        // Root 2 was unreached downstream
+        assertEquals("NOT RUN", root2.getStatus());
+        assertEquals("Not executed because step #2 failed.", root2.getNotRunReason());
+
+        // Verify metrics
+        final TestExecutionReport.ReportMetrics m = report.getMetrics();
+        assertNotNull(m);
+        assertEquals(3, m.getTotalSteps());
+        assertEquals(1, m.getFailedSteps());
+        assertEquals(1, m.getNotRunSteps());
+        assertEquals(0, m.getSkippedSteps(), "Root steps skipped count should be 0");
+    }
 }

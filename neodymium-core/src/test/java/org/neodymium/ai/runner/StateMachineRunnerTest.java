@@ -270,5 +270,44 @@ public class StateMachineRunnerTest
         assertEquals(1, act2.getSubStepIndex());
         assertEquals("Type searchTerm into search field", act2.getSubStepInstruction());
     }
+
+    @Test
+    public void testCompositeSubStepFailureSetsSubStepSpecificLabelInNotRunReason()
+    {
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(mockProvider);
+
+        final MockTargetExecutor mockExecutor = new MockTargetExecutor();
+        final AiSession session = AiSession.mock(new SessionData(), registry, new ExecutionEventBus(), mockExecutor);
+        final StateMachineRunner runner = new StateMachineRunner(session);
+
+        final PlaybookStep parent = new PlaybookStep("Parent complex flow");
+        final PlaybookStep sub1 = new PlaybookStep("Sub 1: select category");
+        sub1.setStatus(PlaybookStepStatus.SUCCESS);
+        final PlaybookStep sub2 = new PlaybookStep("Sub 2: select filter");
+        sub2.setStatus(PlaybookStepStatus.RUNNING);
+        parent.setSubSteps(List.of(sub1, sub2));
+
+        final PlaybookStep downstreamStep = new PlaybookStep("Step 2: checkout");
+        downstreamStep.setStatus(PlaybookStepStatus.PENDING);
+
+        final List<PlaybookStep> playbookSteps = List.of(parent, downstreamStep);
+
+        final ExecutionContext innerContext = session.getExecutionContext();
+        innerContext.getTransientData().put("playbook.steps", new ArrayList<>(playbookSteps));
+        innerContext.getTransientData().put("playbook.flatSteps", new ArrayList<>(playbookSteps));
+        innerContext.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, sub2);
+
+        innerContext.pushStep(ctx -> {
+            throw new ConclusiveFailureException("Failed to select filter");
+        });
+
+        assertThrows(ConclusiveFailureException.class, () -> runner.run());
+
+        assertEquals(PlaybookStepStatus.NOT_RUN, downstreamStep.getStatus());
+        assertEquals("Not executed because step #1.2 failed.", downstreamStep.getNotRunReason(),
+            "Downstream step notRunReason must mention parent and sub-step index (#1.2)");
+    }
 }
 

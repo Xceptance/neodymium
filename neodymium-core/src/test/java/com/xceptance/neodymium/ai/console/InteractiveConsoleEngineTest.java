@@ -1416,5 +1416,58 @@ public class InteractiveConsoleEngineTest
         assertEquals("not_run", stepNode.path("status").asText());
         assertEquals("Not executed because step #1 failed.", stepNode.path("notRunReason").asText());
     }
+
+    @Test
+    public void testSuccessfulAfterStepPreservesPassedStatusWhenPrecedingStepFailed() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+
+        final PlaybookStep coreStep = new PlaybookStep("Process payment");
+        coreStep.setStatus(PlaybookStepStatus.FAILED);
+        coreStep.setFailureReason("Credit card rejected");
+
+        final PlaybookStep afterStep = new PlaybookStep("Close browser session");
+        afterStep.setBlock("after");
+        afterStep.setStatus(PlaybookStepStatus.SUCCESS);
+
+        context.getTransientData().put("playbook.steps", List.of(coreStep));
+        context.getTransientData().put("playbook.flatSteps", List.of(coreStep, afterStep));
+        context.getTransientData().put("playbook.afterSteps", List.of(afterStep));
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run-after-success", 0, "failed");
+        final JsonNode root = new ObjectMapper().readTree(stateJson);
+
+        final JsonNode afterNode = root.path("blocks").path("after").get(0);
+        assertEquals("passed", afterNode.path("status").asText(),
+            "Teardown (after) step that succeeded must retain 'passed' status even when preceding core step failed");
+        assertFalse(afterNode.has("notRunReason"),
+            "Successful after step must not be assigned a notRunReason");
+    }
+
+    @Test
+    public void testUnexecutedAfterStepSerializesAsNotRunWhenPrecedingStepFailed() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+
+        final PlaybookStep coreStep = new PlaybookStep("Process payment");
+        coreStep.setStatus(PlaybookStepStatus.FAILED);
+        coreStep.setFailureReason("Credit card rejected");
+
+        final PlaybookStep afterStep = new PlaybookStep("Close browser session");
+        afterStep.setBlock("after");
+        afterStep.setStatus(PlaybookStepStatus.PENDING);
+
+        context.getTransientData().put("playbook.steps", List.of(coreStep));
+        context.getTransientData().put("playbook.flatSteps", List.of(coreStep, afterStep));
+        context.getTransientData().put("playbook.afterSteps", List.of(afterStep));
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run-after-pending", 0, "failed");
+        final JsonNode root = new ObjectMapper().readTree(stateJson);
+
+        final JsonNode afterNode = root.path("blocks").path("after").get(0);
+        assertEquals("not_run", afterNode.path("status").asText(),
+            "Unexecuted teardown step must be marked 'not_run' when execution aborted");
+        assertEquals("Not executed because step #1 failed.", afterNode.path("notRunReason").asText());
+    }
 }
 

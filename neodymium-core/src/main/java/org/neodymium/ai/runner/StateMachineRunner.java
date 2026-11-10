@@ -1291,9 +1291,15 @@ public final class StateMachineRunner
                 for (int fi = 0; fi < allFlat.size(); fi++)
                 {
                     final PlaybookStep s = allFlat.get(fi);
-                    if (s == failedStepObj || (failedStepObj instanceof PlaybookStep fs && (s.equals(fs) || (s.hasSubSteps() && s.getSubSteps().contains(fs)))))
+                    if (s == failedStepObj)
                     {
                         failedStepLabel = "#" + (fi + 1);
+                        break;
+                    }
+                    else if (failedStepObj instanceof final PlaybookStep fs && (s.equals(fs) || (s.hasSubSteps() && s.getSubSteps().contains(fs))))
+                    {
+                        final int subIdx = s.hasSubSteps() ? s.getSubSteps().indexOf(fs) : -1;
+                        failedStepLabel = "#" + (fi + 1) + (subIdx >= 0 ? "." + (subIdx + 1) : "");
                         break;
                     }
                 }
@@ -1305,12 +1311,21 @@ public final class StateMachineRunner
             final PlaybookStep step = targetSteps.get(i);
             if (!foundFailed)
             {
-                if (step == failedStepObj || (failedStepObj instanceof PlaybookStep fs && (step.equals(fs) || (step.hasSubSteps() && step.getSubSteps().contains(fs)))))
+                if (step == failedStepObj)
                 {
                     foundFailed = true;
                     if (failedStepLabel == null)
                     {
                         failedStepLabel = "#" + (i + 1);
+                    }
+                }
+                else if (failedStepObj instanceof final PlaybookStep fs && (step.equals(fs) || (step.hasSubSteps() && step.getSubSteps().contains(fs))))
+                {
+                    foundFailed = true;
+                    if (failedStepLabel == null)
+                    {
+                        final int subIdx = step.hasSubSteps() ? step.getSubSteps().indexOf(fs) : -1;
+                        failedStepLabel = "#" + (i + 1) + (subIdx >= 0 ? "." + (subIdx + 1) : "");
                     }
                 }
                 continue;

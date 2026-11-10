@@ -938,34 +938,30 @@ public final class InteractiveStateBuilder
         final boolean isRunFailed = runnerStatus != null && ("failed".equalsIgnoreCase(runnerStatus) || "aborted".equalsIgnoreCase(runnerStatus));
 
         PlaybookStepStatus status = step.getStatus();
-        if (precedingStepFailed && isRunFailed)
+        if (status == null || status == PlaybookStepStatus.PENDING || status == PlaybookStepStatus.SPLITTED)
         {
-            status = PlaybookStepStatus.NOT_RUN;
-        }
-        else if (status == null)
-        {
-            if (isRunFailed)
-            {
-                status = precedingStepFailed ? PlaybookStepStatus.NOT_RUN : PlaybookStepStatus.SKIPPED;
-            }
-            else if (isThisStepActive)
-            {
-                status = PlaybookStepStatus.RUNNING;
-            }
-            else if (isPastSection || (isCurrentSection && (stepIndex < activeStepIndex || globalIndex < activeStepIndex)))
-            {
-                status = PlaybookStepStatus.SUCCESS;
-            }
-            else
-            {
-                status = PlaybookStepStatus.PENDING;
-            }
-        }
-        else if (status == PlaybookStepStatus.PENDING)
-        {
-            if (isRunFailed && precedingStepFailed)
+            if (precedingStepFailed && isRunFailed)
             {
                 status = PlaybookStepStatus.NOT_RUN;
+            }
+            else if (status == null)
+            {
+                if (isRunFailed)
+                {
+                    status = precedingStepFailed ? PlaybookStepStatus.NOT_RUN : PlaybookStepStatus.SKIPPED;
+                }
+                else if (isThisStepActive)
+                {
+                    status = PlaybookStepStatus.RUNNING;
+                }
+                else if (isPastSection || (isCurrentSection && (stepIndex < activeStepIndex || globalIndex < activeStepIndex)))
+                {
+                    status = PlaybookStepStatus.SUCCESS;
+                }
+                else
+                {
+                    status = PlaybookStepStatus.PENDING;
+                }
             }
             else if (isThisStepActive && "running".equalsIgnoreCase(runnerStatus))
             {
@@ -992,14 +988,13 @@ public final class InteractiveStateBuilder
         if (status == PlaybookStepStatus.NOT_RUN)
         {
             String reason = step.getNotRunReason();
-            if ((reason == null || reason.isBlank()) && firstFailedStepLabel != null)
+            if (reason == null || reason.isBlank())
             {
-                reason = "Not executed because step " + firstFailedStepLabel + " failed.";
+                reason = firstFailedStepLabel != null
+                    ? "Not executed because step " + firstFailedStepLabel + " failed."
+                    : "Not executed due to a preceding test failure.";
             }
-            if (reason != null && !reason.isBlank())
-            {
-                obj.addProperty("notRunReason", reason);
-            }
+            obj.addProperty("notRunReason", reason);
         }
         else if (step.getNotRunReason() != null && !step.getNotRunReason().isBlank())
         {

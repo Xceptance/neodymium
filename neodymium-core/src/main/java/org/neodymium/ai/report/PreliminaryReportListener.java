@@ -481,6 +481,10 @@ public final class PreliminaryReportListener implements ExecutionListener
                     {
                         targetStep.setFailureReason(pbStep.getFailureReason());
                     }
+                    if (pbStep.getNotRunReason() != null)
+                    {
+                        targetStep.setNotRunReason(pbStep.getNotRunReason());
+                    }
                     if (pbStep.getSsimScore() != null)
                     {
                         targetStep.setSsimScore(pbStep.getSsimScore());
@@ -762,7 +766,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                             failureEncountered = true;
                             continue;
                         }
-                        if ("SKIPPED".equalsIgnoreCase(sub.getStatus()))
+                        if ("SKIPPED".equalsIgnoreCase(sub.getStatus()) || sub.isNotRun())
                         {
                             continue;
                         }
@@ -1328,11 +1332,15 @@ public final class PreliminaryReportListener implements ExecutionListener
                 else
                 {
                     // Steps after the failure were not executed
-                    if ("RUNNING".equalsIgnoreCase(leaf.getStatus()) || "PENDING".equalsIgnoreCase(leaf.getStatus()) || leaf.getStatus() == null)
+                    if ("RUNNING".equalsIgnoreCase(leaf.getStatus()) || "PENDING".equalsIgnoreCase(leaf.getStatus())
+                        || leaf.isNotRun() || leaf.getStatus() == null)
                     {
                         leaf.setStatus("NOT RUN");
                         leaf.setFailureReason(null);
-                        leaf.setNotRunReason("Not executed because step " + failedStepLabel + " failed.");
+                        if (leaf.getNotRunReason() == null || leaf.getNotRunReason().isBlank())
+                        {
+                            leaf.setNotRunReason("Not executed because step " + failedStepLabel + " failed.");
+                        }
                     }
                 }
             }
@@ -1500,7 +1508,7 @@ public final class PreliminaryReportListener implements ExecutionListener
             step.setStatus("SKIPPED");
             step.setFailureReason(null);
         }
-        else if (allSuccess)
+        else if (allSuccess || (firstNotRunReason == null && !anyFailed))
         {
             step.setStatus("SUCCESS");
             step.setFailureReason(null);
