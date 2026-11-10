@@ -410,4 +410,71 @@ public final class AuraManagerEditorAiReviewToolbarTest
         // Verify #editorUnsavedBadge becomes visible immediately
         $("#editorUnsavedBadge").shouldBe(Condition.visible);
     }
+
+    @Test
+    public final void testSuggestionCardAutoExpandsCollapsedSubstepsAndClearsStaleDialog() throws Exception
+    {
+        final String playbookWithSubsteps = "steps: |\n"
+                                          + "  Open https://example.com\n"
+                                          + "  - >-\n"
+                                          + "    First child action\n"
+                                          + "    Second child action\n";
+
+        this.fileService.saveYamlFileContent(TEST_PLAYBOOK, playbookWithSubsteps);
+
+        open("http://localhost:" + this.port + "/?file=" + TEST_PLAYBOOK);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        final SelenideElement toggleBar = $(".substeps-toggle-bar");
+        toggleBar.shouldBe(Condition.visible);
+        final ElementsCollection substepRows = $$("#stepsList .step-row-substep");
+        substepRows.shouldHave(CollectionCondition.size(2));
+        substepRows.get(0).shouldBe(Condition.visible);
+
+        // Collapse the substep group
+        toggleBar.$(".toggle-chevron").click();
+        toggleBar.shouldHave(Condition.cssClass("collapsed"));
+        substepRows.get(0).shouldNotBe(Condition.visible);
+
+        // Render suggestion targeting the collapsed sub-step
+        Selenide.executeJavaScript(
+            "renderStepSuggestionCards([{\n"
+            + "  stepIndex: 3,\n"
+            + "  rawInstruction: 'Second child action',\n"
+            + "  category: 'ADVISORY',\n"
+            + "  severity: 'WARNING',\n"
+            + "  message: 'Child action needs explicit target',\n"
+            + "  suggestedRewrite: 'Second child action #explicit'\n"
+            + "}]);\n"
+        );
+
+        // Verify toggleBar auto-expanded
+        toggleBar.shouldNotHave(Condition.cssClass("collapsed"));
+        substepRows.get(0).shouldBe(Condition.visible);
+        substepRows.get(1).shouldBe(Condition.visible);
+        $(".review-suggestion-card").shouldBe(Condition.visible);
+
+        // Verify stale findings dialog is cleaned up on new results / zero findings
+        Selenide.executeJavaScript(
+            "showRawModeFindingsDialog([{\n"
+            + "  severity: 'WARNING',\n"
+            + "  message: 'Stale fragment finding',\n"
+            + "  sourceFile: 'fragments/stale.steps'\n"
+            + "}]);\n"
+        );
+        $(".var-prompt-card[data-type='ai-review-report']").shouldBe(Condition.visible);
+
+        // Simulate successful zero-finding review response
+        Selenide.executeJavaScript(
+            "window.fetch = function() {\n"
+            + "  return Promise.resolve({\n"
+            + "    json: function() { return Promise.resolve({ status: 'OK', findings: [] }); }\n"
+            + "  });\n"
+            + "};\n"
+            + "runAiReview();\n"
+        );
+
+        // Verify prompt card was removed
+        $(".var-prompt-card[data-type='ai-review-report']").shouldNot(Condition.exist);
+    }
 }

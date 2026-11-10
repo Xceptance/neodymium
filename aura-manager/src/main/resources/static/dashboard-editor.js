@@ -5827,8 +5827,15 @@ function applySuggestionRewrite(btnOrLine, newInstruction) {
         }
     } else if (typeof btnOrLine === 'number' || typeof btnOrLine === 'string') {
         row = document.querySelector(`.step-row[data-line="${btnOrLine}"]`);
-        if (row && row.nextElementSibling && row.nextElementSibling.classList.contains('review-suggestion-card')) {
-            card = row.nextElementSibling;
+        if (row) {
+            let sib = row.nextElementSibling;
+            while (sib && !sib.classList.contains('step-row')) {
+                if (sib.classList.contains('review-suggestion-card')) {
+                    card = sib;
+                    break;
+                }
+                sib = sib.nextElementSibling;
+            }
         }
     }
 
@@ -5906,6 +5913,9 @@ function runAiReview() {
             return;
         }
 
+        // Clean up any existing unanchored / raw mode findings dialog from prior runs
+        document.querySelectorAll('.var-prompt-card[data-type="ai-review-report"]').forEach(card => card.remove());
+
         if (data.status === 'SYNTAX_ERROR' || data.status === 'VALIDATION_ERROR') {
             if (typeof showValidationResultDialog === 'function') {
                 showValidationResultDialog(data.issues || []);
@@ -5956,6 +5966,9 @@ function runAiReview() {
             console.debug('Discarding AI review findings for superseded file:', file, 'active file:', activeFileNow);
             return;
         }
+
+        // Clean up any existing unanchored / raw mode findings dialog from prior runs
+        document.querySelectorAll('.var-prompt-card[data-type="ai-review-report"]').forEach(card => card.remove());
         if (typeof showToast === 'function') {
             showToast('⚠️ AI Review request failed. Check the console for details.', 'error');
         }
@@ -6022,6 +6035,17 @@ function renderStepSuggestionCards(findings) {
         if (!targetRow) {
             unanchoredFindings.push(f);
             return;
+        }
+
+        // If targetRow is inside a collapsed sub-step group, auto-expand it so suggestions are immediately visible
+        if (targetRow.classList.contains('step-row-substep') || targetRow.style.display === 'none') {
+            let prev = targetRow.previousElementSibling;
+            while (prev && !prev.classList.contains('substeps-toggle-bar')) {
+                prev = prev.previousElementSibling;
+            }
+            if (prev && prev.classList.contains('collapsed')) {
+                toggleSubsteps(prev);
+            }
         }
 
         const sevClass = (f.severity || 'WARNING').toLowerCase();

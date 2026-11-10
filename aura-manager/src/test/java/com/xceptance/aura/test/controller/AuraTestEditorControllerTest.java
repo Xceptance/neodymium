@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.playbook.linter.LinterCategory;
 import org.neodymium.ai.playbook.linter.LinterSeverity;
 import org.neodymium.ai.playbook.linter.PlaybookLinter;
@@ -520,5 +521,40 @@ public class AuraTestEditorControllerTest
         Assertions.assertNotNull(response.getBody());
         Assertions.assertEquals("ERROR", response.getBody().get("status"));
         Assertions.assertTrue(String.valueOf(response.getBody().get("error")).contains("LLM Quota Exceeded"));
+    }
+
+    @Test
+    public final void testAiReviewResolvesDiskBasedIncludeFragment() throws Exception
+    {
+        final HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
+        final String mainYaml = "steps:\n  - _include: fragments/auth.steps\n  - Verify welcome message";
+        Mockito.when(request.getParameter("file")).thenReturn("test.yaml");
+        Mockito.when(request.getParameter("content")).thenReturn(mainYaml);
+
+        final PlaybookLinter mockLinter = Mockito.mock(PlaybookLinter.class);
+        final AuraTestEditorController customController = new AuraTestEditorController(fileService, mockLinter);
+
+        Mockito.when(fileService.validateFileContent("test.yaml", mainYaml)).thenReturn(List.of());
+        Mockito.when(fileService.readYamlFileContent("fragments/auth.steps")).thenReturn("steps:\n  - Enter credentials\n  - Submit form");
+        Mockito.when(mockLinter.lintWithResult(Mockito.anyList(), Mockito.any())).thenAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> stepsArg = invocation.getArgument(0);
+            Assertions.assertEquals(3, stepsArg.size(), "Should parse 2 included fragment steps plus 1 main step");
+            return PlaybookLinterResult.success(List.of(
+                    new PlaybookLinterFinding(1, 1, "fragments/auth.steps", "Enter credentials", "Enter credentials",
+                            LinterCategory.VAGUE_TARGET, LinterSeverity.WARNING, "Fragment step needs review", "Enter valid user credentials", null)
+            ));
+        });
+
+        final ResponseEntity<Map<String, Object>> response = customController.aiReview(request);
+
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertEquals("OK", response.getBody().get("status"));
+        @SuppressWarnings("unchecked")
+        final List<Map<String, Object>> findings = (List<Map<String, Object>>) response.getBody().get("findings");
+        Assertions.assertEquals(1, findings.size());
+        Assertions.assertEquals("fragments/auth.steps", findings.get(0).get("sourceFile"));
+        Assertions.assertEquals("Enter credentials", findings.get(0).get("rawInstruction"));
     }
 }

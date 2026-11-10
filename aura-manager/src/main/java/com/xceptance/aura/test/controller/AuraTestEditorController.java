@@ -23,6 +23,10 @@ import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.aura.AuraFileService.IssueSeverity;
 import com.xceptance.neodymium.aura.AuraFileService.ValidationIssue;
 import jakarta.servlet.http.HttpServletRequest;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -37,6 +41,8 @@ import org.neodymium.ai.playbook.YamlPlaybookParser;
 import org.neodymium.ai.playbook.linter.PlaybookLinter;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 import org.neodymium.ai.playbook.linter.PlaybookLinterResult;
+import org.neodymium.ai.resources.ClasspathResourceManager;
+import org.neodymium.ai.resources.PlaybookResourceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -718,8 +724,61 @@ public class AuraTestEditorController
 
         try
         {
+            final PlaybookResourceManager resourceManager = new PlaybookResourceManager()
+            {
+                private final ClasspathResourceManager classpathManager = new ClasspathResourceManager();
+
+                @Override
+                public InputStream read(final String identifier) throws IOException
+                {
+                    if (fileService != null && identifier != null)
+                    {
+                        try
+                        {
+                            final String fileContent = fileService.readYamlFileContent(identifier);
+                            if (fileContent != null)
+                            {
+                                return new ByteArrayInputStream(fileContent.getBytes(StandardCharsets.UTF_8));
+                            }
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+                    return this.classpathManager.read(identifier);
+                }
+
+                @Override
+                public void write(final String identifier, final String content) throws IOException
+                {
+                    if (fileService != null && identifier != null)
+                    {
+                        fileService.saveYamlFileContent(identifier, content);
+                        return;
+                    }
+                    this.classpathManager.write(identifier, content);
+                }
+
+                @Override
+                public void delete(final String identifier) throws IOException
+                {
+                    if (fileService != null && identifier != null)
+                    {
+                        fileService.deleteYamlFile(identifier);
+                        return;
+                    }
+                    this.classpathManager.delete(identifier);
+                }
+
+                @Override
+                public String resolveInclude(final String parentIdentifier, final String relativePath)
+                {
+                    return relativePath;
+                }
+            };
+
             final YamlPlaybookParser parser = new YamlPlaybookParser();
-            final Playbook playbook = parser.parseString(content);
+            final Playbook playbook = parser.parseString(content, resourceManager);
             final List<PlaybookStep> steps = playbook != null ? playbook.getAllSteps() : List.of();
             final String description = playbook != null ? playbook.getDescription() : null;
 
