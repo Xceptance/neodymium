@@ -1636,6 +1636,7 @@ function setEditorMode(mode) {
     const undoBtn = document.getElementById('undoBtn');
     const redoBtn = document.getElementById('redoBtn');
     const reviewBtn = document.getElementById('reviewStepsBtn');
+    const aiReviewBtn = document.getElementById('aiReviewBtn');
 
     if (mode === 'raw') {
         if (visualContainer && rawPanel) {
@@ -1652,6 +1653,9 @@ function setEditorMode(mode) {
         }
         currentEditorMode = 'raw';
         window.currentEditorMode = 'raw';
+        if (editorPanel) {
+            editorPanel.setAttribute('data-mode', 'raw');
+        }
         if (btnVisual) {
             btnVisual.style.background = 'transparent';
             btnVisual.style.color = 'var(--text-secondary)';
@@ -1666,7 +1670,13 @@ function setEditorMode(mode) {
         }
         if (undoBtn) undoBtn.disabled = true;
         if (redoBtn) redoBtn.disabled = true;
-        if (reviewBtn) reviewBtn.disabled = true;
+        if (reviewBtn && (!editorPanel || editorPanel.getAttribute('data-has-error') !== 'true')) {
+            reviewBtn.disabled = false;
+        }
+        if (aiReviewBtn) {
+            aiReviewBtn.disabled = true;
+            aiReviewBtn.setAttribute('title', 'Switch to Visual Editor to run AI Review and interactively apply suggestions');
+        }
     } else {
         if (editorPanel && editorPanel.getAttribute('data-has-error') === 'true') {
             showToast("Cannot switch to Visual Editor: file contains YAML syntax errors.", "error");
@@ -1686,6 +1696,9 @@ function setEditorMode(mode) {
 
         currentEditorMode = 'visual';
         window.currentEditorMode = 'visual';
+        if (editorPanel) {
+            editorPanel.setAttribute('data-mode', 'visual');
+        }
         if (visualContainer && rawPanel) {
             rawPanel.style.display = 'none';
             visualContainer.style.display = 'flex';
@@ -1705,6 +1718,10 @@ function setEditorMode(mode) {
         updateUndoRedoUI();
         if (reviewBtn && (!editorPanel || editorPanel.getAttribute('data-has-error') !== 'true')) {
             reviewBtn.disabled = false;
+        }
+        if (aiReviewBtn && (!editorPanel || editorPanel.getAttribute('data-has-error') !== 'true')) {
+            aiReviewBtn.disabled = false;
+            aiReviewBtn.setAttribute('title', 'AI Review: Analyze playbook steps for ambiguity, missing assertions, and design best practices with PlaybookLinter');
         }
     }
 }
@@ -5625,7 +5642,8 @@ function runValidateFile() {
     const hiddenContent = document.getElementById('editorContent');
     const rawTextarea = document.getElementById('rawYamlTextarea');
     const editorPanel = document.getElementById('editorPanel');
-    const isRawMode = editorPanel && editorPanel.getAttribute('data-mode') === 'raw';
+    const isRawMode = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw')
+        || (editorPanel && editorPanel.getAttribute('data-mode') === 'raw');
     let content = '';
     if (isRawMode && rawTextarea) {
         content = rawTextarea.value;
@@ -5778,28 +5796,7 @@ window.closeValidationPromptCard = closeValidationPromptCard;
 
 
 
-function applySuggestionHint(targetLineNum, hintText) {
-    const row = document.querySelector(`.step-row[data-line="${targetLineNum}"]`);
-    if (row) {
-        const contentEl = row.querySelector('.step-content');
-        if (contentEl) {
-            let current = contentEl.getAttribute('data-raw') || contentEl.innerText;
-            if (!current.includes(hintText)) {
-                current = current.trim() + ' ' + hintText;
-                contentEl.setAttribute('data-raw', current);
-                contentEl.innerText = current;
-                formatStepToTokens(targetLineNum);
-                compilePlaybookToYaml();
-                debouncedPushSnapshot();
-            }
-        }
-        const card = row.nextElementSibling;
-        if (card && card.classList.contains('review-suggestion-card')) {
-            card.remove();
-        }
-    }
-}
-window.applySuggestionHint = applySuggestionHint;
+
 
 function dismissSuggestionCard(btn) {
     const card = btn.closest('.review-suggestion-card');
@@ -5873,7 +5870,8 @@ function runAiReview() {
     const hiddenContent = document.getElementById('editorContent');
     const rawTextarea = document.getElementById('rawYamlTextarea');
     const editorPanel = document.getElementById('editorPanel');
-    const isRawMode = editorPanel && editorPanel.getAttribute('data-mode') === 'raw';
+    const isRawMode = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw')
+        || (editorPanel && editorPanel.getAttribute('data-mode') === 'raw');
     let content = '';
     if (isRawMode && rawTextarea) {
         content = rawTextarea.value;
@@ -6125,12 +6123,16 @@ function showRawModeFindingsDialog(findings) {
     card.setAttribute('data-type', 'ai-review-report');
     card.style.borderLeftColor = 'var(--accent-purple, #a855f7)';
 
+    const editorFileNameEl = document.getElementById('editorFileName');
+    const activeFileNow = (editorFileNameEl ? editorFileNameEl.getAttribute('data-file') : null) || window.activeEditingFile || '';
+
     const itemsHtml = (findings || []).map(f => {
         const sev = (f.severity || 'WARNING').toLowerCase();
         const lineInfo = f.lineNumber > 0 ? `<span class="validation-issue-line">Line ${f.lineNumber}</span>` : (f.stepIndex > 0 ? `<span class="validation-issue-line">Step #${f.stepIndex}</span>` : '');
         const catInfo = f.category ? `<span class="validation-issue-context">${escapeHtml(f.category.replace(/_/g, ' '))}</span>` : '';
-        const sourceInfo = f.sourceFile ? `<span class="validation-issue-context" style="background: rgba(168, 85, 247, 0.12); color: var(--accent-purple, #a855f7); font-weight: 500;">📄 ${escapeHtml(f.sourceFile)}</span>` : '';
-        const rewriteBlock = f.suggestedRewrite ? `<div style="margin-top: 4px; font-size: 11px; color: var(--accent-purple, #a855f7); background: rgba(168, 85, 247, 0.08); padding: 4px 8px; border-radius: 4px;">💡 <b>Suggested:</b> ${escapeHtml(f.suggestedRewrite)}${f.sourceFile ? ` <span style="opacity: 0.8;">(apply directly in ${escapeHtml(f.sourceFile)})</span>` : ''}</div>` : '';
+        const isExternalFragment = f.sourceFile && f.sourceFile !== 'inline.yaml' && f.sourceFile !== activeFileNow;
+        const sourceInfo = isExternalFragment ? `<span class="validation-issue-context" style="background: rgba(168, 85, 247, 0.12); color: var(--accent-purple, #a855f7); font-weight: 500;">📄 ${escapeHtml(f.sourceFile)}</span>` : '';
+        const rewriteBlock = f.suggestedRewrite ? `<div style="margin-top: 4px; font-size: 11px; color: var(--accent-purple, #a855f7); background: rgba(168, 85, 247, 0.08); padding: 4px 8px; border-radius: 4px;">💡 <b>Suggested:</b> ${escapeHtml(f.suggestedRewrite)}${isExternalFragment ? ` <span style="opacity: 0.8;">(apply directly in ${escapeHtml(f.sourceFile)})</span>` : ''}</div>` : '';
 
         return `
             <div class="validation-issue-item ${sev}">

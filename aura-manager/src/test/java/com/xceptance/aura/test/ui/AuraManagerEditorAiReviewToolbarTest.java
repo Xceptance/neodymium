@@ -477,4 +477,49 @@ public final class AuraManagerEditorAiReviewToolbarTest
         // Verify prompt card was removed
         $(".var-prompt-card[data-type='ai-review-report']").shouldNot(Condition.exist);
     }
+
+    @Test
+    public final void testRawModeDisablesAiReviewAndEnablesValidateFile() throws Exception
+    {
+        final String initialPlaybook = "steps: |\n"
+                                     + "  Open https://example.com/test\n"
+                                     + "  Validate headline is visible\n";
+
+        this.fileService.saveYamlFileContent(TEST_PLAYBOOK, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/?file=" + TEST_PLAYBOOK);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        final SelenideElement aiReviewBtn = $("#aiReviewBtn");
+        final SelenideElement validateBtn = $("#reviewStepsBtn");
+        final SelenideElement editorPanel = $("#editorPanel");
+
+        // Initially in Visual mode: both buttons enabled
+        aiReviewBtn.shouldBe(Condition.enabled);
+        validateBtn.shouldBe(Condition.enabled);
+        editorPanel.shouldHave(Condition.attribute("data-mode", "visual"));
+
+        // Switch to Raw mode
+        $("#btnModeRaw").shouldBe(Condition.visible).click();
+
+        // In Raw mode: data-mode is "raw", AI Review disabled with tooltip, Validate File enabled
+        editorPanel.shouldHave(Condition.attribute("data-mode", "raw"));
+        aiReviewBtn.shouldBe(Condition.disabled);
+        aiReviewBtn.shouldHave(Condition.attributeMatching("title", ".*Switch to Visual Editor.*"));
+        validateBtn.shouldBe(Condition.enabled);
+
+        // Click Validate File in Raw mode - verifies file validation works in Raw mode
+        validateBtn.click();
+        $(".var-prompt-card[data-type='validation-report']").shouldBe(Condition.visible);
+        $(".btn-prompt-confirm").shouldBe(Condition.visible).click();
+        $(".var-prompt-card[data-type='validation-report']").shouldNotBe(Condition.exist);
+
+        // Switch back to Visual mode
+        $("#btnModeVisual").shouldBe(Condition.visible).click();
+
+        // Both re-enabled in Visual mode
+        editorPanel.shouldHave(Condition.attribute("data-mode", "visual"));
+        aiReviewBtn.shouldBe(Condition.enabled);
+        validateBtn.shouldBe(Condition.enabled);
+    }
 }

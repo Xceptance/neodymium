@@ -812,7 +812,11 @@ public class AuraTestEditorController
                     final Map<String, Object> fm = new HashMap<>();
                     fm.put("stepIndex", f.stepIndex());
                     fm.put("lineNumber", f.lineNumber());
-                    fm.put("sourceFile", f.sourceFile());
+                    final String rawSource = f.sourceFile();
+                    final String displaySource = ("inline.yaml".equals(rawSource) && file != null && !file.isBlank())
+                            ? file
+                            : rawSource;
+                    fm.put("sourceFile", displaySource);
                     fm.put("rawInstruction", f.rawInstruction());
                     fm.put("category", f.category() != null ? f.category().name() : "");
                     fm.put("severity", f.severity() != null ? f.severity().name() : "WARNING");

@@ -599,4 +599,35 @@ public class AuraTestEditorControllerTest
         Mockito.verify(fileService).readYamlFileContent("fragments/checkout/payment.steps");
         Mockito.verify(fileService).readYamlFileContent("fragments/checkout/billing.steps");
     }
+
+    @Test
+    public final void testAiReviewReplacesInlineYamlSourceFileWithRequestFileName() throws Exception
+    {
+        final HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
+        final String mainYaml = "steps:\n  - Click button";
+        Mockito.when(request.getParameter("file")).thenReturn("my-scenario.yaml");
+        Mockito.when(request.getParameter("content")).thenReturn(mainYaml);
+
+        final PlaybookLinter mockLinter = Mockito.mock(PlaybookLinter.class);
+        final AuraTestEditorController customController = new AuraTestEditorController(fileService, mockLinter);
+
+        Mockito.when(fileService.validateFileContent("my-scenario.yaml", mainYaml)).thenReturn(List.of());
+        Mockito.when(mockLinter.lintWithResult(Mockito.anyList(), Mockito.any())).thenReturn(
+                PlaybookLinterResult.success(List.of(
+                        new PlaybookLinterFinding(1, 1, "inline.yaml", "Click button", "Click button",
+                                LinterCategory.VAGUE_TARGET, LinterSeverity.WARNING, "Ambiguous button target", "Click #submit-btn", null)
+                ))
+        );
+
+        final ResponseEntity<Map<String, Object>> response = customController.aiReview(request);
+
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertEquals("OK", response.getBody().get("status"));
+        @SuppressWarnings("unchecked")
+        final List<Map<String, Object>> findings = (List<Map<String, Object>>) response.getBody().get("findings");
+        Assertions.assertEquals(1, findings.size());
+        Assertions.assertEquals("my-scenario.yaml", findings.get(0).get("sourceFile"),
+                "Expected inline.yaml to be replaced with request file name");
+    }
 }
