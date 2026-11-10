@@ -25,6 +25,7 @@ import static com.codeborne.selenide.Selenide.open;
 import com.codeborne.selenide.CollectionCondition;
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Configuration;
+import com.codeborne.selenide.ElementsCollection;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.xceptance.aura.AuraManagerApplication;
@@ -320,5 +321,93 @@ public final class AuraManagerEditorAiReviewToolbarTest
         // Dismiss the prompt card
         promptCard.$(".btn-prompt-confirm").shouldBe(Condition.visible).click();
         promptCard.shouldNotBe(Condition.exist);
+    }
+
+    @Test
+    public final void testSubstepCollapseWithSuggestionCardsRetainsSingleGroupAndCollapsesContiguously() throws Exception
+    {
+        final String initialPlaybook = "steps: |\n"
+                                     + "  # Authentication Flow\n"
+                                     + "  - >-\n"
+                                     + "    Enter username\n"
+                                     + "    Enter password\n"
+                                     + "    Click login\n";
+
+        this.fileService.saveYamlFileContent(TEST_PLAYBOOK, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/?file=" + TEST_PLAYBOOK);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Render suggestion card specifically attached to Sub-step 1 ('Enter username')
+        Selenide.executeJavaScript(
+            "renderStepSuggestionCards([{\n"
+            + "  stepIndex: 1,\n"
+            + "  rawInstruction: 'Enter username',\n"
+            + "  category: 'VAGUE_TARGET',\n"
+            + "  severity: 'WARNING',\n"
+            + "  message: 'Username input is ambiguous'\n"
+            + "}]);\n"
+        );
+
+        // Force a toggle bar refresh to simulate step movement or line reindex
+        Selenide.executeJavaScript("refreshAllSubstepToggleBars();");
+
+        // Verify there is strictly ONE toggle bar and it still correctly counts all 3 sub-steps
+        $$("#stepsList .substeps-toggle-bar").shouldHave(CollectionCondition.size(1));
+        final SelenideElement toggleBar = $("#stepsList .substeps-toggle-bar");
+        toggleBar.$(".substeps-count-badge").shouldHave(Condition.text("3 sub-steps"));
+
+        // Click the toggle bar chevron to collapse the sub-steps group
+        toggleBar.$(".toggle-chevron").shouldBe(Condition.visible).click();
+
+        // Verify all 3 sub-step rows AND the suggestion card are hidden (display: none)
+        final ElementsCollection substepRows = $$("#stepsList .step-row-substep");
+        substepRows.shouldHave(CollectionCondition.size(3));
+        for (int i = 0; i < 3; i++)
+        {
+            substepRows.get(i).shouldNotBe(Condition.visible);
+        }
+        $("#stepsList .review-suggestion-card").shouldNotBe(Condition.visible);
+
+        // Click again to expand
+        toggleBar.$(".toggle-chevron").shouldBe(Condition.visible).click();
+        for (int i = 0; i < 3; i++)
+        {
+            substepRows.get(i).shouldBe(Condition.visible);
+        }
+        $("#stepsList .review-suggestion-card").shouldBe(Condition.visible);
+    }
+
+    @Test
+    public final void testApplySuggestionRewriteTriggersUnsavedChangesBadge() throws Exception
+    {
+        final String initialPlaybook = "steps: |\n"
+                                     + "  Open https://example.com/test\n";
+
+        this.fileService.saveYamlFileContent(TEST_PLAYBOOK, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/?file=" + TEST_PLAYBOOK);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Initially unsaved badge should be hidden
+        $("#editorUnsavedBadge").shouldNotBe(Condition.visible);
+
+        // Render suggestion card for step 1
+        Selenide.executeJavaScript(
+            "renderStepSuggestionCards([{\n"
+            + "  stepIndex: 1,\n"
+            + "  rawInstruction: 'Open https://example.com/test',\n"
+            + "  category: 'VAGUE_TARGET',\n"
+            + "  severity: 'WARNING',\n"
+            + "  message: 'Ambiguous target URL',\n"
+            + "  suggestedRewrite: 'Open https://example.com/login'\n"
+            + "}]);\n"
+        );
+
+        // Click Apply Rewrite
+        $(".btn-apply-suggestion").shouldBe(Condition.visible).click();
+
+        // Verify #editorUnsavedBadge becomes visible immediately
+        $("#editorUnsavedBadge").shouldBe(Condition.visible);
     }
 }

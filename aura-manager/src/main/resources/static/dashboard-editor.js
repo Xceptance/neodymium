@@ -3283,7 +3283,7 @@ function toggleSubsteps(toggleBar) {
     toggleBar.classList.toggle('collapsed');
     const isCollapsed = toggleBar.classList.contains('collapsed');
     let next = toggleBar.nextElementSibling;
-    while (next && next.classList.contains('step-row-substep')) {
+    while (next && (next.classList.contains('step-row-substep') || next.classList.contains('review-suggestion-card'))) {
         next.style.display = isCollapsed ? 'none' : 'flex';
         next = next.nextElementSibling;
     }
@@ -3464,9 +3464,11 @@ function refreshSubstepToggleBars(container) {
                 }
             }
 
-            while (i < children.length && children[i].classList.contains('step-row-substep')) {
-                lastSubstep = children[i];
-                count++;
+            while (i < children.length && (children[i].classList.contains('step-row-substep') || children[i].classList.contains('review-suggestion-card'))) {
+                if (children[i].classList.contains('step-row-substep')) {
+                    lastSubstep = children[i];
+                    count++;
+                }
                 i++;
             }
             if (lastSubstep) {
@@ -5841,6 +5843,9 @@ function applySuggestionRewrite(btnOrLine, newInstruction) {
             if (typeof compilePlaybookToYaml === 'function') {
                 compilePlaybookToYaml();
             }
+            if (typeof checkEditorDirtyStatus === 'function') {
+                checkEditorDirtyStatus();
+            }
             if (typeof debouncedPushSnapshot === 'function') {
                 debouncedPushSnapshot();
             }
@@ -5894,6 +5899,13 @@ function runAiReview() {
             aiBtn.disabled = false;
         }
 
+        const editorFileNameEl = document.getElementById('editorFileName');
+        const activeFileNow = (editorFileNameEl ? editorFileNameEl.getAttribute('data-file') : null) || window.activeEditingFile || '';
+        if (file && activeFileNow && file !== activeFileNow) {
+            console.debug('Discarding AI review findings for superseded file:', file, 'active file:', activeFileNow);
+            return;
+        }
+
         if (data.status === 'SYNTAX_ERROR' || data.status === 'VALIDATION_ERROR') {
             if (typeof showValidationResultDialog === 'function') {
                 showValidationResultDialog(data.issues || []);
@@ -5936,6 +5948,13 @@ function runAiReview() {
         if (aiBtn) {
             aiBtn.innerHTML = '<span class="material-symbols-outlined">auto_awesome</span> AI Review';
             aiBtn.disabled = false;
+        }
+
+        const editorFileNameEl = document.getElementById('editorFileName');
+        const activeFileNow = (editorFileNameEl ? editorFileNameEl.getAttribute('data-file') : null) || window.activeEditingFile || '';
+        if (file && activeFileNow && file !== activeFileNow) {
+            console.debug('Discarding AI review findings for superseded file:', file, 'active file:', activeFileNow);
+            return;
         }
         if (typeof showToast === 'function') {
             showToast('⚠️ AI Review request failed. Check the console for details.', 'error');
