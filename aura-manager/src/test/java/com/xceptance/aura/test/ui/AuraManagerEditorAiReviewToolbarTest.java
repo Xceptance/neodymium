@@ -19,6 +19,7 @@
 package com.xceptance.aura.test.ui;
 
 import static com.codeborne.selenide.Selenide.$;
+import static com.codeborne.selenide.Selenide.$$;
 import static com.codeborne.selenide.Selenide.open;
 
 import com.codeborne.selenide.Condition;
@@ -134,5 +135,47 @@ public final class AuraManagerEditorAiReviewToolbarTest
         $(".var-prompt-card[data-type='validation-report']").shouldBe(Condition.visible);
         $(".btn-prompt-confirm").shouldBe(Condition.visible).click();
         $(".var-prompt-card[data-type='validation-report']").shouldNotBe(Condition.exist);
+    }
+
+    @Test
+    public final void testMoveStepRetainsAdjacentSuggestionCards() throws Exception
+    {
+        final String initialPlaybook = "steps: |\n"
+                                     + "  Open https://example.com/test\n"
+                                     + "  Validate headline is visible\n";
+
+        this.fileService.saveYamlFileContent(TEST_PLAYBOOK, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/?file=" + TEST_PLAYBOOK);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Render a suggestion card for step 1
+        Selenide.executeJavaScript(
+            "renderStepSuggestionCards([{"
+            + "  stepIndex: 1,"
+            + "  rawInstruction: 'Open https://example.com/test',"
+            + "  category: 'VAGUE_TARGET',"
+            + "  severity: 'WARNING',"
+            + "  message: 'Ambiguous URL target',"
+            + "  suggestedRewrite: 'Open https://example.com/login'"
+            + "}]);"
+        );
+
+        $(".review-suggestion-card").shouldBe(Condition.visible);
+
+        // Move step 1 down (now becomes step 2)
+        $$("#stepsList .step-row").get(0).hover().$(".btn-move-down").shouldBe(Condition.visible).click();
+
+        // Verify the suggestion card moved with the row and is now after the moved step
+        final SelenideElement secondRow = $$("#stepsList .step-row").get(1);
+        secondRow.$(".step-content").shouldHave(Condition.text("Open https://example.com/test"));
+
+        // Click Apply Rewrite on the suggestion card
+        $(".btn-apply-suggestion").shouldBe(Condition.visible).click();
+
+        // Verify that step 2 was rewritten to login, while step 1 remains 'Validate headline is visible'
+        secondRow.$(".step-content").shouldHave(Condition.text("Open https://example.com/login"));
+        $$("#stepsList .step-row").get(0).$(".step-content").shouldHave(Condition.text("Validate headline is visible"));
+        $(".review-suggestion-card").shouldNotBe(Condition.exist);
     }
 }

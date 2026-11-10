@@ -3107,13 +3107,28 @@ function moveStep(lineNumOrElement, direction) {
     const currentIndex = allRows.indexOf(row);
     if (currentIndex === -1) return;
 
+    // Collect all suggestion cards belonging to this row
+    const suggestionCards = [];
+    let startEl = (treeCard && treeCard.parentElement === container) ? treeCard : row;
+    let nextSibling = startEl.nextElementSibling;
+    while (nextSibling && nextSibling.classList.contains('review-suggestion-card')) {
+        suggestionCards.push(nextSibling);
+        nextSibling = nextSibling.nextElementSibling;
+    }
+
     if (direction === -1) {
         // Move Up
         if (currentIndex > 0) {
             const targetPrevRow = allRows[currentIndex - 1];
             container.insertBefore(row, targetPrevRow);
+            let attachRef = row;
             if (treeCard && treeCard.parentElement === container) {
-                row.after(treeCard);
+                attachRef.after(treeCard);
+                attachRef = treeCard;
+            }
+            for (const card of suggestionCards) {
+                attachRef.after(card);
+                attachRef = card;
             }
         } else {
             return;
@@ -3125,10 +3140,20 @@ function moveStep(lineNumOrElement, direction) {
             const nextLineId = targetNextRow.getAttribute('data-line');
             const nextTreeCard = document.getElementById(`includeTreeCard_${nextLineId}`) || document.getElementById(`includeTreeCard${nextLineId}`);
             
-            const insertAfterRef = (nextTreeCard && nextTreeCard.parentElement === container) ? nextTreeCard : targetNextRow;
+            let insertAfterRef = (nextTreeCard && nextTreeCard.parentElement === container) ? nextTreeCard : targetNextRow;
+            // Advance past all suggestion cards belonging to targetNextRow so row isn't interleaved
+            while (insertAfterRef.nextElementSibling && insertAfterRef.nextElementSibling.classList.contains('review-suggestion-card')) {
+                insertAfterRef = insertAfterRef.nextElementSibling;
+            }
             insertAfterRef.after(row);
+            let attachRef = row;
             if (treeCard && treeCard.parentElement === container) {
-                row.after(treeCard);
+                attachRef.after(treeCard);
+                attachRef = treeCard;
+            }
+            for (const card of suggestionCards) {
+                attachRef.after(card);
+                attachRef = card;
             }
         } else {
             return;
@@ -5865,12 +5890,12 @@ function runAiReview() {
             aiBtn.disabled = false;
         }
 
-        if (data.status === 'SYNTAX_ERROR') {
+        if (data.status === 'SYNTAX_ERROR' || data.status === 'VALIDATION_ERROR') {
             if (typeof showValidationResultDialog === 'function') {
                 showValidationResultDialog(data.issues || []);
             }
             if (typeof showToast === 'function') {
-                showToast('⚠️ Syntax errors found. Fix syntax before running AI Review.', 'warning');
+                showToast(data.message || (data.status === 'SYNTAX_ERROR' ? '⚠️ Syntax errors found. Fix syntax before running AI Review.' : '⚠️ Validation errors found. Fix validation before running AI Review.'), 'warning');
             }
             return;
         }
@@ -5929,40 +5954,34 @@ function renderStepSuggestionCards(findings) {
 
     findings.forEach(f => {
         let targetRow = null;
-        const allRows = document.querySelectorAll('#beforeStepsList .step-row, #stepsList .step-row, #afterStepsList .step-row');
+        const allRows = Array.from(document.querySelectorAll('#beforeStepsList .step-row:not(.step-row-comment), #stepsList .step-row:not(.step-row-comment), #afterStepsList .step-row:not(.step-row-comment)'));
 
-        // 1. Try exact match by stepIndex (if rawInstruction matches or is blank)
-        if (f.stepIndex > 0 && f.stepIndex <= allRows.length) {
-            const candidate = allRows[f.stepIndex - 1];
-            if (!f.rawInstruction || !f.rawInstruction.trim()) {
-                targetRow = candidate;
-            } else {
-                const c = candidate.querySelector('.step-content');
-                const candidateRaw = c ? (c.getAttribute('data-raw') || c.innerText || '').trim() : '';
-                if (candidateRaw === f.rawInstruction.trim()) {
-                    targetRow = candidate;
-                }
-            }
-        }
-
-        // 2. If index didn't match rawInstruction, search all rows by rawInstruction
-        if (!targetRow && f.rawInstruction && f.rawInstruction.trim()) {
+        // 1. Content matching with occurrence resolution
+        if (f.rawInstruction && f.rawInstruction.trim()) {
             const rawTarget = f.rawInstruction.trim();
-            for (const r of allRows) {
+            const matchingRows = allRows.filter(r => {
                 const c = r.querySelector('.step-content');
-                if (c && ((c.getAttribute('data-raw') || '').trim() === rawTarget || (c.innerText || '').trim() === rawTarget)) {
-                    targetRow = r;
-                    break;
+                return c && ((c.getAttribute('data-raw') || '').trim() === rawTarget || (c.innerText || '').trim() === rawTarget);
+            });
+            if (matchingRows.length === 1) {
+                targetRow = matchingRows[0];
+            } else if (matchingRows.length > 1) {
+                // If multiple identical steps exist, match the one closest to stepIndex
+                let bestMatch = matchingRows[0];
+                let minDiff = Infinity;
+                for (const r of matchingRows) {
+                    const rIdx = allRows.indexOf(r) + 1;
+                    const diff = Math.abs(rIdx - f.stepIndex);
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        bestMatch = r;
+                    }
                 }
+                targetRow = bestMatch;
             }
         }
 
-        // 3. Fall back to lineNumber
-        if (!targetRow && f.lineNumber > 0) {
-            targetRow = document.querySelector(`.step-row[data-line="${f.lineNumber}"]`);
-        }
-
-        // 4. Fall back to stepIndex directly
+        // 2. Fall back to stepIndex directly (using comment-filtered rows)
         if (!targetRow && f.stepIndex > 0 && f.stepIndex <= allRows.length) {
             targetRow = allRows[f.stepIndex - 1];
         }

@@ -529,4 +529,28 @@ public final class PlaybookLinterTest
             AiConfiguration.resetInstance();
         }
     }
+
+    @Test
+    @DisplayName("Verify session data can explicitly override and disable linter even when globally enabled")
+    public void testLintWithResultHonorsSessionDataDisabledOverride()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("neodymium.ai.linter.enabled", "false", false);
+
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry registry = new LlmRegistry();
+        registry.registerProvider(mockProvider);
+
+        final AiSession session = AiSession.mock(sessionData, registry, new ExecutionEventBus(), null);
+        final PlaybookLinter linter = new PlaybookLinter(session);
+        final List<PlaybookStep> steps = List.of(new PlaybookStep("Click button"));
+        final PlaybookLinterResult result = linter.lintWithResult(steps, "Scenario");
+
+        assertNotNull(result);
+        assertFalse(result.successful());
+        assertNotNull(result.errorMessage());
+        assertTrue(result.errorMessage().contains("disabled"));
+        assertTrue(result.findings().isEmpty());
+        assertNull(mockProvider.getLastRequest(), "Mock LLM provider should never have been invoked");
+    }
 }

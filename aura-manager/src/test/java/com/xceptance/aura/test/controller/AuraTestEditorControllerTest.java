@@ -388,6 +388,29 @@ public class AuraTestEditorControllerTest
     }
 
     @Test
+    public final void testAiReviewHaltsOnValidationError() throws Exception
+    {
+        final HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(request.getParameter("file")).thenReturn("missing-include.yaml");
+        Mockito.when(request.getParameter("content")).thenReturn("steps:\n  - _include: non-existent.steps");
+
+        final PlaybookLinter mockLinter = Mockito.mock(PlaybookLinter.class);
+        final AuraTestEditorController customController = new AuraTestEditorController(fileService, mockLinter);
+
+        Mockito.when(fileService.validateFileContent("missing-include.yaml", "steps:\n  - _include: non-existent.steps"))
+                .thenReturn(List.of(new ValidationIssue(IssueSeverity.ERROR, "Included file does not exist: \"non-existent.steps\"", "non-existent.steps")));
+
+        final ResponseEntity<Map<String, Object>> response = customController.aiReview(request);
+
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertEquals("VALIDATION_ERROR", response.getBody().get("status"));
+        Assertions.assertTrue(String.valueOf(response.getBody().get("message")).contains("unresolved variables or missing includes"));
+        Assertions.assertTrue(response.getBody().containsKey("issues"));
+        Mockito.verify(mockLinter, Mockito.never()).lintWithResult(Mockito.anyList(), Mockito.any());
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     public final void testAiReviewSuccessfulWithFindings() throws Exception
     {

@@ -55,6 +55,7 @@ public final class PlaybookLinter
 
     private final AiSession session;
     private final LlmProvider customProvider;
+    private LlmRegistry standaloneRegistry;
 
     /**
      * Constructs a standalone PlaybookLinter using the default LLM registry configuration.
@@ -156,8 +157,7 @@ public final class PlaybookLinter
             }
             if (provider == null && this.session == null)
             {
-                final LlmRegistry registry = new LlmRegistry();
-                LlmRegistry.bootstrap(registry, config);
+                final LlmRegistry registry = getOrCreateStandaloneRegistry(config);
                 try
                 {
                     provider = registry.getProvider(LlmCapability.LINTER);
@@ -303,5 +303,22 @@ public final class PlaybookLinter
             LOGGER.warn("⚠️ Pre-flight playbook linter encountered an error and was skipped gracefully: {}", t.getMessage(), t);
             return PlaybookLinterResult.failure(t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName());
         }
+    }
+
+    /**
+     * Lazily bootstraps and caches an {@link LlmRegistry} for standalone on-demand executions.
+     *
+     * @param config the AI configuration
+     * @return the standalone LlmRegistry instance
+     */
+    private synchronized LlmRegistry getOrCreateStandaloneRegistry(final AiConfiguration config)
+    {
+        if (this.standaloneRegistry == null)
+        {
+            final LlmRegistry reg = new LlmRegistry();
+            LlmRegistry.bootstrap(reg, config);
+            this.standaloneRegistry = reg;
+        }
+        return this.standaloneRegistry;
     }
 }

@@ -674,6 +674,7 @@ public class AuraTestEditorController
                 file != null ? file : "",
                 content != null ? content : "");
         boolean hasErrors = false;
+        boolean hasSyntaxError = false;
         final List<Map<String, Object>> issueList = new ArrayList<>();
         for (final ValidationIssue issue : issues)
         {
@@ -685,13 +686,24 @@ public class AuraTestEditorController
             if (issue.severity() == IssueSeverity.ERROR)
             {
                 hasErrors = true;
+                final boolean isNonSyntaxValidation = issue.message() != null
+                        && (issue.message().startsWith("Included file does not exist")
+                            || issue.message().startsWith("Undefined variable"));
+                if (!isNonSyntaxValidation)
+                {
+                    hasSyntaxError = true;
+                }
             }
         }
 
         if (hasErrors)
         {
-            response.put("status", "SYNTAX_ERROR");
-            response.put("message", "File has syntax errors. Please resolve syntax errors before running AI Review.");
+            final String status = hasSyntaxError ? "SYNTAX_ERROR" : "VALIDATION_ERROR";
+            final String message = hasSyntaxError
+                    ? "File has syntax errors. Please resolve syntax errors before running AI Review."
+                    : "File has validation errors (unresolved variables or missing includes). Please resolve them before running AI Review.";
+            response.put("status", status);
+            response.put("message", message);
             response.put("issues", issueList);
             response.put("findings", List.of());
             return ResponseEntity.ok(response);
