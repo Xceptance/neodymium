@@ -746,10 +746,7 @@ public final class AgentToolLoopStep implements PipelineStep
                     {
                         step.addReasoning(sanitizedThought);
                     }
-                    if (!proposedActions.isEmpty() || step.getReasoning() == null || step.getReasoning().isBlank())
-                    {
-                        step.setReasoning(sanitizedThought);
-                    }
+                    step.setReasoning(sanitizedThought);
                 }
             }
 
@@ -1227,10 +1224,15 @@ public final class AgentToolLoopStep implements PipelineStep
                                 executedCalls.size(), milestones.size());
                     }
 
-                    final String summary = currentCall.arguments().path("summary").asText("Goal completed");
-                    context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
+                    final String summary = currentCall.arguments() != null && currentCall.arguments().hasNonNull("summary") && !currentCall.arguments().path("summary").asText().isBlank()
+                            ? currentCall.arguments().path("summary").asText().trim()
+                            : null;
+                    if (summary != null)
+                    {
+                        context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
+                    }
                     finishLoop(context, executedCalls, summary);
-                    LOGGER.info("🎯 Goal Accomplished: {} (Turns: {}, Executed Calls: {})", summary, turn, executedCalls.size());
+                    LOGGER.info("🎯 Goal Accomplished: {} (Turns: {}, Executed Calls: {})", summary != null ? summary : "Goal completed", turn, executedCalls.size());
                     if (response != null && response.tokenUsage() != null)
                     {
                         final TokenUsage tu = response.tokenUsage();
@@ -1755,10 +1757,15 @@ public final class AgentToolLoopStep implements PipelineStep
                     final boolean hasRemaining = milestones != null && !milestones.isEmpty() && executedCalls.size() < milestones.size();
                     if (!hasRemaining)
                     {
-                        final String summary = coProposedComplete.arguments().path("summary").asText("Goal completed");
-                        context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
+                        final String summary = coProposedComplete.arguments() != null && coProposedComplete.arguments().hasNonNull("summary") && !coProposedComplete.arguments().path("summary").asText().isBlank()
+                                ? coProposedComplete.arguments().path("summary").asText().trim()
+                                : null;
+                        if (summary != null)
+                        {
+                            context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
+                        }
                         finishLoop(context, executedCalls, summary);
-                        LOGGER.info("🎯 Goal Accomplished via co-proposed complete_step: {} (Turn: #{}, Executed Calls: {})", summary, turn, executedCalls.size());
+                        LOGGER.info("🎯 Goal Accomplished via co-proposed complete_step: {} (Turn: #{}, Executed Calls: {})", summary != null ? summary : "Goal completed", turn, executedCalls.size());
                         if (response != null && response.tokenUsage() != null)
                         {
                             final TokenUsage tu = response.tokenUsage();
@@ -2190,7 +2197,7 @@ public final class AgentToolLoopStep implements PipelineStep
                     {
                         mapped = mapped.withReasoning(existing.getReasoning());
                     }
-                    else if ((mapped.getReasoning() == null || mapped.getReasoning().isBlank()) && currentStep.getReasoning() != null && !currentStep.getReasoning().isBlank())
+                    else if ((mapped.getReasoning() == null || mapped.getReasoning().isBlank()) && currentStep.getReasoning() != null && !currentStep.getReasoning().isBlank() && (executedCalls.size() <= 1 || (existingActions != null && existingActions.stream().noneMatch(a -> a.getReasoning() != null && !a.getReasoning().isBlank()))))
                     {
                         mapped = mapped.withReasoning(currentStep.getReasoning());
                     }

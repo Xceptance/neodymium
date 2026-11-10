@@ -3534,6 +3534,18 @@ function generateTurnConversationMarkdown(stepData, call, cIdx) {
         }
     }
 
+    let turnThinking = call.thinking || call.reasoning || call.thought || '';
+    if (Array.isArray(turnThinking)) {
+        turnThinking = turnThinking.filter(Boolean).map(t => typeof t === 'object' && t !== null ? (t.text || t.summary || t.thought || JSON.stringify(t)) : String(t)).join('\n\n');
+    } else if (typeof turnThinking === 'object' && turnThinking !== null) {
+        turnThinking = turnThinking.text || turnThinking.summary || turnThinking.thought || JSON.stringify(turnThinking);
+    }
+    if (turnThinking && String(turnThinking).trim().length > 0) {
+        lines.push('#### Model Thought / Reasoning');
+        lines.push(String(turnThinking).trim());
+        lines.push('');
+    }
+
     const respText = call.responseContent || call.response_content || call.rawResponse || call.raw_response || call.response || '';
     const respParsed = parseToolCallResponse(respText);
     lines.push('#### Model Response');

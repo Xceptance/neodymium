@@ -2386,6 +2386,24 @@ table.aura-table tr.clickable-row.active-selected-row td:first-child {
     max-height: 260px;
     overflow-y: auto;
 }
+[data-theme="dark"] .llm-tag-thinking,
+:root.force-dark .llm-tag-thinking,
+:root[data-bs-theme="dark"] .llm-tag-thinking,
+body.force-dark .llm-tag-thinking,
+body[data-bs-theme="dark"] .llm-tag-thinking {
+    background: rgba(147, 51, 234, 0.18);
+    color: #d8b4fe;
+    border-color: rgba(147, 51, 234, 0.4);
+}
+[data-theme="dark"] .llm-thinking-text,
+:root.force-dark .llm-thinking-text,
+:root[data-bs-theme="dark"] .llm-thinking-text,
+body.force-dark .llm-thinking-text,
+body[data-bs-theme="dark"] .llm-thinking-text {
+    background: rgba(147, 51, 234, 0.1);
+    color: var(--text-main);
+    border-left-color: #c084fc;
+}
 .llm-instruction-text {
     font-weight: 600;
     color: var(--text-main);

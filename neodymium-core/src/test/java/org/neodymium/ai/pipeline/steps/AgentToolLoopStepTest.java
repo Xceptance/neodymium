@@ -5310,6 +5310,140 @@ public class AgentToolLoopStepTest
         Assertions.assertTrue(playbookStep.getReasonings().contains("Analyzing search button location"));
         Assertions.assertTrue(playbookStep.getReasonings().contains("Search results confirmed"));
     }
+
+    @Test
+    public void testCompleteStepWithoutSummaryPreservesPriorTurnReasoning() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("mock_click", "Click", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Clicked");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Completed");
+            }
+        });
+
+        final PlaybookStep playbookStep = new PlaybookStep("Navigate and finish");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Navigate and finish");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("Navigating to dashboard", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("c-1", "mock_click", MAPPER.createObjectNode())), "Navigating to dashboard and dismissing cookies");
+            }
+            else
+            {
+                // complete_step with empty arguments (no summary provided)
+                return new LlmResponse("Done", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("c-2", "complete_step", MAPPER.createObjectNode())), null);
+            }
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        step.execute(this.context);
+
+        // Pre-existing rich reasoning must NOT be clobbered by "Goal completed"
+        Assertions.assertEquals("Navigating to dashboard and dismissing cookies", playbookStep.getReasoning());
+        Assertions.assertFalse(playbookStep.getReasonings().contains("Goal completed"), "Dummy string 'Goal completed' must not be added to reasonings list");
+    }
+
+    @Test
+    public void testFinalTurnAssistantThoughtHonoredOnCompleteStep() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("mock_click", "Click", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Clicked");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Completed");
+            }
+        });
+
+        final PlaybookStep playbookStep = new PlaybookStep("Filter products");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Filter products");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("Opening filter", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("c-1", "mock_click", MAPPER.createObjectNode())), "Opening filter drawer");
+            }
+            else
+            {
+                // Concluding turn with thought but complete_step without summary argument
+                return new LlmResponse("Step complete", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("c-2", "complete_step", MAPPER.createObjectNode())), "Filters applied and item count verified");
+            }
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        step.execute(this.context);
+
+        Assertions.assertEquals("Filters applied and item count verified", playbookStep.getReasoning());
+        Assertions.assertTrue(playbookStep.getReasonings().contains("Opening filter drawer"));
+        Assertions.assertTrue(playbookStep.getReasonings().contains("Filters applied and item count verified"));
+    }
 }
 
 
