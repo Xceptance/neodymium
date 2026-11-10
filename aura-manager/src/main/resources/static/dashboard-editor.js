@@ -3172,6 +3172,9 @@ function deleteStep(lineNumOrElement) {
         }
         const treeCard = document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`);
         if (treeCard) treeCard.remove();
+        if (row.nextElementSibling && row.nextElementSibling.classList.contains('review-suggestion-card')) {
+            row.nextElementSibling.remove();
+        }
 
         reindexSteps();
         if (typeof pushEditorSnapshot === 'function') {
@@ -3182,6 +3185,9 @@ function deleteStep(lineNumOrElement) {
 
     const treeCard = document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`);
     if (treeCard) treeCard.remove();
+    if (row.nextElementSibling && row.nextElementSibling.classList.contains('review-suggestion-card')) {
+        row.nextElementSibling.remove();
+    }
 
     row.remove();
     reindexSteps();
@@ -5772,15 +5778,30 @@ function dismissSuggestionCard(btn) {
 }
 window.dismissSuggestionCard = dismissSuggestionCard;
 
-function applySuggestionRewrite(targetLineNum, newInstruction) {
-    const row = document.querySelector(`.step-row[data-line="${targetLineNum}"]`);
+function applySuggestionRewrite(btnOrLine, newInstruction) {
+    let row = null;
+    let card = null;
+
+    if (btnOrLine && typeof btnOrLine === 'object' && btnOrLine.nodeType) {
+        card = btnOrLine.closest('.review-suggestion-card');
+        if (card) {
+            row = card.previousElementSibling;
+        }
+    } else if (typeof btnOrLine === 'number' || typeof btnOrLine === 'string') {
+        row = document.querySelector(`.step-row[data-line="${btnOrLine}"]`);
+        if (row && row.nextElementSibling && row.nextElementSibling.classList.contains('review-suggestion-card')) {
+            card = row.nextElementSibling;
+        }
+    }
+
     if (row && newInstruction != null) {
         const contentEl = row.querySelector('.step-content');
         if (contentEl) {
             contentEl.setAttribute('data-raw', newInstruction);
             contentEl.innerText = newInstruction;
+            const lineNum = row.getAttribute('data-line');
             if (typeof formatStepToTokens === 'function') {
-                formatStepToTokens(targetLineNum);
+                formatStepToTokens(lineNum || row);
             }
             if (typeof compilePlaybookToYaml === 'function') {
                 compilePlaybookToYaml();
@@ -5789,7 +5810,6 @@ function applySuggestionRewrite(targetLineNum, newInstruction) {
                 debouncedPushSnapshot();
             }
         }
-        const card = row.nextElementSibling;
         if (card && card.classList.contains('review-suggestion-card')) {
             card.remove();
         }
@@ -5903,9 +5923,26 @@ function renderStepSuggestionCards(findings) {
 
     findings.forEach(f => {
         let targetRow = null;
-        if (f.lineNumber > 0) {
+
+        // 1. Try anchoring by rawInstruction matching
+        if (f.rawInstruction && f.rawInstruction.trim()) {
+            const rawTarget = f.rawInstruction.trim();
+            const candidates = document.querySelectorAll('.step-row');
+            for (const r of candidates) {
+                const c = r.querySelector('.step-content');
+                if (c && (c.getAttribute('data-raw') === rawTarget || c.innerText.trim() === rawTarget)) {
+                    targetRow = r;
+                    break;
+                }
+            }
+        }
+
+        // 2. Fall back to lineNumber
+        if (!targetRow && f.lineNumber > 0) {
             targetRow = document.querySelector(`.step-row[data-line="${f.lineNumber}"]`);
         }
+
+        // 3. Fall back to stepIndex
         if (!targetRow && f.stepIndex > 0) {
             const allRows = document.querySelectorAll('#stepsList .step-row, .step-row');
             if (f.stepIndex <= allRows.length) {
@@ -5922,7 +5959,6 @@ function renderStepSuggestionCards(findings) {
         const card = document.createElement('div');
         card.className = `review-suggestion-card ${sevClass}`;
 
-        const targetLine = targetRow.getAttribute('data-line') || f.stepIndex || 1;
         const categoryLabel = f.category ? f.category.replace(/_/g, ' ') : 'Advisory';
 
         let rewriteHtml = '';
@@ -5931,7 +5967,7 @@ function renderStepSuggestionCards(findings) {
             const encodedRewrite = encodeURIComponent(f.suggestedRewrite);
             rewriteHtml = `
                 <button type="button" class="btn-apply-suggestion"
-                        onclick="applySuggestionRewrite('${targetLine}', decodeURIComponent('${encodedRewrite}'))"
+                        onclick="applySuggestionRewrite(this, decodeURIComponent('${encodedRewrite}'))"
                         title="Replace step instruction with suggested rewrite: &quot;${safeRewrite}&quot;">
                     Apply Rewrite
                 </button>

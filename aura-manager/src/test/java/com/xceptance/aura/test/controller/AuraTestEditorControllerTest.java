@@ -32,6 +32,7 @@ import org.neodymium.ai.playbook.linter.LinterCategory;
 import org.neodymium.ai.playbook.linter.LinterSeverity;
 import org.neodymium.ai.playbook.linter.PlaybookLinter;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
+import org.neodymium.ai.playbook.linter.PlaybookLinterResult;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.ui.ConcurrentModel;
@@ -383,7 +384,7 @@ public class AuraTestEditorControllerTest
         Assertions.assertNotNull(response.getBody());
         Assertions.assertEquals("SYNTAX_ERROR", response.getBody().get("status"));
         Assertions.assertTrue(response.getBody().containsKey("issues"));
-        Mockito.verify(mockLinter, Mockito.never()).lint(Mockito.anyList(), Mockito.any());
+        Mockito.verify(mockLinter, Mockito.never()).lintWithResult(Mockito.anyList(), Mockito.any());
     }
 
     @Test
@@ -413,7 +414,7 @@ public class AuraTestEditorControllerTest
                 null
         );
 
-        Mockito.when(mockLinter.lint(Mockito.anyList(), Mockito.any())).thenReturn(List.of(finding));
+        Mockito.when(mockLinter.lintWithResult(Mockito.anyList(), Mockito.any())).thenReturn(PlaybookLinterResult.success(List.of(finding)));
 
         final ResponseEntity<Map<String, Object>> response = customController.aiReview(request);
 
@@ -429,6 +430,7 @@ public class AuraTestEditorControllerTest
         Assertions.assertEquals("WARNING", f0.get("severity"));
         Assertions.assertEquals("Button target is ambiguous", f0.get("message"));
         Assertions.assertEquals("Click the primary 'Submit' button", f0.get("suggestedRewrite"));
+        Assertions.assertEquals("Click button", f0.get("rawInstruction"));
     }
 
     @Test
@@ -449,7 +451,30 @@ public class AuraTestEditorControllerTest
         Assertions.assertNotNull(response.getBody());
         Assertions.assertEquals("OK", response.getBody().get("status"));
         Assertions.assertEquals(List.of(), response.getBody().get("findings"));
-        Mockito.verify(mockLinter, Mockito.never()).lint(Mockito.anyList(), Mockito.any());
+        Mockito.verify(mockLinter, Mockito.never()).lintWithResult(Mockito.anyList(), Mockito.any());
+    }
+
+    @Test
+    public final void testAiReviewWhenLinterReturnsFailure() throws Exception
+    {
+        final HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
+        final String validYaml = "steps:\n  - Click button";
+        Mockito.when(request.getParameter("file")).thenReturn("valid.yaml");
+        Mockito.when(request.getParameter("content")).thenReturn(validYaml);
+
+        final PlaybookLinter mockLinter = Mockito.mock(PlaybookLinter.class);
+        final AuraTestEditorController customController = new AuraTestEditorController(fileService, mockLinter);
+
+        Mockito.when(fileService.validateFileContent("valid.yaml", validYaml)).thenReturn(List.of());
+        Mockito.when(mockLinter.lintWithResult(Mockito.anyList(), Mockito.any())).thenReturn(
+                PlaybookLinterResult.failure("No LLM provider registered for capability LINTER"));
+
+        final ResponseEntity<Map<String, Object>> response = customController.aiReview(request);
+
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertEquals("ERROR", response.getBody().get("status"));
+        Assertions.assertTrue(String.valueOf(response.getBody().get("error")).contains("No LLM provider registered"));
     }
 
     @Test
@@ -464,7 +489,7 @@ public class AuraTestEditorControllerTest
         final AuraTestEditorController customController = new AuraTestEditorController(fileService, mockLinter);
 
         Mockito.when(fileService.validateFileContent("valid.yaml", validYaml)).thenReturn(List.of());
-        Mockito.when(mockLinter.lint(Mockito.anyList(), Mockito.any())).thenThrow(new RuntimeException("LLM Quota Exceeded"));
+        Mockito.when(mockLinter.lintWithResult(Mockito.anyList(), Mockito.any())).thenThrow(new RuntimeException("LLM Quota Exceeded"));
 
         final ResponseEntity<Map<String, Object>> response = customController.aiReview(request);
 

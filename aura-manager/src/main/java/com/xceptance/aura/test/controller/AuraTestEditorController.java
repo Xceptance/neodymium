@@ -36,6 +36,7 @@ import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.playbook.YamlPlaybookParser;
 import org.neodymium.ai.playbook.linter.PlaybookLinter;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
+import org.neodymium.ai.playbook.linter.PlaybookLinterResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -717,9 +718,20 @@ public class AuraTestEditorController
                 return ResponseEntity.ok(response);
             }
 
-            final List<PlaybookLinterFinding> findings = this.playbookLinter != null
-                    ? this.playbookLinter.lint(steps, description)
-                    : new PlaybookLinter().lint(steps, description);
+            final PlaybookLinter linter = this.playbookLinter != null
+                    ? this.playbookLinter
+                    : new PlaybookLinter();
+            final PlaybookLinterResult linterResult = linter.lintWithResult(steps, description);
+
+            if (!linterResult.successful())
+            {
+                response.put("status", "ERROR");
+                response.put("error", "AI Review unavailable: " + linterResult.errorMessage());
+                response.put("findings", List.of());
+                return ResponseEntity.ok(response);
+            }
+
+            final List<PlaybookLinterFinding> findings = linterResult.findings();
 
             final List<Map<String, Object>> findingList = new ArrayList<>();
             if (findings != null)
@@ -730,6 +742,7 @@ public class AuraTestEditorController
                     fm.put("stepIndex", f.stepIndex());
                     fm.put("lineNumber", f.lineNumber());
                     fm.put("sourceFile", f.sourceFile());
+                    fm.put("rawInstruction", f.rawInstruction());
                     fm.put("category", f.category() != null ? f.category().name() : "");
                     fm.put("severity", f.severity() != null ? f.severity().name() : "WARNING");
                     fm.put("message", f.message());

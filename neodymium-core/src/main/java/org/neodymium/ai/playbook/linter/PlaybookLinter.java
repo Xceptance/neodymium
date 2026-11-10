@@ -43,7 +43,8 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Service executing upfront pre-flight static analysis on playbook scenario steps.
- * Runs in a single batch call during session initialization, providing non-blocking advisory findings.
+ * Runs in a single batch call during session initialization or on-demand from the editor,
+ * providing structured advisory findings and execution status.
  *
  * @author AI-generated: Gemini 3.7 Flash
  * @author Xceptance GmbH 2026
@@ -94,16 +95,29 @@ public final class PlaybookLinter
      */
     public List<PlaybookLinterFinding> lint(final List<PlaybookStep> steps, final String description)
     {
+        return lintWithResult(steps, description).findings();
+    }
+
+    /**
+     * Runs upfront static analysis on the provided scenario steps and returns a structured
+     * {@link PlaybookLinterResult} capturing findings, success status, and error details.
+     *
+     * @param steps the list of playbook steps
+     * @param description optional high-level scenario description
+     * @return a PlaybookLinterResult with findings and execution status
+     */
+    public PlaybookLinterResult lintWithResult(final List<PlaybookStep> steps, final String description)
+    {
         if (steps == null || steps.isEmpty())
         {
-            return Collections.emptyList();
+            return PlaybookLinterResult.success(Collections.emptyList());
         }
 
         final ExecutionMode mode = this.session != null ? this.session.getExecutionMode() : null;
         if (mode != null && !mode.isLive())
         {
             LOGGER.debug("Playbook pre-flight linter is bypassed in replay mode ({}).", mode);
-            return Collections.emptyList();
+            return PlaybookLinterResult.success(Collections.emptyList());
         }
 
         final AiConfiguration config = AiConfiguration.getInstance();
@@ -121,7 +135,7 @@ public final class PlaybookLinter
         if (!enabled)
         {
             LOGGER.debug("Playbook pre-flight linter is disabled (neodymium.ai.linter.enabled=false).");
-            return Collections.emptyList();
+            return PlaybookLinterResult.failure("Playbook pre-flight linter is disabled (neodymium.ai.linter.enabled=false).");
         }
 
         final ExecutionContext context = this.session != null ? this.session.getExecutionContext() : ExecutionContext.getActiveContext();
@@ -131,19 +145,34 @@ public final class PlaybookLinter
             LlmProvider provider = this.customProvider;
             if (provider == null && this.session != null && this.session.getLlmRegistry() != null)
             {
-                provider = this.session.getLlmRegistry().getProvider(LlmCapability.LINTER);
+                try
+                {
+                    provider = this.session.getLlmRegistry().getProvider(LlmCapability.LINTER);
+                }
+                catch (final IllegalStateException ignored)
+                {
+                    provider = null;
+                }
             }
-            if (provider == null)
+            if (provider == null && this.session == null)
             {
                 final LlmRegistry registry = new LlmRegistry();
                 LlmRegistry.bootstrap(registry, config);
-                provider = registry.getProvider(LlmCapability.LINTER);
+                try
+                {
+                    provider = registry.getProvider(LlmCapability.LINTER);
+                }
+                catch (final IllegalStateException ignored)
+                {
+                    provider = null;
+                }
             }
 
             if (provider == null)
             {
                 LOGGER.warn("⚠️ No LLM provider registered for capability {}", LlmCapability.LINTER);
-                return Collections.emptyList();
+                return PlaybookLinterResult.failure("No LLM provider registered for capability " + LlmCapability.LINTER
+                        + ". Ensure GEMINI_API_KEY environment variable is set or configured in ai.properties.");
             }
 
             if (this.customProvider == null
@@ -152,18 +181,12 @@ public final class PlaybookLinter
                 && (this.session == null || this.session.data() == null || !"true".equals(String.valueOf(this.session.data().get("neodymium.ai.linter.enabled")))))
             {
                 LOGGER.debug("Playbook pre-flight linter is automatically bypassed for MockLlmProvider to protect test step response queue.");
-                return Collections.emptyList();
+                return PlaybookLinterResult.success(Collections.emptyList());
             }
 
             final PlaybookLinterPrompt prompt = new PlaybookLinterPrompt(description, steps, context);
             final String sysMsg = prompt.compileSystemMessage(context);
             final String userMsg = prompt.compileUserMessage(context);
-
-            if (LOGGER.isTraceEnabled())
-            {
-                LOGGER.trace("Playbook Linter System Prompt:\n{}", sysMsg);
-                LOGGER.trace("Playbook Linter User Prompt:\n{}", userMsg);
-            }
 
             final double temperature = config.getTemperature("linter");
             final int timeoutSeconds = config.getTimeoutSeconds("linter");
@@ -273,12 +296,12 @@ public final class PlaybookLinter
                 context.getTransientData().put(ExecutionContext.KEY_PLAYBOOK_LINTER_FINDINGS, findings);
             }
 
-            return findings;
+            return PlaybookLinterResult.success(findings);
         }
         catch (final Throwable t)
         {
             LOGGER.warn("⚠️ Pre-flight playbook linter encountered an error and was skipped gracefully: {}", t.getMessage(), t);
-            return Collections.emptyList();
+            return PlaybookLinterResult.failure(t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName());
         }
     }
 }

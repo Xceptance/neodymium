@@ -425,4 +425,108 @@ public final class PlaybookLinterTest
         assertNotNull(findings);
         assertTrue(findings.isEmpty());
     }
+
+    @Test
+    @DisplayName("Verify lintWithResult returns successful result when LLM provider returns findings")
+    public void testLintWithResultCapturesSuccess()
+    {
+        final String cannedJson = """
+            {
+              "findings": [
+                {
+                  "stepIndex": 1,
+                  "category": "VAGUE_TARGET",
+                  "severity": "WARNING",
+                  "message": "Target button is ambiguous.",
+                  "suggestedRewrite": "Click the Submit button in the footer"
+                }
+              ]
+            }
+            """;
+
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        mockProvider.addResponse(new LlmResponse(cannedJson, new TokenUsage(80, 40, 120, 10), "mock-linter-model"));
+
+        final PlaybookLinter linter = new PlaybookLinter(mockProvider);
+        final List<PlaybookStep> steps = List.of(new PlaybookStep("Click button"));
+        final PlaybookLinterResult result = linter.lintWithResult(steps, "Standalone Scenario");
+
+        assertNotNull(result);
+        assertTrue(result.successful());
+        assertNull(result.errorMessage());
+        assertEquals(1, result.findings().size());
+        assertEquals("Target button is ambiguous.", result.findings().get(0).message());
+    }
+
+    @Test
+    @DisplayName("Verify lintWithResult returns failure when no provider is registered")
+    public void testLintWithResultCapturesFailureWhenNoProvider()
+    {
+        final LlmRegistry emptyRegistry = new LlmRegistry();
+        final AiSession session = AiSession.mock(new SessionData(), emptyRegistry, new ExecutionEventBus(), null);
+        final PlaybookLinter linter = new PlaybookLinter(session);
+        final List<PlaybookStep> steps = List.of(new PlaybookStep("Click button"));
+        final PlaybookLinterResult result = linter.lintWithResult(steps, "Standalone Scenario");
+
+        assertNotNull(result);
+        assertFalse(result.successful());
+        assertNotNull(result.errorMessage());
+        assertTrue(result.errorMessage().contains("No LLM provider registered"));
+        assertTrue(result.findings().isEmpty());
+    }
+
+    @Test
+    @DisplayName("Verify lintWithResult captures failure when provider throws exception")
+    public void testLintWithResultCapturesProviderException()
+    {
+        final LlmProvider failingProvider = new LlmProvider()
+        {
+            @Override
+            public LlmResponse chat(final LlmRequest request)
+            {
+                throw new RuntimeException("Simulated LLM network timeout");
+            }
+
+            @Override
+            public Set<LlmCapability> getCapabilities()
+            {
+                return Set.of(LlmCapability.LINTER);
+            }
+        };
+        final PlaybookLinter linter = new PlaybookLinter(failingProvider);
+        final List<PlaybookStep> steps = List.of(new PlaybookStep("Click button"));
+        final PlaybookLinterResult result = linter.lintWithResult(steps, "Standalone Scenario");
+
+        assertNotNull(result);
+        assertFalse(result.successful());
+        assertNotNull(result.errorMessage());
+        assertTrue(result.errorMessage().contains("Simulated LLM network timeout"));
+        assertTrue(result.findings().isEmpty());
+    }
+
+    @Test
+    @DisplayName("Verify lintWithResult returns failure when linter is disabled via configuration")
+    public void testLintWithResultCapturesFailureWhenDisabled()
+    {
+        System.setProperty("neodymium.ai.linter.enabled", "false");
+        try
+        {
+            AiConfiguration.resetInstance();
+            final MockLlmProvider mockProvider = new MockLlmProvider();
+            final PlaybookLinter linter = new PlaybookLinter(mockProvider);
+            final List<PlaybookStep> steps = List.of(new PlaybookStep("Click button"));
+            final PlaybookLinterResult result = linter.lintWithResult(steps, "Standalone Scenario");
+
+            assertNotNull(result);
+            assertFalse(result.successful());
+            assertNotNull(result.errorMessage());
+            assertTrue(result.errorMessage().contains("disabled"));
+            assertTrue(result.findings().isEmpty());
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.linter.enabled");
+            AiConfiguration.resetInstance();
+        }
+    }
 }
