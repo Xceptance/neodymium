@@ -37,7 +37,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 
 import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.event.structural.PlaybookRecordingFlushEvent;
 import org.neodymium.ai.server.JavalinTestServer;
+import org.neodymium.ai.session.AiSession;
 import org.neodymium.common.browser.SuppressBrowsers;
 import org.neodymium.util.Neodymium;
 import com.codeborne.selenide.Configuration;
@@ -229,17 +231,46 @@ public abstract class BaseAiTest extends BaseLlmTest
      */
     protected File getTestResourceFile(final String relativePath)
     {
+        final File e2eSrc = new File("neodymium-e2e-tests/src/test/resources", relativePath);
+        if (e2eSrc.exists())
+        {
+            return e2eSrc;
+        }
         final File direct = new File("src/test/resources", relativePath);
         if (direct.exists())
         {
             return direct;
+        }
+        final File e2eTarget = new File("neodymium-e2e-tests/target/test-classes", relativePath);
+        if (e2eTarget.exists())
+        {
+            return e2eTarget;
+        }
+        final File target = new File("target/test-classes", relativePath);
+        if (target.exists())
+        {
+            return target;
         }
         final File submodule = new File("neodymium-core/src/test/resources", relativePath);
         if (submodule.exists())
         {
             return submodule;
         }
-        return direct;
+        final boolean isMonorepoRoot = new File("neodymium-e2e-tests").isDirectory();
+        return isMonorepoRoot ? e2eSrc : direct;
+    }
+
+    /**
+     * Flushes in-flight candidate playbook recording to disk mid-lifecycle for test assertion verification.
+     *
+     * @param session the active AI session
+     */
+    protected void flushRecording(final AiSession session)
+    {
+        if (session != null && session.getEventBus() != null)
+        {
+            session.getEventBus().dispatch(new PlaybookRecordingFlushEvent(session.getExecutionContext()));
+        }
     }
 
     /**

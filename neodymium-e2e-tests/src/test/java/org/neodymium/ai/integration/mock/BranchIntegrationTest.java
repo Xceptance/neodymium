@@ -133,6 +133,8 @@ public class BranchIntegrationTest extends BaseAiTest
 
         $("#result").shouldHave(text("Cookies Accepted!"));
 
+        flushRecording(session);
+
         // Verify parameterization
         final String browserProfile = Neodymium.getBrowserProfileName();
         final File recordingFile = getTestResourceFile("playbooks/integration/programmatic/custom_branch_playbook_" + browserProfile + ".json");

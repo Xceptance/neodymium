@@ -115,6 +115,8 @@ public class ClickIntegrationTest extends BaseAiTest
 
         $("#click-status").shouldHave(text("Clicked"));
 
+        flushRecording(session);
+
         // Verify parameterization
         final String browserProfile = Neodymium.getBrowserProfileName();
         final File recordingFile = getTestResourceFile("playbooks/integration/programmatic/custom_click_playbook_" + browserProfile + ".json");

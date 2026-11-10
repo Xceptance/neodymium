@@ -141,6 +141,8 @@ public class NoReplayIntegrationTest extends BaseAiTest
                 "Replay should make exactly 1 LLM call because of the (no-replay) tag on step 2");
         }
 
+        flushRecording(session);
+
         // Verify parameterization
         final String browserProfile = Neodymium.getBrowserProfileName();
         final File recordingFile = getTestResourceFile("playbooks/integration/programmatic/custom_no_replay_playbook_" + browserProfile + ".json");
