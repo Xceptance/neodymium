@@ -4039,10 +4039,13 @@ public class AgentToolLoopStepTest
         final AgentToolLoopStep loopStep = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 10);
         loopStep.execute(this.context);
 
-        Assertions.assertEquals("Navigating to Wikipedia homepage", step.getReasoning());
+        Assertions.assertEquals("Page opened", step.getReasoning());
+        Assertions.assertTrue(step.getReasonings().contains("Navigating to Wikipedia homepage"));
+        Assertions.assertTrue(step.getReasonings().contains("Page opened"));
         Assertions.assertFalse(step.getActions().isEmpty(), "Step should contain populated proposed actions when executed");
         final Action firstAction = step.getActions().get(0);
         Assertions.assertEquals("OPEN_URL", firstAction.getType());
+        Assertions.assertEquals("Navigating to Wikipedia homepage", firstAction.getReasoning());
     }
 
     @Test
@@ -5077,6 +5080,235 @@ public class AgentToolLoopStepTest
         Assertions.assertEquals("${user.password}", capturedCanonicalAction.get().getValue(), "action (canonical) in event must retain variable placeholder without leaking secret");
         Assertions.assertNotNull(capturedResolvedAction.get(), "resolvedAction must be populated in ActionExecutedEvent");
         Assertions.assertEquals("${user.password}", capturedResolvedAction.get().getValue(), "resolvedAction in event must retain variable placeholder without leaking secret");
+    }
+
+    @Test
+    public void testStepReasoningAndActionReasoningPopulatedFromCompleteStepSummary() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("mock_click", "Click", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Clicked");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Completed");
+            }
+        });
+
+        final PlaybookStep playbookStep = new PlaybookStep("Search for product");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Search for product");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("c-1", "mock_click", MAPPER.createObjectNode().put("target", "#search-button"))));
+            }
+            else
+            {
+                return new LlmResponse("Done", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("c-2", "complete_step", MAPPER.createObjectNode().put("summary", "Searched for shoes and results loaded"))));
+            }
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        step.execute(this.context);
+
+        Assertions.assertEquals("Searched for shoes and results loaded", playbookStep.getReasoning());
+        Assertions.assertTrue(playbookStep.getReasonings().contains("Searched for shoes and results loaded"));
+        Assertions.assertFalse(playbookStep.getActions().isEmpty(), "PlaybookStep should have actions from executed tool calls");
+        Assertions.assertEquals("Searched for shoes and results loaded", playbookStep.getActions().get(0).getReasoning());
+    }
+
+    @Test
+    public void testMultiTurnActionsRetainIndividualTurnThoughtsWhenStepCompletesWithSummary() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("mock_click", "Click", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Clicked");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("mock_type", "Type", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Typed");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Completed");
+            }
+        });
+
+        final PlaybookStep playbookStep = new PlaybookStep("Search and filter");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Search and filter");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("Clicking search bar to focus", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("c-1", "mock_click", MAPPER.createObjectNode().put("target", "#search-bar"))),
+                        "Focusing on search input field");
+            }
+            else if (t == 2)
+            {
+                return new LlmResponse("Typing shoes into input", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("c-2", "mock_type", MAPPER.createObjectNode().put("target", "#search-bar").put("value", "shoes"))),
+                        "Entering search keyword shoes");
+            }
+            else
+            {
+                return new LlmResponse("Done", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("c-3", "complete_step", MAPPER.createObjectNode().put("summary", "Searched for shoes successfully"))),
+                        "Verification satisfied");
+            }
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        step.execute(this.context);
+
+        Assertions.assertEquals("Searched for shoes successfully", playbookStep.getReasoning());
+        Assertions.assertEquals(2, playbookStep.getActions().size());
+        Assertions.assertEquals("Focusing on search input field", playbookStep.getActions().get(0).getReasoning());
+        Assertions.assertEquals("Entering search keyword shoes", playbookStep.getActions().get(1).getReasoning());
+        Assertions.assertTrue(playbookStep.getReasonings().contains("Focusing on search input field"));
+        Assertions.assertTrue(playbookStep.getReasonings().contains("Entering search keyword shoes"));
+        Assertions.assertTrue(playbookStep.getReasonings().contains("Searched for shoes successfully"));
+    }
+
+    @Test
+    public void testTurnThoughtsRecordedInPlaybookStepReasonings() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("mock_click", "Click", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Clicked");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Completed");
+            }
+        });
+
+        final PlaybookStep playbookStep = new PlaybookStep("Click search");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click search");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("Clicking search", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("c-1", "mock_click", MAPPER.createObjectNode())), "Analyzing search button location");
+            }
+            else
+            {
+                return new LlmResponse("Done", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("c-2", "complete_step", MAPPER.createObjectNode().put("summary", "Search button clicked"))),
+                        "Search results confirmed");
+            }
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        step.execute(this.context);
+
+        Assertions.assertEquals("Search button clicked", playbookStep.getReasoning());
+        Assertions.assertTrue(playbookStep.getReasonings().contains("Analyzing search button location"));
+        Assertions.assertTrue(playbookStep.getReasonings().contains("Search results confirmed"));
     }
 }
 

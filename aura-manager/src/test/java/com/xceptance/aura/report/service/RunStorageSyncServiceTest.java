@@ -1593,6 +1593,82 @@ public class RunStorageSyncServiceTest
             deleteRecursively(runDir);
         }
     }
+
+    @Test
+    public void testSyncLocalRunStoragePopulatesStepReasoningAndReasonings() throws IOException
+    {
+        final String runId = "run-sync-reasoning-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path execDir = runDir.resolve("Checkout").resolve("CheckoutProcessTest");
+        Files.createDirectories(execDir);
+
+        final String execJson = """
+            {
+              "id": "exec-reasoning-1",
+              "runId": "%s",
+              "testClass": "CheckoutProcessTest",
+              "testMethod": "testCheckout",
+              "status": "passed",
+              "steps": {
+                "tries": {
+                  "1": {
+                    "coreSteps": [
+                      {
+                        "name": "Navigate to login",
+                        "status": "success",
+                        "reasoning": "Navigated to home page and dismissed cookies",
+                        "reasonings": [
+                          "Locating navigation bar",
+                          "Navigated to home page and dismissed cookies"
+                        ],
+                        "actions": []
+                      },
+                      {
+                        "name": "Click submit",
+                        "status": "success",
+                        "reasonings": [
+                          "Submit button located and clicked"
+                        ],
+                        "actions": []
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+            """.formatted(runId);
+
+        final Path execFile = execDir.resolve("execution-1.json");
+        Files.writeString(execFile, execJson);
+
+        try
+        {
+            final ObjectMapper mapper = new ObjectMapper();
+            final Optional<String> runJsonOpt = storageService.buildRunJsonContent(runDir.toFile(), runId, true);
+            Assertions.assertTrue(runJsonOpt.isPresent(), "run.json content should be generated");
+
+            final JsonNode updatedExec = mapper.readTree(execFile.toFile());
+            final JsonNode blockSteps = updatedExec.path("blocks").path("steps");
+            Assertions.assertTrue(blockSteps.isArray() && !blockSteps.isEmpty(), "blocks.steps should be populated");
+
+            final JsonNode firstStep = blockSteps.get(0);
+            Assertions.assertEquals("Navigated to home page and dismissed cookies", firstStep.path("reasoning").asText());
+            Assertions.assertTrue(firstStep.has("reasonings"), "step should have reasonings array");
+            Assertions.assertEquals(2, firstStep.path("reasonings").size());
+            Assertions.assertEquals("Locating navigation bar", firstStep.path("reasonings").get(0).asText());
+            Assertions.assertEquals("Navigated to home page and dismissed cookies", firstStep.path("reasonings").get(1).asText());
+
+            final JsonNode secondStep = blockSteps.get(1);
+            Assertions.assertEquals("Submit button located and clicked", secondStep.path("reasoning").asText());
+            Assertions.assertTrue(secondStep.has("reasonings"), "second step should have reasonings array");
+            Assertions.assertEquals(1, secondStep.path("reasonings").size());
+            Assertions.assertEquals("Submit button located and clicked", secondStep.path("reasonings").get(0).asText());
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
 }
 
 

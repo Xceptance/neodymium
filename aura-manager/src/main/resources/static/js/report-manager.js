@@ -3240,6 +3240,22 @@ function renderStreamlinedLlmCallCard(call, cIdx, stepId, isStepFailed, isSubSte
     }
 
     // Response row
+    let turnThinking = call.thinking || call.reasoning || call.thought || '';
+    if (Array.isArray(turnThinking)) {
+        turnThinking = turnThinking.filter(Boolean).map(t => typeof t === 'object' && t !== null ? (t.text || t.summary || t.thought || JSON.stringify(t)) : String(t)).join('\n\n');
+    } else if (typeof turnThinking === 'object' && turnThinking !== null) {
+        turnThinking = turnThinking.text || turnThinking.summary || turnThinking.thought || JSON.stringify(turnThinking);
+    }
+    let thinkingRowHtml = '';
+    if (turnThinking && String(turnThinking).trim().length > 0) {
+        thinkingRowHtml = `
+            <div class="llm-exchange-row">
+                <span class="llm-exchange-tag llm-tag-thinking">Thought</span>
+                <div class="llm-thinking-text">${escapeHtml(String(turnThinking).trim())}</div>
+            </div>
+        `;
+    }
+
     let responseDisplay = respParsed.formattedToolCall || respParsed.rawText || 'No response payload recorded';
     const failureMsg = isTurnFailed ? '<div style="margin-top: 0.35rem; font-size: 0.76rem; color: #dc2626; font-weight: 600;">❌ FAILED / TIMEOUT</div>' : '';
     const responseRowHtml = `
@@ -3373,6 +3389,7 @@ function renderStreamlinedLlmCallCard(call, cIdx, stepId, isStepFailed, isSubSte
             </div>
             <div class="llm-turn-body">
                 ${requestRowHtml}
+                ${thinkingRowHtml}
                 ${responseRowHtml}
             </div>
             ${hasDetails ? `<div class="llm-details-drawer" style="display: none;">${detailsInnerHtml}</div>` : ''}
@@ -4082,11 +4099,12 @@ function renderStepsForExecution(activeRow) {
 
             // Format Reasoning
             let reasoningHtml = '';
-            if (s.reasoning) {
+            const stepReasoning = s.reasoning || (Array.isArray(s.reasonings) && s.reasonings.length > 0 ? Array.from(new Set(s.reasonings.filter(Boolean))).join('\n\n') : '');
+            if (stepReasoning && String(stepReasoning).trim().length > 0) {
                 reasoningHtml = `
                     <div class="reasoning-card" style="margin-top: 0.5rem;">
                         <div class="reasoning-title">💡 AI Reasoning & Decisioning</div>
-                        <div class="reasoning-body">${s.reasoning}</div>
+                        <div class="reasoning-body">${escapeHtml(String(stepReasoning).trim())}</div>
                     </div>
                 `;
             }
@@ -4243,7 +4261,7 @@ function renderStepsForExecution(activeRow) {
                         ? `<span class="action-status-badge ${act.success ? 'action-status-ok' : 'action-status-fail'}" title="${act.success ? 'Action succeeded' : 'Action failed'}"><span class="material-symbols-outlined">${act.success ? 'check_circle' : 'cancel'}</span></span>`
                         : '';
                     const actReasoning = act.reasoning
-                        ? `<div class="action-reasoning"><span class="material-symbols-outlined">psychology</span><span class="action-reasoning-text">${act.reasoning}</span></div>`
+                        ? `<div class="action-reasoning"><span class="material-symbols-outlined">psychology</span><span class="action-reasoning-text">${escapeHtml(act.reasoning)}</span></div>`
                         : '';
                     const origTarget = act.expectedTarget || act.originalTarget || act.healedFrom || (act.healed && act.target && act.target !== actTarget ? act.target : null);
                     let healedBadge = '';
