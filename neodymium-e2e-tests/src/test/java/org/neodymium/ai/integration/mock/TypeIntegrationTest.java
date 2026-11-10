@@ -116,6 +116,8 @@ public class TypeIntegrationTest extends BaseAiTest
 
         $("#first-name").shouldHave(value("John"));
 
+        flushRecording(session);
+
         // Verify parameterization
         final String browserProfile = Neodymium.getBrowserProfileName();
         final File recordingFile = getTestResourceFile("playbooks/integration/programmatic/custom_type_playbook_" + browserProfile + ".json");

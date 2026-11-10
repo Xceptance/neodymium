@@ -114,6 +114,8 @@ public class ScrollIntegrationTest extends BaseAiTest
 
         $("#btn-bottom").click();
 
+        flushRecording(session);
+
         // Verify parameterization
         final String browserProfile = Neodymium.getBrowserProfileName();
         final File recordingFile = getTestResourceFile("playbooks/integration/programmatic/custom_scroll_playbook_" + browserProfile + ".json");

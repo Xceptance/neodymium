@@ -117,6 +117,8 @@ public class AssertIntegrationTest extends BaseAiTest
 
         $("#welcome-message").shouldHave(text("Welcome to our web store!"));
 
+        flushRecording(session);
+
         // Verify parameterization
         final String browserProfile = Neodymium.getBrowserProfileName();
         final File recordingFile = getTestResourceFile("playbooks/integration/programmatic/custom_assert_playbook_" + browserProfile + ".json");

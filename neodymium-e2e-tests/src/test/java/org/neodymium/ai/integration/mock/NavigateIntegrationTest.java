@@ -100,6 +100,8 @@ public class NavigateIntegrationTest extends BaseAiTest
 
         $("h1").shouldHave(text("Assert Action Test"));
 
+        flushRecording(session);
+
         // Verify that the recorded playbook contains the parameterized placeholders instead of hardcoded URLs
         final String browserProfile = Neodymium.getBrowserProfileName();
         final File recordingFile = getTestResourceFile("playbooks/integration/programmatic/custom_navigate_playbook_" + browserProfile + ".json");

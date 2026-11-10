@@ -115,6 +115,8 @@ public class CheckIntegrationTest extends BaseAiTest
 
         $("#check-box").shouldBe(selected);
 
+        flushRecording(session);
+
         // Verify parameterization
         final String browserProfile = Neodymium.getBrowserProfileName();
         final File recordingFile = getTestResourceFile("playbooks/integration/programmatic/custom_check_playbook_" + browserProfile + ".json");

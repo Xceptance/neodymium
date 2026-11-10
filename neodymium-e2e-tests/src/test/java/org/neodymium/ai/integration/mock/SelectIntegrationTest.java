@@ -115,6 +115,8 @@ public class SelectIntegrationTest extends BaseAiTest
 
         $("#country-select").shouldHave(value("DE"));
 
+        flushRecording(session);
+
         // Verify parameterization
         final String browserProfile = Neodymium.getBrowserProfileName();
         final File recordingFile = getTestResourceFile("playbooks/integration/programmatic/custom_select_playbook_" + browserProfile + ".json");

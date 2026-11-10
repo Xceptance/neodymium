@@ -130,6 +130,8 @@ public class WaitIntegrationTest extends BaseAiTest
 
         $("#success-1").shouldBe(visible);
 
+        flushRecording(session);
+
         // Verify parameterization
         final String browserProfile = Neodymium.getBrowserProfileName();
         final File recordingFile = getTestResourceFile("playbooks/integration/programmatic/custom_wait_playbook_" + browserProfile + ".json");

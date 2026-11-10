@@ -741,7 +741,8 @@ public final class AgentToolLoopStep implements PipelineStep
                 }
                 if (thought != null && !thought.isBlank() && (!proposedActions.isEmpty() || step.getReasoning() == null || step.getReasoning().isBlank()))
                 {
-                    step.setReasoning(thought.trim());
+                    final String sanitizedThought = sessionData != null ? sanitizer.sanitizeText(thought.trim(), sessionData) : thought.trim();
+                    step.setReasoning(sanitizedThought);
                 }
             }
 
@@ -2144,6 +2145,11 @@ public final class AgentToolLoopStep implements PipelineStep
             final SessionData sessionData = context.getSessionData();
             final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
 
+            if (currentStep.getReasoning() != null && sessionData != null)
+            {
+                currentStep.setReasoning(sanitizer.sanitizeText(currentStep.getReasoning(), sessionData));
+            }
+
             final List<ToolCall> sanitizedCalls = new ArrayList<>();
             for (final ToolCall call : executedCalls)
             {
@@ -2185,6 +2191,10 @@ public final class AgentToolLoopStep implements PipelineStep
                 partitionToolCallsAndActions(children, currentStep.getToolCalls(), currentStep.getActions(), false);
                 for (final PlaybookStep child : children)
                 {
+                    if (child.getReasoning() != null && sessionData != null)
+                    {
+                        child.setReasoning(sanitizer.sanitizeText(child.getReasoning(), sessionData));
+                    }
                     if (child.getParent() == null)
                     {
                         child.setParent(currentStep);
@@ -3981,8 +3991,16 @@ public final class AgentToolLoopStep implements PipelineStep
                 {
                     return node.path("reasoning").asText().trim();
                 }
-                if (node.has("tool_call") || node.has("name"))
+                if (node.has("tool_call") || node.has("name") || node.has("actions"))
                 {
+                    if (node.has("actions") && node.path("actions").isArray() && !node.path("actions").isEmpty())
+                    {
+                        final JsonNode firstAction = node.path("actions").get(0);
+                        if (firstAction.has("reasoning") && !firstAction.path("reasoning").asText().isBlank())
+                        {
+                            return firstAction.path("reasoning").asText().trim();
+                        }
+                    }
                     return null;
                 }
             }
