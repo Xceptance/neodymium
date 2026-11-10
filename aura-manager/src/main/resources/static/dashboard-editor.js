@@ -5919,7 +5919,10 @@ function runAiReview() {
             return;
         }
 
-        if (isRawMode) {
+        const currentPanel = document.getElementById('editorPanel');
+        const currentIsRawMode = currentPanel && currentPanel.getAttribute('data-mode') === 'raw';
+
+        if (currentIsRawMode) {
             showRawModeFindingsDialog(findings);
         } else {
             renderStepSuggestionCards(findings);
@@ -5994,11 +5997,9 @@ function renderStepSuggestionCards(findings) {
             }
         }
 
-        // 2. Fall back to stepIndex directly (using comment-filtered rows)
-        if (!targetRow && f.stepIndex > 0 && f.stepIndex <= allRows.length) {
-            targetRow = allRows[f.stepIndex - 1];
-        }
-
+        // 2. Unanchored fallback: If rawInstruction is not present in the current caller DOM
+        // (e.g. findings belonging to an included fragment), route to unanchored dialog
+        // instead of blindly overwriting an unrelated step by stepIndex.
         if (!targetRow) {
             unanchoredFindings.push(f);
             return;
@@ -6085,13 +6086,15 @@ function showRawModeFindingsDialog(findings) {
         const sev = (f.severity || 'WARNING').toLowerCase();
         const lineInfo = f.lineNumber > 0 ? `<span class="validation-issue-line">Line ${f.lineNumber}</span>` : (f.stepIndex > 0 ? `<span class="validation-issue-line">Step #${f.stepIndex}</span>` : '');
         const catInfo = f.category ? `<span class="validation-issue-context">${escapeHtml(f.category.replace(/_/g, ' '))}</span>` : '';
-        const rewriteBlock = f.suggestedRewrite ? `<div style="margin-top: 4px; font-size: 11px; color: var(--accent-purple, #a855f7); background: rgba(168, 85, 247, 0.08); padding: 4px 8px; border-radius: 4px;">💡 <b>Suggested:</b> ${escapeHtml(f.suggestedRewrite)}</div>` : '';
+        const sourceInfo = f.sourceFile ? `<span class="validation-issue-context" style="background: rgba(168, 85, 247, 0.12); color: var(--accent-purple, #a855f7); font-weight: 500;">📄 ${escapeHtml(f.sourceFile)}</span>` : '';
+        const rewriteBlock = f.suggestedRewrite ? `<div style="margin-top: 4px; font-size: 11px; color: var(--accent-purple, #a855f7); background: rgba(168, 85, 247, 0.08); padding: 4px 8px; border-radius: 4px;">💡 <b>Suggested:</b> ${escapeHtml(f.suggestedRewrite)}${f.sourceFile ? ` <span style="opacity: 0.8;">(apply directly in ${escapeHtml(f.sourceFile)})</span>` : ''}</div>` : '';
 
         return `
             <div class="validation-issue-item ${sev}">
                 <div class="validation-issue-header">
                     <span class="material-symbols-outlined issue-icon" style="color: var(--accent-purple, #a855f7);">auto_awesome</span>
                     <span class="validation-issue-badge ${sev}">${escapeHtml(f.severity || 'WARNING')}</span>
+                    ${sourceInfo}
                     ${lineInfo}
                     ${catInfo}
                 </div>

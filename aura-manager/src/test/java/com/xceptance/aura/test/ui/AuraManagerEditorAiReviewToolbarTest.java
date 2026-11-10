@@ -270,4 +270,55 @@ public final class AuraManagerEditorAiReviewToolbarTest
         Assertions.assertTrue(Boolean.TRUE.equals(correctSequencing),
             "Expected [step-row] -> [includeTreeCard] -> [review-suggestion-card] sequence after move");
     }
+
+    @Test
+    public final void testAiReviewFindingsFromIncludedFragmentRouteToUnanchoredPromptDialogWithoutCorruptingCallerSteps() throws Exception
+    {
+        final String initialPlaybook = "steps: |\n"
+                                     + "  Open https://example.com/test\n"
+                                     + "  include: login.steps\n"
+                                     + "  Click checkout button\n";
+
+        this.fileService.saveYamlFileContent(TEST_PLAYBOOK, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/?file=" + TEST_PLAYBOOK);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Simulate AI review returning a finding for a step that originated inside login.steps (stepIndex = 2 in flattened list)
+        // Since 'Type username' is NOT a row in the caller DOM, it must NOT latch onto caller step 2 (include: login.steps)
+        Selenide.executeJavaScript(
+            "renderStepSuggestionCards([{\n"
+            + "  stepIndex: 2,\n"
+            + "  sourceFile: 'login.steps',\n"
+            + "  rawInstruction: 'Type username into email field',\n"
+            + "  category: 'VAGUE_TARGET',\n"
+            + "  severity: 'WARNING',\n"
+            + "  message: 'Username target locator is ambiguous',\n"
+            + "  suggestedRewrite: 'Type username into #email-input'\n"
+            + "}]);\n"
+        );
+
+        // Verify NO suggestion card was attached inside #stepsList (which would risk overwriting the caller step or include)
+        $("#stepsList .review-suggestion-card").shouldNotBe(Condition.exist);
+
+        // Verify finding was routed to the unanchored prompt card modal
+        final SelenideElement promptCard = $(".var-prompt-card[data-type='ai-review-report']");
+        promptCard.shouldBe(Condition.visible);
+        promptCard.shouldHave(Condition.text("AI Review Findings (1)"));
+        promptCard.shouldHave(Condition.text("login.steps"));
+        promptCard.shouldHave(Condition.text("Username target locator is ambiguous"));
+        promptCard.shouldHave(Condition.text("Type username into #email-input"));
+
+        // Verify caller steps in #stepsList remain completely pristine
+        final SelenideElement firstRow = $$("#stepsList .step-row").get(0);
+        final SelenideElement secondRow = $$("#stepsList .step-row").get(1);
+        final SelenideElement thirdRow = $$("#stepsList .step-row").get(2);
+        firstRow.$(".step-content").shouldHave(Condition.text("Open https://example.com/test"));
+        secondRow.$(".step-content").shouldHave(Condition.text("include: login.steps"));
+        thirdRow.$(".step-content").shouldHave(Condition.text("Click checkout button"));
+
+        // Dismiss the prompt card
+        promptCard.$(".btn-prompt-confirm").shouldBe(Condition.visible).click();
+        promptCard.shouldNotBe(Condition.exist);
+    }
 }
