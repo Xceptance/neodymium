@@ -553,4 +553,35 @@ public final class PlaybookLinterTest
         assertTrue(result.findings().isEmpty());
         assertNull(mockProvider.getLastRequest(), "Mock LLM provider should never have been invoked");
     }
+
+    @Test
+    @DisplayName("Verify standalone registry invalidates cache when provider is null so subsequent attempts re-bootstrap")
+    public void testStandaloneRegistryRebootstrapsWhenProviderInitiallyNull()
+    {
+        final PlaybookLinter linter = new PlaybookLinter();
+        final List<PlaybookStep> steps = List.of(new PlaybookStep("Click button"));
+
+        // First attempt with no provider configured or invalid credentials fails
+        final PlaybookLinterResult firstResult = linter.lintWithResult(steps, "Scenario");
+        assertNotNull(firstResult);
+        assertFalse(firstResult.successful());
+        assertNotNull(firstResult.errorMessage());
+
+        // Now configure mock provider as provider
+        System.setProperty("neodymium.ai.provider", "mock");
+        System.setProperty("neodymium.ai.linter.provider", "mock");
+        try
+        {
+            AiConfiguration.resetInstance();
+            final PlaybookLinterResult secondResult = linter.lintWithResult(steps, "Scenario");
+            assertNotNull(secondResult);
+            assertTrue(secondResult.successful(), "Standalone linter should re-bootstrap after configuration update");
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.provider");
+            System.clearProperty("neodymium.ai.linter.provider");
+            AiConfiguration.resetInstance();
+        }
+    }
 }

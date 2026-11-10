@@ -557,4 +557,46 @@ public class AuraTestEditorControllerTest
         Assertions.assertEquals("fragments/auth.steps", findings.get(0).get("sourceFile"));
         Assertions.assertEquals("Enter credentials", findings.get(0).get("rawInstruction"));
     }
+
+    @Test
+    public final void testAiReviewResolvesNestedRelativeIncludeFragment() throws Exception
+    {
+        final HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
+        final String mainYaml = "steps:\n  - _include: fragments/checkout/payment.steps\n  - Finalize order";
+        Mockito.when(request.getParameter("file")).thenReturn("test.yaml");
+        Mockito.when(request.getParameter("content")).thenReturn(mainYaml);
+
+        final PlaybookLinter mockLinter = Mockito.mock(PlaybookLinter.class);
+        final AuraTestEditorController customController = new AuraTestEditorController(fileService, mockLinter);
+
+        Mockito.when(fileService.validateFileContent("test.yaml", mainYaml)).thenReturn(List.of());
+        Mockito.when(fileService.readYamlFileContent("fragments/checkout/payment.steps"))
+                .thenReturn("steps:\n  - _include: billing.steps\n  - Enter credit card details");
+        Mockito.when(fileService.readYamlFileContent("fragments/checkout/billing.steps"))
+                .thenReturn("steps:\n  - Enter billing address");
+
+        Mockito.when(mockLinter.lintWithResult(Mockito.anyList(), Mockito.any())).thenAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> stepsArg = invocation.getArgument(0);
+            Assertions.assertEquals(3, stepsArg.size(), "Should parse nested billing step, payment step, and main step");
+            Assertions.assertEquals("Enter billing address", stepsArg.get(0).getInstruction());
+            Assertions.assertEquals("billing.steps", stepsArg.get(0).getSourceFile());
+            return PlaybookLinterResult.success(List.of(
+                    new PlaybookLinterFinding(1, 1, "billing.steps", "Enter billing address", "Enter billing address",
+                            LinterCategory.VAGUE_TARGET, LinterSeverity.WARNING, "Billing address step needs container hint", "Enter billing address in checkout form", null)
+            ));
+        });
+
+        final ResponseEntity<Map<String, Object>> response = customController.aiReview(request);
+
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertEquals("OK", response.getBody().get("status"));
+        @SuppressWarnings("unchecked")
+        final List<Map<String, Object>> findings = (List<Map<String, Object>>) response.getBody().get("findings");
+        Assertions.assertEquals(1, findings.size());
+        Assertions.assertEquals("billing.steps", findings.get(0).get("sourceFile"));
+        Mockito.verify(fileService).readYamlFileContent("fragments/checkout/payment.steps");
+        Mockito.verify(fileService).readYamlFileContent("fragments/checkout/billing.steps");
+    }
 }

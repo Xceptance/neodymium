@@ -166,10 +166,24 @@ public final class PlaybookLinter
                 {
                     provider = null;
                 }
+                if (provider == null)
+                {
+                    synchronized (this)
+                    {
+                        this.standaloneRegistry = null;
+                    }
+                }
             }
 
             if (provider == null)
             {
+                if (this.session == null && this.customProvider == null)
+                {
+                    synchronized (this)
+                    {
+                        this.standaloneRegistry = null;
+                    }
+                }
                 LOGGER.warn("⚠️ No LLM provider registered for capability {}", LlmCapability.LINTER);
                 return PlaybookLinterResult.failure("No LLM provider registered for capability " + LlmCapability.LINTER
                         + ". Ensure GEMINI_API_KEY environment variable is set or configured in ai.properties.");
@@ -300,6 +314,13 @@ public final class PlaybookLinter
         }
         catch (final Throwable t)
         {
+            if (this.session == null && this.customProvider == null)
+            {
+                synchronized (this)
+                {
+                    this.standaloneRegistry = null;
+                }
+            }
             LOGGER.warn("⚠️ Pre-flight playbook linter encountered an error and was skipped gracefully: {}", t.getMessage(), t);
             return PlaybookLinterResult.failure(t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName());
         }

@@ -4132,17 +4132,7 @@ body[data-bs-theme="dark"] .step-row.step-row-substep {
     border-color: var(--accent);
 }
 
-/* AI Step Review Button & Cards */
-.btn-editor.btn-review {
-    color: var(--accent-purple);
-    border-color: rgba(168, 85, 247, 0.35);
-    background: var(--bg-purple-subtle);
-}
-
-.btn-editor.btn-review:hover {
-    background: rgba(168, 85, 247, 0.18);
-    border-color: var(--accent-purple);
-}
+/* AI Step Review Cards */
 
 .review-suggestion-card {
     margin: 4px 16px 6px 44px;

@@ -773,7 +773,7 @@ public class AuraTestEditorController
                 @Override
                 public String resolveInclude(final String parentIdentifier, final String relativePath)
                 {
-                    return relativePath;
+                    return this.classpathManager.resolveInclude(parentIdentifier, relativePath);
                 }
             };
 
