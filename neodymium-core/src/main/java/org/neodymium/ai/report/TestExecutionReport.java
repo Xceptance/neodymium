@@ -55,6 +55,7 @@ public final class TestExecutionReport
     private String playbookFile;
     private String status = "UNKNOWN";
     private boolean success;
+    private boolean expectedFailure;
     private long startTimeMs;
     private long endTimeMs;
     private long durationMs;
@@ -158,6 +159,16 @@ public final class TestExecutionReport
     public void setSuccess(final boolean success)
     {
         this.success = success;
+    }
+
+    public boolean isExpectedFailure()
+    {
+        return this.expectedFailure;
+    }
+
+    public void setExpectedFailure(final boolean expectedFailure)
+    {
+        this.expectedFailure = expectedFailure;
     }
 
     public long getStartTimeMs()
@@ -462,6 +473,7 @@ public final class TestExecutionReport
         private boolean optional;
         private boolean continueOnError;
         private boolean noHealing;
+        private boolean expectedFailure;
         private boolean visual;
         private boolean marker;
         private boolean multiStage;
@@ -835,6 +847,16 @@ public final class TestExecutionReport
         public void setNoHealing(final boolean noHealing)
         {
             this.noHealing = noHealing;
+        }
+
+        public boolean isExpectedFailure()
+        {
+            return this.expectedFailure;
+        }
+
+        public void setExpectedFailure(final boolean expectedFailure)
+        {
+            this.expectedFailure = expectedFailure;
         }
 
         public boolean isVisual()

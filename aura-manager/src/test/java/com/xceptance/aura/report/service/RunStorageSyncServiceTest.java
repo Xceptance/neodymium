@@ -1514,6 +1514,85 @@ public class RunStorageSyncServiceTest
         final TestExecutionDto unrelatedDto = service.getExecutionDetails("run-interactive-test", "UnrelatedOrderTest#testOrder#Default#Chrome");
         Assertions.assertNull(unrelatedDto, "Interactive session must NOT match an unrelated execution key");
     }
+
+    @Test
+    public void testExpectedFailureAndSyntheticRunExclusionInStorageAndDto() throws Exception
+    {
+        final String runId = "run-expected-failure-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path execDir = runDir.resolve("NegativeTests").resolve("ExpectedFailTest");
+        Files.createDirectories(execDir);
+
+        final String expectedFailureJson = """
+            {
+              "id": "expected-fail-exec-1",
+              "runId": "%s",
+              "testClass": "ExpectedFailTest",
+              "testMethod": "testIntentionalFailureHandledByAssertThrows",
+              "status": "passed",
+              "expectedFailure": true,
+              "failure": "Intentional assertion error",
+              "blocks": {
+                "steps": [
+                  {
+                    "instruction": "Assert invalid state",
+                    "status": "failed",
+                    "expectedFailure": true,
+                    "error": "Intentional assertion error"
+                  }
+                ]
+              }
+            }
+            """.formatted(runId);
+
+        final String syntheticRunJson = """
+            {
+              "id": "synthetic-exec-fixture",
+              "runId": "%s",
+              "testClass": "FixtureSetup",
+              "testMethod": "setupEnv",
+              "status": "passed",
+              "synthetic": true,
+              "blocks": {
+                "steps": []
+              }
+            }
+            """.formatted(runId);
+
+        final Path execFile = execDir.resolve("console-execution-1.json");
+        Files.writeString(execFile, expectedFailureJson);
+
+        final Path syntheticFile = execDir.resolve("console-execution-fixture.json");
+        Files.writeString(syntheticFile, syntheticRunJson);
+
+        try
+        {
+            final ObjectMapper mapper = new ObjectMapper();
+            final Optional<String> runJsonOpt = storageService.buildRunJsonContent(runDir.toFile(), runId, true);
+            Assertions.assertTrue(runJsonOpt.isPresent(), "run.json content should be generated");
+
+            final JsonNode runNode = mapper.readTree(runJsonOpt.get());
+
+            // Summary must tally the expected failure as a PASS and exclude synthetic fixture execution
+            Assertions.assertEquals(1, runNode.path("summary").path("total").asInt(), "Total runs must exclude synthetic fixtures");
+            Assertions.assertEquals(1, runNode.path("summary").path("pass").asInt(), "Passed count must be 1 for expected failure");
+            Assertions.assertEquals(0, runNode.path("summary").path("unknown").asInt(), "Unknown fail count must be 0");
+            Assertions.assertEquals(0, runNode.path("summary").path("failedAssertion").asInt(), "Failed assertion count must be 0");
+
+            // Verify via AuraReportDataService
+            final RunReportDto report = dataService.getRunReport(runId);
+            Assertions.assertNotNull(report, "RunReportDto should not be null");
+            Assertions.assertEquals(1, report.getPassCount(), "RunReport should reflect 1 passed test");
+            Assertions.assertEquals(0, report.getFailCount(), "RunReport should reflect 0 failed tests");
+            Assertions.assertEquals(1, report.getExecutions().size(), "Only non-synthetic execution should be recorded");
+            Assertions.assertEquals("PASSED", report.getExecutions().get(0).getDisplayStatusKey());
+            Assertions.assertEquals(0, report.getExecutions().get(0).getFailedStepsCount(), "Steps failed must be 0 for expected failure");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
 }
 
 

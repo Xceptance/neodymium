@@ -642,36 +642,46 @@ public final class InteractiveStateBuilder
             state.addProperty("status", "healed");
         }
 
-        boolean anyStepFailed = (execReport != null && ("FAILED".equalsIgnoreCase(execReport.getStatus()) || "ERROR".equalsIgnoreCase(execReport.getStatus())));
-        if (!anyStepFailed)
+        final boolean isExpectedFailure = execReport != null && execReport.isExpectedFailure();
+        if (isExpectedFailure)
         {
-            for (final JsonArray arr : List.of(beforeArray, stepsArray, afterArray))
+            state.addProperty("status", "passed");
+            state.addProperty("expectedFailure", true);
+        }
+        else
+        {
+            boolean anyStepFailed = (execReport != null && ("FAILED".equalsIgnoreCase(execReport.getStatus()) || "ERROR".equalsIgnoreCase(execReport.getStatus())));
+            if (!anyStepFailed)
             {
-                for (final JsonElement elem : arr)
+                for (final JsonArray arr : List.of(beforeArray, stepsArray, afterArray))
                 {
-                    if (elem.isJsonObject())
+                    for (final JsonElement elem : arr)
                     {
-                        final JsonObject stepObj = elem.getAsJsonObject();
-                        final String st = stepObj.has("status") && !stepObj.get("status").isJsonNull() ? stepObj.get("status").getAsString() : "";
-                        final boolean optional = stepObj.has("optional") && !stepObj.get("optional").isJsonNull() && stepObj.get("optional").getAsBoolean();
-                        if ("failed".equalsIgnoreCase(st) && !optional)
+                        if (elem.isJsonObject())
                         {
-                            anyStepFailed = true;
-                            break;
+                            final JsonObject stepObj = elem.getAsJsonObject();
+                            final String st = stepObj.has("status") && !stepObj.get("status").isJsonNull() ? stepObj.get("status").getAsString() : "";
+                            final boolean optional = stepObj.has("optional") && !stepObj.get("optional").isJsonNull() && stepObj.get("optional").getAsBoolean();
+                            final boolean stepExpectedFailure = stepObj.has("expectedFailure") && !stepObj.get("expectedFailure").isJsonNull() && stepObj.get("expectedFailure").getAsBoolean();
+                            if ("failed".equalsIgnoreCase(st) && !optional && !stepExpectedFailure)
+                            {
+                                anyStepFailed = true;
+                                break;
+                            }
                         }
                     }
-                }
-                if (anyStepFailed)
-                {
-                    break;
+                    if (anyStepFailed)
+                    {
+                        break;
+                    }
                 }
             }
-        }
-        final boolean isExecutionFinished = (execReport != null && ("FAILED".equalsIgnoreCase(execReport.getStatus()) || "ERROR".equalsIgnoreCase(execReport.getStatus())))
-            || (state.has("status") && ("passed".equalsIgnoreCase(state.get("status").getAsString()) || "succeeded".equalsIgnoreCase(state.get("status").getAsString())));
-        if (anyStepFailed && (isExecutionFinished || "failed".equalsIgnoreCase(runnerStatus)))
-        {
-            state.addProperty("status", "failed");
+            final boolean isExecutionFinished = (execReport != null && ("FAILED".equalsIgnoreCase(execReport.getStatus()) || "ERROR".equalsIgnoreCase(execReport.getStatus())))
+                || (state.has("status") && ("passed".equalsIgnoreCase(state.get("status").getAsString()) || "succeeded".equalsIgnoreCase(state.get("status").getAsString())));
+            if (anyStepFailed && (isExecutionFinished || "failed".equalsIgnoreCase(runnerStatus)))
+            {
+                state.addProperty("status", "failed");
+            }
         }
 
         // Enrich with TestExecutionReport data if available
@@ -1099,6 +1109,10 @@ public final class InteractiveStateBuilder
 
         if (reportStep != null)
         {
+            if (reportStep.isExpectedFailure())
+            {
+                obj.addProperty("expectedFailure", true);
+            }
             if (reportStep.getRawInstruction() != null)
             {
                 obj.addProperty("rawInstruction", reportStep.getRawInstruction());
@@ -1792,6 +1806,10 @@ public final class InteractiveStateBuilder
                     final String rawStatus = sub.getStatus() != null ? sub.getStatus().trim() : "pending";
                     final String normalizedStatus = "SUCCESS".equalsIgnoreCase(rawStatus) ? "passed" : rawStatus.toLowerCase(Locale.ROOT);
                     subObj.addProperty("status", normalizedStatus);
+                    if (sub.isExpectedFailure())
+                    {
+                        subObj.addProperty("expectedFailure", true);
+                    }
                     subObj.addProperty("startTimeMs", sub.getStartTimeMs());
                     subObj.addProperty("durationMs", sub.getDurationMs());
                     subObj.addProperty("reasoning", sub.getReasoning());

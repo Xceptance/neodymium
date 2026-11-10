@@ -1198,7 +1198,8 @@ public final class PreliminaryReportListener implements ExecutionListener
             resolveUnfinishedSteps();
             recalculateMetrics();
 
-            if (hasNonOptionalFailedSteps() || (this.report.getMetrics() != null && this.report.getMetrics().getFailedSteps() > 0))
+            if (!this.report.isExpectedFailure()
+                && (hasNonOptionalFailedSteps() || (this.report.getMetrics() != null && this.report.getMetrics().getFailedSteps() > 0)))
             {
                 this.report.setSuccess(false);
                 this.report.setStatus("FAILED");
@@ -1212,13 +1213,13 @@ public final class PreliminaryReportListener implements ExecutionListener
     {
         for (final TestExecutionReport.ReportStepEntry step : this.report.getSteps())
         {
-            if ("FAILED".equalsIgnoreCase(step.getStatus()) && !step.isOptional())
+            if ("FAILED".equalsIgnoreCase(step.getStatus()) && !step.isOptional() && !step.isExpectedFailure())
             {
                 return true;
             }
             for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
             {
-                if ("FAILED".equalsIgnoreCase(sub.getStatus()) && !sub.isOptional())
+                if ("FAILED".equalsIgnoreCase(sub.getStatus()) && !sub.isOptional() && !sub.isExpectedFailure())
                 {
                     return true;
                 }
@@ -1741,7 +1742,10 @@ public final class PreliminaryReportListener implements ExecutionListener
             }
             else if ("FAILED".equals(st))
             {
-                failed++;
+                if (!step.isExpectedFailure())
+                {
+                    failed++;
+                }
             }
             else if ("SKIPPED".equals(st))
             {
@@ -2174,6 +2178,64 @@ public final class PreliminaryReportListener implements ExecutionListener
                 }
             }
         }
+    }
+
+    /**
+     * Reconciles the preliminary report status with the actual JUnit test lifecycle outcome.
+     *
+     * @param testPassed true if JUnit completed the test method successfully without uncaught exceptions
+     * @param uncaughtException the uncaught exception if JUnit failed, or null if test passed
+     */
+    public synchronized void reconcileTestOutcome(final boolean testPassed, final Throwable uncaughtException)
+    {
+        if (this.report == null)
+        {
+            return;
+        }
+
+        if (testPassed)
+        {
+            final boolean wasFailed = "FAILED".equalsIgnoreCase(this.report.getStatus())
+                || "ERROR".equalsIgnoreCase(this.report.getStatus())
+                || !this.report.isSuccess();
+
+            if (wasFailed)
+            {
+                this.report.setSuccess(true);
+                this.report.setStatus("PASSED");
+                this.report.setExpectedFailure(true);
+                for (final TestExecutionReport.ReportStepEntry step : this.report.getSteps())
+                {
+                    if ("FAILED".equalsIgnoreCase(step.getStatus()))
+                    {
+                        step.setExpectedFailure(true);
+                    }
+                    for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
+                    {
+                        if ("FAILED".equalsIgnoreCase(sub.getStatus()))
+                        {
+                            sub.setExpectedFailure(true);
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            this.report.setSuccess(false);
+            this.report.setStatus("FAILED");
+            this.report.setExpectedFailure(false);
+            if (uncaughtException != null)
+            {
+                this.report.setFailureReason(uncaughtException.getMessage() != null ? uncaughtException.getMessage() : uncaughtException.toString());
+                final StringWriter sw = new StringWriter();
+                uncaughtException.printStackTrace(new PrintWriter(sw));
+                this.report.setFailureStackTrace(sw.toString());
+            }
+        }
+
+        recalculateMetrics();
+        flushReport();
     }
 
     /**
