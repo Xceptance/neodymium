@@ -2172,18 +2172,20 @@ public class PreliminaryReportListenerTest
             // Stale verificationResult from live recording MUST be suppressed
             assertNull(stepEntry.getVerificationResult(), "Failed step must not retain verificationResult");
 
-            // Sub-steps must be SKIPPED, not SUCCESS, and durations must be 0 ms
+            // Sub-steps must be NOT RUN, not SUCCESS, and durations must be 0 ms
             assertEquals(2, stepEntry.getSubSteps().size());
             final TestExecutionReport.ReportStepEntry subEntry1 = stepEntry.getSubSteps().get(0);
             final TestExecutionReport.ReportStepEntry subEntry2 = stepEntry.getSubSteps().get(1);
 
-            assertEquals("SKIPPED", subEntry1.getStatus());
+            assertEquals("NOT RUN", subEntry1.getStatus());
             assertEquals(0L, subEntry1.getDurationMs(), "Unexecuted sub-step duration must be 0 ms");
             assertNull(subEntry1.getFailureReason());
+            assertNotNull(subEntry1.getNotRunReason());
 
-            assertEquals("SKIPPED", subEntry2.getStatus());
+            assertEquals("NOT RUN", subEntry2.getStatus());
             assertEquals(0L, subEntry2.getDurationMs(), "Unexecuted sub-step duration must be 0 ms");
             assertNull(subEntry2.getFailureReason(), "Trailing sub-step must not be falsely blamed for gate failure");
+            assertNotNull(subEntry2.getNotRunReason());
         }
         finally
         {
@@ -3033,6 +3035,294 @@ public class PreliminaryReportListenerTest
         final JsonNode rootNode = mapper.readTree(jsonPath.toFile());
         assertEquals("FAILED", rootNode.get("status").asText());
         assertFalse(rootNode.get("success").asBoolean());
+    }
+
+    @Test
+    @DisplayName("Verify resolveUnfinishedSteps distinguishes unreached downstream steps as NOT RUN from intentionally SKIPPED steps")
+    public void testResolveUnfinishedStepsDistinguishesNotRunFromSkipped(@TempDir final Path tempDir)
+    {
+        final PreliminaryReportListener listener = new PreliminaryReportListener(tempDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.MARKDOWN, DiskReportFormat.JSON), false);
+        final TestExecutionReport report = listener.getReport();
+        report.setStatus("FAILED");
+        report.setSuccess(false);
+        report.setFailureReason("Checkout button unclickable");
+
+        final TestExecutionReport.ReportStepEntry step0 = new TestExecutionReport.ReportStepEntry(0, "Open homepage");
+        step0.setStatus("SUCCESS");
+        step0.setDurationMs(120);
+
+        final TestExecutionReport.ReportStepEntry step1 = new TestExecutionReport.ReportStepEntry(1, "Optional cookie consent banner");
+        step1.setStatus("SKIPPED");
+        step1.setDurationMs(0);
+
+        final TestExecutionReport.ReportStepEntry step2 = new TestExecutionReport.ReportStepEntry(2, "Click checkout button");
+        step2.setStatus("FAILED");
+        step2.setFailureReason("Checkout button unclickable");
+        step2.setDurationMs(500);
+
+        final TestExecutionReport.ReportStepEntry step3 = new TestExecutionReport.ReportStepEntry(3, "Enter payment information");
+        step3.setStatus("PENDING");
+
+        final TestExecutionReport.ReportStepEntry step4 = new TestExecutionReport.ReportStepEntry(4, "Confirm purchase");
+        step4.setStatus(null);
+
+        report.addStep(step0);
+        report.addStep(step1);
+        report.addStep(step2);
+        report.addStep(step3);
+        report.addStep(step4);
+
+        listener.resolveUnfinishedSteps();
+        listener.recalculateMetrics();
+
+        // Step 0 must remain SUCCESS
+        assertEquals("SUCCESS", step0.getStatus());
+        assertNull(step0.getNotRunReason());
+
+        // Step 1 must remain SKIPPED without notRunReason
+        assertEquals("SKIPPED", step1.getStatus());
+        assertNull(step1.getNotRunReason());
+
+        // Step 2 is the failing step
+        assertEquals("FAILED", step2.getStatus());
+        assertNull(step2.getNotRunReason());
+
+        // Downstream unreached steps 3 and 4 must become NOT RUN with explanation
+        assertEquals("NOT RUN", step3.getStatus());
+        assertTrue(step3.isNotRun());
+        assertNotNull(step3.getNotRunReason());
+        assertTrue(step3.getNotRunReason().contains("step #3 failed"));
+
+        assertEquals("NOT RUN", step4.getStatus());
+        assertTrue(step4.isNotRun());
+        assertNotNull(step4.getNotRunReason());
+        assertTrue(step4.getNotRunReason().contains("step #3 failed"));
+
+        // Verify metrics separation
+        final TestExecutionReport.ReportMetrics m = report.getMetrics();
+        assertNotNull(m);
+        assertEquals(5, m.getTotalSteps());
+        assertEquals(1, m.getFailedSteps());
+        assertEquals(1, m.getSkippedSteps());
+        assertEquals(2, m.getNotRunSteps());
+    }
+
+    @Test
+    @DisplayName("Verify compound step failure marks downstream sub-steps as NOT RUN with parent-relative step label #1.2")
+    public void testCompoundStepFailureMarksDownstreamSubStepsNotRun(@TempDir final Path tempDir)
+    {
+        final PreliminaryReportListener listener = new PreliminaryReportListener(tempDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.MARKDOWN, DiskReportFormat.JSON), false);
+        final TestExecutionReport report = listener.getReport();
+        report.setStatus("FAILED");
+        report.setSuccess(false);
+        report.setFailureReason("Sub-step verification failed");
+
+        final TestExecutionReport.ReportStepEntry root0 = new TestExecutionReport.ReportStepEntry(0, "Complex Checkout Flow");
+        final TestExecutionReport.ReportStepEntry sub0 = new TestExecutionReport.ReportStepEntry(0, "Select address");
+        sub0.setStatus("SUCCESS");
+        sub0.setDurationMs(80);
+        root0.addSubStep(sub0);
+
+        final TestExecutionReport.ReportStepEntry sub1 = new TestExecutionReport.ReportStepEntry(1, "Select shipping method");
+        sub1.setStatus("FAILED");
+        sub1.setFailureReason("Standard shipping option not available");
+        sub1.setDurationMs(300);
+        root0.addSubStep(sub1);
+
+        final TestExecutionReport.ReportStepEntry sub2 = new TestExecutionReport.ReportStepEntry(2, "Confirm order summary");
+        sub2.setStatus("PENDING");
+        root0.addSubStep(sub2);
+
+        final TestExecutionReport.ReportStepEntry root1 = new TestExecutionReport.ReportStepEntry(1, "Verify order confirmation page");
+        root1.setStatus("PENDING");
+
+        report.addStep(root0);
+        report.addStep(root1);
+
+        listener.resolveUnfinishedSteps();
+        listener.recalculateMetrics();
+
+        // Sub-step 2 and root step 1 should both be marked NOT RUN mentioning #1.2
+        assertEquals("NOT RUN", sub2.getStatus());
+        assertNotNull(sub2.getNotRunReason());
+        assertEquals("Not executed because step #1.2 failed.", sub2.getNotRunReason());
+
+        assertEquals("NOT RUN", root1.getStatus());
+        assertNotNull(root1.getNotRunReason());
+        assertEquals("Not executed because step #1.2 failed.", root1.getNotRunReason());
+
+        // Root 0 should have status FAILED due to sub-step failure
+        assertEquals("FAILED", root0.getStatus());
+
+        // Metrics verification
+        final TestExecutionReport.ReportMetrics m = report.getMetrics();
+        assertNotNull(m);
+        assertEquals(2, m.getTotalSteps()); // 2 root steps
+        assertEquals(1, m.getFailedSteps());
+        assertEquals(1, m.getNotRunSteps());
+    }
+
+    @Test
+    @DisplayName("Verify HTML, Markdown, and Index reports render NOT RUN pills, banners, and metrics")
+    public void testHtmlAndMarkdownReportGeneratorsRenderNotRunPillsAndBanners(@TempDir final Path tempDir) throws Exception
+    {
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestClass("org.neodymium.ai.integration.CheckoutTest");
+        report.setTestMethod("testCheckoutOrder");
+        report.setStatus("FAILED");
+        report.setSuccess(false);
+        report.setFailureReason("Button disabled");
+        report.setStartTimeMs(System.currentTimeMillis() - 5000);
+        report.setEndTimeMs(System.currentTimeMillis());
+        report.setDurationMs(5000);
+
+        final TestExecutionReport.ReportStepEntry step0 = new TestExecutionReport.ReportStepEntry(0, "Open cart");
+        step0.setStatus("SUCCESS");
+        step0.setDurationMs(100);
+
+        final TestExecutionReport.ReportStepEntry step1 = new TestExecutionReport.ReportStepEntry(1, "Click proceed");
+        step1.setStatus("FAILED");
+        step1.setFailureReason("Button disabled");
+        step1.setDurationMs(400);
+
+        final TestExecutionReport.ReportStepEntry step2 = new TestExecutionReport.ReportStepEntry(2, "Confirm order");
+        step2.setStatus("NOT RUN");
+        step2.setNotRunReason("Not executed because step #2 failed.");
+        step2.setDurationMs(0);
+
+        report.addStep(step0);
+        report.addStep(step1);
+        report.addStep(step2);
+
+        final TestExecutionReport.ReportMetrics metrics = new TestExecutionReport.ReportMetrics();
+        metrics.setTotalSteps(3);
+        metrics.setFailedSteps(1);
+        metrics.setNotRunSteps(1);
+        metrics.setSkippedSteps(0);
+        report.setMetrics(metrics);
+
+        // 1. HTML Report Verification
+        final String html = new HtmlReportGenerator().generate(report);
+        assertTrue(html.contains("step-card-not-run"), "HTML report must contain step-card-not-run class");
+        assertTrue(html.contains("pill-not-run"), "HTML report must contain pill-not-run class");
+        assertTrue(html.contains("step-card-not-run-banner"), "HTML report must contain step-card-not-run-banner class");
+        assertTrue(html.contains("Not executed because step #2 failed."), "HTML report must contain notRunReason text");
+        assertTrue(html.contains("Not Run: 1"), "HTML report must display Not Run in step metrics");
+
+        // 2. Markdown Report Verification
+        final String md = new MarkdownReportGenerator().generate(report);
+        assertTrue(md.contains("Not Run: 1"), "Markdown report must include Not Run count in summary table");
+        assertTrue(md.contains("⏹️"), "Markdown report must use ⏹️ emoji for NOT RUN steps");
+        assertTrue(md.contains("**Status:** `NOT RUN`"), "Markdown report must display NOT RUN status");
+        assertTrue(md.contains("*Not executed because step #2 failed.*"), "Markdown report must render notRunReason note");
+
+        // 3. Index Entry & Report Verification
+        final HtmlIndexReportGenerator.IndexEntry entry = HtmlIndexReportGenerator.IndexEntry.fromReport(report, "CheckoutTest");
+        assertEquals(1, entry.getNotRunSteps(), "IndexEntry must store notRunSteps");
+        assertEquals(1, entry.getPassedSteps(), "IndexEntry must calculate passedSteps subtracting notRunSteps");
+
+        final HtmlIndexReportGenerator indexGenerator = new HtmlIndexReportGenerator();
+        indexGenerator.updateIndex(tempDir, report, "CheckoutTest");
+        final Path indexPath = tempDir.resolve("index.html");
+        assertTrue(Files.exists(indexPath));
+        final String indexHtml = Files.readString(indexPath, StandardCharsets.UTF_8);
+        assertTrue(indexHtml.contains("1 not run"), "Index HTML must display not run count in steps column");
+        assertTrue(indexHtml.contains(".pill-not-run"), "Index HTML must include pill-not-run CSS style");
+    }
+
+    @Test
+    @DisplayName("Verify StepFinishedEvent with NOT_RUN copies notRunReason and resolveUnfinishedSteps preserves it")
+    public void testStepFinishedEventWithNotRunStatusPreservesNotRunReason(@TempDir final Path tempDir)
+    {
+        final PreliminaryReportListener listener = new PreliminaryReportListener(tempDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final TestExecutionReport report = listener.getReport();
+        report.setStatus("FAILED");
+        report.setSuccess(false);
+        report.setFailureReason("Button disabled");
+
+        final PlaybookStep pbStep1 = new PlaybookStep("Open home");
+        final PlaybookStep pbStep2 = new PlaybookStep("Click button");
+        final PlaybookStep pbStep3 = new PlaybookStep("Proceed to payment");
+        pbStep3.setStatus(PlaybookStepStatus.NOT_RUN);
+        pbStep3.setNotRunReason("Not executed because step #2 failed.");
+
+        final TestExecutionReport.ReportStepEntry step1 = new TestExecutionReport.ReportStepEntry(0, "Open home");
+        step1.setStatus("SUCCESS");
+        final TestExecutionReport.ReportStepEntry step2 = new TestExecutionReport.ReportStepEntry(1, "Click button");
+        step2.setStatus("FAILED");
+        step2.setFailureReason("Button disabled");
+        final TestExecutionReport.ReportStepEntry step3 = new TestExecutionReport.ReportStepEntry(2, "Proceed to payment");
+        step3.setStatus("PENDING");
+
+        report.addStep(step1);
+        report.addStep(step2);
+        report.addStep(step3);
+
+        // Simulate StateMachineRunner dispatching StepFinishedEvent for unreached step 3
+        listener.onEvent(new StepFinishedEvent(pbStep3, PlaybookStepStatus.NOT_RUN));
+
+        assertEquals("NOT_RUN", step3.getStatus());
+        assertEquals("Not executed because step #2 failed.", step3.getNotRunReason(),
+            "onEvent(StepFinishedEvent) must copy notRunReason from PlaybookStep");
+
+        // Now finalize via resolveUnfinishedSteps
+        listener.resolveUnfinishedSteps();
+
+        assertEquals("NOT RUN", step3.getStatus());
+        assertEquals("Not executed because step #2 failed.", step3.getNotRunReason(),
+            "resolveUnfinishedSteps must preserve existing notRunReason");
+    }
+
+    @Test
+    @DisplayName("Verify composite step with SUCCESS and SKIPPED sub-steps remains SUCCESS when a downstream step fails")
+    public void testCompositeStepWithPassedAndSkippedSubstepsRemainsSuccessWhenDownstreamStepFails(@TempDir final Path tempDir)
+    {
+        final PreliminaryReportListener listener = new PreliminaryReportListener(tempDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final TestExecutionReport report = listener.getReport();
+        report.setStatus("FAILED");
+        report.setSuccess(false);
+        report.setFailureReason("Downstream step failed");
+
+        final TestExecutionReport.ReportStepEntry root0 = new TestExecutionReport.ReportStepEntry(0, "Initialize Account");
+        final TestExecutionReport.ReportStepEntry sub0 = new TestExecutionReport.ReportStepEntry(0, "Create profile");
+        sub0.setStatus("SUCCESS");
+        final TestExecutionReport.ReportStepEntry sub1 = new TestExecutionReport.ReportStepEntry(1, "Optional survey banner");
+        sub1.setStatus("SKIPPED");
+        root0.addSubStep(sub0);
+        root0.addSubStep(sub1);
+
+        final TestExecutionReport.ReportStepEntry root1 = new TestExecutionReport.ReportStepEntry(1, "Checkout");
+        root1.setStatus("FAILED");
+        root1.setFailureReason("Checkout service unavailable");
+
+        final TestExecutionReport.ReportStepEntry root2 = new TestExecutionReport.ReportStepEntry(2, "Order Confirmation");
+        root2.setStatus("PENDING");
+
+        report.addStep(root0);
+        report.addStep(root1);
+        report.addStep(root2);
+
+        listener.resolveUnfinishedSteps();
+        listener.recalculateMetrics();
+
+        // Root 0 completed before Root 1 failed, so it must remain SUCCESS, NOT NOT RUN
+        assertEquals("SUCCESS", root0.getStatus(), "Completed composite step must be SUCCESS");
+        assertNull(root0.getNotRunReason(), "Completed composite step must not have notRunReason");
+
+        // Root 1 is the failing step
+        assertEquals("FAILED", root1.getStatus());
+
+        // Root 2 was unreached downstream
+        assertEquals("NOT RUN", root2.getStatus());
+        assertEquals("Not executed because step #2 failed.", root2.getNotRunReason());
+
+        // Verify metrics
+        final TestExecutionReport.ReportMetrics m = report.getMetrics();
+        assertNotNull(m);
+        assertEquals(3, m.getTotalSteps());
+        assertEquals(1, m.getFailedSteps());
+        assertEquals(1, m.getNotRunSteps());
+        assertEquals(0, m.getSkippedSteps(), "Root steps skipped count should be 0");
     }
 
     @Test

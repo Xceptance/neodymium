@@ -612,8 +612,9 @@ public final class ExecuteActionsStep
                             }
                             else
                             {
-                                sub.setStatus(PlaybookStepStatus.SKIPPED);
+                                sub.setStatus(PlaybookStepStatus.NOT_RUN);
                                 sub.setFailed(false);
+                                sub.setNotRunReason("Not executed because sub-step #" + (failIdx + 1) + " failed.");
                             }
                         }
                     }

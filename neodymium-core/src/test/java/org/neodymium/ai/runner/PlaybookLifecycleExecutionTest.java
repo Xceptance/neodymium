@@ -124,7 +124,7 @@ public class PlaybookLifecycleExecutionTest
         assertTrue(thrown.getMessage().contains("Simulated setup failure") || (thrown.getCause() != null && thrown.getCause().getMessage().contains("Simulated setup failure")));
 
         assertEquals(PlaybookStepStatus.FAILED, beforeStep.getStatus(), "Before step should be marked FAILED");
-        assertEquals(PlaybookStepStatus.SKIPPED, coreStep.getStatus(), "Core step should be marked SKIPPED and not executed");
+        assertEquals(PlaybookStepStatus.NOT_RUN, coreStep.getStatus(), "Core step should be marked NOT_RUN and not executed");
         assertEquals(PlaybookStepStatus.SUCCESS, afterStep.getStatus(), "After step should be executed and marked SUCCESS");
 
         assertFalse(executedInstructions.contains("core_task"), "Core step action must not have executed");
@@ -415,7 +415,7 @@ public class PlaybookLifecycleExecutionTest
         assertNotNull(thrown);
 
         assertEquals(PlaybookStepStatus.FAILED, beforeStep.getStatus(), "Before step should be marked FAILED");
-        assertEquals(PlaybookStepStatus.SKIPPED, coreStep.getStatus(), "Core step should be marked SKIPPED");
+        assertEquals(PlaybookStepStatus.NOT_RUN, coreStep.getStatus(), "Core step should be marked NOT_RUN");
         assertEquals(PlaybookStepStatus.SUCCESS, afterStep.getStatus(), "After step should execute and be marked SUCCESS");
 
         final TestExecutionReport report = reportListener.getReport();

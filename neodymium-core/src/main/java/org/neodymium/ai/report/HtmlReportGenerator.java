@@ -141,7 +141,16 @@ public final class HtmlReportGenerator
         sb.append("    <div class=\"metric-card\">\n");
         sb.append("      <div class=\"metric-label\">Playbook Steps</div>\n");
         sb.append("      <div class=\"metric-value\">").append(m.getTotalSteps()).append("</div>\n");
-        sb.append("      <div class=\"metric-sub\">✨ Healed: ").append(m.getHealedSteps()).append(" | ❌ Failed: ").append(m.getFailedSteps()).append("</div>\n");
+        sb.append("      <div class=\"metric-sub\">✨ Healed: ").append(m.getHealedSteps()).append(" | ❌ Failed: ").append(m.getFailedSteps());
+        if (m.getSkippedSteps() > 0)
+        {
+            sb.append(" | ⏭️ Skipped: ").append(m.getSkippedSteps());
+        }
+        if (m.getNotRunSteps() > 0)
+        {
+            sb.append(" | ⏹️ Not Run: ").append(m.getNotRunSteps());
+        }
+        sb.append("</div>\n");
         sb.append("    </div>\n");
 
         sb.append("    <div class=\"metric-card\">\n");
@@ -1027,14 +1036,17 @@ public final class HtmlReportGenerator
     private static void renderStepCardWithSubSteps(final StringBuilder sb, final TestExecutionReport.ReportStepEntry step, final int index)
     {
         final String stepStatus = step.getStatus() != null ? step.getStatus().toUpperCase() : "PENDING";
+        final boolean isNotRun = step.isNotRun();
         final String stepPillClass = "PASSED".equals(stepStatus) || "SUCCESS".equals(stepStatus) ? "pill-pass"
             : "HEALED".equals(stepStatus) ? "pill-heal"
             : "FAILED".equals(stepStatus) ? "pill-fail"
+            : isNotRun ? "pill-not-run"
             : "SKIPPED".equals(stepStatus) ? "pill-skip" : "pill-pending";
 
         final boolean hasSubSteps = !step.getSubSteps().isEmpty();
+        final String cardExtraClass = isNotRun ? " step-card-not-run" : "";
 
-        sb.append("        <div class=\"step-card step-select-item\" id=\"step-item-").append(index).append("\">\n");
+        sb.append("        <div class=\"step-card step-select-item").append(cardExtraClass).append("\" id=\"step-item-").append(index).append("\">\n");
         sb.append("          <div class=\"step-header\">\n");
         sb.append("            <div class=\"step-header-left\">\n");
         sb.append("              <span class=\"step-number\">#").append(index + 1).append("</span>\n");
@@ -1070,6 +1082,11 @@ public final class HtmlReportGenerator
             sb.append("            <div class=\"step-card-error-banner\">❌ <strong>Error:</strong> ")
               .append(escapeHtml(step.getFailureReason())).append("</div>\n");
         }
+        if (step.getNotRunReason() != null && !step.getNotRunReason().isBlank())
+        {
+            sb.append("            <div class=\"step-card-not-run-banner\">⏹️ <em>")
+              .append(escapeHtml(step.getNotRunReason())).append("</em></div>\n");
+        }
         appendScreenshotPreviews(sb, step.getScreenshots(), "Step #" + (index + 1));
         sb.append("          </div>\n");
 
@@ -1085,11 +1102,15 @@ public final class HtmlReportGenerator
             {
                 final TestExecutionReport.ReportStepEntry sub = step.getSubSteps().get(s);
                 final String subStatus = sub.getStatus() != null ? sub.getStatus().toUpperCase() : "SUCCESS";
+                final boolean isSubNotRun = sub.isNotRun();
                 final String subPillClass = "PASSED".equals(subStatus) || "SUCCESS".equals(subStatus) ? "pill-pass"
                     : "HEALED".equals(subStatus) ? "pill-heal"
-                    : "FAILED".equals(subStatus) ? "pill-fail" : "pill-pending";
+                    : "FAILED".equals(subStatus) ? "pill-fail"
+                    : isSubNotRun ? "pill-not-run"
+                    : "SKIPPED".equals(subStatus) ? "pill-skip" : "pill-pending";
+                final String subCardExtraClass = isSubNotRun ? " sub-step-card-not-run" : "";
 
-                sb.append("            <div class=\"sub-step-card\" id=\"substep-item-").append(index).append("-").append(s).append("\">\n");
+                sb.append("            <div class=\"sub-step-card").append(subCardExtraClass).append("\" id=\"substep-item-").append(index).append("-").append(s).append("\">\n");
                 sb.append("              <div class=\"sub-step-header\">\n");
                 sb.append("                <div class=\"sub-step-header-left\">\n");
                 sb.append("                  <span class=\"sub-step-number\">#").append(index + 1).append(".").append(s + 1).append("</span>\n");
@@ -1110,6 +1131,11 @@ public final class HtmlReportGenerator
                 {
                     sb.append("              <div class=\"step-card-error-banner\">❌ <strong>Error:</strong> ")
                       .append(escapeHtml(sub.getFailureReason())).append("</div>\n");
+                }
+                if (sub.getNotRunReason() != null && !sub.getNotRunReason().isBlank())
+                {
+                    sb.append("              <div class=\"step-card-not-run-banner\">⏹️ <em>")
+                      .append(escapeHtml(sub.getNotRunReason())).append("</em></div>\n");
                 }
 
                 if (!sub.getScreenshots().isEmpty())
@@ -1374,7 +1400,8 @@ public final class HtmlReportGenerator
                     status === 'SUCCESS' || status === 'PASSED' ? 'pill-pass' :
                     status === 'HEALED' ? 'pill-heal' :
                     status === 'FAILED' ? 'pill-fail' :
-                    status === 'SKIPPED' ? 'pill-skip' : 'pill-pending'
+                    status === 'SKIPPED' ? 'pill-skip' :
+                    status === 'NOT RUN' || status === 'NOT_RUN' || status === 'UNREACHED' ? 'pill-not-run' : 'pill-pending'
                 );
 
                 var duration = step.durationMs || 0;
@@ -1480,6 +1507,11 @@ public final class HtmlReportGenerator
                 var errEl = document.getElementById('inspErrorBanner');
                 if (step.failureReason) {
                     errEl.innerHTML = '❌ <strong>Error:</strong> <span>' + escapeHtml(step.failureReason) + '</span>';
+                    errEl.className = 'inspector-error-banner';
+                    errEl.style.display = 'block';
+                } else if (step.notRunReason) {
+                    errEl.innerHTML = '⏹️ <em>' + escapeHtml(step.notRunReason) + '</em>';
+                    errEl.className = 'step-card-not-run-banner';
                     errEl.style.display = 'block';
                 } else {
                     errEl.style.display = 'none';
@@ -2427,6 +2459,20 @@ public final class HtmlReportGenerator
                 border-color: var(--border-subtle);
                 box-shadow: 0 2px 4px rgba(0,0,0,0.06);
             }
+            .step-card.step-card-not-run {
+                opacity: 0.65;
+                transition: opacity 0.2s ease;
+            }
+            .step-card.step-card-not-run:hover {
+                opacity: 0.95;
+            }
+            .sub-step-card.sub-step-card-not-run {
+                opacity: 0.65;
+                transition: opacity 0.2s ease;
+            }
+            .sub-step-card.sub-step-card-not-run:hover {
+                opacity: 0.95;
+            }
             .step-select-item.active {
                 border-color: var(--accent-primary);
                 box-shadow: 0 0 0 2px var(--accent-primary-light), 0 2px 4px rgba(0,0,0,0.06);
@@ -2465,6 +2511,7 @@ public final class HtmlReportGenerator
             .pill-heal { background: var(--accent-purple-light); color: var(--accent-purple); border: 1px solid rgba(124, 58, 237, 0.3); }
             .pill-fail { background: var(--accent-danger-light); color: var(--accent-danger); border: 1px solid rgba(220, 38, 38, 0.3); }
             .pill-skip { background: #f1f5f9; color: var(--text-muted); border: 1px solid var(--border); }
+            .pill-not-run { background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
             .pill-pending { background: var(--accent-warning-light); color: var(--accent-warning); border: 1px solid rgba(217, 119, 6, 0.3); }
             .badge-flag {
                 font-size: 0.72rem;
@@ -2800,6 +2847,17 @@ public final class HtmlReportGenerator
                 border-left: 4px solid var(--accent-danger);
                 border-radius: 6px;
                 color: #991b1b;
+                padding: 0.5rem 0.75rem;
+                font-size: 0.82rem;
+                margin-top: 0.5rem;
+                word-break: break-word;
+            }
+            .step-card-not-run-banner {
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-left: 4px solid #94a3b8;
+                border-radius: 6px;
+                color: #64748b;
                 padding: 0.5rem 0.75rem;
                 font-size: 0.82rem;
                 margin-top: 0.5rem;

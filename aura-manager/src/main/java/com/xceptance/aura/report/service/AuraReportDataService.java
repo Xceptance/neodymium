@@ -4109,6 +4109,11 @@ public class AuraReportDataService
                 statusClass = "badge-ignored";
                 statusLabel = "SKIPPED";
             }
+            case "not_run", "not run", "unreached" ->
+            {
+                statusClass = "badge-not-run";
+                statusLabel = "NOT RUN";
+            }
             default ->
             {
                 statusClass = "badge-pass";

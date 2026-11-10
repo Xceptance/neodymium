@@ -446,6 +446,7 @@ public final class TestExecutionReport
         private String reasoning;
         private final List<String> reasonings = new ArrayList<>();
         private String failureReason;
+        private String notRunReason;
         private int escalations;
         private String contextLevels;
         private int standardCalls;
@@ -618,6 +619,26 @@ public final class TestExecutionReport
         public void setFailureReason(final String failureReason)
         {
             this.failureReason = failureReason;
+        }
+
+        public String getNotRunReason()
+        {
+            return this.notRunReason;
+        }
+
+        public void setNotRunReason(final String notRunReason)
+        {
+            this.notRunReason = notRunReason;
+        }
+
+        public boolean isNotRun()
+        {
+            return "NOT RUN".equalsIgnoreCase(this.status) || "NOT_RUN".equalsIgnoreCase(this.status) || "UNREACHED".equalsIgnoreCase(this.status);
+        }
+
+        public boolean isSkipped()
+        {
+            return "SKIPPED".equalsIgnoreCase(this.status);
         }
 
         public int getEscalations()
@@ -1767,6 +1788,7 @@ public final class TestExecutionReport
         private int healedSteps;
         private int failedSteps;
         private int skippedSteps;
+        private int notRunSteps;
         private int totalLlmCalls;
         private long tokenUsageInput;
         private long tokenUsageOutput;
@@ -1828,6 +1850,16 @@ public final class TestExecutionReport
         public void setSkippedSteps(final int skippedSteps)
         {
             this.skippedSteps = skippedSteps;
+        }
+
+        public int getNotRunSteps()
+        {
+            return this.notRunSteps;
+        }
+
+        public void setNotRunSteps(final int notRunSteps)
+        {
+            this.notRunSteps = notRunSteps;
         }
 
         public int getTotalLlmCalls()
