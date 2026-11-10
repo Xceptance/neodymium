@@ -1629,6 +1629,16 @@ public class BrowserToolsTest
         Assertions.assertTrue(BrowserToolProvider.matchesCandidate("Populated text", "Populated", false, false));
         Assertions.assertTrue(BrowserToolProvider.matchesCandidate("Populated text", " ", false, false));
         Assertions.assertFalse(BrowserToolProvider.matchesCandidate("Populated text", "   ", false, false));
+
+        // Regex empty and whitespace matching
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("", "^$", true, false));
+        Assertions.assertFalse(BrowserToolProvider.matchesCandidate("Populated text", "^$", true, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("   ", "^\\s*$", true, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("   ", "^\\s+$", true, false));
+        Assertions.assertFalse(BrowserToolProvider.matchesCandidate("", "^\\s+$", true, false));
+        Assertions.assertFalse(BrowserToolProvider.matchesCandidate("Populated text", "   ", true, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("", "   ", true, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("   ", "   ", true, false));
     }
 
     @Test

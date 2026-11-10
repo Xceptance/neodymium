@@ -808,6 +808,16 @@ public class BrowserToolProviderStabilityTest
         Assertions.assertTrue(BrowserToolProvider.matchesCandidate("Hello World", "World", false, false));
         Assertions.assertTrue(BrowserToolProvider.matchesCandidate("Hello World", " ", false, false));
         Assertions.assertFalse(BrowserToolProvider.matchesCandidate("Hello World", "   ", false, false));
+
+        // Regex empty and whitespace matching
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("", "^$", true, false));
+        Assertions.assertFalse(BrowserToolProvider.matchesCandidate("Hello World", "^$", true, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("   ", "^\\s*$", true, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("   ", "^\\s+$", true, false));
+        Assertions.assertFalse(BrowserToolProvider.matchesCandidate("", "^\\s+$", true, false));
+        Assertions.assertFalse(BrowserToolProvider.matchesCandidate("Hello World", "   ", true, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("", "   ", true, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("   ", "   ", true, false));
     }
 
     @Test

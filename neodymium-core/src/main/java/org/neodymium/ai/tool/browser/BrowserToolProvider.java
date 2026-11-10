@@ -2364,14 +2364,15 @@ public final class BrowserToolProvider
         {
             return candidate.isBlank();
         }
-        if (candidate.isBlank())
-        {
-            return expectedText.isBlank();
-        }
 
         if (regex)
         {
             final String cleanPattern = cleanRegexPattern(expectedText);
+            if (cleanPattern.isEmpty())
+            {
+                return candidate.isBlank();
+            }
+
             Pattern pattern;
             try
             {
@@ -2383,6 +2384,11 @@ public final class BrowserToolProvider
             }
             return pattern.matcher(candidate).find()
                     || pattern.matcher(candidate.replaceAll("\\s+", " ")).find();
+        }
+
+        if (candidate.isBlank())
+        {
+            return expectedText.isBlank();
         }
 
         final String unescaped = unescapeLiteralText(expectedText);
