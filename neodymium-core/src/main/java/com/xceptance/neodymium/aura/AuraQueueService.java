@@ -434,11 +434,15 @@ public final class AuraQueueService
                         : System.getProperty("batchName", System.getProperty("neodymium.batchName", "Queue"));
                 currentBatchName.set(effectiveBatchName);
 
+                final String effectiveEnv = (req.environment != null && !req.environment.isBlank())
+                        ? req.environment.trim()
+                        : System.getProperty("environment", System.getProperty("neodymium.environment", null));
+
                 if (queueRunProgressListener != null)
                 {
                     try
                     {
-                        queueRunProgressListener.onRunStarted(generatedRunId, effectiveBatchName, "Unknown", req.tags);
+                        queueRunProgressListener.onRunStarted(generatedRunId, effectiveBatchName, effectiveEnv, req.tags);
                     }
                     catch (final Exception e)
                     {
@@ -1007,6 +1011,8 @@ public final class AuraQueueService
                 }
                 runningQueue.set(false);
                 activeFile.set("");
+                currentRunId.set("");
+                currentBatchName.set("");
             }
         });
         thread.setName("NeodymiumAuraQueueExecutor");
@@ -1053,55 +1059,52 @@ public final class AuraQueueService
             final File[] existingExecs = classDir.listFiles((dir, name) -> name.startsWith("console-execution-") && name.endsWith(".json"));
             final int targetCount = Math.max(1, ids.size());
 
-            if (isFailedRun || testWasCancelled)
+            if (existingExecs != null)
             {
-                if (existingExecs != null)
+                for (final File existingFile : existingExecs)
                 {
-                    for (final File existingFile : existingExecs)
+                    try
                     {
-                        try
+                        final JsonNode node = mapper.readTree(existingFile);
+                        if (node instanceof ObjectNode objNode)
                         {
-                            final JsonNode node = mapper.readTree(existingFile);
-                            if (node instanceof ObjectNode objNode)
+                            final String currentStatus = objNode.has("status") ? objNode.get("status").asText("") : "";
+                            final boolean isFailureStatus = "failed".equalsIgnoreCase(currentStatus) || "failed-unknown".equalsIgnoreCase(currentStatus)
+                                    || "failed-known".equalsIgnoreCase(currentStatus) || "error".equalsIgnoreCase(currentStatus)
+                                    || "skipped".equalsIgnoreCase(currentStatus) || "cancelled".equalsIgnoreCase(currentStatus);
+
+                            final boolean isZeroStep = objNode.path("currentStepIndex").asInt(0) == 0
+                                    && (!objNode.has("steps") || objNode.get("steps").isEmpty() || objNode.get("steps").isNull())
+                                    && objNode.path("metrics").path("totalSteps").asInt(0) == 0;
+
+                            if (testWasCancelled || (isFailedRun && (isZeroStep || !isFailureStatus)) || !isFinalExecutionStatus(currentStatus))
                             {
-                                final String currentStatus = objNode.has("status") ? objNode.get("status").asText("") : "";
-                                final boolean isFailureStatus = "failed".equalsIgnoreCase(currentStatus) || "failed-unknown".equalsIgnoreCase(currentStatus)
-                                        || "failed-known".equalsIgnoreCase(currentStatus) || "error".equalsIgnoreCase(currentStatus)
-                                        || "skipped".equalsIgnoreCase(currentStatus) || "cancelled".equalsIgnoreCase(currentStatus);
-
-                                final boolean isZeroStep = objNode.path("currentStepIndex").asInt(0) == 0
-                                        && (!objNode.has("steps") || objNode.get("steps").isEmpty() || objNode.get("steps").isNull())
-                                        && objNode.path("metrics").path("totalSteps").asInt(0) == 0;
-
-                                if (!isFailureStatus && (isZeroStep || testWasCancelled || !isFinalExecutionStatus(currentStatus)))
-                                {
-                                    objNode.put("status", statusStr);
-                                    objNode.put("runnerStatus", testWasCancelled ? "cancelled" : statusStr);
-                                    if (extractedError != null)
-                                    {
-                                        objNode.put("failureReason", extractedError);
-                                        objNode.put("error", extractedError);
-                                    }
-                                    else if (!objNode.has("failureReason"))
-                                    {
-                                        final String defaultFallback = "Test execution failed during setup (exit code " + exitCode + "). Check process logs or API configuration.";
-                                        objNode.put("failureReason", defaultFallback);
-                                        objNode.put("error", defaultFallback);
-                                    }
-                                    AtomicFileUtils.writeStringAtomic(existingFile.toPath(), mapper.writerWithDefaultPrettyPrinter().writeValueAsString(objNode));
-                                }
-                                else if (isFailedRun && !objNode.has("failureReason") && extractedError != null)
+                                objNode.put("status", statusStr);
+                                objNode.put("runnerStatus", testWasCancelled ? "cancelled" : statusStr);
+                                if (extractedError != null)
                                 {
                                     objNode.put("failureReason", extractedError);
                                     objNode.put("error", extractedError);
-                                    AtomicFileUtils.writeStringAtomic(existingFile.toPath(), mapper.writerWithDefaultPrettyPrinter().writeValueAsString(objNode));
                                 }
+                                else if (isFailedRun && !objNode.has("failureReason"))
+                                {
+                                    final String defaultFallback = "Test execution failed during setup (exit code " + exitCode + "). Check process logs or API configuration.";
+                                    objNode.put("failureReason", defaultFallback);
+                                    objNode.put("error", defaultFallback);
+                                }
+                                AtomicFileUtils.writeStringAtomic(existingFile.toPath(), mapper.writerWithDefaultPrettyPrinter().writeValueAsString(objNode));
+                            }
+                            else if (isFailedRun && !objNode.has("failureReason") && extractedError != null)
+                            {
+                                objNode.put("failureReason", extractedError);
+                                objNode.put("error", extractedError);
+                                AtomicFileUtils.writeStringAtomic(existingFile.toPath(), mapper.writerWithDefaultPrettyPrinter().writeValueAsString(objNode));
                             }
                         }
-                        catch (final Exception e)
-                        {
-                            LOGGER.warn("[Aura Server] Could not update execution status in {}: {}", existingFile.getPath(), e.getMessage());
-                        }
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.warn("[Aura Server] Could not update execution status in {}: {}", existingFile.getPath(), e.getMessage());
                     }
                 }
             }
@@ -1272,17 +1275,17 @@ public final class AuraQueueService
                     LOGGER.warn("[Aura Server] Failed to parse execution JSON {}: {}", execFile.getAbsolutePath(), e.getMessage());
                     continue;
                 }
+                final String rawStatus = payload.get("status") != null ? String.valueOf(payload.get("status")) : "";
                 if (onlyFinalStatus)
                 {
-                    final String rawStatus = payload.get("status") != null ? String.valueOf(payload.get("status")) : "";
                     if (!isFinalExecutionStatus(rawStatus))
                     {
                         continue;
                     }
-                    if ("finished".equalsIgnoreCase(rawStatus) || "succeeded".equalsIgnoreCase(rawStatus))
-                    {
-                        payload.put("status", "passed");
-                    }
+                }
+                if ("finished".equalsIgnoreCase(rawStatus) || "succeeded".equalsIgnoreCase(rawStatus))
+                {
+                    payload.put("status", "passed");
                 }
                 synchronized (ingestedExecutionFiles)
                 {

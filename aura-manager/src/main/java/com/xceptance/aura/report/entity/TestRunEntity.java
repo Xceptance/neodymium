@@ -107,6 +107,9 @@ public class TestRunEntity
     @Column(name = "ignored_count")
     private Integer ignoredCount = 0;
 
+    @Column(name = "running_count")
+    private Integer runningCount = 0;
+
     @Column(name = "passed_healed_count")
     private Integer passedHealedCount = 0;
 
@@ -130,6 +133,9 @@ public class TestRunEntity
 
     @Column(name = "failed_unknown_ai_count")
     private Integer failedUnknownAiCount = 0;
+
+    @Column(name = "playbook_count")
+    private Integer playbookCount = 0;
 
     @Column(name = "flaky_count")
     private Integer flakyCount = 0;
@@ -386,6 +392,11 @@ public class TestRunEntity
         this.totalTests = totalTests;
     }
 
+    public int getTotalTestsSafe()
+    {
+        return totalTests != null ? totalTests : 0;
+    }
+
     public Integer getPassedCount()
     {
         return passedCount;
@@ -434,6 +445,33 @@ public class TestRunEntity
     public void setIgnoredCount(final Integer ignoredCount)
     {
         this.ignoredCount = ignoredCount;
+    }
+
+    public Integer getRunningCount()
+    {
+        return runningCount;
+    }
+
+    public void setRunningCount(final Integer runningCount)
+    {
+        this.runningCount = runningCount;
+    }
+
+    public int getRunningCountSafe()
+    {
+        return runningCount != null ? runningCount : 0;
+    }
+
+    public double getRunningPct()
+    {
+        final int total = getTotalTestsSafe();
+        return total > 0 ? (getRunningCountSafe() * 100.0 / total) : 0.0;
+    }
+
+    public String getRunningLabel()
+    {
+        final int count = getRunningCountSafe();
+        return getRunningPct() >= 7.0 ? String.valueOf(count) : "";
     }
 
     public Integer getFlakyCount()
@@ -716,6 +754,12 @@ public class TestRunEntity
         return "Ignored: " + count + " (" + Math.round(getIgnoredPct()) + "%)";
     }
 
+    public String getRunningTooltip()
+    {
+        final int count = getRunningCountSafe();
+        return "Running: " + count + " (" + Math.round(getRunningPct()) + "%)";
+    }
+
     public Integer getPassedHealedCount()
     {
         return passedHealedCount;
@@ -910,6 +954,21 @@ public class TestRunEntity
     public void setFailedUnknownAiCount(final Integer failedUnknownAiCount)
     {
         this.failedUnknownAiCount = failedUnknownAiCount;
+    }
+
+    public Integer getPlaybookCount()
+    {
+        return playbookCount;
+    }
+
+    public void setPlaybookCount(final Integer playbookCount)
+    {
+        this.playbookCount = playbookCount;
+    }
+
+    public int getPlaybookCountSafe()
+    {
+        return playbookCount != null ? playbookCount : 0;
     }
 
     public int getPassedAiCountSafe()

@@ -580,9 +580,9 @@ function restoreActiveRunContextUI() {
 
     const sidebarRunIdEl = document.getElementById('sidebarActiveRunId');
     const currentRunIdText = sidebarRunIdEl ? sidebarRunIdEl.textContent.trim() : '';
-    const hasHtmlRunId = currentRunIdText && !currentRunIdText.includes('RUN_ID') && currentRunIdText !== 'Run #';
+    const hasHtmlRunId = currentRunIdText && !currentRunIdText.includes('RUN_ID') && currentRunIdText !== 'Run #' && currentRunIdText !== '#';
 
-    const effectiveRunId = hasHtmlRunId ? currentRunIdText.replace(/^Run\s*#/, '').trim() : savedRunId;
+    const effectiveRunId = hasHtmlRunId ? currentRunIdText.replace(/^(Run\s*)?#?/, '').trim() : (savedRunId ? savedRunId.replace(/^(Run\s*)?#?/, '').trim() : null);
 
     if (effectiveRunId) {
         activeRunStats.runId = effectiveRunId;
@@ -592,7 +592,17 @@ function restoreActiveRunContextUI() {
         sidebarCard.style.display = 'flex';
 
         if (sidebarRunIdEl) {
-            sidebarRunIdEl.textContent = `Run #${effectiveRunId}`;
+            sidebarRunIdEl.textContent = effectiveRunId.startsWith('#') ? effectiveRunId : `#${effectiveRunId}`;
+        }
+
+        const sidebarBatchNameEl = document.getElementById('sidebarActiveBatchName');
+        if (sidebarBatchNameEl) {
+            const rawBatch = (sidebarBatchNameEl.textContent || '').trim();
+            if (!rawBatch || ['default', 'unknown', 'queue', 'suite', 'all', 'n/a'].includes(rawBatch.toLowerCase())) {
+                sidebarBatchNameEl.style.display = 'none';
+            } else {
+                sidebarBatchNameEl.style.display = 'block';
+            }
         }
 
         const sidebarStatusEl = document.getElementById('sidebarActiveStatus') || document.getElementById('sidebarActiveEnv');
@@ -604,6 +614,16 @@ function restoreActiveRunContextUI() {
         if (pulseDot) {
             const isRunningState = (sidebarStatusEl && sidebarStatusEl.textContent === 'running') || savedStatus === 'running';
             pulseDot.style.display = isRunningState ? 'inline-block' : 'none';
+        }
+
+        const savedProgress = localStorage.getItem('aura_active_run_progress');
+        const sidebarProgressEl = document.getElementById('sidebarActiveProgress');
+        const sidebarProgressContainer = document.getElementById('sidebarActiveProgressContainer');
+        if (sidebarProgressEl && savedProgress) {
+            sidebarProgressEl.textContent = savedProgress;
+            if (sidebarProgressContainer) {
+                sidebarProgressContainer.style.display = 'flex';
+            }
         }
     } else {
         sidebarCard.style.display = 'none';
@@ -778,6 +798,10 @@ function init() {
         if (typeof loadFiles === 'function') loadFiles();
         if (typeof startPolling === 'function') startPolling();
         if (typeof initResizers === 'function') initResizers();
+    } else {
+        if (document.getElementById('sidebarContextCard') !== null && typeof startPolling === 'function') {
+            startPolling();
+        }
     }
 
     let savedYamlFileListScrollTop = 0;

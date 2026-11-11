@@ -128,4 +128,19 @@ public class TestRunEntityTest
         final String json = entity.getTagsJson();
         assertEquals("{\"batch\":\"stg-emea\",\"locale\":[\"UK\",\"US\",\"DE\"],\"release\":\"2026.10\"}", json);
     }
+
+    @Test
+    public void testPlaybookCount()
+    {
+        final TestRunEntity entity = new TestRunEntity();
+        assertEquals(0, entity.getPlaybookCountSafe());
+        assertEquals(0, entity.getPlaybookCount());
+
+        entity.setPlaybookCount(12);
+        assertEquals(12, entity.getPlaybookCountSafe());
+        assertEquals(12, entity.getPlaybookCount());
+
+        entity.setPlaybookCount(null);
+        assertEquals(0, entity.getPlaybookCountSafe());
+    }
 }

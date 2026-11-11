@@ -301,6 +301,16 @@ public final class BatchLatestVariationDto
         return status;
     }
 
+    public boolean isFinished()
+    {
+        if (status == null || status.isBlank())
+        {
+            return false;
+        }
+        final String st = status.toLowerCase(Locale.ROOT);
+        return !"running".equals(st) && !"in_progress".equals(st) && !"executing".equals(st) && !"pending".equals(st);
+    }
+
     public boolean isHealed()
     {
         return healed;

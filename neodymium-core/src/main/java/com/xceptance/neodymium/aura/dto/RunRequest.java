@@ -37,6 +37,7 @@ public final class RunRequest
     public String executionMode = "LLM_RECORDING";
     public List<String> globalBrowserProfiles;
     public String batchName;
+    public String environment;
     public Map<String, List<String>> tags;
 
     public RunRequest()

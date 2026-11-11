@@ -753,17 +753,30 @@ async function pollStatus() {
 
                     const sidebarRunIdEl = document.getElementById('sidebarActiveRunId');
                     if (sidebarRunIdEl) {
-                        sidebarRunIdEl.textContent = `Run #${currentRunId}`;
+                        sidebarRunIdEl.textContent = currentRunId.startsWith('#') ? currentRunId : `#${currentRunId}`;
                     }
 
                     const sidebarBatchNameEl = document.getElementById('sidebarActiveBatchName');
-                    if (sidebarBatchNameEl && statusData.batchName) {
-                        sidebarBatchNameEl.textContent = statusData.batchName;
+                    const isRealBatchName = statusData.batchName && !['default', 'unknown', 'queue', 'suite', 'all', 'n/a'].includes(statusData.batchName.toLowerCase().trim());
+                    if (sidebarBatchNameEl) {
+                        if (isRealBatchName) {
+                            sidebarBatchNameEl.textContent = statusData.batchName.trim();
+                            sidebarBatchNameEl.style.display = 'block';
+                        } else {
+                            sidebarBatchNameEl.textContent = '';
+                            sidebarBatchNameEl.style.display = 'none';
+                        }
                     }
 
-                    if (statusData.batchName) {
+                    if (isRealBatchName) {
                         try {
-                            localStorage.setItem('aura_active_batch_name', statusData.batchName);
+                            localStorage.setItem('aura_active_batch_name', statusData.batchName.trim());
+                        } catch (e) {
+                            // ignore storage failure
+                        }
+                    } else {
+                        try {
+                            localStorage.removeItem('aura_active_batch_name');
                         } catch (e) {
                             // ignore storage failure
                         }
@@ -777,6 +790,31 @@ async function pollStatus() {
                     const pulseDot = document.getElementById('sidebarContextPulseDot');
                     if (pulseDot) {
                         pulseDot.style.display = statusData.running ? 'inline-block' : 'none';
+                    }
+
+                    const sidebarProgressEl = document.getElementById('sidebarActiveProgress');
+                    const sidebarProgressContainer = document.getElementById('sidebarActiveProgressContainer');
+                    if (sidebarProgressEl) {
+                        if (statusData.progressText) {
+                            sidebarProgressEl.textContent = statusData.progressText;
+                            if (sidebarProgressContainer) {
+                                sidebarProgressContainer.style.display = 'flex';
+                            }
+                            try {
+                                localStorage.setItem('aura_active_run_progress', statusData.progressText);
+                            } catch (e) {
+                                // ignore storage failure
+                            }
+                        } else {
+                            if (sidebarProgressContainer) {
+                                sidebarProgressContainer.style.display = 'none';
+                            }
+                            try {
+                                localStorage.removeItem('aura_active_run_progress');
+                            } catch (e) {
+                                // ignore storage failure
+                            }
+                        }
                     }
                 }
 
@@ -834,8 +872,9 @@ async function pollStatus() {
                         if (runSpinner) runSpinner.style.display = 'inline-block';
                         const sidebarBadge = document.getElementById('sidebarRunBadge');
                         if (sidebarBadge) {
+                            const testsCount = statusData.tests ? statusData.tests.length : (statusData.scheduledCount || statusData.total || 0);
                             sidebarBadge.style.display = 'flex';
-                            sidebarBadge.innerHTML = `<span class="material-symbols-outlined spinner">progress_activity</span> ${statusData.passed + statusData.failed + (statusData.skipped || 0) + 1}/${statusData.tests.length}`;
+                            sidebarBadge.innerHTML = `<span class="material-symbols-outlined spinner">progress_activity</span> ${statusData.passed + statusData.failed + (statusData.skipped || 0) + 1}/${testsCount}`;
                         }
                     } else {
                         if (runSpinner) runSpinner.style.display = 'none';

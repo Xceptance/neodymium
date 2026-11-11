@@ -209,10 +209,13 @@ public class AuraTestDashboardController
             model.addAttribute("yamlFiles", testFiles);
         }
 
-        final String activeRunId = queueController.getCurrentRunId();
-        model.addAttribute("activeRunId", activeRunId != null ? activeRunId : "");
-        model.addAttribute("activeRunStatus", running ? "running" : "finished");
-        model.addAttribute("activeRunReportUrl", (activeRunId != null && !activeRunId.isEmpty()) ? "/run-report?runId=" + activeRunId : "/");
+        if (!model.containsAttribute("activeRunId") || (model.getAttribute("activeRunId") != null && ((String) model.getAttribute("activeRunId")).isEmpty()))
+        {
+            final String activeRunId = queueController.getCurrentRunId();
+            model.addAttribute("activeRunId", activeRunId != null ? activeRunId : "");
+            model.addAttribute("activeRunStatus", running ? "running" : "finished");
+            model.addAttribute("activeRunReportUrl", (activeRunId != null && !activeRunId.isEmpty()) ? "/run-report?runId=" + activeRunId : "/");
+        }
 
         if (running)
         {
