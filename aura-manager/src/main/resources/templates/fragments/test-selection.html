@@ -160,7 +160,7 @@
                     </div>
                 </div>
                 
-                <div class="dataset-list" th:id="'datasets-' + ${item.file}" th:style="'display: ' + (${#sets.contains(expandedFiles, item.file) ? 'flex' : 'none'}) + '; flex-direction: column; padding-left: 24px; margin-top: 4px; gap: 4px;'">
+                <div class="dataset-list" th:id="'datasets-' + ${item.file}" th:data-file="${item.file}" th:style="'display: ' + (${#sets.contains(expandedFiles, item.file) ? 'flex' : 'none'}) + '; flex-direction: column; padding-left: 24px; margin-top: 4px; gap: 4px;'">
                     <div th:if="${item.hasError}" class="file-parse-error-box" style="padding: 8px 12px; border-radius: 6px; background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; font-size: 11px; color: #ef4444; word-break: break-word;">
                         <div style="font-weight: 600; margin-bottom: 2px;">YAML Syntax Error</div>
                         <div style="font-family: monospace; white-space: pre-wrap;" th:text="${item.errorMessage}">Parse error details</div>

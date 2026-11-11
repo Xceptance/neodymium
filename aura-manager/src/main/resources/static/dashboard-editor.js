@@ -2261,7 +2261,6 @@ function initVisualPlaybookEditor() {
 
     // Record initial baseline content and initialize undo/redo snapshot stack
     const currentYaml = compilePlaybookToYaml(false);
-    const rawTextarea = document.getElementById('rawYamlTextarea');
     if (rawTextarea && (typeof currentEditorMode === 'undefined' || currentEditorMode !== 'raw')) {
         rawTextarea.value = currentYaml;
     }
