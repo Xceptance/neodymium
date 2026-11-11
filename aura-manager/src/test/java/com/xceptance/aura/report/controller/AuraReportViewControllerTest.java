@@ -622,4 +622,41 @@ public class AuraReportViewControllerTest
 
         Assertions.assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
     }
+
+    @Test
+    public void testServeRunFileContentTypes() throws Exception
+    {
+        final String runId = "test_run_media_" + System.currentTimeMillis();
+        final Path dir = Paths.get("storage/runs", runId, "MediaTestClass");
+        Files.createDirectories(dir);
+        final Path gifFile = dir.resolve("animation.gif");
+        final Path upperMp4 = dir.resolve("recording.MP4");
+        final Path jpgFile = dir.resolve("snapshot.jpg");
+        Files.writeString(gifFile, "gif data");
+        Files.writeString(upperMp4, "mp4 data");
+        Files.writeString(jpgFile, "jpg data");
+
+        try
+        {
+            final ResponseEntity<Resource> gifResp = controller.serveRunFile(runId, "MediaTestClass", "animation.gif");
+            Assertions.assertEquals(HttpStatus.OK, gifResp.getStatusCode());
+            Assertions.assertEquals("image/gif", gifResp.getHeaders().getContentType().toString());
+
+            final ResponseEntity<Resource> mp4Resp = controller.serveRunFile(runId, "MediaTestClass", "recording.MP4");
+            Assertions.assertEquals(HttpStatus.OK, mp4Resp.getStatusCode());
+            Assertions.assertEquals("video/mp4", mp4Resp.getHeaders().getContentType().toString());
+
+            final ResponseEntity<Resource> jpgResp = controller.serveRunFile(runId, "MediaTestClass", "snapshot.jpg");
+            Assertions.assertEquals(HttpStatus.OK, jpgResp.getStatusCode());
+            Assertions.assertEquals("image/jpeg", jpgResp.getHeaders().getContentType().toString());
+        }
+        finally
+        {
+            Files.deleteIfExists(gifFile);
+            Files.deleteIfExists(upperMp4);
+            Files.deleteIfExists(jpgFile);
+            Files.deleteIfExists(dir);
+            Files.deleteIfExists(Paths.get("storage/runs", runId));
+        }
+    }
 }

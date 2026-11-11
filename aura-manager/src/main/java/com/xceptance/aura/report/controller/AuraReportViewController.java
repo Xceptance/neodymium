@@ -681,24 +681,33 @@ public class AuraReportViewController
         try
         {
             final Resource resource = new UrlResource(path.toUri());
+            final String lowerName = filename.toLowerCase();
             String contentType = "application/octet-stream";
-            if (filename.endsWith(".mp4"))
+            if (lowerName.endsWith(".mp4"))
             {
                 contentType = "video/mp4";
             }
-            else if (filename.endsWith(".webm"))
+            else if (lowerName.endsWith(".webm"))
             {
                 contentType = "video/webm";
             }
-            else if (filename.endsWith(".png"))
+            else if (lowerName.endsWith(".png"))
             {
                 contentType = "image/png";
             }
-            else if (filename.endsWith(".html"))
+            else if (lowerName.endsWith(".gif"))
+            {
+                contentType = "image/gif";
+            }
+            else if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg"))
+            {
+                contentType = "image/jpeg";
+            }
+            else if (lowerName.endsWith(".html"))
             {
                 contentType = "text/html";
             }
-            else if (filename.endsWith(".json"))
+            else if (lowerName.endsWith(".json"))
             {
                 contentType = "application/json";
             }

@@ -8,6 +8,8 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.ProcessBuilder.Redirect;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.Date;
 import java.util.UUID;
 
@@ -158,8 +160,27 @@ public class VideoWriter implements Writer
             LOGGER.info("process video is processing");
             Selenide.sleep(200);
         }
-        File tempFile = new File(recordingConfigurations.tempFolderToStoreRecording() + "/" + "temp" + UUID.randomUUID() + ".mp4");
-        new File(videoFileName).renameTo(tempFile);
+        final File srcFile = new File(videoFileName);
+        if (!srcFile.exists() || screenshots == 0 || testDuration <= 0)
+        {
+            LOGGER.warn("Video file '{}' does not exist or contains no captured frames; skipping framerate adjustment.", videoFileName);
+            return;
+        }
+
+        final File tempFile = new File(recordingConfigurations.tempFolderToStoreRecording(), "temp-" + UUID.randomUUID() + ".mp4");
+        if (!srcFile.renameTo(tempFile))
+        {
+            try
+            {
+                Files.copy(srcFile.toPath(), tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                srcFile.delete();
+            }
+            catch (final Exception e)
+            {
+                LOGGER.error("Failed to copy video file for framerate adjustment", e);
+                return;
+            }
+        }
         double actualFramerate = screenshots / ((double) testDuration / 1000.0);
         if (Double.isNaN(actualFramerate) || Double.isInfinite(actualFramerate) || actualFramerate <= 0.0)
         {
