@@ -4780,26 +4780,37 @@ function renderStepsForExecution(activeRow) {
 }
 
 function openAttachmentWindow(type, url) {
-    if (!url) return;
-    let targetUrl = url;
-    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://') && !targetUrl.startsWith('/api/')) {
-        const activeRow = document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row');
-        if (activeRow) {
-            const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '');
-            let testClass = activeRow.getAttribute('data-test-class') || activeRow.getAttribute('data-test-name') || activeRow.getAttribute('data-class-name') || 'DefaultTestClass';
-            if (testClass.includes('#')) {
-                testClass = testClass.substring(0, testClass.indexOf('#'));
-            }
-            if (testClass.includes('.')) {
-                testClass = testClass.substring(testClass.lastIndexOf('.') + 1);
-            }
-            const filename = activeRow.getAttribute('data-video-url') || url;
-            if (filename.startsWith('http') || filename.startsWith('/')) {
-                targetUrl = filename;
-            } else {
-                targetUrl = `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(filename)}`;
-            }
+    const activeRow = (typeof currentActiveRowId !== 'undefined' && currentActiveRowId)
+        ? (document.getElementById(currentActiveRowId) || document.querySelector(`[data-row-id="${currentActiveRowId}"]`))
+        : document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row');
+
+    let filename = (url && typeof url === 'string' && url.trim().length > 0) ? url.trim() : '';
+    if (!filename && type === 'video' && activeRow) {
+        filename = activeRow.getAttribute('data-video-url') || '';
+    }
+    if (!filename) return;
+
+    let targetUrl = filename;
+    const isAbsolute = targetUrl.startsWith('/')
+        || targetUrl.startsWith('http://')
+        || targetUrl.startsWith('https://')
+        || targetUrl.startsWith('data:')
+        || targetUrl.startsWith('blob:');
+
+    if (!isAbsolute) {
+        const runId = (typeof resolveActiveRunId === 'function')
+            ? resolveActiveRunId(null, activeRow)
+            : ((activeRow ? activeRow.getAttribute('data-run-id') : '') || (typeof activeRunId !== 'undefined' ? activeRunId : ''));
+        if (!runId || runId === '#RUN_ID') return;
+
+        let testClass = (activeRow ? (activeRow.getAttribute('data-test-class') || activeRow.getAttribute('data-test-name') || activeRow.getAttribute('data-class-name')) : '') || 'DefaultTestClass';
+        if (testClass.includes('#')) {
+            testClass = testClass.substring(0, testClass.indexOf('#'));
         }
+        if (testClass.includes('.')) {
+            testClass = testClass.substring(testClass.lastIndexOf('.') + 1);
+        }
+        targetUrl = `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(filename)}`;
     }
     window.open(targetUrl, '_blank', 'width=1000,height=700,resizable=yes,scrollbars=yes');
 }

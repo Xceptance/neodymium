@@ -54,6 +54,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -629,7 +632,6 @@ public class AuraReportViewController
         @PathVariable("filename") final String filename)
     {
         final Path baseStoragePath = Paths.get("storage/runs").toAbsolutePath().normalize();
-        final Path baseSandboxPath = Paths.get("target/aura-sandbox/allure-results").toAbsolutePath().normalize();
 
         Path candidate = resolveSafePath(baseStoragePath, runId, testClass, filename);
         if (candidate != null)
@@ -641,21 +643,6 @@ public class AuraReportViewController
         if (normalizedClass != null && !normalizedClass.equals(testClass))
         {
             candidate = resolveSafePath(baseStoragePath, runId, normalizedClass, filename);
-            if (candidate != null)
-            {
-                return servePath(candidate, filename);
-            }
-        }
-
-        candidate = resolveSafePath(baseSandboxPath, runId, testClass, filename);
-        if (candidate != null)
-        {
-            return servePath(candidate, filename);
-        }
-
-        if (normalizedClass != null && !normalizedClass.equals(testClass))
-        {
-            candidate = resolveSafePath(baseSandboxPath, runId, normalizedClass, filename);
             if (candidate != null)
             {
                 return servePath(candidate, filename);
@@ -728,13 +715,19 @@ public class AuraReportViewController
             {
                 contentType = "application/json";
             }
+
+            final ContentDisposition disposition = ContentDisposition.inline()
+                .filename(filename, StandardCharsets.UTF_8)
+                .build();
+
             return ResponseEntity.ok()
-                    .contentType(MediaType.parseMediaType(contentType))
-                    .body(resource);
+                .contentType(MediaType.parseMediaType(contentType))
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .body(resource);
         }
         catch (final Exception e)
         {
-            return ResponseEntity.internalServerError().build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
