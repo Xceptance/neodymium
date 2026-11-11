@@ -1034,7 +1034,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final PlaybookResourceManager manager = new HybridResourceManager(new ClasspathResourceManager());
             this.resourceManager = manager;
 
-            if (FilmTestExecution.getContextVideo().enableFilming() && FilmTestExecution.getNamesOfAllCurrentVideoRecordings().isEmpty())
+            final boolean browserRunnerFilming = this.browser != null && FilmTestExecution.getContextVideo().filmAutomatically();
+            if (FilmTestExecution.getContextVideo().enableFilming() && !browserRunnerFilming)
             {
                 final String recordingID = (testClass != null ? testClass.getSimpleName() + "_" : "") + java.util.UUID.randomUUID().toString();
                 executionContext.getTransientData().put("recordingID", recordingID);

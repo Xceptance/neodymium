@@ -634,7 +634,7 @@ public class AuraReportViewController
             return servePath(filePath, filename);
         }
 
-        if (testClass.contains("."))
+        if (testClass.contains(".") && !testClass.endsWith("."))
         {
             final String simpleClass = testClass.substring(testClass.lastIndexOf('.') + 1);
             final Path simplePath = Paths.get("storage/runs", runId, simpleClass, filename);
@@ -650,7 +650,7 @@ public class AuraReportViewController
             return servePath(runSandboxPath, filename);
         }
 
-        if (testClass.contains("."))
+        if (testClass.contains(".") && !testClass.endsWith("."))
         {
             final String simpleClass = testClass.substring(testClass.lastIndexOf('.') + 1);
             final Path simpleSandboxPath = Paths.get("target/aura-sandbox/allure-results", runId, simpleClass, filename);

@@ -11,5 +11,5 @@
 - **Resolution:** 
   1. Updated `AuraReportViewController.serveRunFile` and `report-manager.js` to normalize FQCNs to simple class names when resolving execution media and removed the unindexed root fallback to `target/aura-sandbox/allure-results/{filename}`.
   2. Added `-movflags +faststart` to FFmpeg commands in `VideoWriter` for both initial piping and framerate adjustment.
-  3. Added an active recordings guard in `NeodymiumAiRunner.executeBeforeEach` to prevent concurrent duplicate video recordings when `BrowserRunner` has already initiated filming.
+  3. Added an invocation-scoped active recording guard in `NeodymiumAiRunner.executeBeforeEach` (`this.browser != null && filmAutomatically()`) to prevent concurrent duplicate video recordings when `BrowserRunner` has already initiated filming without risking thread cross-talk in parallel test execution.
 - **Safety Net Added:** Added unit test `AuraReportViewControllerTest.testServeRunFileWithFqcnNormalizedToSimpleClassName` verifying that FQCN paths resolve to simple class name directories, and updated `VideoWriterTest` / `VideoWriter` process builder assertions.
