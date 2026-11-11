@@ -307,7 +307,7 @@ public final class TestBaseVariationHistoryDto
     }
 
     /**
-     * Resolves the display execution mode string (AI, HEALED, PLAYBOOK, or JAVA).
+     * Resolves the display execution mode string (AI, HEALED, RECORDING, or JAVA).
      *
      * @return display mode string
      */
@@ -327,9 +327,9 @@ public final class TestBaseVariationHistoryDto
         {
             return "HEALED";
         }
-        if ("REPLAY_STRICT".equals(upper) || "PLAYBOOK".equals(upper) || "REPLAY_WITH_HEALING".equals(upper) || "AUTO".equals(upper))
+        if ("REPLAY_STRICT".equals(upper) || "PLAYBOOK".equals(upper) || "RECORDING".equals(upper) || "REPLAY_WITH_HEALING".equals(upper) || "AUTO".equals(upper))
         {
-            return "PLAYBOOK";
+            return "RECORDING";
         }
         if ("JAVA".equals(upper))
         {

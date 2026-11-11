@@ -44,20 +44,20 @@ public final class StaticResourceSyntaxTest
     @Test
     public void testAllStaticJavaScriptAssetsHaveValidSyntax() throws Exception
     {
-        final Path jsDirPath = Paths.get("src/main/resources/static/js");
-        Assertions.assertTrue(Files.exists(jsDirPath), "Static JS directory must exist: " + jsDirPath.toAbsolutePath());
+        final Path staticDirPath = Paths.get("src/main/resources/static");
+        Assertions.assertTrue(Files.exists(staticDirPath), "Static directory must exist: " + staticDirPath.toAbsolutePath());
 
         final List<File> jsFiles;
-        try (final Stream<Path> stream = Files.list(jsDirPath))
+        try (final Stream<Path> stream = Files.walk(staticDirPath))
         {
             jsFiles = stream
-                .filter(p -> p.toString().endsWith(".js"))
+                .filter(p -> Files.isRegularFile(p) && p.toString().endsWith(".js"))
                 .map(Path::toFile)
                 .sorted()
                 .collect(Collectors.toList());
         }
 
-        Assertions.assertFalse(jsFiles.isEmpty(), "At least one JavaScript file should be present in " + jsDirPath);
+        Assertions.assertFalse(jsFiles.isEmpty(), "At least one JavaScript file should be present in " + staticDirPath);
 
         final boolean nodeAvailable = isNodeAvailable();
 
@@ -431,7 +431,7 @@ public final class StaticResourceSyntaxTest
             "sidebar.html must render title label 'Aura Manager'"
         );
 
-        final String[] expectedIcons = {"play_circle", "format_list_bulleted", "database"};
+        final String[] expectedIcons = {"play_circle"};
         for (final String icon : expectedIcons)
         {
             Assertions.assertTrue(
@@ -440,7 +440,7 @@ public final class StaticResourceSyntaxTest
             );
         }
 
-        final String[] expectedLabels = {"Playbooks & Queue", "Run History", "Test Base"};
+        final String[] expectedLabels = {"Playbooks & Queue"};
         for (final String label : expectedLabels)
         {
             Assertions.assertTrue(
@@ -448,6 +448,23 @@ public final class StaticResourceSyntaxTest
                 "sidebar.html must contain nav-label: " + label
             );
         }
+
+        Assertions.assertTrue(
+            sidebarContent.contains("<span>Dashboards</span>"),
+            "sidebar.html must render 'Dashboards' section header"
+        );
+        Assertions.assertFalse(
+            sidebarContent.contains("<span>Custom Dashboards</span>"),
+            "sidebar.html must not contain old 'Custom Dashboards' section header"
+        );
+        Assertions.assertFalse(
+            sidebarContent.contains("Run History"),
+            "sidebar.html must not contain Run History tab"
+        );
+        Assertions.assertFalse(
+            sidebarContent.contains("Test Base"),
+            "sidebar.html must not contain Test Base tab"
+        );
     }
 
     @Test
@@ -527,6 +544,23 @@ public final class StaticResourceSyntaxTest
             "custom-dashboard-page.html must not contain batch-card-actions container");
         Assertions.assertTrue(customPageContent.contains("onclick=\"if (!event.target.closest('a, button, input, select'))"),
             "custom-dashboard-page.html must have click delegation on batch-card to open group dashboard");
+    }
+
+    @Test
+    public void testCustomDashboardNoBackToOverviewOnMainDashboardAndPreservesSubDashboardBackLink() throws Exception
+    {
+        final Path customPagePath = Paths.get("src/main/resources/templates/fragments/custom-dashboard-page.html");
+        Assertions.assertTrue(Files.exists(customPagePath), "custom-dashboard-page.html must exist");
+        final String customPageContent = Files.readString(customPagePath, StandardCharsets.UTF_8);
+
+        Assertions.assertFalse(
+            customPageContent.contains("Back to Overview"),
+            "custom-dashboard-page.html must not contain 'Back to Overview' button on main dashboards"
+        );
+        Assertions.assertTrue(
+            customPageContent.contains("th:if=\"${isSubPage == true and parentDashboard != null}\""),
+            "custom-dashboard-page.html must preserve sub-dashboard back button leading to parent group dashboard"
+        );
     }
 
     @Test
@@ -2208,7 +2242,7 @@ public final class StaticResourceSyntaxTest
         // Verify Area normalization in resolveVariationDimensionValue
         Assertions.assertTrue(jsContent.contains("const clean = raw.replace(/^@/, '').replace(/\\s*\\(default\\)$/i, '').trim();"),
             "resolveVariationDimensionValue must strip leading @ and trailing (default) from area dimension values");
-        Assertions.assertTrue(jsContent.contains("return clean.length > 0 ? clean : 'Browsing';"),
+        Assertions.assertTrue(jsContent.contains("return clean.length > 0 ? clean : 'Default';"),
             "resolveVariationDimensionValue must return clean area fallback without @ prefix");
 
         // Verify Area normalization in resolveDimensionCount
@@ -2218,8 +2252,8 @@ public final class StaticResourceSyntaxTest
             "resolveDimensionCount must perform exact equality on normalized area values");
 
         // Verify Area normalization in matchesVariationFilter
-        Assertions.assertTrue(jsContent.contains("const a = (v.a || '').toLowerCase().trim().replace(/^@/, '').replace(/\\s*\\(default\\)$/i, '').trim();"),
-            "matchesVariationFilter must strip leading @ and trailing (default) for area filter matching");
+        Assertions.assertTrue(jsContent.contains("const normA = normalizeAreaFilterVal(v.a || '');"),
+            "matchesVariationFilter must use normalizeAreaFilterVal for area filter matching");
 
         // Verify Locale/Location and Environment/Env synonym canonicalization in matchesContainerFilters
         Assertions.assertTrue(jsContent.contains("const normExclude = (cleanExclude === 'location' ? 'locale' : (cleanExclude === 'environment' ? 'env' : cleanExclude));"),
@@ -3614,23 +3648,27 @@ public final class StaticResourceSyntaxTest
             "const vAi = { s: 'PASSED', b: 'Chrome', m: 'AI', h: false };",
             "const vHealed = { s: 'PASSED', b: 'Chrome', m: 'JAVA', h: true };",
             "const vPlaybook = { s: 'PASSED', b: 'Chrome', m: 'PLAYBOOK', h: false };",
+            "const vRecording = { s: 'PASSED', b: 'Chrome', m: 'RECORDING', h: false };",
             "const activeFiltersMode = { mode: new Set(['AI-Driven']) };",
             "const activeFiltersType = { type: new Set(['AI-Driven']) };",
             "context.vAi = vAi;",
             "context.vHealed = vHealed;",
             "context.vPlaybook = vPlaybook;",
+            "context.vRecording = vRecording;",
             "context.activeFiltersMode = activeFiltersMode;",
             "context.activeFiltersType = activeFiltersType;",
             "const matchAiMode = vm.runInContext('matchesContainerFilters(vAi, activeFiltersMode, null)', context);",
             "const matchAiType = vm.runInContext('matchesContainerFilters(vAi, activeFiltersType, null)', context);",
             "const matchHealedMode = vm.runInContext('matchesContainerFilters(vHealed, activeFiltersMode, null)', context);",
             "const matchPlaybookMode = vm.runInContext('matchesContainerFilters(vPlaybook, activeFiltersMode, null)', context);",
+            "const matchRecordingMode = vm.runInContext('matchesContainerFilters(vRecording, activeFiltersMode, null)', context);",
             "const facetExcludeMode = vm.runInContext('matchesContainerFilters(vHealed, activeFiltersMode, \\'mode\\')', context);",
             "const facetExcludeType = vm.runInContext('matchesContainerFilters(vHealed, activeFiltersType, \\'mode\\')', context);",
             "if (matchAiMode !== true) throw new Error('vAi must match active filter mode=AI-Driven');",
             "if (matchAiType !== true) throw new Error('vAi must match active filter type=AI-Driven');",
             "if (matchHealedMode !== false) throw new Error('vHealed must be filtered out by mode=AI-Driven');",
             "if (matchPlaybookMode !== false) throw new Error('vPlaybook must be filtered out by mode=AI-Driven');",
+            "if (matchRecordingMode !== false) throw new Error('vRecording must be filtered out by mode=AI-Driven');",
             "if (facetExcludeMode !== true) throw new Error('Facet exclusion for mode must allow vHealed on AI_USAGE card');",
             "if (facetExcludeType !== true) throw new Error('Facet exclusion with legacy type must allow vHealed on AI_USAGE card');",
             "const dimVal = vm.runInContext('resolveVariationDimensionValue(vAi, \\'mode\\')', context);",
@@ -4040,6 +4078,202 @@ public final class StaticResourceSyntaxTest
         final int exitCode = p.waitFor();
         Assertions.assertEquals(0, exitCode, "Container pie chart SVG layer grouping and overlay synchronization test failed:\n" + out);
         Assertions.assertTrue(out.toString().contains("SUCCESS"), "Test output must contain SUCCESS: " + out);
+    }
+
+    /**
+     * Automated regression safety net verifying that clicking a test variation row within
+     * the Known Test Base Variations widget on the dashboard correctly resolves the row element,
+     * recognizes it as a test variation, displays sidePageTestBaseVariationControls, updates
+     * variation badges (locale, browser, batch), and invokes loadTestBaseVariationHistory.
+     *
+     * @throws Exception
+     *             if template reading or node script execution fails
+     * @author AI-generated: Gemini 3.8 Flash (High)
+     * @author Xceptance GmbH 2026
+     */
+    @Test
+    public void testKnownTestVariationsWidgetRowClickOpensVariationHistorySafetyNet() throws Exception
+    {
+        final Path templatePath = Paths.get("src/main/resources/templates/fragments/dashboard-widgets.html");
+        Assertions.assertTrue(Files.exists(templatePath), "dashboard-widgets.html must exist");
+        final String templateContent = Files.readString(templatePath, StandardCharsets.UTF_8);
+
+        // 1. Verify template contract: th:data-row-id must match th:id with widget id prefix
+        Assertions.assertFalse(
+            templateContent.contains("th:data-row-id=\"'row-var-' + ${var.id}\""),
+            "dashboard-widgets.html must not use unprefixed 'row-var-' for data-row-id on widget rows"
+        );
+        Assertions.assertTrue(
+            templateContent.contains("th:data-row-id=\"'widget-' + ${w.id} + '-row-var-' + ${var.id}\""),
+            "dashboard-widgets.html must prefix data-row-id with widget id matching th:id"
+        );
+
+        final Path jsPath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsPath), "report-manager.js must exist");
+        final String jsContent = Files.readString(jsPath, StandardCharsets.UTF_8);
+
+        // 2. Verify JavaScript contracts in report-manager.js
+        Assertions.assertTrue(
+            jsContent.contains("const rowId = row.id || row.getAttribute('data-row-id');"),
+            "handleRowClick must prioritize row.id before getAttribute('data-row-id')"
+        );
+        Assertions.assertTrue(
+            jsContent.contains("activeRow.closest('.widget-test-variations-body') !== null"),
+            "openTestSidePagePanel must recognize .widget-test-variations-body for isTestBaseRow routing"
+        );
+        Assertions.assertTrue(
+            jsContent.contains("const batchBadge = document.getElementById('tbSideBatchBadge');"),
+            "openTestSidePagePanel must synchronize tbSideBatchBadge with the variation batch"
+        );
+
+        // 3. Node.js headless DOM behavioral assertion
+        final String nodeTestScript = String.join(
+            "\n",
+            "const fs = require('fs');",
+            "const vm = require('vm');",
+            "",
+            "const jsCode = fs.readFileSync('src/main/resources/static/js/report-manager.js', 'utf8');",
+            "",
+            "let historyLoaded = false;",
+            "let loadedParams = null;",
+            "const mockElements = {};",
+            "",
+            "function createMockEl(id, tag, classes) {",
+            "    const el = {",
+            "        id: id || '',",
+            "        tagName: (tag || 'DIV').toUpperCase(),",
+            "        classList: {",
+            "            _classes: new Set(classes || []),",
+            "            add: function(c) { this._classes.add(c); },",
+            "            remove: function(c) { this._classes.delete(c); },",
+            "            contains: function(c) { return this._classes.has(c); }",
+            "        },",
+            "        style: {},",
+            "        attributes: {},",
+            "        getAttribute: function(a) { return this.attributes[a] || null; },",
+            "        setAttribute: function(a, v) { this.attributes[a] = String(v); },",
+            "        hasAttribute: function(a) { return a in this.attributes; },",
+            "        removeAttribute: function(a) { delete this.attributes[a]; },",
+            "        parentElement: null,",
+            "        children: [],",
+            "        closest: function(sel) {",
+            "            let cur = this;",
+            "            while (cur) {",
+            "                if (sel === '.widget-test-variations-body' && cur.classList.contains('widget-test-variations-body')) return cur;",
+            "                if (sel === '#pageTestBase' && cur.id === 'pageTestBase') return cur;",
+            "                if (sel === '#batchTestBaseVariationsPanel' && cur.id === 'batchTestBaseVariationsPanel') return cur;",
+            "                cur = cur.parentElement;",
+            "            }",
+            "            return null;",
+            "        },",
+            "        querySelector: function() { return null; },",
+            "        querySelectorAll: function() { return []; },",
+            "        prepend: function() {},",
+            "        appendChild: function(c) { this.children.push(c); c.parentElement = this; return c; }",
+            "    };",
+            "    if (id) mockElements[id] = el;",
+            "    return el;",
+            "}",
+            "",
+            "const widgetBody = createMockEl('widgetBody', 'div', ['widget-test-variations-body']);",
+            "const rowEl = createMockEl('widget-1-row-var-42', 'tr', ['tb-entry-row', 'clickable-row', 'js-open-side-panel']);",
+            "rowEl.setAttribute('data-row-id', 'widget-1-row-var-42');",
+            "rowEl.setAttribute('data-test-name', 'com.example.SampleTest');",
+            "rowEl.setAttribute('data-test-method', 'executeTest');",
+            "rowEl.setAttribute('data-dataset', 'dataset_1');",
+            "rowEl.setAttribute('data-location', 'DEU');",
+            "rowEl.setAttribute('data-browser', 'Chrome_1920x1080');",
+            "rowEl.setAttribute('data-batch', 'Nightly');",
+            "rowEl.setAttribute('data-status', 'passed');",
+            "widgetBody.appendChild(rowEl);",
+            "",
+            "createMockEl('testSidePagePanel', 'div', ['allure-side-page-panel']);",
+            "createMockEl('sidePageSingleRunControls', 'div', []);",
+            "createMockEl('sidePageTestBaseVariationControls', 'div', []);",
+            "createMockEl('tbSideLocaleBadge', 'span', []);",
+            "createMockEl('tbSideBrowserBadge', 'span', []);",
+            "createMockEl('tbSideBatchBadge', 'span', []);",
+            "createMockEl('sidePageTestName', 'div', []);",
+            "createMockEl('sidePageTestDataSet', 'div', []);",
+            "const mockBody = { addEventListener: () => {}, removeEventListener: () => {}, style: {} };",
+            "const mockDoc = {",
+            "    body: mockBody,",
+            "    addEventListener: function() {},",
+            "    removeEventListener: function() {},",
+            "    getElementById: function(id) { return mockElements[id] || null; },",
+            "    querySelector: function(sel) {",
+            "        if (sel === '[data-row-id=\"widget-1-row-var-42\"]') return rowEl;",
+            "        return null;",
+            "    },",
+            "    querySelectorAll: function(sel) {",
+            "        if (sel === 'tr.clickable-row') return [rowEl];",
+            "        return [];",
+            "    }",
+            "};",
+            "const mockWin = {",
+            "    document: mockDoc,",
+            "    addEventListener: function() {},",
+            "    removeEventListener: function() {},",
+            "    location: { href: 'http://localhost:8080/dashboard' },",
+            "    history: { replaceState: function() {} },",
+            "    ResizeObserver: class { observe() {} unobserve() {} disconnect() {} }",
+            "};",
+            "mockDoc.defaultView = mockWin;",
+            "",
+            "const context = {",
+            "    console: console,",
+            "    window: mockWin,",
+            "    document: mockDoc,",
+            "    ResizeObserver: mockWin.ResizeObserver,",
+            "    setTimeout: setTimeout,",
+            "    clearTimeout: clearTimeout,",
+            "    CSS: { escape: function(s) { return s; } },",
+            "    localStorage: { getItem: function() { return null; }, setItem: function() {} }",
+            "};",
+            "",
+            "vm.createContext(context);",
+            "vm.runInContext(jsCode, context);",
+            "",
+            "historyLoaded = false;",
+            "loadedParams = null;",
+            "context.loadTestBaseVariationHistory = function(testClass, testMethod, dataSet, loc, browser) {",
+            "    historyLoaded = true;",
+            "    loadedParams = { testClass, testMethod, dataSet, loc, browser };",
+            "};",
+            "",
+            "// Simulate row click event on the widget row",
+            "context.handleRowClick({ currentTarget: rowEl, preventDefault: () => {} });",
+            "",
+            "const singleRun = mockElements['sidePageSingleRunControls'];",
+            "const testBase = mockElements['sidePageTestBaseVariationControls'];",
+            "const batchBadge = mockElements['tbSideBatchBadge'];",
+            "",
+            "if (singleRun.style.display !== 'none') throw new Error('singleRunControls must be hidden (display: none)');",
+            "if (testBase.style.display !== 'flex') throw new Error('testBaseVariationControls must be displayed (display: flex)');",
+            "if (!historyLoaded) throw new Error('loadTestBaseVariationHistory was not invoked on row click');",
+            "if (!batchBadge.innerHTML.includes('Nightly')) throw new Error('tbSideBatchBadge should contain batch name Nightly but was: ' + batchBadge.innerHTML);",
+            "if (loadedParams.testClass !== 'com.example.SampleTest' || loadedParams.testMethod !== 'executeTest' || loadedParams.dataSet !== 'dataset_1') {",
+            "    throw new Error('Incorrect variation parameters passed to loadTestBaseVariationHistory: ' + JSON.stringify(loadedParams));",
+            "}",
+            "console.log('SUCCESS');"
+        );
+
+        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
+        pb.redirectErrorStream(true);
+        final Process p = pb.start();
+        final StringBuilder out = new StringBuilder();
+        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8)))
+        {
+            String line;
+            while ((line = reader.readLine()) != null)
+            {
+                out.append(line).append("\n");
+            }
+        }
+
+        final int exitCode = p.waitFor();
+        Assertions.assertEquals(0, exitCode, "Known test variations widget row click regression test failed:\n" + out);
+        Assertions.assertTrue(out.toString().contains("SUCCESS"), "Output must contain SUCCESS: " + out);
     }
 }
 

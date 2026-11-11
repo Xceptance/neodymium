@@ -20,6 +20,7 @@ package com.xceptance.aura.report.dto;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -242,5 +243,44 @@ public final class RunReportDtoTest
         Assertions.assertEquals("en_US", localeRatios.get(0).getName());
         Assertions.assertEquals(3, localeRatios.get(0).getCount());
         Assertions.assertEquals("100%", localeRatios.get(0).getFormattedPercentage());
+    }
+
+    @Test
+    public void testHasRealAreas()
+    {
+        // 1. Empty area summaries -> false
+        final RunReportDto emptyReport = new RunReportDto("run1", "batch1", "2026-11-10", "10s", 0, 0, 0, 0, 0, 0, List.of());
+        Assertions.assertFalse(emptyReport.hasRealAreas());
+
+        // 2. Only fallback default area -> false
+        final AreaSummaryDto defaultArea = new AreaSummaryDto("@Browsing (default)", "areaBrowsing", List.of(), 1, 0, 0, 0, 0);
+        final RunReportDto defaultReport = new RunReportDto("run2", "batch1", "2026-11-10", "10s", 1, 1, 0, 0, 0, 0, 0, List.of(), List.of(defaultArea));
+        Assertions.assertFalse(defaultReport.hasRealAreas());
+
+        // 3. General fallback area -> false
+        final AreaSummaryDto generalArea = new AreaSummaryDto("General", "areaGeneral", List.of(), 1, 0, 0, 0, 0);
+        final RunReportDto generalReport = new RunReportDto("run3", "batch1", "2026-11-10", "10s", 1, 1, 0, 0, 0, 0, 0, List.of(), List.of(generalArea));
+        Assertions.assertFalse(generalReport.hasRealAreas());
+
+        // 4. Real custom area -> true
+        final AreaSummaryDto realArea = new AreaSummaryDto("@Checkout", "areaCheckout", List.of(), 1, 0, 0, 0, 0);
+        final RunReportDto realReport = new RunReportDto("run4", "batch1", "2026-11-10", "10s", 1, 1, 0, 0, 0, 0, 0, List.of(), List.of(realArea));
+        Assertions.assertTrue(realReport.hasRealAreas());
+
+        // 5. TestBaseDataDto with only fallback -> false
+        final TestBaseDataDto testBaseDefault = new TestBaseDataDto(
+            List.of(), List.of(), List.of(),
+            List.of(new TestBaseAreaDto("@Browsing (default)", "tb1", "btn1", "folder", 1, List.of())),
+            Map.of(), 1, 1
+        );
+        Assertions.assertFalse(testBaseDefault.hasRealAreas());
+
+        // 6. TestBaseDataDto with real area -> true
+        final TestBaseDataDto testBaseReal = new TestBaseDataDto(
+            List.of(), List.of(), List.of(),
+            List.of(new TestBaseAreaDto("@Search", "tb2", "btn2", "folder", 1, List.of())),
+            Map.of(), 1, 1
+        );
+        Assertions.assertTrue(testBaseReal.hasRealAreas());
     }
 }

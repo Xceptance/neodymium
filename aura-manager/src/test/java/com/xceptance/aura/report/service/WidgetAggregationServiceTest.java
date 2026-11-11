@@ -107,7 +107,7 @@ public class WidgetAggregationServiceTest
         Assertions.assertEquals(1, view.getPieSlices().get(0).getCount());
         Assertions.assertEquals("Succeeded Fixed", view.getPieSlices().get(1).getLabel());
         Assertions.assertEquals(1, view.getPieSlices().get(1).getCount());
-        Assertions.assertEquals("Unknown Fail", view.getPieSlices().get(2).getLabel());
+        Assertions.assertEquals("Fail", view.getPieSlices().get(2).getLabel());
         Assertions.assertEquals(1, view.getPieSlices().get(2).getCount());
     }
 
@@ -143,7 +143,7 @@ public class WidgetAggregationServiceTest
         Assertions.assertEquals(1, pieView.getPieSlices().get(1).getCount());
         Assertions.assertEquals("Known Fail", pieView.getPieSlices().get(2).getLabel());
         Assertions.assertEquals(1, pieView.getPieSlices().get(2).getCount());
-        Assertions.assertEquals("Unknown Fail", pieView.getPieSlices().get(3).getLabel());
+        Assertions.assertEquals("Fail", pieView.getPieSlices().get(3).getLabel());
         Assertions.assertEquals(1, pieView.getPieSlices().get(3).getCount());
         Assertions.assertEquals("Ignored", pieView.getPieSlices().get(4).getLabel());
         Assertions.assertEquals(1, pieView.getPieSlices().get(4).getCount());
@@ -158,7 +158,7 @@ public class WidgetAggregationServiceTest
         Assertions.assertTrue(groupNames.contains("Passed"));
         Assertions.assertTrue(groupNames.contains("Succeeded Fixed"));
         Assertions.assertTrue(groupNames.contains("Known Fail"));
-        Assertions.assertTrue(groupNames.contains("Unknown Fail"));
+        Assertions.assertTrue(groupNames.contains("Fail"));
         Assertions.assertTrue(groupNames.contains("Ignored"));
     }
 
@@ -1003,7 +1003,7 @@ public class WidgetAggregationServiceTest
         Assertions.assertEquals(2, view.getRatioSegments().size());
         Assertions.assertEquals("Passed", view.getRatioSegments().get(0).getName());
         Assertions.assertEquals(60.0, view.getRatioSegments().get(0).getPercentage(), 0.01);
-        Assertions.assertEquals("Unknown Fail", view.getRatioSegments().get(1).getName());
+        Assertions.assertEquals("Fail", view.getRatioSegments().get(1).getName());
         Assertions.assertEquals(40.0, view.getRatioSegments().get(1).getPercentage(), 0.01);
     }
 
@@ -1572,8 +1572,8 @@ public class WidgetAggregationServiceTest
         Assertions.assertEquals("var(--status-known-healed, #fb923c)", knownSlice.getHealedColor());
         Assertions.assertEquals(1, knownSlice.getAiCount());
 
-        final WidgetPieSliceDto unknownSlice = view.getPieSlices().stream().filter(s -> s.getLabel().contains("Unknown")).findFirst().orElseThrow();
-        Assertions.assertEquals("var(--status-unknown-fail, #ef4444)", unknownSlice.getColor(), "Unknown Fail AI base stroke must stay red");
+        final WidgetPieSliceDto unknownSlice = view.getPieSlices().stream().filter(s -> "Fail".equals(s.getLabel())).findFirst().orElseThrow();
+        Assertions.assertEquals("var(--status-unknown-fail, #ef4444)", unknownSlice.getColor(), "Fail AI base stroke must stay red");
         Assertions.assertEquals("var(--status-unknown-healed, #f87171)", unknownSlice.getHealedColor());
         Assertions.assertEquals(1, unknownSlice.getAiCount());
     }
@@ -2600,7 +2600,7 @@ public class WidgetAggregationServiceTest
         Assertions.assertEquals("90.0%", chromeBead.getDetails().get("Pass Rate"));
         Assertions.assertEquals("10", chromeBead.getDetails().get("Total Tests"));
         Assertions.assertEquals("9", chromeBead.getDetails().get("Passed"));
-        Assertions.assertEquals("1", chromeBead.getDetails().get("Unknown Fail"));
+        Assertions.assertEquals("1", chromeBead.getDetails().get("Fail"));
         Assertions.assertTrue(chromeBead.getPillWidth() >= chromeBead.getRadius() * 1.9);
 
         final PerlenketteBeadDto firefoxBead = beads.get(1);
@@ -2859,6 +2859,56 @@ public class WidgetAggregationServiceTest
         Assertions.assertEquals("5", volumeBead.getDetails().get("Total Tests"));
         Assertions.assertEquals("5", volumeBead.getDetails().get("Total Executions"));
         Assertions.assertEquals("4", volumeBead.getDetails().get("Passed"));
+    }
+
+    @Test
+    public void testTagPerlenketteLatestApproach_PreservesParameterizedAndDataDrivenScenarios()
+    {
+        final AuraReportDataService dataService = Mockito.mock(AuraReportDataService.class);
+
+        final TestRunEntity r = new TestRunEntity();
+        r.setId("run_20261110_134845");
+        r.setStartTimeMs(1794315000000L);
+        r.setTags(Collections.emptyList());
+
+        // Two executions sharing the same test class and method, but distinct scenario titles (e.g. YAML parameterized tests)
+        final TestExecutionDto exec1 = new TestExecutionDto(
+            "e1", "run_20261110_134845", "Aura_tests_examples_wikipedia_search_yml_Test",
+            "executeYamlTest", "wikipedia_search_example_1", "passed-clean", "Chrome_1500x1000", Collections.emptyMap()
+        );
+        final TestExecutionDto exec2 = new TestExecutionDto(
+            "e2", "run_20261110_134845", "Aura_tests_examples_wikipedia_search_yml_Test",
+            "executeYamlTest", "wikipedia_search_example_2", "passed-clean", "Chrome_1500x1000", Collections.emptyMap()
+        );
+
+        final RunReportDto rep = new RunReportDto(
+            "run_20261110_134845", "Queue", "2026-11-10 13:50", "4m 22s",
+            2, 2, 0, 0, 0, 0, List.of(exec1, exec2)
+        );
+        Mockito.when(dataService.getRunReport("run_20261110_134845")).thenReturn(rep);
+
+        final DashboardWidgetConfigDto config = new DashboardWidgetConfigDto(
+            "w-tag-release-perlenkette", "Release String of Pearls", WidgetMetric.TAG, "Release",
+            WidgetPresentation.PERLENKETTE, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.PERCENT,
+            WidgetPointScope.LATEST_TEST_STATUS, "full", 0, false
+        );
+
+        final DashboardWidgetViewDto view = service.aggregateWidget(
+            config, List.of(r), Collections.emptyList(),
+            Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList(), dataService
+        );
+
+        Assertions.assertNotNull(view);
+        Assertions.assertNotNull(view.getPerlenkette());
+        Assertions.assertEquals(1, view.getPerlenkette().getTotalBeads());
+        final PerlenketteBeadDto bead = view.getPerlenkette().getBeads().get(0);
+        Assertions.assertEquals("Default", bead.getLabel());
+        // Both parameterized scenarios must be counted, not collapsed into 1 test
+        Assertions.assertEquals("2 tests", bead.getTimestampLabel());
+        Assertions.assertEquals("100%", bead.getValueFormatted());
+        Assertions.assertEquals(100.0, bead.getPercentValue(), 0.1);
+        Assertions.assertEquals("2", bead.getDetails().get("Total Tests"));
+        Assertions.assertEquals("2", bead.getDetails().get("Passed"));
     }
 
     @Test
@@ -3649,7 +3699,7 @@ public class WidgetAggregationServiceTest
         Assertions.assertEquals(1, healedSlice.getCount());
         Assertions.assertEquals("#10b981", healedSlice.getColor());
 
-        final WidgetPieSliceDto playbookSlice = view.getPieSlices().stream().filter(s -> "Playbook".equals(s.getLabel())).findFirst().orElseThrow();
+        final WidgetPieSliceDto playbookSlice = view.getPieSlices().stream().filter(s -> "Recording".equals(s.getLabel())).findFirst().orElseThrow();
         Assertions.assertEquals(1, playbookSlice.getCount());
         Assertions.assertEquals("#0284c7", playbookSlice.getColor());
 
@@ -3715,7 +3765,7 @@ public class WidgetAggregationServiceTest
         Assertions.assertEquals("30%", bead.getValueFormatted());
         Assertions.assertEquals("30.0%", bead.getDetails().get("AI Usage Rate"));
         Assertions.assertEquals("3", bead.getDetails().get("Total AI Tests"));
-        Assertions.assertEquals("2", bead.getDetails().get("Playbook"));
+        Assertions.assertEquals("2", bead.getDetails().get("Recording"));
 
         final PerlenketteBeadDto bead2 = view.getPerlenkette().getBeads().get(1);
         Assertions.assertEquals("bead-ai", bead2.getStatusClass());
@@ -3818,7 +3868,7 @@ public class WidgetAggregationServiceTest
         Assertions.assertEquals(2, view.getTrendPoints().size());
         Assertions.assertFalse(view.getTrendLayers().isEmpty());
         Assertions.assertTrue(view.getTrendLayers().stream().anyMatch(l -> "AI-Driven".equals(l.getName())));
-        Assertions.assertTrue(view.getTrendLayers().stream().anyMatch(l -> "Playbook".equals(l.getName())));
+        Assertions.assertTrue(view.getTrendLayers().stream().anyMatch(l -> "Recording".equals(l.getName())));
         Assertions.assertTrue(view.getTrendLayers().stream().allMatch(WidgetTrendLayerDto::hasLinePath),
             "All automation trend layers must have standalone line paths for legend selection");
     }
@@ -3843,7 +3893,7 @@ public class WidgetAggregationServiceTest
 
         Assertions.assertNotNull(view);
         Assertions.assertEquals(WidgetPresentation.TEXT, view.getPresentation());
-        Assertions.assertEquals("33% AI · 33% Healed · 0% Playbook", view.getPrimaryTextValue());
+        Assertions.assertEquals("33% AI · 33% Healed · 0% Recording", view.getPrimaryTextValue());
         Assertions.assertEquals("#8b5cf6", view.getTextValueColor());
         Assertions.assertEquals(3, view.getRatioSegments().size());
         Assertions.assertEquals("AI-Driven", view.getRatioSegments().get(0).getName());
@@ -3852,7 +3902,7 @@ public class WidgetAggregationServiceTest
         Assertions.assertEquals("Healed", view.getRatioSegments().get(1).getName());
         Assertions.assertEquals(1, view.getRatioSegments().get(1).getCount());
         Assertions.assertEquals("#10b981", view.getRatioSegments().get(1).getColor());
-        Assertions.assertEquals("Playbook", view.getRatioSegments().get(2).getName());
+        Assertions.assertEquals("Recording", view.getRatioSegments().get(2).getName());
         Assertions.assertEquals(0, view.getRatioSegments().get(2).getCount());
         Assertions.assertEquals("#0284c7", view.getRatioSegments().get(2).getColor());
 
@@ -3863,7 +3913,7 @@ public class WidgetAggregationServiceTest
         final DashboardWidgetViewDto absView = service.aggregateWidget(
             absoluteConfig, Collections.emptyList(), variations, Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
         );
-        Assertions.assertEquals("1 AI · 1 Healed · 0 Playbook", absView.getPrimaryTextValue());
+        Assertions.assertEquals("1 AI · 1 Healed · 0 Recording", absView.getPrimaryTextValue());
         Assertions.assertEquals(3, absView.getRatioSegments().size());
 
         final DashboardWidgetConfigDto trendConfig = new DashboardWidgetConfigDto(
@@ -3874,7 +3924,7 @@ public class WidgetAggregationServiceTest
             trendConfig, Collections.emptyList(), variations, Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
         );
         Assertions.assertEquals(3, trendView.getRatioSegments().size());
-        Assertions.assertEquals("33% AI · 33% Healed · 0% Playbook", trendView.getPrimaryTextValue());
+        Assertions.assertEquals("33% AI · 33% Healed · 0% Recording", trendView.getPrimaryTextValue());
     }
 
     @Test
@@ -3937,7 +3987,7 @@ public class WidgetAggregationServiceTest
         final WidgetListItemDto healedGroup = view.getListItems().stream().filter(i -> "Healed".equals(i.getLabel())).findFirst().orElseThrow();
         Assertions.assertEquals("auto_fix_high", healedGroup.getIcon());
 
-        final WidgetListItemDto playbookGroup = view.getListItems().stream().filter(i -> "Playbook".equals(i.getLabel())).findFirst().orElseThrow();
+        final WidgetListItemDto playbookGroup = view.getListItems().stream().filter(i -> "Recording".equals(i.getLabel())).findFirst().orElseThrow();
         Assertions.assertEquals("menu_book", playbookGroup.getIcon());
 
         final WidgetListItemDto classicGroup = view.getListItems().stream().filter(i -> "Classic".equals(i.getLabel())).findFirst().orElseThrow();
@@ -4904,12 +4954,12 @@ public class WidgetAggregationServiceTest
         final List<WidgetTrendLayerDto> layers = view.getTrendLayers();
         Assertions.assertEquals(2, layers.size());
         final List<String> layerNames = layers.stream().map(WidgetTrendLayerDto::getName).toList();
-        Assertions.assertTrue(layerNames.contains("@Browsing (default)"));
+        Assertions.assertTrue(layerNames.contains("Default"));
         Assertions.assertTrue(layerNames.contains("@Checkout"));
 
         for (final WidgetTrendLayerDto layer : layers)
         {
-            if ("@Browsing (default)".equals(layer.getName()))
+            if ("Default".equals(layer.getName()))
             {
                 Assertions.assertEquals(3, layer.getCount());
             }
@@ -6788,6 +6838,248 @@ public class WidgetAggregationServiceTest
         );
         Assertions.assertNotNull(containerView);
         Assertions.assertEquals(2, containerView.getChildViews().size());
+    }
+
+    @Test
+    public void testAiUsagePieChart_RecordingSlice()
+    {
+        final DashboardWidgetConfigDto config = new DashboardWidgetConfigDto(
+            "w-ai-recording", "AI Usage Pie Recording", WidgetMetric.AI_USAGE, "", WidgetPresentation.PIE_CHART,
+            WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.PERCENT, "half", 0
+        );
+
+        final List<BatchLatestVariationDto> variations = List.of(
+            new BatchLatestVariationDto("v1", "passed", false, "RECORDING", "run-1", "Default", "Chrome", "US"),
+            new BatchLatestVariationDto("v2", "passed", false, "PLAYBOOK", "run-1", "Default", "Chrome", "US"),
+            new BatchLatestVariationDto("v3", "passed", false, "JAVA", "run-1", "Default", "Chrome", "US")
+        );
+
+        final DashboardWidgetViewDto view = service.aggregateWidget(
+            config, Collections.emptyList(), variations, Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+
+        Assertions.assertNotNull(view);
+        final WidgetPieSliceDto recordingSlice = view.getPieSlices().stream()
+            .filter(s -> "Recording".equals(s.getLabel()))
+            .findFirst()
+            .orElseThrow();
+        Assertions.assertEquals(2, recordingSlice.getCount());
+        Assertions.assertEquals("#0284c7", recordingSlice.getColor());
+        Assertions.assertTrue(view.getPieSlices().stream().noneMatch(s -> "Playbook".equals(s.getLabel())));
+    }
+
+    @Test
+    public void testStatusPieChart_FailSlice()
+    {
+        final DashboardWidgetConfigDto config = new DashboardWidgetConfigDto(
+            "w-status-fail", "Status Pie Fail", WidgetMetric.STATUS, "", WidgetPresentation.PIE_CHART,
+            WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.PERCENT, "half", 0
+        );
+
+        final List<BatchLatestVariationDto> variations = List.of(
+            new BatchLatestVariationDto("v1", "passed", false, "JAVA", "run-1", "Default", "Chrome", "US"),
+            new BatchLatestVariationDto("v2", "failed-unknown", false, "JAVA", "run-1", "Default", "Chrome", "US")
+        );
+
+        final DashboardWidgetViewDto view = service.aggregateWidget(
+            config, Collections.emptyList(), variations, Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+
+        Assertions.assertNotNull(view);
+        final WidgetPieSliceDto failSlice = view.getPieSlices().stream()
+            .filter(s -> "Fail".equals(s.getLabel()))
+            .findFirst()
+            .orElseThrow();
+        Assertions.assertEquals(1, failSlice.getCount());
+        Assertions.assertEquals("var(--status-unknown-fail, #ef4444)", failSlice.getColor());
+        Assertions.assertTrue(view.getPieSlices().stream().noneMatch(s -> "Unknown Fail".equals(s.getLabel())));
+    }
+
+    @Test
+    public void testAiUsageTrendGraphByRuns_IncludesRecordingLayer()
+    {
+        final DashboardWidgetConfigDto config = new DashboardWidgetConfigDto(
+            "w-ai-trend-runs", "AI Usage Trend Graph (By Runs)", WidgetMetric.AI_USAGE, "", WidgetPresentation.TREND_GRAPH,
+            WidgetTrendMode.BY_RUNS, WidgetValueFormat.PERCENT, "half", 0
+        );
+
+        final TestRunEntity run1 = new TestRunEntity("run-1", "DefaultBatch", "COMPLETED", "CI", "staging", "en-US", "Chrome", "2026-11-01 10:00", 1730455200000L);
+        run1.setTotalTests(100);
+        run1.setPassedCount(50);
+        run1.setPassedHealedCount(10);
+        run1.setPassedAiCount(20);
+        run1.setPlaybookCount(20);
+
+        final TestRunEntity run2 = new TestRunEntity("run-2", "DefaultBatch", "COMPLETED", "CI", "staging", "en-US", "Chrome", "2026-11-02 10:00", 1730541600000L);
+        run2.setTotalTests(100);
+        run2.setPassedCount(45);
+        run2.setPassedHealedCount(15);
+        run2.setPassedAiCount(25);
+        run2.setPlaybookCount(15);
+
+        final DashboardWidgetViewDto view = service.aggregateWidget(
+            config, List.of(run1, run2), Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+
+        Assertions.assertNotNull(view);
+        Assertions.assertTrue(view.hasTrendLayers(), "AI Usage trend widget must have trend layers");
+        Assertions.assertEquals(4, view.getTrendLayers().size(), "Must have Classic, Recording, Healed, and AI-Driven layers");
+
+        final WidgetTrendLayerDto recordingLayer = view.getTrendLayers().stream()
+            .filter(l -> "Recording".equals(l.getName()))
+            .findFirst()
+            .orElseThrow();
+        Assertions.assertEquals("#0284c7", recordingLayer.getColor());
+        Assertions.assertEquals(15, recordingLayer.getCount());
+        Assertions.assertEquals(20, recordingLayer.getPeakCount());
+        Assertions.assertEquals("20,15", recordingLayer.getRawValuesCsv());
+        Assertions.assertTrue(recordingLayer.hasLinePath());
+        Assertions.assertTrue(recordingLayer.hasPath());
+    }
+
+    @Test
+    public void testAiUsageTrendGraphByRuns_FallbackToDataService()
+    {
+        final DashboardWidgetConfigDto config = new DashboardWidgetConfigDto(
+            "w-ai-trend-fallback", "AI Usage Trend Graph (Fallback)", WidgetMetric.AI_USAGE, "", WidgetPresentation.TREND_GRAPH,
+            WidgetTrendMode.BY_RUNS, WidgetValueFormat.PERCENT, "half", 0
+        );
+
+        final TestRunEntity run1 = new TestRunEntity("run-1", "DefaultBatch", "COMPLETED", "CI", "staging", "en-US", "Chrome", "2026-11-01 10:00", 1730455200000L);
+        run1.setTotalTests(50);
+        run1.setPassedCount(20);
+        run1.setPassedHealedCount(10);
+        run1.setPassedAiCount(10);
+        run1.setPlaybookCount(0);
+
+        final AuraReportDataService dataService = Mockito.mock(AuraReportDataService.class);
+        final TestExecutionDto exec1 = new TestExecutionDto();
+        exec1.setId("e1");
+        exec1.setExecutionMode("RECORDING");
+        final TestExecutionDto exec2 = new TestExecutionDto();
+        exec2.setId("e2");
+        exec2.setExecutionMode("PLAYBOOK");
+        final RunReportDto report = new RunReportDto(
+            "run-1", "Default", "COMPLETED", "10s",
+            50, 40, 0, 10, 0, 0,
+            List.of(exec1, exec2), List.of()
+        );
+        Mockito.when(dataService.getRunReport("run-1")).thenReturn(report);
+
+        final DashboardWidgetViewDto view = service.aggregateWidget(
+            config, List.of(run1), Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList(),
+            dataService
+        );
+
+        Assertions.assertNotNull(view);
+        Assertions.assertTrue(view.hasTrendLayers(), "AI Usage trend widget must have trend layers");
+        final WidgetTrendLayerDto recordingLayer = view.getTrendLayers().stream()
+            .filter(l -> "Recording".equals(l.getName()))
+            .findFirst()
+            .orElseThrow();
+        Assertions.assertEquals(2, recordingLayer.getCount());
+        Assertions.assertEquals("#0284c7", recordingLayer.getColor());
+    }
+
+    @Test
+    public void testAiUsageTrendGraphHourly_IncludesRecordingLayer()
+    {
+        final DashboardWidgetConfigDto config = new DashboardWidgetConfigDto(
+            "w-ai-trend-hourly", "AI Usage Trend Hourly", WidgetMetric.AI_USAGE, "", WidgetPresentation.TREND_GRAPH,
+            WidgetTrendMode.HOURLY, WidgetValueFormat.PERCENT, "half", 0
+        );
+
+        final TestRunEntity run1 = new TestRunEntity("run-1", "DefaultBatch", "COMPLETED", "CI", "staging", "en-US", "Chrome", "2026-11-01 10:05", 1730455500000L);
+        run1.setTotalTests(50);
+        run1.setPassedCount(20);
+        run1.setPassedHealedCount(5);
+        run1.setPassedAiCount(10);
+        run1.setPlaybookCount(15);
+
+        final DashboardWidgetViewDto view = service.aggregateWidget(
+            config, List.of(run1), Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+
+        Assertions.assertNotNull(view);
+        Assertions.assertTrue(view.hasTrendLayers());
+        final WidgetTrendLayerDto recordingLayer = view.getTrendLayers().stream()
+            .filter(l -> "Recording".equals(l.getName()))
+            .findFirst()
+            .orElseThrow();
+        Assertions.assertEquals(15, recordingLayer.getCount());
+    }
+
+    @Test
+    public void testUnfinishedTestsExcludedFromWidgets()
+    {
+        final DashboardWidgetConfigDto config = new DashboardWidgetConfigDto(
+            "w-status-pie", "Latest Status", WidgetMetric.STATUS, "", WidgetPresentation.PIE_CHART,
+            WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.PERCENT, "half", 0
+        );
+
+        final List<BatchLatestVariationDto> variations = List.of(
+            new BatchLatestVariationDto("k1", "passed-clean", false, "JAVA", "run-1", "Default", "Chrome", "US", "Checkout", "Default", Collections.emptyMap(), 0.0, 0L),
+            new BatchLatestVariationDto("k2", "running", false, "JAVA", "run-1", "Default", "Chrome", "US", "Checkout", "Default", Collections.emptyMap(), 0.0, 0L),
+            new BatchLatestVariationDto("k3", "", false, "JAVA", "run-1", "Default", "Chrome", "US", "Checkout", "Default", Collections.emptyMap(), 0.0, 0L)
+        );
+
+        final DashboardWidgetViewDto view = service.aggregateWidget(
+            config, Collections.emptyList(), variations, Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+
+        Assertions.assertNotNull(view);
+        Assertions.assertEquals(1, view.getPieSlices().size());
+        Assertions.assertEquals("Passed", view.getPieSlices().get(0).getLabel());
+        Assertions.assertEquals(1, view.getPieSlices().get(0).getCount());
+    }
+
+    @Test
+    public void testAreaRatioBarWidgetDefaultsToDefaultWhenNoAreasKnown()
+    {
+        final DashboardWidgetConfigDto config = new DashboardWidgetConfigDto(
+            "w-area-ratio", "Area Breakdown List", WidgetMetric.TAG, "Area",
+            WidgetPresentation.RATIO_BAR, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.PERCENT, "half", 0
+        );
+
+        final List<BatchLatestVariationDto> variations = List.of(
+            new BatchLatestVariationDto("k1", "passed-clean", false, "JAVA", "run-1", "Default", "Chrome", "US", null, "Default", Collections.emptyMap(), 0.0, 0L),
+            new BatchLatestVariationDto("k2", "passed-clean", false, "JAVA", "run-1", "Default", "Chrome", "US", "", "Default", Collections.emptyMap(), 0.0, 0L)
+        );
+
+        final DashboardWidgetViewDto view = service.aggregateWidget(
+            config, Collections.emptyList(), variations, Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+
+        Assertions.assertNotNull(view);
+        Assertions.assertEquals(1, view.getRatioSegments().size());
+        Assertions.assertEquals("Default", view.getRatioSegments().get(0).getName());
+        Assertions.assertEquals(2, view.getRatioSegments().get(0).getCount());
+        Assertions.assertEquals(100.0, view.getRatioSegments().get(0).getPercentage(), 0.01);
+        Assertions.assertFalse(view.getRatioSegments().stream().anyMatch(s -> s.getName().contains("Browsing")));
+    }
+
+    @Test
+    public void testAreaPieChartWidgetDefaultsToDefaultWhenNoAreasKnown()
+    {
+        final DashboardWidgetConfigDto config = new DashboardWidgetConfigDto(
+            "w-area-pie", "Area Breakdown Pie", WidgetMetric.TAG, "Area",
+            WidgetPresentation.PIE_CHART, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.PERCENT, "half", 0
+        );
+
+        final List<BatchLatestVariationDto> variations = List.of(
+            new BatchLatestVariationDto("k1", "passed-clean", false, "JAVA", "run-1", "Default", "Chrome", "US", null, "Default", Collections.emptyMap(), 0.0, 0L),
+            new BatchLatestVariationDto("k2", "passed-clean", false, "JAVA", "run-1", "Default", "Chrome", "US", "@Browsing (default)", "Default", Collections.emptyMap(), 0.0, 0L)
+        );
+
+        final DashboardWidgetViewDto view = service.aggregateWidget(
+            config, Collections.emptyList(), variations, Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+
+        Assertions.assertNotNull(view);
+        Assertions.assertEquals(1, view.getPieSlices().size());
+        Assertions.assertEquals("Default", view.getPieSlices().get(0).getLabel());
+        Assertions.assertEquals(2, view.getPieSlices().get(0).getCount());
+        Assertions.assertFalse(view.getPieSlices().stream().anyMatch(s -> s.getLabel().contains("Browsing")));
     }
 }
 

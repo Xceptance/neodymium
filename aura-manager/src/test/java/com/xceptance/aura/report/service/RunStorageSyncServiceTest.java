@@ -47,6 +47,7 @@ import com.xceptance.aura.report.dto.TestExecutionDto;
 import com.xceptance.aura.report.entity.TestBaseBugEntity;
 import com.xceptance.aura.report.entity.TestBaseVariationEntity;
 import com.xceptance.aura.report.entity.TestRunEntity;
+import com.xceptance.aura.report.entity.TestRunTagEntity;
 import com.xceptance.aura.report.repository.TestBaseBugRepository;
 import com.xceptance.aura.report.repository.TestBaseVariationRepository;
 import com.xceptance.aura.report.repository.TestRunRepository;
@@ -277,11 +278,11 @@ public class RunStorageSyncServiceTest
             Assertions.assertTrue(Files.exists(flatExecFile), "Flat execution JSON file must stay at the run root");
             Assertions.assertFalse(Files.exists(runDir.resolve("Browsing (default)")), "No Browsing (default) folder should be created on disk");
 
-            Assertions.assertEquals("Browsing (default)", findAreaForClass(dataService.getRunReport(unassignedRunId), "UnassignedTest"),
+            Assertions.assertEquals("Default", findAreaForClass(dataService.getRunReport(unassignedRunId), "UnassignedTest"),
                 "Flat execution without a category should be grouped under the default category in the run report");
 
             final JsonNode enrichedExec = new ObjectMapper().readTree(flatExecFile.toFile());
-            Assertions.assertEquals("Browsing (default)", enrichedExec.path("areaName").asText(),
+            Assertions.assertEquals("Default", enrichedExec.path("areaName").asText(),
                 "Enriched execution JSON should carry the default category while staying in place");
         }
         finally
@@ -323,12 +324,12 @@ public class RunStorageSyncServiceTest
             final JsonNode runJsonRoot = new ObjectMapper().readTree(runJsonOpt.get());
             final JsonNode metrics = runJsonRoot.path("executionMetrics");
             Assertions.assertTrue(metrics.isObject() && metrics.size() > 0, "Expected run.json executionMetrics to be present");
-            Assertions.assertEquals("Browsing (default)", metrics.fields().next().getValue().path("areaName").asText(),
+            Assertions.assertEquals("Default", metrics.fields().next().getValue().path("areaName").asText(),
                 "Expected run.json executionMetrics to carry the default category for the uncategorized class");
             Assertions.assertEquals("GoogleTest", metrics.fields().next().getValue().path("testClass").asText(),
                 "Expected run.json executionMetrics to map the execution to the class folder name");
 
-            Assertions.assertEquals("Browsing (default)", findAreaForClass(dataService.getRunReport(twoLevelRunId), "GoogleTest"),
+            Assertions.assertEquals("Default", findAreaForClass(dataService.getRunReport(twoLevelRunId), "GoogleTest"),
                 "Class folder without a category should be grouped under the default category in the run report");
         }
         finally
@@ -429,13 +430,13 @@ public class RunStorageSyncServiceTest
             Assertions.assertFalse(Files.exists(runDir.resolve("Browsing (default)")), "No Browsing (default) folder should be created on disk");
 
             final RunReportDto report = dataService.getRunReport(mixedRunId);
-            Assertions.assertEquals("Checkout", findAreaForClass(report, "CheckoutProcessTest"),
+            Assertions.assertEquals("@Checkout", findAreaForClass(report, "CheckoutProcessTest"),
                 "Class folder inside a category folder should keep the category from its folder");
-            Assertions.assertEquals("Browsing (default)", findAreaForClass(report, "StandaloneTest"),
+            Assertions.assertEquals("Default", findAreaForClass(report, "StandaloneTest"),
                 "Class folder without subfolders at the run root should be grouped under the default category");
 
             final JsonNode enrichedExec = new ObjectMapper().readTree(uncategorizedExecFile.toFile());
-            Assertions.assertEquals("Browsing (default)", enrichedExec.path("areaName").asText(),
+            Assertions.assertEquals("Default", enrichedExec.path("areaName").asText(),
                 "Enriched uncategorized execution JSON should carry the default category while staying in place");
             Assertions.assertEquals("StandaloneTest", enrichedExec.path("testClass").asText(),
                 "Enriched uncategorized execution JSON should keep its class name");
@@ -1804,6 +1805,206 @@ public class RunStorageSyncServiceTest
         // 3. Does NOT hijack an unrelated execution ID when the session belongs to a different test
         final TestExecutionDto unrelatedDto = service.getExecutionDetails("run-interactive-test", "UnrelatedOrderTest#testOrder#Default#Chrome");
         Assertions.assertNull(unrelatedDto, "Interactive session must NOT match an unrelated execution key");
+    }
+
+    @Test
+    public void testRunningExecutionClassification() throws IOException
+    {
+        final String runningRunId = "run-sync-running-test";
+        final Path runDir = Paths.get("storage", "runs", runningRunId);
+        final Path execDir = runDir.resolve("Checkout").resolve("CheckoutProcessTest");
+
+        try
+        {
+            Files.createDirectories(execDir);
+
+            final String execJson = """
+                {
+                    "id": "exec-running-1",
+                    "title": "CheckoutProcessTest [US Chrome]",
+                    "testClass": "CheckoutProcessTest",
+                    "status": "running",
+                    "location": "US",
+                    "browser": "Chrome"
+                }
+                """;
+            Files.writeString(execDir.resolve("exec-1.json"), execJson);
+
+            syncService.importOrUpdateRunReport(runningRunId);
+
+            final Optional<TestRunEntity> runOpt = runRepository.findById(runningRunId);
+            Assertions.assertTrue(runOpt.isPresent(), "Running run should be ingested into database");
+            final TestRunEntity entity = runOpt.get();
+            Assertions.assertEquals("IN_PROGRESS", entity.getStatus(), "Run status should be IN_PROGRESS");
+            Assertions.assertEquals(1, entity.getRunningCountSafe(), "runningCount should be 1");
+            Assertions.assertEquals(0, entity.getFailedUnknownCount(), "failedUnknownCount should be 0");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+            runRepository.findById(runningRunId).ifPresent(runRepository::delete);
+        }
+    }
+
+    @Test
+    public void testLiveBufferOverridesIntermediateDiskRunningStatusInGetRunReport() throws IOException
+    {
+        final String runId = "run-live-override-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path execDir = runDir.resolve("Checkout").resolve("CheckoutProcessTest");
+
+        try
+        {
+            Files.createDirectories(execDir);
+
+            final String intermediateExecJson = """
+                {
+                    "id": "exec-running-override-1",
+                    "title": "Dataset US",
+                    "testClass": "CheckoutProcessTest",
+                    "testMethod": "testCheckout",
+                    "status": "running",
+                    "location": "US",
+                    "browser": "Chrome"
+                }
+                """;
+            Files.writeString(execDir.resolve("console-execution-1.json"), intermediateExecJson);
+
+            final TestRunEntity initialRun = new TestRunEntity(
+                runId, "Default", "IN_PROGRESS", "Aura", "Default", "US", "Chrome", "Recently", System.currentTimeMillis()
+            );
+            runRepository.save(initialRun);
+
+            final Map<String, Object> finishedPayload = new HashMap<>();
+            finishedPayload.put("id", "exec-running-override-1");
+            finishedPayload.put("testClass", "CheckoutProcessTest");
+            finishedPayload.put("testMethod", "testCheckout");
+            finishedPayload.put("title", "Dataset US");
+            finishedPayload.put("location", "US");
+            finishedPayload.put("browser", "Chrome");
+            finishedPayload.put("status", "passed");
+
+            dataService.ingestExecution(runId, finishedPayload);
+
+            final RunReportDto report = dataService.getRunReport(runId);
+            Assertions.assertNotNull(report, "RunReportDto must not be null");
+            Assertions.assertEquals(1, report.getTotalCount(), "Report total count should be 1");
+            Assertions.assertEquals(1, report.getPassCount(), "Report pass count should be 1");
+            Assertions.assertEquals(0, report.getRunningCount(), "Report running count should be 0");
+
+            final List<TestExecutionDto> executions = report.getExecutions();
+            Assertions.assertEquals(1, executions.size(), "Executions list should have 1 item");
+            Assertions.assertEquals("passed-clean", executions.get(0).getStatus(), "Live completed status must override disk running status");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+            runRepository.findById(runId).ifPresent(runRepository::delete);
+        }
+    }
+
+    @Test
+    public void testIngestExecutionMaintainsAndClearsRunningCount()
+    {
+        final String runId = "run-ingest-running-count-test";
+        try
+        {
+            final TestRunEntity initialRun = new TestRunEntity(
+                runId, "Default", "IN_PROGRESS", "Aura", "Default", "US", "Chrome", "Recently", System.currentTimeMillis()
+            );
+            runRepository.save(initialRun);
+
+            final Map<String, Object> runningPayload = new HashMap<>();
+            runningPayload.put("id", "exec-step-1");
+            runningPayload.put("testClass", "PaymentProcessTest");
+            runningPayload.put("testMethod", "testPay");
+            runningPayload.put("title", "Dataset 1");
+            runningPayload.put("location", "US");
+            runningPayload.put("browser", "Chrome");
+            runningPayload.put("status", "running");
+
+            dataService.ingestExecution(runId, runningPayload);
+
+            final TestRunEntity runningEntity = runRepository.findById(runId).orElseThrow();
+            Assertions.assertEquals(1, runningEntity.getRunningCountSafe(), "Running count must be 1 while test is running");
+            Assertions.assertEquals(0, runningEntity.getPassedCount(), "Passed count must be 0 while test is running");
+
+            final Map<String, Object> passedPayload = new HashMap<>(runningPayload);
+            passedPayload.put("status", "passed");
+
+            dataService.ingestExecution(runId, passedPayload);
+
+            final TestRunEntity completedEntity = runRepository.findById(runId).orElseThrow();
+            Assertions.assertEquals(0, completedEntity.getRunningCountSafe(), "Running count must drop to 0 after test passes");
+            Assertions.assertEquals(1, completedEntity.getPassedCount(), "Passed count must increase to 1");
+
+            dataService.finishRun(runId);
+
+            final TestRunEntity finishedEntity = runRepository.findById(runId).orElseThrow();
+            Assertions.assertEquals(0, finishedEntity.getRunningCountSafe(), "Running count must be 0 after finishRun");
+            Assertions.assertEquals("COMPLETED", finishedEntity.getStatus(), "Run status must be COMPLETED");
+        }
+        finally
+        {
+            runRepository.findById(runId).ifPresent(runRepository::delete);
+        }
+    }
+
+    @Test
+    public void testPopulateRunTagsSuppressesSyntheticBatchNames()
+    {
+        final TestRunEntity runWithDefault = new TestRunEntity();
+        runWithDefault.setId("run_test_default");
+        runWithDefault.setBatchName("Default");
+
+        final TestRunEntity runWithSuite = new TestRunEntity();
+        runWithSuite.setId("run_test_suite");
+        runWithSuite.setBatchName("Suite");
+
+        final TestRunEntity runWithQueue = new TestRunEntity();
+        runWithQueue.setId("run_test_queue");
+        runWithQueue.setBatchName("Queue");
+
+        final TestRunEntity runWithRealBatch = new TestRunEntity();
+        runWithRealBatch.setId("run_test_real");
+        runWithRealBatch.setBatchName("BillingRegression");
+
+        final List<TestRunEntity> runs = List.of(runWithDefault, runWithSuite, runWithQueue, runWithRealBatch);
+        dataService.populateRunTags(runs);
+
+        Assertions.assertTrue(
+            runWithDefault.getTags() == null || runWithDefault.getTags().stream().noneMatch(t -> "Suite".equalsIgnoreCase(t.getTagKey())),
+            "Run with batch name 'Default' must not receive synthetic Suite tag"
+        );
+        Assertions.assertTrue(
+            runWithSuite.getTags() == null || runWithSuite.getTags().stream().noneMatch(t -> "Suite".equalsIgnoreCase(t.getTagKey())),
+            "Run with batch name 'Suite' must not receive synthetic Suite tag"
+        );
+        Assertions.assertTrue(
+            runWithQueue.getTags() == null || runWithQueue.getTags().stream().noneMatch(t -> "Suite".equalsIgnoreCase(t.getTagKey())),
+            "Run with batch name 'Queue' must not receive synthetic Suite tag"
+        );
+
+        Assertions.assertNotNull(runWithRealBatch.getTags());
+        Assertions.assertTrue(
+            runWithRealBatch.getTags().stream().anyMatch(t -> "Suite".equalsIgnoreCase(t.getTagKey()) && "BillingRegression".equals(t.getTagValue())),
+            "Run with legitimate batch name 'BillingRegression' must receive synthetic Suite tag"
+        );
+
+        final TestRunTagEntity legitTag = new TestRunTagEntity("run_1", "Suite", "BillingRegression");
+        final TestRunTagEntity defaultTag = new TestRunTagEntity("run_2", "Suite", "Default");
+        final TestRunTagEntity suiteTag = new TestRunTagEntity("run_3", "Suite", "Suite");
+        final TestRunTagEntity queueTag = new TestRunTagEntity("run_4", "Batch", "Queue");
+
+        Assertions.assertTrue(AuraReportDataService.isRealBatch("BillingRegression"));
+        Assertions.assertFalse(AuraReportDataService.isRealBatch("Default"));
+        Assertions.assertFalse(AuraReportDataService.isRealBatch("Suite"));
+        Assertions.assertFalse(AuraReportDataService.isRealBatch("Queue"));
+
+        Assertions.assertTrue(AuraReportDataService.isLegitimateTag(legitTag));
+        Assertions.assertFalse(AuraReportDataService.isLegitimateTag(defaultTag));
+        Assertions.assertFalse(AuraReportDataService.isLegitimateTag(suiteTag));
+        Assertions.assertFalse(AuraReportDataService.isLegitimateTag(queueTag));
     }
 }
 

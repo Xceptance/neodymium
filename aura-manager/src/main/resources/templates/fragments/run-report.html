@@ -82,14 +82,14 @@
                         <div class="kpi-sub">Failures with Bugs</div>
                     </div>
                     <div class="kpi-card card-failed" onclick="filterAllTestsByStatus('FAILED_UNKNOWN')">
-                        <div class="kpi-label">Unknown Fail</div>
+                        <div class="kpi-label">Fail</div>
                         <div class="kpi-value-dual" id="overviewKpiUnknown" th:if="${(report?.unknownHealedCount ?: 0) > 0}">
-                            <span class="kpi-healed-part text-unknown-healed" onclick="event.stopPropagation(); filterAllTestsByHealedStatus('FAILED_UNKNOWN', 'HEALED')" title="Filter Unknown Fail Healed Tests">
+                            <span class="kpi-healed-part text-unknown-healed" onclick="event.stopPropagation(); filterAllTestsByHealedStatus('FAILED_UNKNOWN', 'HEALED')" title="Filter Fail Healed Tests">
                                 <span class="material-symbols-outlined kpi-sparkle-icon">auto_fix_high</span> <span th:text="${report?.unknownHealedCount}">0</span> healed
                             </span>
                             <span class="kpi-slash">/</span>
-                            <span class="kpi-total-part text-fail" onclick="event.stopPropagation(); filterAllTestsByStatus('FAILED_UNKNOWN')" title="Filter All Unknown Fail Tests">
-                                <span th:text="${report?.unknownCount ?: 0}">0</span> unknown fail
+                            <span class="kpi-total-part text-fail" onclick="event.stopPropagation(); filterAllTestsByStatus('FAILED_UNKNOWN')" title="Filter All Fail Tests">
+                                <span th:text="${report?.unknownCount ?: 0}">0</span> fail
                             </span>
                         </div>
                         <div class="kpi-value text-fail" id="overviewKpiUnknown" th:unless="${(report?.unknownHealedCount ?: 0) > 0}" th:text="${report?.unknownCount ?: 0}">0</div>
@@ -214,7 +214,7 @@
                                         </div>
                                     </div>
                                     <div class="pie-breakdown-item" th:if="${report.unknownCount > 0}">
-                                        <div class="label"><div class="dot" style="background: var(--status-unknown-fail);"></div> Unknown Fail</div>
+                                        <div class="label"><div class="dot" style="background: var(--status-unknown-fail);"></div> Fail</div>
                                         <div class="val-group">
                                             <span th:if="${report.unknownHealedCount > 0}" class="badge-healed-inline badge-unknown-healed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="'✨ ' + ${report.unknownHealedCount} + ' healed'">✨ 1 healed</span>
                                             <span th:if="${report.unknownAiCount > 0}" class="badge-ai-inline badge-unknown-ai" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="${report.unknownAiCount} + ' AI'">1 AI</span>
@@ -289,7 +289,7 @@
                     </div>
                 </div>
 
-                <div class="panel" style="margin-top: 1rem;">
+                <div class="panel" style="margin-top: 1rem;" th:if="${report?.hasRealAreas()}">
                     <div class="panel-header">
                         <div>
                             <div class="panel-title"><span class="material-symbols-outlined text-accent">pie_chart</span> Test Area Breakdown</div>
@@ -303,7 +303,7 @@
                             <div class="area-pie-card-header">
                                 <div class="area-pie-title">
                                     <span class="material-symbols-outlined text-accent">folder</span>
-                                    <span>Area: <span th:text="${area.areaName != null ? (area.areaName.startsWith('@') ? area.areaName : '@' + area.areaName) : ''}">Checkout</span></span>
+                                    <span>Area: <span th:text="${area.areaName != null ? (area.areaName.equalsIgnoreCase('Default') ? 'Default' : (area.areaName.startsWith('@') ? area.areaName : '@' + area.areaName)) : 'Default'}">Checkout</span></span>
                                 </div>
                                 <button class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" th:data-area-group="${area.areaGroup}" onclick="openAllTestsAndExpandArea(this.getAttribute('data-area-group'))">
                                     Open Area in All Tests <span class="material-symbols-outlined">arrow_forward</span>
@@ -375,7 +375,7 @@
                                         </div>
                                     </div>
                                     <div class="pie-breakdown-item" th:if="${area.unknownCount > 0}">
-                                        <div class="label"><div class="dot" style="background: var(--status-unknown-fail);"></div> Unknown Failed</div>
+                                        <div class="label"><div class="dot" style="background: var(--status-unknown-fail);"></div> Failed</div>
                                         <div class="val-group">
                                             <span class="badge-healed-inline badge-unknown-healed" th:if="${area.unknownHealedCount > 0}" th:text="${'✨ ' + area.unknownHealedCount + ' healed'}">1 healed</span>
                                             <span class="badge-ai-inline badge-unknown-ai" th:if="${area.unknownAiCount > 0}" th:text="${area.unknownAiCount + ' AI'}">1 AI</span>
@@ -482,7 +482,7 @@
                             <span class="badge-status badge-pass clickable-badge js-filter-badge" data-status-key="PASSED" onclick="filterByGlobalStatusBadge('PASSED', this)" title="Filter Passed Clean">Passed: <span th:text="${report?.passCount}">0</span></span>
                             <span class="badge-status badge-fixed clickable-badge js-filter-badge" data-status-key="SUCCEEDED_FIXED" onclick="filterByGlobalStatusBadge('SUCCEEDED_FIXED', this)" title="Filter Succeeded-Fixed">Succeeded-Fixed: <span th:text="${report?.fixedCount ?: (report?.healedCount ?: 0)}">0</span></span>
                             <span class="badge-status badge-known-fail clickable-badge js-filter-badge" data-status-key="FAILED_KNOWN" onclick="filterByGlobalStatusBadge('FAILED_KNOWN', this)" title="Filter Known Fail">Known Fail: <span th:text="${report?.knownCount}">0</span></span>
-                            <span class="badge-status badge-unknown-fail clickable-badge js-filter-badge" data-status-key="FAILED_UNKNOWN" onclick="filterByGlobalStatusBadge('FAILED_UNKNOWN', this)" title="Filter Unknown Fail">Unknown Fail: <span th:text="${report?.unknownCount}">0</span></span>
+                            <span class="badge-status badge-unknown-fail clickable-badge js-filter-badge" data-status-key="FAILED_UNKNOWN" onclick="filterByGlobalStatusBadge('FAILED_UNKNOWN', this)" title="Filter Fail">Fail: <span th:text="${report?.unknownCount}">0</span></span>
                             <span class="badge-status badge-ignored clickable-badge js-filter-badge" data-status-key="SKIPPED" onclick="filterByGlobalStatusBadge('SKIPPED', this)" title="Filter Ignored/Skipped">Ignored: <span th:text="${report?.ignoredCount ?: 0}">0</span></span>
                             <span class="badge-status badge-running clickable-badge js-filter-badge" th:if="${(report?.runningCount ?: 0) > 0}" data-status-key="RUNNING" onclick="filterByGlobalStatusBadge('RUNNING', this)" title="Filter Running">Running: <span th:text="${report?.runningCount}">0</span></span>
                             <span class="badge-status badge-flaky clickable-badge js-filter-badge" th:if="${(report?.flakyCount ?: 0) > 0}" data-status-key="FLAKY" onclick="filterByGlobalStatusBadge('FLAKY', this)" title="Filter Flaky Tests (frequent unknown failures in previous runs)">Flaky: <span th:text="${report?.flakyCount}">0</span></span>
@@ -499,64 +499,77 @@
                         </button>
                     </div>
 
-                    <!-- DYNAMIC AREA GROUPS -->
-                    <div th:each="area : ${report?.areaSummaries}" class="area-group test-row-group expanded" th:id="${area.areaGroup}" th:data-area="${area.areaName}">
-                        <div class="area-group-header" onclick="toggleAreaGroup(this)">
-                            <div class="area-group-title">
-                                <span class="material-symbols-outlined area-chevron">chevron_right</span>
-                                <span class="material-symbols-outlined text-accent">folder_open</span>
-                                <span>Area: <span th:text="${area.areaName != null ? (area.areaName.startsWith('@') ? area.areaName : '@' + area.areaName) : ''}">Checkout</span></span>
-                                <span class="tag-chip area-exec-count-chip" style="margin-left: 0.5rem;" th:text="${area.totalCount + ' Executions'}">5 Executions</span>
+                    <!-- DYNAMIC AREA GROUPS (rendered when real area tags exist) -->
+                    <th:block th:if="${report?.hasRealAreas()}">
+                        <div th:each="area : ${report?.areaSummaries}" class="area-group test-row-group expanded" th:id="${area.areaGroup}" th:data-area="${area.areaName}">
+                            <div class="area-group-header" onclick="toggleAreaGroup(this)">
+                                <div class="area-group-title">
+                                    <span class="material-symbols-outlined area-chevron">chevron_right</span>
+                                    <span class="material-symbols-outlined text-accent">folder_open</span>
+                                    <span>Area: <span th:text="${area.areaName != null ? (area.areaName.equalsIgnoreCase('Default') ? 'Default' : (area.areaName.startsWith('@') ? area.areaName : '@' + area.areaName)) : 'Default'}">Checkout</span></span>
+                                    <span class="tag-chip area-exec-count-chip" style="margin-left: 0.5rem;" th:text="${area.totalCount + ' Executions'}">5 Executions</span>
+                                </div>
+                                
+                                <div class="flex-gap-2 area-summary-badges" onclick="event.stopPropagation()">
+                                    <span class="badge-status badge-pass clickable-badge" th:if="${area.passCount > 0}" onclick="filterAreaByStatusBadge(this, 'PASSED')" title="Filter Passed in Area" th:text="${'Passed: ' + area.passCount}">Passed: 1</span>
+                                    <span class="badge-status badge-fixed clickable-badge" th:if="${area.fixedCount > 0}" onclick="filterAreaByStatusBadge(this, 'SUCCEEDED_FIXED')" title="Filter Succeeded-Fixed in Area" th:text="${'Succeeded-Fixed: ' + area.fixedCount}">Succeeded-Fixed: 1</span>
+                                    <span class="badge-status badge-known-fail clickable-badge" th:if="${area.knownCount > 0}" onclick="filterAreaByStatusBadge(this, 'FAILED_KNOWN')" title="Filter Known Fail in Area" th:text="${'Known: ' + area.knownCount}">Known: 1</span>
+                                    <span class="badge-status badge-unknown-fail clickable-badge" th:if="${area.unknownCount > 0}" onclick="filterAreaByStatusBadge(this, 'FAILED_UNKNOWN')" title="Filter Fail in Area" th:text="${'Fail: ' + area.unknownCount}">Fail: 1</span>
+                                    <span class="badge-status badge-ignored clickable-badge" th:if="${area.ignoredCount > 0}" onclick="filterAreaByStatusBadge(this, 'SKIPPED')" title="Filter Skipped in Area" th:text="${'Ignored: ' + area.ignoredCount}">Ignored: 1</span>
+                                    <span class="badge-status badge-running clickable-badge" th:if="${area.runningCount > 0}" onclick="filterAreaByStatusBadge(this, 'RUNNING')" title="Filter Running in Area" th:text="${'Running: ' + area.runningCount}">Running: 1</span>
+                                    <span class="badge-status badge-flaky clickable-badge" th:if="${area.flakyCount > 0}" onclick="filterAreaByStatusBadge(this, 'FLAKY')" title="Filter Flaky in Area" th:text="${'Flaky: ' + area.flakyCount}">Flaky: 1</span>
+                                </div>
                             </div>
-                            
-                            <div class="flex-gap-2 area-summary-badges" onclick="event.stopPropagation()">
-                                <span class="badge-status badge-pass clickable-badge" th:if="${area.passCount > 0}" onclick="filterAreaByStatusBadge(this, 'PASSED')" title="Filter Passed in Area" th:text="${'Passed: ' + area.passCount}">Passed: 1</span>
-                                <span class="badge-status badge-fixed clickable-badge" th:if="${area.fixedCount > 0}" onclick="filterAreaByStatusBadge(this, 'SUCCEEDED_FIXED')" title="Filter Succeeded-Fixed in Area" th:text="${'Succeeded-Fixed: ' + area.fixedCount}">Succeeded-Fixed: 1</span>
-                                <span class="badge-status badge-known-fail clickable-badge" th:if="${area.knownCount > 0}" onclick="filterAreaByStatusBadge(this, 'FAILED_KNOWN')" title="Filter Known Fail in Area" th:text="${'Known: ' + area.knownCount}">Known: 1</span>
-                                <span class="badge-status badge-unknown-fail clickable-badge" th:if="${area.unknownCount > 0}" onclick="filterAreaByStatusBadge(this, 'FAILED_UNKNOWN')" title="Filter Unknown Fail in Area" th:text="${'Unknown: ' + area.unknownCount}">Unknown: 1</span>
-                                <span class="badge-status badge-ignored clickable-badge" th:if="${area.ignoredCount > 0}" onclick="filterAreaByStatusBadge(this, 'SKIPPED')" title="Filter Skipped in Area" th:text="${'Ignored: ' + area.ignoredCount}">Ignored: 1</span>
-                                <span class="badge-status badge-running clickable-badge" th:if="${area.runningCount > 0}" onclick="filterAreaByStatusBadge(this, 'RUNNING')" title="Filter Running in Area" th:text="${'Running: ' + area.runningCount}">Running: 1</span>
-                                <span class="badge-status badge-flaky clickable-badge" th:if="${area.flakyCount > 0}" onclick="filterAreaByStatusBadge(this, 'FLAKY')" title="Filter Flaky in Area" th:text="${'Flaky: ' + area.flakyCount}">Flaky: 1</span>
+
+                            <div class="area-group-body">
+                                <!-- If Area has Sub-Areas, render nested Sub-Area groups -->
+                                <th:block th:if="${area.hasSubAreas()}">
+                                    <div th:each="sub : ${area.subAreas}" class="sub-area-group expanded" th:id="${sub.subAreaGroup}" th:data-sub-area="${sub.subAreaName}">
+                                        <div class="sub-area-header" onclick="toggleSubAreaGroup(this)">
+                                            <div class="sub-area-title">
+                                                <span class="material-symbols-outlined sub-area-chevron">chevron_right</span>
+                                                <span class="material-symbols-outlined text-accent" style="font-size: 1.1rem;">subdirectory_arrow_right</span>
+                                                <span>Sub-Area: <span th:text="${sub.subAreaName != null ? (sub.subAreaName.startsWith('@') ? sub.subAreaName : '@' + sub.subAreaName) : ''}">Browsing</span></span>
+                                                <span class="tag-chip sub-area-exec-count-chip" style="margin-left: 0.5rem;" th:text="${sub.totalCount + ' Executions'}">2 Executions</span>
+                                            </div>
+                                            <div class="flex-gap-2 sub-area-summary-badges" onclick="event.stopPropagation()">
+                                                <span class="badge-status badge-pass clickable-badge" th:if="${sub.passCount > 0}" onclick="filterSubAreaByStatusBadge(this, 'PASSED')" title="Filter Passed in Sub-Area" th:text="${'Passed: ' + sub.passCount}">Passed: 1</span>
+                                                <span class="badge-status badge-fixed clickable-badge" th:if="${sub.fixedCount > 0}" onclick="filterSubAreaByStatusBadge(this, 'SUCCEEDED_FIXED')" title="Filter Succeeded-Fixed in Sub-Area" th:text="${'Succeeded-Fixed: ' + sub.fixedCount}">Succeeded-Fixed: 1</span>
+                                                <span class="badge-status badge-known-fail clickable-badge" th:if="${sub.knownCount > 0}" onclick="filterSubAreaByStatusBadge(this, 'FAILED_KNOWN')" title="Filter Known Fail in Sub-Area" th:text="${'Known: ' + sub.knownCount}">Known: 1</span>
+                                                <span class="badge-status badge-unknown-fail clickable-badge" th:if="${sub.unknownCount > 0}" onclick="filterSubAreaByStatusBadge(this, 'FAILED_UNKNOWN')" title="Filter Fail in Sub-Area" th:text="${'Fail: ' + sub.unknownCount}">Fail: 1</span>
+                                                <span class="badge-status badge-ignored clickable-badge" th:if="${sub.ignoredCount > 0}" onclick="filterSubAreaByStatusBadge(this, 'SKIPPED')" title="Filter Skipped in Sub-Area" th:text="${'Ignored: ' + sub.ignoredCount}">Ignored: 1</span>
+                                                <span class="badge-status badge-running clickable-badge" th:if="${sub.runningCount > 0}" onclick="filterSubAreaByStatusBadge(this, 'RUNNING')" title="Filter Running in Sub-Area" th:text="${'Running: ' + sub.runningCount}">Running: 1</span>
+                                                <span class="badge-status badge-flaky clickable-badge" th:if="${sub.flakyCount > 0}" onclick="filterSubAreaByStatusBadge(this, 'FLAKY')" title="Filter Flaky in Sub-Area" th:text="${'Flaky: ' + sub.flakyCount}">Flaky: 1</span>
+                                            </div>
+                                        </div>
+                                        <div class="sub-area-body">
+                                            <th:block th:each="cls : ${sub.testClasses}">
+                                                <th:block th:replace="~{fragments/run-report :: renderRunReportTestClass(cls=${cls})}"></th:block>
+                                            </th:block>
+                                        </div>
+                                    </div>
+                                </th:block>
+
+                                <!-- If Area has NO Sub-Areas, render flat Test Classes directly -->
+                                <th:block th:unless="${area.hasSubAreas()}">
+                                    <th:block th:each="cls : ${area.testClasses}">
+                                        <th:block th:replace="~{fragments/run-report :: renderRunReportTestClass(cls=${cls})}"></th:block>
+                                    </th:block>
+                                </th:block>
                             </div>
                         </div>
+                    </th:block>
 
-                        <div class="area-group-body">
-                            <!-- If Area has Sub-Areas, render nested Sub-Area groups -->
-                            <th:block th:if="${area.hasSubAreas()}">
-                                <div th:each="sub : ${area.subAreas}" class="sub-area-group expanded" th:id="${sub.subAreaGroup}" th:data-sub-area="${sub.subAreaName}">
-                                    <div class="sub-area-header" onclick="toggleSubAreaGroup(this)">
-                                        <div class="sub-area-title">
-                                            <span class="material-symbols-outlined sub-area-chevron">chevron_right</span>
-                                            <span class="material-symbols-outlined text-accent" style="font-size: 1.1rem;">subdirectory_arrow_right</span>
-                                            <span>Sub-Area: <span th:text="${sub.subAreaName != null ? (sub.subAreaName.startsWith('@') ? sub.subAreaName : '@' + sub.subAreaName) : ''}">Browsing</span></span>
-                                            <span class="tag-chip sub-area-exec-count-chip" style="margin-left: 0.5rem;" th:text="${sub.totalCount + ' Executions'}">2 Executions</span>
-                                        </div>
-                                        <div class="flex-gap-2 sub-area-summary-badges" onclick="event.stopPropagation()">
-                                            <span class="badge-status badge-pass clickable-badge" th:if="${sub.passCount > 0}" onclick="filterSubAreaByStatusBadge(this, 'PASSED')" title="Filter Passed in Sub-Area" th:text="${'Passed: ' + sub.passCount}">Passed: 1</span>
-                                            <span class="badge-status badge-fixed clickable-badge" th:if="${sub.fixedCount > 0}" onclick="filterSubAreaByStatusBadge(this, 'SUCCEEDED_FIXED')" title="Filter Succeeded-Fixed in Sub-Area" th:text="${'Succeeded-Fixed: ' + sub.fixedCount}">Succeeded-Fixed: 1</span>
-                                            <span class="badge-status badge-known-fail clickable-badge" th:if="${sub.knownCount > 0}" onclick="filterSubAreaByStatusBadge(this, 'FAILED_KNOWN')" title="Filter Known Fail in Sub-Area" th:text="${'Known: ' + sub.knownCount}">Known: 1</span>
-                                            <span class="badge-status badge-unknown-fail clickable-badge" th:if="${sub.unknownCount > 0}" onclick="filterSubAreaByStatusBadge(this, 'FAILED_UNKNOWN')" title="Filter Unknown Fail in Sub-Area" th:text="${'Unknown: ' + sub.unknownCount}">Unknown: 1</span>
-                                            <span class="badge-status badge-ignored clickable-badge" th:if="${sub.ignoredCount > 0}" onclick="filterSubAreaByStatusBadge(this, 'SKIPPED')" title="Filter Skipped in Sub-Area" th:text="${'Ignored: ' + sub.ignoredCount}">Ignored: 1</span>
-                                            <span class="badge-status badge-running clickable-badge" th:if="${sub.runningCount > 0}" onclick="filterSubAreaByStatusBadge(this, 'RUNNING')" title="Filter Running in Sub-Area" th:text="${'Running: ' + sub.runningCount}">Running: 1</span>
-                                            <span class="badge-status badge-flaky clickable-badge" th:if="${sub.flakyCount > 0}" onclick="filterSubAreaByStatusBadge(this, 'FLAKY')" title="Filter Flaky in Sub-Area" th:text="${'Flaky: ' + sub.flakyCount}">Flaky: 1</span>
-                                        </div>
-                                    </div>
-                                    <div class="sub-area-body">
-                                        <th:block th:each="cls : ${sub.testClasses}">
-                                            <th:block th:replace="~{fragments/run-report :: renderRunReportTestClass(cls=${cls})}"></th:block>
-                                        </th:block>
-                                    </div>
-                                </div>
-                            </th:block>
-
-                            <!-- If Area has NO Sub-Areas, render flat Test Classes directly -->
-                            <th:block th:unless="${area.hasSubAreas()}">
+                    <!-- FLAT TEST CLASSES (rendered directly without Area hierarchy when no real area tags exist) -->
+                    <th:block th:unless="${report?.hasRealAreas()}">
+                        <div class="flat-test-classes-container">
+                            <th:block th:each="area : ${report?.areaSummaries}">
                                 <th:block th:each="cls : ${area.testClasses}">
                                     <th:block th:replace="~{fragments/run-report :: renderRunReportTestClass(cls=${cls})}"></th:block>
                                 </th:block>
                             </th:block>
                         </div>
-                    </div>
+                    </th:block>
                 </div>
             </div>
 
@@ -602,10 +615,15 @@
 
         </div>
     </div>
+
+    <!-- OUT-OF-BAND SIDEBAR CONTEXT CARD SYNC -->
+    <th:block th:if="${isHxRequest == true}">
+        <th:block th:replace="~{fragments/sidebar :: sidebarContextCard}"></th:block>
+    </th:block>
 </div>
 
 <!-- Test Class Fragment for Run Report (reusable for both Flat and Sub-Area modes) -->
-<th:block th:fragment="renderRunReportTestClass(cls)">
+<th:block th:fragment="renderRunReportTestClass(cls)" th:if="${cls != null}">
     <div class="test-class-container expanded" th:id="${cls.classContainer}">
         <div class="test-class-header" onclick="toggleTestClassGroup(this)">
             <div class="test-class-title">
@@ -618,7 +636,7 @@
                 <span class="badge-status badge-pass clickable-badge" th:if="${cls.passCount > 0}" onclick="filterClassByStatusBadge(this, 'PASSED')" title="Filter Passed in Class" th:text="${'Passed: ' + cls.passCount}">Passed: 1</span>
                 <span class="badge-status badge-fixed clickable-badge" th:if="${cls.fixedCount > 0}" onclick="filterClassByStatusBadge(this, 'SUCCEEDED_FIXED')" title="Filter Succeeded-Fixed in Class" th:text="${'Succeeded-Fixed: ' + cls.fixedCount}">Succeeded-Fixed: 1</span>
                 <span class="badge-status badge-known-fail clickable-badge" th:if="${cls.knownCount > 0}" onclick="filterClassByStatusBadge(this, 'FAILED_KNOWN')" title="Filter Known Fail in Class" th:text="${'Known: ' + cls.knownCount}">Known: 1</span>
-                <span class="badge-status badge-unknown-fail clickable-badge" th:if="${cls.unknownCount > 0}" onclick="filterClassByStatusBadge(this, 'FAILED_UNKNOWN')" title="Filter Unknown Fail in Class" th:text="${'Unknown: ' + cls.unknownCount}">Unknown: 1</span>
+                <span class="badge-status badge-unknown-fail clickable-badge" th:if="${cls.unknownCount > 0}" onclick="filterClassByStatusBadge(this, 'FAILED_UNKNOWN')" title="Filter Fail in Class" th:text="${'Fail: ' + cls.unknownCount}">Fail: 1</span>
                 <span class="badge-status badge-ignored clickable-badge" th:if="${cls.ignoredCount > 0}" onclick="filterClassByStatusBadge(this, 'SKIPPED')" title="Filter Skipped in Class" th:text="${'Ignored: ' + cls.ignoredCount}">Ignored: 1</span>
                 <span class="badge-status badge-running clickable-badge" th:if="${cls.runningCount > 0}" onclick="filterClassByStatusBadge(this, 'RUNNING')" title="Filter Running in Class" th:text="${'Running: ' + cls.runningCount}">Running: 1</span>
                 <span class="badge-status badge-flaky clickable-badge" th:if="${cls.flakyCount > 0}" onclick="filterClassByStatusBadge(this, 'FLAKY')" title="Filter Flaky in Class" th:text="${'Flaky: ' + cls.flakyCount}">Flaky: 1</span>
@@ -693,7 +711,7 @@
                                     <span class="badge-status badge-pass" th:if="${exec.displayStatusKey == 'PASSED'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">check_circle</span> PASSED</span>
                                     <span class="badge-status badge-fixed" th:if="${exec.displayStatusKey == 'SUCCEEDED_FIXED'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> SUCCEEDED-FIXED</span>
                                     <span class="badge-status badge-known-fail" th:if="${exec.displayStatusKey == 'FAILED_KNOWN'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> KNOWN FAIL</span>
-                                    <span class="badge-status badge-unknown-fail" th:if="${exec.displayStatusKey == 'FAILED_UNKNOWN'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">cancel</span> UNKNOWN FAIL</span>
+                                    <span class="badge-status badge-unknown-fail" th:if="${exec.displayStatusKey == 'FAILED_UNKNOWN'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">cancel</span> FAIL</span>
                                     <span class="badge-status badge-ignored" th:if="${exec.displayStatusKey == 'SKIPPED'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">skip_next</span> SKIPPED</span>
                                     <span class="badge-status badge-flaky" th:if="${exec.flaky}" th:title="${exec.flakyReason}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">shuffle</span> FLAKY</span>
                                 </div>
@@ -716,11 +734,11 @@
                             <td>
                                 <div style="display: inline-flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
                                     <span class="badge-status" 
-                                          th:classappend="${exec.displayMode == 'AI' ? 'badge-mode-ai' : (exec.displayMode == 'PLAYBOOK' ? 'badge-mode-playbook' : (exec.displayMode == 'HEALED' ? 'badge-mode-healed' : 'badge-mode-java'))}"
+                                          th:classappend="${exec.displayMode == 'AI' ? 'badge-mode-ai' : (exec.displayMode == 'RECORDING' or exec.displayMode == 'PLAYBOOK' ? 'badge-mode-recording' : (exec.displayMode == 'HEALED' ? 'badge-mode-healed' : 'badge-mode-java'))}"
                                           onclick="event.stopPropagation(); filterByMode(this.innerText)" 
                                           style="cursor: pointer; font-size: 0.72rem; padding: 0.15rem 0.45rem;"
                                           th:title="${'Execution Mode: ' + (exec.executionMode ?: 'JAVA')}"
-                                          th:text="${exec.displayMode}">PLAYBOOK</span>
+                                          th:text="${exec.displayMode}">RECORDING</span>
                                 </div>
                             </td>
 

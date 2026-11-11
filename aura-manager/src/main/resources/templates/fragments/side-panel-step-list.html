@@ -91,10 +91,10 @@
                                 <td th:data-sort="${exec.batchName}"><span th:text="${exec.batchName}">Batch Name</span></td>
                                 <td th:data-sort="${exec.displayMode}">
                                     <span class="badge-status" 
-                                          th:classappend="${exec.displayMode == 'AI' ? 'badge-mode-ai' : (exec.displayMode == 'PLAYBOOK' ? 'badge-mode-playbook' : (exec.displayMode == 'HEALED' ? 'badge-mode-healed' : 'badge-mode-java'))}"
+                                          th:classappend="${exec.displayMode == 'AI' ? 'badge-mode-ai' : (exec.displayMode == 'RECORDING' or exec.displayMode == 'PLAYBOOK' ? 'badge-mode-recording' : (exec.displayMode == 'HEALED' ? 'badge-mode-healed' : 'badge-mode-java'))}"
                                           style="font-size: 0.72rem; padding: 0.15rem 0.45rem;"
                                           th:title="${'Execution Mode: ' + (exec.mode ?: 'JAVA')}"
-                                          th:text="${exec.displayMode}">PLAYBOOK</span>
+                                          th:text="${exec.displayMode}">RECORDING</span>
                                 </td>
                                 <td th:data-sort="${exec.timestamp}"><span class="text-muted font-mono" style="font-size: 0.82rem; white-space: nowrap;" th:text="${exec.timestamp}">Recently</span></td>
                                 <td th:data-sort="${exec.statusLabel}">

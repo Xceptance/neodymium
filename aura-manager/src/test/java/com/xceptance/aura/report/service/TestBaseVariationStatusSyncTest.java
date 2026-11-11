@@ -141,6 +141,7 @@ public class TestBaseVariationStatusSyncTest
         Mockito.when(bugRepository.findByVariationIdAndBatchNameInAndEnvironmentIn(
             Mockito.eq(varId), Mockito.anyList(), Mockito.anyList()
         )).thenReturn(List.of(activeBug));
+        Mockito.when(bugRepository.findByVariationIdIn(Mockito.anyList())).thenReturn(List.of(activeBug));
 
         final Map<String, Object> payload = Map.of(
             "testClass", testClass,
@@ -311,7 +312,7 @@ public class TestBaseVariationStatusSyncTest
         );
         varPlaybook.setExecutionMode("REPLAY_STRICT");
         varPlaybook.setLastStatus("failed-unknown");
-        Assertions.assertEquals("PLAYBOOK", varPlaybook.getDisplayMode());
+        Assertions.assertEquals("RECORDING", varPlaybook.getDisplayMode());
         Assertions.assertEquals("failed-unknown", varPlaybook.getLastStatus());
 
         // 4. Default Java Test

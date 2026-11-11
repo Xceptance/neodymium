@@ -968,7 +968,7 @@ header { height: 64px; background-color: var(--bg-panel); border-bottom: 1px sol
 
 /* Execution Engine Badges */
 .badge-mode-ai { background: var(--mode-ai-bg); color: var(--mode-ai-color); border: 1px solid var(--mode-ai-border); font-weight: 700; font-family: var(--font-family); }
-.badge-mode-playbook { background: var(--mode-playbook-bg); color: var(--mode-playbook-color); border: 1px solid var(--mode-playbook-border); font-weight: 700; font-family: var(--font-family); }
+.badge-mode-recording, .badge-mode-playbook { background: var(--mode-playbook-bg); color: var(--mode-playbook-color); border: 1px solid var(--mode-playbook-border); font-weight: 700; font-family: var(--font-family); }
 .badge-mode-healed { background: var(--mode-healed-bg); color: var(--mode-healed-color); border: 1px solid var(--mode-healed-border); font-weight: 700; font-family: var(--font-family); }
 .badge-mode-java { background: var(--mode-java-bg); color: var(--mode-java-color); border: 1px solid var(--mode-java-border); font-weight: 600; font-family: var(--font-family); }
 
@@ -1931,6 +1931,12 @@ table.aura-table tr.clickable-row:hover td.col-action {
 
 .status-bar-seg.seg-ignored {
     background-color: var(--status-ignored);
+    color: #ffffff;
+    border-right: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.status-bar-seg.seg-running {
+    background-color: var(--status-running, #3b82f6);
     color: #ffffff;
     border-right: 1px solid rgba(255, 255, 255, 0.25);
 }

@@ -436,6 +436,13 @@ public class AuraReportDataService
         return batches;
     }
 
+    public List<TestRunEntity> getAllRuns()
+    {
+        return runRepository != null
+            ? runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc()
+            : Collections.emptyList();
+    }
+
     public BatchOverviewDataDto getBatchOverviewData()
     {
         final List<TestBatchEntity> allBatchEntities = batchRepository.findAll();
@@ -489,6 +496,11 @@ public class AuraReportDataService
                         r.setFailedUnknownAiCount(report.getUnknownAiCount());
                         changed = true;
                     }
+                    if (!Objects.equals(r.getPlaybookCount(), report.getPlaybookCount()))
+                    {
+                        r.setPlaybookCount(report.getPlaybookCount());
+                        changed = true;
+                    }
                     if (!Objects.equals(r.getPassedCount(), report.getPassCount()))
                     {
                         r.setPassedCount(report.getPassCount());
@@ -512,6 +524,11 @@ public class AuraReportDataService
                     if (!Objects.equals(r.getIgnoredCount(), report.getIgnoredCount()))
                     {
                         r.setIgnoredCount(report.getIgnoredCount());
+                        changed = true;
+                    }
+                    if (!Objects.equals(r.getRunningCount(), report.getRunningCount()))
+                    {
+                        r.setRunningCount(report.getRunningCount());
                         changed = true;
                     }
                     if (!Objects.equals(r.getTotalTests(), report.getTotalCount()))
@@ -757,6 +774,11 @@ public class AuraReportDataService
                             r.setFailedUnknownAiCount(report.getUnknownAiCount());
                             changed = true;
                         }
+                        if (!Objects.equals(r.getPlaybookCount(), report.getPlaybookCount()))
+                        {
+                            r.setPlaybookCount(report.getPlaybookCount());
+                            changed = true;
+                        }
                         if (!Objects.equals(r.getPassedCount(), report.getPassCount()))
                         {
                             r.setPassedCount(report.getPassCount());
@@ -894,7 +916,7 @@ public class AuraReportDataService
                     }
                     if (vals.isEmpty())
                     {
-                        vals.add(normalizeArea("@Browsing (default)"));
+                        vals.add("Default");
                     }
                 }
                 else if ("batch".equalsIgnoreCase(dim))
@@ -1145,7 +1167,9 @@ public class AuraReportDataService
                 ? String.format(Locale.ROOT, "%.0f%% Pass", ((double) (pass + fixed) / total * 100.0))
                 : "N/A";
 
-            final String cardId = "group-" + String.join("-", activeDimensions) + "-" + groupName.replaceAll("[^a-zA-Z0-9]", "_");
+            final String sanitizedDims = String.join("-", activeDimensions).replaceAll("[^a-zA-Z0-9_-]", "_");
+            final String sanitizedGroup = groupName.replaceAll("[^a-zA-Z0-9_-]", "_");
+            final String cardId = "group-" + sanitizedDims + "-" + sanitizedGroup;
 
             final String historyUrl;
             if (parentGroupType != null && !parentGroupType.isBlank() && parentGroupValue != null && !parentGroupValue.isBlank())
@@ -1446,13 +1470,13 @@ public class AuraReportDataService
                 classVars
             );
 
-            String areaName = "@Browsing (default)";
+            String areaName = "Default";
             for (final TestBaseVariationEntity v : classVars)
             {
                 final String area = v.getAreaTag();
-                if (area != null && !area.trim().isEmpty() && !"@General".equalsIgnoreCase(area.trim()))
+                if (isRealArea(area))
                 {
-                    areaName = area.startsWith("@") ? area : "@" + area;
+                    areaName = area.trim().startsWith("@") ? area.trim() : "@" + area.trim();
                     break;
                 }
             }
@@ -1959,15 +1983,15 @@ public class AuraReportDataService
         for (final TestBaseClassDto classDto : classDtos)
         {
             final List<TestBaseVariationEntity> classVars = classDto.getVariations();
-            String areaName = "@Browsing (default)";
+            String areaName = "Default";
             if (classVars != null)
             {
                 for (final TestBaseVariationEntity v : classVars)
                 {
                     final String area = v.getAreaTag();
-                    if (area != null && !area.trim().isEmpty() && !"@General".equalsIgnoreCase(area.trim()))
+                    if (isRealArea(area))
                     {
-                        areaName = area.startsWith("@") ? area : "@" + area;
+                        areaName = area.trim().startsWith("@") ? area.trim() : "@" + area.trim();
                         break;
                     }
                 }
@@ -2381,6 +2405,7 @@ public class AuraReportDataService
             ));
 
         final Map<String, String> variationStatus = new LinkedHashMap<>();
+        final Set<String> runningVariationKeys = new HashSet<>();
         final Map<String, Boolean> variationHealed = new LinkedHashMap<>();
         final Map<String, String> variationMode = new LinkedHashMap<>();
         final Map<String, String> variationRunId = new LinkedHashMap<>();
@@ -2561,7 +2586,11 @@ public class AuraReportDataService
                 runExecutionsMap.computeIfAbsent(run.getId(), k -> new LinkedHashMap<>())
                     .put(logicalKey, new VariationRunState(effectiveStatus, exec.isHealed(), mode, exec.isFlaky()));
 
-                if (isRunInSnapshot && !variationStatus.containsKey(logicalKey))
+                if (isRunInSnapshot && !exec.isFinished())
+                {
+                    runningVariationKeys.add(logicalKey);
+                }
+                else if (isRunInSnapshot && !variationStatus.containsKey(logicalKey) && !runningVariationKeys.contains(logicalKey))
                 {
                     final String env = (run.getEnvironment() != null && !run.getEnvironment().isBlank())
                         ? run.getEnvironment()
@@ -2955,7 +2984,8 @@ public class AuraReportDataService
         final Map<String, Integer> aMap = new LinkedHashMap<>();
         for (final String ar : variationArea.values())
         {
-            aMap.put(ar, aMap.getOrDefault(ar, 0) + 1);
+            final String normAr = isRealArea(ar) ? normalizeArea(ar) : "Default";
+            aMap.put(normAr, aMap.getOrDefault(normAr, 0) + 1);
         }
         final List<DistributionRatioDto> areaRatios = new ArrayList<>();
         final int aTotal = aMap.values().stream().mapToInt(Integer::intValue).sum();
@@ -3183,7 +3213,7 @@ public class AuraReportDataService
                 variationEnvironment.getOrDefault(key, "Default"),
                 variationBrowser.getOrDefault(key, "Default"),
                 variationLocation.getOrDefault(key, "Default"),
-                variationArea.getOrDefault(key, "@Browsing (default)"),
+                variationArea.getOrDefault(key, "Default"),
                 variationBatch.getOrDefault(key, "Default"),
                 varTags,
                 variationLlmCost.getOrDefault(key, 0.0),
@@ -3398,7 +3428,7 @@ public class AuraReportDataService
                 final String st = state.status();
                 final boolean isHealed = state.healed();
                 final boolean isAi = "AI".equalsIgnoreCase(state.mode());
-                final boolean isPlaybook = "PLAYBOOK".equalsIgnoreCase(state.mode()) && !isHealed;
+                final boolean isPlaybook = ("RECORDING".equalsIgnoreCase(state.mode()) || "PLAYBOOK".equalsIgnoreCase(state.mode())) && !isHealed;
 
                 if (isPlaybook)
                 {
@@ -4045,7 +4075,7 @@ public class AuraReportDataService
     {
         if (run == null || run.getId() == null)
         {
-            return List.of(normalizeArea("@Browsing (default)"));
+            return List.of("Default");
         }
         if (run.getAreasCsv() != null && !run.getAreasCsv().isBlank())
         {
@@ -4081,14 +4111,14 @@ public class AuraReportDataService
                 return areas;
             }
         }
-        return List.of(normalizeArea("@Browsing (default)"));
+        return List.of("Default");
     }
 
     public List<String> getRunAreas(final String runId)
     {
         if (runId == null || runId.isBlank())
         {
-            return List.of(normalizeArea("@Browsing (default)"));
+            return List.of("Default");
         }
         return runRepository.findById(runId)
             .map(this::getRunAreas)
@@ -4102,7 +4132,7 @@ public class AuraReportDataService
                         .distinct()
                         .collect(Collectors.toList());
                 }
-                return List.of(normalizeArea("@Browsing (default)"));
+                return List.of("Default");
             });
     }
 
@@ -4250,9 +4280,42 @@ public class AuraReportDataService
                 }
             }
 
-            if (rawExecutions.isEmpty() && liveRunBuffer.containsKey(effectiveRunId))
+            if (liveRunBuffer.containsKey(effectiveRunId))
             {
-                rawExecutions = liveRunBuffer.get(effectiveRunId);
+                final List<TestExecutionDto> liveList = liveRunBuffer.get(effectiveRunId);
+                if (rawExecutions.isEmpty())
+                {
+                    rawExecutions = new ArrayList<>(liveList);
+                }
+                else if (liveList != null && !liveList.isEmpty())
+                {
+                    for (final TestExecutionDto liveExec : liveList)
+                    {
+                        boolean matched = false;
+                        final String liveId = liveExec.getId();
+                        final String liveVarId = generateVariationId(liveExec.getTestClass(), liveExec.getTestMethod(), liveExec.getTitle(), liveExec.getLocation(), liveExec.getBrowser());
+                        for (int idx = 0; idx < rawExecutions.size(); idx++)
+                        {
+                            final TestExecutionDto rawExec = rawExecutions.get(idx);
+                            final boolean idMatch = (liveId != null && !liveId.isBlank() && !liveId.equalsIgnoreCase("default")
+                                    && liveId.equalsIgnoreCase(rawExec.getId()));
+                            final String rawVarId = generateVariationId(rawExec.getTestClass(), rawExec.getTestMethod(), rawExec.getTitle(), rawExec.getLocation(), rawExec.getBrowser());
+                            if (idMatch || (liveVarId != null && liveVarId.equalsIgnoreCase(rawVarId)))
+                            {
+                                if (liveExec.isFinished() || !rawExec.isFinished())
+                                {
+                                    rawExecutions.set(idx, liveExec);
+                                }
+                                matched = true;
+                                break;
+                            }
+                        }
+                        if (!matched)
+                        {
+                            rawExecutions.add(liveExec);
+                        }
+                    }
+                }
             }
 
             final String runEnv = runEntity.getEnvironment() != null ? runEntity.getEnvironment() : "ALL";
@@ -4349,6 +4412,7 @@ public class AuraReportDataService
                 liveRun.setFailedKnownCount(report.getKnownCount());
                 liveRun.setFailedUnknownCount(report.getUnknownCount());
                 liveRun.setIgnoredCount(report.getIgnoredCount());
+                liveRun.setRunningCount(report.getRunningCount());
                 liveRun.setPassedHealedCount(report.getPassHealedCount());
                 liveRun.setSucceededFixedHealedCount(report.getFixedHealedCount());
                 liveRun.setFailedKnownHealedCount(report.getKnownHealedCount());
@@ -5479,7 +5543,11 @@ public class AuraReportDataService
                     {
                         if (tagVal != null && !tagVal.isBlank())
                         {
-                            tagEntities.add(new TestRunTagEntity(effectiveRunId, tagKey.trim(), tagVal.trim()));
+                            final String trimmedVal = tagVal.trim();
+                            if (!"Default".equalsIgnoreCase(trimmedVal) && !"Unknown".equalsIgnoreCase(trimmedVal))
+                            {
+                                tagEntities.add(new TestRunTagEntity(effectiveRunId, tagKey.trim(), trimmedVal));
+                            }
                         }
                     }
                 }
@@ -5508,16 +5576,18 @@ public class AuraReportDataService
 
             boolean replaced = false;
             final String execId = dto.getId();
-            if (execId != null && !execId.isBlank())
+            final String varId = generateVariationId(dto.getTestClass(), dto.getTestMethod(), dto.getTitle(), dto.getLocation(), dto.getBrowser());
+            for (int i = 0; i < list.size(); i++)
             {
-                for (int i = 0; i < list.size(); i++)
+                final TestExecutionDto existing = list.get(i);
+                final boolean idMatch = (execId != null && !execId.isBlank() && !execId.equalsIgnoreCase("default")
+                        && execId.equalsIgnoreCase(existing.getId()));
+                final String existingVarId = generateVariationId(existing.getTestClass(), existing.getTestMethod(), existing.getTitle(), existing.getLocation(), existing.getBrowser());
+                if (idMatch || (varId != null && varId.equalsIgnoreCase(existingVarId)))
                 {
-                    if (execId.equalsIgnoreCase(list.get(i).getId()))
-                    {
-                        list.set(i, dto);
-                        replaced = true;
-                        break;
-                    }
+                    list.set(i, dto);
+                    replaced = true;
+                    break;
                 }
             }
             if (!replaced)
@@ -5527,7 +5597,6 @@ public class AuraReportDataService
 
             if (dto.getTestClass() != null && !dto.getTestClass().isEmpty())
             {
-                final String varId = generateVariationId(dto.getTestClass(), dto.getTestMethod(), dto.getTitle(), dto.getLocation(), dto.getBrowser());
                 final String area = (dto.getAreaName() != null && !dto.getAreaName().isBlank())
                     ? (dto.getAreaName().startsWith("@") ? dto.getAreaName() : "@" + dto.getAreaName())
                     : "@General";
@@ -5568,7 +5637,6 @@ public class AuraReportDataService
                             (a, b) -> a
                         ));
 
-                    final String varId = generateVariationId(dto.getTestClass(), dto.getTestMethod(), dto.getTitle(), dto.getLocation(), dto.getBrowser());
                     final String varIdNoMethod = generateVariationId(dto.getTestClass(), null, dto.getTitle(), dto.getLocation(), dto.getBrowser());
                     final List<TestBaseBugEntity> candidateActiveBugs = bugRepository.findByVariationIdIn(List.of(varId, varIdNoMethod)).stream()
                         .filter(b -> (b.getBatchName().equalsIgnoreCase("ALL") || b.getBatchName().equalsIgnoreCase(runBatch))
@@ -5594,9 +5662,13 @@ public class AuraReportDataService
                 {
                     effectiveStatus = hasBugs ? "failed-known" : "failed-unknown";
                 }
-                else if ("passed".equalsIgnoreCase(raw) || "succeeded-fixed".equalsIgnoreCase(raw) || "passed-clean".equalsIgnoreCase(raw))
+                else if ("passed".equalsIgnoreCase(raw) || "succeeded-fixed".equalsIgnoreCase(raw) || "passed-clean".equalsIgnoreCase(raw) || "succeeded".equalsIgnoreCase(raw) || "healed".equalsIgnoreCase(raw))
                 {
                     effectiveStatus = hasBugs ? "succeeded-fixed" : "passed-clean";
+                }
+                else if ("running".equalsIgnoreCase(raw) || "in_progress".equalsIgnoreCase(raw) || "executing".equalsIgnoreCase(raw) || "pending".equalsIgnoreCase(raw))
+                {
+                    effectiveStatus = "running";
                 }
                 else
                 {
@@ -5606,7 +5678,6 @@ public class AuraReportDataService
 
                 if (dto.getTestClass() != null && !dto.getTestClass().isEmpty())
                 {
-                    final String varId = generateVariationId(dto.getTestClass(), dto.getTestMethod(), dto.getTitle(), dto.getLocation(), dto.getBrowser());
                     final Optional<TestBaseVariationEntity> varOpt = variationRepository.findById(varId);
                     if (varOpt.isPresent())
                     {
@@ -5621,6 +5692,7 @@ public class AuraReportDataService
                 int fixedCount = 0;
                 int knownCount = 0;
                 int unknownCount = 0;
+                int runningCount = 0;
                 int ignoredCount = 0;
                 int passHealedCount = 0;
                 int fixedHealedCount = 0;
@@ -5637,6 +5709,7 @@ public class AuraReportDataService
                     final String st = item.getStatus() != null ? item.getStatus() : "passed-clean";
                     switch (st)
                     {
+                        case "running", "in_progress", "executing", "pending" -> runningCount++;
                         case "passed-clean", "passed" -> {
                             passCount++;
                             if (item.isPassHealed())
@@ -5712,6 +5785,7 @@ public class AuraReportDataService
                 run.setFailedKnownCount(knownCount);
                 run.setFailedUnknownCount(unknownCount);
                 run.setIgnoredCount(ignoredCount);
+                run.setRunningCount(runningCount);
                 run.setPassedHealedCount(passHealedCount);
                 run.setSucceededFixedHealedCount(fixedHealedCount);
                 run.setFailedKnownHealedCount(knownHealedCount);
@@ -5805,6 +5879,7 @@ public class AuraReportDataService
 
             try
             {
+                run.setRunningCount(0);
                 run.setRunJsonPath("storage/runs/" + runId);
                 runRepository.save(run);
 
@@ -5839,6 +5914,7 @@ public class AuraReportDataService
         {
             final TestRunEntity run = runOpt.get();
             run.setStatus("CANCELLED");
+            run.setRunningCount(0);
             runRepository.save(run);
         }
 
@@ -6382,8 +6458,8 @@ public class AuraReportDataService
 
                     if (!updated)
                     {
-                        final String area = (exec.getAreaName() != null && !exec.getAreaName().trim().isEmpty() && !"General".equalsIgnoreCase(exec.getAreaName().trim()))
-                                            ? exec.getAreaName().trim() : "Browsing (default)";
+                        final String area = (exec.getAreaName() != null && isRealArea(exec.getAreaName()))
+                                            ? exec.getAreaName().trim() : "Default";
                         final String testCls = (exec.getTestClass() != null && !exec.getTestClass().trim().isEmpty())
                                                ? exec.getTestClass().trim() : "DefaultClass";
                         final Path execDir = runDir.resolve(area).resolve(testCls);
@@ -6480,6 +6556,7 @@ public class AuraReportDataService
             run.setSucceededFixedAiCount(report.getFixedAiCount());
             run.setFailedKnownAiCount(report.getKnownAiCount());
             run.setFailedUnknownAiCount(report.getUnknownAiCount());
+            run.setPlaybookCount(report.getPlaybookCount());
             run.recalculatePassRate();
             runRepository.save(run);
             final long durationMs = System.currentTimeMillis() - startMs;
@@ -6670,7 +6747,7 @@ public class AuraReportDataService
             testClasses.add(new TestClassSummaryDto(
                 testClass,
                 "classContainer" + testClass.replace(".", ""),
-                "Browsing (default)",
+                "Default",
                 classExecs.size(),
                 cPass, cFixed, cKnown, cUnknown, cIgnored, cRunning,
                 classExecs
@@ -6680,11 +6757,12 @@ public class AuraReportDataService
         final Map<String, List<TestClassSummaryDto>> byArea = testClasses.stream()
             .collect(Collectors.groupingBy(
                 tc -> {
-                    if (!tc.getExecutions().isEmpty() && tc.getExecutions().get(0).getAreaName() != null && !"General".equalsIgnoreCase(tc.getExecutions().get(0).getAreaName()))
+                    if (!tc.getExecutions().isEmpty() && tc.getExecutions().get(0).getAreaName() != null && isRealArea(tc.getExecutions().get(0).getAreaName()))
                     {
-                        return tc.getExecutions().get(0).getAreaName();
+                        final String an = tc.getExecutions().get(0).getAreaName().trim();
+                        return an.startsWith("@") ? an : "@" + an;
                     }
-                    return "Browsing (default)";
+                    return "Default";
                 },
                 LinkedHashMap::new,
                 Collectors.toList()
@@ -6769,7 +6847,7 @@ public class AuraReportDataService
                         subClasses.add(new TestClassSummaryDto(
                             scName,
                             "classContainer" + scName.replace(".", "") + cleanSubName,
-                            "Browsing (default)",
+                            "Default",
                             scExecs.size(),
                             cPass, cFixed, cKnown, cUnknown, cIgnored, cRunning,
                             scExecs
@@ -6791,7 +6869,7 @@ public class AuraReportDataService
             areas.add(new AreaSummaryDto(
                 areaName,
                 "areaGroup" + areaName.replace(" ", "").replace("@", ""),
-                "Browsing (default)",
+                "Default",
                 aPass + aFixed + aKnown + aUnknown + aIgnored + aRunning,
                 aPass, aFixed, aKnown, aUnknown, aIgnored, aRunning,
                 areaClasses,
@@ -6857,7 +6935,7 @@ public class AuraReportDataService
             !executions.isEmpty() ? known : (runEntity.getFailedKnownCount() != null ? runEntity.getFailedKnownCount() : known),
             !executions.isEmpty() ? unknown : (runEntity.getFailedUnknownCount() != null ? runEntity.getFailedUnknownCount() : unknown),
             !executions.isEmpty() ? ignored : (runEntity.getIgnoredCount() != null ? runEntity.getIgnoredCount() : ignored),
-            running,
+            !executions.isEmpty() ? running : (runEntity.getRunningCount() != null ? runEntity.getRunningCount() : 0),
             executions, areas,
             runEntity.getTotalLlmCalls(),
             runEntity.getTotalLlmTokens(),
@@ -6949,18 +7027,137 @@ public class AuraReportDataService
     {
         if (raw == null || raw.isBlank())
         {
-            return "@Browsing (default)";
+            return "Default";
         }
         final String trimmed = raw.trim();
         if ("General".equalsIgnoreCase(trimmed) || "@General".equalsIgnoreCase(trimmed))
         {
-            return "@Browsing (default)";
+            return "Default";
         }
         if ("Browsing (default)".equalsIgnoreCase(trimmed) || "@Browsing (default)".equalsIgnoreCase(trimmed))
         {
-            return "@Browsing (default)";
+            return "Default";
+        }
+        if ("Default".equalsIgnoreCase(trimmed) || "@Default".equalsIgnoreCase(trimmed))
+        {
+            return "Default";
         }
         return trimmed.startsWith("@") ? trimmed : "@" + trimmed;
+    }
+
+    /**
+     * Determines whether the given area string represents a real user-defined area rather than the
+     * synthetic fallback default (@Browsing (default), General, or Default).
+     *
+     * @param raw area name or tag to evaluate
+     * @return true if non-null, non-blank, and not equal to a fallback default
+     */
+    public static boolean isRealArea(final String raw)
+    {
+        if (raw == null || raw.isBlank())
+        {
+            return false;
+        }
+        final String trimmed = raw.trim();
+        return !"General".equalsIgnoreCase(trimmed)
+            && !"@General".equalsIgnoreCase(trimmed)
+            && !"Browsing (default)".equalsIgnoreCase(trimmed)
+            && !"@Browsing (default)".equalsIgnoreCase(trimmed)
+            && !"Default".equalsIgnoreCase(trimmed)
+            && !"@Default".equalsIgnoreCase(trimmed);
+    }
+
+    /**
+     * Determines whether the given environment string represents a real user-defined environment rather than
+     * a synthetic fallback placeholder (Default, Unknown, ALL, or N/A).
+     *
+     * @param raw environment name or tag to evaluate
+     * @return true if non-null, non-blank, and not equal to a fallback placeholder
+     */
+    public static boolean isRealEnvironment(final String raw)
+    {
+        if (raw == null || raw.isBlank())
+        {
+            return false;
+        }
+        final String trimmed = raw.trim();
+        return !"Default".equalsIgnoreCase(trimmed)
+            && !"Unknown".equalsIgnoreCase(trimmed)
+            && !"ALL".equalsIgnoreCase(trimmed)
+            && !"N/A".equalsIgnoreCase(trimmed);
+    }
+
+    /**
+     * Determines whether the given locale/location string represents a real user-defined locale rather than
+     * a synthetic fallback placeholder (Default, Unknown, ALL, or N/A).
+     *
+     * @param raw locale name or tag to evaluate
+     * @return true if non-null, non-blank, and not equal to a fallback placeholder
+     */
+    public static boolean isRealLocale(final String raw)
+    {
+        if (raw == null || raw.isBlank())
+        {
+            return false;
+        }
+        final String trimmed = raw.trim();
+        return !"Default".equalsIgnoreCase(trimmed)
+            && !"Unknown".equalsIgnoreCase(trimmed)
+            && !"ALL".equalsIgnoreCase(trimmed)
+            && !"N/A".equalsIgnoreCase(trimmed);
+    }
+
+    /**
+     * Determines whether the given batch/suite name represents a real user-defined batch rather than
+     * a synthetic fallback placeholder (Default, Unknown, Queue, Suite, ALL, or N/A).
+     *
+     * @param raw batch name to evaluate
+     * @return true if non-null, non-blank, and not equal to a fallback placeholder
+     */
+    public static boolean isRealBatch(final String raw)
+    {
+        if (raw == null || raw.isBlank())
+        {
+            return false;
+        }
+        final String trimmed = raw.trim();
+        return !"Default".equalsIgnoreCase(trimmed)
+            && !"Unknown".equalsIgnoreCase(trimmed)
+            && !"Queue".equalsIgnoreCase(trimmed)
+            && !"Suite".equalsIgnoreCase(trimmed)
+            && !"ALL".equalsIgnoreCase(trimmed)
+            && !"N/A".equalsIgnoreCase(trimmed);
+    }
+
+    /**
+     * Determines whether the given tag represents a real user-defined or meaningful tag rather than
+     * a synthetic fallback placeholder (Default, Unknown, Queue for Suite, etc.).
+     *
+     * @param tag test run tag entity to evaluate
+     * @return true if non-null, valid, and not a synthetic placeholder
+     */
+    public static boolean isLegitimateTag(final TestRunTagEntity tag)
+    {
+        if (tag == null || tag.getTagKey() == null || tag.getTagKey().isBlank()
+            || tag.getTagValue() == null || tag.getTagValue().isBlank())
+        {
+            return false;
+        }
+        final String val = tag.getTagValue().trim();
+        if ("Default".equalsIgnoreCase(val) || "Unknown".equalsIgnoreCase(val))
+        {
+            return false;
+        }
+        final String key = tag.getTagKey().trim();
+        if (("suite".equalsIgnoreCase(key) || "batch".equalsIgnoreCase(key)) && !isRealBatch(val))
+        {
+            return false;
+        }
+        if (("environment".equalsIgnoreCase(key) || "env".equalsIgnoreCase(key)) && !isRealEnvironment(val))
+        {
+            return false;
+        }
+        return true;
     }
 
     public List<TestBaseVariationHistoryDto> getVariationHistory(
@@ -7397,7 +7594,9 @@ public class AuraReportDataService
         return "browser".equals(lower)
             || "locale".equals(lower) || "location".equals(lower)
             || "environment".equals(lower) || "env".equals(lower) || "instance".equals(lower)
-            || "area".equals(lower) || "areatag".equals(lower);
+            || "area".equals(lower) || "areatag".equals(lower)
+            || "batch".equals(lower) || "batchname".equals(lower)
+            || "suite".equals(lower);
     }
 
     public Map<String, List<String>> getAllKnownTagMap()
@@ -7674,24 +7873,34 @@ public class AuraReportDataService
             {
                 if (r.getId() != null)
                 {
-                    final List<TestRunTagEntity> rTags = new ArrayList<>(tagsByRunId.getOrDefault(r.getId(), Collections.emptyList()));
+                    final List<TestRunTagEntity> rTags = new ArrayList<>();
+                    if (tagsByRunId.containsKey(r.getId()))
+                    {
+                        for (final TestRunTagEntity t : tagsByRunId.get(r.getId()))
+                        {
+                            if (isLegitimateTag(t))
+                            {
+                                rTags.add(t);
+                            }
+                        }
+                    }
                     if (r.getTags() != null)
                     {
                         for (final TestRunTagEntity existing : r.getTags())
                         {
-                            if (rTags.stream().noneMatch(t -> Objects.equals(t.getTagKey(), existing.getTagKey()) && Objects.equals(t.getTagValue(), existing.getTagValue())))
+                            if (isLegitimateTag(existing) && rTags.stream().noneMatch(t -> Objects.equals(t.getTagKey(), existing.getTagKey()) && Objects.equals(t.getTagValue(), existing.getTagValue())))
                             {
                                 rTags.add(existing);
                             }
                         }
                     }
                     final boolean hasSuiteTag = rTags.stream().anyMatch(t -> t.getTagKey() != null && ("suite".equalsIgnoreCase(t.getTagKey()) || "batch".equalsIgnoreCase(t.getTagKey())));
-                    if (!hasSuiteTag && r.getBatchName() != null && !r.getBatchName().isBlank())
+                    if (!hasSuiteTag && isRealBatch(r.getBatchName()))
                     {
                         rTags.add(0, new TestRunTagEntity(r.getId(), "Suite", r.getBatchName().trim()));
                     }
                     final boolean hasEnvTag = rTags.stream().anyMatch(t -> t.getTagKey() != null && ("environment".equalsIgnoreCase(t.getTagKey()) || "env".equalsIgnoreCase(t.getTagKey())));
-                    if (!hasEnvTag && r.getEnvironment() != null && !r.getEnvironment().isBlank())
+                    if (!hasEnvTag && isRealEnvironment(r.getEnvironment()))
                     {
                         rTags.add(new TestRunTagEntity(r.getId(), "Environment", r.getEnvironment().trim()));
                     }
@@ -7706,15 +7915,21 @@ public class AuraReportDataService
                 final List<TestRunTagEntity> rTags = new ArrayList<>();
                 if (r.getTags() != null)
                 {
-                    rTags.addAll(r.getTags());
+                    for (final TestRunTagEntity existing : r.getTags())
+                    {
+                        if (isLegitimateTag(existing))
+                        {
+                            rTags.add(existing);
+                        }
+                    }
                 }
                 final boolean hasSuiteTag = rTags.stream().anyMatch(t -> t.getTagKey() != null && ("suite".equalsIgnoreCase(t.getTagKey()) || "batch".equalsIgnoreCase(t.getTagKey())));
-                if (!hasSuiteTag && r.getBatchName() != null && !r.getBatchName().isBlank())
+                if (!hasSuiteTag && isRealBatch(r.getBatchName()))
                 {
                     rTags.add(0, new TestRunTagEntity(r.getId(), "Suite", r.getBatchName().trim()));
                 }
                 final boolean hasEnvTag = rTags.stream().anyMatch(t -> t.getTagKey() != null && ("environment".equalsIgnoreCase(t.getTagKey()) || "env".equalsIgnoreCase(t.getTagKey())));
-                if (!hasEnvTag && r.getEnvironment() != null && !r.getEnvironment().isBlank())
+                if (!hasEnvTag && isRealEnvironment(r.getEnvironment()))
                 {
                     rTags.add(new TestRunTagEntity(r.getId(), "Environment", r.getEnvironment().trim()));
                 }
@@ -7803,7 +8018,7 @@ public class AuraReportDataService
             case "failed-unknown", "unknown", "failed", "error" ->
             {
                 statusClass = "badge-unknown-fail";
-                statusLabel = "UNKNOWN FAIL";
+                statusLabel = "FAIL";
             }
             case "ignored", "skipped" ->
             {

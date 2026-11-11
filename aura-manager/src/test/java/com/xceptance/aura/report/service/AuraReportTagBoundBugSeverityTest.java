@@ -439,6 +439,9 @@ public class AuraReportTagBoundBugSeverityTest
         Assertions.assertFalse(candidateCustomTags.containsKey("environment"), "Standard environment dimension must be excluded");
         Assertions.assertFalse(candidateCustomTags.containsKey("location"), "Standard location dimension must be excluded");
         Assertions.assertFalse(candidateCustomTags.containsKey("area"), "Standard area dimension must be excluded");
+        Assertions.assertFalse(candidateCustomTags.containsKey("batch"), "Standard batch dimension must be excluded");
+        Assertions.assertFalse(candidateCustomTags.containsKey("suite"), "Standard suite dimension must be excluded");
+        Assertions.assertFalse(candidateCustomTags.containsKey("batchname"), "Standard batchname dimension must be excluded");
         Assertions.assertTrue(candidateCustomTags.containsKey("Branch"), "Branch custom tag must be present with preserved casing");
         Assertions.assertTrue(candidateCustomTags.get("Branch").contains("develop"), "Branch must contain develop");
         Assertions.assertTrue(candidateCustomTags.containsKey("Release"), "Release custom tag must be present with preserved casing");

@@ -215,7 +215,7 @@
                                             </div>
                                         </td>
                                         <td>
-                                            <span th:class="'badge-status ' + (${e.displayMode != null && e.displayMode.contains('AI')} ? 'badge-mode-ai' : (${e.displayMode != null && e.displayMode.contains('HEALED')} ? 'badge-mode-healed' : (${e.displayMode != null && e.displayMode.contains('PLAYBOOK')} ? 'badge-mode-playbook' : 'badge-mode-java')))"
+                                            <span th:class="'badge-status ' + (${e.displayMode != null && e.displayMode.contains('AI')} ? 'badge-mode-ai' : (${e.displayMode != null && e.displayMode.contains('HEALED')} ? 'badge-mode-healed' : (${e.displayMode != null && (e.displayMode.contains('RECORDING') || e.displayMode.contains('PLAYBOOK'))} ? 'badge-mode-recording' : 'badge-mode-java')))"
                                                   style="font-size: 0.68rem; padding: 0.1rem 0.4rem;"
                                                   th:text="${e.displayMode != null ? e.displayMode : (e.mode != null ? e.mode : 'Standard')}">Standard</span>
                                             <div class="text-muted font-mono mt-1" style="font-size: 0.7rem;" th:if="${e.durationFormatted != null}" th:text="${e.durationFormatted}">120ms</div>

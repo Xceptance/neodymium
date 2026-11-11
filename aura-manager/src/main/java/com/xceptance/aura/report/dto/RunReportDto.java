@@ -18,6 +18,7 @@
  */
 package com.xceptance.aura.report.dto;
 
+import com.xceptance.aura.report.service.AuraReportDataService;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -308,6 +309,21 @@ public final class RunReportDto
         return areaSummaries;
     }
 
+    /**
+     * Returns true if this report contains at least one real user-defined area summary (i.e. not
+     * empty and not falling back to Browsing (default) or General).
+     *
+     * @return true if real area tags are present
+     */
+    public boolean hasRealAreas()
+    {
+        if (areaSummaries == null || areaSummaries.isEmpty())
+        {
+            return false;
+        }
+        return areaSummaries.stream().anyMatch(a -> AuraReportDataService.isRealArea(a.getAreaName()));
+    }
+
     public List<String> getFilterLocations()
     {
         if (executions == null || executions.isEmpty())
@@ -473,7 +489,7 @@ public final class RunReportDto
         if (executions != null && !executions.isEmpty())
         {
             return (int) executions.stream()
-                .filter(e -> "PLAYBOOK".equalsIgnoreCase(e.getDisplayMode()))
+                .filter(e -> "RECORDING".equalsIgnoreCase(e.getDisplayMode()) || "PLAYBOOK".equalsIgnoreCase(e.getDisplayMode()))
                 .count();
         }
         return 0;

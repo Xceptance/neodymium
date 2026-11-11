@@ -80,8 +80,8 @@
             </button>
         </div>
 
-        <!-- DYNAMIC AREA TABS BAR -->
-        <div class="sub-tab-bar" style="margin-top: 1rem;" th:if="${not #lists.isEmpty(areas)}">
+        <!-- DYNAMIC AREA TABS BAR (rendered only when real user-defined areas exist) -->
+        <div class="sub-tab-bar" style="margin-top: 1rem;" th:if="${(hasRealAreas != null ? hasRealAreas : false) and not #lists.isEmpty(areas)}">
             <button th:each="area, iterStat : ${areas}" 
                     class="sub-tab-btn" 
                     th:classappend="${iterStat.first} ? ' active' : ''" 
@@ -89,109 +89,33 @@
                     th:data-pane-id="${area.areaPaneId}"
                     onclick="switchTestBaseAreaTab(this.getAttribute('data-pane-id'), this)">
                 <span class="material-symbols-outlined text-accent" th:text="${area.icon}">folder</span> 
-                <span th:text="${area.areaName}">@Checkout</span> 
+                <span th:text="${area.areaName != null ? (area.areaName.equalsIgnoreCase('Default') ? 'Default' : (area.areaName.startsWith('@') ? area.areaName : '@' + area.areaName)) : 'Default'}">@Checkout</span> 
                 <span class="tag-chip" th:text="${area.classCount + (area.classCount == 1 ? ' Class' : ' Classes')}">1 Class</span>
             </button>
         </div>
 
-        <!-- DYNAMIC AREA PANES AND TEST CLASSES -->
-        <div th:each="area, iterStat : ${areas}" 
-             th:id="${area.areaPaneId}" 
-             class="test-base-area-pane" 
-             th:style="${iterStat.first} ? 'margin-top: 1rem; display: flex; flex-direction: column; gap: 1rem;' : 'margin-top: 1rem; display: none; flex-direction: column; gap: 1rem;'">
-            
-            <div th:each="cls : ${area.testClasses}" class="test-class-container expanded tb-class-item" th:id="${cls.classContainerId}">
-                <div class="test-class-header" onclick="toggleTestClassGroup(this)">
-                    <div class="test-class-title">
-                        <span class="material-symbols-outlined test-class-chevron">chevron_right</span>
-                        <span class="material-symbols-outlined text-accent">folder_open</span>
-                        <span th:text="${cls.className}">CheckoutProcessTest</span>
-                    </div>
-                    <span class="badge-status badge-pass" style="background: var(--bg-hover); color: var(--text-main); font-weight: 700; font-size: 0.75rem;" th:text="${cls.variationCount + (cls.variationCount == 1 ? ' Variation' : ' Variations')}">1 Variation</span>
-                </div>
-                <div class="test-class-executions">
-                    <div class="table-responsive">
-                        <table class="aura-table">
-                            <colgroup>
-                                <col style="width: 38%;">
-                                <col style="width: 12%;">
-                                <col style="width: 18%;">
-                                <col style="width: 14%;">
-                                <col style="width: 18%;">
-                            </colgroup>
-                            <thead>
-                                <tr>
-                                    <th>Data Set / Variation</th>
-                                    <th>Locale</th>
-                                    <th>Browser</th>
-                                    <th>Execution Mode</th>
-                                    <th>Last Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr th:each="var, iterStat2 : ${cls.variations}" class="tb-entry-row clickable-row js-open-side-panel" 
-                                    th:id="'row-var-' + ${var.id}" 
-                                    th:data-row-id="'row-var-' + ${var.id}" 
-                                    th:data-test-name="${var.testClassName}" 
-                                    th:data-test-method="${var.testMethodName ?: ''}"
-                                    th:data-dataset="${var.dataSetLabel}" 
-                                    th:data-status="${var.lastStatus}" 
-                                    th:data-mode="${var.displayMode}"
-                                    th:data-healed="${var.healed or var.lastStatus == 'healed'}"
-                                    th:data-location="${var.location}" 
-                                    th:data-browser="${var.browser}"
-                                    th:data-flaky="${var.flaky ?: false}"
-                                    th:data-flaky-reason="${var.flakyReason ?: ''}">
-                                    <td>
-                                        <div style="display: flex; flex-direction: column; gap: 0.15rem;">
-                                            <div style="display: flex; align-items: baseline; gap: 0.45rem; flex-wrap: wrap;">
-                                                <a class="test-title-link text-mono" style="text-decoration: none; color: var(--text-main); font-weight: 700;"
-                                                   th:href="@{/test-base(testName=${var.testClassName}, dataSet=${var.dataSetLabel}, location=${var.location}, browser=${var.browser})}"
-                                                   onclick="if (!event.ctrlKey && !event.metaKey && !event.shiftKey && event.button === 0) { event.preventDefault(); }"
-                                                   th:title="'Open variation in Test Base'"
-                                                   th:text="${(var.testMethodName != null and !#strings.isEmpty(var.testMethodName)) ? var.testMethodName : ((var.dataSetLabel != null and !#strings.isEmpty(var.dataSetLabel)) ? var.dataSetLabel : 'Default')}">testMethodName</a>
-                                                <span class="font-mono text-muted" style="font-size: 0.78rem; font-weight: normal;" th:text="${'(' + var.totalExecutionsCount + (var.totalExecutionsCount == 1 ? ' run' : ' runs') + ')'}">(1 runs)</span>
-                                            </div>
-                                            <span th:if="${var.testMethodName != null and !#strings.isEmpty(var.testMethodName) and var.dataSetLabel != null and !#strings.isEmpty(var.dataSetLabel)}" class="font-mono" style="font-size: 0.78rem; color: var(--status-fixed); font-weight: 600;" th:text="${'Data Set: ' + var.dataSetLabel}">Data Set: bad</span>
-                                        </div>
-                                    </td>
-                                    <td><span class="location-highlight-badge"><span class="material-symbols-outlined">location_on</span> <span th:text="${var.location}">US</span></span></td>
-                                    <td><span class="material-symbols-outlined text-accent" style="font-size: 0.95rem; vertical-align: middle; margin-right: 0.25rem;">language</span><span th:text="${var.browser}">Chrome</span></td>
-                                    <td>
-                                        <span class="badge-status" 
-                                              th:classappend="${var.displayMode == 'AI' ? 'badge-mode-ai' : (var.displayMode == 'PLAYBOOK' ? 'badge-mode-playbook' : (var.displayMode == 'HEALED' ? 'badge-mode-healed' : 'badge-mode-java'))}"
-                                              style="font-size: 0.72rem; padding: 0.15rem 0.45rem;"
-                                              th:text="${var.displayMode}">PLAYBOOK</span>
-                                    </td>
-                                    <td class="col-status-badge">
-                                        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                                            <span class="badge-status badge-pass" th:if="${var.lastStatus == 'passed-clean' or var.lastStatus == 'passed' or var.lastStatus == 'succeeded' or var.lastStatus == null}">
-                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">check_circle</span> PASSED
-                                            </span>
-                                            <span class="badge-status badge-fixed" th:if="${var.lastStatus == 'succeeded-fixed' or var.lastStatus == 'fixed'}">
-                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> SUCCEEDED-FIXED
-                                            </span>
-                                            <span class="badge-status badge-known-fail" th:if="${var.lastStatus == 'failed-known' or var.lastStatus == 'known'}">
-                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> KNOWN FAIL
-                                            </span>
-                                            <span class="badge-status badge-unknown-fail" th:if="${var.lastStatus == 'failed-unknown' or var.lastStatus == 'unknown' or var.lastStatus == 'failed' or var.lastStatus == 'error'}">
-                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">cancel</span> UNKNOWN FAIL
-                                            </span>
-                                            <span class="badge-status badge-ignored" th:if="${var.lastStatus == 'ignored' or var.lastStatus == 'skipped'}">
-                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">skip_next</span> SKIPPED
-                                            </span>
-                                            <span class="badge-status badge-flaky" th:if="${var.flaky}" th:title="${var.flakyReason != null ? var.flakyReason : 'Flaky test: frequent unknown failures in previous runs'}">
-                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">shuffle</span> FLAKY
-                                            </span>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+        <!-- DYNAMIC AREA PANES AND TEST CLASSES (when real areas exist) -->
+        <th:block th:if="${hasRealAreas != null ? hasRealAreas : false}">
+            <div th:each="area, iterStat : ${areas}" 
+                 th:id="${area.areaPaneId}" 
+                 class="test-base-area-pane" 
+                 th:style="${iterStat.first} ? 'margin-top: 1rem; display: flex; flex-direction: column; gap: 1rem;' : 'margin-top: 1rem; display: none; flex-direction: column; gap: 1rem;'">
+                <th:block th:each="cls : ${area.testClasses}">
+                    <th:block th:replace="~{fragments/test-base :: renderTestBaseClass(cls=${cls}, bugsMap=${bugsMap})}"></th:block>
+                </th:block>
             </div>
-        </div>
+        </th:block>
+
+        <!-- FLAT TEST CLASSES (when no real areas exist, skipping area tabs and hierarchy level) -->
+        <th:block th:unless="${hasRealAreas != null ? hasRealAreas : false}">
+            <div class="test-base-flat-classes" style="margin-top: 1rem; display: flex; flex-direction: column; gap: 1rem;">
+                <th:block th:each="area : ${areas}">
+                    <th:block th:each="cls : ${area.testClasses}">
+                        <th:block th:replace="~{fragments/test-base :: renderTestBaseClass(cls=${cls}, bugsMap=${bugsMap})}"></th:block>
+                    </th:block>
+                </th:block>
+            </div>
+        </th:block>
 
         <!-- EMPTY STATE WHEN NO TEST BASE DATA IS PRESENT -->
         <div th:if="${#lists.isEmpty(areas)}" class="text-center py-5" style="color: var(--text-muted); background: var(--bg-card); border-radius: var(--radius-lg); border: 1px dashed var(--border-color); padding: 3rem 1rem; margin-top: 1rem;">
@@ -205,7 +129,107 @@
             </button>
         </div>
     </div>
+
+    <!-- OUT-OF-BAND SIDEBAR CONTEXT CARD SYNC -->
+    <th:block th:if="${isHxRequest == true}">
+        <th:block th:replace="~{fragments/sidebar :: sidebarContextCard}"></th:block>
+    </th:block>
 </div>
+
+<!-- Reusable Test Class Fragment for Test Base -->
+<th:block th:fragment="renderTestBaseClass(cls, bugsMap)">
+    <div class="test-class-container expanded tb-class-item" th:id="${cls.classContainerId}">
+        <div class="test-class-header" onclick="toggleTestClassGroup(this)">
+            <div class="test-class-title">
+                <span class="material-symbols-outlined test-class-chevron">chevron_right</span>
+                <span class="material-symbols-outlined text-accent">folder_open</span>
+                <span th:text="${cls.className}">CheckoutProcessTest</span>
+            </div>
+            <span class="badge-status badge-pass" style="background: var(--bg-hover); color: var(--text-main); font-weight: 700; font-size: 0.75rem;" th:text="${cls.variationCount + (cls.variationCount == 1 ? ' Variation' : ' Variations')}">1 Variation</span>
+        </div>
+        <div class="test-class-executions">
+            <div class="table-responsive">
+                <table class="aura-table">
+                    <colgroup>
+                        <col style="width: 38%;">
+                        <col style="width: 12%;">
+                        <col style="width: 18%;">
+                        <col style="width: 14%;">
+                        <col style="width: 18%;">
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th>Data Set / Variation</th>
+                            <th>Locale</th>
+                            <th>Browser</th>
+                            <th>Execution Mode</th>
+                            <th>Last Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="var, iterStat2 : ${cls.variations}" class="tb-entry-row clickable-row js-open-side-panel" 
+                            th:id="'row-var-' + ${var.id}" 
+                            th:data-row-id="'row-var-' + ${var.id}" 
+                            th:data-test-name="${var.testClassName}" 
+                            th:data-test-method="${var.testMethodName ?: ''}"
+                            th:data-dataset="${var.dataSetLabel}" 
+                            th:data-status="${var.lastStatus}" 
+                            th:data-mode="${var.displayMode}"
+                            th:data-healed="${var.healed or var.lastStatus == 'healed'}"
+                            th:data-location="${var.location}" 
+                            th:data-browser="${var.browser}"
+                            th:data-flaky="${var.flaky ?: false}"
+                            th:data-flaky-reason="${var.flakyReason ?: ''}">
+                            <td>
+                                <div style="display: flex; flex-direction: column; gap: 0.15rem;">
+                                    <div style="display: flex; align-items: baseline; gap: 0.45rem; flex-wrap: wrap;">
+                                        <a class="test-title-link text-mono" style="text-decoration: none; color: var(--text-main); font-weight: 700;"
+                                           th:href="@{/test-base(testName=${var.testClassName}, dataSet=${var.dataSetLabel}, location=${var.location}, browser=${var.browser})}"
+                                           onclick="if (!event.ctrlKey && !event.metaKey && !event.shiftKey && event.button === 0) { event.preventDefault(); }"
+                                           th:title="'Open variation in Test Base'"
+                                           th:text="${(var.testMethodName != null and !#strings.isEmpty(var.testMethodName)) ? var.testMethodName : ((var.dataSetLabel != null and !#strings.isEmpty(var.dataSetLabel)) ? var.dataSetLabel : 'Default')}">testMethodName</a>
+                                        <span class="font-mono text-muted" style="font-size: 0.78rem; font-weight: normal;" th:text="${'(' + var.totalExecutionsCount + (var.totalExecutionsCount == 1 ? ' run' : ' runs') + ')'}">(1 runs)</span>
+                                    </div>
+                                    <span th:if="${var.testMethodName != null and !#strings.isEmpty(var.testMethodName) and var.dataSetLabel != null and !#strings.isEmpty(var.dataSetLabel)}" class="font-mono" style="font-size: 0.78rem; color: var(--status-fixed); font-weight: 600;" th:text="${'Data Set: ' + var.dataSetLabel}">Data Set: bad</span>
+                                </div>
+                            </td>
+                            <td><span class="location-highlight-badge"><span class="material-symbols-outlined">location_on</span> <span th:text="${var.location}">US</span></span></td>
+                            <td><span class="material-symbols-outlined text-accent" style="font-size: 0.95rem; vertical-align: middle; margin-right: 0.25rem;">language</span><span th:text="${var.browser}">Chrome</span></td>
+                            <td>
+                                <span class="badge-status" 
+                                      th:classappend="${var.displayMode == 'AI' ? 'badge-mode-ai' : (var.displayMode == 'RECORDING' or var.displayMode == 'PLAYBOOK' ? 'badge-mode-recording' : (var.displayMode == 'HEALED' ? 'badge-mode-healed' : 'badge-mode-java'))}"
+                                      style="font-size: 0.72rem; padding: 0.15rem 0.45rem;"
+                                      th:text="${var.displayMode}">RECORDING</span>
+                            </td>
+                            <td class="col-status-badge">
+                                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                    <span class="badge-status badge-pass" th:if="${var.lastStatus == 'passed-clean' or var.lastStatus == 'passed' or var.lastStatus == 'succeeded' or var.lastStatus == null}">
+                                        <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">check_circle</span> PASSED
+                                    </span>
+                                    <span class="badge-status badge-fixed" th:if="${var.lastStatus == 'succeeded-fixed' or var.lastStatus == 'fixed'}">
+                                        <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> SUCCEEDED-FIXED
+                                    </span>
+                                    <span class="badge-status badge-known-fail" th:if="${var.lastStatus == 'failed-known' or var.lastStatus == 'known'}">
+                                        <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> KNOWN FAIL
+                                    </span>
+                                    <span class="badge-status badge-unknown-fail" th:if="${var.lastStatus == 'failed-unknown' or var.lastStatus == 'unknown' or var.lastStatus == 'failed' or var.lastStatus == 'error'}">
+                                        <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">cancel</span> FAIL
+                                    </span>
+                                    <span class="badge-status badge-ignored" th:if="${var.lastStatus == 'ignored' or var.lastStatus == 'skipped'}">
+                                        <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">skip_next</span> SKIPPED
+                                    </span>
+                                    <span class="badge-status badge-flaky" th:if="${var.flaky}" th:title="${var.flakyReason != null ? var.flakyReason : 'Flaky test: frequent unknown failures in previous runs'}">
+                                        <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">shuffle</span> FLAKY
+                                    </span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</th:block>
 
 </body>
 </html>

@@ -154,7 +154,7 @@ public final class TestExecutionDtoTest
             }
             """;
         final TestExecutionDto dtoPlaybook = objectMapper.readValue(jsonPlaybook, TestExecutionDto.class);
-        Assertions.assertEquals("PLAYBOOK", dtoPlaybook.getDisplayMode());
+        Assertions.assertEquals("RECORDING", dtoPlaybook.getDisplayMode());
 
         // 2. REPLAY_WITH_HEALING with healing -> HEALED
         final String jsonHealed = """
@@ -189,7 +189,7 @@ public final class TestExecutionDtoTest
         final TestExecutionDto dtoJava = objectMapper.readValue(jsonJava, TestExecutionDto.class);
         Assertions.assertEquals("JAVA", dtoJava.getDisplayMode());
 
-        // 5. REPLAY_STRICT -> PLAYBOOK
+        // 5. REPLAY_STRICT -> RECORDING
         final String jsonStrict = """
             {
                 "id": "exec-strict",
@@ -198,7 +198,7 @@ public final class TestExecutionDtoTest
             }
             """;
         final TestExecutionDto dtoStrict = objectMapper.readValue(jsonStrict, TestExecutionDto.class);
-        Assertions.assertEquals("PLAYBOOK", dtoStrict.getDisplayMode());
+        Assertions.assertEquals("RECORDING", dtoStrict.getDisplayMode());
 
         // 6. FORCE_RECORDING / LLM_ONLY -> AI
         final String jsonForce = """
@@ -210,6 +210,17 @@ public final class TestExecutionDtoTest
             """;
         final TestExecutionDto dtoForce = objectMapper.readValue(jsonForce, TestExecutionDto.class);
         Assertions.assertEquals("AI", dtoForce.getDisplayMode());
+
+        // 7. Explicit RECORDING mode -> RECORDING
+        final String jsonRecording = """
+            {
+                "id": "exec-recording",
+                "testClass": "com.xceptance.test.DemoTest",
+                "executionMode": "RECORDING"
+            }
+            """;
+        final TestExecutionDto dtoRecording = objectMapper.readValue(jsonRecording, TestExecutionDto.class);
+        Assertions.assertEquals("RECORDING", dtoRecording.getDisplayMode());
     }
 
     @Test
@@ -496,6 +507,32 @@ public final class TestExecutionDtoTest
         Assertions.assertEquals("Step 1", deserialized.getBlocks().path("steps").get(0).path("title").asText());
         Assertions.assertNotNull(deserialized.getSteps());
         Assertions.assertEquals("Step 1", deserialized.getSteps().get(0).path("title").asText());
+    }
+
+    @Test
+    public void testIsFinishedAndRunningStatusFallback()
+    {
+        final TestExecutionDto runningDto = new TestExecutionDto();
+        runningDto.setStatus("running");
+        Assertions.assertFalse(runningDto.isFinished());
+        Assertions.assertEquals("running", runningDto.getStatus());
+
+        final TestExecutionDto blankDto = new TestExecutionDto();
+        blankDto.setStatus("");
+        Assertions.assertFalse(blankDto.isFinished());
+        Assertions.assertEquals("running", blankDto.getStatus());
+
+        final TestExecutionDto inProgressDto = new TestExecutionDto();
+        inProgressDto.setStatus("in_progress");
+        Assertions.assertFalse(inProgressDto.isFinished());
+
+        final TestExecutionDto passedDto = new TestExecutionDto();
+        passedDto.setStatus("passed-clean");
+        Assertions.assertTrue(passedDto.isFinished());
+
+        final TestExecutionDto failedDto = new TestExecutionDto();
+        failedDto.setStatus("failed-unknown");
+        Assertions.assertTrue(failedDto.isFinished());
     }
 }
 

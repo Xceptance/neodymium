@@ -814,7 +814,7 @@ function normalizeAreaFilterVal(str) {
     if (!str) return '';
     let s = str.trim().toUpperCase();
     if (s.startsWith('@')) s = s.substring(1).trim();
-    if (s === 'GENERAL' || s === 'BROWSING (DEFAULT)' || s === 'DEFAULT') return 'BROWSING (DEFAULT)';
+    if (s === 'GENERAL' || s === 'BROWSING (DEFAULT)' || s === 'DEFAULT') return 'DEFAULT';
     return s;
 }
 
@@ -2242,7 +2242,7 @@ function renderDynamicSuiteEvolutionChart() {
                     </div>
                     ${fixedTotal > 0 ? `<div style="display: flex; justify-content: space-between; color: var(--status-fixed);"><span>Fixed:</span><strong>${fixedTotal}</strong></div>` : ''}
                     ${knownTotal > 0 ? `<div style="display: flex; justify-content: space-between; color: var(--status-known-fail);"><span>Known Fail:</span><strong>${knownTotal}</strong></div>` : ''}
-                    ${unknownTotal > 0 ? `<div style="display: flex; justify-content: space-between; color: var(--status-unknown-fail);"><span>Unknown Fail:</span><strong>${unknownTotal}</strong></div>` : ''}
+                    ${unknownTotal > 0 ? `<div style="display: flex; justify-content: space-between; color: var(--status-unknown-fail);"><span>Fail:</span><strong>${unknownTotal}</strong></div>` : ''}
                     ${ignoredTotal > 0 ? `<div style="display: flex; justify-content: space-between; color: var(--status-ignored);"><span>Ignored:</span><strong>${ignoredTotal}</strong></div>` : ''}
                 `;
             }
@@ -3183,7 +3183,7 @@ function updateRowStatusAndMetrics(rowId) {
         } else if (newStatus === 'FAILED_KNOWN' || newStatus === 'failed-known') {
             statusTd.innerHTML = `<span class="badge-status badge-known-fail"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> KNOWN FAIL</span>`;
         } else if (newStatus === 'FAILED_UNKNOWN' || newStatus === 'failed-unknown') {
-            statusTd.innerHTML = `<span class="badge-status badge-unknown-fail"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">cancel</span> UNKNOWN FAIL</span>`;
+            statusTd.innerHTML = `<span class="badge-status badge-unknown-fail"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">cancel</span> FAIL</span>`;
         } else if (newStatus === 'SKIPPED' || newStatus === 'ignored' || newStatus === 'skipped') {
             statusTd.innerHTML = `<span class="badge-status badge-ignored"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">skip_next</span> SKIPPED</span>`;
         }
@@ -3368,7 +3368,7 @@ function recalculateRunReportMetrics() {
     if (elOvUnknown) {
         if (unknownHealed > 0) {
             elOvUnknown.className = 'kpi-value-dual';
-            elOvUnknown.innerHTML = `<span class="kpi-healed-part text-unknown-healed" onclick="event.stopPropagation(); filterAllTestsByHealedStatus('FAILED_UNKNOWN', 'HEALED')" title="Filter Unknown Fail Healed Tests"><span class="material-symbols-outlined kpi-sparkle-icon">auto_fix_high</span> ${unknownHealed} healed</span><span class="kpi-slash">/</span><span class="kpi-total-part text-fail" onclick="event.stopPropagation(); filterAllTestsByStatus('FAILED_UNKNOWN')" title="Filter All Unknown Fail Tests">${unknown} unknown fail</span>`;
+            elOvUnknown.innerHTML = `<span class="kpi-healed-part text-unknown-healed" onclick="event.stopPropagation(); filterAllTestsByHealedStatus('FAILED_UNKNOWN', 'HEALED')" title="Filter Fail Healed Tests"><span class="material-symbols-outlined kpi-sparkle-icon">auto_fix_high</span> ${unknownHealed} healed</span><span class="kpi-slash">/</span><span class="kpi-total-part text-fail" onclick="event.stopPropagation(); filterAllTestsByStatus('FAILED_UNKNOWN')" title="Filter All Fail Tests">${unknown} fail</span>`;
         } else {
             elOvUnknown.className = 'kpi-value text-fail';
             elOvUnknown.innerText = unknown;
@@ -3400,7 +3400,7 @@ function recalculateRunReportMetrics() {
             <span class="badge-status badge-pass clickable-badge js-filter-badge${isPassActive}" onclick="filterByGlobalStatusBadge('PASSED', this)" data-status-key="PASSED" title="Filter Passed">Passed: ${pass}</span>
             <span class="badge-status badge-fixed clickable-badge js-filter-badge${isFixedActive}" onclick="filterByGlobalStatusBadge('SUCCEEDED_FIXED', this)" data-status-key="SUCCEEDED_FIXED" title="Filter Succeeded-Fixed">Succeeded-Fixed: ${fixed}</span>
             <span class="badge-status badge-known-fail clickable-badge js-filter-badge${isKnownActive}" onclick="filterByGlobalStatusBadge('FAILED_KNOWN', this)" data-status-key="FAILED_KNOWN" title="Filter Known Fail">Known Fail: ${known}</span>
-            <span class="badge-status badge-unknown-fail clickable-badge js-filter-badge${isUnknownActive}" onclick="filterByGlobalStatusBadge('FAILED_UNKNOWN', this)" data-status-key="FAILED_UNKNOWN" title="Filter Unknown Fail">Unknown Fail: ${unknown}</span>
+            <span class="badge-status badge-unknown-fail clickable-badge js-filter-badge${isUnknownActive}" onclick="filterByGlobalStatusBadge('FAILED_UNKNOWN', this)" data-status-key="FAILED_UNKNOWN" title="Filter Fail">Fail: ${unknown}</span>
             <span class="badge-status badge-ignored clickable-badge js-filter-badge${isSkippedActive}" onclick="filterByGlobalStatusBadge('SKIPPED', this)" data-status-key="SKIPPED" title="Filter Ignored/Skipped">Ignored: ${ignored}</span>
             ${running > 0 ? `<span class="badge-status badge-running clickable-badge js-filter-badge${isRunningActive}" onclick="filterByGlobalStatusBadge('RUNNING', this)" data-status-key="RUNNING" title="Filter Running">Running: ${running}</span>` : ''}
         `;
@@ -3454,7 +3454,7 @@ function recalculateRunReportMetrics() {
             if (aPass > 0) badgesHtml += `<span class="badge-status badge-pass clickable-badge${activeFilter === 'PASSED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'PASSED');" title="Filter Passed in Area">Passed: ${aPass}</span>`;
             if (aFixed > 0) badgesHtml += `<span class="badge-status badge-fixed clickable-badge${activeFilter === 'SUCCEEDED_FIXED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'SUCCEEDED_FIXED');" title="Filter Succeeded-Fixed in Area">Succeeded-Fixed: ${aFixed}</span>`;
             if (aKnown > 0) badgesHtml += `<span class="badge-status badge-known-fail clickable-badge${activeFilter === 'FAILED_KNOWN' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'FAILED_KNOWN');" title="Filter Known Fail in Area">Known: ${aKnown}</span>`;
-            if (aUnknown > 0) badgesHtml += `<span class="badge-status badge-unknown-fail clickable-badge${activeFilter === 'FAILED_UNKNOWN' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'FAILED_UNKNOWN');" title="Filter Unknown Fail in Area">Unknown: ${aUnknown}</span>`;
+            if (aUnknown > 0) badgesHtml += `<span class="badge-status badge-unknown-fail clickable-badge${activeFilter === 'FAILED_UNKNOWN' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'FAILED_UNKNOWN');" title="Filter Fail in Area">Fail: ${aUnknown}</span>`;
             if (aIgnored > 0) badgesHtml += `<span class="badge-status badge-ignored clickable-badge${activeFilter === 'SKIPPED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'SKIPPED');" title="Filter Ignored in Area">Ignored: ${aIgnored}</span>`;
             if (aRunning > 0) badgesHtml += `<span class="badge-status badge-running clickable-badge${activeFilter === 'RUNNING' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'RUNNING');" title="Filter Running in Area">Running: ${aRunning}</span>`;
             areaBadgesContainer.innerHTML = badgesHtml;
@@ -3572,11 +3572,11 @@ function recalculateRunReportMetrics() {
                 addSubSlice(aKnownHealed, '#fb923c', 'Healed Known Fail', true, false);
                 addSubSlice(aKnownAi, '#ea580c', 'AI-Driven Known Fail', false, true);
 
-                // 4. Unknown Failed: Clean (#dc2626) + Healed (#f87171 + sparkle) + AI (#dc2626 + pinstripe)
+                // 4. Failed: Clean (#dc2626) + Healed (#f87171 + sparkle) + AI (#dc2626 + pinstripe)
                 const cleanUnknown = Math.max(0, aUnknown - aUnknownHealed - aUnknownAi);
-                addSubSlice(cleanUnknown, '#dc2626', 'Clean Unknown Fail', false, false);
-                addSubSlice(aUnknownHealed, '#f87171', 'Healed Unknown Fail', true, false);
-                addSubSlice(aUnknownAi, '#dc2626', 'AI-Driven Unknown Fail', false, true);
+                addSubSlice(cleanUnknown, '#dc2626', 'Clean Fail', false, false);
+                addSubSlice(aUnknownHealed, '#f87171', 'Healed Fail', true, false);
+                addSubSlice(aUnknownAi, '#dc2626', 'AI-Driven Fail', false, true);
 
                 // 5. Ignored: (#64748b)
                 addSubSlice(aIgnored, '#64748b', 'Ignored / Skipped', false, false);
@@ -3611,7 +3611,7 @@ function recalculateRunReportMetrics() {
             if (cPass > 0) html += `<span class="badge-status badge-pass clickable-badge${activeFilter === 'PASSED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'PASSED');" title="Filter Passed in Class">Passed: ${cPass}</span>`;
             if (cFixed > 0) html += `<span class="badge-status badge-fixed clickable-badge${activeFilter === 'SUCCEEDED_FIXED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'SUCCEEDED_FIXED');" title="Filter Succeeded-Fixed in Class">Succeeded-Fixed: ${cFixed}</span>`;
             if (cKnown > 0) html += `<span class="badge-status badge-known-fail clickable-badge${activeFilter === 'FAILED_KNOWN' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'FAILED_KNOWN');" title="Filter Known Fail in Class">Known: ${cKnown}</span>`;
-            if (cUnknown > 0) html += `<span class="badge-status badge-unknown-fail clickable-badge${activeFilter === 'FAILED_UNKNOWN' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'FAILED_UNKNOWN');" title="Filter Unknown Fail in Class">Unknown: ${cUnknown}</span>`;
+            if (cUnknown > 0) html += `<span class="badge-status badge-unknown-fail clickable-badge${activeFilter === 'FAILED_UNKNOWN' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'FAILED_UNKNOWN');" title="Filter Fail in Class">Fail: ${cUnknown}</span>`;
             if (cIgnored > 0) html += `<span class="badge-status badge-ignored clickable-badge${activeFilter === 'SKIPPED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'SKIPPED');" title="Filter Ignored in Class">Ignored: ${cIgnored}</span>`;
             if (cRunning > 0) html += `<span class="badge-status badge-running clickable-badge${activeFilter === 'RUNNING' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'RUNNING');" title="Filter Running in Class">Running: ${cRunning}</span>`;
             classBadgeContainer.innerHTML = html;
@@ -3742,7 +3742,11 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
     currentDataSetRaw = dataSet || '';
     currentDataSetStr = dataSet ? (dataSet.startsWith('[') ? dataSet : `[Data Set: ${dataSet}]`) : '';
 
-    const activeRow = rowId ? document.getElementById(rowId) : null;
+    const activeRow = rowId ? (
+        document.getElementById(rowId) ||
+        document.querySelector(`[data-row-id="${CSS.escape(rowId)}"]`) ||
+        document.querySelector(`[id$="${CSS.escape(rowId)}"]`)
+    ) : null;
     if (activeRow) {
         if (!currentTestNameStr) currentTestNameStr = activeRow.getAttribute('data-test-name') || '';
         if (!currentDataSetRaw) currentDataSetRaw = activeRow.getAttribute('data-dataset') || '';
@@ -3772,7 +3776,12 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
 
     const activeRunId = resolveActiveRunId(runId, activeRow);
     const activeRowId = rowId || activeRow?.getAttribute('data-row-id') || activeRow?.id || '';
-    const isTestBaseRow = activeRow ? (activeRow.closest('#pageTestBase') !== null || activeRow.closest('#batchTestBaseVariationsPanel') !== null || activeRow.classList.contains('tb-entry-row')) : (document.getElementById('pageTestBase') !== null);
+    const isTestBaseRow = activeRow ? (
+        activeRow.closest('#pageTestBase') !== null ||
+        activeRow.closest('#batchTestBaseVariationsPanel') !== null ||
+        activeRow.closest('.widget-test-variations-body') !== null ||
+        activeRow.classList.contains('tb-entry-row')
+    ) : (document.getElementById('pageTestBase') !== null);
 
     // Synchronize form inputs for bug ticket entry
     const bugRunInput = document.querySelector('#bugTicketFormBox input[name="runId"]');
@@ -3992,8 +4001,11 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
 
         const locBadge = document.getElementById('tbSideLocaleBadge');
         const browserBadge = document.getElementById('tbSideBrowserBadge');
+        const batchBadge = document.getElementById('tbSideBatchBadge');
+        const batch = activeRow?.getAttribute('data-batch') || 'Default';
         if (locBadge) locBadge.innerHTML = `<span class="material-symbols-outlined">location_on</span> ${loc}`;
         if (browserBadge) browserBadge.innerHTML = `<span class="material-symbols-outlined text-accent">language</span> ${browser}`;
+        if (batchBadge) batchBadge.innerHTML = `<span class="material-symbols-outlined">layers</span> ${escapeTextHelper(batch)}`;
 
         loadTestBaseVariationHistory(testClass, testMethod, dataSetVal, loc, browser);
     } else {
@@ -8330,7 +8342,35 @@ document.body.addEventListener('htmx:afterSwap', (evt) => {
         const targetExecId = document.querySelector('[data-target-execution-id]')?.getAttribute('data-target-execution-id')
             || urlParams.get('executionId')
             || urlParams.get('testExecutionId');
-        if (!targetExecId) {
+        const sidePanel = document.getElementById('testSidePagePanel');
+        const isPanelActive = sidePanel && sidePanel.classList.contains('active');
+        const tbControls = document.getElementById('sidePageTestBaseVariationControls');
+        const isTbSidePanelActive = isPanelActive && tbControls && tbControls.style.display !== 'none';
+        const activeRow = currentActiveRowId
+            ? (document.getElementById(currentActiveRowId) || document.querySelector(`[data-row-id="${currentActiveRowId}"]`))
+            : null;
+
+        if (targetExecId) {
+            // Handled downstream by focusAndInspectExecution in bindGlobalListeners
+        } else if (isTbSidePanelActive) {
+            const tbRow = document.querySelector('.tb-entry-row.selected')
+                || (currentActiveRowId ? document.querySelector(`.tb-entry-row[data-row-id="${currentActiveRowId}"]`) : null);
+            if (tbRow && typeof loadTestBaseVariationHistory === 'function') {
+                const testClass = tbRow.getAttribute('data-test-name') || '';
+                const testMethod = tbRow.getAttribute('data-test-method') || '';
+                const dataSet = tbRow.getAttribute('data-dataset') || '';
+                const loc = tbRow.getAttribute('data-location') || '';
+                const browser = tbRow.getAttribute('data-browser') || '';
+                loadTestBaseVariationHistory(testClass, testMethod, dataSet, loc, browser);
+            } else {
+                closeTestSidePagePanel();
+            }
+        } else if (isPanelActive && activeRow) {
+            activeRow.classList.add('selected', 'active-selected-row');
+            if (typeof renderStepsForExecution === 'function') {
+                renderStepsForExecution(activeRow);
+            }
+        } else {
             closeTestSidePagePanel();
         }
         lastHandledTargetExecutionId = null;
@@ -8639,7 +8679,7 @@ function focusAndInspectExecution(targetExecId) {
         const dataSet = rowEl.getAttribute('data-dataset') || '';
         const statusKey = rowEl.getAttribute('data-status') || 'passed-clean';
         const issueTag = rowEl.getAttribute('data-bugs') || '';
-        const rowId = rowEl.getAttribute('data-row-id') || rowEl.id;
+        const rowId = rowEl.id || rowEl.getAttribute('data-row-id');
         const runId = resolveActiveRunId(rowEl.getAttribute('data-run-id'), rowEl);
 
         openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, runId);
@@ -8652,7 +8692,7 @@ function handleRowClick(e) {
     const dataSet = row.getAttribute('data-dataset') || '';
     const statusKey = row.getAttribute('data-status') || 'passed-clean';
     const issueTag = row.getAttribute('data-bugs') || '';
-    const rowId = row.getAttribute('data-row-id') || row.id;
+    const rowId = row.id || row.getAttribute('data-row-id');
     const runId = resolveActiveRunId(row.getAttribute('data-run-id'), row);
 
     const isTestBasePage = document.getElementById('pageTestBase') !== null || row.closest('#pageTestBase') !== null || row.closest('#batchTestBaseVariationsPanel') !== null || row.classList.contains('tb-entry-row');
@@ -9397,7 +9437,10 @@ function deleteRunFromHistory(runId, event) {
         }
         // If we are currently showing a side panel for variation history, reload it
         const varDrawer = document.getElementById('variationHistoryDrawer');
-        if (varDrawer && varDrawer.classList.contains('active')) {
+        const tbControls = document.getElementById('sidePageTestBaseVariationControls');
+        const sidePanel = document.getElementById('testSidePagePanel');
+        const isTbSidePanelActive = sidePanel && sidePanel.classList.contains('active') && tbControls && tbControls.style.display !== 'none';
+        if ((varDrawer && varDrawer.classList.contains('active')) || isTbSidePanelActive) {
             const activeRow = document.querySelector('.tb-entry-row.selected');
             if (activeRow) {
                 const testClass = activeRow.getAttribute('data-test-name') || '';
@@ -11281,17 +11324,17 @@ function matchesVariationFilter(v, filterDim, filterVal) {
         return e === val;
     }
     if (dim === 'area') {
-        const a = (v.a || '').toLowerCase().trim().replace(/^@/, '').replace(/\s*\(default\)$/i, '').trim();
-        const cleanArea = val.replace(/^@/, '').replace(/\s*\(default\)$/i, '').trim();
-        return a === cleanArea;
+        const normA = normalizeAreaFilterVal(v.a || '');
+        const normFilter = normalizeAreaFilterVal(val);
+        return normA === normFilter;
     }
     if (dim === 'mode' || dim === 'type') {
         const isHealed = (v.h === true) || ((v.m || '').toUpperCase() === 'HEALED') || ((v.s || '').toLowerCase() === 'healed');
         const isAi = ((v.m || '').toUpperCase() === 'AI') || (v.s && v.s.toLowerCase().includes('ai'));
         if (val.includes('ai')) return isAi;
         if (val.includes('heal')) return isHealed;
-        if (val.includes('playbook')) return (v.m || '').toUpperCase() === 'PLAYBOOK' && !isHealed;
-        if (val.includes('classic') || val.includes('java')) return !isHealed && !isAi && (v.m || '').toUpperCase() !== 'PLAYBOOK';
+        if (val.includes('playbook') || val.includes('record')) return ((v.m || '').toUpperCase() === 'PLAYBOOK' || (v.m || '').toUpperCase() === 'RECORDING') && !isHealed;
+        if (val.includes('classic') || val.includes('java')) return !isHealed && !isAi && (v.m || '').toUpperCase() !== 'PLAYBOOK' && (v.m || '').toUpperCase() !== 'RECORDING';
         return !isHealed && !isAi;
     }
     if (dim === 'status') {
@@ -11368,7 +11411,7 @@ function matchesVariationFilter(v, filterDim, filterVal) {
 function normalizeStatusCategory(raw) {
     if (!raw) return 'Passed';
     const s = raw.toLowerCase().trim();
-    if (s.includes('unknown') || (s.includes('fail') && !s.includes('known'))) return 'Unknown Fail';
+    if (s.includes('unknown') || (s.includes('fail') && !s.includes('known'))) return 'Fail';
     if (s.includes('known') && !s.includes('unknown')) return 'Known Fail';
     if (s.includes('fixed')) return 'Succeeded Fixed';
     if (s.includes('pass') || s.includes('succeed')) return 'Passed';
@@ -11401,8 +11444,8 @@ function resolveDimensionCount(rawVal, counts, dim) {
         if (rl.includes('heal') && counts['Healed'] !== undefined) {
             return counts['Healed'];
         }
-        if (rl.includes('playbook') && counts['Playbook'] !== undefined) {
-            return counts['Playbook'];
+        if ((rl.includes('recording') || rl.includes('playbook')) && (counts['Recording'] !== undefined || counts['Playbook'] !== undefined)) {
+            return counts['Recording'] !== undefined ? counts['Recording'] : counts['Playbook'];
         }
         if (rl.includes('classic') && counts['Classic'] !== undefined) {
             return counts['Classic'];
@@ -11427,23 +11470,25 @@ function resolveVariationDimensionValue(v, dim) {
     if (d === 'locale' || d === 'location') return v.l || 'Default';
     if (d === 'env' || d === 'environment') return v.e || 'Default';
     if (d === 'area') {
-        const raw = v.a || 'Browsing';
+        const raw = v.a || '';
+        const norm = normalizeAreaFilterVal(raw);
+        if (norm === 'DEFAULT' || !norm) return 'Default';
         const clean = raw.replace(/^@/, '').replace(/\s*\(default\)$/i, '').trim();
-        return clean.length > 0 ? clean : 'Browsing';
+        return clean.length > 0 ? clean : 'Default';
     }
     if (d === 'mode' || d === 'type') {
         const isHealed = (v.h === true) || ((v.m || '').toUpperCase() === 'HEALED') || ((v.s || '').toLowerCase() === 'healed');
         const isAi = ((v.m || '').toUpperCase() === 'AI') || (v.s && v.s.toLowerCase().includes('ai'));
-        const isPlaybook = ((v.m || '').toUpperCase() === 'PLAYBOOK') && !isHealed;
+        const isPlaybook = (((v.m || '').toUpperCase() === 'PLAYBOOK') || ((v.m || '').toUpperCase() === 'RECORDING')) && !isHealed;
         if (isAi) return 'AI-Driven';
         if (isHealed) return 'Healed';
-        if (isPlaybook) return 'Playbook';
+        if (isPlaybook) return 'Recording';
         return 'Classic';
     }
     if (d === 'costs' || d === 'tokens') return ((v.tok && Number(v.tok) > 0) || (v.c && Number(v.c) > 0) || v.m === 'AI') ? 'AI / Tokens' : 'No AI';
     if (d === 'status') {
         const s = (v.s || '').toLowerCase();
-        if (s.includes('unknown') || (s.includes('fail') && !s.includes('known'))) return 'Unknown Fail';
+        if (s.includes('unknown') || (s.includes('fail') && !s.includes('known'))) return 'Fail';
         if (s.includes('known') && !s.includes('unknown')) return 'Known Fail';
         if (s.includes('fixed')) return 'Succeeded Fixed';
         if (s.includes('pass') || s.includes('succeed')) return 'Passed';
@@ -11553,6 +11598,7 @@ function recalculateStatusPieChart(sec, variations, isFiltered) {
         'Passed': totalPassed,
         'Succeeded Fixed': totalFixed,
         'Known Fail': totalKnown,
+        'Fail': totalUnknown,
         'Unknown Fail': totalUnknown,
         'Ignored': ignored
     };
@@ -11560,6 +11606,7 @@ function recalculateStatusPieChart(sec, variations, isFiltered) {
         'Passed': passHealed,
         'Succeeded Fixed': fixedHealed,
         'Known Fail': knownHealed,
+        'Fail': unknownHealed,
         'Unknown Fail': unknownHealed,
         'Ignored': 0
     };
@@ -11567,6 +11614,7 @@ function recalculateStatusPieChart(sec, variations, isFiltered) {
         'Passed': passAi,
         'Succeeded Fixed': fixedAi,
         'Known Fail': knownAi,
+        'Fail': unknownAi,
         'Unknown Fail': unknownAi,
         'Ignored': 0
     };
@@ -11884,7 +11932,7 @@ function recalculateAiUsagePieChart(sec, variations, isFiltered) {
     effectiveVariations.forEach(v => {
         const isHealed = (v.h === true) || (v.m || '').toUpperCase() === 'HEALED';
         const isAi = (v.m || '').toUpperCase() === 'AI';
-        const isPlaybook = (v.m || '').toUpperCase() === 'PLAYBOOK' && !isHealed;
+        const isPlaybook = ((v.m || '').toUpperCase() === 'PLAYBOOK' || (v.m || '').toUpperCase() === 'RECORDING') && !isHealed;
         if (isAi) aiDriven++;
         else if (isHealed) healed++;
         else if (isPlaybook) playbook++;
@@ -11915,6 +11963,7 @@ function recalculateAiUsagePieChart(sec, variations, isFiltered) {
     const counts = {
         'AI-Driven': aiDriven,
         'Healed': healed,
+        'Recording': playbook,
         'Playbook': playbook,
         'Classic': classic
     };
@@ -12622,7 +12671,7 @@ function recalculateContainerText(sec, variations, isFiltered) {
         variations.forEach(v => {
             const isHealed = (v.h === true) || (v.m || '').toUpperCase() === 'HEALED';
             const isAi = (v.m || '').toUpperCase() === 'AI';
-            const isPlaybook = (v.m || '').toUpperCase() === 'PLAYBOOK' && !isHealed;
+            const isPlaybook = ((v.m || '').toUpperCase() === 'PLAYBOOK' || (v.m || '').toUpperCase() === 'RECORDING') && !isHealed;
             if (isAi) aiDriven++;
             else if (isHealed) healed++;
             else if (isPlaybook) playbook++;
@@ -12632,6 +12681,7 @@ function recalculateContainerText(sec, variations, isFiltered) {
         const counts = {
             'AI-Driven': aiDriven,
             'Healed': healed,
+            'Recording': playbook,
             'Playbook': playbook,
             'Classic': classic
         };

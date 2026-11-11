@@ -257,7 +257,7 @@ public class TestBaseVariationHistoryTest
         Assertions.assertEquals(1, history.size());
         Assertions.assertEquals("RUN_200", history.get(0).getRunId());
         Assertions.assertEquals("failed-unknown", history.get(0).getStatus());
-        Assertions.assertEquals("UNKNOWN FAIL", history.get(0).getStatusLabel());
+        Assertions.assertEquals("FAIL", history.get(0).getStatusLabel());
         Assertions.assertTrue(history.get(0).getBugs().isEmpty());
     }
 
@@ -702,16 +702,16 @@ public class TestBaseVariationHistoryTest
         );
         Assertions.assertEquals("AI", dtoAiForce.getDisplayMode());
 
-        // 2. Playbook Modes without Healing
+        // 2. Recording Modes without Healing
         final TestBaseVariationHistoryDto dtoPlaybook = new TestBaseVariationHistoryDto(
             "R2", "e2", "B1", "REPLAY_STRICT", "Java", "2026-10-14 10:00:00", "passed-clean", "badge-pass", "PASSED", List.of()
         );
-        Assertions.assertEquals("PLAYBOOK", dtoPlaybook.getDisplayMode());
+        Assertions.assertEquals("RECORDING", dtoPlaybook.getDisplayMode());
 
         final TestBaseVariationHistoryDto dtoReplayNoHeal = new TestBaseVariationHistoryDto(
             "R2b", "e2b", "B1", "REPLAY_WITH_HEALING", "Java", "2026-10-14 10:00:00", "passed-clean", "badge-pass", "PASSED", List.of(), false, false, false
         );
-        Assertions.assertEquals("PLAYBOOK", dtoReplayNoHeal.getDisplayMode());
+        Assertions.assertEquals("RECORDING", dtoReplayNoHeal.getDisplayMode());
 
         // 3. Healed Mode
         final TestBaseVariationHistoryDto dtoReplayHealed = new TestBaseVariationHistoryDto(
@@ -828,7 +828,7 @@ public class TestBaseVariationHistoryTest
         Assertions.assertEquals("DE", searchVar.getLocation());
         Assertions.assertEquals("Firefox", searchVar.getBrowser());
         Assertions.assertEquals("passed-clean", searchVar.getLastStatus());
-        Assertions.assertEquals("PLAYBOOK", searchVar.getDisplayMode());
+        Assertions.assertEquals("RECORDING", searchVar.getDisplayMode());
         Assertions.assertEquals(1, searchVar.getTotalExecutionsCount());
     }
 
@@ -1123,10 +1123,10 @@ public class TestBaseVariationHistoryTest
         Assertions.assertEquals(2, searchArea.getTotalVariationsCount());
 
         final TestBaseAreaDto browsingArea = areas.stream()
-            .filter(a -> "@Browsing (default)".equals(a.getAreaName()))
+            .filter(a -> "Default".equals(a.getAreaName()))
             .findFirst()
             .orElseThrow();
-        Assertions.assertEquals("batchAreaBrowsingdefault", browsingArea.getAreaPaneId());
+        Assertions.assertEquals("batchAreaDefault", browsingArea.getAreaPaneId());
         Assertions.assertEquals("folder", browsingArea.getIcon());
         Assertions.assertEquals(1, browsingArea.getClassCount());
         Assertions.assertEquals(1, browsingArea.getTotalVariationsCount());
@@ -2727,6 +2727,68 @@ public class TestBaseVariationHistoryTest
         Assertions.assertEquals("RUN_2", evolution.getActiveRunId(), "Active run on evolution curve must be RUN_2");
         Assertions.assertTrue(evolution.isHistoricalActive(), "Evolution should report historical active mode");
         Assertions.assertEquals(3, evolution.getActivePoint().getTotalTestsKnown());
+    }
+
+    @Test
+    public void testSuiteEvolution_RecordsPlaybookAndRecordingMode()
+    {
+        final TestRunEntity run = new TestRunEntity(
+            "RUN_REC", "Batch Recording", "COMPLETED", "CI", "staging",
+            "US", "Chrome", "2026-11-10 10:00", 1730000000000L
+        );
+        run.setTotalTests(3);
+        run.setPassedCount(3);
+
+        final String jsonRun = """
+            {
+              "id": "RUN_REC",
+              "batch": "Batch Recording",
+              "status": "COMPLETED",
+              "executions": [
+                {
+                  "id": "e1",
+                  "testClass": "com.xceptance.neodymium.test.PlaybookTest",
+                  "testMethod": "test1",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean",
+                  "executionMode": "RECORDING"
+                },
+                {
+                  "id": "e2",
+                  "testClass": "com.xceptance.neodymium.test.PlaybookTest",
+                  "testMethod": "test2",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean",
+                  "executionMode": "PLAYBOOK"
+                },
+                {
+                  "id": "e3",
+                  "testClass": "com.xceptance.neodymium.test.JavaTest",
+                  "testMethod": "test3",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean",
+                  "executionMode": "JAVA"
+                }
+              ]
+            }
+            """;
+
+        Mockito.when(storageService.readRunJson("RUN_REC")).thenReturn(Optional.of(jsonRun));
+
+        final BatchLatestExecutionsDto result = dataService.getBatchLatestTestExecutionsSummary("Batch Recording", List.of(run));
+        Assertions.assertNotNull(result);
+
+        final BatchSuiteEvolutionDto evolution = result.getSuiteEvolution();
+        Assertions.assertNotNull(evolution);
+        Assertions.assertEquals(1, evolution.getPoints().size());
+
+        final BatchSuiteEvolutionPointDto point = evolution.getPoints().get(0);
+        Assertions.assertEquals(3, point.getTotalTestsKnown());
+        Assertions.assertEquals(2, point.getPlaybookCount(), "Must count both RECORDING and PLAYBOOK executions as playbookCount");
+        Assertions.assertEquals(1, point.getClassicCount(), "Classic count must be 3 total - 2 playbook = 1");
     }
 }
 

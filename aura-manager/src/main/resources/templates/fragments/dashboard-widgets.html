@@ -1541,12 +1541,13 @@
 <!-- 8. TEST VARIATIONS PRESENTATION BODY -->
 <div th:fragment="testVariationsBody(w)" th:if="${w != null}" class="widget-card-body widget-test-variations-body p-2 d-flex flex-column gap-2 w-100">
     <!-- DYNAMIC AREA GROUPS -->
+    <th:block th:if="${w.hasRealAreas()}">
     <div th:each="area : ${w.testAreas}" class="area-group test-row-group" th:id="'widget-' + ${w.id} + '-' + ${area.areaPaneId}" th:data-area="${area.areaName}">
         <div class="area-group-header" onclick="toggleAreaGroup(this)">
             <div class="area-group-title">
                 <span class="material-symbols-outlined area-chevron">chevron_right</span>
                 <span class="material-symbols-outlined text-accent" th:text="${area.icon ?: 'folder'}">folder</span>
-                <span>Area: <span th:text="${area.areaName}">@Browsing (default)</span></span>
+                <span>Area: <span th:text="${area.areaName != null ? (area.areaName.equalsIgnoreCase('Default') ? 'Default' : (area.areaName.startsWith('@') ? area.areaName : '@' + area.areaName)) : 'Default'}">Default</span></span>
                 <span class="tag-chip area-exec-count-chip" style="margin-left: 0.5rem;" th:text="${area.classCount + (area.classCount == 1 ? ' Class' : ' Classes') + ', ' + area.totalVariationsCount + (area.totalVariationsCount == 1 ? ' Variation' : ' Variations')}">1 Class, 2 Variations</span>
             </div>
         </div>
@@ -1584,7 +1585,7 @@
                             <tbody>
                                 <tr th:each="var : ${cls.variations}" class="tb-entry-row clickable-row js-open-side-panel"
                                     th:id="'widget-' + ${w.id} + '-row-var-' + ${var.id}"
-                                    th:data-row-id="'row-var-' + ${var.id}"
+                                    th:data-row-id="'widget-' + ${w.id} + '-row-var-' + ${var.id}"
                                     th:data-run-id="${var.lastRunId}"
                                     th:data-env="${var.lastEnvironment ?: 'Default'}"
                                     th:data-test-name="${var.testClassName}"
@@ -1620,9 +1621,9 @@
                                     </td>
                                     <td>
                                         <span class="badge-status"
-                                              th:classappend="${var.displayMode == 'AI' ? 'badge-mode-ai' : (var.displayMode == 'PLAYBOOK' ? 'badge-mode-playbook' : (var.displayMode == 'HEALED' ? 'badge-mode-healed' : 'badge-mode-java'))}"
+                                              th:classappend="${var.displayMode == 'AI' ? 'badge-mode-ai' : (var.displayMode == 'RECORDING' or var.displayMode == 'PLAYBOOK' ? 'badge-mode-recording' : (var.displayMode == 'HEALED' ? 'badge-mode-healed' : 'badge-mode-java'))}"
                                               style="font-size: 0.72rem; padding: 0.15rem 0.45rem;"
-                                              th:text="${var.displayMode}">PLAYBOOK</span>
+                                              th:text="${var.displayMode}">RECORDING</span>
                                     </td>
                                     <td class="col-status-badge">
                                         <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
@@ -1636,7 +1637,7 @@
                                                 <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> KNOWN FAIL
                                             </span>
                                             <span class="badge-status badge-unknown-fail" th:if="${var.lastStatus == 'failed-unknown' or var.lastStatus == 'unknown' or var.lastStatus == 'failed' or var.lastStatus == 'error'}">
-                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">cancel</span> UNKNOWN FAIL
+                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">cancel</span> FAIL
                                             </span>
                                             <span class="badge-status badge-ignored" th:if="${var.lastStatus == 'ignored' or var.lastStatus == 'skipped'}">
                                                 <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">skip_next</span> SKIPPED
@@ -1654,9 +1655,10 @@
             </div>
         </div>
     </div>
+    </th:block>
 
-    <!-- Fallback if testAreas is empty but testClasses is present -->
-    <th:block th:if="${(w.testAreas == null or w.testAreas.isEmpty()) and w.testClasses != null and !w.testClasses.isEmpty()}">
+    <!-- Plain test classes rendered directly when no real user-defined areas exist -->
+    <th:block th:if="${!w.hasRealAreas() and w.testClasses != null and !w.testClasses.isEmpty()}">
         <div th:each="cls : ${w.testClasses}" class="test-class-container tb-class-item" th:id="'widget-' + ${w.id} + '-' + ${cls.classContainerId}">
             <div class="test-class-header" onclick="toggleTestClassGroup(this)">
                 <div class="test-class-title">
@@ -1682,7 +1684,7 @@
                         <tbody>
                             <tr th:each="var : ${cls.variations}" class="tb-entry-row clickable-row js-open-side-panel"
                                 th:id="'widget-' + ${w.id} + '-row-var-' + ${var.id}"
-                                th:data-row-id="'row-var-' + ${var.id}"
+                                th:data-row-id="'widget-' + ${w.id} + '-row-var-' + ${var.id}"
                                 th:data-run-id="${var.lastRunId}"
                                 th:data-env="${var.lastEnvironment ?: 'Default'}"
                                 th:data-test-name="${var.testClassName}"
@@ -1718,9 +1720,9 @@
                                 </td>
                                 <td>
                                     <span class="badge-status"
-                                          th:classappend="${var.displayMode == 'AI' ? 'badge-mode-ai' : (var.displayMode == 'PLAYBOOK' ? 'badge-mode-playbook' : (var.displayMode == 'HEALED' ? 'badge-mode-healed' : 'badge-mode-java'))}"
+                                          th:classappend="${var.displayMode == 'AI' ? 'badge-mode-ai' : (var.displayMode == 'RECORDING' or var.displayMode == 'PLAYBOOK' ? 'badge-mode-recording' : (var.displayMode == 'HEALED' ? 'badge-mode-healed' : 'badge-mode-java'))}"
                                           style="font-size: 0.72rem; padding: 0.15rem 0.45rem;"
-                                          th:text="${var.displayMode}">PLAYBOOK</span>
+                                          th:text="${var.displayMode}">RECORDING</span>
                                 </td>
                                 <td class="col-status-badge">
                                     <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
@@ -1734,7 +1736,7 @@
                                             <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> KNOWN FAIL
                                         </span>
                                         <span class="badge-status badge-unknown-fail" th:if="${var.lastStatus == 'failed-unknown' or var.lastStatus == 'unknown' or var.lastStatus == 'failed' or var.lastStatus == 'error'}">
-                                            <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">cancel</span> UNKNOWN FAIL
+                                            <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">cancel</span> FAIL
                                         </span>
                                         <span class="badge-status badge-ignored" th:if="${var.lastStatus == 'ignored' or var.lastStatus == 'skipped'}">
                                             <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">skip_next</span> SKIPPED
@@ -1752,7 +1754,7 @@
         </div>
     </th:block>
 
-    <div th:if="${(w.testAreas == null || w.testAreas.isEmpty()) and (w.testClasses == null || w.testClasses.isEmpty())}" class="text-center py-4 text-muted" style="padding: 1.5rem; font-size: 0.875rem;">
+    <div th:if="${(w.testClasses == null || w.testClasses.isEmpty()) and (!w.hasRealAreas() || w.testAreas == null || w.testAreas.isEmpty())}" class="text-center py-4 text-muted" style="padding: 1.5rem; font-size: 0.875rem;">
         No test base variations found for this widget configuration.
     </div>
 </div>
@@ -1765,9 +1767,6 @@
                 <tr>
                     <th>Run ID</th>
                     <th>Tags</th>
-                    <th>Trigger</th>
-                    <th>Locales</th>
-                    <th>Browsers</th>
                     <th>Total</th>
                     <th class="col-status-breakdown">Status Breakdown</th>
                     <th class="col-pass-rate">Pass Rate</th>
@@ -1838,23 +1837,6 @@
                             </a>
                         </div>
                     </td>
-                    <td><span class="tag-trigger" th:text="${run.triggerSource}">Unknown</span></td>
-                    <td>
-                        <div class="table-cell-chips cell-locales" th:if="${run.localesCsv != null and !#strings.isEmpty(run.localesCsv)}">
-                            <span class="tag-chip tag-locale" th:each="loc : ${#strings.arraySplit(run.localesCsv, ',')}" th:if="${!#strings.isEmpty(#strings.trim(loc))}" th:text="${#strings.trim(loc)}">Default</span>
-                        </div>
-                        <div class="table-cell-chips cell-locales" th:if="${run.localesCsv == null or #strings.isEmpty(run.localesCsv)}">
-                            <span class="tag-chip tag-locale">Default</span>
-                        </div>
-                    </td>
-                    <td>
-                        <div class="table-cell-chips cell-browsers" th:if="${run.browsersCsv != null and !#strings.isEmpty(run.browsersCsv)}">
-                            <span class="tag-chip tag-browser" th:each="br : ${#strings.arraySplit(run.browsersCsv, ',')}" th:if="${!#strings.isEmpty(#strings.trim(br))}" th:text="${#strings.trim(br)}">Chrome</span>
-                        </div>
-                        <div class="table-cell-chips cell-browsers" th:if="${run.browsersCsv == null or #strings.isEmpty(run.browsersCsv)}">
-                            <span class="tag-chip tag-browser">Chrome</span>
-                        </div>
-                    </td>
                     <td class="text-mono" th:text="${run.totalTests}">0</td>
                     <td class="col-status-breakdown">
                         <div class="status-stacked-bar">
@@ -1870,6 +1852,7 @@
                             <div th:if="${run.unknownCleanCount > 0}" class="status-bar-seg seg-unknown" th:style="'width:' + ${#numbers.formatDecimal(run.unknownCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.unknownCleanTooltip}" th:text="${run.unknownCleanLabel}">1</div>
                             <div th:if="${run.unknownHealedCountSafe > 0}" class="status-bar-seg seg-unknown-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(run.unknownHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.unknownHealedTooltip}" th:text="${run.unknownHealedLabel}">0</div>
                             <div th:if="${run.unknownAiCountSafe > 0}" class="status-bar-seg seg-unknown seg-ai-print" th:style="'width:' + ${#numbers.formatDecimal(run.unknownAiPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.unknownAiTooltip}" th:text="${run.unknownAiLabel}">0</div>
+                            <div th:if="${run.runningCountSafe > 0}" class="status-bar-seg seg-running" th:style="'width:' + ${#numbers.formatDecimal(run.runningPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.runningTooltip}" th:text="${run.runningLabel}">0</div>
                             <div th:if="${run.ignoredCount > 0}" class="status-bar-seg seg-ignored" th:style="'width:' + ${#numbers.formatDecimal(run.ignoredPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.ignoredTooltip}" th:text="${run.ignoredLabel}">1</div>
                         </div>
                     </td>
@@ -1890,7 +1873,7 @@
                     </td>
                 </tr>
                 <tr th:if="${w.runs == null or #lists.isEmpty(w.runs)}">
-                    <td colspan="10" class="text-center py-4 text-muted">
+                    <td colspan="7" class="text-center py-4 text-muted">
                         No test runs found matching active criteria.
                     </td>
                 </tr>

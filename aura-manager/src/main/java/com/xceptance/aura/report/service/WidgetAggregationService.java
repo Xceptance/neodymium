@@ -751,7 +751,7 @@ public class WidgetAggregationService
             {
                 final boolean isHealed = v.isHealed() || "HEALED".equalsIgnoreCase(v.getMode());
                 final boolean isAi = "AI".equalsIgnoreCase(v.getMode());
-                final boolean isPlaybook = "PLAYBOOK".equalsIgnoreCase(v.getMode()) && !isHealed;
+                final boolean isPlaybook = ("RECORDING".equalsIgnoreCase(v.getMode()) || "PLAYBOOK".equalsIgnoreCase(v.getMode())) && !isHealed;
 
                 if (isAi)
                 {
@@ -783,10 +783,12 @@ public class WidgetAggregationService
                     final int healedCount = r.getPassedHealedCountSafe() + r.getFixedHealedCountSafe()
                         + r.getKnownHealedCountSafe() + r.getUnknownHealedCountSafe();
                     final int totalTests = (r.getTotalTests() != null) ? r.getTotalTests() : 0;
-                    final int classicCount = Math.max(0, totalTests - aiCount - healedCount);
+                    final int pCount = resolveRunPlaybookCount(r, latestVariations, null);
+                    final int classicCount = Math.max(0, totalTests - aiCount - healedCount - pCount);
 
                     aiDriven += aiCount;
                     healed += healedCount;
+                    playbook += pCount;
                     classic += classicCount;
                 }
             }
@@ -834,6 +836,10 @@ public class WidgetAggregationService
             {
                 for (final BatchLatestVariationDto v : latestVariations)
                 {
+                    if (!v.isFinished())
+                    {
+                        continue;
+                    }
                     final String st = (v.getStatus() != null) ? v.getStatus().toLowerCase(Locale.ROOT) : "passed";
                     final boolean isHealed = v.isHealed();
                     final boolean isAi = "AI".equalsIgnoreCase(v.getMode());
@@ -959,7 +965,7 @@ public class WidgetAggregationService
                 final double pct = (double) unknownTotal / total * 100.0;
                 final double healedPct = (double) unknownHealed / total * 100.0;
                 final double aiPct = (double) unknownAi / total * 100.0;
-                slices.add(new WidgetPieSliceDto("Unknown Fail", unknownTotal, pct, "var(--status-unknown-fail, #ef4444)", currentOffset, unknownHealed, unknownAi, healedPct, aiPct));
+                slices.add(new WidgetPieSliceDto("Fail", unknownTotal, pct, "var(--status-unknown-fail, #ef4444)", currentOffset, unknownHealed, unknownAi, healedPct, aiPct));
                 currentOffset -= pct;
             }
             if (ignored > 0)
@@ -1188,7 +1194,7 @@ public class WidgetAggregationService
             if (playbook > 0)
             {
                 final double pct = (double) playbook / total * 100.0;
-                slices.add(new WidgetPieSliceDto("Playbook", playbook, pct, "#0284c7", currentOffset, 0, 0));
+                slices.add(new WidgetPieSliceDto("Recording", playbook, pct, "#0284c7", currentOffset, 0, 0));
                 currentOffset -= pct;
             }
             if (classic > 0)
@@ -1736,7 +1742,7 @@ public class WidgetAggregationService
                         details.put("Total AI Tests", String.valueOf(pt.getTotalAiUsageCount()));
                         details.put("AI-Driven", String.valueOf(pt.getTotalAiCount()));
                         details.put("Healed", String.valueOf(pt.getTotalHealedCount()));
-                        details.put("Playbook", String.valueOf(pt.getPlaybookCount()));
+                        details.put("Recording", String.valueOf(pt.getPlaybookCount()));
                         details.put("Classic", String.valueOf(pt.getClassicCount()));
                     }
                     else if (config.getMetric() == WidgetMetric.BUGS)
@@ -1755,7 +1761,7 @@ public class WidgetAggregationService
                         details.put("Passed", String.valueOf(pt.getPassCleanCount() + pt.getPassHealedCount() + pt.getPassAiCount()));
                         details.put("Fixed", String.valueOf(pt.getFixedCleanCount() + pt.getFixedHealedCount() + pt.getFixedAiCount()));
                         details.put("Known Fail", String.valueOf(pt.getKnownCleanCount() + pt.getKnownHealedCount() + pt.getKnownAiCount()));
-                        details.put("Unknown Fail", String.valueOf(pt.getUnknownCleanCount() + pt.getUnknownHealedCount() + pt.getUnknownAiCount()));
+                        details.put("Fail", String.valueOf(pt.getUnknownCleanCount() + pt.getUnknownHealedCount() + pt.getUnknownAiCount()));
                     }
                     else
                     {
@@ -1764,7 +1770,7 @@ public class WidgetAggregationService
                         details.put("Passed", String.valueOf(pt.getPassCleanCount() + pt.getPassHealedCount() + pt.getPassAiCount()));
                         details.put("Fixed", String.valueOf(pt.getFixedCleanCount() + pt.getFixedHealedCount() + pt.getFixedAiCount()));
                         details.put("Known Fail", String.valueOf(pt.getKnownCleanCount() + pt.getKnownHealedCount() + pt.getKnownAiCount()));
-                        details.put("Unknown Fail", String.valueOf(pt.getUnknownCleanCount() + pt.getUnknownHealedCount() + pt.getUnknownAiCount()));
+                        details.put("Fail", String.valueOf(pt.getUnknownCleanCount() + pt.getUnknownHealedCount() + pt.getUnknownAiCount()));
                     }
 
                     rawBeads.add(new PerlenketteBeadDto(
@@ -1897,6 +1903,8 @@ public class WidgetAggregationService
                     details.put("Total AI Tests", String.valueOf(b.getTotalAiUsageCount()));
                     details.put("AI-Driven", String.valueOf(b.getAiTotalCount()));
                     details.put("Healed", String.valueOf(b.getHealedTotalCount()));
+                    details.put("Recording", String.valueOf(b.getPlaybookCount()));
+                    details.put("Classic", String.valueOf(Math.max(0, b.totalTests - b.getAiTotalCount() - b.getHealedTotalCount() - b.getPlaybookCount())));
                 }
                 else if (config.getMetric() == WidgetMetric.NUMBER_OF_RUNS)
                 {
@@ -1905,7 +1913,7 @@ public class WidgetAggregationService
                     details.put("Passed", String.valueOf(b.passedCount));
                     details.put("Fixed", String.valueOf(b.fixedCount));
                     details.put("Known Fail", String.valueOf(b.knownFailCount));
-                    details.put("Unknown Fail", String.valueOf(b.unknownFailCount));
+                    details.put("Fail", String.valueOf(b.unknownFailCount));
                 }
                 else
                 {
@@ -2078,8 +2086,12 @@ public class WidgetAggregationService
                     final double aiRate = (totalTests > 0) ? ((double) totalAi / totalTests * 100.0) : 0.0;
                     details.put("AI Usage Rate", String.format(Locale.ROOT, "%.1f%%", aiRate));
                     details.put("Total AI Tests", String.valueOf(totalAi));
+                    final int playbookCount = resolveRunPlaybookCount(r, latestVariations, dataService);
+                    final int classicCount = Math.max(0, totalTests - aiCount - healedCount - playbookCount);
                     details.put("AI-Driven", String.valueOf(aiCount));
                     details.put("Healed", String.valueOf(healedCount));
+                    details.put("Recording", String.valueOf(playbookCount));
+                    details.put("Classic", String.valueOf(classicCount));
                 }
                 else if (config.getMetric() == WidgetMetric.BUGS)
                 {
@@ -2105,7 +2117,7 @@ public class WidgetAggregationService
                     details.put("Passed", String.valueOf(r.getPassedCount()));
                     details.put("Fixed", String.valueOf(r.getSucceededFixedCount()));
                     details.put("Known Fail", String.valueOf(r.getFailedKnownCount()));
-                    details.put("Unknown Fail", String.valueOf(r.getFailedUnknownCount()));
+                    details.put("Fail", String.valueOf(r.getFailedUnknownCount()));
                 }
                 else
                 {
@@ -2114,7 +2126,7 @@ public class WidgetAggregationService
                     details.put("Passed", String.valueOf(r.getPassedCount()));
                     details.put("Fixed", String.valueOf(r.getSucceededFixedCount()));
                     details.put("Known Fail", String.valueOf(r.getFailedKnownCount()));
-                    details.put("Unknown Fail", String.valueOf(r.getFailedUnknownCount()));
+                    details.put("Fail", String.valueOf(r.getFailedUnknownCount()));
                 }
 
                 rawBeads.add(new PerlenketteBeadDto(
@@ -2682,6 +2694,10 @@ public class WidgetAggregationService
 
     private static void accumulateExecutionIntoStats(final TagValueStats stats, final TestExecutionDto exec)
     {
+        if (exec == null || !exec.isFinished())
+        {
+            return;
+        }
         final String st = (exec.getStatus() != null) ? exec.getStatus().toLowerCase(Locale.ROOT) : "passed";
         final boolean isHealed = exec.isHealed();
         final boolean isAi = "AI".equalsIgnoreCase(exec.getExecutionMode());
@@ -2904,10 +2920,17 @@ public class WidgetAggregationService
                         {
                             final String val = extractExecutionTagValue(exec, tagKey, r, dataService);
                             final String effectiveVal = (val != null && !val.isBlank()) ? val.trim() : "Default";
-                            final String execKey = (exec.getTestClass() != null ? exec.getTestClass() : "") + "#"
-                                + (exec.getTestMethod() != null ? exec.getTestMethod() : "") + "#"
-                                + (exec.getBrowser() != null ? exec.getBrowser() : "") + "#"
-                                + (exec.getLocation() != null ? exec.getLocation() : "");
+                            final String logicalKey = (dataService != null) ? dataService.buildLogicalKey(r, exec) : null;
+                            final String dataSet = (exec.getTitle() != null && !exec.getTitle().isBlank())
+                                ? exec.getTitle().trim()
+                                : (exec.getTestName() != null ? exec.getTestName().trim() : "");
+                            final String execKey = (logicalKey != null && !logicalKey.isBlank())
+                                ? logicalKey
+                                : (exec.getTestClass() != null ? exec.getTestClass() : "") + "#"
+                                    + (exec.getTestMethod() != null ? exec.getTestMethod() : "") + "#"
+                                    + dataSet + "#"
+                                    + (exec.getBrowser() != null ? exec.getBrowser() : "") + "#"
+                                    + (exec.getLocation() != null ? exec.getLocation() : "");
 
                             milestoneExecutions
                                 .computeIfAbsent(effectiveVal, k -> new LinkedHashMap<>())
@@ -2953,6 +2976,10 @@ public class WidgetAggregationService
         {
             for (final BatchLatestVariationDto v : latestVariations)
             {
+                if (!v.isFinished())
+                {
+                    continue;
+                }
                 final String val = extractVariationTagValue(v, tagKey);
                 final String effectiveVal = (val != null && !val.isBlank()) ? val.trim() : "Default";
                 final TagValueStats stats = statsMap.computeIfAbsent(effectiveVal, TagValueStats::new);
@@ -3128,7 +3155,7 @@ public class WidgetAggregationService
             }
             if (s.getUnknownTotal() > 0)
             {
-                details.put("Unknown Fail", String.valueOf(s.getUnknownTotal()));
+                details.put("Fail", String.valueOf(s.getUnknownTotal()));
             }
             if (s.ignored > 0)
             {
@@ -3556,7 +3583,8 @@ public class WidgetAggregationService
                         final int aiCount = r.getPassedAiCountSafe() + r.getFixedAiCountSafe() + r.getKnownAiCountSafe() + r.getUnknownAiCountSafe();
                         final int healedCount = r.getPassedHealedCountSafe() + r.getFixedHealedCountSafe() + r.getKnownHealedCountSafe() + r.getUnknownHealedCountSafe();
                         final int totalTests = (r.getTotalTests() != null) ? r.getTotalTests() : 0;
-                        final int classicCount = Math.max(0, totalTests - aiCount - healedCount);
+                        final int playbookCount = resolveRunPlaybookCount(r, latestVariations, dataService);
+                        final int classicCount = Math.max(0, totalTests - aiCount - healedCount - playbookCount);
                         final int totalAi = aiCount + healedCount;
                         final double v = (totalTests > 0) ? ((double) totalAi / totalTests * 100.0) : 0.0;
                         minVal = Math.min(minVal, v);
@@ -3568,7 +3596,7 @@ public class WidgetAggregationService
                             i, 0.0, 0.0, "#" + r.getId(), r.getTimestampLabel(), v, valFormatted, r.getId()
                         ));
                         aiUsageBreakdowns.add(new AiUsagePointBreakdown(
-                            aiCount, healedCount, 0, classicCount
+                            aiCount, healedCount, playbookCount, classicCount
                         ));
                     }
                 }
@@ -4028,14 +4056,15 @@ public class WidgetAggregationService
                         final int aiCount = r.getPassedAiCountSafe() + r.getFixedAiCountSafe() + r.getKnownAiCountSafe() + r.getUnknownAiCountSafe();
                         final int healedCount = r.getPassedHealedCountSafe() + r.getFixedHealedCountSafe() + r.getKnownHealedCountSafe() + r.getUnknownHealedCountSafe();
                         final int totalTests = (r.getTotalTests() != null) ? r.getTotalTests() : 0;
-                        final int classicCount = Math.max(0, totalTests - aiCount - healedCount);
+                        final int playbookCount = resolveRunPlaybookCount(r, latestVariations, dataService);
+                        final int classicCount = Math.max(0, totalTests - aiCount - healedCount - playbookCount);
                         final int totalAi = aiCount + healedCount;
                         v = (totalTests > 0) ? ((double) totalAi / totalTests * 100.0) : 0.0;
                         valFormatted = (format == WidgetValueFormat.PERCENT)
                             ? String.format(Locale.ROOT, "%.1f%%", v)
                             : (totalAi + " AI");
                         aiUsageBreakdowns.add(new AiUsagePointBreakdown(
-                            aiCount, healedCount, 0, classicCount
+                            aiCount, healedCount, playbookCount, classicCount
                         ));
                     }
                     else if (metric == WidgetMetric.TAG)
@@ -4132,9 +4161,10 @@ public class WidgetAggregationService
                             : (b.getTotalAiUsageCount() + " AI");
                         final int aiCount = b.getAiTotalCount();
                         final int healedCount = b.getHealedTotalCount();
-                        final int classicCount = Math.max(0, b.totalTests - aiCount - healedCount);
+                        final int playbookCount = b.getPlaybookCount();
+                        final int classicCount = Math.max(0, b.totalTests - aiCount - healedCount - playbookCount);
                         aiUsageBreakdowns.add(new AiUsagePointBreakdown(
-                            aiCount, healedCount, 0, classicCount
+                            aiCount, healedCount, playbookCount, classicCount
                         ));
                     }
                     else if (metric == WidgetMetric.TAG)
@@ -4238,14 +4268,15 @@ public class WidgetAggregationService
                     final int aiCount = r.getPassedAiCountSafe() + r.getFixedAiCountSafe() + r.getKnownAiCountSafe() + r.getUnknownAiCountSafe();
                     final int healedCount = r.getPassedHealedCountSafe() + r.getFixedHealedCountSafe() + r.getKnownHealedCountSafe() + r.getUnknownHealedCountSafe();
                     final int totalTests = (r.getTotalTests() != null ? r.getTotalTests() : 0);
-                    final int classicCount = Math.max(0, totalTests - aiCount - healedCount);
+                    final int playbookCount = resolveRunPlaybookCount(r, latestVariations, dataService);
+                    final int classicCount = Math.max(0, totalTests - aiCount - healedCount - playbookCount);
                     final int totalAi = aiCount + healedCount;
                     v = (totalTests > 0) ? ((double) totalAi / totalTests * 100.0) : 0.0;
                     valFormatted = (format == WidgetValueFormat.PERCENT)
                         ? String.format(Locale.ROOT, "%.1f%%", v)
                         : (totalAi + " AI");
                     aiUsageBreakdowns.add(new AiUsagePointBreakdown(
-                        aiCount, healedCount, 0, classicCount
+                        aiCount, healedCount, playbookCount, classicCount
                     ));
                 }
                 else if (metric == WidgetMetric.TAG)
@@ -5049,7 +5080,7 @@ public class WidgetAggregationService
                     yTop[i] = yCurrent[i] - (aiUsageBreakdowns.get(i).playbook * baseScale);
                 }
                 final String rawCsv = rawPlaybook.stream().map(String::valueOf).collect(Collectors.joining(","));
-                trendLayers.add(new WidgetTrendLayerDto("Playbook", "#0284c7",
+                trendLayers.add(new WidgetTrendLayerDto("Recording", "#0284c7",
                     buildStackedAreaPolygon(xs, yTop, yCurrent, padLeft, width - padRight, singleColumnHalfWidth),
                     buildStandaloneLinePath(xs, yPlaybookStandalone, padLeft, width - padRight, singleColumnHalfWidth),
                     latestPlaybook, "", null, null, peakPlaybook, rawCsv));
@@ -5713,12 +5744,12 @@ public class WidgetAggregationService
 
             if (format == WidgetValueFormat.ABSOLUTE)
             {
-                primaryVal = ab.aiDriven + " AI · " + ab.healed + " Healed · " + ab.playbook + " Playbook";
+                primaryVal = ab.aiDriven + " AI · " + ab.healed + " Healed · " + ab.playbook + " Recording";
                 secondaryVal = pie.getSummaryLabel();
             }
             else
             {
-                primaryVal = String.format(Locale.ROOT, "%.0f%% AI · %.0f%% Healed · %.0f%% Playbook", aiDrivenPct, healedPct, playbookPct);
+                primaryVal = String.format(Locale.ROOT, "%.0f%% AI · %.0f%% Healed · %.0f%% Recording", aiDrivenPct, healedPct, playbookPct);
                 secondaryVal = pie.getSummaryLabel();
             }
             color = "#8b5cf6";
@@ -5726,7 +5757,7 @@ public class WidgetAggregationService
             final List<DistributionRatioDto> aiSegments = new ArrayList<>();
             aiSegments.add(new DistributionRatioDto("AI-Driven", ab.aiDriven, aiDrivenPct, "#8b5cf6"));
             aiSegments.add(new DistributionRatioDto("Healed", ab.healed, healedPct, "#10b981"));
-            aiSegments.add(new DistributionRatioDto("Playbook", ab.playbook, playbookPct, "#0284c7"));
+            aiSegments.add(new DistributionRatioDto("Recording", ab.playbook, playbookPct, "#0284c7"));
             textRatioSegments = Collections.unmodifiableList(aiSegments);
         }
         else if (metric == WidgetMetric.FLAKINESS)
@@ -6027,6 +6058,10 @@ public class WidgetAggregationService
                 {
                     for (final BatchLatestVariationDto v : latestVariations)
                     {
+                        if (!v.isFinished())
+                        {
+                            continue;
+                        }
                         if (scope != WidgetPointScope.LATEST_TEST_STATUS && !scopedRunIds.contains(v.getRunId()))
                         {
                             continue;
@@ -6035,7 +6070,7 @@ public class WidgetAggregationService
                         final String group;
                         if (st.contains("unknown") || (st.contains("fail") && !st.contains("known")))
                         {
-                            group = "Unknown Fail";
+                            group = "Fail";
                         }
                         else if (st.contains("known"))
                         {
@@ -6250,7 +6285,7 @@ public class WidgetAggregationService
                     {
                         final boolean isHealed = v.isHealed() || "HEALED".equalsIgnoreCase(v.getMode());
                         final boolean isAi = "AI".equalsIgnoreCase(v.getMode());
-                        final boolean isPlaybook = "PLAYBOOK".equalsIgnoreCase(v.getMode()) && !isHealed;
+                        final boolean isPlaybook = ("PLAYBOOK".equalsIgnoreCase(v.getMode()) || "RECORDING".equalsIgnoreCase(v.getMode())) && !isHealed;
                         final String group;
                         if (isAi)
                         {
@@ -6262,7 +6297,7 @@ public class WidgetAggregationService
                         }
                         else if (isPlaybook)
                         {
-                            group = "Playbook";
+                            group = "Recording";
                         }
                         else
                         {
@@ -6777,7 +6812,7 @@ public class WidgetAggregationService
         }
 
         final String area = v.getArea();
-        if (area != null && !area.isBlank() && !"@Browsing (default)".equalsIgnoreCase(area))
+        if (AuraReportDataService.isRealArea(area))
         {
             final String cleanArea = area.startsWith("@") ? area.trim() : ("@" + area.trim());
             tags.add(cleanArea);
@@ -7036,7 +7071,7 @@ public class WidgetAggregationService
         if (metric == WidgetMetric.AI_USAGE)
         {
             if (l.contains("healed")) return "auto_fix_high";
-            if (l.contains("playbook")) return "menu_book";
+            if (l.contains("playbook") || l.contains("recording")) return "menu_book";
             if (l.contains("classic")) return "code";
             return "psychology";
         }
@@ -7506,6 +7541,7 @@ public class WidgetAggregationService
         private int unknownCleanCount = 0;
         private int unknownHealedCount = 0;
         private int unknownAiCount = 0;
+        private int playbookCount = 0;
         private double totalCost = 0.0;
         private int activeBugsCount = 0;
         private int flakyCount = 0;
@@ -7548,6 +7584,7 @@ public class WidgetAggregationService
             unknownCleanCount += r.getUnknownCleanCount();
             unknownHealedCount += r.getUnknownHealedCountSafe();
             unknownAiCount += r.getUnknownAiCountSafe();
+            playbookCount += r.getPlaybookCountSafe();
 
             if (r.getTotalLlmCost() != null)
             {
@@ -7577,6 +7614,11 @@ public class WidgetAggregationService
         int getHealedTotalCount()
         {
             return passHealedCount + fixedHealedCount + knownHealedCount + unknownHealedCount;
+        }
+
+        int getPlaybookCount()
+        {
+            return playbookCount;
         }
 
         int getPlaybookTotalCount()
@@ -7997,6 +8039,10 @@ public class WidgetAggregationService
 
                     final List<TestExecutionDto> filtered = report.getExecutions().stream()
                         .filter(exec -> {
+                            if (!exec.isFinished())
+                            {
+                                return false;
+                            }
                             if (filterByLatestScope)
                             {
                                 final boolean matchesId = !runExecIds.isEmpty() && exec.getId() != null
@@ -8123,6 +8169,10 @@ public class WidgetAggregationService
             {
                 for (final TestExecutionDto exec : runExecutions)
                 {
+                    if (!exec.isFinished())
+                    {
+                        continue;
+                    }
                     if (exec.isFlaky())
                     {
                         groupFlaky++;
@@ -8516,7 +8566,11 @@ public class WidgetAggregationService
                 final String[] areas = run.getAreasCsv().split(",");
                 if (areas.length == 1)
                 {
-                    counts.put(AuraReportDataService.normalizeArea(areas[0].trim()), total);
+                    final String ar = areas[0].trim();
+                    final String normAr = AuraReportDataService.isRealArea(ar)
+                        ? AuraReportDataService.normalizeArea(ar)
+                        : "Default";
+                    counts.put(normAr, total);
                     return counts;
                 }
             }
@@ -8552,6 +8606,42 @@ public class WidgetAggregationService
         return counts;
     }
 
+    private int resolveRunPlaybookCount(
+        final TestRunEntity run,
+        final List<BatchLatestVariationDto> latestVariations,
+        final AuraReportDataService dataService)
+    {
+        if (run == null)
+        {
+            return 0;
+        }
+        if (run.getPlaybookCountSafe() > 0)
+        {
+            return run.getPlaybookCountSafe();
+        }
+        if (dataService != null && run.getId() != null)
+        {
+            final RunReportDto report = dataService.getRunReport(run.getId());
+            if (report != null && report.getPlaybookCount() > 0)
+            {
+                return report.getPlaybookCount();
+            }
+        }
+        if (latestVariations != null && !latestVariations.isEmpty() && run.getId() != null)
+        {
+            final int count = (int) latestVariations.stream()
+                .filter(v -> Objects.equals(v.getRunId(), run.getId())
+                    && ("RECORDING".equalsIgnoreCase(v.getMode()) || "PLAYBOOK".equalsIgnoreCase(v.getMode()))
+                    && !v.isHealed())
+                .count();
+            if (count > 0)
+            {
+                return count;
+            }
+        }
+        return 0;
+    }
+
     private String extractExecutionTagValue(
         final TestExecutionDto exec,
         final String normKey,
@@ -8568,7 +8658,9 @@ public class WidgetAggregationService
         }
         if ("area".equals(normKey))
         {
-            return AuraReportDataService.normalizeArea(exec.getAreaName());
+            return AuraReportDataService.isRealArea(exec.getAreaName())
+                ? AuraReportDataService.normalizeArea(exec.getAreaName())
+                : "Default";
         }
         if ("location".equals(normKey) || "locale".equals(normKey))
         {
@@ -8641,7 +8733,9 @@ public class WidgetAggregationService
         }
         if ("area".equals(key))
         {
-            return AuraReportDataService.normalizeArea(v.getArea());
+            return AuraReportDataService.isRealArea(v.getArea())
+                ? AuraReportDataService.normalizeArea(v.getArea())
+                : "Default";
         }
         if ("location".equals(key) || "locale".equals(key))
         {

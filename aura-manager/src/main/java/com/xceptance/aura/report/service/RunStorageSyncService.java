@@ -340,7 +340,7 @@ public class RunStorageSyncService
             }
             if (aSet.isEmpty())
             {
-                aSet.add(AuraReportDataService.normalizeArea("@Browsing (default)"));
+                aSet.add("Default");
             }
             final String areasCsv = String.join(",", aSet);
 
@@ -433,6 +433,7 @@ public class RunStorageSyncService
             int calcFixed = 0;
             int calcKnown = 0;
             int calcUnknown = 0;
+            int calcRunning = 0;
             int calcIgnored = 0;
             int calcPassHealed = 0;
             int calcFixedHealed = 0;
@@ -442,6 +443,7 @@ public class RunStorageSyncService
             int calcFixedAi = 0;
             int calcKnownAi = 0;
             int calcUnknownAi = 0;
+            int calcPlaybook = 0;
 
             long sumDurationMs = 0L;
 
@@ -476,7 +478,7 @@ public class RunStorageSyncService
                         }
                     }
                     final String browser = AuraReportDataService.normalizeBrowser(!rawBrowser.isEmpty() ? rawBrowser : "Chrome");
-                    final String rawStatus = exec.path("status").asText("failed-unknown");
+                    final String rawStatus = exec.path("status").asText("").trim();
 
                     final boolean isHealed = (exec.has("healed") && exec.path("healed").asBoolean(false))
                                           || (exec.has("healedStepsCount") && exec.path("healedStepsCount").asInt(0) > 0)
@@ -563,7 +565,12 @@ public class RunStorageSyncService
                     final String bugsStr = hasBugs ? String.join(";", bugList) : "";
 
                     final String effectiveStatus;
-                    if ("failed".equalsIgnoreCase(rawStatus) || "failed-known".equalsIgnoreCase(rawStatus) || "failed-unknown".equalsIgnoreCase(rawStatus) || "error".equalsIgnoreCase(rawStatus) || "failure".equalsIgnoreCase(rawStatus))
+                    if ("running".equalsIgnoreCase(rawStatus) || "in_progress".equalsIgnoreCase(rawStatus) || rawStatus.isEmpty())
+                    {
+                        effectiveStatus = "running";
+                        calcRunning++;
+                    }
+                    else if ("failed".equalsIgnoreCase(rawStatus) || "failed-known".equalsIgnoreCase(rawStatus) || "failed-unknown".equalsIgnoreCase(rawStatus) || "error".equalsIgnoreCase(rawStatus) || "failure".equalsIgnoreCase(rawStatus))
                     {
                         if (hasBugs)
                         {
@@ -702,6 +709,11 @@ public class RunStorageSyncService
                             calculatedMode = "JAVA";
                         }
 
+                        if ("PLAYBOOK".equalsIgnoreCase(calculatedMode) && !isHealed)
+                        {
+                            calcPlaybook++;
+                        }
+
                         final Long runTimeMs = (minStartTimeMs != null && minStartTimeMs > 0L) ? minStartTimeMs : System.currentTimeMillis();
                         final Long currentVarTime = varEntity.getLastExecutedAt();
                         if (currentVarTime == null || runTimeMs >= currentVarTime)
@@ -722,7 +734,7 @@ public class RunStorageSyncService
             final TestRunEntity runEntity;
             final Long initialStartMs = minStartTimeMs != null ? minStartTimeMs : parseTimestampToMs(timestamp);
             final boolean isStillActive = localRunJsonStorageService.isRunCurrentlyActiveOnDisk(runId);
-            final String runStatus = isStillActive ? "IN_PROGRESS" : "COMPLETED";
+            final String runStatus = (isStillActive || calcRunning > 0) ? "IN_PROGRESS" : "COMPLETED";
 
             if (existingRunOpt.isPresent())
             {
@@ -761,6 +773,7 @@ public class RunStorageSyncService
             final int finalFixed = hasExecCounts ? calcFixed : fixed;
             final int finalKnown = hasExecCounts ? calcKnown : known;
             final int finalUnknown = hasExecCounts ? calcUnknown : unknown;
+            final int finalRunning = hasExecCounts ? calcRunning : summaryNode.path("running").asInt(0);
             final int finalIgnored = hasExecCounts ? calcIgnored : ignored;
             final int finalPassHealed = hasExecCounts ? calcPassHealed : passHealed;
             final int finalFixedHealed = hasExecCounts ? calcFixedHealed : fixedHealed;
@@ -770,6 +783,7 @@ public class RunStorageSyncService
             final int finalFixedAi = hasExecCounts ? calcFixedAi : fixedAi;
             final int finalKnownAi = hasExecCounts ? calcKnownAi : knownAi;
             final int finalUnknownAi = hasExecCounts ? calcUnknownAi : unknownAi;
+            final int finalPlaybook = hasExecCounts ? calcPlaybook : 0;
             final double finalPassRate = finalTotal > 0 ? (double) Math.round((double)(finalPass + finalFixed) / finalTotal * 100.0) : passRate;
 
             final long calculatedRunDurationMs;
@@ -798,6 +812,7 @@ public class RunStorageSyncService
             runEntity.setSucceededFixedCount(finalFixed);
             runEntity.setFailedKnownCount(finalKnown);
             runEntity.setFailedUnknownCount(finalUnknown);
+            runEntity.setRunningCount(finalRunning);
             runEntity.setIgnoredCount(finalIgnored);
             runEntity.setPassedHealedCount(finalPassHealed);
             runEntity.setSucceededFixedHealedCount(finalFixedHealed);
@@ -807,6 +822,7 @@ public class RunStorageSyncService
             runEntity.setSucceededFixedAiCount(finalFixedAi);
             runEntity.setFailedKnownAiCount(finalKnownAi);
             runEntity.setFailedUnknownAiCount(finalUnknownAi);
+            runEntity.setPlaybookCount(finalPlaybook);
             runEntity.setPassRate(finalPassRate);
             runEntity.setTotalLlmCalls(sumLlmCalls);
             runEntity.setTotalLlmTokens(sumLlmTokens);
@@ -844,7 +860,16 @@ public class RunStorageSyncService
             final List<TestRunTagEntity> tagEntities = new ArrayList<>();
             final Set<String> seenTagPairs = new HashSet<>();
             final Consumer<TestRunTagEntity> addTagSafe = t -> {
-                final String composite = t.getTagKey().toLowerCase() + "::" + t.getTagValue().toLowerCase();
+                if (t.getTagValue() == null || t.getTagValue().isBlank())
+                {
+                    return;
+                }
+                final String trimmedVal = t.getTagValue().trim();
+                if ("Default".equalsIgnoreCase(trimmedVal) || "Unknown".equalsIgnoreCase(trimmedVal))
+                {
+                    return;
+                }
+                final String composite = t.getTagKey().toLowerCase() + "::" + trimmedVal.toLowerCase();
                 if (seenTagPairs.add(composite))
                 {
                     tagEntities.add(t);
@@ -916,11 +941,14 @@ public class RunStorageSyncService
             }
 
             // 3. Fallback standard Suite, Environment, Browser tags if present
-            if (batchName != null && !batchName.isBlank() && !"Default".equalsIgnoreCase(batchName) && !"Unknown".equalsIgnoreCase(batchName))
+            if (batchName != null && !batchName.isBlank()
+                && !"Default".equalsIgnoreCase(batchName)
+                && !"Unknown".equalsIgnoreCase(batchName)
+                && !"Queue".equalsIgnoreCase(batchName))
             {
                 addTagSafe.accept(new TestRunTagEntity(runId, "Suite", batchName.trim()));
             }
-            if (env != null && !env.isBlank() && !"Default".equalsIgnoreCase(env) && !"ALL".equalsIgnoreCase(env))
+            if (AuraReportDataService.isRealEnvironment(env))
             {
                 addTagSafe.accept(new TestRunTagEntity(runId, "Environment", env.trim()));
             }
@@ -940,10 +968,7 @@ public class RunStorageSyncService
             }
             for (final String area : aSet)
             {
-                if (!area.isBlank() && !"Unknown".equalsIgnoreCase(area)
-                    && !"@Browsing (default)".equalsIgnoreCase(area)
-                    && !"Browsing (default)".equalsIgnoreCase(area)
-                    && !"General".equalsIgnoreCase(area))
+                if (AuraReportDataService.isRealArea(area))
                 {
                     addTagSafe.accept(new TestRunTagEntity(runId, "Area", area.trim()));
                 }

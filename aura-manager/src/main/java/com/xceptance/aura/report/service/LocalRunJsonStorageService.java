@@ -120,7 +120,8 @@ public class LocalRunJsonStorageService
                     if ("running".equalsIgnoreCase(status)
                             || "in_progress".equalsIgnoreCase(status)
                             || "executing".equalsIgnoreCase(status)
-                            || "pending".equalsIgnoreCase(status))
+                            || "pending".equalsIgnoreCase(status)
+                            || status.isBlank())
                     {
                         return true;
                     }
@@ -225,7 +226,7 @@ public class LocalRunJsonStorageService
             final List<String> existingLocales = new ArrayList<>();
             final List<String> existingBrowsers = new ArrayList<>();
             int totalExecsCount = 0;
-            int pass = 0, fixed = 0, known = 0, unknown = 0, ignoredCount = 0;
+            int pass = 0, fixed = 0, known = 0, unknown = 0, ignoredCount = 0, runningCount = 0;
             int passHealed = 0, fixedHealed = 0, knownHealed = 0, unknownHealed = 0;
             long earliestMs = Long.MAX_VALUE;
             String earliestTimeStr = null;
@@ -443,15 +444,15 @@ public class LocalRunJsonStorageService
                                     rawArea = extractedFromNode;
                                 }
                             }
-                            if (rawArea.isEmpty() || "General".equalsIgnoreCase(rawArea))
+                            if (rawArea.isEmpty() || !AuraReportDataService.isRealArea(rawArea))
                             {
-                                if (!folderArea.isEmpty() && !"General".equalsIgnoreCase(folderArea))
+                                if (!folderArea.isEmpty() && AuraReportDataService.isRealArea(folderArea))
                                 {
                                     rawArea = folderArea;
                                 }
                                 else
                                 {
-                                    rawArea = "Browsing (default)";
+                                    rawArea = "Default";
                                 }
                             }
                             final String areaName = rawArea.trim();
@@ -627,14 +628,18 @@ public class LocalRunJsonStorageService
                         }
 
                         totalExecsCount++;
-                        final String rawStatus = node.path("status").asText("failed-unknown");
+                        final String rawStatus = node.path("status").asText("").trim();
                         final JsonNode bugsNode = node.path("bugs");
                         final boolean hasBugs = hasBugsNode(bugsNode);
                         final boolean isHealed = (node.has("healed") && node.path("healed").asBoolean(false))
                                               || (node.has("healedStepsCount") && node.path("healedStepsCount").asInt(0) > 0)
                                               || "healed".equalsIgnoreCase(rawStatus);
 
-                        if ("failed".equalsIgnoreCase(rawStatus) || "failed-known".equalsIgnoreCase(rawStatus) || "failed-unknown".equalsIgnoreCase(rawStatus) || "error".equalsIgnoreCase(rawStatus) || "failure".equalsIgnoreCase(rawStatus))
+                        if ("running".equalsIgnoreCase(rawStatus) || "in_progress".equalsIgnoreCase(rawStatus) || rawStatus.isEmpty())
+                        {
+                            runningCount++;
+                        }
+                        else if ("failed".equalsIgnoreCase(rawStatus) || "failed-known".equalsIgnoreCase(rawStatus) || "failed-unknown".equalsIgnoreCase(rawStatus) || "error".equalsIgnoreCase(rawStatus) || "failure".equalsIgnoreCase(rawStatus))
                         {
                             if (hasBugs)
                             {
@@ -763,6 +768,7 @@ public class LocalRunJsonStorageService
             summaryNode.put("fixed", fixed);
             summaryNode.put("known", known);
             summaryNode.put("unknown", unknown);
+            summaryNode.put("running", runningCount);
             summaryNode.put("ignored", ignoredCount);
             summaryNode.put("passHealed", passHealed);
             summaryNode.put("fixedHealed", fixedHealed);
@@ -871,7 +877,7 @@ public class LocalRunJsonStorageService
                         effStatus = baseStatus;
                     }
                     metricObj.put("status", effStatus);
-                    metricObj.put("areaName", objNode.path("areaName").asText("Browsing (default)"));
+                    metricObj.put("areaName", objNode.path("areaName").asText("Default"));
                     if (objNode.has("startTime"))
                     {
                         metricObj.put("startTime", objNode.path("startTime").asText(""));
@@ -946,6 +952,9 @@ public class LocalRunJsonStorageService
             {
                 compactRootNode.put("startTimeMs", earliestMs);
             }
+            final boolean isStillActive = isRunCurrentlyActiveOnDisk(runId);
+            final String runStatus = (isStillActive || runningCount > 0) ? "IN_PROGRESS" : "COMPLETED";
+            compactRootNode.put("status", runStatus);
             compactRootNode.set("summary", summaryNode);
             compactRootNode.set("executionMetrics", executionMetricsNode);
 
@@ -969,11 +978,14 @@ public class LocalRunJsonStorageService
             }
             else
             {
-                if (batchName != null && !batchName.isBlank() && !"Default".equalsIgnoreCase(batchName) && !"Unknown".equalsIgnoreCase(batchName))
+                if (batchName != null && !batchName.isBlank()
+                    && !"Default".equalsIgnoreCase(batchName)
+                    && !"Unknown".equalsIgnoreCase(batchName)
+                    && !"Queue".equalsIgnoreCase(batchName))
                 {
                     tagsNode.put("Suite", batchName);
                 }
-                if (env != null && !env.isBlank() && !"Default".equalsIgnoreCase(env) && !"ALL".equalsIgnoreCase(env))
+                if (AuraReportDataService.isRealEnvironment(env))
                 {
                     tagsNode.put("Instance", env);
                 }
@@ -1549,9 +1561,9 @@ public class LocalRunJsonStorageService
                                                 areaToUse = extractedFromNode;
                                             }
                                         }
-                                        if (areaToUse.isEmpty() || "General".equalsIgnoreCase(areaToUse))
+                                        if (areaToUse.isEmpty() || !AuraReportDataService.isRealArea(areaToUse))
                                         {
-                                            areaToUse = "Browsing (default)";
+                                            areaToUse = "Default";
                                         }
                                         execObj.put("areaName", areaToUse);
 

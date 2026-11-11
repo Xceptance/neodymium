@@ -221,7 +221,7 @@ public final class TestExecutionDto
 
     public TestExecutionDto()
     {
-        this("", "", "", "", "", "", "", "", "passed-clean", "Java", "UNKNOWN", null, "Unknown", "NONE", new ArrayList<>(), null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, Collections.emptyMap());
+        this("", "", "", "", "", "", "", "", "running", "Java", "UNKNOWN", null, "Unknown", "NONE", new ArrayList<>(), null, "Default", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, Collections.emptyMap());
     }
 
     public TestExecutionDto(
@@ -493,7 +493,7 @@ public final class TestExecutionDto
         this.testMethod = effectiveTestMethod;
 
         this.testName = (testName != null && !testName.isEmpty()) ? testName : (this.testClass + " " + (this.testMethod.isEmpty() ? this.title : (this.testMethod + " [" + this.title + "]"))).trim();
-        this.status = status != null ? status : "passed-clean";
+        this.status = (status != null && !status.isBlank()) ? status : "running";
         this.engine = engine != null ? engine : "Java";
 
         final String effectiveLocation;
@@ -568,7 +568,7 @@ public final class TestExecutionDto
         this.postFlightFindings = postFlightFindings;
         this.tags = tags != null ? TagUtils.parseTags(tags) : Collections.emptyMap();
 
-        String resolvedAreaName = (areaName != null && !areaName.trim().isEmpty() && !"General".equalsIgnoreCase(areaName.trim())) ? areaName.trim() : null;
+        String resolvedAreaName = (areaName != null && AuraReportDataService.isRealArea(areaName)) ? areaName.trim() : null;
         if (resolvedAreaName == null && !this.tags.isEmpty())
         {
             for (final Map.Entry<String, List<String>> entry : this.tags.entrySet())
@@ -604,9 +604,11 @@ public final class TestExecutionDto
         }
         if (resolvedAreaName != null && !resolvedAreaName.isEmpty())
         {
-            if ("@Browsing (default)".equalsIgnoreCase(resolvedAreaName) || "Browsing (default)".equalsIgnoreCase(resolvedAreaName))
+            if ("@Browsing (default)".equalsIgnoreCase(resolvedAreaName) || "Browsing (default)".equalsIgnoreCase(resolvedAreaName)
+                || "Default".equalsIgnoreCase(resolvedAreaName) || "@Default".equalsIgnoreCase(resolvedAreaName)
+                || "General".equalsIgnoreCase(resolvedAreaName) || "@General".equalsIgnoreCase(resolvedAreaName))
             {
-                this.areaName = "Browsing (default)";
+                this.areaName = "Default";
             }
             else
             {
@@ -615,7 +617,7 @@ public final class TestExecutionDto
         }
         else
         {
-            this.areaName = "Browsing (default)";
+            this.areaName = "Default";
         }
 
         String resolvedSubArea = (subArea != null && !subArea.isBlank()) ? subArea.trim() : null;
@@ -805,7 +807,7 @@ public final class TestExecutionDto
         final String failure,
         final List<String> bugs)
     {
-        this(id, "", testClass, null, title, testClass + " " + title, "", "", status, engine, location, null, browser, failure, bugs, null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, Collections.emptyMap());
+        this(id, "", testClass, null, title, testClass + " " + title, "", "", status, engine, location, null, browser, failure, bugs, null, "Default", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, Collections.emptyMap());
     }
 
     public TestExecutionDto(
@@ -819,7 +821,7 @@ public final class TestExecutionDto
         final String browser,
         final Map<String, ?> tags)
     {
-        this(id, runId, testClass, testMethod, title, testClass + " " + title, "", "", status, "Java", location != null ? location : "US", null, browser, null, new ArrayList<>(), null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, tags, null);
+        this(id, runId, testClass, testMethod, title, testClass + " " + title, "", "", status, "Java", location != null ? location : "US", null, browser, null, new ArrayList<>(), null, null, new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, tags, null);
     }
 
     public TestExecutionDto(
@@ -848,7 +850,7 @@ public final class TestExecutionDto
         final long llmTotalTokens,
         final Map<String, ?> tags)
     {
-        this(id, runId, testClass, testMethod, title, testClass + " " + title, "", "", status, "Java", location != null ? location : "US", location, browser, null, new ArrayList<>(), null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, llmTotalTokens, llmCost, null, "", "", "", null, null, "", false, null, null, tags, null);
+        this(id, runId, testClass, testMethod, title, testClass + " " + title, "", "", status, "Java", location != null ? location : "US", location, browser, null, new ArrayList<>(), null, null, new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, llmTotalTokens, llmCost, null, "", "", "", null, null, "", false, null, null, tags, null);
     }
 
     @JsonProperty("tags")
@@ -960,12 +962,22 @@ public final class TestExecutionDto
 
     public String getStatus()
     {
-        return status;
+        return (status != null && !status.isBlank()) ? status : "running";
+    }
+
+    public boolean isFinished()
+    {
+        if (status == null || status.isBlank())
+        {
+            return false;
+        }
+        final String st = status.toLowerCase(Locale.ROOT);
+        return !"running".equals(st) && !"in_progress".equals(st) && !"executing".equals(st) && !"pending".equals(st);
     }
 
     public void setStatus(final String status)
     {
-        this.status = status;
+        this.status = (status != null && !status.isBlank()) ? status : "running";
     }
 
     /**
@@ -1135,7 +1147,10 @@ public final class TestExecutionDto
 
     public String getAreaName()
     {
-        return (areaName != null && !areaName.trim().isEmpty() && !"General".equalsIgnoreCase(areaName.trim())) ? areaName.trim() : "Browsing (default)";
+        return (areaName != null && !areaName.trim().isEmpty()
+            && !"General".equalsIgnoreCase(areaName.trim())
+            && !"Browsing (default)".equalsIgnoreCase(areaName.trim())
+            && !"@Browsing (default)".equalsIgnoreCase(areaName.trim())) ? areaName.trim() : "Default";
     }
 
     @JsonProperty("subArea")
@@ -1272,11 +1287,11 @@ public final class TestExecutionDto
      * Resolves the user-facing display mode for the All Tests tab mode column.
      * <p>
      * - If REPLAY_WITH_HEALING (or AUTO) and healing was performed: HEALED
-     * - If REPLAY_WITH_HEALING (or AUTO or REPLAY_STRICT) and no healing was performed: PLAYBOOK
+     * - If REPLAY_WITH_HEALING (or AUTO or REPLAY_STRICT) and no healing was performed: RECORDING
      * - If LLM_RECORDING (or LLM_ONLY or FORCE_RECORDING): AI
      * - If no mode was configured or test is standard non-AI: JAVA
      *
-     * @return display mode string (PLAYBOOK, HEALED, AI, or JAVA)
+     * @return display mode string (RECORDING, HEALED, AI, or JAVA)
      */
     @JsonProperty("displayMode")
     public String getDisplayMode()
@@ -1289,11 +1304,11 @@ public final class TestExecutionDto
         final String upper = rawMode.toUpperCase();
         if ("REPLAY_WITH_HEALING".equals(upper) || "AUTO".equals(upper))
         {
-            return isHealed() ? "HEALED" : "PLAYBOOK";
+            return isHealed() ? "HEALED" : "RECORDING";
         }
-        if ("REPLAY_STRICT".equals(upper) || "PLAYBOOK".equals(upper))
+        if ("REPLAY_STRICT".equals(upper) || "PLAYBOOK".equals(upper) || "RECORDING".equals(upper))
         {
-            return "PLAYBOOK";
+            return "RECORDING";
         }
         if ("LLM_RECORDING".equals(upper) || "LLM_ONLY".equals(upper) || "FORCE_RECORDING".equals(upper) || "AI".equals(upper))
         {

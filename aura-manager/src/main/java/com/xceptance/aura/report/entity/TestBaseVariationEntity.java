@@ -123,7 +123,9 @@ public class TestBaseVariationEntity
         this.testClassName = testClassName;
         this.testMethodName = (testMethodName != null && !testMethodName.isBlank()) ? testMethodName.trim() : null;
         this.dataSetLabel = (dataSetLabel != null && !dataSetLabel.isBlank()) ? dataSetLabel.trim() : "Default";
-        this.areaTag = (areaTag != null && !areaTag.isBlank()) ? areaTag : "@Browsing (default)";
+        this.areaTag = (areaTag != null && !areaTag.isBlank()
+            && !"@Browsing (default)".equalsIgnoreCase(areaTag.trim())
+            && !"Browsing (default)".equalsIgnoreCase(areaTag.trim())) ? areaTag.trim() : "Default";
         this.location = AuraReportDataService.normalizeLocation(location);
         this.browser = AuraReportDataService.normalizeBrowser(browser);
     }
@@ -170,12 +172,16 @@ public class TestBaseVariationEntity
 
     public String getAreaTag()
     {
-        return (areaTag != null && !areaTag.isBlank()) ? areaTag : "@Browsing (default)";
+        return (areaTag != null && !areaTag.isBlank()
+            && !"@Browsing (default)".equalsIgnoreCase(areaTag.trim())
+            && !"Browsing (default)".equalsIgnoreCase(areaTag.trim())) ? areaTag.trim() : "Default";
     }
 
     public void setAreaTag(final String areaTag)
     {
-        this.areaTag = (areaTag != null && !areaTag.isBlank()) ? areaTag : "@Browsing (default)";
+        this.areaTag = (areaTag != null && !areaTag.isBlank()
+            && !"@Browsing (default)".equalsIgnoreCase(areaTag.trim())
+            && !"Browsing (default)".equalsIgnoreCase(areaTag.trim())) ? areaTag.trim() : "Default";
     }
 
     public String getSubAreaTag()
@@ -339,7 +345,7 @@ public class TestBaseVariationEntity
     }
 
     /**
-     * Resolves the display execution mode string (AI, HEALED, PLAYBOOK, or JAVA).
+     * Resolves the display execution mode string (AI, HEALED, RECORDING, or JAVA).
      *
      * @return display mode string
      */
@@ -354,9 +360,9 @@ public class TestBaseVariationEntity
         {
             return "HEALED";
         }
-        if ("PLAYBOOK".equalsIgnoreCase(rawMode) || "REPLAY_STRICT".equalsIgnoreCase(rawMode) || "REPLAY_WITH_HEALING".equalsIgnoreCase(rawMode))
+        if ("RECORDING".equalsIgnoreCase(rawMode) || "PLAYBOOK".equalsIgnoreCase(rawMode) || "REPLAY_STRICT".equalsIgnoreCase(rawMode) || "REPLAY_WITH_HEALING".equalsIgnoreCase(rawMode))
         {
-            return "PLAYBOOK";
+            return "RECORDING";
         }
         if ("JAVA".equalsIgnoreCase(rawMode))
         {
@@ -372,7 +378,7 @@ public class TestBaseVariationEntity
         }
         if (testClassName != null && (testClassName.contains("_yaml_") || testClassName.contains("_yml_") || testClassName.endsWith("PlaybookTest")))
         {
-            return "PLAYBOOK";
+            return "RECORDING";
         }
         return "JAVA";
     }

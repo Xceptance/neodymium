@@ -18,10 +18,16 @@
  */
 package com.xceptance.aura.report.controller;
 
+import com.xceptance.aura.report.dto.AreaSummaryDto;
+import com.xceptance.aura.report.dto.RunReportDto;
+import com.xceptance.aura.report.dto.TestBaseAreaDto;
+import com.xceptance.aura.report.dto.TestBaseClassDto;
 import com.xceptance.aura.report.dto.TestExecutionDto;
+import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.dto.TestExecutionDto.BugDetailDto;
 import com.xceptance.aura.report.dto.widget.DashboardWidgetConfigDto;
 import com.xceptance.aura.report.dto.widget.DashboardWidgetViewDto;
+import com.xceptance.aura.report.entity.TestBaseVariationEntity;
 import com.xceptance.aura.report.dto.widget.WidgetContributingExecutionsDto;
 import com.xceptance.aura.report.dto.widget.WidgetFilterConfigDto;
 import com.xceptance.aura.report.dto.widget.WidgetMetric;
@@ -603,5 +609,142 @@ public class AuraReportViewControllerSpringContextTest
         Assertions.assertTrue(html.contains("en_US"));
         Assertions.assertTrue(html.contains("Production"));
         Assertions.assertTrue(html.contains("@Checkout"));
+    }
+
+    @Test
+    public void testTestVariationsWidgetSuppressesAreaHierarchyWhenNoRealAreasExist()
+    {
+        final DashboardWidgetConfigDto config = new DashboardWidgetConfigDto(
+            "widget-variations-1", "Known Test Base Variations", WidgetMetric.TEST_VARIATIONS, "latest",
+            WidgetPresentation.TEST_VARIATIONS, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.ABSOLUTE,
+            WidgetPointScope.LATEST_TEST_STATUS, "full", 0, false
+        );
+
+        final TestBaseVariationEntity variation = new TestBaseVariationEntity(
+            "var-1", "Aura_tests_examples_wikipedia_search_yml_Test", "testSearch", "Default", "@Browsing (default)", "US", "Chrome"
+        );
+        final TestBaseClassDto classDto = new TestBaseClassDto(
+            "Aura_tests_examples_wikipedia_search_yml_Test", "containerWikiTest", 1, List.of(variation)
+        );
+        final TestBaseAreaDto fallbackArea = new TestBaseAreaDto(
+            "@Browsing (default)", "batchAreaBrowsingdefault", "batchTabBtnBrowsingdefault", "folder",
+            1, List.of(classDto)
+        );
+
+        final DashboardWidgetViewDto viewDto = DashboardWidgetViewDto.createTestVariationsView(
+            config,
+            List.of(fallbackArea),
+            List.of(classDto),
+            1,
+            Collections.emptyList(),
+            false,
+            Collections.emptySet()
+        );
+
+        Assertions.assertFalse(viewDto.hasRealAreas(), "Widget must report hasRealAreas() == false for fallback @Browsing (default)");
+
+        final MockHttpServletRequest request = new MockHttpServletRequest(webApplicationContext.getServletContext());
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        final JakartaServletWebApplication application = JakartaServletWebApplication.buildApplication(webApplicationContext.getServletContext());
+        final IWebExchange webExchange = application.buildExchange(request, response);
+        final WebContext context = new WebContext(webExchange);
+        context.setVariable("dashboardWidgets", List.of(viewDto));
+        context.setVariable("isCustomWidgetsConfigured", Boolean.TRUE);
+
+        final String html = templateEngine.process("fragments/dashboard-widgets", context);
+        Assertions.assertNotNull(html);
+
+        // Verify that plain test class is rendered directly without the Area: group header
+        Assertions.assertTrue(html.contains("Aura_tests_examples_wikipedia_search_yml_Test"), "Must render the test class name");
+        Assertions.assertFalse(html.contains("class=\"area-group-header\""), "Must not render area group header for fallback area");
+        Assertions.assertFalse(html.contains("Area:"), "Must not render Area: header for fallback area");
+    }
+
+    @Test
+    public void testTestVariationsWidgetRendersAreaHierarchyWhenRealAreasExist()
+    {
+        final DashboardWidgetConfigDto config = new DashboardWidgetConfigDto(
+            "widget-variations-2", "Known Test Base Variations", WidgetMetric.TEST_VARIATIONS, "latest",
+            WidgetPresentation.TEST_VARIATIONS, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.ABSOLUTE,
+            WidgetPointScope.LATEST_TEST_STATUS, "full", 0, false
+        );
+
+        final TestBaseVariationEntity variation = new TestBaseVariationEntity(
+            "var-2", "CheckoutProcessTest", "testCheckout", "Default", "@Checkout", "US", "Chrome"
+        );
+        final TestBaseClassDto classDto = new TestBaseClassDto(
+            "CheckoutProcessTest", "containerCheckoutTest", 1, List.of(variation)
+        );
+        final TestBaseAreaDto realArea = new TestBaseAreaDto(
+            "@Checkout", "batchAreaCheckout", "batchTabBtnCheckout", "shopping_cart",
+            1, List.of(classDto)
+        );
+
+        final DashboardWidgetViewDto viewDto = DashboardWidgetViewDto.createTestVariationsView(
+            config,
+            List.of(realArea),
+            List.of(classDto),
+            1,
+            Collections.emptyList(),
+            false,
+            Collections.emptySet()
+        );
+
+        Assertions.assertTrue(viewDto.hasRealAreas(), "Widget must report hasRealAreas() == true for real @Checkout area");
+
+        final MockHttpServletRequest request = new MockHttpServletRequest(webApplicationContext.getServletContext());
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        final JakartaServletWebApplication application = JakartaServletWebApplication.buildApplication(webApplicationContext.getServletContext());
+        final IWebExchange webExchange = application.buildExchange(request, response);
+        final WebContext context = new WebContext(webExchange);
+        context.setVariable("dashboardWidgets", List.of(viewDto));
+        context.setVariable("isCustomWidgetsConfigured", Boolean.TRUE);
+
+        final String html = templateEngine.process("fragments/dashboard-widgets", context);
+        Assertions.assertNotNull(html);
+
+        // Verify that real area hierarchy header is rendered
+        Assertions.assertTrue(html.contains("Area:"), "Must render Area: label for legitimate area");
+        Assertions.assertTrue(html.contains("@Checkout"), "Must render @Checkout area name");
+        Assertions.assertTrue(html.contains("CheckoutProcessTest"), "Must render the test class inside the area");
+    }
+
+    @Test
+    public void testRunReportRendersDefaultInsteadOfBrowsingDefaultForUntaggedTestsWhenRealAreasExist()
+    {
+        final TestExecutionDto execTagged = new TestExecutionDto(
+            "exec-1", "run-1", "com.example.CheckoutTest", "testCheckout", "Checkout Test",
+            "passed-clean", "US", "Chrome", Map.of("Area", List.of("Checkout"))
+        );
+        final TestExecutionDto execUntagged = new TestExecutionDto(
+            "exec-2", "run-1", "com.example.HomeTest", "testHome", "Home Test",
+            "passed-clean", "US", "Chrome", Collections.emptyMap()
+        );
+
+        final AuraReportDataService dataService = webApplicationContext.getBean(AuraReportDataService.class);
+        final List<TestExecutionDto> execs = List.of(execTagged, execUntagged);
+        final List<AreaSummaryDto> areaSummaries = dataService.buildAreaSummaries(execs);
+
+        final RunReportDto report = new RunReportDto(
+            "run-1", "Batch", "2026-11-11 10:00", "5s", 2, 2, 0, 0, 0, 0,
+            execs, areaSummaries
+        );
+
+        final MockHttpServletRequest request = new MockHttpServletRequest(webApplicationContext.getServletContext());
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        final JakartaServletWebApplication application = JakartaServletWebApplication.buildApplication(webApplicationContext.getServletContext());
+        final IWebExchange webExchange = application.buildExchange(request, response);
+        final WebContext context = new WebContext(webExchange);
+        context.setVariable("report", report);
+
+        final String html = templateEngine.process("fragments/run-report", context);
+        Assertions.assertNotNull(html);
+
+        // Verify that report has real areas, so area headers are rendered
+        Assertions.assertTrue(report.hasRealAreas(), "RunReportDto must report hasRealAreas() == true");
+        Assertions.assertTrue(html.contains("@Checkout"), "Must render tagged area @Checkout");
+        Assertions.assertTrue(html.contains("<span>Default</span>"), "Must render untagged tests under Default area");
+        Assertions.assertFalse(html.contains("@Browsing (default)"), "Must not render legacy @Browsing (default)");
+        Assertions.assertFalse(html.contains("@Default"), "Must not render @Default with prepended @");
     }
 }

@@ -23,6 +23,7 @@ import com.xceptance.aura.report.dto.DistributionRatioDto;
 import com.xceptance.aura.report.dto.TestBaseAreaDto;
 import com.xceptance.aura.report.dto.TestBaseClassDto;
 import com.xceptance.aura.report.entity.TestRunEntity;
+import com.xceptance.aura.report.service.AuraReportDataService;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -1187,6 +1188,21 @@ public final class DashboardWidgetViewDto
     public List<TestBaseAreaDto> getTestAreas()
     {
         return testAreas != null ? testAreas : Collections.emptyList();
+    }
+
+    /**
+     * Determines whether this widget contains at least one area that is a legitimate,
+     * user-defined area rather than a fallback placeholder (such as @Browsing (default) or @General).
+     *
+     * @return true if at least one real area is present
+     */
+    public boolean hasRealAreas()
+    {
+        if (testAreas == null || testAreas.isEmpty())
+        {
+            return false;
+        }
+        return testAreas.stream().anyMatch(a -> AuraReportDataService.isRealArea(a.getAreaName()));
     }
 
     public List<TestBaseClassDto> getTestClasses()
