@@ -34,6 +34,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.RequestHeader;
 
 /**
  * Controller advice providing global model attributes for active run context and custom dashboard pages
@@ -76,8 +77,15 @@ public class AuraGlobalModelAdvice
     }
 
     @ModelAttribute
-    public void addGlobalAttributes(final Model model)
+    public void addGlobalAttributes(
+        @RequestHeader(value = "HX-Request", required = false) final String hxRequest,
+        final Model model)
     {
+        if (model != null)
+        {
+            final boolean isHxRequest = hxRequest != null && !hxRequest.isBlank();
+            model.addAttribute("isHxRequest", isHxRequest);
+        }
         if (dashboardSettingService != null && model != null)
         {
             model.addAttribute("customPages", dashboardSettingService.getCustomPages());
@@ -109,15 +117,23 @@ public class AuraGlobalModelAdvice
                     }
                     if (r.getLocalesCsv() != null && !r.getLocalesCsv().isBlank())
                     {
-                        Arrays.stream(r.getLocalesCsv().split(",")).map(String::trim).filter(s -> !s.isEmpty()).forEach(lSet::add);
+                        Arrays.stream(r.getLocalesCsv().split(","))
+                            .map(String::trim)
+                            .filter(AuraReportDataService::isRealLocale)
+                            .forEach(lSet::add);
                     }
-                    if (r.getEnvironment() != null && !r.getEnvironment().isBlank())
+                    if (r.getEnvironment() != null && AuraReportDataService.isRealEnvironment(r.getEnvironment()))
                     {
                         eSet.add(r.getEnvironment().trim());
                     }
                     if (dataService != null)
                     {
-                        dataService.getRunAreas(r).forEach(a -> aSet.add(AuraReportDataService.normalizeArea(a)));
+                        dataService.getRunAreas(r).forEach(a -> {
+                            if (AuraReportDataService.isRealArea(a))
+                            {
+                                aSet.add(AuraReportDataService.normalizeArea(a));
+                            }
+                        });
                     }
                 }
             }
@@ -130,32 +146,45 @@ public class AuraGlobalModelAdvice
                 }
                 if (allKnown.containsKey("location"))
                 {
-                    lSet.addAll(allKnown.get("location"));
+                    allKnown.get("location").forEach(loc -> {
+                        if (AuraReportDataService.isRealLocale(loc))
+                        {
+                            lSet.add(loc.trim());
+                        }
+                    });
                 }
                 if (allKnown.containsKey("environment"))
                 {
-                    eSet.addAll(allKnown.get("environment"));
+                    allKnown.get("environment").forEach(env -> {
+                        if (AuraReportDataService.isRealEnvironment(env))
+                        {
+                            eSet.add(env.trim());
+                        }
+                    });
                 }
                 if (allKnown.containsKey("area"))
                 {
-                    allKnown.get("area").forEach(a -> aSet.add(AuraReportDataService.normalizeArea(a)));
+                    allKnown.get("area").forEach(a -> {
+                        if (AuraReportDataService.isRealArea(a))
+                        {
+                            aSet.add(AuraReportDataService.normalizeArea(a));
+                        }
+                    });
                 }
             }
             if (bSet.isEmpty())
             {
                 bSet.add("Chrome");
             }
-            if (lSet.isEmpty())
+            final List<String> candidateLocales = new ArrayList<>(lSet);
+            final List<String> candidateEnvs = new ArrayList<>(eSet);
+            final List<String> candidateAreas = new ArrayList<>();
+            for (final String a : aSet)
             {
-                lSet.add("Default");
-            }
-            if (eSet.isEmpty())
-            {
-                eSet.add("Default");
-            }
-            if (aSet.isEmpty())
-            {
-                aSet.add("@Browsing (default)");
+                if (AuraReportDataService.isRealArea(a))
+                {
+                    candidateAreas.add(a);
+                }
             }
 
             if (dataService != null)
@@ -175,32 +204,104 @@ public class AuraGlobalModelAdvice
                 : Collections.emptyMap();
 
             model.addAttribute("candidateBrowsers", new ArrayList<>(bSet));
-            model.addAttribute("candidateLocales", new ArrayList<>(lSet));
-            model.addAttribute("candidateEnvs", new ArrayList<>(eSet));
-            model.addAttribute("candidateAreas", new ArrayList<>(aSet));
+            model.addAttribute("candidateLocales", candidateLocales);
+            model.addAttribute("candidateEnvs", candidateEnvs);
+            model.addAttribute("candidateAreas", candidateAreas);
             model.addAttribute("availableIdentityTags", availableIdentityTags);
             model.addAttribute("candidateCustomTags", candidateCustomTags);
         }
-        if (queueService != null && model != null)
+        if (model != null)
         {
-            final String activeRunId = queueService.getCurrentRunId();
-            final boolean running = queueService.isRunningQueue();
-            final String currentBatch = queueService.getCurrentBatchName();
-            final String effectiveBatch = (currentBatch != null && !currentBatch.isBlank()) ? currentBatch : "Default";
+            final boolean isQueueRunning = queueService != null && queueService.isRunningQueue();
+            String activeRunId = isQueueRunning ? queueService.getCurrentRunId() : null;
+            boolean running = isQueueRunning;
+            String currentBatch = isQueueRunning ? queueService.getCurrentBatchName() : null;
+            Integer executedCount = isQueueRunning ? queueService.getGlobalTestsRun() : null;
+            Integer scheduledCount = null;
+            if (isQueueRunning && queueService.getLastRunRequest() != null && queueService.getLastRunRequest().datasets != null)
+            {
+                scheduledCount = queueService.getLastRunRequest().datasets.size();
+            }
+            String progressText = "";
+
+            if (running && executedCount != null)
+            {
+                if (scheduledCount != null && scheduledCount > 0)
+                {
+                    progressText = executedCount + " of " + scheduledCount + " tests";
+                }
+                else
+                {
+                    progressText = executedCount + " executed";
+                }
+            }
+
+            if ((activeRunId == null || activeRunId.isBlank()) && (runRepository != null || dataService != null))
+            {
+                final List<TestRunEntity> allRuns = runRepository != null
+                    ? runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc()
+                    : (dataService != null ? dataService.getAllRuns() : Collections.emptyList());
+
+                final TestRunEntity activeEntity = allRuns.stream()
+                    .filter(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus()))
+                    .findFirst()
+                    .orElse(null);
+
+                if (activeEntity != null)
+                {
+                    activeRunId = activeEntity.getId();
+                    running = true;
+                    currentBatch = activeEntity.getBatchName();
+                    final int runningCount = activeEntity.getRunningCountSafe();
+                    final int total = activeEntity.getTotalTestsSafe();
+                    executedCount = Math.max(0, total - runningCount);
+                    if (total > runningCount && total > 0)
+                    {
+                        scheduledCount = total;
+                        progressText = executedCount + " of " + scheduledCount + " tests (" + runningCount + " running)";
+                    }
+                    else if (runningCount > 0)
+                    {
+                        progressText = executedCount + " executed (" + runningCount + " running)";
+                    }
+                    else
+                    {
+                        progressText = executedCount + " executed";
+                    }
+                }
+                else if (!allRuns.isEmpty())
+                {
+                    final TestRunEntity latestRun = allRuns.get(0);
+                    activeRunId = latestRun.getId();
+                    running = false;
+                    currentBatch = latestRun.getBatchName();
+                    executedCount = latestRun.getTotalTestsSafe();
+                    scheduledCount = latestRun.getTotalTestsSafe();
+                    progressText = executedCount + " tests completed";
+                }
+            }
+
+            final String effectiveBatch = (currentBatch != null && AuraReportDataService.isRealBatch(currentBatch)) ? currentBatch.trim() : "";
             if (activeRunId != null && !activeRunId.isEmpty())
             {
                 model.addAttribute("activeRunId", activeRunId);
                 model.addAttribute("activeBatchName", effectiveBatch);
                 model.addAttribute("activeRunStatus", running ? "running" : "finished");
                 model.addAttribute("activeRunReportUrl", "/run-report?runId=" + activeRunId);
+                model.addAttribute("activeRunProgress", progressText);
+                model.addAttribute("activeRunExecutedCount", executedCount);
+                model.addAttribute("activeRunScheduledCount", scheduledCount);
                 model.addAttribute("hasRunContext", true);
             }
             else
             {
                 model.addAttribute("activeRunId", "");
-                model.addAttribute("activeBatchName", "Default");
+                model.addAttribute("activeBatchName", "");
                 model.addAttribute("activeRunStatus", "");
                 model.addAttribute("activeRunReportUrl", "");
+                model.addAttribute("activeRunProgress", "");
+                model.addAttribute("activeRunExecutedCount", 0);
+                model.addAttribute("activeRunScheduledCount", 0);
                 model.addAttribute("hasRunContext", false);
             }
             model.addAttribute("running", running);
@@ -208,5 +309,15 @@ public class AuraGlobalModelAdvice
             model.addAttribute("parseErrorMessage", "");
             model.addAttribute("editorMode", "visual");
         }
+    }
+
+    /**
+     * Backward-compatible overload for {@link #addGlobalAttributes(String, Model)} without HTMX request header.
+     *
+     * @param model Spring MVC model
+     */
+    public void addGlobalAttributes(final Model model)
+    {
+        addGlobalAttributes(null, model);
     }
 }

@@ -712,6 +712,69 @@ public class AuraReportViewControllerTest
     }
 
     @Test
+    public void testRefreshAndResyncRuns_CustomDashboardPage()
+    {
+        final DashboardPageConfigDto page = new DashboardPageConfigDto(
+            "page-custom-1",
+            "My Custom Dashboard",
+            Collections.emptyList(),
+            0,
+            0L
+        );
+        Mockito.when(settingService.getCustomPage("page-custom-1")).thenReturn(page);
+        Mockito.when(settingService.getWidgetsForPage("page-custom-1")).thenReturn(Collections.emptyList());
+
+        final Model model = new ConcurrentModel();
+        final String currentUrl = "http://localhost:8080/dashboard-pages/page-custom-1";
+        final String view = controller.refreshAndResyncRuns("true", currentUrl, null, model);
+
+        Assertions.assertEquals("fragments/custom-dashboard-page :: customDashboardPage", view);
+        Assertions.assertEquals(page, model.getAttribute("customPage"));
+        Mockito.verify(syncService, Mockito.times(1)).syncLocalRunStorage();
+        Mockito.verify(dataService, Mockito.times(1)).clearCache();
+    }
+
+    @Test
+    public void testRefreshAndResyncRuns_RootUrl_WithConfiguredDashboard()
+    {
+        final DashboardPageConfigDto page = new DashboardPageConfigDto(
+            "page-root-1",
+            "Root Dashboard",
+            Collections.emptyList(),
+            0,
+            0L
+        );
+        Mockito.when(settingService.getRootCustomPages()).thenReturn(List.of(page));
+        Mockito.when(settingService.getCustomPage("page-root-1")).thenReturn(page);
+        Mockito.when(settingService.getWidgetsForPage("page-root-1")).thenReturn(Collections.emptyList());
+
+        final Model model = new ConcurrentModel();
+        final String currentUrl = "http://localhost:8080/";
+        final String view = controller.refreshAndResyncRuns("true", currentUrl, null, model);
+
+        Assertions.assertEquals("fragments/custom-dashboard-page :: customDashboardPage", view);
+        Assertions.assertEquals(page, model.getAttribute("customPage"));
+        Mockito.verify(syncService, Mockito.times(1)).syncLocalRunStorage();
+        Mockito.verify(dataService, Mockito.times(1)).clearCache();
+    }
+
+    @Test
+    public void testRefreshAndResyncRuns_RootUrl_WithoutConfiguredDashboard()
+    {
+        Mockito.when(settingService.getRootCustomPages()).thenReturn(Collections.emptyList());
+        Mockito.when(settingService.getCustomPages()).thenReturn(Collections.emptyList());
+        Mockito.when(runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(Collections.emptyList());
+
+        final Model model = new ConcurrentModel();
+        final String currentUrl = "http://localhost:8080/";
+        final String view = controller.refreshAndResyncRuns("true", currentUrl, null, model);
+
+        Assertions.assertEquals("fragments/batch-history :: batchHistory", view);
+        Mockito.verify(syncService, Mockito.times(1)).syncLocalRunStorage();
+        Mockito.verify(dataService, Mockito.times(1)).clearCache();
+    }
+
+    @Test
     public void testBatchHistoryPopulatesGranularHealingInAreaTrends()
     {
         final TestRunEntity r1 = new TestRunEntity();
@@ -1000,6 +1063,107 @@ public class AuraReportViewControllerTest
             .andExpect(status().isOk())
             .andExpect(view().name("index"))
             .andExpect(model().attribute("activeTab", "Directory"));
+    }
+
+    @Test
+    public void testRootRouteRendersFirstDashboardWhenAvailable() throws Exception
+    {
+        final DashboardPageConfigDto page1 = new DashboardPageConfigDto(
+            "page-first-dash",
+            "Primary Dashboard",
+            Collections.emptyList(),
+            0,
+            System.currentTimeMillis()
+        );
+        Mockito.when(settingService.getRootCustomPages()).thenReturn(List.of(page1));
+        Mockito.when(settingService.getCustomPage("page-first-dash")).thenReturn(page1);
+
+        final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+        mockMvc.perform(get("/"))
+            .andExpect(status().isOk())
+            .andExpect(view().name("index"))
+            .andExpect(model().attribute("activeCustomPageId", "page-first-dash"))
+            .andExpect(model().attribute("pageTitle", "Primary Dashboard"))
+            .andExpect(model().attribute("viewFragment", "fragments/custom-dashboard-page :: customDashboardPage"));
+    }
+
+    @Test
+    public void testCandidateFiltersOmittedWhenOnlyTrivialDefaults()
+    {
+        final TestRunEntity r1 = new TestRunEntity();
+        r1.setId("r1");
+        r1.setBatchName("Queue");
+        r1.setLocalesCsv("Default");
+        r1.setEnvironment("Unknown");
+        r1.setBrowsersCsv("Chrome");
+
+        final TestRunEntity r2 = new TestRunEntity();
+        r2.setId("r2");
+        r2.setBatchName("Default");
+        r2.setLocalesCsv("Unknown");
+        r2.setEnvironment("Default");
+        r2.setBrowsersCsv("Chrome");
+
+        Mockito.when(runRepository.findAll()).thenReturn(List.of(r1, r2));
+        Mockito.when(dataService.getAllKnownTagMap()).thenReturn(Map.of(
+            "browser", List.of("Chrome"),
+            "location", List.of("Default", "Unknown"),
+            "environment", List.of("Default", "Unknown"),
+            "area", List.of("@Browsing (default)")
+        ));
+
+        final Model model = new ConcurrentModel();
+        controller.getWidgetConfigModal((String) null, model);
+
+        @SuppressWarnings("unchecked")
+        final List<String> candidateLocales = (List<String>) model.getAttribute("candidateLocales");
+        @SuppressWarnings("unchecked")
+        final List<String> candidateEnvs = (List<String>) model.getAttribute("candidateEnvs");
+        @SuppressWarnings("unchecked")
+        final List<String> candidateAreas = (List<String>) model.getAttribute("candidateAreas");
+
+        Assertions.assertNotNull(candidateLocales);
+        Assertions.assertTrue(candidateLocales.isEmpty(), "candidateLocales should be empty when only 'Default' or 'Unknown' is known");
+        Assertions.assertNotNull(candidateEnvs);
+        Assertions.assertTrue(candidateEnvs.isEmpty(), "candidateEnvs should be empty when only 'Default' or 'Unknown' is known");
+        Assertions.assertNotNull(candidateAreas);
+        Assertions.assertTrue(candidateAreas.isEmpty(), "candidateAreas should be empty when only fallback default is known");
+    }
+
+    @Test
+    public void testCandidateFiltersPopulatedWhenRealOptionsExist()
+    {
+        final TestRunEntity r1 = new TestRunEntity();
+        r1.setId("r1");
+        r1.setBatchName("Queue");
+        r1.setLocalesCsv("en-US");
+        r1.setEnvironment("Staging");
+        r1.setBrowsersCsv("Chrome");
+        Mockito.when(runRepository.findAll()).thenReturn(List.of(r1));
+        Mockito.when(dataService.getAllKnownTagMap()).thenReturn(Map.of(
+            "browser", List.of("Chrome", "Firefox"),
+            "location", List.of("en-US", "de-DE"),
+            "environment", List.of("Staging"),
+            "area", List.of("@Checkout", "@Browsing (default)")
+        ));
+
+        final Model model = new ConcurrentModel();
+        controller.getWidgetConfigModal((String) null, model);
+
+        @SuppressWarnings("unchecked")
+        final List<String> candidateLocales = (List<String>) model.getAttribute("candidateLocales");
+        @SuppressWarnings("unchecked")
+        final List<String> candidateEnvs = (List<String>) model.getAttribute("candidateEnvs");
+        @SuppressWarnings("unchecked")
+        final List<String> candidateAreas = (List<String>) model.getAttribute("candidateAreas");
+
+        Assertions.assertNotNull(candidateLocales);
+        Assertions.assertTrue(candidateLocales.contains("en-US"));
+        Assertions.assertNotNull(candidateEnvs);
+        Assertions.assertTrue(candidateEnvs.contains("Staging"));
+        Assertions.assertNotNull(candidateAreas);
+        Assertions.assertTrue(candidateAreas.contains("@Checkout"));
+        Assertions.assertFalse(candidateAreas.contains("@Browsing (default)"));
     }
 
     @Test
@@ -2398,16 +2562,12 @@ public class AuraReportViewControllerTest
         Assertions.assertTrue(html.contains("Build:"), "Should render Build tag key");
         Assertions.assertTrue(html.contains("build-1039"), "Should render Build tag value");
 
-        // Multiline chips for locales & browsers
-        Assertions.assertTrue(html.contains("cell-locales"), "Should render cell-locales wrapper");
-        Assertions.assertTrue(html.contains("tag-chip tag-locale"), "Should render individual locale chips");
-        Assertions.assertTrue(html.contains(">DE</span>"), "Should render DE locale chip");
-        Assertions.assertTrue(html.contains(">US</span>"), "Should render US locale chip");
-
-        Assertions.assertTrue(html.contains("cell-browsers"), "Should render cell-browsers wrapper");
-        Assertions.assertTrue(html.contains("tag-chip tag-browser"), "Should render individual browser chips");
-        Assertions.assertTrue(html.contains(">Chrome_headless</span>"), "Should render Chrome_headless chip");
-        Assertions.assertTrue(html.contains(">Firefox_1920x1080</span>"), "Should render Firefox_1920x1080 chip");
+        // Redundant Trigger, Locales, and Browsers columns removed from table to give space to Tags
+        Assertions.assertFalse(html.contains("<th>Trigger</th>"), "Table header 'Trigger' should no longer exist");
+        Assertions.assertFalse(html.contains("<th>Locales</th>"), "Table header 'Locales' should no longer exist");
+        Assertions.assertFalse(html.contains("<th>Browsers</th>"), "Table header 'Browsers' should no longer exist");
+        Assertions.assertFalse(html.contains("cell-locales"), "Table should no longer render cell-locales column");
+        Assertions.assertFalse(html.contains("cell-browsers"), "Table should no longer render cell-browsers column");
 
         // Fallback run renders Suite tag chip
         Assertions.assertTrue(html.contains("custom-dev"), "Fallback run should render custom-dev in tags cell");
@@ -2510,6 +2670,45 @@ public class AuraReportViewControllerTest
         Assertions.assertNotNull(run.getTags());
         Assertions.assertTrue(run.getTags().stream().anyMatch(t -> "Suite".equalsIgnoreCase(t.getTagKey()) && "SmokeSuite".equals(t.getTagValue())));
         Assertions.assertTrue(run.getTags().stream().anyMatch(t -> "Environment".equalsIgnoreCase(t.getTagKey()) && "STG".equals(t.getTagValue())));
+        Assertions.assertTrue(run.getTags().stream().anyMatch(t -> "Branch".equalsIgnoreCase(t.getTagKey()) && "develop".equals(t.getTagValue())));
+    }
+
+    @Test
+    public void testPopulateRunTagsSuppressesTrivialDefaultAndUnknownTags()
+    {
+        final TestRunRepository runRepo = Mockito.mock(TestRunRepository.class);
+        final TestBatchRepository batchRepo = Mockito.mock(TestBatchRepository.class);
+        final TestBaseVariationRepository varRepo = Mockito.mock(TestBaseVariationRepository.class);
+        final TestBaseBugRepository bugRepo = Mockito.mock(TestBaseBugRepository.class);
+        final TestRunTagRepository tagRepo = Mockito.mock(TestRunTagRepository.class);
+
+        final AuraReportDataService svc = new AuraReportDataService(
+            runRepo,
+            batchRepo,
+            varRepo,
+            bugRepo,
+            tagRepo,
+            null,
+            null,
+            null
+        );
+
+        final TestRunEntity run = new TestRunEntity();
+        run.setId("run-unknown-456");
+        run.setBatchName("Queue");
+        run.setEnvironment("Unknown");
+
+        Mockito.when(tagRepo.findByRunIdIn(List.of("run-unknown-456"))).thenReturn(List.of(
+            new TestRunTagEntity("run-unknown-456", "Branch", "develop"),
+            new TestRunTagEntity("run-unknown-456", "Environment", "Unknown"),
+            new TestRunTagEntity("run-unknown-456", "Suite", "Default")
+        ));
+
+        svc.populateRunTags(List.of(run));
+
+        Assertions.assertNotNull(run.getTags());
+        Assertions.assertFalse(run.getTags().stream().anyMatch(t -> "Suite".equalsIgnoreCase(t.getTagKey())), "Suite tag should not be synthesized for 'Queue' or kept if 'Default'");
+        Assertions.assertFalse(run.getTags().stream().anyMatch(t -> "Environment".equalsIgnoreCase(t.getTagKey())), "Environment tag should not be synthesized or kept for 'Unknown'");
         Assertions.assertTrue(run.getTags().stream().anyMatch(t -> "Branch".equalsIgnoreCase(t.getTagKey()) && "develop".equals(t.getTagValue())));
     }
 
@@ -4095,6 +4294,48 @@ public class AuraReportViewControllerTest
 
         Mockito.verify(settingService).reorderContainerChildren("page-custom-1", "cont-1", List.of("c-2", "c-1"));
         Assertions.assertNotNull(result);
+    }
+
+    @Test
+    public void testReorderWidgets_RootUrl_InvokesSettingServiceWithResolvedPageId()
+    {
+        final DashboardPageConfigDto rootPage = new DashboardPageConfigDto(
+            "page-default",
+            "Default Dashboard",
+            Collections.emptyList(),
+            0,
+            0L
+        );
+        Mockito.when(settingService.getRootCustomPages()).thenReturn(List.of(rootPage));
+        Mockito.when(settingService.getCustomPage("page-default")).thenReturn(rootPage);
+        Mockito.when(settingService.getWidgetsForPage("page-default")).thenReturn(Collections.emptyList());
+
+        final Model model = new ConcurrentModel();
+        final String result = controller.reorderWidgets("w-3,w-1,w-2", "true", "http://localhost:8080/", null, model);
+
+        Mockito.verify(settingService).reorderWidgets("page-default", List.of("w-3", "w-1", "w-2"));
+        Assertions.assertEquals("fragments/custom-dashboard-page :: customDashboardPage", result);
+    }
+
+    @Test
+    public void testReorderContainerChildren_RootUrl_InvokesSettingServiceWithResolvedPageId()
+    {
+        final DashboardPageConfigDto rootPage = new DashboardPageConfigDto(
+            "page-default",
+            "Default Dashboard",
+            Collections.emptyList(),
+            0,
+            0L
+        );
+        Mockito.when(settingService.getRootCustomPages()).thenReturn(List.of(rootPage));
+        Mockito.when(settingService.getCustomPage("page-default")).thenReturn(rootPage);
+        Mockito.when(settingService.getWidgetsForPage("page-default")).thenReturn(Collections.emptyList());
+
+        final Model model = new ConcurrentModel();
+        final String result = controller.reorderContainerChildren("cont-1", "c-3,c-1", "true", "http://localhost:8080/", null, model);
+
+        Mockito.verify(settingService).reorderContainerChildren("page-default", "cont-1", List.of("c-3", "c-1"));
+        Assertions.assertEquals("fragments/custom-dashboard-page :: customDashboardPage", result);
     }
 
     @Test

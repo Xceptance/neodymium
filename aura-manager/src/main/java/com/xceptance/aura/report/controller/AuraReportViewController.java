@@ -58,6 +58,7 @@ import com.xceptance.aura.report.repository.TestRunRepository;
 import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.ReportDashboardSettingService;
 import com.xceptance.aura.report.service.RunStorageSyncService;
+import java.net.URI;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -173,7 +174,47 @@ public class AuraReportViewController
         return dataService.getAllKnownTagsList();
     }
 
-    @GetMapping({"/", "/report", "/batch-overview", "/fragments/batch-overview"})
+    /**
+     * Root URL handler displaying the first configured dashboard page on server start.
+     * Falls back to batch overview if no dashboards exist.
+     *
+     * @param hxRequest HTMX request header
+     * @param response HTTP response
+     * @param model Spring MVC model
+     * @return custom dashboard view or batch overview fallback
+     */
+    @GetMapping("/")
+    public String rootIndex(
+        @RequestHeader(value = "HX-Request", required = false) final String hxRequest,
+        final HttpServletResponse response,
+        final Model model)
+    {
+        final List<DashboardPageConfigDto> rootPages = (dashboardSettingService != null)
+            ? dashboardSettingService.getRootCustomPages()
+            : Collections.emptyList();
+
+        final DashboardPageConfigDto firstDashboard;
+        if (rootPages != null && !rootPages.isEmpty())
+        {
+            firstDashboard = rootPages.get(0);
+        }
+        else
+        {
+            final List<DashboardPageConfigDto> allPages = (dashboardSettingService != null)
+                ? dashboardSettingService.getCustomPages()
+                : Collections.emptyList();
+            firstDashboard = (allPages != null && !allPages.isEmpty()) ? allPages.get(0) : null;
+        }
+
+        if (firstDashboard != null && firstDashboard.getId() != null)
+        {
+            return getCustomDashboardPage(firstDashboard.getId(), hxRequest, response, model);
+        }
+
+        return batchOverview(null, hxRequest, model);
+    }
+
+    @GetMapping({"/report", "/batch-overview", "/fragments/batch-overview"})
     public String batchOverview(
         @RequestParam(name = "groupBy", required = false) final String groupBy,
         @RequestParam(name = "limit", required = false) final Integer limit,
@@ -462,7 +503,19 @@ public class AuraReportViewController
         final String targetUrl = currentUrl != null && !currentUrl.isBlank() ? currentUrl : referer;
         if (targetUrl != null)
         {
-            if (targetUrl.contains("/run-report"))
+            if (targetUrl.contains("/dashboard-pages/"))
+            {
+                final String pageId = extractDashboardPageId(targetUrl);
+                if (pageId != null && !pageId.isBlank())
+                {
+                    return getCustomDashboardPage(pageId, hxRequest, model);
+                }
+            }
+            else if (isRootUrl(targetUrl))
+            {
+                return rootIndex(hxRequest, null, model);
+            }
+            else if (targetUrl.contains("/run-report"))
             {
                 final String runId = extractQueryParam(targetUrl, "runId");
                 final String executionId = extractQueryParam(targetUrl, "executionId");
@@ -478,6 +531,15 @@ public class AuraReportViewController
                 final String groupType = extractQueryParam(targetUrl, "groupType");
                 final String groupValue = extractQueryParam(targetUrl, "groupValue");
                 final String limitParam = extractQueryParam(targetUrl, "limit");
+                final String excludeRuns = extractQueryParam(targetUrl, "excludeRuns");
+                final String olderThanDate = extractQueryParam(targetUrl, "olderThanDate");
+                final String startDate = extractQueryParam(targetUrl, "startDate");
+                final String endDate = extractQueryParam(targetUrl, "endDate");
+                final String runBrowsers = extractQueryParam(targetUrl, "runBrowsers");
+                final String runLocales = extractQueryParam(targetUrl, "runLocales");
+                final String runEnvs = extractQueryParam(targetUrl, "runEnvs");
+                final String runAreas = extractQueryParam(targetUrl, "runAreas");
+                final String runTags = extractQueryParam(targetUrl, "runTags");
                 Integer limit = null;
                 if (limitParam != null && !limitParam.isBlank())
                 {
@@ -490,7 +552,11 @@ public class AuraReportViewController
                         // Fall back to no limit
                     }
                 }
-                return batchHistory(batchName, groupType, groupValue, limit, null, null, hxRequest, model);
+                final Map<String, String> allParams = AuraReportDataService.parseQueryParams(targetUrl);
+                return batchHistory(
+                    batchName, groupType, groupValue, limit, excludeRuns, olderThanDate, startDate, endDate,
+                    runBrowsers, runLocales, runEnvs, runAreas, runTags, hxRequest, model, allParams
+                );
             }
             else if (targetUrl.contains("/test-base"))
             {
@@ -532,6 +598,10 @@ public class AuraReportViewController
                 {
                     return getCustomDashboardPage(pageId, hxRequest, model);
                 }
+            }
+            else if (isRootUrl(targetUrl))
+            {
+                return rootIndex(hxRequest, null, model);
             }
             else if (targetUrl.contains("/batch-history"))
             {
@@ -595,6 +665,11 @@ public class AuraReportViewController
             }
         }
 
+        if (isRootUrl(targetUrl))
+        {
+            return rootIndex(hxRequest, null, model);
+        }
+
         if (targetUrl != null && targetUrl.contains("/batch-history"))
         {
             final String batchName = extractQueryParam(targetUrl, "batchName");
@@ -656,6 +731,65 @@ public class AuraReportViewController
         }
         final String rawId = url.substring(start, end).trim();
         return rawId.isEmpty() ? null : rawId;
+    }
+
+    /**
+     * Checks if the given URL represents the root URL path ('/' or empty path).
+     *
+     * @param url input URL
+     * @return true if URL points to root path, false otherwise
+     */
+    private boolean isRootUrl(final String url)
+    {
+        if (url == null || url.isBlank())
+        {
+            return false;
+        }
+        try
+        {
+            final URI uri = URI.create(url.trim());
+            final String path = uri.getPath();
+            return path == null || path.isEmpty() || "/".equals(path);
+        }
+        catch (final Exception ignored)
+        {
+            final String clean = url.split("[?#]", 2)[0].trim();
+            return clean.isEmpty() || "/".equals(clean) || clean.matches("^https?://[^/]+/?$");
+        }
+    }
+
+    /**
+     * Resolves the target dashboard page ID from a URL, extracting /dashboard-pages/{pageId}
+     * or resolving to the primary configured dashboard page if the URL is the root URL.
+     *
+     * @param url input URL
+     * @return resolved dashboard page ID, or null if none
+     */
+    private String resolveTargetPageId(final String url)
+    {
+        final String pageId = extractDashboardPageId(url);
+        if (pageId != null && !pageId.isBlank())
+        {
+            return pageId;
+        }
+        if (isRootUrl(url))
+        {
+            final List<DashboardPageConfigDto> rootPages = (dashboardSettingService != null)
+                ? dashboardSettingService.getRootCustomPages()
+                : Collections.emptyList();
+            if (rootPages != null && !rootPages.isEmpty())
+            {
+                return rootPages.get(0).getId();
+            }
+            final List<DashboardPageConfigDto> allPages = (dashboardSettingService != null)
+                ? dashboardSettingService.getCustomPages()
+                : Collections.emptyList();
+            if (allPages != null && !allPages.isEmpty())
+            {
+                return allPages.get(0).getId();
+            }
+        }
+        return null;
     }
 
     /**
@@ -1697,15 +1831,23 @@ public class AuraReportViewController
                 }
                 if (r.getLocalesCsv() != null && !r.getLocalesCsv().isBlank())
                 {
-                    Arrays.stream(r.getLocalesCsv().split(",")).map(String::trim).filter(s -> !s.isEmpty()).forEach(lSet::add);
+                    Arrays.stream(r.getLocalesCsv().split(","))
+                        .map(String::trim)
+                        .filter(AuraReportDataService::isRealLocale)
+                        .forEach(lSet::add);
                 }
-                if (r.getEnvironment() != null && !r.getEnvironment().isBlank())
+                if (r.getEnvironment() != null && AuraReportDataService.isRealEnvironment(r.getEnvironment()))
                 {
                     eSet.add(r.getEnvironment().trim());
                 }
                 if (dataService != null)
                 {
-                    dataService.getRunAreas(r).forEach(a -> aSet.add(AuraReportDataService.normalizeArea(a)));
+                    dataService.getRunAreas(r).forEach(a -> {
+                        if (AuraReportDataService.isRealArea(a))
+                        {
+                            aSet.add(AuraReportDataService.normalizeArea(a));
+                        }
+                    });
                 }
             }
             if (dataService != null)
@@ -1717,44 +1859,50 @@ public class AuraReportViewController
                 }
                 if (allKnown.containsKey("location"))
                 {
-                    lSet.addAll(allKnown.get("location"));
+                    allKnown.get("location").forEach(loc -> {
+                        if (AuraReportDataService.isRealLocale(loc))
+                        {
+                            lSet.add(loc.trim());
+                        }
+                    });
                 }
                 if (allKnown.containsKey("environment"))
                 {
-                    eSet.addAll(allKnown.get("environment"));
+                    allKnown.get("environment").forEach(env -> {
+                        if (AuraReportDataService.isRealEnvironment(env))
+                        {
+                            eSet.add(env.trim());
+                        }
+                    });
                 }
                 if (allKnown.containsKey("area"))
                 {
-                    allKnown.get("area").forEach(a -> aSet.add(AuraReportDataService.normalizeArea(a)));
+                    allKnown.get("area").forEach(a -> {
+                        if (AuraReportDataService.isRealArea(a))
+                        {
+                            aSet.add(AuraReportDataService.normalizeArea(a));
+                        }
+                    });
                 }
             }
             if (bSet.isEmpty())
             {
                 bSet.add("Chrome");
             }
-            if (lSet.isEmpty())
-            {
-                lSet.add("Default");
-            }
-            if (eSet.isEmpty())
-            {
-                eSet.add("Default");
-            }
-            if (aSet.isEmpty())
-            {
-                aSet.add("@Browsing (default)");
-            }
             candidateBrowsers.addAll(bSet);
             candidateLocales.addAll(lSet);
             candidateEnvs.addAll(eSet);
-            candidateAreas.addAll(aSet);
+            for (final String a : aSet)
+            {
+                if (AuraReportDataService.isRealArea(a))
+                {
+                    candidateAreas.add(a);
+                }
+            }
         }
         else
         {
             candidateBrowsers.add("Chrome");
-            candidateLocales.add("Default");
-            candidateEnvs.add("Default");
-            candidateAreas.add("@Browsing (default)");
         }
 
         if (dataService != null)
@@ -1809,7 +1957,7 @@ public class AuraReportViewController
         final String targetUrl = currentUrl != null && !currentUrl.isBlank() ? currentUrl : referer;
         final String resolvedPageId = (pageIdParam != null && !pageIdParam.isBlank())
             ? pageIdParam
-            : extractDashboardPageId(targetUrl);
+            : resolveTargetPageId(targetUrl);
 
         final List<DashboardWidgetConfigDto> allWidgets;
         if (dashboardSettingService != null)
@@ -1909,7 +2057,7 @@ public class AuraReportViewController
         final Model model)
     {
         final String targetUrl = (currentUrl != null && !currentUrl.isBlank()) ? currentUrl : referer;
-        final String resolvedPageId = extractDashboardPageId(targetUrl);
+        final String resolvedPageId = resolveTargetPageId(targetUrl);
         final List<DashboardWidgetConfigDto> allWidgets;
         if (dashboardSettingService != null)
         {
@@ -2267,7 +2415,7 @@ public class AuraReportViewController
         final String targetUrl = currentUrl != null && !currentUrl.isBlank() ? currentUrl : referer;
         final String resolvedPageId = (pageIdParam != null && !pageIdParam.isBlank())
             ? pageIdParam
-            : extractDashboardPageId(targetUrl);
+            : resolveTargetPageId(targetUrl);
 
         if (dashboardSettingService != null)
         {
@@ -2455,7 +2603,7 @@ public class AuraReportViewController
         final Model model)
     {
         final String targetUrl = currentUrl != null && !currentUrl.isBlank() ? currentUrl : referer;
-        final String resolvedPageId = extractDashboardPageId(targetUrl);
+        final String resolvedPageId = resolveTargetPageId(targetUrl);
         if (dashboardSettingService != null && widgetId != null && !widgetId.isBlank())
         {
             if (resolvedPageId != null && !resolvedPageId.isBlank())
@@ -2491,7 +2639,7 @@ public class AuraReportViewController
         final Model model)
     {
         final String targetUrl = currentUrl != null && !currentUrl.isBlank() ? currentUrl : referer;
-        final String resolvedPageId = extractDashboardPageId(targetUrl);
+        final String resolvedPageId = resolveTargetPageId(targetUrl);
         if (dashboardSettingService != null && widgetId != null && !widgetId.isBlank())
         {
             final List<DashboardWidgetConfigDto> pageWidgets = (resolvedPageId != null && !resolvedPageId.isBlank())
@@ -2538,7 +2686,7 @@ public class AuraReportViewController
         final Model model)
     {
         final String targetUrl = currentUrl != null && !currentUrl.isBlank() ? currentUrl : referer;
-        final String resolvedPageId = extractDashboardPageId(targetUrl);
+        final String resolvedPageId = resolveTargetPageId(targetUrl);
         if (dashboardSettingService != null && widgetId != null && !widgetId.isBlank())
         {
             final List<DashboardWidgetConfigDto> pageWidgets = (resolvedPageId != null && !resolvedPageId.isBlank())
@@ -2581,7 +2729,7 @@ public class AuraReportViewController
         final Model model)
     {
         final String targetUrl = currentUrl != null && !currentUrl.isBlank() ? currentUrl : referer;
-        final String resolvedPageId = extractDashboardPageId(targetUrl);
+        final String resolvedPageId = resolveTargetPageId(targetUrl);
         if (dashboardSettingService != null)
         {
             if (resolvedPageId != null && !resolvedPageId.isBlank())
@@ -2615,7 +2763,7 @@ public class AuraReportViewController
         final Model model)
     {
         final String targetUrl = currentUrl != null && !currentUrl.isBlank() ? currentUrl : referer;
-        final String resolvedPageId = extractDashboardPageId(targetUrl);
+        final String resolvedPageId = resolveTargetPageId(targetUrl);
         if (dashboardSettingService != null && widgetIdsCsv != null && !widgetIdsCsv.isBlank())
         {
             final List<String> ids = Arrays.stream(widgetIdsCsv.split(","))
@@ -2655,7 +2803,7 @@ public class AuraReportViewController
         final Model model)
     {
         final String targetUrl = currentUrl != null && !currentUrl.isBlank() ? currentUrl : referer;
-        final String resolvedPageId = extractDashboardPageId(targetUrl);
+        final String resolvedPageId = resolveTargetPageId(targetUrl);
         if (dashboardSettingService != null && containerId != null && !containerId.isBlank() && childIdsCsv != null && !childIdsCsv.isBlank())
         {
             final List<String> ids = Arrays.stream(childIdsCsv.split(","))
@@ -2695,7 +2843,7 @@ public class AuraReportViewController
         final Model model)
     {
         final String targetUrl = currentUrl != null && !currentUrl.isBlank() ? currentUrl : referer;
-        final String resolvedPageId = extractDashboardPageId(targetUrl);
+        final String resolvedPageId = resolveTargetPageId(targetUrl);
         if (dashboardSettingService != null && targetWidgetId != null && sourceWidgetId != null && !targetWidgetId.equals(sourceWidgetId))
         {
             final List<DashboardWidgetConfigDto> allWidgets = (resolvedPageId != null && !resolvedPageId.isBlank())
@@ -2807,7 +2955,7 @@ public class AuraReportViewController
         final Model model)
     {
         final String targetUrl = currentUrl != null && !currentUrl.isBlank() ? currentUrl : referer;
-        final String resolvedPageId = extractDashboardPageId(targetUrl);
+        final String resolvedPageId = resolveTargetPageId(targetUrl);
         if (dashboardSettingService != null && containerId != null && !containerId.isBlank())
         {
             if (resolvedPageId != null && !resolvedPageId.isBlank())
@@ -2843,7 +2991,7 @@ public class AuraReportViewController
         final Model model)
     {
         final String targetUrl = currentUrl != null && !currentUrl.isBlank() ? currentUrl : referer;
-        final String resolvedPageId = extractDashboardPageId(targetUrl);
+        final String resolvedPageId = resolveTargetPageId(targetUrl);
         if (dashboardSettingService != null && widgetId != null && !widgetId.isBlank())
         {
             if (resolvedPageId != null && !resolvedPageId.isBlank())
@@ -2883,7 +3031,7 @@ public class AuraReportViewController
         final String targetUrl = currentUrl != null && !currentUrl.isBlank() ? currentUrl : referer;
         final String resolvedPageId = (pageIdParam != null && !pageIdParam.isBlank())
             ? pageIdParam
-            : extractDashboardPageId(targetUrl);
+            : resolveTargetPageId(targetUrl);
         if (dashboardSettingService != null && widgetId != null && !widgetId.isBlank() && title != null && !title.isBlank())
         {
             if (resolvedPageId != null && !resolvedPageId.isBlank())
@@ -5131,6 +5279,7 @@ public class AuraReportViewController
         model.addAttribute("filterLocales", testBaseData.getFilterLocales());
         model.addAttribute("filterBrowsers", testBaseData.getFilterBrowsers());
         model.addAttribute("areas", testBaseData.getAreas());
+        model.addAttribute("hasRealAreas", testBaseData.hasRealAreas());
         model.addAttribute("bugsMap", testBaseData.getBugsMap());
         model.addAttribute("totalClassesCount", testBaseData.getTotalTestClassesCount());
         model.addAttribute("totalVariationsCount", testBaseData.getTotalVariationsCount());
