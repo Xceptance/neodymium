@@ -610,4 +610,16 @@ public class AuraReportViewControllerTest
 
         Assertions.assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
     }
+
+    @Test
+    public void testServeRunFilePathTraversalReturns404()
+    {
+        final ResponseEntity<Resource> response = controller.serveRunFile(
+            "test_run",
+            "../../etc",
+            "passwd"
+        );
+
+        Assertions.assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+    }
 }

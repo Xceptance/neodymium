@@ -4734,7 +4734,7 @@ function renderStepsForExecution(activeRow) {
             videoPreviewBox.style.display = 'flex';
         }
         const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '');
-        let testClass = activeRow.getAttribute('data-test-class') || activeRow.getAttribute('data-test-name') || activeRow.getAttribute('data-class-name') || '';
+        let testClass = activeRow.getAttribute('data-test-class') || activeRow.getAttribute('data-test-name') || activeRow.getAttribute('data-class-name') || 'DefaultTestClass';
         if (testClass.includes('.')) {
             testClass = testClass.substring(testClass.lastIndexOf('.') + 1);
         }
@@ -4783,7 +4783,10 @@ function openAttachmentWindow(type, url) {
         const activeRow = document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row');
         if (activeRow) {
             const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '');
-            const testClass = activeRow.getAttribute('data-test-class') || activeRow.getAttribute('data-test-name') || activeRow.getAttribute('data-class-name') || '';
+            let testClass = activeRow.getAttribute('data-test-class') || activeRow.getAttribute('data-test-name') || activeRow.getAttribute('data-class-name') || 'DefaultTestClass';
+            if (testClass.includes('.')) {
+                testClass = testClass.substring(testClass.lastIndexOf('.') + 1);
+            }
             const filename = activeRow.getAttribute('data-video-url') || url;
             if (filename.startsWith('http') || filename.startsWith('/')) {
                 targetUrl = filename;

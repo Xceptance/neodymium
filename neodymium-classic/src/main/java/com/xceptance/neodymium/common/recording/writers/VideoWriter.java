@@ -160,8 +160,12 @@ public class VideoWriter implements Writer
         }
         File tempFile = new File(recordingConfigurations.tempFolderToStoreRecording() + "/" + "temp" + UUID.randomUUID() + ".mp4");
         new File(videoFileName).renameTo(tempFile);
-        double actualFramerate = screenshots / ((double) testDuration / 1000);
-        pb = new ProcessBuilder(recordingConfigurations.ffmpegBinaryPath(), "-y", "-r", actualFramerate + "", "-i", tempFile.getPath(), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", videoFileName);
+        double actualFramerate = screenshots / ((double) testDuration / 1000.0);
+        if (Double.isNaN(actualFramerate) || Double.isInfinite(actualFramerate) || actualFramerate <= 0.0)
+        {
+            actualFramerate = 1.0;
+        }
+        pb = new ProcessBuilder(recordingConfigurations.ffmpegBinaryPath(), "-y", "-r", String.valueOf(actualFramerate), "-i", tempFile.getPath(), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", videoFileName);
 
         pb.redirectErrorStream(true);
         pb.redirectOutput(Redirect.appendTo(new File((this.recordingConfigurations).ffmpegLogFile())));

@@ -628,39 +628,52 @@ public class AuraReportViewController
         @PathVariable("testClass") final String testClass,
         @PathVariable("filename") final String filename)
     {
-        final Path filePath = Paths.get("storage/runs", runId, testClass, filename);
-        if (Files.exists(filePath) && Files.isReadable(filePath))
+        final Path baseStoragePath = Paths.get("storage/runs").toAbsolutePath().normalize();
+        final Path baseSandboxPath = Paths.get("target/aura-sandbox/allure-results").toAbsolutePath().normalize();
+
+        Path candidate = resolveSafePath(baseStoragePath, runId, testClass, filename);
+        if (candidate != null)
         {
-            return servePath(filePath, filename);
+            return servePath(candidate, filename);
         }
 
         if (testClass.contains(".") && !testClass.endsWith("."))
         {
             final String simpleClass = testClass.substring(testClass.lastIndexOf('.') + 1);
-            final Path simplePath = Paths.get("storage/runs", runId, simpleClass, filename);
-            if (Files.exists(simplePath) && Files.isReadable(simplePath))
+            candidate = resolveSafePath(baseStoragePath, runId, simpleClass, filename);
+            if (candidate != null)
             {
-                return servePath(simplePath, filename);
+                return servePath(candidate, filename);
             }
         }
 
-        final Path runSandboxPath = Paths.get("target/aura-sandbox/allure-results", runId, testClass, filename);
-        if (Files.exists(runSandboxPath) && Files.isReadable(runSandboxPath))
+        candidate = resolveSafePath(baseSandboxPath, runId, testClass, filename);
+        if (candidate != null)
         {
-            return servePath(runSandboxPath, filename);
+            return servePath(candidate, filename);
         }
 
         if (testClass.contains(".") && !testClass.endsWith("."))
         {
             final String simpleClass = testClass.substring(testClass.lastIndexOf('.') + 1);
-            final Path simpleSandboxPath = Paths.get("target/aura-sandbox/allure-results", runId, simpleClass, filename);
-            if (Files.exists(simpleSandboxPath) && Files.isReadable(simpleSandboxPath))
+            candidate = resolveSafePath(baseSandboxPath, runId, simpleClass, filename);
+            if (candidate != null)
             {
-                return servePath(simpleSandboxPath, filename);
+                return servePath(candidate, filename);
             }
         }
 
         return ResponseEntity.notFound().build();
+    }
+
+    private Path resolveSafePath(final Path baseDir, final String runId, final String className, final String filename)
+    {
+        final Path resolved = baseDir.resolve(Paths.get(runId, className, filename)).normalize();
+        if (!resolved.startsWith(baseDir))
+        {
+            return null;
+        }
+        return (Files.exists(resolved) && Files.isReadable(resolved)) ? resolved : null;
     }
 
     private ResponseEntity<Resource> servePath(final Path path, final String filename)
