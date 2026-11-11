@@ -1397,6 +1397,92 @@ public class ReportDashboardSettingServiceTest
     }
 
     @Test
+    public void testDefaultCustomPagesWhenUnconfigured()
+    {
+        Assertions.assertFalse(service.isCustomPagesConfigured(), "Should not be configured initially");
+
+        final List<DashboardPageConfigDto> defaultPages = service.getCustomPages();
+        Assertions.assertEquals(3, defaultPages.size(), "Should have exactly 3 default custom dashboard pages");
+
+        // General Overview
+        final DashboardPageConfigDto v1 = defaultPages.get(0);
+        Assertions.assertEquals("default-page-general-overview", v1.getId());
+        Assertions.assertEquals("General Overview", v1.getName());
+        Assertions.assertEquals(0, v1.getSortOrder());
+        Assertions.assertEquals(9, v1.getWidgets().size(), "General Overview should contain 9 top-level widgets/containers");
+        final DashboardWidgetConfigDto v1Container = v1.getWidgets().stream()
+            .filter(w -> "default-v1-container-status".equals(w.getId()))
+            .findFirst()
+            .orElse(null);
+        Assertions.assertNotNull(v1Container);
+        Assertions.assertEquals(6, v1Container.getChildren().size(), "General Overview container should contain 6 child widgets");
+
+        // Test Health Overview
+        final DashboardPageConfigDto v2 = defaultPages.get(1);
+        Assertions.assertEquals("default-page-test-health-overview", v2.getId());
+        Assertions.assertEquals("Test Health Overview", v2.getName());
+        Assertions.assertEquals(1, v2.getSortOrder());
+        Assertions.assertEquals(3, v2.getWidgets().size(), "Test Health Overview should contain 3 top-level widgets/containers");
+        final DashboardWidgetConfigDto v2Container = v2.getWidgets().stream()
+            .filter(w -> "default-v2-container-health".equals(w.getId()))
+            .findFirst()
+            .orElse(null);
+        Assertions.assertNotNull(v2Container);
+        Assertions.assertEquals(6, v2Container.getChildren().size(), "Test Health Overview container should contain 6 child widgets");
+
+        final DashboardWidgetConfigDto v2Trend = v2.getWidgets().stream()
+            .filter(w -> "default-v2-status-trend".equals(w.getId()))
+            .findFirst()
+            .orElse(null);
+        Assertions.assertNotNull(v2Trend);
+        Assertions.assertTrue(v2Trend.isOverrideRunFilters());
+        Assertions.assertNotNull(v2Trend.getRunFilters());
+        Assertions.assertEquals(Integer.valueOf(30), v2Trend.getRunFilters().getLimit());
+
+        // Costs Overview
+        final DashboardPageConfigDto v3 = defaultPages.get(2);
+        Assertions.assertEquals("default-page-costs-overview", v3.getId());
+        Assertions.assertEquals("Costs Overview", v3.getName());
+        Assertions.assertEquals(2, v3.getSortOrder());
+        Assertions.assertEquals(4, v3.getWidgets().size(), "Costs Overview should contain 4 top-level widgets/containers");
+        final DashboardWidgetConfigDto v3Container = v3.getWidgets().stream()
+            .filter(w -> "default-v3-container-status-ai".equals(w.getId()))
+            .findFirst()
+            .orElse(null);
+        Assertions.assertNotNull(v3Container);
+        Assertions.assertEquals(2, v3Container.getChildren().size(), "Costs Overview container should contain 2 child widgets");
+    }
+
+    @Test
+    public void testResetWidgetsForDefaultPageRestoresDefaultWidgets()
+    {
+        final String pageId = "default-page-costs-overview";
+        final List<DashboardWidgetConfigDto> initialWidgets = service.getWidgetsForPage(pageId);
+        Assertions.assertEquals(4, initialWidgets.size());
+
+        // Modify widgets by setting empty list
+        service.setWidgetsForPage(pageId, Collections.emptyList());
+        Assertions.assertTrue(service.getWidgetsForPage(pageId).isEmpty());
+
+        // Reset widgets should restore the 4 default widgets of Variant 3
+        service.resetWidgetsForPage(pageId);
+        final List<DashboardWidgetConfigDto> restoredWidgets = service.getWidgetsForPage(pageId);
+        Assertions.assertEquals(4, restoredWidgets.size());
+        Assertions.assertEquals("default-v3-cost-trend", restoredWidgets.get(0).getId());
+    }
+
+    @Test
+    public void testResetDefaultCustomPages()
+    {
+        service.createCustomPage("Temporary Page");
+        Assertions.assertTrue(service.isCustomPagesConfigured());
+
+        service.resetDefaultCustomPages();
+        Assertions.assertFalse(service.isCustomPagesConfigured());
+        Assertions.assertEquals(3, service.getCustomPages().size());
+    }
+
+    @Test
     public void testCreateCustomPage()
     {
         final DashboardPageConfigDto created = service.createCustomPage("Executive Summary");
@@ -1407,9 +1493,9 @@ public class ReportDashboardSettingServiceTest
         Assertions.assertTrue(created.getWidgets().isEmpty(), "New custom page should start completely empty");
 
         final List<DashboardPageConfigDto> pages = service.getCustomPages();
-        Assertions.assertEquals(1, pages.size());
-        Assertions.assertEquals(created.getId(), pages.get(0).getId());
-        Assertions.assertEquals("Executive Summary", pages.get(0).getName());
+        Assertions.assertEquals(4, pages.size());
+        Assertions.assertEquals(created.getId(), pages.get(3).getId());
+        Assertions.assertEquals("Executive Summary", pages.get(3).getName());
     }
 
     @Test
@@ -1486,12 +1572,12 @@ public class ReportDashboardSettingServiceTest
     {
         final DashboardPageConfigDto page1 = service.createCustomPage("Page One");
         final DashboardPageConfigDto page2 = service.createCustomPage("Page Two");
-        Assertions.assertEquals(2, service.getCustomPages().size());
+        Assertions.assertEquals(5, service.getCustomPages().size());
 
         service.deleteCustomPage(page1.getId());
         final List<DashboardPageConfigDto> remainingPages = service.getCustomPages();
-        Assertions.assertEquals(1, remainingPages.size());
-        Assertions.assertEquals(page2.getId(), remainingPages.get(0).getId());
+        Assertions.assertEquals(4, remainingPages.size());
+        Assertions.assertEquals(page2.getId(), remainingPages.get(3).getId());
 
         // Verify getCustomPage returns null for deleted page
         Assertions.assertNull(service.getCustomPage(page1.getId()));
@@ -1592,11 +1678,11 @@ public class ReportDashboardSettingServiceTest
         Assertions.assertEquals(runFilters, created.getRunFilters());
 
         final List<DashboardPageConfigDto> pages = service.getCustomPages();
-        Assertions.assertEquals(1, pages.size());
-        Assertions.assertEquals("QA Performance", pages.get(0).getName());
-        Assertions.assertEquals(identityDims, pages.get(0).getExecutionIdentityDimensions());
-        Assertions.assertTrue(pages.get(0).hasRunFilters());
-        Assertions.assertEquals(Integer.valueOf(10), pages.get(0).getRunFilters().getLimit());
+        Assertions.assertEquals(4, pages.size());
+        Assertions.assertEquals("QA Performance", pages.get(3).getName());
+        Assertions.assertEquals(identityDims, pages.get(3).getExecutionIdentityDimensions());
+        Assertions.assertTrue(pages.get(3).hasRunFilters());
+        Assertions.assertEquals(Integer.valueOf(10), pages.get(3).getRunFilters().getLimit());
     }
 
     @Test
@@ -1808,6 +1894,7 @@ public class ReportDashboardSettingServiceTest
     @Test
     public void testGetRootCustomPagesNestsSubPages()
     {
+        service.setCustomPages(Collections.emptyList());
         final DashboardPageConfigDto standardPage = service.createCustomPage("Standard Overview", List.of("browser"), null);
         final DashboardPageConfigDto groupParent = service.createGroupDashboard(
             "Environments",
@@ -1938,6 +2025,7 @@ public class ReportDashboardSettingServiceTest
     @Test
     public void testRecursiveTreeAndMultiLevelCascadeDeletion()
     {
+        service.setCustomPages(Collections.emptyList());
         final DashboardPageConfigDto rootGroup = service.createGroupDashboard(
             "Root Group",
             "batch",

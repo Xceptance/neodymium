@@ -24,6 +24,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xceptance.aura.report.controller.AuraReportViewController;
 import com.xceptance.aura.report.dto.widget.DashboardPageConfigDto;
 import com.xceptance.aura.report.dto.widget.DashboardWidgetConfigDto;
+import com.xceptance.aura.report.dto.widget.WidgetColorPolarity;
 import com.xceptance.aura.report.dto.widget.WidgetFilterConfigDto;
 import com.xceptance.aura.report.dto.widget.WidgetMetric;
 import com.xceptance.aura.report.dto.widget.WidgetPointScope;
@@ -1276,6 +1277,638 @@ public class ReportDashboardSettingService
     }
 
     /**
+     * Canonical default custom dashboard pages present out of the box even for empty projects.
+     *
+     * @return unmodifiable list of default custom dashboard pages
+     */
+    public static List<DashboardPageConfigDto> getDefaultCustomPages()
+    {
+        return List.of(
+            createDefaultGeneralOverviewPage(),
+            createDefaultTestHealthOverviewPage(),
+            createDefaultCostsOverviewPage()
+        );
+    }
+
+    private static DashboardPageConfigDto createDefaultGeneralOverviewPage()
+    {
+        final List<DashboardWidgetConfigDto> containerChildren = List.of(
+            new DashboardWidgetConfigDto(
+                "default-v1-status-pie",
+                "Status Pie Chart",
+                WidgetMetric.STATUS,
+                "",
+                WidgetPresentation.PIE_CHART,
+                WidgetTrendMode.LATEST_APPROACH,
+                WidgetValueFormat.PERCENT,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "half",
+                0,
+                true,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_GREEN
+            ),
+            new DashboardWidgetConfigDto(
+                "default-v1-area-breakdown",
+                "Area Breakdown List",
+                WidgetMetric.TAG,
+                "Area",
+                WidgetPresentation.RATIO_BAR,
+                WidgetTrendMode.LATEST_APPROACH,
+                WidgetValueFormat.PERCENT,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "half",
+                1,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_GREEN
+            ),
+            new DashboardWidgetConfigDto(
+                "default-v1-flakiness-bar",
+                "Flakiness Ratio Bar",
+                WidgetMetric.FLAKINESS,
+                "",
+                WidgetPresentation.RATIO_BAR,
+                WidgetTrendMode.LATEST_APPROACH,
+                WidgetValueFormat.PERCENT,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "half",
+                2,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_RED
+            ),
+            new DashboardWidgetConfigDto(
+                "default-v1-bug-breakdown",
+                "Bug Breakdown List",
+                WidgetMetric.BUGS,
+                "",
+                WidgetPresentation.LIST,
+                WidgetTrendMode.LATEST_APPROACH,
+                WidgetValueFormat.ABSOLUTE,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "half",
+                3,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_GREEN
+            ),
+            new DashboardWidgetConfigDto(
+                "default-v1-ai-usage",
+                "AI Usage KPI",
+                WidgetMetric.AI_USAGE,
+                "",
+                WidgetPresentation.TEXT,
+                WidgetTrendMode.LATEST_APPROACH,
+                WidgetValueFormat.ABSOLUTE,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "half",
+                4,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_GREEN
+            ),
+            new DashboardWidgetConfigDto(
+                "default-v1-browser-ratio",
+                "Browser ratio",
+                WidgetMetric.TAG,
+                "Browser",
+                WidgetPresentation.RATIO_BAR,
+                WidgetTrendMode.LATEST_APPROACH,
+                WidgetValueFormat.PERCENT,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "half",
+                5,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_GREEN
+            )
+        );
+
+        final DashboardWidgetConfigDto statusContainer = new DashboardWidgetConfigDto(
+            "default-v1-container-status",
+            "Latest test status information",
+            WidgetMetric.STATUS,
+            "",
+            WidgetPresentation.CONTAINER,
+            WidgetTrendMode.LATEST_APPROACH,
+            WidgetValueFormat.PERCENT,
+            WidgetPointScope.LATEST_TEST_STATUS,
+            "full",
+            4,
+            false,
+            false,
+            Collections.emptyList(),
+            false,
+            null,
+            WidgetColorPolarity.HIGHER_IS_GREEN,
+            false,
+            false,
+            containerChildren
+        );
+
+        final List<DashboardWidgetConfigDto> widgets = List.of(
+            new DashboardWidgetConfigDto(
+                "default-v1-status-trend",
+                "Status with Trend (Latest Approach)",
+                WidgetMetric.STATUS,
+                "",
+                WidgetPresentation.TEXT_WITH_SMALL_TREND,
+                WidgetTrendMode.LATEST_APPROACH,
+                WidgetValueFormat.PERCENT,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "quarter",
+                0,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_GREEN
+            ),
+            new DashboardWidgetConfigDto(
+                "default-v1-active-bugs",
+                "Active Bugs KPI",
+                WidgetMetric.BUGS,
+                "",
+                WidgetPresentation.TEXT,
+                WidgetTrendMode.LATEST_APPROACH,
+                WidgetValueFormat.ABSOLUTE,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "quarter",
+                1,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_GREEN
+            ),
+            new DashboardWidgetConfigDto(
+                "default-v1-flakiness-trend",
+                "Flakiness with Trend (Latest Approach)",
+                WidgetMetric.FLAKINESS,
+                "",
+                WidgetPresentation.TEXT_WITH_SMALL_TREND,
+                WidgetTrendMode.LATEST_APPROACH,
+                WidgetValueFormat.PERCENT,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "quarter",
+                2,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_RED
+            ),
+            new DashboardWidgetConfigDto(
+                "default-v1-number-of-runs",
+                "Number of Runs KPI",
+                WidgetMetric.NUMBER_OF_RUNS,
+                "",
+                WidgetPresentation.TEXT,
+                WidgetTrendMode.LATEST_APPROACH,
+                WidgetValueFormat.ABSOLUTE,
+                WidgetPointScope.TODAY,
+                "quarter",
+                3,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_GREEN
+            ),
+            statusContainer,
+            new DashboardWidgetConfigDto(
+                "default-v1-release-perlenkette",
+                "Release String of Pearls",
+                WidgetMetric.TAG,
+                "Release",
+                WidgetPresentation.PERLENKETTE,
+                WidgetTrendMode.LATEST_APPROACH,
+                WidgetValueFormat.PERCENT,
+                WidgetPointScope.LAST_MONTH,
+                "full",
+                5,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_GREEN
+            ),
+            new DashboardWidgetConfigDto(
+                "default-v1-release-trend",
+                "Release Trend Graph (Latest Approach)",
+                WidgetMetric.STATUS,
+                "",
+                WidgetPresentation.TREND_GRAPH,
+                WidgetTrendMode.LATEST_APPROACH,
+                WidgetValueFormat.PERCENT,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "full",
+                6,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_GREEN,
+                true
+            ),
+            new DashboardWidgetConfigDto(
+                "default-v1-test-variations",
+                "Known Test Base Variations",
+                WidgetMetric.TEST_VARIATIONS,
+                "",
+                WidgetPresentation.TEST_VARIATIONS,
+                WidgetTrendMode.LATEST_APPROACH,
+                WidgetValueFormat.PERCENT,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "full",
+                7,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_GREEN
+            ),
+            new DashboardWidgetConfigDto(
+                "default-v1-runs-list",
+                "List of Runs",
+                WidgetMetric.RUNS,
+                "",
+                WidgetPresentation.RUNS,
+                WidgetTrendMode.LATEST_APPROACH,
+                WidgetValueFormat.PERCENT,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "full",
+                8,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_GREEN
+            )
+        );
+
+        return new DashboardPageConfigDto(
+            "default-page-general-overview",
+            "General Overview",
+            widgets,
+            0,
+            0L,
+            DEFAULT_EXECUTION_IDENTITY_DIMENSIONS,
+            null
+        );
+    }
+
+    private static DashboardPageConfigDto createDefaultTestHealthOverviewPage()
+    {
+        final List<DashboardWidgetConfigDto> containerChildren = List.of(
+            new DashboardWidgetConfigDto(
+                "default-v2-status-pie",
+                "Status Pie Chart",
+                WidgetMetric.STATUS,
+                "",
+                WidgetPresentation.PIE_CHART,
+                WidgetTrendMode.LATEST_APPROACH,
+                WidgetValueFormat.PERCENT,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "half",
+                0,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_GREEN
+            ),
+            new DashboardWidgetConfigDto(
+                "default-v2-bugs-pie",
+                "Bugs Pie Chart",
+                WidgetMetric.BUGS,
+                "",
+                WidgetPresentation.PIE_CHART,
+                WidgetTrendMode.LATEST_APPROACH,
+                WidgetValueFormat.ABSOLUTE,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "half",
+                1,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_GREEN
+            ),
+            new DashboardWidgetConfigDto(
+                "default-v2-flakiness-list",
+                "Flakiness List",
+                WidgetMetric.FLAKINESS,
+                "",
+                WidgetPresentation.LIST,
+                WidgetTrendMode.LATEST_APPROACH,
+                WidgetValueFormat.PERCENT,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "half",
+                2,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_RED
+            ),
+            new DashboardWidgetConfigDto(
+                "default-v2-browser-ratio",
+                "Browser Ratio Bar",
+                WidgetMetric.TAG,
+                "Browser",
+                WidgetPresentation.RATIO_BAR,
+                WidgetTrendMode.LATEST_APPROACH,
+                WidgetValueFormat.PERCENT,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "half",
+                3,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_GREEN
+            ),
+            new DashboardWidgetConfigDto(
+                "default-v2-env-ratio",
+                "Environment Ratio Bar",
+                WidgetMetric.TAG,
+                "Environment",
+                WidgetPresentation.RATIO_BAR,
+                WidgetTrendMode.LATEST_APPROACH,
+                WidgetValueFormat.ABSOLUTE,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "half",
+                4,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_GREEN
+            ),
+            new DashboardWidgetConfigDto(
+                "default-v2-bug-breakdown",
+                "Bug Breakdown List",
+                WidgetMetric.BUGS,
+                "",
+                WidgetPresentation.LIST,
+                WidgetTrendMode.LATEST_APPROACH,
+                WidgetValueFormat.ABSOLUTE,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "half",
+                5,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_GREEN
+            )
+        );
+
+        final DashboardWidgetConfigDto healthContainer = new DashboardWidgetConfigDto(
+            "default-v2-container-health",
+            "Flakiness List & Bugs Pie Chart",
+            WidgetMetric.FLAKINESS,
+            "",
+            WidgetPresentation.CONTAINER,
+            WidgetTrendMode.LATEST_APPROACH,
+            WidgetValueFormat.PERCENT,
+            WidgetPointScope.LATEST_TEST_STATUS,
+            "full",
+            0,
+            false,
+            false,
+            Collections.emptyList(),
+            false,
+            null,
+            WidgetColorPolarity.HIGHER_IS_GREEN,
+            false,
+            false,
+            containerChildren
+        );
+
+        final WidgetFilterConfigDto runFiltersLimit30 = new WidgetFilterConfigDto(
+            null, null, null, null, null, null, null, null, null, null, null, null, 30, null, null
+        );
+
+        final List<DashboardWidgetConfigDto> widgets = List.of(
+            healthContainer,
+            new DashboardWidgetConfigDto(
+                "default-v2-status-trend",
+                "Status Trend Graph (By Runs)",
+                WidgetMetric.STATUS,
+                "",
+                WidgetPresentation.TREND_GRAPH,
+                WidgetTrendMode.BY_RUNS,
+                WidgetValueFormat.PERCENT,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "full",
+                1,
+                false,
+                false,
+                Collections.emptyList(),
+                true,
+                runFiltersLimit30,
+                WidgetColorPolarity.HIGHER_IS_GREEN,
+                true
+            ),
+            new DashboardWidgetConfigDto(
+                "default-v2-runs-list",
+                "List of Runs",
+                WidgetMetric.RUNS,
+                "",
+                WidgetPresentation.RUNS,
+                WidgetTrendMode.LATEST_APPROACH,
+                WidgetValueFormat.PERCENT,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "full",
+                2,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_GREEN
+            )
+        );
+
+        return new DashboardPageConfigDto(
+            "default-page-test-health-overview",
+            "Test Health Overview",
+            widgets,
+            1,
+            0L,
+            DEFAULT_EXECUTION_IDENTITY_DIMENSIONS,
+            null
+        );
+    }
+
+    private static DashboardPageConfigDto createDefaultCostsOverviewPage()
+    {
+        final List<DashboardWidgetConfigDto> containerChildren = List.of(
+            new DashboardWidgetConfigDto(
+                "default-v3-status-pie",
+                "Status Pie Chart",
+                WidgetMetric.STATUS,
+                "",
+                WidgetPresentation.PIE_CHART,
+                WidgetTrendMode.LATEST_APPROACH,
+                WidgetValueFormat.PERCENT,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "half",
+                0,
+                true,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_GREEN
+            ),
+            new DashboardWidgetConfigDto(
+                "default-v3-ai-usage-kpi",
+                "AI Usage KPI",
+                WidgetMetric.AI_USAGE,
+                "",
+                WidgetPresentation.TEXT,
+                WidgetTrendMode.LATEST_APPROACH,
+                WidgetValueFormat.PERCENT,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "quarter",
+                1,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_GREEN
+            )
+        );
+
+        final DashboardWidgetConfigDto statusAiContainer = new DashboardWidgetConfigDto(
+            "default-v3-container-status-ai",
+            "Status Pie Chart & AI Usage KPI",
+            WidgetMetric.STATUS,
+            "",
+            WidgetPresentation.CONTAINER,
+            WidgetTrendMode.LATEST_APPROACH,
+            WidgetValueFormat.PERCENT,
+            WidgetPointScope.LATEST_TEST_STATUS,
+            "full",
+            3,
+            false,
+            false,
+            Collections.emptyList(),
+            false,
+            null,
+            WidgetColorPolarity.HIGHER_IS_GREEN,
+            false,
+            false,
+            containerChildren
+        );
+
+        final List<DashboardWidgetConfigDto> widgets = List.of(
+            new DashboardWidgetConfigDto(
+                "default-v3-cost-trend",
+                "Cost with Trend",
+                WidgetMetric.COSTS,
+                "",
+                WidgetPresentation.TEXT_WITH_SMALL_TREND,
+                WidgetTrendMode.MONTHLY,
+                WidgetValueFormat.ABSOLUTE,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "quarter",
+                0,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_GREEN
+            ),
+            new DashboardWidgetConfigDto(
+                "default-v3-ai-usage-trend",
+                "AI Usage Trend Graph (Latest Approach)",
+                WidgetMetric.AI_USAGE,
+                "",
+                WidgetPresentation.TREND_GRAPH,
+                WidgetTrendMode.BY_RUNS,
+                WidgetValueFormat.PERCENT,
+                WidgetPointScope.LATEST_TEST_STATUS,
+                "half",
+                1,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_GREEN
+            ),
+            new DashboardWidgetConfigDto(
+                "default-v3-cost-pie",
+                "Cost Pie Chart",
+                WidgetMetric.COSTS,
+                "",
+                WidgetPresentation.PIE_CHART,
+                WidgetTrendMode.BY_RUNS,
+                WidgetValueFormat.ABSOLUTE,
+                WidgetPointScope.LAST_MONTH,
+                "quarter",
+                2,
+                false,
+                false,
+                Collections.emptyList(),
+                false,
+                null,
+                WidgetColorPolarity.HIGHER_IS_GREEN
+            ),
+            statusAiContainer
+        );
+
+        return new DashboardPageConfigDto(
+            "default-page-costs-overview",
+            "Costs Overview",
+            widgets,
+            2,
+            0L,
+            DEFAULT_EXECUTION_IDENTITY_DIMENSIONS,
+            null
+        );
+    }
+
+    /**
      * Checks whether custom dashboard widgets are persisted in database or file.
      *
      * @return true if customized, false if using defaults
@@ -1895,6 +2528,55 @@ public class ReportDashboardSettingService
     }
 
     /**
+     * Checks whether custom dashboard pages are persisted in database or file.
+     *
+     * @return true if customized, false if using defaults
+     */
+    public synchronized boolean isCustomPagesConfigured()
+    {
+        if (repository != null)
+        {
+            try
+            {
+                if (repository.existsById(CUSTOM_DASHBOARD_PAGES_KEY))
+                {
+                    return true;
+                }
+            }
+            catch (final Exception e)
+            {
+                LOG.debug("Could not check custom pages settings existence in database: {}", e.getMessage());
+            }
+        }
+        final Map<String, String> fileSettings = readFileSettings();
+        return fileSettings.containsKey(CUSTOM_DASHBOARD_PAGES_KEY);
+    }
+
+    /**
+     * Resets custom dashboard pages to canonical defaults.
+     */
+    public synchronized void resetDefaultCustomPages()
+    {
+        if (repository != null)
+        {
+            try
+            {
+                repository.deleteById(CUSTOM_DASHBOARD_PAGES_KEY);
+            }
+            catch (final Exception e)
+            {
+                LOG.warn("Failed to delete custom dashboard pages from database: {}", e.getMessage());
+            }
+        }
+        final Map<String, String> fileSettings = readFileSettings();
+        if (fileSettings.containsKey(CUSTOM_DASHBOARD_PAGES_KEY))
+        {
+            fileSettings.remove(CUSTOM_DASHBOARD_PAGES_KEY);
+            writeFileSettings(fileSettings);
+        }
+    }
+
+    /**
      * Retrieves all configured custom dashboard pages in sort order.
      *
      * @return list of custom dashboard pages
@@ -1947,7 +2629,7 @@ public class ReportDashboardSettingService
             }
         }
 
-        return Collections.emptyList();
+        return getDefaultCustomPages();
     }
 
     /**
@@ -3099,17 +3781,26 @@ public class ReportDashboardSettingService
 
     /**
      * Resets widgets on the given page.
-     * For custom pages, clears all widgets (returns to empty page).
-     * For default page (pageId is null/blank), resets to default widgets.
+     * For canonical default custom dashboard pages, restores their default widgets.
+     * For other custom pages, clears all widgets (returns to empty page).
+     * For default page (pageId is null/blank/default), resets to default widgets.
      *
      * @param pageId optional page ID
      */
     public synchronized void resetWidgetsForPage(final String pageId)
     {
-        if (pageId == null || pageId.isBlank())
+        if (pageId == null || pageId.isBlank() || "default".equalsIgnoreCase(pageId.trim()))
         {
             resetDefaultWidgets();
             return;
+        }
+        for (final DashboardPageConfigDto defaultPage : getDefaultCustomPages())
+        {
+            if (defaultPage.getId().equals(pageId))
+            {
+                setWidgetsForPage(pageId, defaultPage.getWidgets());
+                return;
+            }
         }
         setWidgetsForPage(pageId, Collections.emptyList());
     }
