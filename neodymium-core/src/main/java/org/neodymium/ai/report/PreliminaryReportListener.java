@@ -392,7 +392,7 @@ public final class PreliminaryReportListener implements ExecutionListener
             {
                 final String pbInstr = pbStep.getInstruction();
                 final String pbRaw = pbStep.getRawInstruction();
-                if (this.currentStep != null)
+                if (this.currentStep != null && !isTerminalCompleted(this.currentStep.getStatus()))
                 {
                     final boolean matchesCurrent = (pbInstr != null && (pbInstr.equals(this.currentStep.getRawInstruction()) || pbInstr.equals(this.currentStep.getInstruction())))
                         || (pbRaw != null && (pbRaw.equals(this.currentStep.getRawInstruction()) || pbRaw.equals(this.currentStep.getInstruction())));
@@ -407,8 +407,9 @@ public final class PreliminaryReportListener implements ExecutionListener
                     for (int i = this.report.getSteps().size() - 1; i >= 0; i--)
                     {
                         final TestExecutionReport.ReportStepEntry rootEntry = this.report.getSteps().get(i);
-                        if ((pbInstr != null && (pbInstr.equals(rootEntry.getRawInstruction()) || pbInstr.equals(rootEntry.getInstruction())))
-                            || (pbRaw != null && (pbRaw.equals(rootEntry.getRawInstruction()) || pbRaw.equals(rootEntry.getInstruction()))))
+                        if (!isTerminalCompleted(rootEntry.getStatus())
+                            && ((pbInstr != null && (pbInstr.equals(rootEntry.getRawInstruction()) || pbInstr.equals(rootEntry.getInstruction())))
+                                || (pbRaw != null && (pbRaw.equals(rootEntry.getRawInstruction()) || pbRaw.equals(rootEntry.getInstruction())))))
                         {
                             targetStep = rootEntry;
                             break;
@@ -416,8 +417,9 @@ public final class PreliminaryReportListener implements ExecutionListener
                         for (int j = rootEntry.getSubSteps().size() - 1; j >= 0; j--)
                         {
                             final TestExecutionReport.ReportStepEntry sub = rootEntry.getSubSteps().get(j);
-                            if ((pbInstr != null && (pbInstr.equals(sub.getRawInstruction()) || pbInstr.equals(sub.getInstruction())))
-                                || (pbRaw != null && (pbRaw.equals(sub.getRawInstruction()) || pbRaw.equals(sub.getInstruction()))))
+                            if (!isTerminalCompleted(sub.getStatus())
+                                && ((pbInstr != null && (pbInstr.equals(sub.getRawInstruction()) || pbInstr.equals(sub.getInstruction())))
+                                    || (pbRaw != null && (pbRaw.equals(sub.getRawInstruction()) || pbRaw.equals(sub.getInstruction())))))
                             {
                                 targetStep = sub;
                                 break;
@@ -442,6 +444,10 @@ public final class PreliminaryReportListener implements ExecutionListener
 
             if (targetStep != null)
             {
+                if (isTerminalCompleted(targetStep.getStatus()))
+                {
+                    return;
+                }
                 targetStep.setStatus(status != null ? status.name() : "SUCCESS");
                 if (status == PlaybookStepStatus.FAILED && !targetStep.isOptional())
                 {
@@ -1407,6 +1413,22 @@ public final class PreliminaryReportListener implements ExecutionListener
         {
             resolveParentStepStatus(root);
         }
+    }
+
+    private static boolean isTerminalCompleted(final String status)
+    {
+        if (status == null || status.isBlank())
+        {
+            return false;
+        }
+        final String upper = status.trim().toUpperCase();
+        return "SUCCESS".equals(upper)
+            || "PASSED".equals(upper)
+            || "FAILED".equals(upper)
+            || "HEALED".equals(upper)
+            || "SKIPPED".equals(upper)
+            || "NOT RUN".equals(upper)
+            || "NOT_RUN".equals(upper);
     }
 
     private String resolveStepDisplayLabel(final TestExecutionReport.ReportStepEntry leaf, final List<TestExecutionReport.ReportStepEntry> rootSteps, final int leafIndex)

@@ -20,6 +20,7 @@ package org.neodymium.ai.runner;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -308,6 +309,52 @@ public class StateMachineRunnerTest
         assertEquals(PlaybookStepStatus.NOT_RUN, downstreamStep.getStatus());
         assertEquals("Not executed because step #1.2 failed.", downstreamStep.getNotRunReason(),
             "Downstream step notRunReason must mention parent and sub-step index (#1.2)");
+    }
+
+    @Test
+    public void testMarkRemainingStepsAsSkippedPreservesCompletedSuccessfulSteps()
+    {
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(mockProvider);
+
+        final MockTargetExecutor mockExecutor = new MockTargetExecutor();
+        final AiSession session = AiSession.mock(new SessionData(), registry, new ExecutionEventBus(), mockExecutor);
+        final StateMachineRunner runner = new StateMachineRunner(session);
+
+        final PlaybookStep step1 = new PlaybookStep("Step 1: browse");
+        step1.setStatus(PlaybookStepStatus.SUCCESS);
+        step1.setDurationMs(1500L);
+        step1.setStartTimeMs(1000L);
+
+        final PlaybookStep step2 = new PlaybookStep("Step 2: search");
+        step2.setStatus(PlaybookStepStatus.RUNNING);
+
+        final PlaybookStep step3 = new PlaybookStep("Step 3: checkout");
+        step3.setStatus(PlaybookStepStatus.PENDING);
+
+        final List<PlaybookStep> playbookSteps = List.of(step1, step2, step3);
+
+        final ExecutionContext innerContext = session.getExecutionContext();
+        innerContext.getTransientData().put("playbook.steps", new ArrayList<>(playbookSteps));
+        innerContext.getTransientData().put("playbook.flatSteps", new ArrayList<>(playbookSteps));
+        innerContext.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step2);
+
+        innerContext.pushStep(ctx -> {
+            throw new ConclusiveFailureException("Search failed");
+        });
+
+        assertThrows(ConclusiveFailureException.class, () -> runner.run());
+
+        // Step 1 was completed and must NOT be marked NOT_RUN or have its durations cleared
+        assertEquals(PlaybookStepStatus.SUCCESS, step1.getStatus(), "Completed step 1 must remain SUCCESS");
+        assertEquals(1500L, step1.getDurationMs(), "Completed step 1 duration must be preserved");
+        assertNull(step1.getNotRunReason(), "Completed step 1 must not have notRunReason");
+
+        // Step 3 was pending and must be marked NOT_RUN
+        assertEquals(PlaybookStepStatus.NOT_RUN, step3.getStatus(), "Unexecuted downstream step must be marked NOT_RUN");
+        assertEquals("Not executed because step #2 failed.", step3.getNotRunReason(),
+            "Downstream step notRunReason must reference step #2");
     }
 }
 
