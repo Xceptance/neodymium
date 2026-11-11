@@ -180,7 +180,11 @@ public class VideoWriter implements Writer
         final File srcFile = new File(videoFileName);
         if (!srcFile.exists() || screenshots == 0 || testDuration <= 0)
         {
-            LOGGER.warn("Video file '{}' does not exist or contains no captured frames; skipping framerate adjustment.", videoFileName);
+            LOGGER.warn("Video file '{}' does not exist or contains no captured frames; discarding empty video.", videoFileName);
+            if (srcFile.exists())
+            {
+                srcFile.delete();
+            }
             return;
         }
 
@@ -266,6 +270,7 @@ public class VideoWriter implements Writer
                 catch (final Exception restoreEx)
                 {
                     LOGGER.error("Failed to restore original video from temp file: {}", tempFile, restoreEx);
+                    tempFile.delete();
                 }
             }
             else

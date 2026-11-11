@@ -57,4 +57,28 @@ public class VideoWriterTest
             }
         }
     }
+
+    @Test
+    public void testStopWithZeroScreenshotsDeletesEmptyVideoFile() throws Exception
+    {
+        final VideoRecordingConfigurations config = (VideoRecordingConfigurations) FilmTestExecution.getContext(VideoRecordingConfigurations.class);
+        final File testVideoFile = new File("target/test-zero-screenshots-" + System.currentTimeMillis() + ".mp4");
+        final VideoWriter videoWriter = new VideoWriter(config, testVideoFile.getAbsolutePath());
+
+        try
+        {
+            videoWriter.start();
+            // Stop immediately without capturing any frames (e.g. early failure in @BeforeEach)
+            videoWriter.stop();
+
+            Assertions.assertFalse(testVideoFile.exists(), "Empty video file should be discarded and deleted on zero screenshots");
+        }
+        finally
+        {
+            if (testVideoFile.exists())
+            {
+                testVideoFile.delete();
+            }
+        }
+    }
 }

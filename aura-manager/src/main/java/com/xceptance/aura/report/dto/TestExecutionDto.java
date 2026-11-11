@@ -488,6 +488,22 @@ public final class TestExecutionDto
         return testClass;
     }
 
+    /**
+     * Returns the simple class name derived from the fully qualified {@link #testClass}.
+     *
+     * @return the simple class name without package prefix, or "DefaultClass" if empty
+     */
+    public String getSimpleClassName()
+    {
+        if (testClass == null || testClass.isBlank())
+        {
+            return "DefaultClass";
+        }
+        final String trimmed = testClass.trim();
+        final int lastDot = trimmed.lastIndexOf('.');
+        return (lastDot >= 0 && lastDot < trimmed.length() - 1) ? trimmed.substring(lastDot + 1) : trimmed;
+    }
+
     public String getTestMethod()
     {
         return testMethod != null ? testMethod : "";

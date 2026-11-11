@@ -52,10 +52,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
+import org.springframework.core.io.support.ResourceRegion;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpRange;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -87,6 +90,9 @@ public class AuraReportViewController
     private final TestBaseVariationRepository variationRepository;
     private final TestBaseBugRepository bugRepository;
     private final ObjectMapper objectMapper;
+
+    @Value("${aura.report.storage.runs.base-dir:storage/runs}")
+    private String runsBaseDir = "storage/runs";
 
     public AuraReportViewController(
         final AuraReportDataService dataService,
@@ -624,19 +630,34 @@ public class AuraReportViewController
         return ResponseEntity.ok(exec);
     }
 
+    void setRunsBaseDir(final String runsBaseDir)
+    {
+        this.runsBaseDir = runsBaseDir;
+    }
+
+    public ResponseEntity<?> serveRunFile(
+        final String runId,
+        final String testClass,
+        final String filename)
+    {
+        return serveRunFile(runId, testClass, filename, null);
+    }
+
     @GetMapping("/api/runs/{runId}/{testClass}/{filename:.+}")
     @ResponseBody
-    public ResponseEntity<Resource> serveRunFile(
+    public ResponseEntity<?> serveRunFile(
         @PathVariable("runId") final String runId,
         @PathVariable("testClass") final String testClass,
-        @PathVariable("filename") final String filename)
+        @PathVariable("filename") final String filename,
+        @RequestHeader(value = HttpHeaders.RANGE, required = false) final String rangeHeader)
     {
-        final Path baseStoragePath = Paths.get("storage/runs").toAbsolutePath().normalize();
+        final String effectiveBaseDir = (runsBaseDir != null && !runsBaseDir.isBlank()) ? runsBaseDir : "storage/runs";
+        final Path baseStoragePath = Paths.get(effectiveBaseDir).toAbsolutePath().normalize();
 
         Path candidate = resolveSafePath(baseStoragePath, runId, testClass, filename);
         if (candidate != null)
         {
-            return servePath(candidate, filename);
+            return servePath(candidate, filename, rangeHeader);
         }
 
         final String normalizedClass = normalizeClassName(testClass);
@@ -645,7 +666,7 @@ public class AuraReportViewController
             candidate = resolveSafePath(baseStoragePath, runId, normalizedClass, filename);
             if (candidate != null)
             {
-                return servePath(candidate, filename);
+                return servePath(candidate, filename, rangeHeader);
             }
         }
 
@@ -691,7 +712,7 @@ public class AuraReportViewController
         return (Files.isRegularFile(resolved) && Files.isReadable(resolved)) ? resolved : null;
     }
 
-    private ResponseEntity<Resource> servePath(final Path path, final String filename)
+    private ResponseEntity<?> servePath(final Path path, final String filename, final String rangeHeader)
     {
         try
         {
@@ -731,10 +752,36 @@ public class AuraReportViewController
                 .filename(filename, StandardCharsets.UTF_8)
                 .build();
 
+            if (rangeHeader != null && !rangeHeader.isBlank())
+            {
+                try
+                {
+                    final List<HttpRange> ranges = HttpRange.parseRanges(rangeHeader);
+                    if (!ranges.isEmpty())
+                    {
+                        final HttpRange range = ranges.get(0);
+                        final ResourceRegion region = range.toResourceRegion(resource);
+                        return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
+                            .contentType(MediaType.parseMediaType(contentType))
+                            .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                            .header("X-Content-Type-Options", "nosniff")
+                            .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                            .body(region);
+                    }
+                }
+                catch (final IllegalArgumentException e)
+                {
+                    return ResponseEntity.status(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                        .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                        .build();
+                }
+            }
+
             return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(contentType))
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                 .header("X-Content-Type-Options", "nosniff")
+                .header(HttpHeaders.ACCEPT_RANGES, "bytes")
                 .body(resource);
         }
         catch (final Exception e)

@@ -429,4 +429,20 @@ public final class TestExecutionDtoTest
         Assertions.assertEquals(2000L, dto.getLlmTotalTokens());
         Assertions.assertTrue(dto.isAiDriven());
     }
+
+    @Test
+    public void testSimpleClassNameExtraction()
+    {
+        final TestExecutionDto dto1 = new TestExecutionDto("id1", "com.xceptance.neodymium.aura.CheckoutTest", "title", "passed", "engine", "loc", "chrome", null, null);
+        Assertions.assertEquals("CheckoutTest", dto1.getSimpleClassName());
+
+        final TestExecutionDto dto2 = new TestExecutionDto("id2", "SampleClassWithoutPackage", "title", "passed", "engine", "loc", "chrome", null, null);
+        Assertions.assertEquals("SampleClassWithoutPackage", dto2.getSimpleClassName());
+
+        final TestExecutionDto dto3 = new TestExecutionDto();
+        Assertions.assertEquals("DefaultClass", dto3.getSimpleClassName());
+
+        final TestExecutionDto dto4 = new TestExecutionDto("id4", null, "title", "passed", "engine", "loc", "chrome", null, null);
+        Assertions.assertEquals("DefaultClass", dto4.getSimpleClassName());
+    }
 }

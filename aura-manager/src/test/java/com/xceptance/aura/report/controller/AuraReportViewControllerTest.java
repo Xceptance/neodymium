@@ -46,6 +46,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.ResourceRegion;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.ui.ConcurrentModel;
@@ -581,7 +582,7 @@ public class AuraReportViewControllerTest
 
         try
         {
-            final ResponseEntity<Resource> response = controller.serveRunFile(
+            final ResponseEntity<?> response = controller.serveRunFile(
                 runId,
                 "com.xceptance.neodymium.aura.sandbox.SampleTestClass",
                 "video-1.mp4"
@@ -590,6 +591,7 @@ public class AuraReportViewControllerTest
             Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
             Assertions.assertNotNull(response.getBody());
             Assertions.assertEquals("video/mp4", response.getHeaders().getContentType().toString());
+            Assertions.assertEquals("bytes", response.getHeaders().getFirst("Accept-Ranges"));
         }
         finally
         {
@@ -602,7 +604,7 @@ public class AuraReportViewControllerTest
     @Test
     public void testServeRunFileNotFoundReturns404()
     {
-        final ResponseEntity<Resource> response = controller.serveRunFile(
+        final ResponseEntity<?> response = controller.serveRunFile(
             "non_existent_run",
             "com.xceptance.neodymium.aura.sandbox.NonExistentTest",
             "video-1.mp4"
@@ -614,7 +616,7 @@ public class AuraReportViewControllerTest
     @Test
     public void testServeRunFilePathTraversalReturns404()
     {
-        final ResponseEntity<Resource> response = controller.serveRunFile(
+        final ResponseEntity<?> response = controller.serveRunFile(
             "test_run",
             "../../etc",
             "passwd"
@@ -638,16 +640,16 @@ public class AuraReportViewControllerTest
 
         try
         {
-            final ResponseEntity<Resource> gifResp = controller.serveRunFile(runId, "MediaTestClass", "animation.gif");
+            final ResponseEntity<?> gifResp = controller.serveRunFile(runId, "MediaTestClass", "animation.gif");
             Assertions.assertEquals(HttpStatus.OK, gifResp.getStatusCode());
             Assertions.assertEquals("image/gif", gifResp.getHeaders().getContentType().toString());
 
-            final ResponseEntity<Resource> mp4Resp = controller.serveRunFile(runId, "MediaTestClass", "recording.MP4");
+            final ResponseEntity<?> mp4Resp = controller.serveRunFile(runId, "MediaTestClass", "recording.MP4");
             Assertions.assertEquals(HttpStatus.OK, mp4Resp.getStatusCode());
             Assertions.assertEquals("video/mp4", mp4Resp.getHeaders().getContentType().toString());
             Assertions.assertEquals("nosniff", mp4Resp.getHeaders().getFirst("X-Content-Type-Options"));
 
-            final ResponseEntity<Resource> jpgResp = controller.serveRunFile(runId, "MediaTestClass", "snapshot.jpg");
+            final ResponseEntity<?> jpgResp = controller.serveRunFile(runId, "MediaTestClass", "snapshot.jpg");
             Assertions.assertEquals(HttpStatus.OK, jpgResp.getStatusCode());
             Assertions.assertEquals("image/jpeg", jpgResp.getHeaders().getContentType().toString());
         }
@@ -672,7 +674,7 @@ public class AuraReportViewControllerTest
 
         try
         {
-            final ResponseEntity<Resource> response = controller.serveRunFile(
+            final ResponseEntity<?> response = controller.serveRunFile(
                 runId,
                 "com.xceptance.neodymium.CheckoutTest#testPaymentWithCreditCard",
                 "video-1.mp4"
@@ -700,7 +702,7 @@ public class AuraReportViewControllerTest
 
         try
         {
-            final ResponseEntity<Resource> response = controller.serveRunFile(
+            final ResponseEntity<?> response = controller.serveRunFile(
                 runId,
                 "SampleTestClass",
                 "subfolder"
@@ -712,6 +714,66 @@ public class AuraReportViewControllerTest
         {
             Files.deleteIfExists(subDir);
             Files.deleteIfExists(classDir);
+            Files.deleteIfExists(Paths.get("storage/runs", runId));
+        }
+    }
+
+    @Test
+    public void testServeRunFileWithByteRangeReturns206PartialContent() throws Exception
+    {
+        final String runId = "test_run_range_" + System.currentTimeMillis();
+        final Path dir = Paths.get("storage/runs", runId, "SampleTestClass");
+        Files.createDirectories(dir);
+        final Path videoFile = dir.resolve("video-1.mp4");
+        Files.writeString(videoFile, "0123456789abcdefghij");
+
+        try
+        {
+            final ResponseEntity<?> response = controller.serveRunFile(
+                runId,
+                "SampleTestClass",
+                "video-1.mp4",
+                "bytes=0-4"
+            );
+
+            Assertions.assertEquals(HttpStatus.PARTIAL_CONTENT, response.getStatusCode());
+            Assertions.assertEquals("video/mp4", response.getHeaders().getContentType().toString());
+            Assertions.assertEquals("bytes", response.getHeaders().getFirst("Accept-Ranges"));
+            Assertions.assertInstanceOf(ResourceRegion.class, response.getBody());
+        }
+        finally
+        {
+            Files.deleteIfExists(videoFile);
+            Files.deleteIfExists(dir);
+            Files.deleteIfExists(Paths.get("storage/runs", runId));
+        }
+    }
+
+    @Test
+    public void testServeRunFileInvalidByteRangeReturns416() throws Exception
+    {
+        final String runId = "test_run_range_inv_" + System.currentTimeMillis();
+        final Path dir = Paths.get("storage/runs", runId, "SampleTestClass");
+        Files.createDirectories(dir);
+        final Path videoFile = dir.resolve("video-1.mp4");
+        Files.writeString(videoFile, "dummy video data");
+
+        try
+        {
+            final ResponseEntity<?> response = controller.serveRunFile(
+                runId,
+                "SampleTestClass",
+                "video-1.mp4",
+                "invalid-range-format"
+            );
+
+            Assertions.assertEquals(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE, response.getStatusCode());
+            Assertions.assertEquals("bytes", response.getHeaders().getFirst("Accept-Ranges"));
+        }
+        finally
+        {
+            Files.deleteIfExists(videoFile);
+            Files.deleteIfExists(dir);
             Files.deleteIfExists(Paths.get("storage/runs", runId));
         }
     }
