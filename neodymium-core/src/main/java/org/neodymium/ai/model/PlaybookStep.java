@@ -243,6 +243,13 @@ public final class PlaybookStep
     private DomFeatureVector domFeatureVector;
 
     /**
+     * Explanation of why this step was not run (e.g. preceding step failed).
+     */
+    @JsonProperty("notRunReason")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String notRunReason;
+
+    /**
      * Current schema version for recorded playbook steps.
      */
     public static final String CURRENT_SCHEMA_VERSION = "4.0";
@@ -1250,6 +1257,38 @@ public final class PlaybookStep
     }
 
     /**
+     * Returns the reason why this step was not run, if any.
+     *
+     * @return explanation why the step was not run, or null
+     */
+    public String getNotRunReason()
+    {
+        return this.notRunReason;
+    }
+
+    /**
+     * Sets the reason why this step was not run.
+     *
+     * @param notRunReason explanation why the step was not run
+     */
+    public void setNotRunReason(final String notRunReason)
+    {
+        this.notRunReason = notRunReason;
+    }
+
+    /**
+     * Checks if this step was not run due to a prior failure or error.
+     *
+     * @return true if the step status is NOT_RUN
+     */
+    @JsonIgnore
+    public boolean isNotRun()
+    {
+        return this.status == PlaybookStepStatus.NOT_RUN;
+    }
+
+
+    /**
      * Checks if this step is a composite step containing sub-steps.
      *
      * @return true if sub-steps collection is not empty, false otherwise
@@ -1749,6 +1788,20 @@ public final class PlaybookStep
         if (reasoning != null && !reasoning.isBlank())
         {
             this.reasonings.add(reasoning);
+        }
+    }
+
+    /**
+     * Sets all AI reasonings generated across execution stages for this step.
+     *
+     * @param reasonings the list of stage reasonings to set
+     */
+    public void setReasonings(final List<String> reasonings)
+    {
+        this.reasonings.clear();
+        if (reasonings != null)
+        {
+            this.reasonings.addAll(reasonings);
         }
     }
 

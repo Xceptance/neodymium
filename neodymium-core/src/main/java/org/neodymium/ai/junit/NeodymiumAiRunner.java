@@ -66,16 +66,20 @@ import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.playbook.PlaybookParser;
 import org.neodymium.ai.playbook.YamlPlaybookParser;
 import org.neodymium.ai.recorder.PlaybookRecorder;
+import org.neodymium.ai.report.PreliminaryReportListener;
 import org.neodymium.ai.resources.ClasspathResourceManager;
 import org.neodymium.ai.resources.PlaybookResourceManager;
 import org.neodymium.ai.runner.StateMachineRunner;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.common.browser.BrowserData;
 import org.neodymium.common.browser.BrowserMethodData;
+import org.neodymium.common.browser.WebDriverCache;
+import org.neodymium.common.browser.WebDriverStateContainer;
 import org.neodymium.common.recording.FilmTestExecution;
 import org.neodymium.common.testdata.DataFile;
 import org.neodymium.junit5.browser.BrowserExecutionCallback;
 import org.neodymium.util.Neodymium;
+import org.openqa.selenium.WebDriver;
 
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleServer;
@@ -1031,7 +1035,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final PlaybookResourceManager manager = new HybridResourceManager(new ClasspathResourceManager());
             this.resourceManager = manager;
 
-            if (FilmTestExecution.getContextVideo().enableFilming())
+            final boolean browserRunnerFilming = this.browser != null && FilmTestExecution.getContextVideo().filmAutomatically();
+            if (FilmTestExecution.getContextVideo().enableFilming() && !browserRunnerFilming)
             {
                 final String recordingID = (testClass != null ? testClass.getSimpleName() + "_" : "") + java.util.UUID.randomUUID().toString();
                 executionContext.getTransientData().put("recordingID", recordingID);
@@ -1561,13 +1566,13 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         {
             if (Neodymium.hasDriver())
             {
-                final org.neodymium.common.browser.WebDriverStateContainer legacyCont = Neodymium.getWebDriverStateContainer();
+                final WebDriverStateContainer legacyCont = Neodymium.getWebDriverStateContainer();
                 if (legacyCont != null && legacyCont.getWebDriver() != null)
                 {
-                    final org.openqa.selenium.WebDriver driver = legacyCont.getDecoratedWebDriver() != null
+                    final WebDriver driver = legacyCont.getDecoratedWebDriver() != null
                         ? legacyCont.getDecoratedWebDriver()
                         : legacyCont.getWebDriver();
-                    com.codeborne.selenide.WebDriverRunner.setWebDriver(driver);
+                    WebDriverRunner.setWebDriver(driver);
                 }
             }
         }
@@ -1871,12 +1876,39 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 FrameContextManager.resetActiveFramePath();
                 if (!Neodymium.hasDriver() && WebDriverRunner.hasWebDriverStarted())
                 {
+                    WebDriver currentDriver = null;
                     try
                     {
-                        WebDriverRunner.closeWebDriver();
+                        currentDriver = WebDriverRunner.getWebDriver();
                     }
                     catch (final Exception ignored)
                     {
+                    }
+
+                    final boolean isCached = currentDriver != null && WebDriverCache.instance.containsWebDriver(currentDriver);
+
+                    if (isCached)
+                    {
+                        // Driver is safely stored in WebDriverCache. Detach Selenide's ThreadLocal reference
+                        // without quitting the driver, preventing ghost-driver leaks and subsequent session crashes.
+                        WebDriverRunner.resetWebDriver();
+                    }
+                    else if (this.browser == null)
+                    {
+                        // Standalone unmanaged AI test: close the unmanaged browser so it doesn't leak.
+                        try
+                        {
+                            WebDriverRunner.closeWebDriver();
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+                    else
+                    {
+                        // Managed test whose driver was already handled by BrowserRunner (either kept open or quit).
+                        // Detach Selenide's ThreadLocal without re-quitting.
+                        WebDriverRunner.resetWebDriver();
                     }
                 }
                 final boolean hasExecutionError = (context == null
@@ -1909,6 +1941,23 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 {
                     Neodymium.getData().remove("neodymium.ai.ssim.minScore");
                     com.xceptance.neodymium.util.Neodymium.getData().remove("neodymium.ai.ssim.minScore");
+                }
+
+                final boolean testSucceededInJunit = (context != null && context.getExecutionException().isEmpty()) && afterPlaybookError == null;
+                final Throwable uncaught = context != null ? context.getExecutionException().orElse(afterPlaybookError) : afterPlaybookError;
+                if (this.session != null && this.session.getEventBus() != null)
+                {
+                    for (final Object listener : this.session.getEventBus().getListeners())
+                    {
+                        if (listener instanceof InteractiveConsoleListener icl)
+                        {
+                            icl.reconcileTestOutcome(testSucceededInJunit, uncaught);
+                        }
+                        else if (listener instanceof PreliminaryReportListener prl)
+                        {
+                            prl.reconcileTestOutcome(testSucceededInJunit, uncaught);
+                        }
+                    }
                 }
             }
 

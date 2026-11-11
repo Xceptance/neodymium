@@ -112,6 +112,8 @@ public class OptionalIntegrationTest extends BaseAiTest
             """);
 
         // The playbook run should have bypassed the failing optional step silently and completed.
+        flushRecording(session);
+
         // Verify parameterization
         final String browserProfile = Neodymium.getBrowserProfileName();
         final File recordingFile = getTestResourceFile("playbooks/integration/programmatic/custom_optional_playbook_" + browserProfile + ".json");

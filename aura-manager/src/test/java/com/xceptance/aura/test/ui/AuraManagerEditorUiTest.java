@@ -67,6 +67,7 @@ public final class AuraManagerEditorUiTest
     {
         Configuration.browser = "chrome";
         Configuration.headless = true;
+        Configuration.browserSize = "1920x1080";
         Configuration.screenshots = false;
         Configuration.savePageSource = false;
         if (new File("/usr/local/bin/google-chrome").exists())
@@ -387,14 +388,18 @@ public final class AuraManagerEditorUiTest
         thsAfterAdd.get(2).$(".btn-remove-iteration").shouldBe(Condition.visible);
 
         // 1. Decline confirmation: column must NOT be removed
-        Selenide.executeJavaScript("window.confirm = function(msg) { return false; };");
         thsAfterAdd.get(2).$(".btn-remove-iteration").click();
+        $("#removeConfirmationModal").shouldBe(Condition.visible);
+        $("#removeConfirmationCancelBtn").shouldBe(Condition.visible).click();
+        $("#removeConfirmationModal").shouldNotBe(Condition.visible);
         final ElementsCollection thsAfterCancel = $$("#matrixHeaderRow th");
         Assertions.assertEquals(4, thsAfterCancel.size(), "Column should remain when confirmation is cancelled.");
 
         // 2. Accept confirmation: column MUST be removed
-        Selenide.executeJavaScript("window.confirm = function(msg) { return true; };");
         thsAfterCancel.get(2).$(".btn-remove-iteration").click();
+        $("#removeConfirmationModal").shouldBe(Condition.visible);
+        $("#removeConfirmationConfirmBtn").shouldBe(Condition.visible).click();
+        $("#removeConfirmationModal").shouldNotBe(Condition.visible);
 
         final ElementsCollection thsAfterDelete = $$("#matrixHeaderRow th");
         Assertions.assertEquals(3, thsAfterDelete.size(), "Column should be removed when confirmed.");
@@ -419,27 +424,31 @@ public final class AuraManagerEditorUiTest
         $("#editorPanel").shouldBe(Condition.visible);
 
         // Initially check tbody rows count
-        final ElementsCollection initialRows = $$("#transposedGrid tbody tr");
+        final ElementsCollection initialRows = $$("#transposedGrid tbody tr:not(#matrixTagsRow)");
         Assertions.assertEquals(1, initialRows.size(), "Should initially have 1 variable row.");
         initialRows.first().$(".btn-remove-var").shouldBe(Condition.visible);
 
         // Add a second variable row
         $(".add-row-bottom-btn").shouldBe(Condition.visible).click();
-        final ElementsCollection rowsAfterAdd = $$("#transposedGrid tbody tr");
+        final ElementsCollection rowsAfterAdd = $$("#transposedGrid tbody tr:not(#matrixTagsRow)");
         Assertions.assertEquals(2, rowsAfterAdd.size(), "Should have 2 variable rows after adding a row.");
         rowsAfterAdd.get(1).$(".btn-remove-var").shouldBe(Condition.visible);
 
         // 1. Decline confirmation: variable row must NOT be removed
-        Selenide.executeJavaScript("window.confirm = function(msg) { return false; };");
         rowsAfterAdd.get(1).$(".btn-remove-var").click();
-        final ElementsCollection rowsAfterCancel = $$("#transposedGrid tbody tr");
+        $("#removeConfirmationModal").shouldBe(Condition.visible);
+        $("#removeConfirmationCancelBtn").shouldBe(Condition.visible).click();
+        $("#removeConfirmationModal").shouldNotBe(Condition.visible);
+        final ElementsCollection rowsAfterCancel = $$("#transposedGrid tbody tr:not(#matrixTagsRow)");
         Assertions.assertEquals(2, rowsAfterCancel.size(), "Variable row should remain when confirmation is cancelled.");
 
         // 2. Accept confirmation: variable row MUST be removed
-        Selenide.executeJavaScript("window.confirm = function(msg) { return true; };");
         rowsAfterCancel.get(1).$(".btn-remove-var").click();
+        $("#removeConfirmationModal").shouldBe(Condition.visible);
+        $("#removeConfirmationConfirmBtn").shouldBe(Condition.visible).click();
+        $("#removeConfirmationModal").shouldNotBe(Condition.visible);
 
-        final ElementsCollection rowsAfterDelete = $$("#transposedGrid tbody tr");
+        final ElementsCollection rowsAfterDelete = $$("#transposedGrid tbody tr:not(#matrixTagsRow)");
         Assertions.assertEquals(1, rowsAfterDelete.size(), "Variable row should be removed when confirmed.");
     }
 
@@ -456,7 +465,7 @@ public final class AuraManagerEditorUiTest
         $("#editorPanel").shouldBe(Condition.visible);
 
         // Open create modal again while editor is active
-        $("#openModalFragmentBtn").shouldBe(Condition.visible).click();
+        $("#openModalFragmentEditorBtn").shouldBe(Condition.visible).click();
         $("#createTestModal").shouldBe(Condition.visible);
 
         // Press Escape key while modal is active
@@ -653,7 +662,7 @@ public final class AuraManagerEditorUiTest
 
         // Verify unsaved badge disappears and original step text is restored
         includeCard.$(".unsaved-badge").shouldNotBe(Condition.visible);
-        includeCard.$(".nested-editable-step").shouldHave(Condition.exactText("- Original fragment step text"));
+        includeCard.$(".nested-editable-step").shouldHave(Condition.text("Original fragment step text"));
     }
 
     @Test
@@ -884,6 +893,11 @@ public final class AuraManagerEditorUiTest
         fragStepContent.click();
         fragStepContent.sendKeys("Original fragment step text");
         $("#editorTitle").click();
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        // Close editor to return to file list
+        Selenide.executeJavaScript("closeEditor(true);");
 
         // Create main test file MainTest.playbook.yaml
         $("#openModalBtn").shouldBe(Condition.visible).click();
@@ -1016,9 +1030,9 @@ public final class AuraManagerEditorUiTest
     {
         open("http://localhost:" + port + "/playbooks");
 
-        $("#btnCreateNewYaml").shouldBe(Condition.visible).click();
+        $("#openModalBtn").shouldBe(Condition.visible).click();
         $("#newTestName").shouldBe(Condition.visible).setValue("Hierarchical Test.yaml");
-        $("#btnModalCreate").shouldBe(Condition.visible).click();
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
 
         final SelenideElement toggleBtn = $("#toggleEditorFragmentViewBtn");
         toggleBtn.shouldBe(Condition.visible);
@@ -1268,16 +1282,16 @@ public final class AuraManagerEditorUiTest
         toggleBar.find(".substeps-title").shouldHave(Condition.text("Detailed verification of the cart page"));
         toggleBar.find(".substeps-count-badge").shouldHave(Condition.text("3 sub-steps"));
 
-        // Click toggle bar to collapse substeps
-        toggleBar.click();
+        // Click toggle bar chevron to collapse substeps
+        toggleBar.$(".toggle-chevron").click();
         stepRows.get(2).shouldNotBe(Condition.visible);
         stepRows.get(3).shouldNotBe(Condition.visible);
         stepRows.get(4).shouldNotBe(Condition.visible);
         stepRows.get(0).shouldBe(Condition.visible);
         stepRows.get(1).shouldBe(Condition.visible);
 
-        // Click toggle bar again to expand substeps
-        toggleBar.click();
+        // Click toggle bar chevron again to expand substeps
+        toggleBar.$(".toggle-chevron").click();
         stepRows.get(2).shouldBe(Condition.visible);
         stepRows.get(3).shouldBe(Condition.visible);
         stepRows.get(4).shouldBe(Condition.visible);

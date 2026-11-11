@@ -55,8 +55,8 @@ public class BlogTest
 
             steps: |
                 Open 'https://blog.xceptance.com/'.
-                Search for 'Neodymium' by typing the searchphrase and the enter key.
-                'Search Results for: neodymium' is displayed.
+                Search for 'Neodymium'.
+                Verify that the search results display articles containing 'Neodymium'.
         """
      )
     public void bruteforceSearch(final AiSession session)
@@ -69,10 +69,9 @@ public class BlogTest
         """
             steps: |
                 Open 'https://blog.xceptance.com/'.
-                Open the search input by clicking the magnifyiing glass icon.
+                Open the search input by clicking the magnifying glass icon.
                 Type 'neodymium' into the search field.
-                Press enter.
-                'Search Results for: neodymium' is displayed.
+                Verify that the search results display articles containing 'Neodymium'.
         """
      )
     public void preciseSearch(final AiSession session)
@@ -91,7 +90,7 @@ public class BlogTest
             steps: |
                 Open 'https://blog.xceptance.com/'.
                 Search for 'Neodymium'.
-                'Search Results for: neodymium' is displayed.
+                Verify that the search results display articles containing 'Neodymium'.
         """
      )
     public void bruteforceSearchExtraJudge(final AiSession session)
@@ -104,10 +103,9 @@ public class BlogTest
         """
             steps: |
                 Open 'https://blog.xceptance.com/'.
-                Open the search input by clicking the magnifyiing glass icon.
+                Open the search input by clicking the magnifying glass icon.
                 Type 'neodymium' into the search field.
-                Press enter.
-                'Search Results for: neodymium' is displayed.
+                Verify that the search results display articles containing 'Neodymium'.
         """
      )
     public void preciseSearchExtraJudge(final AiSession session)

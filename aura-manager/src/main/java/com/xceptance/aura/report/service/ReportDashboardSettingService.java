@@ -2616,7 +2616,7 @@ public class ReportDashboardSettingService
                     {
                     }
                 );
-                if (parsed != null)
+                if (parsed != null && !parsed.isEmpty())
                 {
                     final List<DashboardPageConfigDto> sorted = new ArrayList<>(parsed);
                     sorted.sort((a, b) -> Integer.compare(a.getSortOrder(), b.getSortOrder()));

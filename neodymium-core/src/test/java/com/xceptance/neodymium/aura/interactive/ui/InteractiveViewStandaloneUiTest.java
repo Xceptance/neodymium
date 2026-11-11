@@ -83,7 +83,12 @@ public class InteractiveViewStandaloneUiTest
         consoleUrl = "http://127.0.0.1:" + consoleServer.getLocalUrl().replaceAll(".*:(\\d+)$", "$1");
 
         Selenide.open(consoleUrl);
-        sleep(800);
+        final long deadline = System.currentTimeMillis() + 5000;
+        while (!consoleEngine.hasSseClients() && System.currentTimeMillis() < deadline)
+        {
+            sleep(50);
+        }
+        sleep(200);
     }
 
     @AfterEach
@@ -349,7 +354,7 @@ public class InteractiveViewStandaloneUiTest
         stateWithEdits.addProperty("runId", consoleEngine.getRunId());
         stateWithEdits.addProperty("hudPromptChanged", true);
         
-        consoleEngine.broadcastSseEvent("state", stateWithEdits.toString());
+        consoleEngine.pushState(stateWithEdits.toString());
         sleep(400);
 
         final JsonObject pausePayload1 = new JsonObject();
@@ -375,7 +380,7 @@ public class InteractiveViewStandaloneUiTest
         stateNoEdits.addProperty("runId", consoleEngine.getRunId());
         stateNoEdits.addProperty("hudPromptChanged", false);
 
-        consoleEngine.broadcastSseEvent("state", stateNoEdits.toString());
+        consoleEngine.pushState(stateNoEdits.toString());
         sleep(400);
 
         final JsonObject pausePayload2 = new JsonObject();

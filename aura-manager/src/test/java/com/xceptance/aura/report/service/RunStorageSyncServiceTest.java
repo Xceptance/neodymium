@@ -1847,6 +1847,85 @@ public class RunStorageSyncServiceTest
     }
 
     @Test
+    public void testExpectedFailureAndSyntheticRunExclusionInStorageAndDto() throws Exception
+    {
+        final String runId = "run-expected-failure-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path execDir = runDir.resolve("NegativeTests").resolve("ExpectedFailTest");
+        Files.createDirectories(execDir);
+
+        final String expectedFailureJson = """
+            {
+              "id": "expected-fail-exec-1",
+              "runId": "%s",
+              "testClass": "ExpectedFailTest",
+              "testMethod": "testIntentionalFailureHandledByAssertThrows",
+              "status": "passed",
+              "expectedFailure": true,
+              "failure": "Intentional assertion error",
+              "blocks": {
+                "steps": [
+                  {
+                    "instruction": "Assert invalid state",
+                    "status": "failed",
+                    "expectedFailure": true,
+                    "error": "Intentional assertion error"
+                  }
+                ]
+              }
+            }
+            """.formatted(runId);
+
+        final String syntheticRunJson = """
+            {
+              "id": "synthetic-exec-fixture",
+              "runId": "%s",
+              "testClass": "FixtureSetup",
+              "testMethod": "setupEnv",
+              "status": "passed",
+              "synthetic": true,
+              "blocks": {
+                "steps": []
+              }
+            }
+            """.formatted(runId);
+
+        final Path execFile = execDir.resolve("console-execution-1.json");
+        Files.writeString(execFile, expectedFailureJson);
+
+        final Path syntheticFile = execDir.resolve("console-execution-fixture.json");
+        Files.writeString(syntheticFile, syntheticRunJson);
+
+        try
+        {
+            final ObjectMapper mapper = new ObjectMapper();
+            final Optional<String> runJsonOpt = storageService.buildRunJsonContent(runDir.toFile(), runId, true);
+            Assertions.assertTrue(runJsonOpt.isPresent(), "run.json content should be generated");
+
+            final JsonNode runNode = mapper.readTree(runJsonOpt.get());
+
+            // Summary must tally the expected failure as a PASS and exclude synthetic fixture execution
+            Assertions.assertEquals(1, runNode.path("summary").path("total").asInt(), "Total runs must exclude synthetic fixtures");
+            Assertions.assertEquals(1, runNode.path("summary").path("pass").asInt(), "Passed count must be 1 for expected failure");
+            Assertions.assertEquals(0, runNode.path("summary").path("unknown").asInt(), "Unknown fail count must be 0");
+            Assertions.assertEquals(0, runNode.path("summary").path("failedAssertion").asInt(), "Failed assertion count must be 0");
+
+            // Verify via AuraReportDataService
+            final RunReportDto report = dataService.getRunReport(runId);
+            Assertions.assertNotNull(report, "RunReportDto should not be null");
+            Assertions.assertEquals(1, report.getPassCount(), "RunReport should reflect 1 passed test");
+            Assertions.assertEquals(0, report.getFailCount(), "RunReport should reflect 0 failed tests");
+            Assertions.assertEquals(1, report.getExecutions().size(), "Only non-synthetic execution should be recorded");
+            Assertions.assertEquals("PASSED", report.getExecutions().get(0).getDisplayStatusKey());
+            Assertions.assertEquals(0, report.getExecutions().get(0).getFailedStepsCount(), "Steps failed must be 0 for expected failure");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
     public void testLiveBufferOverridesIntermediateDiskRunningStatusInGetRunReport() throws IOException
     {
         final String runId = "run-live-override-test";
@@ -1900,6 +1979,82 @@ public class RunStorageSyncServiceTest
         {
             deleteRecursively(runDir);
             runRepository.findById(runId).ifPresent(runRepository::delete);
+        }
+    }
+
+    @Test
+    public void testSyncLocalRunStoragePopulatesStepReasoningAndReasonings() throws IOException
+    {
+        final String runId = "run-sync-reasoning-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path execDir = runDir.resolve("Checkout").resolve("CheckoutProcessTest");
+        Files.createDirectories(execDir);
+
+        final String execJson = """
+            {
+              "id": "exec-reasoning-1",
+              "runId": "%s",
+              "testClass": "CheckoutProcessTest",
+              "testMethod": "testCheckout",
+              "status": "passed",
+              "steps": {
+                "tries": {
+                  "1": {
+                    "coreSteps": [
+                      {
+                        "name": "Navigate to login",
+                        "status": "success",
+                        "reasoning": "Navigated to home page and dismissed cookies",
+                        "reasonings": [
+                          "Locating navigation bar",
+                          "Navigated to home page and dismissed cookies"
+                        ],
+                        "actions": []
+                      },
+                      {
+                        "name": "Click submit",
+                        "status": "success",
+                        "reasonings": [
+                          "Submit button located and clicked"
+                        ],
+                        "actions": []
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+            """.formatted(runId);
+
+        final Path execFile = execDir.resolve("execution-1.json");
+        Files.writeString(execFile, execJson);
+
+        try
+        {
+            final ObjectMapper mapper = new ObjectMapper();
+            final Optional<String> runJsonOpt = storageService.buildRunJsonContent(runDir.toFile(), runId, true);
+            Assertions.assertTrue(runJsonOpt.isPresent(), "run.json content should be generated");
+
+            final JsonNode updatedExec = mapper.readTree(execFile.toFile());
+            final JsonNode blockSteps = updatedExec.path("blocks").path("steps");
+            Assertions.assertTrue(blockSteps.isArray() && !blockSteps.isEmpty(), "blocks.steps should be populated");
+
+            final JsonNode firstStep = blockSteps.get(0);
+            Assertions.assertEquals("Navigated to home page and dismissed cookies", firstStep.path("reasoning").asText());
+            Assertions.assertTrue(firstStep.has("reasonings"), "step should have reasonings array");
+            Assertions.assertEquals(2, firstStep.path("reasonings").size());
+            Assertions.assertEquals("Locating navigation bar", firstStep.path("reasonings").get(0).asText());
+            Assertions.assertEquals("Navigated to home page and dismissed cookies", firstStep.path("reasonings").get(1).asText());
+
+            final JsonNode secondStep = blockSteps.get(1);
+            Assertions.assertEquals("Submit button located and clicked", secondStep.path("reasoning").asText());
+            Assertions.assertTrue(secondStep.has("reasonings"), "second step should have reasonings array");
+            Assertions.assertEquals(1, secondStep.path("reasonings").size());
+            Assertions.assertEquals("Submit button located and clicked", secondStep.path("reasonings").get(0).asText());
+        }
+        finally
+        {
+            deleteRecursively(runDir);
         }
     }
 
@@ -2007,5 +2162,3 @@ public class RunStorageSyncServiceTest
         Assertions.assertFalse(AuraReportDataService.isLegitimateTag(queueTag));
     }
 }
-
-

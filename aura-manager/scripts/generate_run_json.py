@@ -243,7 +243,11 @@ def extract_execution_metrics(exec_data, test_class_name):
 
     raw_status = str(exec_data.get("status") or "").strip().lower()
     has_bugs = bool(exec_data.get("bugs"))
-    has_error = bool(exec_data.get("error") or exec_data.get("failure") or exec_data.get("exception") or exec_data.get("errorMessage"))
+
+    def _is_real_error(v):
+        return bool(v and str(v).strip() and str(v).strip().upper() != "NONE")
+
+    has_error = any(_is_real_error(exec_data.get(k)) for k in ("error", "failure", "exception", "errorMessage", "failureReason"))
 
     if raw_status in ("failed", "error", "failure", "failed-unknown"):
         effective_status = "failed-known" if has_bugs else "failed-unknown"
@@ -253,6 +257,11 @@ def extract_execution_metrics(exec_data, test_class_name):
         effective_status = "succeeded-fixed" if has_bugs else "passed-clean"
     elif raw_status in ("succeeded-fixed", "fixed", "healed"):
         effective_status = "succeeded-fixed"
+    elif raw_status == "finished":
+        if not has_error and (failed_steps is None or failed_steps == 0):
+            effective_status = "succeeded-fixed" if has_bugs else "passed-clean"
+        else:
+            effective_status = "failed-known" if has_bugs else "failed-unknown"
     elif raw_status in ("ignored", "skipped", "cancelled"):
         effective_status = "ignored"
     elif raw_status in ("running", "in_progress", "executing", "pending", ""):

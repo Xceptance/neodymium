@@ -615,9 +615,10 @@ public final class StateMachineRunner
                             }
                             else
                             {
-                                sub.setStatus(PlaybookStepStatus.SKIPPED);
+                                sub.setStatus(PlaybookStepStatus.NOT_RUN);
                                 sub.setFailed(false);
                                 sub.setFailureReason(null);
+                                sub.setNotRunReason("Not executed because sub-step #" + (failedIndex + 1) + " failed.");
                             }
                         }
                     }
@@ -1280,13 +1281,52 @@ public final class StateMachineRunner
         }
 
         boolean foundFailed = (failedStepObj == null);
-        for (final PlaybookStep step : targetSteps)
+        String failedStepLabel = null;
+        if (failedStepObj != null)
         {
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> allFlat = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
+            if (allFlat != null)
+            {
+                for (int fi = 0; fi < allFlat.size(); fi++)
+                {
+                    final PlaybookStep s = allFlat.get(fi);
+                    if (s == failedStepObj)
+                    {
+                        failedStepLabel = "#" + (fi + 1);
+                        break;
+                    }
+                    else if (failedStepObj instanceof final PlaybookStep fs && (s.equals(fs) || (s.hasSubSteps() && s.getSubSteps().contains(fs))))
+                    {
+                        final int subIdx = s.hasSubSteps() ? s.getSubSteps().indexOf(fs) : -1;
+                        failedStepLabel = "#" + (fi + 1) + (subIdx >= 0 ? "." + (subIdx + 1) : "");
+                        break;
+                    }
+                }
+            }
+        }
+
+        for (int i = 0; i < targetSteps.size(); i++)
+        {
+            final PlaybookStep step = targetSteps.get(i);
             if (!foundFailed)
             {
-                if (step == failedStepObj || (failedStepObj instanceof PlaybookStep fs && (step.equals(fs) || (step.hasSubSteps() && step.getSubSteps().contains(fs)))))
+                if (step == failedStepObj)
                 {
                     foundFailed = true;
+                    if (failedStepLabel == null)
+                    {
+                        failedStepLabel = "#" + (i + 1);
+                    }
+                }
+                else if (failedStepObj instanceof final PlaybookStep fs && (step.equals(fs) || (step.hasSubSteps() && step.getSubSteps().contains(fs))))
+                {
+                    foundFailed = true;
+                    if (failedStepLabel == null)
+                    {
+                        final int subIdx = step.hasSubSteps() ? step.getSubSteps().indexOf(fs) : -1;
+                        failedStepLabel = "#" + (i + 1) + (subIdx >= 0 ? "." + (subIdx + 1) : "");
+                    }
                 }
                 continue;
             }
@@ -1294,10 +1334,14 @@ public final class StateMachineRunner
             final PlaybookStepStatus st = step.getStatus();
             if (st == null || st == PlaybookStepStatus.PENDING || st == PlaybookStepStatus.RUNNING || st == PlaybookStepStatus.SUCCESS)
             {
-                step.setStatus(PlaybookStepStatus.SKIPPED);
+                step.setStatus(PlaybookStepStatus.NOT_RUN);
                 step.setFailed(false);
                 step.setStartTimeMs(null);
                 step.setDurationMs(null);
+                if (failedStepLabel != null && step.getNotRunReason() == null)
+                {
+                    step.setNotRunReason("Not executed because step " + failedStepLabel + " failed.");
+                }
 
                 if (step.hasSubSteps())
                 {
@@ -1306,17 +1350,21 @@ public final class StateMachineRunner
                         final PlaybookStepStatus subSt = sub.getStatus();
                         if (subSt == null || subSt == PlaybookStepStatus.PENDING || subSt == PlaybookStepStatus.RUNNING || subSt == PlaybookStepStatus.SUCCESS)
                         {
-                            sub.setStatus(PlaybookStepStatus.SKIPPED);
+                            sub.setStatus(PlaybookStepStatus.NOT_RUN);
                             sub.setFailed(false);
                             sub.setStartTimeMs(null);
                             sub.setDurationMs(null);
+                            if (failedStepLabel != null && sub.getNotRunReason() == null)
+                            {
+                                sub.setNotRunReason("Not executed because step " + failedStepLabel + " failed.");
+                            }
                         }
                     }
                 }
 
                 if (this.session != null && this.session.getEventBus() != null)
                 {
-                    this.session.getEventBus().dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SKIPPED));
+                    this.session.getEventBus().dispatch(new StepFinishedEvent(step, PlaybookStepStatus.NOT_RUN));
                 }
             }
         }

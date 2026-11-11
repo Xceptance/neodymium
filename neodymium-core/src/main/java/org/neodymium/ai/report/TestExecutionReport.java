@@ -55,6 +55,7 @@ public final class TestExecutionReport
     private String playbookFile;
     private String status = "UNKNOWN";
     private boolean success;
+    private boolean expectedFailure;
     private long startTimeMs;
     private long endTimeMs;
     private long durationMs;
@@ -158,6 +159,16 @@ public final class TestExecutionReport
     public void setSuccess(final boolean success)
     {
         this.success = success;
+    }
+
+    public boolean isExpectedFailure()
+    {
+        return this.expectedFailure;
+    }
+
+    public void setExpectedFailure(final boolean expectedFailure)
+    {
+        this.expectedFailure = expectedFailure;
     }
 
     public long getStartTimeMs()
@@ -435,6 +446,7 @@ public final class TestExecutionReport
         private String reasoning;
         private final List<String> reasonings = new ArrayList<>();
         private String failureReason;
+        private String notRunReason;
         private int escalations;
         private String contextLevels;
         private int standardCalls;
@@ -462,6 +474,7 @@ public final class TestExecutionReport
         private boolean optional;
         private boolean continueOnError;
         private boolean noHealing;
+        private boolean expectedFailure;
         private boolean visual;
         private boolean marker;
         private boolean multiStage;
@@ -606,6 +619,26 @@ public final class TestExecutionReport
         public void setFailureReason(final String failureReason)
         {
             this.failureReason = failureReason;
+        }
+
+        public String getNotRunReason()
+        {
+            return this.notRunReason;
+        }
+
+        public void setNotRunReason(final String notRunReason)
+        {
+            this.notRunReason = notRunReason;
+        }
+
+        public boolean isNotRun()
+        {
+            return "NOT RUN".equalsIgnoreCase(this.status) || "NOT_RUN".equalsIgnoreCase(this.status) || "UNREACHED".equalsIgnoreCase(this.status);
+        }
+
+        public boolean isSkipped()
+        {
+            return "SKIPPED".equalsIgnoreCase(this.status);
         }
 
         public int getEscalations()
@@ -835,6 +868,16 @@ public final class TestExecutionReport
         public void setNoHealing(final boolean noHealing)
         {
             this.noHealing = noHealing;
+        }
+
+        public boolean isExpectedFailure()
+        {
+            return this.expectedFailure;
+        }
+
+        public void setExpectedFailure(final boolean expectedFailure)
+        {
+            this.expectedFailure = expectedFailure;
         }
 
         public boolean isVisual()
@@ -1280,6 +1323,7 @@ public final class TestExecutionReport
         private String systemPrompt;
         private String userPrompt;
         private String responseContent;
+        private String thinking;
         private List<String> availableTools = new ArrayList<>();
 
         public ReportLlmCallEntry()
@@ -1424,6 +1468,16 @@ public final class TestExecutionReport
         public void setResponseContent(final String responseContent)
         {
             this.responseContent = responseContent;
+        }
+
+        public String getThinking()
+        {
+            return this.thinking;
+        }
+
+        public void setThinking(final String thinking)
+        {
+            this.thinking = thinking;
         }
 
         public List<String> getAvailableTools()
@@ -1734,6 +1788,7 @@ public final class TestExecutionReport
         private int healedSteps;
         private int failedSteps;
         private int skippedSteps;
+        private int notRunSteps;
         private int totalLlmCalls;
         private long tokenUsageInput;
         private long tokenUsageOutput;
@@ -1795,6 +1850,16 @@ public final class TestExecutionReport
         public void setSkippedSteps(final int skippedSteps)
         {
             this.skippedSteps = skippedSteps;
+        }
+
+        public int getNotRunSteps()
+        {
+            return this.notRunSteps;
+        }
+
+        public void setNotRunSteps(final int notRunSteps)
+        {
+            this.notRunSteps = notRunSteps;
         }
 
         public int getTotalLlmCalls()

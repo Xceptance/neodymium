@@ -509,7 +509,6 @@
                                     <span>Area: <span th:text="${area.areaName != null ? (area.areaName.equalsIgnoreCase('Default') ? 'Default' : (area.areaName.startsWith('@') ? area.areaName : '@' + area.areaName)) : 'Default'}">Checkout</span></span>
                                     <span class="tag-chip area-exec-count-chip" style="margin-left: 0.5rem;" th:text="${area.totalCount + ' Executions'}">5 Executions</span>
                                 </div>
-                                
                                 <div class="flex-gap-2 area-summary-badges" onclick="event.stopPropagation()">
                                     <span class="badge-status badge-pass clickable-badge" th:if="${area.passCount > 0}" onclick="filterAreaByStatusBadge(this, 'PASSED')" title="Filter Passed in Area" th:text="${'Passed: ' + area.passCount}">Passed: 1</span>
                                     <span class="badge-status badge-fixed clickable-badge" th:if="${area.fixedCount > 0}" onclick="filterAreaByStatusBadge(this, 'SUCCEEDED_FIXED')" title="Filter Succeeded-Fixed in Area" th:text="${'Succeeded-Fixed: ' + area.fixedCount}">Succeeded-Fixed: 1</span>
@@ -665,7 +664,7 @@
                             th:data-batch="${exec.batchName != null and not #strings.isEmpty(exec.batchName) ? exec.batchName : (report?.batchName ?: '')}"
                             th:data-row-id="${exec.id}" 
                             th:data-test-name="${exec.testClass}" 
-                            th:data-test-class="${exec.testClass}" 
+                            th:data-test-class="${exec.simpleClassName}" 
                             th:data-dataset="${exec.title}" 
                             th:data-status="${exec.displayStatusKey}"
                             th:data-status-raw="${exec.status}" 
@@ -691,7 +690,10 @@
                             th:data-time-formatted="${exec.timeFormatted}"
                             th:data-timestamp-ms="${exec.timestampMs}"
                             th:data-llm-calls="${exec.llmCallsCount}"
-                            th:data-total-tokens="${exec.llmTotalTokens}"
+                            th:data-total-tokens="${exec.totalTokensCount}"
+                            th:data-input-tokens="${exec.inputTokensCount}"
+                            th:data-output-tokens="${exec.outputTokensCount}"
+                            th:data-cached-tokens="${exec.cachedTokensCount}"
                             th:data-est-cost="${exec.llmCostFormatted}"
                             th:data-has-visual-changes="${exec.hasVisualChanges ?: false}"
                             th:data-video="${exec.videoPath ?: ''}"

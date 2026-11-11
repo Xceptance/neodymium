@@ -218,10 +218,14 @@ public final class TestExecutionDto
     private Integer flakyFailureCount = 0;
     private Integer flakyTotalRuns = 0;
     private String flakyReason;
+    private final Long inputTokensCount;
+    private final Long outputTokensCount;
+    private final Long cachedTokensCount;
+    private final JsonNode llmCalls;
 
     public TestExecutionDto()
     {
-        this("", "", "", "", "", "", "", "", "running", "Java", "UNKNOWN", null, "Unknown", "NONE", new ArrayList<>(), null, "Default", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, Collections.emptyMap());
+        this("", "", "", "", "", "", "", "", "running", "Java", "UNKNOWN", null, "Unknown", "NONE", new ArrayList<>(), null, "Default", null, new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, Collections.emptyMap(), null, false, 0, 0, null, null, null, null, null);
     }
 
     public TestExecutionDto(
@@ -274,7 +278,7 @@ public final class TestExecutionDto
         final JsonNode postFlightFindings,
         final Map<String, ?> tags)
     {
-        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, failureReason, failureStackTrace, visualRcaExplanation, llmResponsibility, metrics, videoUrl, healed, linterFindings, postFlightFindings, tags, null);
+        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, null, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, failureReason, failureStackTrace, visualRcaExplanation, llmResponsibility, metrics, videoUrl, healed, linterFindings, postFlightFindings, tags, null, false, 0, 0, null, null, null, null, null);
     }
 
     public TestExecutionDto(
@@ -328,7 +332,7 @@ public final class TestExecutionDto
         @JsonProperty("tags") final Map<String, ?> tags,
         @JsonProperty("bugDetails") final List<BugDetailDto> bugDetails)
     {
-        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, null, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, failureReason, failureStackTrace, visualRcaExplanation, llmResponsibility, metrics, videoUrl, healed, linterFindings, postFlightFindings, tags, bugDetails, false, 0, 0, null);
+        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, null, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, failureReason, failureStackTrace, visualRcaExplanation, llmResponsibility, metrics, videoUrl, healed, linterFindings, postFlightFindings, tags, bugDetails, false, 0, 0, null, null, null, null, null);
     }
 
     @JsonCreator
@@ -386,7 +390,11 @@ public final class TestExecutionDto
         @JsonProperty("flaky") final Boolean flaky,
         @JsonProperty("flakyFailureCount") final Integer flakyFailureCount,
         @JsonProperty("flakyTotalRuns") final Integer flakyTotalRuns,
-        @JsonProperty("flakyReason") final String flakyReason)
+        @JsonProperty("flakyReason") final String flakyReason,
+        @JsonProperty("inputTokensCount") final Long inputTokensCount,
+        @JsonProperty("outputTokensCount") final Long outputTokensCount,
+        @JsonProperty("cachedTokensCount") final Long cachedTokensCount,
+        @JsonProperty("llmCalls") final JsonNode llmCalls)
     {
         final String effectiveTestClass;
         if (testClass != null && !testClass.trim().isEmpty())
@@ -566,6 +574,10 @@ public final class TestExecutionDto
         this.healed = Boolean.TRUE.equals(healed);
         this.linterFindings = linterFindings;
         this.postFlightFindings = postFlightFindings;
+        this.inputTokensCount = inputTokensCount;
+        this.outputTokensCount = outputTokensCount;
+        this.cachedTokensCount = cachedTokensCount;
+        this.llmCalls = llmCalls;
         this.tags = tags != null ? TagUtils.parseTags(tags) : Collections.emptyMap();
 
         String resolvedAreaName = (areaName != null && AuraReportDataService.isRealArea(areaName)) ? areaName.trim() : null;
@@ -697,7 +709,7 @@ public final class TestExecutionDto
         final Double llmCost,
         final String failureSnippet)
     {
-        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, "", "", "", null, null, "", false, null, null, Collections.emptyMap());
+        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, null, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, "", "", "", null, null, "", false, null, null, Collections.emptyMap(), null, false, 0, 0, null, null, null, null, null);
     }
 
     public TestExecutionDto(
@@ -742,7 +754,7 @@ public final class TestExecutionDto
         final String failureStackTrace,
         final String visualRcaExplanation)
     {
-        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, failureReason, failureStackTrace, visualRcaExplanation, null, null, "", false, null, null, Collections.emptyMap());
+        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, null, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, failureReason, failureStackTrace, visualRcaExplanation, null, null, "", false, null, null, Collections.emptyMap(), null, false, 0, 0, null, null, null, null, null);
     }
 
     public TestExecutionDto(
@@ -768,7 +780,7 @@ public final class TestExecutionDto
         final JsonNode blocks,
         final JsonNode steps)
     {
-        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, Collections.emptyMap());
+        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, null, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, Collections.emptyMap(), null, false, 0, 0, null, null, null, null, null);
     }
 
     public TestExecutionDto(
@@ -793,7 +805,7 @@ public final class TestExecutionDto
         final JsonNode blocks,
         final JsonNode steps)
     {
-        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, Collections.emptyMap());
+        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, null, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, Collections.emptyMap(), null, false, 0, 0, null, null, null, null, null);
     }
 
     public TestExecutionDto(
@@ -807,7 +819,7 @@ public final class TestExecutionDto
         final String failure,
         final List<String> bugs)
     {
-        this(id, "", testClass, null, title, testClass + " " + title, "", "", status, engine, location, null, browser, failure, bugs, null, "Default", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, Collections.emptyMap());
+        this(id, "", testClass, null, title, testClass + " " + title, "", "", status, engine, location, null, browser, failure, bugs, null, "Default", null, new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, Collections.emptyMap(), null, false, 0, 0, null, null, null, null, null);
     }
 
     public TestExecutionDto(
@@ -821,7 +833,7 @@ public final class TestExecutionDto
         final String browser,
         final Map<String, ?> tags)
     {
-        this(id, runId, testClass, testMethod, title, testClass + " " + title, "", "", status, "Java", location != null ? location : "US", null, browser, null, new ArrayList<>(), null, null, new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, tags, null);
+        this(id, runId, testClass, testMethod, title, testClass + " " + title, "", "", status, "Java", location != null ? location : "US", null, browser, null, new ArrayList<>(), null, null, null, new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, tags, null, false, 0, 0, null, null, null, null, null);
     }
 
     public TestExecutionDto(
@@ -850,7 +862,7 @@ public final class TestExecutionDto
         final long llmTotalTokens,
         final Map<String, ?> tags)
     {
-        this(id, runId, testClass, testMethod, title, testClass + " " + title, "", "", status, "Java", location != null ? location : "US", location, browser, null, new ArrayList<>(), null, null, new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, llmTotalTokens, llmCost, null, "", "", "", null, null, "", false, null, null, tags, null);
+        this(id, runId, testClass, testMethod, title, testClass + " " + title, "", "", status, "Java", location != null ? location : "US", location, browser, null, new ArrayList<>(), null, null, null, new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, llmTotalTokens, llmCost, null, "", "", "", null, null, "", false, null, null, tags, null, false, 0, 0, null, null, null, null, null);
     }
 
     @JsonProperty("tags")
@@ -925,6 +937,22 @@ public final class TestExecutionDto
         return getTestClass();
     }
 
+    /**
+     * Returns the simple class name derived from the fully qualified {@link #testClass}.
+     *
+     * @return the simple class name without package prefix, or "DefaultClass" if empty
+     */
+    public String getSimpleClassName()
+    {
+        if (testClass == null || testClass.isBlank())
+        {
+            return "DefaultClass";
+        }
+        final String trimmed = testClass.trim();
+        final int lastDot = trimmed.lastIndexOf('.');
+        return (lastDot >= 0 && lastDot < trimmed.length() - 1) ? trimmed.substring(lastDot + 1) : trimmed;
+    }
+
     public String getTestMethod()
     {
         return testMethod != null ? testMethod : "";
@@ -987,29 +1015,41 @@ public final class TestExecutionDto
      */
     public String getDisplayStatusKey()
     {
-        final String st = status != null ? status.toLowerCase() : "running";
+        final String st = status != null ? status.trim().toLowerCase(Locale.ROOT) : "running";
         if ("running".equals(st) || "in_progress".equals(st) || "executing".equals(st) || "pending".equals(st))
         {
             return "RUNNING";
         }
-        final boolean hasBugs = bugs != null && !bugs.isEmpty();
-        if ("succeeded-fixed".equals(st) || "fixed".equals(st) || (("passed-clean".equals(st) || "passed".equals(st) || "succeeded".equals(st)) && hasBugs))
-        {
-            return "SUCCEEDED_FIXED";
-        }
-        if ("passed-clean".equals(st) || "passed".equals(st) || "succeeded".equals(st) || "healed".equals(st))
-        {
-            return "PASSED";
-        }
-        if ("failed-known".equals(st) || "known".equals(st) || (("failed".equals(st) || "error".equals(st) || "failure".equals(st)) && hasBugs))
+        if ("failed-known".equals(st) || "known".equals(st))
         {
             return "FAILED_KNOWN";
         }
-        if ("ignored".equals(st) || "skipped".equals(st))
+        if ("succeeded-fixed".equals(st) || "fixed".equals(st))
+        {
+            return "SUCCEEDED_FIXED";
+        }
+        if ("ignored".equals(st) || "skipped".equals(st) || "cancelled".equals(st))
         {
             return "SKIPPED";
         }
-        return hasBugs ? "FAILED_KNOWN" : "FAILED_UNKNOWN";
+
+        final boolean hasBugs = bugs != null && !bugs.isEmpty();
+        final String eff = AuraReportDataService.computeEffectiveStatus(
+            status,
+            getTotalStepsCount(),
+            getFailedStepsCount(),
+            hasBugs,
+            AuraReportDataService.extractFailureText(this),
+            true);
+        return switch (eff)
+        {
+            case "running" -> "RUNNING";
+            case "passed-clean" -> "PASSED";
+            case "succeeded-fixed" -> "SUCCEEDED_FIXED";
+            case "failed-known" -> "FAILED_KNOWN";
+            case "ignored", "skipped" -> "SKIPPED";
+            default -> "FAILED_UNKNOWN";
+        };
     }
 
     public String getEngine()
@@ -1389,28 +1429,53 @@ public final class TestExecutionDto
 
     public int getLlmCallsCount()
     {
-        return llmCallsCount;
+        if (llmCallsCount > 0)
+        {
+            return llmCallsCount;
+        }
+        if (metrics != null && metrics.has("totalLlmCalls") && metrics.get("totalLlmCalls").isInt())
+        {
+            return metrics.get("totalLlmCalls").asInt();
+        }
+        if (llmCalls != null && llmCalls.isArray())
+        {
+            return llmCalls.size();
+        }
+        return 0;
     }
 
     public long getLlmTotalTokens()
     {
-        return llmTotalTokens;
+        if (llmTotalTokens > 0L)
+        {
+            return llmTotalTokens;
+        }
+        return getTotalTokensCount();
     }
 
     public String getLlmTotalTokensFormatted()
     {
-        return String.format("%,d", llmTotalTokens);
+        return String.format("%,d", getLlmTotalTokens());
     }
 
     public double getLlmCost()
     {
+        if (llmCost > 0.0)
+        {
+            return llmCost;
+        }
+        if (metrics != null && metrics.has("estimatedCostUsd") && metrics.get("estimatedCostUsd").isNumber())
+        {
+            return metrics.get("estimatedCostUsd").asDouble();
+        }
         return llmCost;
     }
 
     public String getLlmCostFormatted()
     {
-        final double roundedUp = Math.ceil(llmCost * 10000.0) / 10000.0;
-        return String.format(java.util.Locale.ROOT, "%.4f", roundedUp);
+        final double cost = getLlmCost();
+        final double roundedUp = Math.ceil(cost * 10000.0) / 10000.0;
+        return String.format(Locale.ROOT, "%.4f", roundedUp);
     }
 
     public String getFailureSnippet()
@@ -1561,7 +1626,8 @@ public final class TestExecutionDto
     public boolean isAiDriven()
     {
         return "AI".equalsIgnoreCase(getDisplayMode())
-            || (llmCallsCount > 0)
+            || (getLlmCallsCount() > 0)
+            || (getLlmTotalTokens() > 0L)
             || "LLM_RECORDING".equalsIgnoreCase(this.executionMode)
             || "LLM_ONLY".equalsIgnoreCase(this.executionMode);
     }
@@ -1588,22 +1654,101 @@ public final class TestExecutionDto
 
     public long getTotalTokensCount()
     {
+        if (metrics != null && metrics.has("totalTokens") && metrics.get("totalTokens").isNumber())
+        {
+            return metrics.get("totalTokens").asLong();
+        }
+        final long in = getInputTokensCount();
+        final long out = getOutputTokensCount();
+        if (in > 0 || out > 0)
+        {
+            return in + out;
+        }
+        if (llmCalls != null && llmCalls.isArray() && !llmCalls.isEmpty())
+        {
+            long sum = 0L;
+            for (final JsonNode call : llmCalls)
+            {
+                if (call.has("totalTokens") && call.path("totalTokens").isNumber())
+                {
+                    sum += call.path("totalTokens").asLong();
+                }
+                else
+                {
+                    sum += (call.path("inputTokens").asLong(0L) + call.path("outputTokens").asLong(0L));
+                }
+            }
+            if (sum > 0L)
+            {
+                return sum;
+            }
+        }
         return llmTotalTokens;
     }
 
     public long getInputTokensCount()
     {
+        if (inputTokensCount != null && inputTokensCount > 0)
+        {
+            return inputTokensCount;
+        }
+        if (metrics != null)
+        {
+            if (metrics.has("tokenUsageInput") && metrics.get("tokenUsageInput").isNumber())
+            {
+                return metrics.get("tokenUsageInput").asLong();
+            }
+            if (metrics.has("inputTokens") && metrics.get("inputTokens").isNumber())
+            {
+                return metrics.get("inputTokens").asLong();
+            }
+        }
         return (long) (llmTotalTokens * 0.85);
     }
 
     public long getOutputTokensCount()
     {
+        if (outputTokensCount != null && outputTokensCount > 0)
+        {
+            return outputTokensCount;
+        }
+        if (metrics != null)
+        {
+            if (metrics.has("tokenUsageOutput") && metrics.get("tokenUsageOutput").isNumber())
+            {
+                return metrics.get("tokenUsageOutput").asLong();
+            }
+            if (metrics.has("outputTokens") && metrics.get("outputTokens").isNumber())
+            {
+                return metrics.get("outputTokens").asLong();
+            }
+        }
         return (long) (llmTotalTokens * 0.15);
     }
 
     public long getCachedTokensCount()
     {
+        if (cachedTokensCount != null && cachedTokensCount > 0)
+        {
+            return cachedTokensCount;
+        }
+        if (metrics != null)
+        {
+            if (metrics.has("tokenUsageCached") && metrics.get("tokenUsageCached").isNumber())
+            {
+                return metrics.get("tokenUsageCached").asLong();
+            }
+            if (metrics.has("cachedTokens") && metrics.get("cachedTokens").isNumber())
+            {
+                return metrics.get("cachedTokens").asLong();
+            }
+        }
         return 0L;
+    }
+
+    public JsonNode getLlmCalls()
+    {
+        return llmCalls;
     }
 
     public String getEstimatedCostUsd()
@@ -1613,11 +1758,22 @@ public final class TestExecutionDto
 
     public String getLlmResponsibilityJson()
     {
-        if (llmResponsibility == null || llmResponsibility.isNull())
+        if (llmResponsibility != null && !llmResponsibility.isNull() && !llmResponsibility.isEmpty())
         {
-            return "";
+            return llmResponsibility.toString();
         }
-        return llmResponsibility.toString();
+        if (metrics != null && !metrics.isNull())
+        {
+            if (metrics.has("categories") && metrics.get("categories").isObject() && !metrics.get("categories").isEmpty())
+            {
+                return metrics.get("categories").toString();
+            }
+            if (metrics.has("action") || metrics.has("verification") || metrics.has("total"))
+            {
+                return metrics.toString();
+            }
+        }
+        return "";
     }
 
     public String getContextLevelCountsJson()

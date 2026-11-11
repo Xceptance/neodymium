@@ -130,6 +130,8 @@ public class StoreIntegrationTest extends BaseAiTest
 
         $("#input-target").shouldHave(value("ORD-987654"));
 
+        flushRecording(session);
+
         // Verify parameterization
         final String browserProfile = Neodymium.getBrowserProfileName();
         final File recordingFile = getTestResourceFile("playbooks/integration/programmatic/custom_store_playbook_" + browserProfile + ".json");

@@ -64,9 +64,12 @@ import org.neodymium.ai.resources.InMemoryResourceManager;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.telemetry.TokenBudgetGuard;
 import org.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.WebDriverCache;
 import org.neodymium.common.browser.WebDriverStateContainer;
+import org.neodymium.common.recording.FilmTestExecution;
 import org.neodymium.util.Neodymium;
 import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WrapsDriver;
 import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -886,6 +889,50 @@ public class NeodymiumAiRunnerTest
     }
 
     /**
+     * Goal: Verifies that AiInvocationExtension does not initiate duplicate video recording
+     * when a browser is present and automatic filming is enabled, delegating to BrowserRunner instead.
+     */
+    @Test
+    public void testAiInvocationExtensionDoesNotDuplicateBrowserRunnerFilming() throws Exception
+    {
+        try
+        {
+            FilmTestExecution.getContextVideo().setProperty("video.enableFilming", "true");
+            FilmTestExecution.getContextVideo().setProperty("video.filmAutomatically", "true");
+
+            final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+            final Method method = SampleBrowserAiTestClass.class.getMethod("sampleMethod");
+            final ExtensionContext extensionContext = createMockExtensionContext(SampleBrowserAiTestClass.class, method);
+
+            final List<TestTemplateInvocationContext> invocations =
+                runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+            Assertions.assertFalse(invocations.isEmpty());
+
+            final List<Extension> extensions = invocations.get(0).getAdditionalExtensions();
+            final List<BeforeEachCallback> beforeCallbacks = extensions.stream()
+                .filter(e -> e instanceof BeforeEachCallback)
+                .map(e -> (BeforeEachCallback) e)
+                .toList();
+            Assertions.assertEquals(2, beforeCallbacks.size());
+
+            // Execute AiInvocationExtension.beforeEach
+            beforeCallbacks.get(1).beforeEach(extensionContext);
+
+            final ExecutionContext execCtx = (ExecutionContext) extensionContext.getStore(null).get(ExecutionContext.class);
+            Assertions.assertNotNull(execCtx);
+            Assertions.assertNull(execCtx.getTransientData().get("recordingID"),
+                "recordingID must NOT be registered by AiInvocationExtension when browser is active and filmAutomatically is true");
+        }
+        finally
+        {
+            FilmTestExecution.getContextVideo().setProperty("video.enableFilming", "false");
+            FilmTestExecution.getContextVideo().setProperty("video.filmAutomatically", "false");
+            WebDriverRunner.closeWebDriver();
+            Neodymium.clearThreadContext();
+        }
+    }
+
+    /**
      * Goal: Verifies that AiInvocationExtension.afterEach does not wipe the browser profile name before BrowserRunner teardown.
      */
     @Test
@@ -915,6 +962,195 @@ public class NeodymiumAiRunnerTest
         finally
         {
             Neodymium.clearThreadContext();
+        }
+    }
+
+    /**
+     * Goal: Verifies that AiInvocationExtension.afterEach does NOT close or quit a WebDriver that has been
+     * returned to WebDriverCache (e.g. by BrowserExecutionCallback before an @AfterEach method when
+     * startNewBrowserForCleanUp = true and reuseDriver = true).
+     * Prevents regression of issue #479 (NoSuchSessionException on reused driver).
+     */
+    @Test
+    public void testAiInvocationExtensionPreservesCachedWebDriverAcrossAfterEach() throws Exception
+    {
+        final AtomicBoolean quitCalled = new AtomicBoolean(false);
+        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
+            WebDriver.class.getClassLoader(),
+            new Class<?>[]{WebDriver.class},
+            (proxy, m, args) -> {
+                if ("quit".equals(m.getName()))
+                {
+                    quitCalled.set(true);
+                }
+                return null;
+            }
+        );
+
+        final WebDriverStateContainer container = new WebDriverStateContainer();
+        container.setWebDriver(mockDriver);
+
+        try
+        {
+            final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+            final Method method = SampleBrowserAiTestClass.class.getMethod("sampleMethod");
+            final ExtensionContext extensionContext = createMockExtensionContext(SampleBrowserAiTestClass.class, method);
+
+            final List<TestTemplateInvocationContext> invocations =
+                runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+            Assertions.assertFalse(invocations.isEmpty());
+
+            final List<Extension> extensions = invocations.get(0).getAdditionalExtensions();
+            final AfterEachCallback afterEach = (AfterEachCallback) extensions.stream()
+                .filter(e -> e instanceof AfterEachCallback)
+                .findFirst()
+                .orElseThrow();
+
+            // Simulate driver registered in Selenide WebDriverRunner, but already reclaimed into WebDriverCache
+            // and detached from Neodymium thread context (exact state during @AfterEach execution)
+            WebDriverRunner.setWebDriver(mockDriver);
+            WebDriverCache.instance.putWebDriverStateContainer("Chrome_1024x768", container);
+            Neodymium.setWebDriverStateContainer(null);
+
+            afterEach.afterEach(extensionContext);
+
+            Assertions.assertFalse(quitCalled.get(), "Cached WebDriver must not be quit by AiInvocationExtension.afterEach");
+            Assertions.assertTrue(WebDriverCache.instance.containsWebDriver(mockDriver), "Cached WebDriver must remain in WebDriverCache");
+            Assertions.assertFalse(WebDriverRunner.hasWebDriverStarted(), "WebDriverRunner must be reset after caching so ThreadLocal does not leak");
+        }
+        finally
+        {
+            WebDriverCache.instance.removeWebDriverStateContainer("Chrome_1024x768");
+            WebDriverRunner.closeWebDriver();
+            Neodymium.clearThreadContext();
+        }
+    }
+
+    /**
+     * Sample test class without @Browser annotation to verify unmanaged WebDriver cleanup.
+     */
+    public static class SampleStandaloneAiTestClass
+    {
+        @Test
+        @AiInlinePlaybook("name: sample-standalone\nsteps:\n  - step: Click search button\n")
+        public void sampleMethod()
+        {
+        }
+    }
+
+    /**
+     * Goal: Verifies that AiInvocationExtension.afterEach properly closes and quits an unmanaged WebDriver
+     * that is NOT present in WebDriverCache and NOT managed by Neodymium's WebDriverStateContainer.
+     */
+    @Test
+    public void testAiInvocationExtensionCleansUpWhenNotCached() throws Exception
+    {
+        final AtomicBoolean quitCalled = new AtomicBoolean(false);
+        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
+            WebDriver.class.getClassLoader(),
+            new Class<?>[]{WebDriver.class},
+            (proxy, m, args) -> {
+                if ("quit".equals(m.getName()))
+                {
+                    quitCalled.set(true);
+                }
+                return null;
+            }
+        );
+
+        try
+        {
+            final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+            final Method method = SampleStandaloneAiTestClass.class.getMethod("sampleMethod");
+            final ExtensionContext extensionContext = createMockExtensionContext(SampleStandaloneAiTestClass.class, method);
+
+            final List<TestTemplateInvocationContext> invocations =
+                runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+            Assertions.assertFalse(invocations.isEmpty());
+
+            final List<Extension> extensions = invocations.get(0).getAdditionalExtensions();
+            final AfterEachCallback afterEach = (AfterEachCallback) extensions.stream()
+                .filter(e -> e instanceof AfterEachCallback)
+                .findFirst()
+                .orElseThrow();
+
+            // Register standalone driver in Selenide WebDriverRunner without caching it in Neodymium
+            WebDriverRunner.setWebDriver(mockDriver);
+            Neodymium.setWebDriverStateContainer(null);
+
+            afterEach.afterEach(extensionContext);
+
+            Assertions.assertTrue(quitCalled.get(), "Unmanaged WebDriver must be quit by AiInvocationExtension.afterEach");
+            Assertions.assertFalse(WebDriverRunner.hasWebDriverStarted(), "WebDriverRunner must report no started driver");
+        }
+        finally
+        {
+            WebDriverRunner.closeWebDriver();
+            Neodymium.clearThreadContext();
+        }
+    }
+
+    /**
+     * Goal: Verifies that WebDriverCache.containsWebDriver correctly identifies cached WebDrivers
+     * regardless of whether raw, wrapped, or decorated instances are supplied.
+     */
+    @Test
+    public void testWebDriverCacheContainsWebDriver()
+    {
+        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
+            WebDriver.class.getClassLoader(),
+            new Class<?>[]{WebDriver.class},
+            (proxy, m, args) -> null
+        );
+
+        final WebDriver wrappedDriver = (WebDriver) Proxy.newProxyInstance(
+            NeodymiumAiRunnerTest.class.getClassLoader(),
+            new Class<?>[]{WebDriver.class, WrapsDriver.class},
+            (proxy, m, args) -> {
+                if ("getWrappedDriver".equals(m.getName()))
+                {
+                    return mockDriver;
+                }
+                return null;
+            }
+        );
+
+        final WebDriverStateContainer container = new WebDriverStateContainer();
+        container.setWebDriver(mockDriver);
+
+        try
+        {
+            Assertions.assertFalse(WebDriverCache.instance.containsWebDriver(mockDriver), "Cache must not contain driver before insertion");
+
+            WebDriverCache.instance.putWebDriverStateContainer("testTag", container);
+
+            // 1. Direct raw equality
+            Assertions.assertTrue(WebDriverCache.instance.containsWebDriver(mockDriver), "Cache must contain registered raw driver");
+
+            // 2. Wrapped candidate matching raw cached driver
+            Assertions.assertTrue(WebDriverCache.instance.containsWebDriver(wrappedDriver), "Cache must recognize wrapped driver pointing to cached driver");
+
+            // 3. Raw candidate matching wrapped cached driver
+            final WebDriverStateContainer wrappedContainer = new WebDriverStateContainer();
+            wrappedContainer.setWebDriver(wrappedDriver);
+            WebDriverCache.instance.putWebDriverStateContainer("testWrappedTag", wrappedContainer);
+
+            Assertions.assertTrue(WebDriverCache.instance.containsWebDriver(mockDriver), "Cache with wrapped driver must recognize raw driver candidate");
+
+            // 4. Null and unknown drivers
+            Assertions.assertFalse(WebDriverCache.instance.containsWebDriver(null), "Null driver must return false");
+
+            final WebDriver unknownDriver = (WebDriver) Proxy.newProxyInstance(
+                WebDriver.class.getClassLoader(),
+                new Class<?>[]{WebDriver.class},
+                (proxy, m, args) -> null
+            );
+            Assertions.assertFalse(WebDriverCache.instance.containsWebDriver(unknownDriver), "Unrelated driver must return false");
+        }
+        finally
+        {
+            WebDriverCache.instance.removeWebDriverStateContainer("testTag");
+            WebDriverCache.instance.removeWebDriverStateContainer("testWrappedTag");
         }
     }
 
@@ -2222,6 +2458,80 @@ public class NeodymiumAiRunnerTest
         finally
         {
             System.clearProperty("neodymium.ai.playbook.recordingDirectory");
+            AiConfiguration.resetInstance();
+            Neodymium.clearThreadContext();
+        }
+    }
+
+    /**
+     * Goal: Verifies that when an intentional negative test catches an expected session failure
+     * via assertThrows, JUnit passes the test method, and NeodymiumAiRunner reconciles the preliminary
+     * execution report and interactive console status from FAILED to PASSED with expectedFailure=true.
+     */
+    @Test
+    public void testExpectedFailureCaughtByAssertThrowsReconcilesReportToPassed(@TempDir final Path tempDir) throws Throwable
+    {
+        final Path reportDir = tempDir.resolve("ai-reports-reconciled");
+        System.setProperty("neodymium.ai.report.disk.directory", reportDir.toString());
+        System.setProperty("neodymium.ai.report.disk.enabled", "true");
+        System.setProperty("neodymium.ai.console.executionLogs.enabled", "true");
+        System.setProperty("neodymium.ai.console.executionLogs.directory", reportDir.toString());
+        AiConfiguration.resetInstance();
+
+        final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+        final Method method = SampleProgrammaticFailureTestClass.class.getMethod("testFailure", AiSession.class);
+        final ExtensionContext extensionContext = createMockExtensionContext(SampleProgrammaticFailureTestClass.class, method, null);
+
+        try
+        {
+            final List<TestTemplateInvocationContext> contexts = runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+            Assertions.assertEquals(1, contexts.size());
+
+            final List<Extension> extensions = contexts.get(0).getAdditionalExtensions();
+            final BeforeEachCallback beforeEach = (BeforeEachCallback) extensions.stream().filter(e -> e instanceof BeforeEachCallback).findFirst().orElseThrow();
+            final InvocationInterceptor interceptor = (InvocationInterceptor) extensions.stream().filter(e -> e instanceof InvocationInterceptor).findFirst().orElseThrow();
+            final AfterEachCallback afterEach = (AfterEachCallback) extensions.stream().filter(e -> e instanceof AfterEachCallback).findFirst().orElseThrow();
+
+            beforeEach.beforeEach(extensionContext);
+            final AiSession session = (AiSession) extensionContext.getStore(null).get(AiSession.class);
+            Assertions.assertNotNull(session);
+            setupMockLlm(session);
+
+            final PreliminaryReportListener reportListener = (PreliminaryReportListener) session.getEventBus().getListeners().stream()
+                .filter(l -> l instanceof PreliminaryReportListener)
+                .findFirst()
+                .orElseThrow();
+
+            interceptor.interceptTestMethod(
+                () -> {
+                    final TestExecutionReport.ReportStepEntry failingStep = new TestExecutionReport.ReportStepEntry(1, "Assert invalid condition");
+                    failingStep.setStatus("FAILED");
+                    failingStep.setFailureReason("Assertion failed as expected");
+                    reportListener.getReport().addStep(failingStep);
+                    reportListener.getReport().setStatus("FAILED");
+                    reportListener.getReport().setSuccess(false);
+                    reportListener.getReport().setFailureReason("Assertion failed as expected");
+                    return null;
+                },
+                null,
+                extensionContext
+            );
+
+            Assertions.assertEquals("FAILED", reportListener.getReport().getStatus());
+
+            afterEach.afterEach(extensionContext);
+
+            Assertions.assertEquals("PASSED", reportListener.getReport().getStatus(), "Report status must be reconciled to PASSED");
+            Assertions.assertTrue(reportListener.getReport().isSuccess(), "Report success must be reconciled to true");
+            Assertions.assertTrue(reportListener.getReport().isExpectedFailure(), "Report must be flagged with expectedFailure=true");
+            Assertions.assertEquals("Assertion failed as expected", reportListener.getReport().getFailureReason(), "Failure reason must be preserved for diagnostics");
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.report.disk.directory");
+            System.clearProperty("neodymium.ai.report.disk.enabled");
+            System.clearProperty("neodymium.ai.console.executionLogs.enabled");
+            System.clearProperty("neodymium.ai.console.executionLogs.directory");
             AiConfiguration.resetInstance();
             Neodymium.clearThreadContext();
         }

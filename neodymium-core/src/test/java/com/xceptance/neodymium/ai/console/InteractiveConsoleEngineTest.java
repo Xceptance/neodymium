@@ -888,7 +888,7 @@ public class InteractiveConsoleEngineTest
 
         final JsonNode cartNode = stepsNode.get(2);
         assertEquals("Add to cart", cartNode.path("instruction").asText());
-        assertEquals("skipped", cartNode.path("status").asText());
+        assertEquals("not_run", cartNode.path("status").asText());
         assertTrue(cartNode.path("hasSubSteps").asBoolean());
         assertEquals(2, cartNode.path("subSteps").size());
     }
@@ -1418,4 +1418,136 @@ public class InteractiveConsoleEngineTest
         assertTrue(loggedRoot.has("subArea"), "console-execution-1.json must contain subArea property");
         assertEquals("@Browsing", loggedRoot.path("subArea").asText());
     }
+
+    @Test
+    public void testStateJsonSerializesNotRunStatusAndReasonForUnexecutedDownstreamSteps() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+
+        final PlaybookStep step1 = new PlaybookStep("Open homepage");
+        step1.setStatus(PlaybookStepStatus.FAILED);
+        step1.setFailureReason("Connection timed out");
+
+        final PlaybookStep step2 = new PlaybookStep("Search for item");
+        step2.setStatus(PlaybookStepStatus.PENDING);
+
+        final PlaybookStep step3 = new PlaybookStep("Click search");
+        step3.setStatus(PlaybookStepStatus.PENDING);
+
+        context.getTransientData().put("playbook.flatSteps", List.of(step1, step2, step3));
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run-not-run-test", 0, "failed");
+        final JsonNode root = new ObjectMapper().readTree(stateJson);
+
+        final JsonNode stepsNode = root.path("blocks").path("steps");
+        assertEquals(3, stepsNode.size());
+
+        // Step 1: Failed
+        assertEquals("failed", stepsNode.get(0).path("status").asText());
+
+        // Step 2: Unexecuted downstream -> not_run with explanation
+        assertEquals("not_run", stepsNode.get(1).path("status").asText());
+        assertEquals("Not executed because step #1 failed.", stepsNode.get(1).path("notRunReason").asText());
+
+        // Step 3: Unexecuted downstream -> not_run with explanation
+        assertEquals("not_run", stepsNode.get(2).path("status").asText());
+        assertEquals("Not executed because step #1 failed.", stepsNode.get(2).path("notRunReason").asText());
+    }
+
+    @Test
+    public void testStateJsonSerializesMetricsWithNotRunSteps() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        final TestExecutionReport report = new TestExecutionReport();
+        final ReportMetrics metrics = new ReportMetrics();
+        metrics.setTotalSteps(5);
+        metrics.setFailedSteps(1);
+        metrics.setSkippedSteps(1);
+        metrics.setNotRunSteps(3);
+        report.setMetrics(metrics);
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run-metrics-test", 0, "failed", null, report);
+        final JsonNode root = new ObjectMapper().readTree(stateJson);
+
+        final JsonNode metricsNode = root.path("metrics");
+        assertEquals(5, metricsNode.path("totalSteps").asInt());
+        assertEquals(1, metricsNode.path("failedSteps").asInt());
+        assertEquals(1, metricsNode.path("skippedSteps").asInt());
+        assertEquals(3, metricsNode.path("notRunSteps").asInt());
+    }
+
+    @Test
+    public void testStateJsonEnrichesNotRunStatusFromReportStep() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        final PlaybookStep pbStep = new PlaybookStep("Checkout cart");
+        context.getTransientData().put("playbook.flatSteps", List.of(pbStep));
+
+        final TestExecutionReport report = new TestExecutionReport();
+        final ReportStepEntry repStep = new ReportStepEntry(0, "Checkout cart");
+        repStep.setStatus("NOT RUN");
+        repStep.setNotRunReason("Not executed because step #1 failed.");
+        report.addStep(repStep);
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run-report-step-not-run", 0, "failed", null, report);
+        final JsonNode root = new ObjectMapper().readTree(stateJson);
+
+        final JsonNode stepNode = root.path("blocks").path("steps").get(0);
+        assertEquals("not_run", stepNode.path("status").asText());
+        assertEquals("Not executed because step #1 failed.", stepNode.path("notRunReason").asText());
+    }
+
+    @Test
+    public void testSuccessfulAfterStepPreservesPassedStatusWhenPrecedingStepFailed() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+
+        final PlaybookStep coreStep = new PlaybookStep("Process payment");
+        coreStep.setStatus(PlaybookStepStatus.FAILED);
+        coreStep.setFailureReason("Credit card rejected");
+
+        final PlaybookStep afterStep = new PlaybookStep("Close browser session");
+        afterStep.setBlock("after");
+        afterStep.setStatus(PlaybookStepStatus.SUCCESS);
+
+        context.getTransientData().put("playbook.steps", List.of(coreStep));
+        context.getTransientData().put("playbook.flatSteps", List.of(coreStep, afterStep));
+        context.getTransientData().put("playbook.afterSteps", List.of(afterStep));
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run-after-success", 0, "failed");
+        final JsonNode root = new ObjectMapper().readTree(stateJson);
+
+        final JsonNode afterNode = root.path("blocks").path("after").get(0);
+        assertEquals("passed", afterNode.path("status").asText(),
+            "Teardown (after) step that succeeded must retain 'passed' status even when preceding core step failed");
+        assertFalse(afterNode.has("notRunReason"),
+            "Successful after step must not be assigned a notRunReason");
+    }
+
+    @Test
+    public void testUnexecutedAfterStepSerializesAsNotRunWhenPrecedingStepFailed() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+
+        final PlaybookStep coreStep = new PlaybookStep("Process payment");
+        coreStep.setStatus(PlaybookStepStatus.FAILED);
+        coreStep.setFailureReason("Credit card rejected");
+
+        final PlaybookStep afterStep = new PlaybookStep("Close browser session");
+        afterStep.setBlock("after");
+        afterStep.setStatus(PlaybookStepStatus.PENDING);
+
+        context.getTransientData().put("playbook.steps", List.of(coreStep));
+        context.getTransientData().put("playbook.flatSteps", List.of(coreStep, afterStep));
+        context.getTransientData().put("playbook.afterSteps", List.of(afterStep));
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run-after-pending", 0, "failed");
+        final JsonNode root = new ObjectMapper().readTree(stateJson);
+
+        final JsonNode afterNode = root.path("blocks").path("after").get(0);
+        assertEquals("not_run", afterNode.path("status").asText(),
+            "Unexecuted teardown step must be marked 'not_run' when execution aborted");
+        assertEquals("Not executed because step #1 failed.", afterNode.path("notRunReason").asText());
+    }
 }
+

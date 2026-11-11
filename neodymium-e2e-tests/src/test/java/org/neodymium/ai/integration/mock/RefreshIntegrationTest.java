@@ -115,6 +115,8 @@ public class RefreshIntegrationTest extends BaseAiTest
 
         $("h1").shouldHave(text("Assert Action Test"));
 
+        flushRecording(session);
+
         // Verify parameterization
         final String browserProfile = Neodymium.getBrowserProfileName();
         final File recordingFile = getTestResourceFile("playbooks/integration/programmatic/custom_refresh_playbook_" + browserProfile + ".json");

@@ -4089,16 +4089,39 @@ function syncRowAiUsage(row) {
 
     let allLlmCalls = [];
     if (blocksObj) {
-        if (Array.isArray(blocksObj.llmCalls) && blocksObj.llmCalls.length > 0) {
-            allLlmCalls = blocksObj.llmCalls;
-        } else {
-            const allSteps = [...(blocksObj.before || []), ...(blocksObj.steps || []), ...(blocksObj.after || [])];
-            allSteps.forEach(s => {
+        const seenCalls = new Set();
+        const addCall = (c) => {
+            if (!c || typeof c !== 'object') return;
+            const key = (c.id || '') + '|' + (c.stepIndex !== undefined ? c.stepIndex : '') + '|'
+                + (c.subStepIndex !== undefined ? c.subStepIndex : '') + '|' + (c.modelName || '') + '|'
+                + (c.capability || '') + '|' + (c.inputTokens || 0) + '|' + (c.outputTokens || 0) + '|'
+                + (c.durationMs || 0) + '|' + ((c.userPrompt || '').substring(0, 30));
+            if (!seenCalls.has(key)) {
+                seenCalls.add(key);
+                allLlmCalls.push(c);
+            }
+        };
+
+        if (Array.isArray(blocksObj.llmCalls)) {
+            blocksObj.llmCalls.forEach(addCall);
+        }
+
+        const collectFromSteps = (steps) => {
+            if (!Array.isArray(steps)) return;
+            steps.forEach(s => {
+                if (!s) return;
                 if (Array.isArray(s.llmCalls)) {
-                    allLlmCalls.push(...s.llmCalls);
+                    s.llmCalls.forEach(addCall);
+                }
+                if (Array.isArray(s.subSteps)) {
+                    collectFromSteps(s.subSteps);
                 }
             });
-        }
+        };
+
+        collectFromSteps(blocksObj.before);
+        collectFromSteps(blocksObj.steps);
+        collectFromSteps(blocksObj.after);
     }
 
     let calcLlmCalls = 0;
@@ -4209,18 +4232,22 @@ function stopLiveStepRefreshTimer() {
 
 function extractBlocksJson(execDto) {
     if (!execDto) return null;
-    if (typeof execDto.blocksJson === 'string' && execDto.blocksJson !== '{}' && execDto.blocksJson !== 'null' && execDto.blocksJson.trim().length > 0) {
-        return execDto.blocksJson;
-    }
     if (execDto.blocks) {
         try {
             // Guard against Jackson ObjectNode POJO metadata leak (where nodeType/containerNode are serialized instead of step data)
             if (typeof execDto.blocks === 'object' && execDto.blocks.nodeType && !execDto.blocks.steps && !execDto.blocks.before) {
                 return null;
             }
-            const str = typeof execDto.blocks === 'string' ? execDto.blocks : JSON.stringify(execDto.blocks);
+            let bObj = typeof execDto.blocks === 'string' ? JSON.parse(execDto.blocks) : Object.assign({}, execDto.blocks);
+            if (execDto.llmCalls && Array.isArray(execDto.llmCalls) && (!bObj.llmCalls || !bObj.llmCalls.length)) {
+                bObj.llmCalls = execDto.llmCalls;
+            }
+            const str = JSON.stringify(bObj);
             if (str && str !== '{}' && str !== 'null' && str.trim().length > 0) return str;
         } catch (e) {}
+    }
+    if (typeof execDto.blocksJson === 'string' && execDto.blocksJson !== '{}' && execDto.blocksJson !== 'null' && execDto.blocksJson.trim().length > 0) {
+        return execDto.blocksJson;
     }
     return null;
 }
@@ -4346,6 +4373,12 @@ function startLiveStepRefreshTimer(activeRow) {
                     else if (execDto.videoPath) currentActiveEl.setAttribute('data-video-url', execDto.videoPath);
                     if (execDto.llmResponsibilityJson) currentActiveEl.setAttribute('data-llm-responsibility', execDto.llmResponsibilityJson);
                     if (execDto.contextLevelCountsJson) currentActiveEl.setAttribute('data-context-level-counts', execDto.contextLevelCountsJson);
+                    if (execDto.inputTokensCount !== undefined && execDto.inputTokensCount !== null) currentActiveEl.setAttribute('data-input-tokens', execDto.inputTokensCount);
+                    if (execDto.outputTokensCount !== undefined && execDto.outputTokensCount !== null) currentActiveEl.setAttribute('data-output-tokens', execDto.outputTokensCount);
+                    if (execDto.cachedTokensCount !== undefined && execDto.cachedTokensCount !== null) currentActiveEl.setAttribute('data-cached-tokens', execDto.cachedTokensCount);
+                    if (execDto.totalTokensCount !== undefined && execDto.totalTokensCount !== null) currentActiveEl.setAttribute('data-total-tokens', execDto.totalTokensCount);
+                    if (execDto.llmCallsCount !== undefined && execDto.llmCallsCount !== null) currentActiveEl.setAttribute('data-llm-calls', execDto.llmCallsCount);
+                    if (execDto.estimatedCostUsd) currentActiveEl.setAttribute('data-est-cost', execDto.estimatedCostUsd);
 
                     const liveLinter = extractFindingsArray(execDto.linterFindings).length > 0
                         ? extractFindingsArray(execDto.linterFindings)
@@ -5215,6 +5248,22 @@ function renderStreamlinedLlmCallCard(call, cIdx, stepId, isStepFailed, isSubSte
     }
 
     // Response row
+    let turnThinking = call.thinking || call.reasoning || call.thought || '';
+    if (Array.isArray(turnThinking)) {
+        turnThinking = turnThinking.filter(Boolean).map(t => typeof t === 'object' && t !== null ? (t.text || t.summary || t.thought || JSON.stringify(t)) : String(t)).join('\n\n');
+    } else if (typeof turnThinking === 'object' && turnThinking !== null) {
+        turnThinking = turnThinking.text || turnThinking.summary || turnThinking.thought || JSON.stringify(turnThinking);
+    }
+    let thinkingRowHtml = '';
+    if (turnThinking && String(turnThinking).trim().length > 0) {
+        thinkingRowHtml = `
+            <div class="llm-exchange-row">
+                <span class="llm-exchange-tag llm-tag-thinking">Thought</span>
+                <div class="llm-thinking-text">${escapeHtml(String(turnThinking).trim())}</div>
+            </div>
+        `;
+    }
+
     let responseDisplay = respParsed.formattedToolCall || respParsed.rawText || 'No response payload recorded';
     const failureMsg = isTurnFailed ? '<div style="margin-top: 0.35rem; font-size: 0.76rem; color: #dc2626; font-weight: 600;">❌ FAILED / TIMEOUT</div>' : '';
     const responseRowHtml = `
@@ -5348,6 +5397,7 @@ function renderStreamlinedLlmCallCard(call, cIdx, stepId, isStepFailed, isSubSte
             </div>
             <div class="llm-turn-body">
                 ${requestRowHtml}
+                ${thinkingRowHtml}
                 ${responseRowHtml}
             </div>
             ${hasDetails ? `<div class="llm-details-drawer" style="display: none;">${detailsInnerHtml}</div>` : ''}
@@ -5490,6 +5540,18 @@ function generateTurnConversationMarkdown(stepData, call, cIdx) {
             lines.push('```');
             lines.push('');
         }
+    }
+
+    let turnThinking = call.thinking || call.reasoning || call.thought || '';
+    if (Array.isArray(turnThinking)) {
+        turnThinking = turnThinking.filter(Boolean).map(t => typeof t === 'object' && t !== null ? (t.text || t.summary || t.thought || JSON.stringify(t)) : String(t)).join('\n\n');
+    } else if (typeof turnThinking === 'object' && turnThinking !== null) {
+        turnThinking = turnThinking.text || turnThinking.summary || turnThinking.thought || JSON.stringify(turnThinking);
+    }
+    if (turnThinking && String(turnThinking).trim().length > 0) {
+        lines.push('#### Model Thought / Reasoning');
+        lines.push(String(turnThinking).trim());
+        lines.push('');
     }
 
     const respText = call.responseContent || call.response_content || call.rawResponse || call.raw_response || call.response || '';
@@ -5666,6 +5728,12 @@ function renderStepsForExecution(activeRow) {
                         else if (execDto.videoPath) activeRow.setAttribute('data-video-url', execDto.videoPath);
                         if (execDto.llmResponsibilityJson) activeRow.setAttribute('data-llm-responsibility', execDto.llmResponsibilityJson);
                         if (execDto.contextLevelCountsJson) activeRow.setAttribute('data-context-level-counts', execDto.contextLevelCountsJson);
+                        if (execDto.inputTokensCount !== undefined && execDto.inputTokensCount !== null) activeRow.setAttribute('data-input-tokens', execDto.inputTokensCount);
+                        if (execDto.outputTokensCount !== undefined && execDto.outputTokensCount !== null) activeRow.setAttribute('data-output-tokens', execDto.outputTokensCount);
+                        if (execDto.cachedTokensCount !== undefined && execDto.cachedTokensCount !== null) activeRow.setAttribute('data-cached-tokens', execDto.cachedTokensCount);
+                        if (execDto.totalTokensCount !== undefined && execDto.totalTokensCount !== null) activeRow.setAttribute('data-total-tokens', execDto.totalTokensCount);
+                        if (execDto.llmCallsCount !== undefined && execDto.llmCallsCount !== null) activeRow.setAttribute('data-llm-calls', execDto.llmCallsCount);
+                        if (execDto.estimatedCostUsd) activeRow.setAttribute('data-est-cost', execDto.estimatedCostUsd);
 
                         const linterArray = extractFindingsArray(execDto.linterFindings).length > 0
                             ? extractFindingsArray(execDto.linterFindings)
@@ -5729,14 +5797,23 @@ function renderStepsForExecution(activeRow) {
     const playbookFile = activeRow.getAttribute('data-playbook-file') || '';
     const failureText = activeRow.getAttribute('data-failure') || '';
 
+    const stInitialVal = (activeRow.getAttribute('data-status') || '').toUpperCase();
+    const stInitialRawVal = (activeRow.getAttribute('data-status-raw') || '').toLowerCase();
+    const isInitialFailureState = stInitialVal === 'FAILED' || stInitialVal === 'FAILED_UNKNOWN' || stInitialVal === 'FAILED_KNOWN' || stInitialVal === 'ERROR'
+        || stInitialRawVal === 'failed' || stInitialRawVal === 'failed-unknown' || stInitialRawVal === 'failed-known' || stInitialRawVal === 'error' || stInitialRawVal === 'known';
+
     // Update Top Error Card (Initial check from row data-failure attribute)
     const errorCard = document.getElementById('sidePageErrorDisplayCard');
     const errorTextEl = document.getElementById('sidePageErrorText');
     if (errorCard && errorTextEl) {
-        const initialHtml = renderErrorBoxContent(failureText, activeRow.getAttribute('data-failure-reason') || '', activeRow.getAttribute('data-visual-rca-explanation') || '', []);
-        if (initialHtml) {
-            errorTextEl.innerHTML = initialHtml;
-            errorCard.style.display = 'flex';
+        if (isInitialFailureState) {
+            const initialHtml = renderErrorBoxContent(failureText, activeRow.getAttribute('data-failure-reason') || '', activeRow.getAttribute('data-visual-rca-explanation') || '', []);
+            if (initialHtml) {
+                errorTextEl.innerHTML = initialHtml;
+                errorCard.style.display = 'flex';
+            } else {
+                errorCard.style.display = 'none';
+            }
         } else {
             errorCard.style.display = 'none';
         }
@@ -5887,24 +5964,30 @@ function renderStepsForExecution(activeRow) {
     const coreSteps = blocksObj ? (blocksObj.steps || []) : [];
     const afterSteps = blocksObj ? (blocksObj.after || []) : [];
 
-    const stVal = (activeRow.getAttribute('data-status') || '').toUpperCase();
-    const stRawVal = (activeRow.getAttribute('data-status-raw') || '').toLowerCase();
+    const stVal = (activeRow.getAttribute('data-status') || blocksObj?.status || '').toUpperCase();
+    const stRawVal = (activeRow.getAttribute('data-status-raw') || blocksObj?.status || '').toLowerCase();
     const isRunningState = stVal === 'RUNNING' || stRawVal === 'running' || stRawVal === 'in_progress' || stRawVal === 'executing' || stRawVal === 'pending';
+    const isFailureState = stVal === 'FAILED' || stVal === 'FAILED_UNKNOWN' || stVal === 'FAILED_KNOWN' || stVal === 'ERROR'
+        || stRawVal === 'failed' || stRawVal === 'failed-unknown' || stRawVal === 'failed-known' || stRawVal === 'error' || stRawVal === 'known';
 
     const failureReason = activeRow.getAttribute('data-failure-reason') || blocksObj?.failureReason || '';
     const failureStackTrace = activeRow.getAttribute('data-failure-stack-trace') || blocksObj?.failureStackTrace || '';
     const visualRcaExplanation = activeRow.getAttribute('data-visual-rca-explanation') || blocksObj?.visualRcaExplanation || '';
 
     if (errorCard && errorTextEl) {
-        const allStackTraces = [];
-        if (failureStackTrace && failureStackTrace.trim().length > 0) {
-            allStackTraces.push(failureStackTrace.trim());
-        }
+        if (isFailureState) {
+            const allStackTraces = [];
+            if (failureStackTrace && failureStackTrace.trim().length > 0) {
+                allStackTraces.push(failureStackTrace.trim());
+            }
 
-        const renderedHtml = renderErrorBoxContent(failureText, failureReason, visualRcaExplanation, allStackTraces);
-        if (renderedHtml) {
-            errorTextEl.innerHTML = renderedHtml;
-            errorCard.style.display = 'flex';
+            const renderedHtml = renderErrorBoxContent(failureText, failureReason, visualRcaExplanation, allStackTraces);
+            if (renderedHtml) {
+                errorTextEl.innerHTML = renderedHtml;
+                errorCard.style.display = 'flex';
+            } else {
+                errorCard.style.display = 'none';
+            }
         } else {
             errorCard.style.display = 'none';
         }
@@ -5974,13 +6057,14 @@ function renderStepsForExecution(activeRow) {
         `;
 
         let hasEncounteredFailure = false;
+        let firstFailedStepIndex = null;
         stepsArray.forEach((s, idx) => {
             const stepNum = s.index || s.stepNum || (idx + 1);
             const title = s.instruction || s.name || s.title || `Step ${stepNum}`;
             let rawStatus = (s.status || (s.passed === false ? 'failed' : 'passed')).toLowerCase();
             const subsList = Array.isArray(s.subSteps) ? s.subSteps : (Array.isArray(s.sub_steps) ? s.sub_steps : []);
             if (subsList.length > 0) {
-                const executedSubs = subsList.filter(sub => sub.status && String(sub.status).toUpperCase() !== 'PENDING' && String(sub.status).toUpperCase() !== 'SKIPPED');
+                const executedSubs = subsList.filter(sub => sub.status && String(sub.status).toUpperCase() !== 'PENDING' && String(sub.status).toUpperCase() !== 'SKIPPED' && String(sub.status).toUpperCase() !== 'NOT RUN' && String(sub.status).toUpperCase() !== 'NOT_RUN');
                 const hasFailedSub = subsList.some(sub => String(sub.status || '').toUpperCase() === 'FAILED' || sub.failureReason || sub.error || sub.failure);
                 if (hasFailedSub) {
                     rawStatus = 'failed';
@@ -5997,19 +6081,23 @@ function renderStepsForExecution(activeRow) {
                 }
             }
             if (hasEncounteredFailure && !isRunningState) {
-                rawStatus = 'skipped';
+                rawStatus = 'not_run';
             }
             if (rawStatus === 'failed' || s.passed === false || s.error || s.failure) {
                 if (!s.optional && !s.continueOnError) {
                     hasEncounteredFailure = true;
+                    if (!firstFailedStepIndex) {
+                        firstFailedStepIndex = stepNum;
+                    }
                 }
             }
             const status = rawStatus;
             const isHealed = status === 'healed' || status === 'succeeded-fixed' || status === 'fixed' || s.healed === true || (Array.isArray(s.actions) && s.actions.some(a => a.healed));
             const isPassed = !isHealed && (status === 'passed' || status === 'passed-clean' || status === 'success' || s.passed === true);
             const isFailed = status === 'failed' || status === 'failed-unknown' || status === 'failed-known' || s.passed === false;
+            const isNotRun = status === 'not_run' || status === 'not run' || status === 'unreached' || (!isPassed && !isFailed && !isHealed && hasEncounteredFailure && !isRunningState);
             
-            const stepClass = isHealed ? 'step-healed' : (isPassed ? 'step-passed' : (isFailed ? 'step-failed' : 'step-ignored'));
+            const stepClass = isHealed ? 'step-healed' : (isPassed ? 'step-passed' : (isFailed ? 'step-failed' : (isNotRun ? 'step-not-run' : 'step-ignored')));
             const stepId = `stepCard_${sectionClass}_${idx}`;
             const rawContextLevel = s.contextLevel || s.contextLevels || s.stats?.contextLevels || s.stats?.contextLevel || 'PENDING';
             const isUnexecutedOrSkipped = !isPassed && !isFailed && status !== 'running';
@@ -6036,11 +6124,12 @@ function renderStepsForExecution(activeRow) {
 
             // Format Reasoning
             let reasoningHtml = '';
-            if (s.reasoning) {
+            const stepReasoning = s.reasoning || (Array.isArray(s.reasonings) && s.reasonings.length > 0 ? Array.from(new Set(s.reasonings.filter(Boolean))).join('\n\n') : '');
+            if (stepReasoning && String(stepReasoning).trim().length > 0) {
                 reasoningHtml = `
                     <div class="reasoning-card" style="margin-top: 0.5rem;">
                         <div class="reasoning-title">💡 AI Reasoning & Decisioning</div>
-                        <div class="reasoning-body">${s.reasoning}</div>
+                        <div class="reasoning-body">${escapeHtml(String(stepReasoning).trim())}</div>
                     </div>
                 `;
             }
@@ -6061,7 +6150,7 @@ function renderStepsForExecution(activeRow) {
                 return `data:${mime};base64,${rawSrc}`;
             }
 
-            // Format Screenshot (Ignore top-level transient screenshot, rely strictly on s.screenshots array)
+            // Format Screenshot (Rely on s.screenshots array, fallback to sub-step screenshots or transient s.screenshot)
             if (Array.isArray(s.screenshots) && s.screenshots.length > 0) {
                 s.screenshots.forEach((sc, scIdx) => {
                     let fullSrc = '';
@@ -6080,6 +6169,37 @@ function renderStepsForExecution(activeRow) {
                         });
                     }
                 });
+            } else if (isFailed && subsList.length > 0 && subsList.some(sub => Array.isArray(sub.screenshots) && sub.screenshots.length > 0)) {
+                const failedSubsWithSc = subsList.filter(sub => (String(sub.status || '').toUpperCase() === 'FAILED' || sub.failureReason || sub.error || sub.failure) && Array.isArray(sub.screenshots) && sub.screenshots.length > 0);
+                const targetSubs = failedSubsWithSc.length > 0 ? failedSubsWithSc : subsList;
+                targetSubs.forEach((sub, subIdx) => {
+                    if (Array.isArray(sub.screenshots)) {
+                        sub.screenshots.forEach((sc, scIdx) => {
+                            let fullSrc = '';
+                            if (sc.base64Data) {
+                                const mime = sc.mediaType || 'image/jpeg';
+                                fullSrc = sc.base64Data.startsWith('data:') ? sc.base64Data : `data:${mime};base64,${sc.base64Data}`;
+                            } else {
+                                const rawSrc = sc.src || sc.url || sc.path || sc.screenshot;
+                                fullSrc = formatScreenshotSrc(rawSrc, sc.mediaType);
+                            }
+                            if (fullSrc && !screenshotSources.some(item => item.src === fullSrc)) {
+                                screenshotSources.push({
+                                    src: fullSrc,
+                                    label: sc.label || sc.name || `Sub-step #${stepNum}.${subIdx + 1} Capture`
+                                });
+                            }
+                        });
+                    }
+                });
+            } else if (s.screenshot) {
+                const fullSrc = formatScreenshotSrc(s.screenshot, 'image/png');
+                if (fullSrc && !screenshotSources.some(item => item.src === fullSrc)) {
+                    screenshotSources.push({
+                        src: fullSrc,
+                        label: 'Step Capture'
+                    });
+                }
             }
 
             if (screenshotSources.length > 0) {
@@ -6166,7 +6286,7 @@ function renderStepsForExecution(activeRow) {
                         ? `<span class="action-status-badge ${act.success ? 'action-status-ok' : 'action-status-fail'}" title="${act.success ? 'Action succeeded' : 'Action failed'}"><span class="material-symbols-outlined">${act.success ? 'check_circle' : 'cancel'}</span></span>`
                         : '';
                     const actReasoning = act.reasoning
-                        ? `<div class="action-reasoning"><span class="material-symbols-outlined">psychology</span><span class="action-reasoning-text">${act.reasoning}</span></div>`
+                        ? `<div class="action-reasoning"><span class="material-symbols-outlined">psychology</span><span class="action-reasoning-text">${escapeHtml(act.reasoning)}</span></div>`
                         : '';
                     const origTarget = act.expectedTarget || act.originalTarget || act.healedFrom || (act.healed && act.target && act.target !== actTarget ? act.target : null);
                     let healedBadge = '';
@@ -6224,9 +6344,12 @@ function renderStepsForExecution(activeRow) {
                     const subTitle = sub.instruction || sub.action || `Sub-step ${subIdx + 1}`;
                     const subDur = (sub.durationMs !== undefined && sub.durationMs !== null) ? formatDurationInMinutes(sub.durationMs) : (sub.duration ? formatDurationInMinutes(sub.duration) : '');
                     const subStatus = (sub.status || 'SUCCESS').toUpperCase();
+                    const isSubNotRun = subStatus === 'NOT RUN' || subStatus === 'NOT_RUN' || subStatus === 'UNREACHED';
                     const subBadgeClass = (subStatus === 'PASSED' || subStatus === 'SUCCESS') ? 'badge-pass'
                         : subStatus === 'HEALED' ? 'badge-healed'
-                        : subStatus === 'FAILED' ? 'badge-unknown-fail' : 'badge-ignored';
+                        : subStatus === 'FAILED' ? 'badge-unknown-fail'
+                        : isSubNotRun ? 'badge-not-run' : 'badge-ignored';
+                    const subStatusLabel = isSubNotRun ? 'NOT RUN' : subStatus;
 
                     // Source line info
                     const subSource = sub.sourceFile ? `📄 ${sub.sourceFile}${sub.lineNumber > 0 ? ':L' + sub.lineNumber : ''}` : '';
@@ -6368,11 +6491,11 @@ function renderStepsForExecution(activeRow) {
                     }
 
                     subStepsHtml += `
-                        <div class="sub-step-card" onclick="toggleSubStepInspector(this, event)">
+                        <div class="sub-step-card ${isSubNotRun ? 'sub-step-card-not-run' : ''}" onclick="toggleSubStepInspector(this, event)">
                             <div class="sub-step-card-header">
                                 <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
                                     <span class="sub-step-number">${subNum}</span>
-                                    <span class="badge-status ${subBadgeClass}" style="font-size: 0.65rem; padding: 0.1rem 0.35rem;">${subStatus}</span>
+                                    <span class="badge-status ${subBadgeClass}" style="font-size: 0.65rem; padding: 0.1rem 0.35rem;">${subStatusLabel}</span>
                                     <span class="sub-step-instruction">${escapeHtml(subTitle)}</span>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 0.4rem;">
@@ -6380,6 +6503,7 @@ function renderStepsForExecution(activeRow) {
                                     <span class="material-symbols-outlined sub-step-chevron">chevron_right</span>
                                 </div>
                             </div>
+                            ${sub.notRunReason ? `<div class="sub-step-not-run-banner" style="font-size: 0.72rem; color: var(--text-muted); font-style: italic; margin: 0.2rem 0.5rem 0.4rem;">⏹️ ${escapeHtml(sub.notRunReason)}</div>` : ''}
                             <div class="sub-step-inspector">
                                 ${subSource ? `<div style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono);">${subSource}</div>` : ''}
                                 ${subErrorHtml}
@@ -6523,8 +6647,9 @@ function renderStepsForExecution(activeRow) {
                             ${isHealed ? '<span class="badge-status badge-healed" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">healing</span> HEALED</span>' :
                               (isPassed ? '<span class="badge-status badge-pass" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">SUCCESS</span>' :
                               (isFailed ? '<span class="badge-status badge-unknown-fail" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">FAILED</span>' :
-                              '<span class="badge-status badge-ignored" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">SKIPPED</span>'))}
-                            <span class="context-badge ${contextLevelClass(contextLevel)}">${contextLevel}</span>
+                              (isNotRun ? '<span class="badge-status badge-not-run" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">NOT RUN</span>' :
+                              '<span class="badge-status badge-ignored" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">SKIPPED</span>')))}
+                            ${isNotRun ? '' : `<span class="context-badge ${contextLevelClass(contextLevel)}">${contextLevel}</span>`}
                             <span style="color: var(--text-main); font-weight: 600; margin-left: 0.2rem;">${title}</span>
                         </div>
                         ${countsSummaryHtml}
@@ -6533,6 +6658,11 @@ function renderStepsForExecution(activeRow) {
                             <span class="material-symbols-outlined step-expand-chevron">chevron_right</span>
                         </div>
                     </div>
+
+                    ${isNotRun ? `
+                    <div style="padding: 0.15rem 0.85rem 0.35rem;">
+                        <div class="step-not-run-banner" style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">⏹️ ${escapeHtml(s.notRunReason || (firstFailedStepIndex ? `Not executed because step #${firstFailedStepIndex} failed.` : 'Not executed due to a preceding step failure.'))}</div>
+                    </div>` : ''}
 
                     <div style="padding: 0 0.85rem 0.5rem;">
                         <div style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 0.2rem;">📄 ${s.sourceMeta || s.playbookSource || s.file +':L'+ s.line || 'Playbook.yaml:L' + stepNum}</div>
@@ -6543,7 +6673,7 @@ function renderStepsForExecution(activeRow) {
                             <div class="inspector-header">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <span style="font-family: var(--font-mono); font-weight: 800; color: var(--status-fixed); font-size: 0.9rem;">#${stepNum}</span>
-                                    <span class="badge-status ${isHealed ? 'badge-healed' : (isPassed ? 'badge-pass' : 'badge-unknown-fail')}" style="font-size: 0.7rem;">${isHealed ? 'HEALED' : (isPassed ? 'PASSED' : 'FAILED')}</span>
+                                    <span class="badge-status ${isHealed ? 'badge-healed' : (isPassed ? 'badge-pass' : (isFailed ? 'badge-unknown-fail' : (isNotRun ? 'badge-not-run' : 'badge-ignored')))}" style="font-size: 0.7rem;">${isHealed ? 'HEALED' : (isPassed ? 'PASSED' : (isFailed ? 'FAILED' : (isNotRun ? 'NOT RUN' : 'SKIPPED')))}</span>
                                 </div>
                                 <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-main); margin-top: 0.2rem;">${title}</div>
                             </div>
@@ -6612,7 +6742,7 @@ function renderStepsForExecution(activeRow) {
             videoPreviewBox.style.display = 'flex';
         }
         const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '');
-        const testClass = activeRow.getAttribute('data-test-class') || activeRow.getAttribute('data-test-name') || activeRow.getAttribute('data-class-name') || '';
+        const testClass = resolveSimpleTestClassName(activeRow);
         const src = (videoUrlAttr.startsWith('http') || videoUrlAttr.startsWith('/'))
             ? videoUrlAttr
             : `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(videoUrlAttr)}`;
@@ -6651,21 +6781,46 @@ function renderStepsForExecution(activeRow) {
     }
 }
 
+function resolveSimpleTestClassName(element) {
+    if (!element) return '';
+    let name = element.getAttribute('data-test-class') || element.getAttribute('data-test-name') || element.getAttribute('data-class-name') || '';
+    if (!name || typeof name !== 'string') return '';
+    name = name.trim();
+    if (name.includes('#')) {
+        name = name.substring(0, name.indexOf('#'));
+    }
+    if (name.includes('.') && !name.endsWith('.')) {
+        name = name.substring(name.lastIndexOf('.') + 1);
+    }
+    return name.trim();
+}
+
 function openAttachmentWindow(type, url) {
-    if (!url) return;
-    let targetUrl = url;
-    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://') && !targetUrl.startsWith('/api/')) {
-        const activeRow = document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row');
-        if (activeRow) {
-            const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '');
-            const testClass = activeRow.getAttribute('data-test-class') || activeRow.getAttribute('data-test-name') || activeRow.getAttribute('data-class-name') || '';
-            const filename = activeRow.getAttribute('data-video-url') || url;
-            if (filename.startsWith('http') || filename.startsWith('/')) {
-                targetUrl = filename;
-            } else {
-                targetUrl = `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(filename)}`;
-            }
-        }
+    const activeRow = (typeof currentActiveRowId !== 'undefined' && currentActiveRowId)
+        ? (document.getElementById(currentActiveRowId) || document.querySelector(`[data-row-id="${currentActiveRowId}"]`))
+        : document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row');
+
+    let filename = (url && typeof url === 'string' && url.trim().length > 0) ? url.trim() : '';
+    if (!filename && type === 'video' && activeRow) {
+        filename = activeRow.getAttribute('data-video-url') || '';
+    }
+    if (!filename) return;
+
+    let targetUrl = filename;
+    const isAbsolute = targetUrl.startsWith('/')
+        || targetUrl.startsWith('http://')
+        || targetUrl.startsWith('https://')
+        || targetUrl.startsWith('data:')
+        || targetUrl.startsWith('blob:');
+
+    if (!isAbsolute) {
+        const runId = (typeof resolveActiveRunId === 'function')
+            ? resolveActiveRunId(null, activeRow)
+            : ((activeRow ? activeRow.getAttribute('data-run-id') : '') || (typeof activeRunId !== 'undefined' ? activeRunId : ''));
+        if (!runId || runId === '#RUN_ID') return;
+
+        const testClass = resolveSimpleTestClassName(activeRow);
+        targetUrl = `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(filename)}`;
     }
     window.open(targetUrl, '_blank', 'width=1000,height=700,resizable=yes,scrollbars=yes');
 }
@@ -6799,16 +6954,20 @@ window.contextLevelClass = contextLevelClass;
 
 function renderLlmResponsibilityRows(llmTbody, responsibilityJson, fallback) {
     const labels = [
-        { key: 'total',        label: 'Total',                                                       total: true  },
-        { key: 'action',       label: 'Action (Standard Generation)',                                total: false },
-        { key: 'pesap',        label: 'PESAP (Pre-Execution Semantic Anchor)',                        total: false },
-        { key: 'judge',        label: 'Self-Judging Validation',                                      total: false },
-        { key: 'verification', label: 'Semantic Outcome Verification',                                total: false },
-        { key: 'visualRca',    label: 'Visual Root Cause Analysis (RCA)',                             total: false }
+        { key: 'total',            label: 'Total',                                                       total: true  },
+        { key: 'action',           label: 'Action (Standard Generation)',                                total: false },
+        { key: 'judge',            label: 'Self-Judging Validation',                                      total: false },
+        { key: 'verification',     label: 'Semantic Outcome Verification',                                total: false },
+        { key: 'visualRca',        label: 'Visual Root Cause Analysis (RCA)',                             total: false },
+        { key: 'linter',           label: 'Playbook Pre-Flight Linter',                                  total: false },
+        { key: 'postFlightLinter', label: 'Playbook Post-Flight Linter',                                 total: false }
     ];
     const buckets = parseResponsibilityBuckets(responsibilityJson);
     if (buckets) {
-        llmTbody.innerHTML = labels.map(({ key, label, total }) => {
+        llmTbody.innerHTML = labels.filter(({ key, total }) => {
+            if (total || key === 'action' || key === 'judge' || key === 'verification' || key === 'visualRca') return true;
+            return buckets[key] && buckets[key].calls > 0;
+        }).map(({ key, label, total }) => {
             const b = buckets[key] || { calls: 0, inputTokens: 0, outputTokens: 0, cachedTokens: 0, totalTokens: 0, estimatedCostUsd: 0 };
             return renderResponsibilityRow(label, b, total);
         }).join('');
@@ -6820,25 +6979,71 @@ function renderLlmResponsibilityRows(llmTbody, responsibilityJson, fallback) {
 function parseResponsibilityBuckets(json) {
     if (!json) return null;
     try {
-        const obj = JSON.parse(json);
+        const obj = (typeof json === 'object') ? json : JSON.parse(json);
         if (!obj || typeof obj !== 'object') return null;
-        const required = ['total', 'action', 'pesap', 'judge', 'verification', 'visualRca'];
-        for (let i = 0; i < required.length; i++) {
-            if (!obj[required[i]] || typeof obj[required[i]] !== 'object') return null;
-        }
+
+        const target = (obj.categories && typeof obj.categories === 'object') ? obj.categories : obj;
+
+        const knownKeys = ['total', 'action', 'judge', 'verification', 'visualRca', 'linter', 'postFlightLinter'];
         const normalized = {};
-        for (let i = 0; i < required.length; i++) {
-            const k = required[i];
-            const src = obj[k];
-            normalized[k] = {
-                calls:           Number(src.calls)           || 0,
-                inputTokens:     Number(src.inputTokens)     || 0,
-                outputTokens:    Number(src.outputTokens)    || 0,
-                cachedTokens:    Number(src.cachedTokens)    || 0,
-                totalTokens:     Number(src.totalTokens)     || 0,
-                estimatedCostUsd:Number(src.estimatedCostUsd)|| 0
+        let foundAny = false;
+
+        knownKeys.forEach(k => {
+            if (target[k] && typeof target[k] === 'object') {
+                const src = target[k];
+                normalized[k] = {
+                    calls:           Number(src.calls)           || 0,
+                    inputTokens:     Number(src.inputTokens)     || 0,
+                    outputTokens:    Number(src.outputTokens)    || 0,
+                    cachedTokens:    Number(src.cachedTokens)    || 0,
+                    totalTokens:     Number(src.totalTokens)     || 0,
+                    estimatedCostUsd:Number(src.estimatedCostUsd)|| 0
+                };
+                foundAny = true;
+            }
+        });
+
+        Object.keys(target).forEach(k => {
+            if (!normalized[k] && target[k] && typeof target[k] === 'object' && k !== 'pesap') {
+                const src = target[k];
+                if (src.calls !== undefined || src.totalTokens !== undefined || src.inputTokens !== undefined) {
+                    normalized[k] = {
+                        calls:           Number(src.calls)           || 0,
+                        inputTokens:     Number(src.inputTokens)     || 0,
+                        outputTokens:    Number(src.outputTokens)    || 0,
+                        cachedTokens:    Number(src.cachedTokens)    || 0,
+                        totalTokens:     Number(src.totalTokens)     || 0,
+                        estimatedCostUsd:Number(src.estimatedCostUsd)|| 0
+                    };
+                    foundAny = true;
+                }
+            }
+        });
+
+        if (!foundAny) return null;
+
+        if (!normalized.total) {
+            let totCalls = 0, totIn = 0, totOut = 0, totCac = 0, totTok = 0, totCost = 0;
+            Object.keys(normalized).forEach(k => {
+                if (k !== 'total') {
+                    totCalls += normalized[k].calls;
+                    totIn += normalized[k].inputTokens;
+                    totOut += normalized[k].outputTokens;
+                    totCac += normalized[k].cachedTokens;
+                    totTok += normalized[k].totalTokens;
+                    totCost += normalized[k].estimatedCostUsd;
+                }
+            });
+            normalized.total = {
+                calls: totCalls,
+                inputTokens: totIn,
+                outputTokens: totOut,
+                cachedTokens: totCac,
+                totalTokens: totTok || (totIn + totOut),
+                estimatedCostUsd: totCost
             };
         }
+
         return normalized;
     } catch (e) {
         return null;
@@ -6865,7 +7070,7 @@ function renderResponsibilityRow(label, bucket, isTotal) {
 
 function renderHeuristicLlmRows(fallback) {
     const f = fallback || { totalCalls: 0, totalTokens: 0, inputTokens: 0, outputTokens: 0, cachedTokens: 0, cost: 0 };
-    const cost = Number(f.cost) || 0;
+    const cost = Number(f.cost !== undefined ? f.cost : (f.totalCost || 0)) || 0;
     return `
         <tr style="font-weight: 700; background: var(--bg-hover);">
             <td style="padding: 0.35rem 0.6rem;">Total</td>
@@ -6878,21 +7083,12 @@ function renderHeuristicLlmRows(fallback) {
         </tr>
         <tr>
             <td style="padding: 0.35rem 0.6rem;">Action (Standard Generation)</td>
-            <td style="text-align: center; padding: 0.35rem 0.6rem;">${Math.ceil((f.totalCalls || 0) * 0.5)}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.totalTokens || 0) * 0.92).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.inputTokens || 0) * 0.92).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.outputTokens || 0) * 0.92).toLocaleString()}</td>
+            <td style="text-align: center; padding: 0.35rem 0.6rem;">${(f.totalCalls || 0).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${(f.totalTokens || 0).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${(f.inputTokens || 0).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${(f.outputTokens || 0).toLocaleString()}</td>
             <td style="text-align: right; padding: 0.35rem 0.6rem;">${(f.cachedTokens || 0).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;" class="text-accent">$${(cost * 0.92).toFixed(4)}</td>
-        </tr>
-        <tr>
-            <td style="padding: 0.35rem 0.6rem;">PESAP (Pre-Execution Semantic Anchor)</td>
-            <td style="text-align: center; padding: 0.35rem 0.6rem;">${Math.floor((f.totalCalls || 0) * 0.5)}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.totalTokens || 0) * 0.08).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.inputTokens || 0) * 0.08).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.outputTokens || 0) * 0.08).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">0</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;" class="text-accent">$${(cost * 0.08).toFixed(4)}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;" class="text-accent">$${cost.toFixed(4)}</td>
         </tr>
     `;
 }

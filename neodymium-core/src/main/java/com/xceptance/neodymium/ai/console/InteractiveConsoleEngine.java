@@ -22,6 +22,8 @@ import org.neodymium.ai.util.AtomicFileUtils;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
@@ -376,6 +378,75 @@ public final class InteractiveConsoleEngine {
             return;
         }
 
+        saveLocalExecutionLog(minified);
+        broadcastSseEvent("state", minified);
+    }
+
+    /**
+     * Reconciles the interactive console state with the test lifecycle outcome.
+     *
+     * @param testPassed true if JUnit completed the test method successfully
+     * @param uncaughtException uncaught exception if test failed, or null
+     */
+    public void reconcileTestOutcome(final boolean testPassed, final Throwable uncaughtException)
+    {
+        if (this.currentStateJson == null || this.currentStateJson.isBlank())
+        {
+            return;
+        }
+        try
+        {
+            final JsonObject parsedState = JsonParser.parseString(this.currentStateJson).getAsJsonObject();
+            final String currentStatus = parsedState.has("status") ? parsedState.get("status").getAsString() : "";
+
+            if (testPassed)
+            {
+                final boolean wasFailed = "failed".equalsIgnoreCase(currentStatus)
+                    || "error".equalsIgnoreCase(currentStatus)
+                    || "failed-unknown".equalsIgnoreCase(currentStatus)
+                    || "failed-known".equalsIgnoreCase(currentStatus);
+                if (wasFailed)
+                {
+                    parsedState.addProperty("status", "passed");
+                    parsedState.addProperty("expectedFailure", true);
+                    final String updatedJson = parsedState.toString();
+                    this.currentStateJson = updatedJson;
+                    saveLocalExecutionLog(updatedJson);
+                    broadcastSseEvent("state", updatedJson);
+                }
+            }
+            else
+            {
+                final boolean wasPassed = "passed".equalsIgnoreCase(currentStatus)
+                    || "passed-clean".equalsIgnoreCase(currentStatus)
+                    || "succeeded".equalsIgnoreCase(currentStatus)
+                    || "succeeded-fixed".equalsIgnoreCase(currentStatus);
+                if (wasPassed)
+                {
+                    parsedState.addProperty("status", "failed");
+                    parsedState.addProperty("expectedFailure", false);
+                    if (uncaughtException != null)
+                    {
+                        parsedState.addProperty("failureReason", uncaughtException.getMessage() != null ? uncaughtException.getMessage() : uncaughtException.toString());
+                        final StringWriter sw = new StringWriter();
+                        uncaughtException.printStackTrace(new PrintWriter(sw));
+                        parsedState.addProperty("failureStackTrace", sw.toString());
+                    }
+                    final String updatedJson = parsedState.toString();
+                    this.currentStateJson = updatedJson;
+                    saveLocalExecutionLog(updatedJson);
+                    broadcastSseEvent("state", updatedJson);
+                }
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("[InteractiveConsole] Failed to reconcile test outcome: {}", e.getMessage());
+        }
+    }
+
+    private void saveLocalExecutionLog(final String minified)
+    {
         if (AiConfiguration.getInstance().isConsoleExecutionLogsEnabled())
         {
             try
@@ -390,6 +461,7 @@ public final class InteractiveConsoleEngine {
                 final String executionKey = extractExecutionKey(parsedState);
                 final String testClassFolder = extractTestClassFolder(parsedState);
                 final int index = getExecutionIndex(testClassFolder, executionKey);
+                String contentToSave = minified;
 
                 // Relocate video recording if generated in target/videos/
                 final File videosFolder = new File("target/videos");
@@ -409,7 +481,7 @@ public final class InteractiveConsoleEngine {
                         final String videoName = "video-" + index + ".mp4";
                         parsedState.addProperty("videoUrl", videoName);
                         parsedState.addProperty("videoPath", videoName);
-                        minified = parsedState.toString();
+                        contentToSave = parsedState.toString();
 
                         final String configuredResultsDirPath = AiConfiguration.getInstance().getConsoleExecutionLogsDirectory();
                         final String runFolder = getRunFolder();
@@ -433,7 +505,7 @@ public final class InteractiveConsoleEngine {
 
                 // 1. Root file for compatibility in default allure.results.directory
                 final File executionJson = new File(defaultResultsDir, "console-execution-" + index + ".json");
-                AtomicFileUtils.writeStringAtomic(executionJson, minified);
+                AtomicFileUtils.writeStringAtomic(executionJson, contentToSave);
 
                 // 2. Structured run and test class folders in configured console logs directory
                 final String configuredResultsDirPath = AiConfiguration.getInstance().getConsoleExecutionLogsDirectory();
@@ -444,7 +516,7 @@ public final class InteractiveConsoleEngine {
                     structuredDir.mkdirs();
                 }
                 final File structuredJson = new File(structuredDir, "console-execution-" + index + ".json");
-                AtomicFileUtils.writeStringAtomic(structuredJson, minified);
+                AtomicFileUtils.writeStringAtomic(structuredJson, contentToSave);
 
                 // 3. Structured copy in configured target/ai-reports directory
                 final String reportsDirPath = AiConfiguration.getInstance().getDiskReportDirectory();
@@ -455,7 +527,7 @@ public final class InteractiveConsoleEngine {
                     reportsStructuredDir.mkdirs();
                 }
                 final File reportsStructuredJson = new File(reportsStructuredDir, "console-execution-" + index + ".json");
-                AtomicFileUtils.writeStringAtomic(reportsStructuredJson, minified);
+                AtomicFileUtils.writeStringAtomic(reportsStructuredJson, contentToSave);
                 if (parsedState.has("videoUrl"))
                 {
                     final String videoName = parsedState.get("videoUrl").getAsString();
@@ -477,8 +549,6 @@ public final class InteractiveConsoleEngine {
                 LOG.warn("[InteractiveConsole] Failed to save local console execution log: {}", e.getMessage());
             }
         }
-
-        broadcastSseEvent("state", minified);
     }
 
     /**
@@ -1113,6 +1183,18 @@ public final class InteractiveConsoleEngine {
         {
             this.sseClients.remove(out);
         }
+    }
+
+    /**
+     * Checks if at least one SSE client is actively connected to this engine.
+     *
+     * @return {@code true} if at least one client output stream is registered
+     * @author AI-generated: Antigravity
+     * @author Xceptance GmbH 2026
+     */
+    public boolean hasSseClients()
+    {
+        return !this.sseClients.isEmpty();
     }
 
     /**

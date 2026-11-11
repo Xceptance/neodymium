@@ -104,8 +104,16 @@ public final class MarkdownReportGenerator
 
         // High-level execution stats
         sb.append("| Metric | Count / Volume |\n");
-        sb.append("| :--- | :--- |\n");
-        sb.append("| **Total Steps** | ").append(m.getTotalSteps()).append(" (Healed: ").append(m.getHealedSteps()).append(", Failed: ").append(m.getFailedSteps()).append(", Skipped: ").append(m.getSkippedSteps()).append(") |\n");
+        final StringBuilder stepBreakdown = new StringBuilder();
+        stepBreakdown.append(" (Healed: ").append(m.getHealedSteps())
+            .append(", Failed: ").append(m.getFailedSteps())
+            .append(", Skipped: ").append(m.getSkippedSteps());
+        if (m.getNotRunSteps() > 0)
+        {
+            stepBreakdown.append(", Not Run: ").append(m.getNotRunSteps());
+        }
+        stepBreakdown.append(")");
+        sb.append("| **Total Steps** | ").append(m.getTotalSteps()).append(stepBreakdown).append(" |\n");
         if (m.getTotalEscalations() > 0)
         {
             sb.append("| **Context Escalations** | ").append(m.getTotalEscalations()).append(" |\n");
@@ -493,9 +501,11 @@ public final class MarkdownReportGenerator
 
     private static void renderStepMarkdown(final StringBuilder sb, final TestExecutionReport.ReportStepEntry step, final String stepLabel, final String headingPrefix)
     {
+        final boolean isNotRun = step.isNotRun();
         final String stepStatusEmoji = "PASSED".equalsIgnoreCase(step.getStatus()) || "SUCCESS".equalsIgnoreCase(step.getStatus()) ? "✅"
             : "HEALED".equalsIgnoreCase(step.getStatus()) ? "✨"
             : "FAILED".equalsIgnoreCase(step.getStatus()) ? "❌"
+            : isNotRun ? "⏹️"
             : "SKIPPED".equalsIgnoreCase(step.getStatus()) ? "⏭️" : "⏳";
 
         sb.append(headingPrefix).append(" Step ").append(stepLabel).append(": ").append(stepStatusEmoji).append(" ").append(escapeMarkdown(step.getInstruction())).append("\n\n");
@@ -646,6 +656,10 @@ public final class MarkdownReportGenerator
         if (step.getFailureReason() != null)
         {
             sb.append("- **Failure Reason:** `").append(step.getFailureReason()).append("`\n");
+        }
+        if (step.getNotRunReason() != null && !step.getNotRunReason().isBlank())
+        {
+            sb.append("- **Note:** *").append(escapeMarkdown(step.getNotRunReason())).append("*\n");
         }
 
         // Actions Table

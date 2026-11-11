@@ -155,15 +155,15 @@ public class InteractiveConsoleServerTest
             assertNotNull(in, "interactive_console.js must be present on the classpath");
             final String jsContent = new String(in.readAllBytes(), StandardCharsets.UTF_8);
 
-            // Verify that applyState only nullifies currentPauseId on status 'running' and preserves explicit pauseId on passed/failed
+            // Verify that applyState preserves explicit pauseId on passed/failed and does not wipe unconditionally
             final int applyStart = jsContent.indexOf("function applyState(state)");
             assertTrue(applyStart >= 0, "applyState function must exist");
             final int applyEnd = jsContent.indexOf("function checkActionApprovals()", applyStart);
             assertTrue(applyEnd > applyStart, "checkActionApprovals function must follow applyState");
             final String applyBody = jsContent.substring(applyStart, applyEnd);
 
-            assertTrue(applyBody.contains("if (state.status === 'running')"),
-                "applyState must check state.status === 'running' to invalidate currentPauseId");
+            assertTrue(applyBody.contains("if (state.pauseId)"),
+                "applyState must check state.pauseId to register currentPauseId");
             assertFalse(applyBody.contains("state.status === 'passed' || state.status === 'failed'"),
                 "applyState must not wipe currentPauseId unconditionally on passed or failed statuses");
         }

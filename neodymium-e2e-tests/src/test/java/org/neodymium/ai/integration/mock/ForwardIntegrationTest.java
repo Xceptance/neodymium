@@ -148,6 +148,8 @@ public class ForwardIntegrationTest extends BaseAiTest
 
         assertTrue(WebDriverRunner.url().contains("testTypeHappyPath.html"));
 
+        flushRecording(session);
+
         // Verify parameterization
         final String browserProfile = Neodymium.getBrowserProfileName();
         final File recordingFile = getTestResourceFile("playbooks/integration/programmatic/custom_forward_playbook_" + browserProfile + ".json");

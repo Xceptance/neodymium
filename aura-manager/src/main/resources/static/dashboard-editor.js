@@ -1883,6 +1883,7 @@ function setEditorMode(mode) {
     const undoBtn = document.getElementById('undoBtn');
     const redoBtn = document.getElementById('redoBtn');
     const reviewBtn = document.getElementById('reviewStepsBtn');
+    const aiReviewBtn = document.getElementById('aiReviewBtn');
 
     if (mode === 'raw') {
         if (visualContainer && rawPanel) {
@@ -1899,6 +1900,9 @@ function setEditorMode(mode) {
         }
         currentEditorMode = 'raw';
         window.currentEditorMode = 'raw';
+        if (editorPanel) {
+            editorPanel.setAttribute('data-mode', 'raw');
+        }
         if (btnVisual) {
             btnVisual.style.background = 'transparent';
             btnVisual.style.color = 'var(--text-secondary)';
@@ -1913,7 +1917,13 @@ function setEditorMode(mode) {
         }
         if (undoBtn) undoBtn.disabled = true;
         if (redoBtn) redoBtn.disabled = true;
-        if (reviewBtn) reviewBtn.disabled = true;
+        if (reviewBtn && (!editorPanel || editorPanel.getAttribute('data-has-error') !== 'true')) {
+            reviewBtn.disabled = false;
+        }
+        if (aiReviewBtn) {
+            aiReviewBtn.disabled = true;
+            aiReviewBtn.setAttribute('title', 'Switch to Visual Editor to run AI Review and interactively apply suggestions');
+        }
     } else {
         if (editorPanel && editorPanel.getAttribute('data-has-error') === 'true') {
             showToast("Cannot switch to Visual Editor: file contains YAML syntax errors.", "error");
@@ -1933,6 +1943,9 @@ function setEditorMode(mode) {
 
         currentEditorMode = 'visual';
         window.currentEditorMode = 'visual';
+        if (editorPanel) {
+            editorPanel.setAttribute('data-mode', 'visual');
+        }
         if (visualContainer && rawPanel) {
             rawPanel.style.display = 'none';
             visualContainer.style.display = 'flex';
@@ -1974,6 +1987,10 @@ function setEditorMode(mode) {
         updateUndoRedoUI();
         if (reviewBtn && (!editorPanel || editorPanel.getAttribute('data-has-error') !== 'true')) {
             reviewBtn.disabled = false;
+        }
+        if (aiReviewBtn && (!editorPanel || editorPanel.getAttribute('data-has-error') !== 'true')) {
+            aiReviewBtn.disabled = false;
+            aiReviewBtn.setAttribute('title', 'AI Review: Analyze playbook steps for ambiguity, missing assertions, and design best practices with PlaybookLinter');
         }
     }
 }
@@ -2036,13 +2053,14 @@ function getStepRawText(content) {
     const rawAttr = content.getAttribute('data-raw');
     const hasPills = content.querySelector('.var-pill, .unified-include-pill, .missing-include-pill, .invalid-include-pill, .hint-badge, .substep-folded-badge, .step-inline-comment, .material-symbols-outlined');
     
-    // If no pills or icon tokens are present, rawAttr or innerText is clean plain text
+    const isFocused = (document.activeElement === content || content.contains(document.activeElement));
+    
+    // If no pills or icon tokens are present, return the live typed text
     if (!hasPills) {
-        return (rawAttr !== null && rawAttr !== undefined && rawAttr.length > 0) ? rawAttr : (content.innerText || '');
+        return (isFocused || content.innerText) ? (content.innerText || '') : ((rawAttr !== null && rawAttr !== undefined) ? rawAttr : '');
     }
     
     // If not focused, data-raw is the authoritative source of truth
-    const isFocused = (document.activeElement === content || content.contains(document.activeElement));
     if (!isFocused && rawAttr !== null && rawAttr !== undefined && rawAttr.trim().length > 0) {
         return rawAttr;
     }
@@ -3458,7 +3476,10 @@ function insertStepBelow(lineNumOrElement, initialText = '') {
 
     const lineId = targetRow.getAttribute('data-line');
     const treeCard = document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`);
-    const insertAfterRef = (treeCard && treeCard.parentElement === targetRow.parentElement) ? treeCard : targetRow;
+    let insertAfterRef = (treeCard && treeCard.parentElement === targetRow.parentElement) ? treeCard : targetRow;
+    while (insertAfterRef.nextElementSibling && insertAfterRef.nextElementSibling.classList.contains('review-suggestion-card')) {
+        insertAfterRef = insertAfterRef.nextElementSibling;
+    }
     insertAfterRef.after(newRow);
 
     reindexSteps();
@@ -3491,13 +3512,29 @@ function moveStep(lineNumOrElement, direction) {
     const currentIndex = allRows.indexOf(row);
     if (currentIndex === -1) return;
 
+    // Collect all suggestion cards belonging to this row (whether before or after treeCard)
+    const suggestionCards = [];
+    let curSibling = row.nextElementSibling;
+    while (curSibling && (curSibling === treeCard || curSibling.classList.contains('review-suggestion-card'))) {
+        if (curSibling.classList.contains('review-suggestion-card')) {
+            suggestionCards.push(curSibling);
+        }
+        curSibling = curSibling.nextElementSibling;
+    }
+
     if (direction === -1) {
         // Move Up
         if (currentIndex > 0) {
             const targetPrevRow = allRows[currentIndex - 1];
             container.insertBefore(row, targetPrevRow);
+            let attachRef = row;
             if (treeCard && treeCard.parentElement === container) {
-                row.after(treeCard);
+                attachRef.after(treeCard);
+                attachRef = treeCard;
+            }
+            for (const card of suggestionCards) {
+                attachRef.after(card);
+                attachRef = card;
             }
         } else {
             return;
@@ -3509,10 +3546,20 @@ function moveStep(lineNumOrElement, direction) {
             const nextLineId = targetNextRow.getAttribute('data-line');
             const nextTreeCard = document.getElementById(`includeTreeCard_${nextLineId}`) || document.getElementById(`includeTreeCard${nextLineId}`);
             
-            const insertAfterRef = (nextTreeCard && nextTreeCard.parentElement === container) ? nextTreeCard : targetNextRow;
+            let insertAfterRef = (nextTreeCard && nextTreeCard.parentElement === container) ? nextTreeCard : targetNextRow;
+            // Advance past all suggestion cards belonging to targetNextRow so row isn't interleaved
+            while (insertAfterRef.nextElementSibling && insertAfterRef.nextElementSibling.classList.contains('review-suggestion-card')) {
+                insertAfterRef = insertAfterRef.nextElementSibling;
+            }
             insertAfterRef.after(row);
+            let attachRef = row;
             if (treeCard && treeCard.parentElement === container) {
-                row.after(treeCard);
+                attachRef.after(treeCard);
+                attachRef = treeCard;
+            }
+            for (const card of suggestionCards) {
+                attachRef.after(card);
+                attachRef = card;
             }
         } else {
             return;
@@ -3556,6 +3603,9 @@ function deleteStep(lineNumOrElement) {
         }
         const treeCard = document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`);
         if (treeCard) treeCard.remove();
+        while (row.nextElementSibling && row.nextElementSibling.classList.contains('review-suggestion-card')) {
+            row.nextElementSibling.remove();
+        }
 
         reindexSteps();
         if (typeof pushEditorSnapshot === 'function') {
@@ -3566,6 +3616,9 @@ function deleteStep(lineNumOrElement) {
 
     const treeCard = document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`);
     if (treeCard) treeCard.remove();
+    while (row.nextElementSibling && row.nextElementSibling.classList.contains('review-suggestion-card')) {
+        row.nextElementSibling.remove();
+    }
 
     row.remove();
     reindexSteps();
@@ -3632,7 +3685,7 @@ function toggleSubsteps(toggleBar) {
     toggleBar.classList.toggle('collapsed');
     const isCollapsed = toggleBar.classList.contains('collapsed');
     let next = toggleBar.nextElementSibling;
-    while (next && next.classList.contains('step-row-substep')) {
+    while (next && (next.classList.contains('step-row-substep') || next.classList.contains('review-suggestion-card'))) {
         next.style.display = isCollapsed ? 'none' : 'flex';
         next = next.nextElementSibling;
     }
@@ -3640,7 +3693,7 @@ function toggleSubsteps(toggleBar) {
 window.toggleSubsteps = toggleSubsteps;
 
 function handleSubstepTitleClick(event, el) {
-    if (event) {
+    if (event && document.activeElement === el) {
         event.stopPropagation();
     }
 }
@@ -3813,9 +3866,11 @@ function refreshSubstepToggleBars(container) {
                 }
             }
 
-            while (i < children.length && children[i].classList.contains('step-row-substep')) {
-                lastSubstep = children[i];
-                count++;
+            while (i < children.length && (children[i].classList.contains('step-row-substep') || children[i].classList.contains('review-suggestion-card'))) {
+                if (children[i].classList.contains('step-row-substep')) {
+                    lastSubstep = children[i];
+                    count++;
+                }
                 i++;
             }
             if (lastSubstep) {
@@ -3937,8 +3992,65 @@ function formatStepToTokens(lineNumOrElement) {
     } else {
         content.innerHTML = safeText;
     }
+
+    // Auto-load include tree card for top-level include steps if not yet attached
+    const includeMatch = rawText.match(/(?:_include|include):\s*["']?([a-zA-Z0-9_\/\.\-]+)["']?/);
+    if (includeMatch && row && !row.closest('.include-tree-card')) {
+        const cleanIncludePath = includeMatch[1].replace(/^['"]|['"]$/g, '');
+        if (!cleanIncludePath.toLowerCase().endsWith('.yaml') && !cleanIncludePath.toLowerCase().endsWith('.yml')) {
+            ensureIncludeTreeCardLoaded(lineNum, cleanIncludePath, row);
+        }
+    }
 }
 window.formatStepToTokens = formatStepToTokens;
+
+function ensureIncludeTreeCardLoaded(cardId, cleanFilePath, targetRow) {
+    if (!cleanFilePath) return;
+    let tree = (targetRow && targetRow.nextElementSibling && targetRow.nextElementSibling.classList && targetRow.nextElementSibling.classList.contains('include-tree-card'))
+        ? targetRow.nextElementSibling
+        : (document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`));
+
+    if (tree && tree.getAttribute('data-include-file') === cleanFilePath) {
+        tree.style.display = 'flex';
+        return;
+    }
+
+    if (tree && tree.getAttribute('data-include-file') !== cleanFilePath) {
+        tree.remove();
+        tree = null;
+    }
+
+    if (!tree) {
+        window.pendingIncludeRequests = window.pendingIncludeRequests || {};
+        if (window.pendingIncludeRequests[cardId]) return;
+        window.pendingIncludeRequests[cardId] = true;
+
+        fetch(`/api/editor/include-tree?file=${encodeURIComponent(cleanFilePath)}&cardId=${encodeURIComponent(cardId)}`)
+            .then(res => res.text())
+            .then(html => {
+                delete window.pendingIncludeRequests[cardId];
+                const liveTarget = document.querySelector(`.step-row[data-line="${cardId}"]`) || targetRow;
+                if (liveTarget && liveTarget.parentElement) {
+                    const existing = (liveTarget.nextElementSibling && liveTarget.nextElementSibling.classList && liveTarget.nextElementSibling.classList.contains('include-tree-card'))
+                        ? liveTarget.nextElementSibling
+                        : (document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`));
+                    if (!existing) {
+                        liveTarget.insertAdjacentHTML('afterend', html);
+                        const newlyInsertedTree = document.getElementById(`includeTreeCard_${cardId}`) || liveTarget.nextElementSibling;
+                        if (newlyInsertedTree) {
+                            formatIncludeTreeCardTokens(newlyInsertedTree);
+                        }
+                        updateAllLineNumbers();
+                    }
+                }
+            })
+            .catch(err => {
+                delete window.pendingIncludeRequests[cardId];
+                if (console && console.error) console.error("Failed to fetch include tree card", err);
+            });
+    }
+}
+window.ensureIncludeTreeCardLoaded = ensureIncludeTreeCardLoaded;
 
 window.pendingIncludeRequests = window.pendingIncludeRequests || {};
 
@@ -4487,9 +4599,7 @@ function enableIncludeEdit(cardId) {
 
     formatIncludeTreeCardTokens(treeCard);
 
-    if (steps.length > 0) {
-        handleNestedFocus(steps[0], null, 0);
-    } else {
+    if (steps.length === 0) {
         addNestedStep(cardId);
     }
 }
@@ -5107,15 +5217,23 @@ function addMatrixRowInlineEmpty() {
     const tbody = document.querySelector('#transposedGrid tbody');
     if (!tbody) return;
     const colCount = document.querySelectorAll('#transposedGrid thead th').length - 2;
-    const newIndex = tbody.rows.length + 1;
-    const newVarName = `newVariable_${newIndex}`;
+
+    const existingVarInputs = tbody.querySelectorAll('.var-key-input');
+    let maxIndex = 0;
+    existingVarInputs.forEach(inp => {
+        const m = (inp.value || '').match(/newVariable_(\d+)/);
+        if (m) {
+            maxIndex = Math.max(maxIndex, parseInt(m[1], 10));
+        }
+    });
+    const newVarName = `newVariable_${maxIndex + 1}`;
     
     const tr = document.createElement('tr');
     let html = `
         <td>
             <div class="var-key-cell">
                 <input type="text" class="var-key-input" value="${newVarName}">
-                <button class="btn-insert-var-chip" onclick="insertVariableFromInput(this.previousElementSibling.value)">+ Insert</button>
+                <button class="btn-insert-var-chip" data-key="${newVarName}" onclick="insertVariableFromInput(this.getAttribute('data-key') || this.previousElementSibling.value)">+ Insert</button>
                 <button type="button" class="btn-remove-var" title="Remove Variable" onclick="removeMatrixRow(this)">
                     <span class="material-symbols-outlined" style="font-size: 14px;">close</span>
                 </button>
@@ -5127,7 +5245,13 @@ function addMatrixRowInlineEmpty() {
     }
     html += `<td></td>`;
     tr.innerHTML = html;
-    tbody.appendChild(tr);
+
+    const matrixTagsRow = tbody.querySelector('#matrixTagsRow');
+    if (matrixTagsRow) {
+        matrixTagsRow.after(tr);
+    } else {
+        tbody.prepend(tr);
+    }
     compilePlaybookToYaml();
 }
 window.addMatrixRowInlineEmpty = addMatrixRowInlineEmpty;
@@ -5998,7 +6122,8 @@ function runValidateFile() {
     const hiddenContent = document.getElementById('editorContent');
     const rawTextarea = document.getElementById('rawYamlTextarea');
     const editorPanel = document.getElementById('editorPanel');
-    const isRawMode = editorPanel && editorPanel.getAttribute('data-mode') === 'raw';
+    const isRawMode = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw')
+        || (editorPanel && editorPanel.getAttribute('data-mode') === 'raw');
     let content = '';
     if (isRawMode && rawTextarea) {
         content = rawTextarea.value;
@@ -6151,28 +6276,7 @@ window.closeValidationPromptCard = closeValidationPromptCard;
 
 
 
-function applySuggestionHint(targetLineNum, hintText) {
-    const row = document.querySelector(`.step-row[data-line="${targetLineNum}"]`);
-    if (row) {
-        const contentEl = row.querySelector('.step-content');
-        if (contentEl) {
-            let current = contentEl.getAttribute('data-raw') || contentEl.innerText;
-            if (!current.includes(hintText)) {
-                current = current.trim() + ' ' + hintText;
-                contentEl.setAttribute('data-raw', current);
-                contentEl.innerText = current;
-                formatStepToTokens(targetLineNum);
-                compilePlaybookToYaml();
-                debouncedPushSnapshot();
-            }
-        }
-        const card = row.nextElementSibling;
-        if (card && card.classList.contains('review-suggestion-card')) {
-            card.remove();
-        }
-    }
-}
-window.applySuggestionHint = applySuggestionHint;
+
 
 function dismissSuggestionCard(btn) {
     const card = btn.closest('.review-suggestion-card');
@@ -6181,6 +6285,376 @@ function dismissSuggestionCard(btn) {
     }
 }
 window.dismissSuggestionCard = dismissSuggestionCard;
+
+function applySuggestionRewrite(btnOrLine, newInstruction) {
+    let row = null;
+    let card = null;
+
+    if (btnOrLine && typeof btnOrLine === 'object' && btnOrLine.nodeType) {
+        card = btnOrLine.closest('.review-suggestion-card');
+        if (card) {
+            let prev = card.previousElementSibling;
+            while (prev && !prev.classList.contains('step-row')) {
+                prev = prev.previousElementSibling;
+            }
+            row = prev;
+        }
+        if (!newInstruction && btnOrLine.hasAttribute && btnOrLine.hasAttribute('data-rewrite')) {
+            newInstruction = btnOrLine.getAttribute('data-rewrite');
+        }
+    } else if (typeof btnOrLine === 'number' || typeof btnOrLine === 'string') {
+        row = document.querySelector(`.step-row[data-line="${btnOrLine}"]`);
+        if (row) {
+            let sib = row.nextElementSibling;
+            while (sib && !sib.classList.contains('step-row')) {
+                if (sib.classList.contains('review-suggestion-card')) {
+                    card = sib;
+                    break;
+                }
+                sib = sib.nextElementSibling;
+            }
+        }
+    }
+
+    if (row && newInstruction != null) {
+        const contentEl = row.querySelector('.step-content');
+        if (contentEl) {
+            contentEl.setAttribute('data-raw', newInstruction);
+            contentEl.innerText = newInstruction;
+            if (typeof formatStepToTokens === 'function') {
+                formatStepToTokens(row);
+            }
+            if (typeof compilePlaybookToYaml === 'function') {
+                compilePlaybookToYaml();
+            }
+            if (typeof checkEditorDirtyStatus === 'function') {
+                checkEditorDirtyStatus();
+            }
+            if (typeof debouncedPushSnapshot === 'function') {
+                debouncedPushSnapshot();
+            }
+        }
+        if (card && card.classList.contains('review-suggestion-card')) {
+            card.remove();
+        }
+    }
+}
+window.applySuggestionRewrite = applySuggestionRewrite;
+
+function runAiReview() {
+    const aiBtn = document.getElementById('aiReviewBtn');
+    const editorFileNameEl = document.getElementById('editorFileName');
+    const file = (editorFileNameEl ? editorFileNameEl.getAttribute('data-file') : null) || window.activeEditingFile || '';
+
+    // Gather current YAML content
+    const hiddenContent = document.getElementById('editorContent');
+    const rawTextarea = document.getElementById('rawYamlTextarea');
+    const editorPanel = document.getElementById('editorPanel');
+    const isRawMode = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw')
+        || (editorPanel && editorPanel.getAttribute('data-mode') === 'raw');
+    let content = '';
+    if (isRawMode && rawTextarea) {
+        content = rawTextarea.value;
+    } else {
+        if (typeof compilePlaybookToYaml === 'function') {
+            content = compilePlaybookToYaml();
+        }
+        if (!content && hiddenContent) {
+            content = hiddenContent.value;
+        }
+    }
+
+    if (aiBtn) {
+        aiBtn.innerHTML = '<span class="material-symbols-outlined spinner">sync</span> Analyzing...';
+        aiBtn.disabled = true;
+    }
+
+    // Clean up existing suggestion cards
+    document.querySelectorAll('.review-suggestion-card').forEach(card => card.remove());
+
+    fetch('/api/editor/ai-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file: file, content: content })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (aiBtn) {
+            aiBtn.innerHTML = '<span class="material-symbols-outlined">auto_awesome</span> AI Review';
+            aiBtn.disabled = false;
+        }
+
+        const editorFileNameEl = document.getElementById('editorFileName');
+        const activeFileNow = (editorFileNameEl ? editorFileNameEl.getAttribute('data-file') : null) || window.activeEditingFile || '';
+        if (file && activeFileNow && file !== activeFileNow) {
+            console.debug('Discarding AI review findings for superseded file:', file, 'active file:', activeFileNow);
+            return;
+        }
+
+        // Clean up any existing unanchored / raw mode findings dialog from prior runs
+        document.querySelectorAll('.var-prompt-card[data-type="ai-review-report"]').forEach(card => card.remove());
+
+        if (data.status === 'SYNTAX_ERROR' || data.status === 'VALIDATION_ERROR') {
+            if (typeof showValidationResultDialog === 'function') {
+                showValidationResultDialog(data.issues || []);
+            }
+            if (typeof showToast === 'function') {
+                showToast(data.message || (data.status === 'SYNTAX_ERROR' ? '⚠️ Syntax errors found. Fix syntax before running AI Review.' : '⚠️ Validation errors found. Fix validation before running AI Review.'), 'warning');
+            }
+            return;
+        }
+
+        if (data.status === 'ERROR') {
+            if (typeof showToast === 'function') {
+                showToast(data.error || '⚠️ AI Review failed.', 'error');
+            }
+            return;
+        }
+
+        const findings = data.findings || [];
+        if (findings.length === 0) {
+            if (typeof showToast === 'function') {
+                showToast('✨ AI Review: No issues found — playbook steps look clear and complete.', 'success');
+            }
+            return;
+        }
+
+        const currentPanel = document.getElementById('editorPanel');
+        const currentIsRawMode = currentPanel && currentPanel.getAttribute('data-mode') === 'raw';
+
+        if (currentIsRawMode) {
+            showRawModeFindingsDialog(findings);
+        } else {
+            renderStepSuggestionCards(findings);
+            if (typeof showToast === 'function') {
+                showToast(`✨ AI Review: Found ${findings.length} actionable suggestion${findings.length > 1 ? 's' : ''}.`, 'info');
+            }
+        }
+    })
+    .catch(err => {
+        console.error('Failed to run AI review:', err);
+        if (aiBtn) {
+            aiBtn.innerHTML = '<span class="material-symbols-outlined">auto_awesome</span> AI Review';
+            aiBtn.disabled = false;
+        }
+
+        const editorFileNameEl = document.getElementById('editorFileName');
+        const activeFileNow = (editorFileNameEl ? editorFileNameEl.getAttribute('data-file') : null) || window.activeEditingFile || '';
+        if (file && activeFileNow && file !== activeFileNow) {
+            console.debug('Discarding AI review findings for superseded file:', file, 'active file:', activeFileNow);
+            return;
+        }
+
+        // Clean up any existing unanchored / raw mode findings dialog from prior runs
+        document.querySelectorAll('.var-prompt-card[data-type="ai-review-report"]').forEach(card => card.remove());
+        if (typeof showToast === 'function') {
+            showToast('⚠️ AI Review request failed. Check the console for details.', 'error');
+        }
+    });
+}
+window.runAiReview = runAiReview;
+
+function renderStepSuggestionCards(findings) {
+    if (!Array.isArray(findings)) return;
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    const unanchoredFindings = [];
+
+    findings.forEach(f => {
+        let targetRow = null;
+        const allRows = Array.from(document.querySelectorAll('#beforeStepsList .step-row:not(.step-row-comment), #stepsList .step-row:not(.step-row-comment), #afterStepsList .step-row:not(.step-row-comment)'));
+
+        // 1. Content matching with occurrence resolution
+        if (f.rawInstruction && f.rawInstruction.trim()) {
+            const rawTarget = f.rawInstruction.trim();
+            let matchingRows = allRows.filter(r => {
+                const c = r.querySelector('.step-content');
+                return c && ((c.getAttribute('data-raw') || '').trim() === rawTarget || (c.innerText || '').trim() === rawTarget);
+            });
+            // Fallback for composite milestone steps with nested sub-steps
+            if (matchingRows.length === 0 && rawTarget.includes('\n')) {
+                const parentLine = rawTarget.split('\n')[0].replace(/:$/, '').trim();
+                matchingRows = allRows.filter(r => {
+                    const c = r.querySelector('.step-content');
+                    const text = (c ? (c.getAttribute('data-raw') || c.innerText || '') : '').replace(/:$/, '').trim();
+                    return text === parentLine;
+                });
+            }
+            if (matchingRows.length === 1) {
+                targetRow = matchingRows[0];
+            } else if (matchingRows.length > 1) {
+                // If multiple identical steps exist, match the one closest to stepIndex
+                let bestMatch = matchingRows[0];
+                let minDiff = Infinity;
+                for (const r of matchingRows) {
+                    const rIdx = allRows.indexOf(r) + 1;
+                    const diff = Math.abs(rIdx - f.stepIndex);
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        bestMatch = r;
+                    }
+                }
+                targetRow = bestMatch;
+            }
+        }
+
+        // 2. Unanchored fallback: If rawInstruction is not present in the current caller DOM
+        // (e.g. findings belonging to an included fragment), route to unanchored dialog
+        // instead of blindly overwriting an unrelated step by stepIndex.
+        if (!targetRow) {
+            unanchoredFindings.push(f);
+            return;
+        }
+
+        // If targetRow is inside a collapsed sub-step group, auto-expand it so suggestions are immediately visible
+        if (targetRow.classList.contains('step-row-substep') || targetRow.style.display === 'none') {
+            let prev = targetRow.previousElementSibling;
+            while (prev && !prev.classList.contains('substeps-toggle-bar')) {
+                prev = prev.previousElementSibling;
+            }
+            if (prev && prev.classList.contains('collapsed')) {
+                toggleSubsteps(prev);
+            }
+        }
+
+        const sevClass = (f.severity || 'WARNING').toLowerCase();
+        const card = document.createElement('div');
+        card.className = `review-suggestion-card ${sevClass}`;
+
+        const categoryLabel = f.category ? f.category.replace(/_/g, ' ') : 'Advisory';
+
+        let rewriteHtml = '';
+        if (f.suggestedRewrite && f.suggestedRewrite.trim().length > 0) {
+            const safeRewrite = escapeHtml(f.suggestedRewrite);
+            rewriteHtml = `
+                <button type="button" class="btn-apply-suggestion"
+                        data-rewrite="${safeRewrite}"
+                        onclick="applySuggestionRewrite(this)"
+                        title="Replace step instruction with suggested rewrite: &quot;${safeRewrite}&quot;">
+                    Apply Rewrite
+                </button>
+            `;
+        }
+
+        card.innerHTML = `
+            <div class="suggestion-left">
+                <span class="material-symbols-outlined" style="font-size: 16px; color: var(--accent-purple, #a855f7);">auto_awesome</span>
+                <span class="suggestion-badge ${sevClass}">${escapeHtml(f.severity || 'WARNING')}</span>
+                <span style="font-weight: 600; font-size: 11.5px; opacity: 0.9;">${escapeHtml(categoryLabel)}:</span>
+                <span>${escapeHtml(f.message)}</span>
+            </div>
+            <div class="suggestion-actions">
+                ${rewriteHtml}
+                <button type="button" class="btn-dismiss-suggestion" onclick="dismissSuggestionCard(this)" title="Dismiss suggestion">✕</button>
+            </div>
+        `;
+
+        const lineId = targetRow.getAttribute('data-line');
+        const treeCard = lineId ? (document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`)) : null;
+        let insertAfterEl = (treeCard && treeCard.parentElement === targetRow.parentElement) ? treeCard : targetRow;
+        while (insertAfterEl.nextElementSibling && insertAfterEl.nextElementSibling.classList.contains('review-suggestion-card')) {
+            insertAfterEl = insertAfterEl.nextElementSibling;
+        }
+        insertAfterEl.parentNode.insertBefore(card, insertAfterEl.nextSibling);
+    });
+
+    if (unanchoredFindings.length > 0) {
+        showRawModeFindingsDialog(unanchoredFindings);
+    }
+}
+window.renderStepSuggestionCards = renderStepSuggestionCards;
+
+function showRawModeFindingsDialog(findings) {
+    let container = document.getElementById('varPromptContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'varPromptContainer';
+        container.className = 'var-prompt-container';
+        const panel = document.getElementById('editorPanel') || document.body;
+        panel.appendChild(container);
+    }
+
+    const existingCard = container.querySelector('.var-prompt-card[data-type="ai-review-report"]');
+    if (existingCard) {
+        existingCard.remove();
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    const card = document.createElement('div');
+    card.className = 'var-prompt-card';
+    card.setAttribute('data-type', 'ai-review-report');
+    card.style.borderLeftColor = 'var(--accent-purple, #a855f7)';
+
+    const editorFileNameEl = document.getElementById('editorFileName');
+    const activeFileNow = (editorFileNameEl ? editorFileNameEl.getAttribute('data-file') : null) || window.activeEditingFile || '';
+
+    const itemsHtml = (findings || []).map(f => {
+        const sev = (f.severity || 'WARNING').toLowerCase();
+        const lineInfo = f.lineNumber > 0 ? `<span class="validation-issue-line">Line ${f.lineNumber}</span>` : (f.stepIndex > 0 ? `<span class="validation-issue-line">Step #${f.stepIndex}</span>` : '');
+        const catInfo = f.category ? `<span class="validation-issue-context">${escapeHtml(f.category.replace(/_/g, ' '))}</span>` : '';
+        const isExternalFragment = f.sourceFile && f.sourceFile !== 'inline.yaml' && f.sourceFile !== activeFileNow;
+        const sourceInfo = isExternalFragment ? `<span class="validation-issue-context" style="background: rgba(168, 85, 247, 0.12); color: var(--accent-purple, #a855f7); font-weight: 500;">📄 ${escapeHtml(f.sourceFile)}</span>` : '';
+        const rewriteBlock = f.suggestedRewrite ? `<div style="margin-top: 4px; font-size: 11px; color: var(--accent-purple, #a855f7); background: rgba(168, 85, 247, 0.08); padding: 4px 8px; border-radius: 4px;">💡 <b>Suggested:</b> ${escapeHtml(f.suggestedRewrite)}${isExternalFragment ? ` <span style="opacity: 0.8;">(apply directly in ${escapeHtml(f.sourceFile)})</span>` : ''}</div>` : '';
+
+        return `
+            <div class="validation-issue-item ${sev}">
+                <div class="validation-issue-header">
+                    <span class="material-symbols-outlined issue-icon" style="color: var(--accent-purple, #a855f7);">auto_awesome</span>
+                    <span class="validation-issue-badge ${sev}">${escapeHtml(f.severity || 'WARNING')}</span>
+                    ${sourceInfo}
+                    ${lineInfo}
+                    ${catInfo}
+                </div>
+                <div class="validation-issue-msg">${escapeHtml(f.message)}</div>
+                ${rewriteBlock}
+            </div>
+        `;
+    }).join('');
+
+    card.innerHTML = `
+        <div class="var-prompt-header">
+            <span class="material-symbols-outlined" style="color: var(--accent-purple, #a855f7);">auto_awesome</span>
+            <span>AI Review Findings (${findings.length})</span>
+        </div>
+        <div class="var-prompt-body">
+            <div class="validation-issue-list" style="max-height: 280px; overflow-y: auto;">
+                ${itemsHtml}
+            </div>
+        </div>
+        <div class="var-prompt-actions">
+            <button type="button" class="btn-prompt-confirm" onclick="closeAiReviewPromptCard(this)">OK</button>
+        </div>
+    `;
+
+    container.appendChild(card);
+}
+window.showRawModeFindingsDialog = showRawModeFindingsDialog;
+
+function closeAiReviewPromptCard(btnOrElement) {
+    if (btnOrElement) {
+        const card = btnOrElement.closest('.var-prompt-card');
+        if (card) card.remove();
+    }
+}
+window.closeAiReviewPromptCard = closeAiReviewPromptCard;
 
 
 

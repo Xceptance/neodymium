@@ -27,6 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Assertions;
@@ -76,17 +77,152 @@ public final class StaticResourceSyntaxTest
         }
     }
 
+    private static final Object NODE_CHECK_LOCK = new Object();
+    private static volatile Boolean nodeAvailableCached = null;
+
     private boolean isNodeAvailable()
+    {
+        if (nodeAvailableCached != null)
+        {
+            return nodeAvailableCached.booleanValue();
+        }
+
+        synchronized (NODE_CHECK_LOCK)
+        {
+            if (nodeAvailableCached != null)
+            {
+                return nodeAvailableCached.booleanValue();
+            }
+
+            try
+            {
+                final Process process = new ProcessBuilder("node", "-v")
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .redirectError(ProcessBuilder.Redirect.DISCARD)
+                    .start();
+                final boolean finished = process.waitFor(10, TimeUnit.SECONDS);
+                if (!finished)
+                {
+                    process.destroyForcibly();
+                    return false;
+                }
+                nodeAvailableCached = (process.exitValue() == 0);
+            }
+            catch (final Exception e)
+            {
+                nodeAvailableCached = Boolean.FALSE;
+            }
+            return nodeAvailableCached != null && nodeAvailableCached.booleanValue();
+        }
+    }
+
+    private static Path resolveTempDirectory(final Path baseDir)
     {
         try
         {
-            final Process process = new ProcessBuilder("node", "-v").start();
-            final int exitCode = process.waitFor();
-            return exitCode == 0;
+            final Path candidate = baseDir.resolve("target").resolve("temp-node-tests");
+            Files.createDirectories(candidate);
+            return candidate;
         }
-        catch (final Exception e)
+        catch (final Exception ignored)
         {
-            return false;
+            return null;
+        }
+    }
+
+    private static void deleteSilently(final Path path)
+    {
+        if (path != null)
+        {
+            try
+            {
+                Files.deleteIfExists(path);
+            }
+            catch (final IOException ignored)
+            {
+                // Prevent masking primary test assertion failures on Windows file locks
+            }
+        }
+    }
+
+    private void runNodeScript(final String nodeTestScript, final String failureMessagePrefix) throws Exception
+    {
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final Path baseDir = Files.exists(Paths.get("src/main/resources"))
+            ? Paths.get(".").toAbsolutePath().normalize()
+            : Paths.get("aura-manager").toAbsolutePath().normalize();
+
+        final Path tempDir = resolveTempDirectory(baseDir);
+        final Path tempScript = (tempDir != null)
+            ? Files.createTempFile(tempDir, "node-test-", ".js")
+            : Files.createTempFile("node-test-", ".js");
+        final Path tempOutput = (tempDir != null)
+            ? Files.createTempFile(tempDir, "node-out-", ".log")
+            : Files.createTempFile("node-out-", ".log");
+
+        try
+        {
+            Files.writeString(tempScript, nodeTestScript, StandardCharsets.UTF_8);
+
+            final ProcessBuilder pb = new ProcessBuilder("node", tempScript.toAbsolutePath().toString());
+            pb.directory(baseDir.toFile());
+            pb.redirectErrorStream(true);
+            pb.redirectOutput(tempOutput.toFile());
+
+            final Process process = pb.start();
+            try
+            {
+                boolean finished = false;
+                try
+                {
+                    finished = process.waitFor(30, TimeUnit.SECONDS);
+                }
+                catch (final InterruptedException e)
+                {
+                    process.destroyForcibly();
+                    Thread.currentThread().interrupt();
+                    Assertions.fail(failureMessagePrefix + " was interrupted while executing Node script", e);
+                }
+
+                if (!finished)
+                {
+                    process.destroyForcibly();
+                    try
+                    {
+                        process.waitFor(5, TimeUnit.SECONDS);
+                    }
+                    catch (final InterruptedException e)
+                    {
+                        Thread.currentThread().interrupt();
+                    }
+                    Assertions.fail(failureMessagePrefix + " timed out after 30 seconds");
+                }
+
+                final int exitCode = process.exitValue();
+                final String rawOutput = Files.readString(tempOutput, StandardCharsets.UTF_8);
+                final String trimmedOutput = rawOutput.strip();
+                final String diagnosticDetails = trimmedOutput.isEmpty()
+                    ? "(No output produced, exit code: " + exitCode + ")"
+                    : trimmedOutput;
+
+                Assertions.assertEquals(0, exitCode, failureMessagePrefix + " (exit code " + exitCode + "):\n" + diagnosticDetails);
+            }
+            finally
+            {
+                if (process.isAlive())
+                {
+                    process.destroyForcibly();
+                }
+            }
+        }
+        finally
+        {
+            deleteSilently(tempScript);
+            deleteSilently(tempOutput);
         }
     }
 
@@ -106,7 +242,14 @@ public final class StaticResourceSyntaxTest
             }
         }
 
-        final int exitCode = process.waitFor();
+        final boolean finished = process.waitFor(10, TimeUnit.SECONDS);
+        if (!finished)
+        {
+            process.destroyForcibly();
+            Assertions.fail("Syntax check timed out for " + jsFile.getName());
+        }
+
+        final int exitCode = process.exitValue();
         Assertions.assertEquals(0, exitCode, "Syntax error detected in " + jsFile.getName() + ":\n" + output);
     }
 
@@ -376,22 +519,132 @@ public final class StaticResourceSyntaxTest
             "sandbox.window = sandbox;\n" +
             "vm.runInNewContext(testScript, sandbox);\n";
 
-        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
-        pb.redirectErrorStream(true);
-        final Process process = pb.start();
+        runNodeScript(nodeTestScript, "Filter state transition test failed");
+    }
 
-        final StringBuilder output = new StringBuilder();
-        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
+    /**
+     * Automated regression safety net verifying that dashboard-runner.js correctly filters
+     * terminal log lines: retaining modern AI events (thoughts, tool calls, results, turns) and
+     * continuation lines while suppressing Maven noise, JVM warnings, and tool schema dumps.
+     *
+     * @throws Exception
+     *             if Node execution or verification fails
+     * @author AI-generated: Gemini 3.8 Flash
+     * @author Xceptance GmbH 2026
+     */
+    @Test
+    public void testDashboardRunnerAiLogFilter() throws Exception
+    {
+        if (!isNodeAvailable())
         {
-            String line;
-            while ((line = reader.readLine()) != null)
-            {
-                output.append(line).append("\n");
-            }
+            return;
         }
 
-        final int exitCode = process.waitFor();
-        Assertions.assertEquals(0, exitCode, "Filter state transition test failed:\n" + output);
+        final Path runnerPath = Paths.get("src/main/resources/static/dashboard-runner.js");
+        Assertions.assertTrue(Files.exists(runnerPath), "dashboard-runner.js must exist: " + runnerPath.toAbsolutePath());
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const runnerCode = fs.readFileSync('" + runnerPath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const sandbox = {\n" +
+            "    console,\n" +
+            "    window: { addEventListener: () => {} },\n" +
+            "    document: {\n" +
+            "        getElementById: () => ({ innerHTML: '', querySelectorAll: () => [], insertAdjacentHTML: () => {} }),\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {}\n" +
+            "    },\n" +
+            "    localStorage: { getItem: () => null, setItem: () => {} },\n" +
+            "    setTimeout: () => {}\n" +
+            "};\n" +
+            "sandbox.window.document = sandbox.document;\n" +
+            "sandbox.window.localStorage = sandbox.localStorage;\n" +
+            "vm.runInNewContext(runnerCode, sandbox);\n" +
+            "const isAiLogLine = sandbox.window.isAiLogLine;\n" +
+            "const aiLines = [\n" +
+            "    '13:30:00 ╔════════════════════════════════════════════════════════════════════════════════════',\n" +
+            "    '13:30:00 ║ 🚀 STARTING TEST CASE: cart/add_item.yaml',\n" +
+            "    '13:30:00 ╚════════════════════════════════════════════════════════════════════════════════════',\n" +
+            "    '13:30:00 ────────────────────────────────────────────────────────────────────────────────',\n" +
+            "    '13:30:01 🤖 Agent Turn #1 (max: 25) | Step: \"Search for jeans\"',\n" +
+            "    '13:30:03 💭 Thought:',\n" +
+            "    '13:30:03 🔧 Tool Call: type',\n" +
+            "    '13:30:04 📥 Result [type]: 🏁 SUCCESS - typed into \\'#search\\'',\n" +
+            "    '13:30:10 🎯 Goal Accomplished: Found jeans (Turns: 1, Executed Calls: 1)',\n" +
+            "    '13:30:10 📊 Tokens: 1,200 in (800 cached) → 45 out (total: 1,245) | Turn 1',\n" +
+            "    '13:30:10 ║ 🏁 TEST CASE COMPLETED: SUCCESS',\n" +
+            "    '13:30:10 🚨 [Visual RCA Diagnosis]: Button was covered by banner',\n" +
+            "    '13:30:10 ⚖️ Quality Judge advised retry'\n" +
+            "];\n" +
+            "for (const line of aiLines) {\n" +
+            "    if (!isAiLogLine(line, false)) {\n" +
+            "        throw new Error('Expected AI line to match: ' + line);\n" +
+            "    }\n" +
+            "}\n" +
+            "if (!isAiLogLine('   I will search for jeans and submit the query.', true)) {\n" +
+            "    throw new Error('Expected thought continuation to match');\n" +
+            "}\n" +
+            "if (!isAiLogLine('   • target: #search-input', true)) {\n" +
+            "    throw new Error('Expected tool call argument continuation to match');\n" +
+            "}\n" +
+            "if (isAiLogLine('   I will search for jeans and submit the query.', false)) {\n" +
+            "    throw new Error('Expected unanchored indented line to NOT match when previous was not AI');\n" +
+            "}\n" +
+            "const allowsAiContinuation = sandbox.window.allowsAiContinuation;\n" +
+            "if (typeof allowsAiContinuation !== 'function') {\n" +
+            "    throw new Error('Expected window.allowsAiContinuation to be defined');\n" +
+            "}\n" +
+            "if (allowsAiContinuation('16:17:11 🤖 Agent Turn #1 (max: 15) | Step: \"Search jeans\"')) {\n" +
+            "    throw new Error('Agent Turn header should NOT allow continuation lines');\n" +
+            "}\n" +
+            "if (!allowsAiContinuation('16:17:12 💭 Thought:')) {\n" +
+            "    throw new Error('Thought header should allow continuation lines');\n" +
+            "}\n" +
+            "if (!allowsAiContinuation('16:17:13 🔧 Tool Call: fill')) {\n" +
+            "    throw new Error('Tool Call header should allow continuation lines');\n" +
+            "}\n" +
+            "const wireLines = [\n" +
+            "    '      \"text\" : \"You are an autonomous web testing agent. Execute the test instruction...\",',\n" +
+            "    '      \"role\" : \"user\",',\n" +
+            "    '      \"parts\" : [',\n" +
+            "    '  {',\n" +
+            "    '  }',\n" +
+            "    'Request:',\n" +
+            "    'Response:',\n" +
+            "    'Host: generativelanguage.googleapis.com',\n" +
+            "    'Content-Type: application/json',\n" +
+            "    '- method: POST',\n" +
+            "    '16:17:11 [DEBUG] dev.langchain4j.http.client.log.LoggingHttpClient - Request:'\n" +
+            "];\n" +
+            "for (const wireLine of wireLines) {\n" +
+            "    if (isAiLogLine(wireLine, true)) {\n" +
+            "        throw new Error('Expected wire log line to be suppressed even with previousWasAi=true: ' + wireLine);\n" +
+            "    }\n" +
+            "}\n" +
+            "const noiseLines = [\n" +
+            "    '[INFO] Scanning for projects...',\n" +
+            "    '[INFO] Compiling 758 source files with javac [debug target 17] to target/test-classes',\n" +
+            "    'WARNING: A terminally deprecated method in sun.misc.Unsafe has been called',\n" +
+            "    'WARNING: sun.misc.Unsafe::objectFieldOffset has been called by ...',\n" +
+            "    'SLF4J(W): Class path contains multiple SLF4J providers.',\n" +
+            "    '[INFO] Running YAML Test: cart/add_item.yaml',\n" +
+            "    '[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0',\n" +
+            "    '[INFO] BUILD SUCCESS',\n" +
+            "    '[INFO] Total time: 12.5 s',\n" +
+            "    '13:30:00 [DEBUG] 🛠️ Available Native Tools (25):',\n" +
+            "    '    ActionTool(name=\"click\", description=\"Click an element\", params=...)',\n" +
+            "    'Conversation context for Turn #1:',\n" +
+            "    'This test uses Neodymium Library (version: ?.?.?)'\n" +
+            "];\n" +
+            "for (const line of noiseLines) {\n" +
+            "    if (isAiLogLine(line, false)) {\n" +
+            "        throw new Error('Expected noise line to be suppressed: ' + line);\n" +
+            "    }\n" +
+            "}\n";
+
+        runNodeScript(nodeTestScript, "AI log filtering test failed");
     }
 
     @Test
@@ -3053,22 +3306,7 @@ public final class StaticResourceSyntaxTest
             "sandbox.window = sandbox;\n" +
             "vm.runInNewContext(testScript, sandbox);\n";
 
-        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
-        pb.redirectErrorStream(true);
-        final Process process = pb.start();
-
-        final StringBuilder output = new StringBuilder();
-        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
-        {
-            String line;
-            while ((line = reader.readLine()) != null)
-            {
-                output.append(line).append("\n");
-            }
-        }
-
-        final int exitCode = process.waitFor();
-        Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+        runNodeScript(nodeTestScript, "Node script execution failed");
     }
 
     @Test
@@ -3165,22 +3403,7 @@ public final class StaticResourceSyntaxTest
             "sandbox.window = sandbox;\n" +
             "vm.runInNewContext(testScript, sandbox);\n";
 
-        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
-        pb.redirectErrorStream(true);
-        final Process process = pb.start();
-
-        final StringBuilder output = new StringBuilder();
-        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
-        {
-            String line;
-            while ((line = reader.readLine()) != null)
-            {
-                output.append(line).append("\n");
-            }
-        }
-
-        final int exitCode = process.waitFor();
-        Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+        runNodeScript(nodeTestScript, "Node script execution failed");
     }
 
     @Test
@@ -3268,22 +3491,7 @@ public final class StaticResourceSyntaxTest
             "sandbox.window = sandbox;\n" +
             "vm.runInNewContext(testScript, sandbox);\n";
 
-        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
-        pb.redirectErrorStream(true);
-        final Process process = pb.start();
-
-        final StringBuilder output = new StringBuilder();
-        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
-        {
-            String line;
-            while ((line = reader.readLine()) != null)
-            {
-                output.append(line).append("\n");
-            }
-        }
-
-        final int exitCode = process.waitFor();
-        Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+        runNodeScript(nodeTestScript, "Node script execution failed");
     }
 
     @Test
@@ -3346,22 +3554,7 @@ public final class StaticResourceSyntaxTest
             "    throw new Error('Expected rendered step HTML with sub-step LLM invocations but got: ' + sideList.innerHTML);\n" +
             "}\n";
 
-        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
-        pb.redirectErrorStream(true);
-        final Process process = pb.start();
-
-        final StringBuilder output = new StringBuilder();
-        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
-        {
-            String line;
-            while ((line = reader.readLine()) != null)
-            {
-                output.append(line).append("\n");
-            }
-        }
-
-        final int exitCode = process.waitFor();
-        Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+        runNodeScript(nodeTestScript, "Node script execution failed");
     }
 
     @Test
@@ -3407,22 +3600,7 @@ public final class StaticResourceSyntaxTest
             "}\n" +
             "sandbox.stopLiveStepRefreshTimer();\n";
 
-        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
-        pb.redirectErrorStream(true);
-        final Process process = pb.start();
-
-        final StringBuilder output = new StringBuilder();
-        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
-        {
-            String line;
-            while ((line = reader.readLine()) != null)
-            {
-                output.append(line).append("\n");
-            }
-        }
-
-        final int exitCode = process.waitFor();
-        Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+        runNodeScript(nodeTestScript, "Node script execution failed");
     }
 
     @Test
@@ -3459,144 +3637,134 @@ public final class StaticResourceSyntaxTest
         );
     }
 
-    /**
-     * Automated regression safety net verifying that dashboard-runner.js correctly filters
-     * terminal log lines: retaining modern AI events (thoughts, tool calls, results, turns) and
-     * continuation lines while suppressing Maven noise, JVM warnings, and tool schema dumps.
-     *
-     * @throws Exception
-     *             if Node execution or verification fails
-     * @author AI-generated: Gemini 3.8 Flash
-     * @author Xceptance GmbH 2026
-     */
     @Test
-    public void testDashboardRunnerAiLogFilter() throws Exception
+    public void testResponsibilityTableOmitsPesapAndParsesModernBuckets() throws Exception
     {
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist");
+
         if (!isNodeAvailable())
         {
             return;
         }
 
-        final Path runnerPath = Paths.get("src/main/resources/static/dashboard-runner.js");
-        Assertions.assertTrue(Files.exists(runnerPath), "dashboard-runner.js must exist: " + runnerPath.toAbsolutePath());
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const sandbox = {\n" +
+            "    console,\n" +
+            "    window: {},\n" +
+            "    document: {\n" +
+            "        readyState: 'complete',\n" +
+            "        getElementById: () => null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {}, contains: () => true }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "vm.runInNewContext(code, sandbox);\n" +
+            "const respJson = JSON.stringify({\n" +
+            "    action: { calls: 10, inputTokens: 50000, outputTokens: 500, cachedTokens: 1000, totalTokens: 50500, estimatedCostUsd: 0.015 },\n" +
+            "    verification: { calls: 5, inputTokens: 20000, outputTokens: 200, cachedTokens: 500, totalTokens: 20200, estimatedCostUsd: 0.006 },\n" +
+            "    judge: { calls: 2, inputTokens: 5000, outputTokens: 50, cachedTokens: 0, totalTokens: 5050, estimatedCostUsd: 0.0015 },\n" +
+            "    visualRca: { calls: 0, inputTokens: 0, outputTokens: 0, cachedTokens: 0, totalTokens: 0, estimatedCostUsd: 0 }\n" +
+            "});\n" +
+            "const buckets = sandbox.parseResponsibilityBuckets(respJson);\n" +
+            "if (!buckets) throw new Error('parseResponsibilityBuckets should successfully parse modern categories without pesap');\n" +
+            "if (!buckets.total || buckets.total.calls !== 17) throw new Error('Calculated total calls should be 17, got: ' + JSON.stringify(buckets.total));\n" +
+            "if (buckets.pesap) throw new Error('buckets should not contain pesap');\n" +
+            "const tbody = { innerHTML: '' };\n" +
+            "sandbox.renderLlmResponsibilityRows(tbody, respJson, null);\n" +
+            "if (tbody.innerHTML.includes('PESAP')) throw new Error('renderLlmResponsibilityRows should not contain PESAP');\n" +
+            "if (!tbody.innerHTML.includes('Action (Standard Generation)')) throw new Error('renderLlmResponsibilityRows should contain Action');\n" +
+            "const heuristicHtml = sandbox.renderHeuristicLlmRows({ totalCalls: 10, totalTokens: 5000, inputTokens: 4000, outputTokens: 1000, cachedTokens: 0, cost: 0.01 });\n" +
+            "if (heuristicHtml.includes('PESAP')) throw new Error('renderHeuristicLlmRows should not contain PESAP');\n" +
+            "if (!heuristicHtml.includes('Action (Standard Generation)')) throw new Error('renderHeuristicLlmRows should contain Action');\n" +
+            "sandbox.stopLiveStepRefreshTimer();\n";
+
+        runNodeScript(nodeTestScript, "Responsibility table evaluation script failed");
+    }
+
+    @Test
+    public void testSyncRowAiUsageRecursivelyTraversesSubStepsAndPreFlightCalls() throws Exception
+    {
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist");
+
+        if (!isNodeAvailable())
+        {
+            return;
+        }
 
         final String nodeTestScript =
             "const fs = require('fs');\n" +
             "const vm = require('vm');\n" +
-            "const runnerCode = fs.readFileSync('" + runnerPath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
             "const sandbox = {\n" +
             "    console,\n" +
-            "    window: { addEventListener: () => {} },\n" +
+            "    window: {},\n" +
             "    document: {\n" +
-            "        getElementById: () => ({ innerHTML: '', querySelectorAll: () => [], insertAdjacentHTML: () => {} }),\n" +
+            "        readyState: 'complete',\n" +
+            "        getElementById: () => null,\n" +
             "        querySelectorAll: () => [],\n" +
             "        querySelector: () => null,\n" +
-            "        addEventListener: () => {}\n" +
-            "    },\n" +
-            "    localStorage: { getItem: () => null, setItem: () => {} },\n" +
-            "    setTimeout: () => {}\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {}, contains: () => true }\n" +
+            "    }\n" +
             "};\n" +
-            "sandbox.window.document = sandbox.document;\n" +
-            "sandbox.window.localStorage = sandbox.localStorage;\n" +
-            "vm.runInNewContext(runnerCode, sandbox);\n" +
-            "const isAiLogLine = sandbox.window.isAiLogLine;\n" +
-            "const aiLines = [\n" +
-            "    '13:30:00 ╔════════════════════════════════════════════════════════════════════════════════════',\n" +
-            "    '13:30:00 ║ 🚀 STARTING TEST CASE: cart/add_item.yaml',\n" +
-            "    '13:30:00 ╚════════════════════════════════════════════════════════════════════════════════════',\n" +
-            "    '13:30:00 ────────────────────────────────────────────────────────────────────────────────',\n" +
-            "    '13:30:01 🤖 Agent Turn #1 (max: 25) | Step: \"Search for jeans\"',\n" +
-            "    '13:30:03 💭 Thought:',\n" +
-            "    '13:30:03 🔧 Tool Call: type',\n" +
-            "    '13:30:04 📥 Result [type]: 🏁 SUCCESS - typed into \\'#search\\'',\n" +
-            "    '13:30:10 🎯 Goal Accomplished: Found jeans (Turns: 1, Executed Calls: 1)',\n" +
-            "    '13:30:10 📊 Tokens: 1,200 in (800 cached) → 45 out (total: 1,245) | Turn 1',\n" +
-            "    '13:30:10 ║ 🏁 TEST CASE COMPLETED: SUCCESS',\n" +
-            "    '13:30:10 🚨 [Visual RCA Diagnosis]: Button was covered by banner',\n" +
-            "    '13:30:10 ⚖️ Quality Judge advised retry'\n" +
-            "];\n" +
-            "for (const line of aiLines) {\n" +
-            "    if (!isAiLogLine(line, false)) {\n" +
-            "        throw new Error('Expected AI line to match: ' + line);\n" +
-            "    }\n" +
-            "}\n" +
-            "if (!isAiLogLine('   I will search for jeans and submit the query.', true)) {\n" +
-            "    throw new Error('Expected thought continuation to match');\n" +
-            "}\n" +
-            "if (!isAiLogLine('   • target: #search-input', true)) {\n" +
-            "    throw new Error('Expected tool call argument continuation to match');\n" +
-            "}\n" +
-            "if (isAiLogLine('   I will search for jeans and submit the query.', false)) {\n" +
-            "    throw new Error('Expected unanchored indented line to NOT match when previous was not AI');\n" +
-            "}\n" +
-            "const allowsAiContinuation = sandbox.window.allowsAiContinuation;\n" +
-            "if (typeof allowsAiContinuation !== 'function') {\n" +
-            "    throw new Error('Expected window.allowsAiContinuation to be defined');\n" +
-            "}\n" +
-            "if (allowsAiContinuation('16:17:11 🤖 Agent Turn #1 (max: 15) | Step: \"Search jeans\"')) {\n" +
-            "    throw new Error('Agent Turn header should NOT allow continuation lines');\n" +
-            "}\n" +
-            "if (!allowsAiContinuation('16:17:12 💭 Thought:')) {\n" +
-            "    throw new Error('Thought header should allow continuation lines');\n" +
-            "}\n" +
-            "if (!allowsAiContinuation('16:17:13 🔧 Tool Call: fill')) {\n" +
-            "    throw new Error('Tool Call header should allow continuation lines');\n" +
-            "}\n" +
-            "const wireLines = [\n" +
-            "    '      \"text\" : \"You are an autonomous web testing agent. Execute the test instruction...\",',\n" +
-            "    '      \"role\" : \"user\",',\n" +
-            "    '      \"parts\" : [',\n" +
-            "    '  {',\n" +
-            "    '  }',\n" +
-            "    'Request:',\n" +
-            "    'Response:',\n" +
-            "    'Host: generativelanguage.googleapis.com',\n" +
-            "    'Content-Type: application/json',\n" +
-            "    '- method: POST',\n" +
-            "    '16:17:11 [DEBUG] dev.langchain4j.http.client.log.LoggingHttpClient - Request:'\n" +
-            "];\n" +
-            "for (const wireLine of wireLines) {\n" +
-            "    if (isAiLogLine(wireLine, true)) {\n" +
-            "        throw new Error('Expected wire log line to be suppressed even with previousWasAi=true: ' + wireLine);\n" +
-            "    }\n" +
-            "}\n" +
-            "const noiseLines = [\n" +
-            "    '[INFO] Scanning for projects...',\n" +
-            "    '[INFO] Compiling 758 source files with javac [debug target 17] to target/test-classes',\n" +
-            "    'WARNING: A terminally deprecated method in sun.misc.Unsafe has been called',\n" +
-            "    'WARNING: sun.misc.Unsafe::objectFieldOffset has been called by ...',\n" +
-            "    'SLF4J(W): Class path contains multiple SLF4J providers.',\n" +
-            "    '[INFO] Running YAML Test: cart/add_item.yaml',\n" +
-            "    '[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0',\n" +
-            "    '[INFO] BUILD SUCCESS',\n" +
-            "    '[INFO] Total time: 12.5 s',\n" +
-            "    '13:30:00 [DEBUG] 🛠️ Available Native Tools (25):',\n" +
-            "    '    ActionTool(name=\"click\", description=\"Click an element\", params=...)',\n" +
-            "    'Conversation context for Turn #1:',\n" +
-            "    'This test uses Neodymium Library (version: ?.?.?)'\n" +
-            "];\n" +
-            "for (const line of noiseLines) {\n" +
-            "    if (isAiLogLine(line, false)) {\n" +
-            "        throw new Error('Expected noise line to be suppressed: ' + line);\n" +
-            "    }\n" +
-            "}\n";
+            "sandbox.window = sandbox;\n" +
+            "vm.runInNewContext(code, sandbox);\n" +
+            "const blocksObj = {\n" +
+            "    llmCalls: [\n" +
+            "        { id: 'pre-1', stepIndex: -1, inputTokens: 3474, outputTokens: 0, cachedTokens: 0, durationMs: 120 }\n" +
+            "    ],\n" +
+            "    steps: [\n" +
+            "        {\n" +
+            "            instruction: 'Step 1',\n" +
+            "            llmCalls: [\n" +
+            "                { id: 'call-1', stepIndex: 0, inputTokens: 10000, outputTokens: 100, cachedTokens: 1000, durationMs: 500 }\n" +
+            "            ]\n" +
+            "        },\n" +
+            "        {\n" +
+            "            instruction: 'Step 2 - fragment',\n" +
+            "            subSteps: [\n" +
+            "                {\n" +
+            "                    instruction: 'SubStep 2.1',\n" +
+            "                    llmCalls: [\n" +
+            "                        { id: 'sub-call-1', stepIndex: 1, subStepIndex: 0, inputTokens: 20000, outputTokens: 200, cachedTokens: 2000, durationMs: 600 }\n" +
+            "                    ]\n" +
+            "                },\n" +
+            "                {\n" +
+            "                    instruction: 'SubStep 2.2',\n" +
+            "                    llmCalls: [\n" +
+            "                        { id: 'sub-call-2', stepIndex: 1, subStepIndex: 1, inputTokens: 30000, outputTokens: 300, cachedTokens: 3000, durationMs: 700 }\n" +
+            "                    ]\n" +
+            "                }\n" +
+            "            ]\n" +
+            "        }\n" +
+            "    ]\n" +
+            "};\n" +
+            "const attributes = {\n" +
+            "    'data-blocks': JSON.stringify(blocksObj),\n" +
+            "    'data-steps': '{}'\n" +
+            "};\n" +
+            "const mockRow = {\n" +
+            "    getAttribute: (k) => attributes[k] || null,\n" +
+            "    setAttribute: (k, v) => { attributes[k] = String(v); },\n" +
+            "    querySelector: () => ({ innerHTML: '' })\n" +
+            "};\n" +
+            "const result = sandbox.syncRowAiUsage(mockRow);\n" +
+            "if (!result) throw new Error('syncRowAiUsage returned null');\n" +
+            "if (result.llmCalls !== 4) throw new Error('Expected 4 llmCalls, got: ' + result.llmCalls);\n" +
+            "if (result.inputTokens !== 63474) throw new Error('Expected 63474 inputTokens, got: ' + result.inputTokens);\n" +
+            "if (result.outputTokens !== 600) throw new Error('Expected 600 outputTokens, got: ' + result.outputTokens);\n" +
+            "if (result.cachedTokens !== 6000) throw new Error('Expected 6000 cachedTokens, got: ' + result.cachedTokens);\n" +
+            "sandbox.stopLiveStepRefreshTimer();\n";
 
-        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
-        pb.redirectErrorStream(true);
-        final Process process = pb.start();
-
-        final StringBuilder output = new StringBuilder();
-        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
-        {
-            String line;
-            while ((line = reader.readLine()) != null)
-            {
-                output.append(line).append("\n");
-            }
-        }
-
-        final int exitCode = process.waitFor();
-        Assertions.assertEquals(0, exitCode, "AI log filtering test failed:\n" + output);
+        runNodeScript(nodeTestScript, "syncRowAiUsage recursion evaluation script failed");
     }
 
     @Test

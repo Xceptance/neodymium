@@ -55,6 +55,8 @@ import org.neodymium.ai.model.UnresolvableVariableException;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.StepStats;
+import org.neodymium.ai.report.PreliminaryReportListener;
+import org.neodymium.ai.telemetry.TokenBudgetGuard;
 
 /**
  * Unit tests verifying static factory methods and execution on {@link AiSession}.
@@ -839,6 +841,34 @@ public class AiSessionTest
             Assertions.assertEquals(1, afterSteps.size(), "afterSteps must retain After 1");
             Assertions.assertEquals("After 1", afterSteps.get(0).getInstruction());
         }
+    }
+
+    @Test
+    @DisplayName("PreliminaryReportListener precedes TokenBudgetGuard in event listener registry")
+    public void testEventListenerOrderPreliminaryReportBeforeTokenBudgetGuard()
+    {
+        final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY);
+        final List<ExecutionListener> listeners = session.getEventBus().getListeners();
+
+        int reportIdx = -1;
+        int guardIdx = -1;
+        for (int i = 0; i < listeners.size(); i++)
+        {
+            final ExecutionListener l = listeners.get(i);
+            if (l instanceof PreliminaryReportListener)
+            {
+                reportIdx = i;
+            }
+            else if (l instanceof TokenBudgetGuard)
+            {
+                guardIdx = i;
+            }
+        }
+
+        Assertions.assertTrue(guardIdx >= 0, "TokenBudgetGuard must be registered");
+        Assertions.assertTrue(reportIdx >= 0, "PreliminaryReportListener must be registered");
+        Assertions.assertTrue(reportIdx < guardIdx,
+            "PreliminaryReportListener must precede TokenBudgetGuard so breaching turn is recorded before budget abort");
     }
 
     private static class LegacyCustomSession extends AiSession
