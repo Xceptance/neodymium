@@ -52,8 +52,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
+import org.springframework.core.io.support.ResourceRegion;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpRange;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -84,6 +90,9 @@ public class AuraReportViewController
     private final TestBaseVariationRepository variationRepository;
     private final TestBaseBugRepository bugRepository;
     private final ObjectMapper objectMapper;
+
+    @Value("${aura.report.storage.runs.base-dir:storage/runs}")
+    private String runsBaseDir = "storage/runs";
 
     public AuraReportViewController(
         final AuraReportDataService dataService,
@@ -621,59 +630,163 @@ public class AuraReportViewController
         return ResponseEntity.ok(exec);
     }
 
-    @GetMapping("/api/runs/{runId}/{testClass}/{filename:.+}")
-    @ResponseBody
-    public ResponseEntity<Resource> serveRunFile(
-        @PathVariable("runId") final String runId,
-        @PathVariable("testClass") final String testClass,
-        @PathVariable("filename") final String filename)
+    void setRunsBaseDir(final String runsBaseDir)
     {
-        final Path filePath = Paths.get("storage/runs", runId, testClass, filename);
-        if (!Files.exists(filePath) || !Files.isReadable(filePath))
-        {
-            final Path defaultPath = Paths.get("target/aura-sandbox/allure-results", filename);
-            if (Files.exists(defaultPath) && Files.isReadable(defaultPath))
-            {
-                return servePath(defaultPath, filename);
-            }
-            return ResponseEntity.notFound().build();
-        }
-        return servePath(filePath, filename);
+        this.runsBaseDir = runsBaseDir;
     }
 
-    private ResponseEntity<Resource> servePath(final Path path, final String filename)
+    public ResponseEntity<?> serveRunFile(
+        final String runId,
+        final String testClass,
+        final String filename)
+    {
+        return serveRunFile(runId, testClass, filename, null);
+    }
+
+    @GetMapping("/api/runs/{runId}/{testClass}/{filename:.+}")
+    @ResponseBody
+    public ResponseEntity<?> serveRunFile(
+        @PathVariable("runId") final String runId,
+        @PathVariable("testClass") final String testClass,
+        @PathVariable("filename") final String filename,
+        @RequestHeader(value = HttpHeaders.RANGE, required = false) final String rangeHeader)
+    {
+        final String effectiveBaseDir = (runsBaseDir != null && !runsBaseDir.isBlank()) ? runsBaseDir : "storage/runs";
+        final Path baseStoragePath = Paths.get(effectiveBaseDir).toAbsolutePath().normalize();
+
+        Path candidate = resolveSafePath(baseStoragePath, runId, testClass, filename);
+        if (candidate != null)
+        {
+            return servePath(candidate, filename, rangeHeader);
+        }
+
+        final String normalizedClass = normalizeClassName(testClass);
+        if (normalizedClass != null && !normalizedClass.equals(testClass))
+        {
+            candidate = resolveSafePath(baseStoragePath, runId, normalizedClass, filename);
+            if (candidate != null)
+            {
+                return servePath(candidate, filename, rangeHeader);
+            }
+        }
+
+        return ResponseEntity.notFound().build();
+    }
+
+    private String normalizeClassName(final String rawClass)
+    {
+        if (rawClass == null || rawClass.isBlank())
+        {
+            return rawClass;
+        }
+        String normalized = rawClass.trim();
+        if (normalized.contains("#"))
+        {
+            normalized = normalized.substring(0, normalized.indexOf('#'));
+        }
+        if (normalized.contains(".") && !normalized.endsWith("."))
+        {
+            normalized = normalized.substring(normalized.lastIndexOf('.') + 1);
+        }
+        return normalized.trim();
+    }
+
+    private Path resolveSafePath(final Path baseDir, final String runId, final String className, final String filename)
+    {
+        if (runId == null || className == null || filename == null)
+        {
+            return null;
+        }
+        if (runId.contains("..") || className.contains("..") || filename.contains("..")
+            || runId.contains("/") || runId.contains("\\")
+            || className.contains("/") || className.contains("\\")
+            || filename.contains("/") || filename.contains("\\"))
+        {
+            return null;
+        }
+        final Path resolved = baseDir.resolve(Paths.get(runId, className, filename)).normalize();
+        if (!resolved.startsWith(baseDir))
+        {
+            return null;
+        }
+        return (Files.isRegularFile(resolved) && Files.isReadable(resolved)) ? resolved : null;
+    }
+
+    private ResponseEntity<?> servePath(final Path path, final String filename, final String rangeHeader)
     {
         try
         {
             final Resource resource = new UrlResource(path.toUri());
+            final String lowerName = filename.toLowerCase();
             String contentType = "application/octet-stream";
-            if (filename.endsWith(".mp4"))
+            if (lowerName.endsWith(".mp4"))
             {
                 contentType = "video/mp4";
             }
-            else if (filename.endsWith(".webm"))
+            else if (lowerName.endsWith(".webm"))
             {
                 contentType = "video/webm";
             }
-            else if (filename.endsWith(".png"))
+            else if (lowerName.endsWith(".png"))
             {
                 contentType = "image/png";
             }
-            else if (filename.endsWith(".html"))
+            else if (lowerName.endsWith(".gif"))
+            {
+                contentType = "image/gif";
+            }
+            else if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg"))
+            {
+                contentType = "image/jpeg";
+            }
+            else if (lowerName.endsWith(".html"))
             {
                 contentType = "text/html";
             }
-            else if (filename.endsWith(".json"))
+            else if (lowerName.endsWith(".json"))
             {
                 contentType = "application/json";
             }
+
+            final ContentDisposition disposition = ContentDisposition.inline()
+                .filename(filename, StandardCharsets.UTF_8)
+                .build();
+
+            if (rangeHeader != null && !rangeHeader.isBlank())
+            {
+                try
+                {
+                    final List<HttpRange> ranges = HttpRange.parseRanges(rangeHeader);
+                    if (!ranges.isEmpty())
+                    {
+                        final HttpRange range = ranges.get(0);
+                        final ResourceRegion region = range.toResourceRegion(resource);
+                        return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
+                            .contentType(MediaType.parseMediaType(contentType))
+                            .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                            .header("X-Content-Type-Options", "nosniff")
+                            .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                            .body(region);
+                    }
+                }
+                catch (final IllegalArgumentException e)
+                {
+                    return ResponseEntity.status(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                        .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                        .build();
+                }
+            }
+
             return ResponseEntity.ok()
-                    .contentType(MediaType.parseMediaType(contentType))
-                    .body(resource);
+                .contentType(MediaType.parseMediaType(contentType))
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .header("X-Content-Type-Options", "nosniff")
+                .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                .body(resource);
         }
         catch (final Exception e)
         {
-            return ResponseEntity.internalServerError().build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 

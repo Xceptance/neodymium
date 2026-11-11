@@ -4734,7 +4734,7 @@ function renderStepsForExecution(activeRow) {
             videoPreviewBox.style.display = 'flex';
         }
         const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '');
-        const testClass = activeRow.getAttribute('data-test-class') || activeRow.getAttribute('data-test-name') || activeRow.getAttribute('data-class-name') || '';
+        const testClass = resolveSimpleTestClassName(activeRow);
         const src = (videoUrlAttr.startsWith('http') || videoUrlAttr.startsWith('/'))
             ? videoUrlAttr
             : `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(videoUrlAttr)}`;
@@ -4773,21 +4773,46 @@ function renderStepsForExecution(activeRow) {
     }
 }
 
+function resolveSimpleTestClassName(element) {
+    if (!element) return '';
+    let name = element.getAttribute('data-test-class') || element.getAttribute('data-test-name') || element.getAttribute('data-class-name') || '';
+    if (!name || typeof name !== 'string') return '';
+    name = name.trim();
+    if (name.includes('#')) {
+        name = name.substring(0, name.indexOf('#'));
+    }
+    if (name.includes('.') && !name.endsWith('.')) {
+        name = name.substring(name.lastIndexOf('.') + 1);
+    }
+    return name.trim();
+}
+
 function openAttachmentWindow(type, url) {
-    if (!url) return;
-    let targetUrl = url;
-    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://') && !targetUrl.startsWith('/api/')) {
-        const activeRow = document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row');
-        if (activeRow) {
-            const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '');
-            const testClass = activeRow.getAttribute('data-test-class') || activeRow.getAttribute('data-test-name') || activeRow.getAttribute('data-class-name') || '';
-            const filename = activeRow.getAttribute('data-video-url') || url;
-            if (filename.startsWith('http') || filename.startsWith('/')) {
-                targetUrl = filename;
-            } else {
-                targetUrl = `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(filename)}`;
-            }
-        }
+    const activeRow = (typeof currentActiveRowId !== 'undefined' && currentActiveRowId)
+        ? (document.getElementById(currentActiveRowId) || document.querySelector(`[data-row-id="${currentActiveRowId}"]`))
+        : document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row');
+
+    let filename = (url && typeof url === 'string' && url.trim().length > 0) ? url.trim() : '';
+    if (!filename && type === 'video' && activeRow) {
+        filename = activeRow.getAttribute('data-video-url') || '';
+    }
+    if (!filename) return;
+
+    let targetUrl = filename;
+    const isAbsolute = targetUrl.startsWith('/')
+        || targetUrl.startsWith('http://')
+        || targetUrl.startsWith('https://')
+        || targetUrl.startsWith('data:')
+        || targetUrl.startsWith('blob:');
+
+    if (!isAbsolute) {
+        const runId = (typeof resolveActiveRunId === 'function')
+            ? resolveActiveRunId(null, activeRow)
+            : ((activeRow ? activeRow.getAttribute('data-run-id') : '') || (typeof activeRunId !== 'undefined' ? activeRunId : ''));
+        if (!runId || runId === '#RUN_ID') return;
+
+        const testClass = resolveSimpleTestClassName(activeRow);
+        targetUrl = `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(filename)}`;
     }
     window.open(targetUrl, '_blank', 'width=1000,height=700,resizable=yes,scrollbars=yes');
 }
