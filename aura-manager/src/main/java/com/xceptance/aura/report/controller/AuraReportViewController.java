@@ -629,16 +629,38 @@ public class AuraReportViewController
         @PathVariable("filename") final String filename)
     {
         final Path filePath = Paths.get("storage/runs", runId, testClass, filename);
-        if (!Files.exists(filePath) || !Files.isReadable(filePath))
+        if (Files.exists(filePath) && Files.isReadable(filePath))
         {
-            final Path defaultPath = Paths.get("target/aura-sandbox/allure-results", filename);
-            if (Files.exists(defaultPath) && Files.isReadable(defaultPath))
-            {
-                return servePath(defaultPath, filename);
-            }
-            return ResponseEntity.notFound().build();
+            return servePath(filePath, filename);
         }
-        return servePath(filePath, filename);
+
+        if (testClass.contains("."))
+        {
+            final String simpleClass = testClass.substring(testClass.lastIndexOf('.') + 1);
+            final Path simplePath = Paths.get("storage/runs", runId, simpleClass, filename);
+            if (Files.exists(simplePath) && Files.isReadable(simplePath))
+            {
+                return servePath(simplePath, filename);
+            }
+        }
+
+        final Path runSandboxPath = Paths.get("target/aura-sandbox/allure-results", runId, testClass, filename);
+        if (Files.exists(runSandboxPath) && Files.isReadable(runSandboxPath))
+        {
+            return servePath(runSandboxPath, filename);
+        }
+
+        if (testClass.contains("."))
+        {
+            final String simpleClass = testClass.substring(testClass.lastIndexOf('.') + 1);
+            final Path simpleSandboxPath = Paths.get("target/aura-sandbox/allure-results", runId, simpleClass, filename);
+            if (Files.exists(simpleSandboxPath) && Files.isReadable(simpleSandboxPath))
+            {
+                return servePath(simpleSandboxPath, filename);
+            }
+        }
+
+        return ResponseEntity.notFound().build();
     }
 
     private ResponseEntity<Resource> servePath(final Path path, final String filename)

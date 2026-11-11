@@ -48,6 +48,16 @@ public class VideoWriter implements Writer
     private Process p;
 
     /**
+     * Returns the underlying {@link ProcessBuilder} configured for FFmpeg execution.
+     *
+     * @return the configured ProcessBuilder
+     */
+    public ProcessBuilder getProcessBuilder()
+    {
+        return pb;
+    }
+
+    /**
      * Required to instantiate the object in the {@link Writer#instantiate(Class, RecordingConfigurations, String)}
      * method.
      * <p>
@@ -78,7 +88,7 @@ public class VideoWriter implements Writer
 
         this.videoFileName = videoFileName;
         pb = new ProcessBuilder(((VideoRecordingConfigurations) recordingConfigurations).ffmpegBinaryPath(), "-y", "-f", "image2pipe", "-r", Fraction.getFraction(framerate)
-                                                                                                                                                     .toString(), "-i", "pipe:0", "-c:v", "libx264", "-strict", "-2", "-preset", "slow", "-pix_fmt", "yuv420p", "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-f", "mp4", videoFileName);
+                                                                                                                                                     .toString(), "-i", "pipe:0", "-c:v", "libx264", "-strict", "-2", "-preset", "slow", "-pix_fmt", "yuv420p", "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-movflags", "+faststart", "-f", "mp4", videoFileName);
         pb.redirectErrorStream(true);
         pb.redirectOutput(Redirect.appendTo(new File((this.recordingConfigurations).ffmpegLogFile())));
     }
@@ -151,7 +161,7 @@ public class VideoWriter implements Writer
         File tempFile = new File(recordingConfigurations.tempFolderToStoreRecording() + "/" + "temp" + UUID.randomUUID() + ".mp4");
         new File(videoFileName).renameTo(tempFile);
         double actualFramerate = screenshots / ((double) testDuration / 1000);
-        pb = new ProcessBuilder(recordingConfigurations.ffmpegBinaryPath(), "-y", "-r", actualFramerate + "", "-i", tempFile.getPath(), videoFileName);
+        pb = new ProcessBuilder(recordingConfigurations.ffmpegBinaryPath(), "-y", "-r", actualFramerate + "", "-i", tempFile.getPath(), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", videoFileName);
 
         pb.redirectErrorStream(true);
         pb.redirectOutput(Redirect.appendTo(new File((this.recordingConfigurations).ffmpegLogFile())));

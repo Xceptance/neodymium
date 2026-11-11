@@ -33,6 +33,9 @@ import com.xceptance.aura.report.repository.TestBatchRepository;
 import com.xceptance.aura.report.repository.TestRunRepository;
 import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.RunStorageSyncService;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -42,6 +45,9 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.ui.Model;
 
@@ -562,5 +568,46 @@ public class AuraReportViewControllerTest
         Assertions.assertEquals("fragments/test-base :: testBase", view);
         Assertions.assertEquals("CheckoutTest", model.getAttribute("targetTestName"));
         Mockito.verify(dataService).removeRunFromHistory("RUN-300");
+    }
+
+    @Test
+    public void testServeRunFileWithFqcnNormalizedToSimpleClassName() throws Exception
+    {
+        final String runId = "test_run_fqcn_" + System.currentTimeMillis();
+        final Path dir = Paths.get("storage/runs", runId, "SampleTestClass");
+        Files.createDirectories(dir);
+        final Path videoFile = dir.resolve("video-1.mp4");
+        Files.writeString(videoFile, "dummy video data");
+
+        try
+        {
+            final ResponseEntity<Resource> response = controller.serveRunFile(
+                runId,
+                "com.xceptance.neodymium.aura.sandbox.SampleTestClass",
+                "video-1.mp4"
+            );
+
+            Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+            Assertions.assertNotNull(response.getBody());
+            Assertions.assertEquals("video/mp4", response.getHeaders().getContentType().toString());
+        }
+        finally
+        {
+            Files.deleteIfExists(videoFile);
+            Files.deleteIfExists(dir);
+            Files.deleteIfExists(Paths.get("storage/runs", runId));
+        }
+    }
+
+    @Test
+    public void testServeRunFileNotFoundReturns404()
+    {
+        final ResponseEntity<Resource> response = controller.serveRunFile(
+            "non_existent_run",
+            "com.xceptance.neodymium.aura.sandbox.NonExistentTest",
+            "video-1.mp4"
+        );
+
+        Assertions.assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
     }
 }
