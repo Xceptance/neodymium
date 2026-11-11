@@ -25,9 +25,15 @@ import com.xceptance.aura.report.dto.widget.WidgetPointScope;
 import com.xceptance.aura.report.dto.widget.WidgetPresentation;
 import com.xceptance.aura.report.dto.widget.WidgetTrendMode;
 import com.xceptance.aura.report.dto.widget.WidgetValueFormat;
+import com.xceptance.aura.report.dto.RunReportDto;
+import com.xceptance.aura.report.dto.TestExecutionDto;
+import com.xceptance.aura.report.entity.TestRunEntity;
+import com.xceptance.aura.report.repository.TestRunRepository;
+import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.ReportDashboardSettingService;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -59,19 +65,39 @@ public final class CustomDashboardViewControllerIntegrationTest
     @Autowired
     private ReportDashboardSettingService dashboardSettingService;
 
+    @Autowired
+    private TestRunRepository runRepository;
+
+    @Autowired
+    private AuraReportDataService dataService;
+
     private MockMvc mockMvc;
     private final List<String> createdPageIds = new ArrayList<>();
+    private final List<String> createdRunIds = new ArrayList<>();
 
     @BeforeEach
     public final void setUp()
     {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
         createdPageIds.clear();
+        createdRunIds.clear();
     }
 
     @AfterEach
     public final void tearDown()
     {
+        for (final String runId : createdRunIds)
+        {
+            try
+            {
+                dataService.removeRunFromHistory(runId);
+                runRepository.deleteById(runId);
+            }
+            catch (final Exception ignored)
+            {
+                // Cleanup best-effort
+            }
+        }
         for (final String pageId : createdPageIds)
         {
             try
@@ -616,6 +642,93 @@ public final class CustomDashboardViewControllerIntegrationTest
         Assertions.assertEquals(2, afterWidgets.size(), "Widgets must remain separate and not combined");
         Assertions.assertFalse(afterWidgets.get(0).isContainer(), "First widget must remain standalone");
         Assertions.assertFalse(afterWidgets.get(1).isContainer(), "Second widget must remain standalone");
+    }
+
+    @Test
+    public final void testGroupDashboardCardsRenderHealedAndAiPatternSvg() throws Exception
+    {
+        final String runId = "run-pattern-test-" + System.currentTimeMillis();
+        final String batchName = "PatternBatch";
+        final String browser = "Chrome";
+        final long startTime = System.currentTimeMillis();
+
+        final TestRunEntity runEntity = new TestRunEntity(
+            runId, batchName, "COMPLETED", "Trigger", "Staging", "US", browser, "2026-11-10 14:00:00", startTime
+        );
+        runEntity.setTotalTests(2);
+        runEntity.setPassedCount(2);
+        runEntity.setBrowsersCsv(browser);
+        runEntity.setLocalesCsv("US");
+        runEntity.setEnvironment("Staging");
+        runRepository.save(runEntity);
+        createdRunIds.add(runId);
+
+        final TestExecutionDto healedExec = new TestExecutionDto(
+            "exec-healed-1", runId, "com.xceptance.neodymium.test.HealedTest", "testHealed",
+            "HealedTest testHealed", "HealedTest testHealed", null, null, "passed", "Java",
+            "US", "US", browser, "NONE", List.of(), null, "Browsing (default)", List.of(),
+            Map.of(), Map.of(), null, null, null, null, "JAVA", "JAVA", "14:00:00", "2026-11-10",
+            "14:00:00", startTime, 1, 0, 1000L, "1.0s", 0, 0L, 0.0, null, null, null,
+            null, null, null, null, true, null, null, Map.of()
+        );
+        healedExec.setHealed(true);
+
+        final TestExecutionDto aiExec = new TestExecutionDto(
+            "exec-ai-1", runId, "com.xceptance.neodymium.test.AiTest", "testAi",
+            "AiTest testAi", "AiTest testAi", null, null, "passed", "Java",
+            "US", "US", browser, "NONE", List.of(), null, "Browsing (default)", List.of(),
+            Map.of(), Map.of(), null, null, null, null, "AI", "AI", "14:00:00", "2026-11-10",
+            "14:00:00", startTime, 1, 0, 1000L, "1.0s", 1, 100L, 0.001, null, null, null,
+            null, null, null, null, false, null, null, Map.of()
+        );
+        aiExec.setExecutionMode("AI");
+
+        final RunReportDto report = new RunReportDto(
+            runId, batchName, "2026-11-10 14:00:00", "1.0s", 2,
+            2, 0, 0, 0, 0, List.of(healedExec, aiExec)
+        );
+        dataService.saveRunReportToDisk(runId, report);
+
+        final DashboardPageConfigDto groupPage = dashboardSettingService.createGroupDashboard(
+            "Pattern Test Dashboard",
+            "browser",
+            WidgetPointScope.LATEST_TEST_STATUS,
+            List.of("browser"),
+            null,
+            List.of(browser)
+        );
+        createdPageIds.add(groupPage.getId());
+
+        final MvcResult mvcResult = mockMvc.perform(MockMvcRequestBuilders.get("/dashboard-pages/" + groupPage.getId())
+                .header("HX-Request", "true"))
+            .andExpect(MockMvcResultMatchers.status().isOk())
+            .andExpect(MockMvcResultMatchers.view().name("fragments/custom-dashboard-page :: customDashboardPage"))
+            .andReturn();
+
+        final String content = mvcResult.getResponse().getContentAsString();
+
+        // 1. Verify SVG viewBox and overflow
+        Assertions.assertTrue(content.contains("viewBox=\"-2 -2 40 40\""), "Must use extended viewBox to prevent clipping");
+        Assertions.assertTrue(content.contains("overflow: visible"), "Must have overflow visible on SVG");
+
+        // 2. Verify sparkle pattern definition with rotation
+        Assertions.assertTrue(content.contains("sparkle-pat-group-"), "Must define sparkle pattern for grouping card");
+        Assertions.assertTrue(content.contains("patternTransform=\"rotate(25)\""), "Sparkle pattern must rotate 25deg");
+
+        // 3. Verify AI pattern definition with rotation
+        Assertions.assertTrue(content.contains("ai-pat-group-"), "Must define AI stripes pattern for grouping card");
+        Assertions.assertTrue(content.contains("patternTransform=\"rotate(45)\""), "AI pattern must rotate 45deg");
+
+        // 4. Verify circles with appropriate classes and stroke references
+        Assertions.assertTrue(content.contains("class=\"pie-slice-healed\""), "Must contain pie-slice-healed circle");
+        Assertions.assertTrue(content.contains("class=\"pie-slice-sparkle\""), "Must contain pie-slice-sparkle circle");
+        Assertions.assertTrue(content.contains("class=\"pie-slice-ai\""), "Must contain pie-slice-ai circle");
+        Assertions.assertTrue(content.contains("class=\"pie-slice-stripes\""), "Must contain pie-slice-stripes circle");
+        Assertions.assertTrue(content.contains("stroke=\"url(#sparkle-pat-group-"), "Must reference sparkle pattern in stroke");
+        Assertions.assertTrue(content.contains("stroke=\"url(#ai-pat-group-"), "Must reference AI pattern in stroke");
+
+        // 5. Verify pointer-events="none" on overlay elements
+        Assertions.assertTrue(content.contains("pointer-events=\"none\""), "Overlay pattern circles must have pointer-events none");
     }
 
     private static String extractIdFromJson(final String json)
