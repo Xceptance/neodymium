@@ -30,27 +30,8 @@
             </a>
         </nav>
 
-        <div class="nav-group-label" style="margin-top: 1rem;">Analytics & Reports</div>
-        <nav>
-            <a class="nav-item-btn" id="navRunsList" 
-               th:classappend="${activeTab == 'Directory'} ? ' active' : ''"
-               href="/" 
-               onclick="setActiveNavBtn(this)"
-               title="Overview of Runs">
-                <span class="material-symbols-outlined">format_list_bulleted</span> <span class="nav-label">Run History</span>
-            </a>
-
-            <a class="nav-item-btn" id="navTestBase" 
-               th:classappend="${activeTab == 'TestBase'} ? ' active' : ''"
-               href="/test-base" 
-               onclick="setActiveNavBtn(this)"
-               title="Comprehensive Test Base">
-                <span class="material-symbols-outlined">database</span> <span class="nav-label">Test Base</span>
-            </a>
-        </nav>
-
         <div class="nav-group-label d-flex align-items-center justify-content-between" style="margin-top: 1rem;">
-            <span>Custom Dashboards</span>
+            <span>Dashboards</span>
             <button type="button" class="btn-sidebar-add-page" onclick="openCreatePageModal(event)" title="Create New Dashboard Page">
                 <span class="material-symbols-outlined" style="font-size: 15px;">add</span>
             </button>
@@ -64,6 +45,8 @@
         </nav>
 
         <a class="run-context-card" id="sidebarContextCard" 
+           th:fragment="sidebarContextCard"
+           th:attr="hx-swap-oob=${isHxRequest == true ? 'true' : null}"
            th:style="${(activeRunId != null and !activeRunId.isEmpty()) ? 'text-decoration: none; cursor: pointer; display: flex;' : 'text-decoration: none; cursor: pointer; display: none;'}"
            th:href="${(activeRunReportUrl != null and !activeRunReportUrl.isEmpty()) ? activeRunReportUrl : ((activeRunId != null and !activeRunId.isEmpty()) ? '/run-report?runId=' + activeRunId : '/')}" 
            href="/" 
@@ -76,17 +59,21 @@
                     <div class="pulse-dot" id="sidebarContextPulseDot" th:style="${running == true ? 'display: inline-block;' : 'display: none;'}"></div>
                     <span id="sidebarContextLabel">Active Run Context</span>
                 </div>
-                <div style="font-weight: 700; color: var(--text-main); margin-top: 0.2rem;" id="sidebarActiveBatchName" th:text="${activeBatchName ?: 'Default'}">Default</div>
+                <div style="font-weight: 700; color: var(--text-main); margin-top: 0.2rem;" id="sidebarActiveBatchName" th:if="${activeBatchName != null and !activeBatchName.isEmpty()}" th:text="${activeBatchName}"></div>
                 <div style="font-size: 0.72rem; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between;">
-                    <span id="sidebarActiveRunId" th:text="${activeRunId != null and !activeRunId.isEmpty() ? 'Run #' + activeRunId : 'Run #RUN_ID'}">Run #RUN_ID</span>
+                    <span id="sidebarActiveRunId" th:text="${activeRunId != null and !activeRunId.isEmpty() ? (activeRunId.startsWith('#') ? activeRunId : '#' + activeRunId) : '#RUN_ID'}">#RUN_ID</span>
                     <span class="tag-chip" id="sidebarActiveStatus" th:text="${activeRunStatus != null ? activeRunStatus : (activeEnv ?: 'Default')}">Default</span>
+                </div>
+                <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem; display: flex; align-items: center; gap: 0.35rem;" id="sidebarActiveProgressContainer" th:style="${activeRunProgress != null and !activeRunProgress.isEmpty() ? 'display: flex;' : 'display: none;'}">
+                    <span class="material-symbols-outlined" style="font-size: 0.8rem; color: var(--primary);">trending_up</span>
+                    <span id="sidebarActiveProgress" th:text="${activeRunProgress ?: ''}"></span>
                 </div>
             </div>
         </a>
     </div>
 </aside>
 
-<!-- Recursive Navigation Item Fragment for Custom Dashboards -->
+<!-- Recursive Navigation Item Fragment for Dashboards -->
 <th:block th:fragment="renderCustomPageNav(page, level)">
     <th:block th:if="${page != null}">
         <!-- Regular Page (not group parent) -->

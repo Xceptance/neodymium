@@ -525,8 +525,10 @@ public final class AuraManagerEditorUiTest
         stepContent.click();
         stepContent.sendKeys("Open https://xceptance.com");
 
-        // Click sidebar link to Run History (/report) while file is unsaved
-        $("#navRunsList").shouldBe(Condition.visible).click();
+        // Click sidebar link to a dashboard while file is unsaved
+        final SelenideElement firstDashboardLink = $("#customPagesNav a.nav-item-btn").shouldBe(Condition.visible);
+        final String targetDashboardUrl = firstDashboardLink.getAttribute("href");
+        firstDashboardLink.click();
 
         // Verify overlay modal opens with all 3 choices
         $("#unsavedChangesModal").shouldBe(Condition.visible);
@@ -540,12 +542,12 @@ public final class AuraManagerEditorUiTest
         $("#editorPanel").shouldBe(Condition.visible);
 
         // Click sidebar link again and choose Save changes & leave
-        $("#navRunsList").click();
+        $("#customPagesNav a.nav-item-btn").click();
         $("#unsavedChangesModal").shouldBe(Condition.visible);
         $("#unsavedChangesSaveBtn").click();
 
-        // Verify redirect to root Run History completes
-        Selenide.webdriver().shouldHave(WebDriverConditions.url("http://localhost:" + this.port + "/"));
+        // Verify redirect to target dashboard completes
+        Selenide.webdriver().shouldHave(WebDriverConditions.url(targetDashboardUrl));
     }
 
     @Test
@@ -2053,21 +2055,20 @@ public final class AuraManagerEditorUiTest
     }
 
     /**
-     * Verifies that accessing the root URL (/) renders the Run History view by default,
+     * Verifies that accessing the root URL (/) renders the first dashboard view by default on server start,
      * and clicking the Playbooks navigation link switches to the /playbooks dashboard.
      */
     @Test
-    public final void testRootUrlLoadsRunHistoryByDefaultAndNavigatesToPlaybooks()
+    public final void testRootUrlLoadsFirstDashboardByDefaultAndNavigatesToPlaybooks()
     {
         Selenide.open("http://localhost:" + this.port + "/");
-        $("#navRunsList").shouldHave(Condition.cssClass("active"));
+        $("#navRunsList").shouldNotBe(Condition.exist);
         $("#navAuraManager").shouldNotHave(Condition.cssClass("active"));
-        $("#pageRunsList").shouldBe(Condition.visible);
+        $("#pageCustomDashboard").shouldBe(Condition.visible);
 
         $("#navAuraManager").shouldBe(Condition.visible).click();
         Selenide.webdriver().shouldHave(WebDriverConditions.urlContaining("/playbooks"));
         $("#navAuraManager").shouldHave(Condition.cssClass("active"));
-        $("#navRunsList").shouldNotHave(Condition.cssClass("active"));
         $("#auraTestManagerWorkspace").shouldBe(Condition.visible);
     }
 
