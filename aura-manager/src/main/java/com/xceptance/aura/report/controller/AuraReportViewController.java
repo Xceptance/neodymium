@@ -637,10 +637,10 @@ public class AuraReportViewController
             return servePath(candidate, filename);
         }
 
-        if (testClass.contains(".") && !testClass.endsWith("."))
+        final String normalizedClass = normalizeClassName(testClass);
+        if (normalizedClass != null && !normalizedClass.equals(testClass))
         {
-            final String simpleClass = testClass.substring(testClass.lastIndexOf('.') + 1);
-            candidate = resolveSafePath(baseStoragePath, runId, simpleClass, filename);
+            candidate = resolveSafePath(baseStoragePath, runId, normalizedClass, filename);
             if (candidate != null)
             {
                 return servePath(candidate, filename);
@@ -653,10 +653,9 @@ public class AuraReportViewController
             return servePath(candidate, filename);
         }
 
-        if (testClass.contains(".") && !testClass.endsWith("."))
+        if (normalizedClass != null && !normalizedClass.equals(testClass))
         {
-            final String simpleClass = testClass.substring(testClass.lastIndexOf('.') + 1);
-            candidate = resolveSafePath(baseSandboxPath, runId, simpleClass, filename);
+            candidate = resolveSafePath(baseSandboxPath, runId, normalizedClass, filename);
             if (candidate != null)
             {
                 return servePath(candidate, filename);
@@ -666,6 +665,24 @@ public class AuraReportViewController
         return ResponseEntity.notFound().build();
     }
 
+    private String normalizeClassName(final String rawClass)
+    {
+        if (rawClass == null || rawClass.isBlank())
+        {
+            return rawClass;
+        }
+        String normalized = rawClass.trim();
+        if (normalized.contains("#"))
+        {
+            normalized = normalized.substring(0, normalized.indexOf('#'));
+        }
+        if (normalized.contains(".") && !normalized.endsWith("."))
+        {
+            normalized = normalized.substring(normalized.lastIndexOf('.') + 1);
+        }
+        return normalized.trim();
+    }
+
     private Path resolveSafePath(final Path baseDir, final String runId, final String className, final String filename)
     {
         final Path resolved = baseDir.resolve(Paths.get(runId, className, filename)).normalize();
@@ -673,7 +690,7 @@ public class AuraReportViewController
         {
             return null;
         }
-        return (Files.exists(resolved) && Files.isReadable(resolved)) ? resolved : null;
+        return (Files.isRegularFile(resolved) && Files.isReadable(resolved)) ? resolved : null;
     }
 
     private ResponseEntity<Resource> servePath(final Path path, final String filename)

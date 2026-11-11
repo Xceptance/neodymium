@@ -659,4 +659,59 @@ public class AuraReportViewControllerTest
             Files.deleteIfExists(Paths.get("storage/runs", runId));
         }
     }
+
+    @Test
+    public void testServeRunFileWithMethodSeparatorNormalizedToSimpleClassName() throws Exception
+    {
+        final String runId = "test_run_method_" + System.currentTimeMillis();
+        final Path dir = Paths.get("storage/runs", runId, "CheckoutTest");
+        Files.createDirectories(dir);
+        final Path videoFile = dir.resolve("video-1.mp4");
+        Files.writeString(videoFile, "dummy video data");
+
+        try
+        {
+            final ResponseEntity<Resource> response = controller.serveRunFile(
+                runId,
+                "com.xceptance.neodymium.CheckoutTest#testPaymentWithCreditCard",
+                "video-1.mp4"
+            );
+
+            Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+            Assertions.assertNotNull(response.getBody());
+            Assertions.assertEquals("video/mp4", response.getHeaders().getContentType().toString());
+        }
+        finally
+        {
+            Files.deleteIfExists(videoFile);
+            Files.deleteIfExists(dir);
+            Files.deleteIfExists(Paths.get("storage/runs", runId));
+        }
+    }
+
+    @Test
+    public void testServeRunFileDirectoryReturns404() throws Exception
+    {
+        final String runId = "test_run_dir_" + System.currentTimeMillis();
+        final Path classDir = Paths.get("storage/runs", runId, "SampleTestClass");
+        final Path subDir = classDir.resolve("subfolder");
+        Files.createDirectories(subDir);
+
+        try
+        {
+            final ResponseEntity<Resource> response = controller.serveRunFile(
+                runId,
+                "SampleTestClass",
+                "subfolder"
+            );
+
+            Assertions.assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        }
+        finally
+        {
+            Files.deleteIfExists(subDir);
+            Files.deleteIfExists(classDir);
+            Files.deleteIfExists(Paths.get("storage/runs", runId));
+        }
+    }
 }

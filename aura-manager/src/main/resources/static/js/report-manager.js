@@ -4735,6 +4735,9 @@ function renderStepsForExecution(activeRow) {
         }
         const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '');
         let testClass = activeRow.getAttribute('data-test-class') || activeRow.getAttribute('data-test-name') || activeRow.getAttribute('data-class-name') || 'DefaultTestClass';
+        if (testClass.includes('#')) {
+            testClass = testClass.substring(0, testClass.indexOf('#'));
+        }
         if (testClass.includes('.')) {
             testClass = testClass.substring(testClass.lastIndexOf('.') + 1);
         }
@@ -4784,6 +4787,9 @@ function openAttachmentWindow(type, url) {
         if (activeRow) {
             const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '');
             let testClass = activeRow.getAttribute('data-test-class') || activeRow.getAttribute('data-test-name') || activeRow.getAttribute('data-class-name') || 'DefaultTestClass';
+            if (testClass.includes('#')) {
+                testClass = testClass.substring(0, testClass.indexOf('#'));
+            }
             if (testClass.includes('.')) {
                 testClass = testClass.substring(testClass.lastIndexOf('.') + 1);
             }
