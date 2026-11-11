@@ -672,6 +672,17 @@ public class AuraReportViewController
 
     private Path resolveSafePath(final Path baseDir, final String runId, final String className, final String filename)
     {
+        if (runId == null || className == null || filename == null)
+        {
+            return null;
+        }
+        if (runId.contains("..") || className.contains("..") || filename.contains("..")
+            || runId.contains("/") || runId.contains("\\")
+            || className.contains("/") || className.contains("\\")
+            || filename.contains("/") || filename.contains("\\"))
+        {
+            return null;
+        }
         final Path resolved = baseDir.resolve(Paths.get(runId, className, filename)).normalize();
         if (!resolved.startsWith(baseDir))
         {
@@ -723,6 +734,7 @@ public class AuraReportViewController
             return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(contentType))
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .header("X-Content-Type-Options", "nosniff")
                 .body(resource);
         }
         catch (final Exception e)

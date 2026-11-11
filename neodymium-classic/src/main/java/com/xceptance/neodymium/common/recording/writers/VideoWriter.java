@@ -55,7 +55,7 @@ public class VideoWriter implements Writer
      *
      * @return the configured ProcessBuilder
      */
-    public ProcessBuilder getProcessBuilder()
+    ProcessBuilder getProcessBuilder()
     {
         return pb;
     }
@@ -168,6 +168,11 @@ public class VideoWriter implements Writer
                 {
                     Thread.currentThread().interrupt();
                 }
+                final File partialFile = new File(videoFileName);
+                if (partialFile.exists())
+                {
+                    partialFile.delete();
+                }
                 return;
             }
             Selenide.sleep(200);
@@ -201,13 +206,9 @@ public class VideoWriter implements Writer
         try
         {
             double actualFramerate = screenshots / ((double) testDuration / 1000.0);
-            if (Double.isNaN(actualFramerate) || Double.isInfinite(actualFramerate) || actualFramerate < 0.5)
+            if (Double.isNaN(actualFramerate) || Double.isInfinite(actualFramerate) || actualFramerate <= 0.0)
             {
-                actualFramerate = (screenshots > 0) ? 0.5 : 1.0;
-            }
-            else if (actualFramerate > 60.0)
-            {
-                actualFramerate = 60.0;
+                actualFramerate = 1.0;
             }
 
             pb = new ProcessBuilder(
@@ -224,14 +225,7 @@ public class VideoWriter implements Writer
             pb.redirectErrorStream(true);
             pb.redirectOutput(Redirect.appendTo(new File((this.recordingConfigurations).ffmpegLogFile())));
 
-            try
-            {
-                p = pb.start();
-            }
-            catch (final IOException e)
-            {
-                throw new RuntimeException("Could not adjust video frame rate", e);
-            }
+            p = pb.start();
 
             final long adjustmentStart = new Date().getTime();
             while (p.isAlive())

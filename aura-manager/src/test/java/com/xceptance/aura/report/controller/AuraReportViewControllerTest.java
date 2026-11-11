@@ -645,6 +645,7 @@ public class AuraReportViewControllerTest
             final ResponseEntity<Resource> mp4Resp = controller.serveRunFile(runId, "MediaTestClass", "recording.MP4");
             Assertions.assertEquals(HttpStatus.OK, mp4Resp.getStatusCode());
             Assertions.assertEquals("video/mp4", mp4Resp.getHeaders().getContentType().toString());
+            Assertions.assertEquals("nosniff", mp4Resp.getHeaders().getFirst("X-Content-Type-Options"));
 
             final ResponseEntity<Resource> jpgResp = controller.serveRunFile(runId, "MediaTestClass", "snapshot.jpg");
             Assertions.assertEquals(HttpStatus.OK, jpgResp.getStatusCode());
