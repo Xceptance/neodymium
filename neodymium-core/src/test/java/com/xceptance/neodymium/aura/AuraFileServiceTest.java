@@ -28,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 import com.xceptance.neodymium.aura.AuraFileService.IssueSeverity;
 import com.xceptance.neodymium.aura.AuraFileService.ValidationIssue;
-import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -786,13 +785,21 @@ public class AuraFileServiceTest
     @Test
     public void testExtractAreaTagFromContent()
     {
-        Assertions.assertEquals("@Checkout", AuraFileService.extractAreaTag("#@Checkout\nsteps:\n  - step 1"));
-        Assertions.assertEquals("@Checkout", AuraFileService.extractAreaTag("  #@Checkout\nsteps:\n  - step 1"));
-        Assertions.assertEquals("@Checkout", AuraFileService.extractAreaTag("# @Checkout\nsteps:\n  - step 1"));
-        Assertions.assertEquals("@Checkout", AuraFileService.extractAreaTag("@Checkout\nsteps:\n  - step 1"));
-        Assertions.assertEquals("@Checkout", AuraFileService.extractAreaTag("  @Checkout\nsteps:\n  - step 1"));
-        Assertions.assertEquals("@Area_123", AuraFileService.extractAreaTag("#@Area_123\nsteps:\n  - step 1"));
-        Assertions.assertEquals("@Area-tag", AuraFileService.extractAreaTag("#@Area-tag\nsteps:\n  - step 1"));
+        // Legacy @tag and #@tag formats are no longer recognized as area tags
+        Assertions.assertNull(AuraFileService.extractAreaTag("#@Checkout\nsteps:\n  - step 1"));
+        Assertions.assertNull(AuraFileService.extractAreaTag("  #@Checkout\nsteps:\n  - step 1"));
+        Assertions.assertNull(AuraFileService.extractAreaTag("# @Checkout\nsteps:\n  - step 1"));
+        Assertions.assertNull(AuraFileService.extractAreaTag("@Checkout\nsteps:\n  - step 1"));
+        Assertions.assertNull(AuraFileService.extractAreaTag("  @Checkout\nsteps:\n  - step 1"));
+        Assertions.assertNull(AuraFileService.extractAreaTag("#@Area_123\nsteps:\n  - step 1"));
+        Assertions.assertNull(AuraFileService.extractAreaTag("#@Area-tag\nsteps:\n  - step 1"));
+
+        // Attribution and author comments must never be interpreted as area tags
+        Assertions.assertNull(AuraFileService.extractAreaTag("# @author Xceptance GmbH 2026\nsteps:\n  - step 1"));
+        Assertions.assertNull(AuraFileService.extractAreaTag("# AI-generated: Gemini 2.5 Pro\n# @author Xceptance GmbH 2026\nsteps:\n  - step 1"));
+
+        // Structured YAML tags are recognized
+        Assertions.assertEquals("@Checkout", AuraFileService.extractAreaTag("tags:\n  area: Checkout\nsteps:\n  - step 1"));
 
         // Null and blank content
         Assertions.assertNull(AuraFileService.extractAreaTag(null));
@@ -808,12 +815,26 @@ public class AuraFileServiceTest
     }
 
     @Test
+    public void testAuthorCommentDoesNotYieldAreaTag()
+    {
+        final String yaml = """
+            # @author Xceptance GmbH 2026
+            # AI-generated: Gemini 2.5 Pro
+            steps:
+              - step 1
+            """;
+        Assertions.assertNull(AuraFileService.extractAreaTag(yaml));
+        final List<String> tags = AuraFileService.extractAreaTags(yaml);
+        Assertions.assertTrue(tags.isEmpty());
+    }
+
+    @Test
     public void testExtractAreaTagFromFileSystem() throws IOException
     {
         final File tempFile = File.createTempFile("playbook-area-", ".yaml");
         try
         {
-            Files.writeString(tempFile.toPath(), "#@Search\n# Test file\nsteps:\n  - Open url\n", StandardCharsets.UTF_8);
+            Files.writeString(tempFile.toPath(), "tags:\n  area: Search\n# Test file\nsteps:\n  - Open url\n", StandardCharsets.UTF_8);
             final String tag = AuraFileService.extractAreaTagFromFileSystem(tempFile.getAbsolutePath());
             Assertions.assertEquals("@Search", tag);
 
@@ -878,7 +899,8 @@ public class AuraFileServiceTest
     {
         final AuraFileService fileService = new AuraFileService();
         final String content = """
-            #@Checkout
+            tags:
+              area: Checkout
             # Neodymium YAML Test Data File
             steps: |
               Open https://verla.xceptance.com

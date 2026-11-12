@@ -65,8 +65,6 @@ public final class AuraFileService
         "(?m)^([ \\t]*(?:-\\s+|(?:steps|_steps|before|beforeEach|_beforeEach|after|afterEach|_afterEach):\\s*))>(-\\s*(?:#.*)?|[ \\t]*(?:#.*)?)$"
     );
 
-    private static final Pattern AREA_TAG_SECTION_HEADER_PATTERN = Pattern.compile("^(steps|before|after|data|variables|_include|include):", Pattern.CASE_INSENSITIVE);
-    private static final Pattern AREA_TAG_PATTERN = Pattern.compile("^\\s*#?\\s*@([a-zA-Z0-9_-]+)");
     private static final Pattern STRUCTURED_AREA_TAG_PATTERN = Pattern.compile(
         "(?im)^[ \\t]*(?:tags|_tags)\\s*:\\s*\\r?\\n(?:[ \\t]+[^\\r\\n]*\\r?\\n)*?[ \\t]+(?:area|Area)\\s*:\\s*(?:\\r?\\n[ \\t]*-\\s*[\"']?@?([a-zA-Z0-9][a-zA-Z0-9_-]*)[\"']?|[ \\t]*[\"']?@?([a-zA-Z0-9][a-zA-Z0-9_-]*)[\"']?)"
     );
@@ -90,19 +88,12 @@ public final class AuraFileService
         {
             return content;
         }
-        final String withCommentedTags = content.replaceAll("(?m)^\\s*@([a-zA-Z0-9_-]+)", "# @$1");
-        return FOLDED_BLOCK_SCALAR_PATTERN.matcher(withCommentedTags).replaceAll("$1|$2");
+        return FOLDED_BLOCK_SCALAR_PATTERN.matcher(content).replaceAll("$1|$2");
     }
 
     /**
-     * Extracts an area tag (e.g. {@code "@Checkout"}) from the header of a playbook YAML file.
-     *
-     * @param content the raw YAML file content
-     * @return the formatted area tag (e.g. {@code "@Checkout"}), or null if none is present
-     */
-    /**
      * Extracts all ordered area tags from the given playbook content.
-     * Searches top-level YAML comments (#@Area: ...) and structured tags/tags blocks.
+     * Searches structured tags/tags blocks ({@code tags:} or {@code _tags:}).
      *
      * @param content the raw playbook YAML content
      * @return the list of formatted area tags (e.g. {@code ["@Search", "@Browsing"]}), never null
@@ -114,28 +105,6 @@ public final class AuraFileService
             return List.of();
         }
         final List<String> result = new ArrayList<>();
-        final String[] lines = content.split("\\r?\\n");
-        for (final String line : lines)
-        {
-            final String trimmed = line.trim();
-            if (AREA_TAG_SECTION_HEADER_PATTERN.matcher(trimmed).find())
-            {
-                break;
-            }
-            final Matcher matcher = AREA_TAG_PATTERN.matcher(trimmed);
-            if (matcher.find())
-            {
-                final String tag = "@" + matcher.group(1);
-                if (!result.contains(tag))
-                {
-                    result.add(tag);
-                }
-            }
-        }
-        if (!result.isEmpty())
-        {
-            return result;
-        }
         if (content.contains("tags:") || content.contains("_tags:"))
         {
             try
@@ -196,7 +165,7 @@ public final class AuraFileService
 
     /**
      * Extracts an area tag from the given playbook content.
-     * Searches top-level YAML comments (#@Area: ...) and structured tags/tags blocks.
+     * Searches structured tags/tags blocks ({@code tags:} or {@code _tags:}).
      *
      * @param content the raw playbook YAML content
      * @return the formatted area tag (e.g. {@code "@Checkout"}), or null if none is present
