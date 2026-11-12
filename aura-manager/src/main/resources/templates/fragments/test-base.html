@@ -89,7 +89,7 @@
                     th:data-pane-id="${area.areaPaneId}"
                     onclick="switchTestBaseAreaTab(this.getAttribute('data-pane-id'), this)">
                 <span class="material-symbols-outlined text-accent" th:text="${area.icon}">folder</span> 
-                <span th:text="${area.areaName != null ? (area.areaName.equalsIgnoreCase('Default') ? 'Default' : (area.areaName.startsWith('@') ? area.areaName : '@' + area.areaName)) : 'Default'}">@Checkout</span> 
+                <span th:text="${area.areaName != null ? (area.areaName.equalsIgnoreCase('Default') ? 'Default' : (area.areaName.startsWith('@') ? area.areaName.substring(1) : area.areaName)) : 'Default'}">Checkout</span> 
                 <span class="tag-chip" th:text="${area.classCount + (area.classCount == 1 ? ' Class' : ' Classes')}">1 Class</span>
             </button>
         </div>

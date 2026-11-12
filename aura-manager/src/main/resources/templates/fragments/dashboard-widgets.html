@@ -1547,7 +1547,7 @@
             <div class="area-group-title">
                 <span class="material-symbols-outlined area-chevron">chevron_right</span>
                 <span class="material-symbols-outlined text-accent" th:text="${area.icon ?: 'folder'}">folder</span>
-                <span>Area: <span th:text="${area.areaName != null ? (area.areaName.equalsIgnoreCase('Default') ? 'Default' : (area.areaName.startsWith('@') ? area.areaName : '@' + area.areaName)) : 'Default'}">Default</span></span>
+                <span>Area: <span th:text="${area.areaName != null ? (area.areaName.equalsIgnoreCase('Default') ? 'Default' : (area.areaName.startsWith('@') ? area.areaName.substring(1) : area.areaName)) : 'Default'}">Default</span></span>
                 <span class="tag-chip area-exec-count-chip" style="margin-left: 0.5rem;" th:text="${area.classCount + (area.classCount == 1 ? ' Class' : ' Classes') + ', ' + area.totalVariationsCount + (area.totalVariationsCount == 1 ? ' Variation' : ' Variations')}">1 Class, 2 Variations</span>
             </div>
         </div>

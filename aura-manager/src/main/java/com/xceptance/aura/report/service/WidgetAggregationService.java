@@ -6814,11 +6814,10 @@ public class WidgetAggregationService
         final String area = v.getArea();
         if (AuraReportDataService.isRealArea(area))
         {
-            final String cleanArea = area.startsWith("@") ? area.trim() : ("@" + area.trim());
+            final String cleanArea = AuraReportDataService.normalizeArea(area);
             tags.add(cleanArea);
-            seenValues.add(area.trim().toLowerCase(Locale.ROOT));
             seenValues.add(cleanArea.toLowerCase(Locale.ROOT));
-            seenValues.add("area:" + area.trim().toLowerCase(Locale.ROOT).replace("@", ""));
+            seenValues.add("area:" + cleanArea.toLowerCase(Locale.ROOT));
         }
 
         final String env = v.getEnvironment();

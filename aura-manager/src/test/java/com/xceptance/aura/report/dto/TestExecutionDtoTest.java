@@ -322,8 +322,8 @@ public final class TestExecutionDtoTest
             """;
         final TestExecutionDto dto = objectMapper.readValue(json, TestExecutionDto.class);
         Assertions.assertNotNull(dto);
-        Assertions.assertEquals("@Search", dto.getAreaName());
-        Assertions.assertEquals("@Browsing", dto.getSubArea());
+        Assertions.assertEquals("Search", dto.getAreaName());
+        Assertions.assertEquals("Browsing", dto.getSubArea());
     }
 
     @Test
@@ -340,8 +340,8 @@ public final class TestExecutionDtoTest
             """;
         final TestExecutionDto dto = objectMapper.readValue(json, TestExecutionDto.class);
         Assertions.assertNotNull(dto);
-        Assertions.assertEquals("@Search", dto.getAreaName());
-        Assertions.assertEquals("@Browsing", dto.getSubArea());
+        Assertions.assertEquals("Search", dto.getAreaName());
+        Assertions.assertEquals("Browsing", dto.getSubArea());
     }
 
     @Test
@@ -359,8 +359,8 @@ public final class TestExecutionDtoTest
             """;
         final TestExecutionDto dto = objectMapper.readValue(json, TestExecutionDto.class);
         Assertions.assertNotNull(dto);
-        Assertions.assertEquals("@Search", dto.getAreaName());
-        Assertions.assertEquals("@Browsing", dto.getSubArea());
+        Assertions.assertEquals("Search", dto.getAreaName());
+        Assertions.assertEquals("Browsing", dto.getSubArea());
     }
 
     @Test

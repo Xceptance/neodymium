@@ -4084,7 +4084,7 @@ public class AuraReportViewController
                                 continue;
                             }
                         }
-                        areaPointsMap.computeIfAbsent(areaName, k -> new ArrayList<>())
+                        areaPointsMap.computeIfAbsent(normArea, k -> new ArrayList<>())
                             .add(new AreaRunPointDto(
                                 r.getId(),
                                 r.getTimestampLabel(),

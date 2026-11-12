@@ -525,8 +525,12 @@ public class LocalRunJsonStorageService
                             }
                             if (!rawSubArea.isEmpty())
                             {
-                                final String formattedSub = rawSubArea.startsWith("@") ? rawSubArea.trim() : "@" + rawSubArea.trim();
-                                objNode.put("subArea", formattedSub);
+                                String cleanSub = rawSubArea.trim();
+                                while (cleanSub.startsWith("@"))
+                                {
+                                    cleanSub = cleanSub.substring(1).trim();
+                                }
+                                objNode.put("subArea", cleanSub);
                             }
                             objNode.put("testClass", testClass);
 
@@ -623,7 +627,15 @@ public class LocalRunJsonStorageService
                             {
                                 final ObjectNode localData = objectMapper.createObjectNode();
                                 localData.put("areaName", areaName);
-                                if (!rawSubArea.isEmpty()) localData.put("subArea", rawSubArea.startsWith("@") ? rawSubArea.trim() : "@" + rawSubArea.trim());
+                                if (!rawSubArea.isEmpty())
+                                {
+                                    String cleanSub = rawSubArea.trim();
+                                    while (cleanSub.startsWith("@"))
+                                    {
+                                        cleanSub = cleanSub.substring(1).trim();
+                                    }
+                                    localData.put("subArea", cleanSub);
+                                }
                                 localData.put("testClass", testClass);
                                 if (!title.isEmpty()) localData.put("dataSet", title);
                                 localData.put("location", location);
@@ -2569,8 +2581,7 @@ public class LocalRunJsonStorageService
                     final String first = areaNode.get(0).asText("");
                     if (!first.isBlank())
                     {
-                        final String trimmed = first.trim();
-                        return trimmed.startsWith("@") ? trimmed : "@" + trimmed;
+                        return stripLeadingAt(first);
                     }
                 }
                 else if (!areaNode.isMissingNode() && !areaNode.isNull())
@@ -2586,7 +2597,7 @@ public class LocalRunJsonStorageService
                     }
                     if (!text.isBlank())
                     {
-                        return text.startsWith("@") ? text : "@" + text;
+                        return stripLeadingAt(text);
                     }
                 }
             }
@@ -2602,8 +2613,7 @@ public class LocalRunJsonStorageService
         }
         if (node.has("subArea") && !node.path("subArea").asText("").trim().isEmpty())
         {
-            final String sub = node.path("subArea").asText("").trim();
-            return sub.startsWith("@") ? sub : "@" + sub;
+            return stripLeadingAt(node.path("subArea").asText(""));
         }
         if (node.has("tags") && node.path("tags").isObject())
         {
@@ -2617,8 +2627,7 @@ public class LocalRunJsonStorageService
         {
             if (node.path("localDataBindings").has("subArea") && !node.path("localDataBindings").path("subArea").asText("").trim().isEmpty())
             {
-                final String sub = node.path("localDataBindings").path("subArea").asText("").trim();
-                return sub.startsWith("@") ? sub : "@" + sub;
+                return stripLeadingAt(node.path("localDataBindings").path("subArea").asText(""));
             }
             final String sub = extractSubAreaFromTagsObject(node.path("localDataBindings"));
             if (!sub.isEmpty())
@@ -2630,8 +2639,7 @@ public class LocalRunJsonStorageService
         {
             if (node.path("dataBindings").has("subArea") && !node.path("dataBindings").path("subArea").asText("").trim().isEmpty())
             {
-                final String sub = node.path("dataBindings").path("subArea").asText("").trim();
-                return sub.startsWith("@") ? sub : "@" + sub;
+                return stripLeadingAt(node.path("dataBindings").path("subArea").asText(""));
             }
             final String sub = extractSubAreaFromTagsObject(node.path("dataBindings"));
             if (!sub.isEmpty())
@@ -2660,8 +2668,7 @@ public class LocalRunJsonStorageService
                     final String second = areaNode.get(1).asText("");
                     if (!second.isBlank())
                     {
-                        final String trimmed = second.trim();
-                        return trimmed.startsWith("@") ? trimmed : "@" + trimmed;
+                        return stripLeadingAt(second);
                     }
                 }
                 else if (!areaNode.isMissingNode() && !areaNode.isNull())
@@ -2675,8 +2682,7 @@ public class LocalRunJsonStorageService
                             final String[] parts = text.split(",", 2);
                             if (parts.length > 1 && !parts[1].trim().isBlank())
                             {
-                                final String trimmed = parts[1].trim();
-                                return trimmed.startsWith("@") ? trimmed : "@" + trimmed;
+                                return stripLeadingAt(parts[1]);
                             }
                         }
                     }
@@ -2684,5 +2690,19 @@ public class LocalRunJsonStorageService
             }
         }
         return "";
+    }
+
+    private static String stripLeadingAt(final String raw)
+    {
+        if (raw == null)
+        {
+            return "";
+        }
+        String s = raw.trim();
+        while (s.startsWith("@"))
+        {
+            s = s.substring(1).trim();
+        }
+        return s;
     }
 }

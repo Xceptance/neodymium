@@ -3464,7 +3464,7 @@ public class WidgetAggregationServiceTest
         Assertions.assertTrue(subPass.hasTags());
         Assertions.assertTrue(subPass.getTags().contains("Chrome"));
         Assertions.assertTrue(subPass.getTags().contains("UK"));
-        Assertions.assertTrue(subPass.getTags().contains("@Checkout"));
+        Assertions.assertTrue(subPass.getTags().contains("Checkout"));
         Assertions.assertTrue(subPass.getTags().contains("STG"));
         Assertions.assertTrue(subPass.getTags().contains("Branch:main"));
         // Negative boolean 'Not Custom' and duplicate 'locale:UK' must be excluded
@@ -4955,7 +4955,7 @@ public class WidgetAggregationServiceTest
         Assertions.assertEquals(2, layers.size());
         final List<String> layerNames = layers.stream().map(WidgetTrendLayerDto::getName).toList();
         Assertions.assertTrue(layerNames.contains("Default"));
-        Assertions.assertTrue(layerNames.contains("@Checkout"));
+        Assertions.assertTrue(layerNames.contains("Checkout"));
 
         for (final WidgetTrendLayerDto layer : layers)
         {
@@ -4963,7 +4963,7 @@ public class WidgetAggregationServiceTest
             {
                 Assertions.assertEquals(3, layer.getCount());
             }
-            else if ("@Checkout".equals(layer.getName()))
+            else if ("Checkout".equals(layer.getName()))
             {
                 Assertions.assertEquals(5, layer.getCount());
             }
@@ -6417,9 +6417,9 @@ public class WidgetAggregationServiceTest
         Assertions.assertEquals("2 Items (Run #run-new)", view.getSummaryLabel());
         Assertions.assertEquals(2, view.getPieSlices().size());
         final List<String> sliceLabels = view.getPieSlices().stream().map(WidgetPieSliceDto::getLabel).toList();
-        Assertions.assertTrue(sliceLabels.contains("@Checkout"));
-        Assertions.assertTrue(sliceLabels.contains("@Cart"));
-        Assertions.assertFalse(sliceLabels.contains("@Catalog"));
+        Assertions.assertTrue(sliceLabels.contains("Checkout"));
+        Assertions.assertTrue(sliceLabels.contains("Cart"));
+        Assertions.assertFalse(sliceLabels.contains("Catalog"));
     }
 
     @Test

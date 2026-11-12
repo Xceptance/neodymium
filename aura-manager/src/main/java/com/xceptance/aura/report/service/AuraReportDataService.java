@@ -1482,7 +1482,7 @@ public class AuraReportDataService
                 final String area = v.getAreaTag();
                 if (isRealArea(area))
                 {
-                    areaName = area.trim().startsWith("@") ? area.trim() : "@" + area.trim();
+                    areaName = normalizeArea(area);
                     break;
                 }
             }
@@ -1997,7 +1997,7 @@ public class AuraReportDataService
                     final String area = v.getAreaTag();
                     if (isRealArea(area))
                     {
-                        areaName = area.trim().startsWith("@") ? area.trim() : "@" + area.trim();
+                        areaName = normalizeArea(area);
                         break;
                     }
                 }
@@ -2029,9 +2029,12 @@ public class AuraReportDataService
                     {
                         for (final TestBaseVariationEntity v : cd.getVariations())
                         {
-                            final String subTag = (v.getSubAreaTag() != null && !v.getSubAreaTag().isBlank())
-                                ? (v.getSubAreaTag().startsWith("@") ? v.getSubAreaTag() : "@" + v.getSubAreaTag())
-                                : "@General";
+                            String rawSub = (v.getSubAreaTag() != null && !v.getSubAreaTag().isBlank()) ? v.getSubAreaTag().trim() : "General";
+                            while (rawSub.startsWith("@"))
+                            {
+                                rawSub = rawSub.substring(1).trim();
+                            }
+                            final String subTag = rawSub.isEmpty() ? "General" : rawSub;
                             varsBySub.computeIfAbsent(subTag, k -> new ArrayList<>()).add(v);
                         }
                     }
@@ -5617,13 +5620,18 @@ public class AuraReportDataService
             if (dto.getTestClass() != null && !dto.getTestClass().isEmpty())
             {
                 final String area = (dto.getAreaName() != null && !dto.getAreaName().isBlank())
-                    ? (dto.getAreaName().startsWith("@") ? dto.getAreaName() : "@" + dto.getAreaName())
-                    : "@General";
+                    ? normalizeArea(dto.getAreaName())
+                    : "Default";
                 final TestBaseVariationEntity var = variationRepository.findById(varId)
                     .orElseGet(() -> new TestBaseVariationEntity(varId, dto.getTestClass(), dto.getTestMethod(), dto.getTitle(), area, dto.getLocation(), dto.getBrowser()));
                 if (dto.getSubArea() != null && !dto.getSubArea().isBlank())
                 {
-                    var.setSubAreaTag(dto.getSubArea().startsWith("@") ? dto.getSubArea() : "@" + dto.getSubArea());
+                    String sArea = dto.getSubArea().trim();
+                    while (sArea.startsWith("@"))
+                    {
+                        sArea = sArea.substring(1).trim();
+                    }
+                    var.setSubAreaTag(sArea.isEmpty() ? null : sArea);
                 }
 
                 if (dto.getTestMethod() != null && !dto.getTestMethod().isBlank())
@@ -6789,8 +6797,7 @@ public class AuraReportDataService
                 tc -> {
                     if (!tc.getExecutions().isEmpty() && tc.getExecutions().get(0).getAreaName() != null && isRealArea(tc.getExecutions().get(0).getAreaName()))
                     {
-                        final String an = tc.getExecutions().get(0).getAreaName().trim();
-                        return an.startsWith("@") ? an : "@" + an;
+                        return normalizeArea(tc.getExecutions().get(0).getAreaName());
                     }
                     return "Default";
                 },
@@ -6827,7 +6834,18 @@ public class AuraReportDataService
 
                 final Map<String, List<TestExecutionDto>> bySubArea = allAreaExecs.stream()
                     .collect(Collectors.groupingBy(
-                        e -> (e.getSubArea() != null && !e.getSubArea().isBlank()) ? e.getSubArea() : "General",
+                        e -> {
+                            if (e.getSubArea() != null && !e.getSubArea().isBlank())
+                            {
+                                String sn = e.getSubArea().trim();
+                                while (sn.startsWith("@"))
+                                {
+                                    sn = sn.substring(1).trim();
+                                }
+                                return sn.isEmpty() ? "General" : sn;
+                            }
+                            return "General";
+                        },
                         LinkedHashMap::new,
                         Collectors.toList()
                     ));
@@ -7221,20 +7239,19 @@ public class AuraReportDataService
         {
             return "Default";
         }
-        final String trimmed = raw.trim();
-        if ("General".equalsIgnoreCase(trimmed) || "@General".equalsIgnoreCase(trimmed))
+        String trimmed = raw.trim();
+        while (trimmed.startsWith("@"))
+        {
+            trimmed = trimmed.substring(1).trim();
+        }
+        if (trimmed.isEmpty()
+            || "General".equalsIgnoreCase(trimmed)
+            || "Browsing (default)".equalsIgnoreCase(trimmed)
+            || "Default".equalsIgnoreCase(trimmed))
         {
             return "Default";
         }
-        if ("Browsing (default)".equalsIgnoreCase(trimmed) || "@Browsing (default)".equalsIgnoreCase(trimmed))
-        {
-            return "Default";
-        }
-        if ("Default".equalsIgnoreCase(trimmed) || "@Default".equalsIgnoreCase(trimmed))
-        {
-            return "Default";
-        }
-        return trimmed.startsWith("@") ? trimmed : "@" + trimmed;
+        return trimmed;
     }
 
     /**

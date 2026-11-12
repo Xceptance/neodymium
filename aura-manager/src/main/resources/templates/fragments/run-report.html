@@ -303,7 +303,7 @@
                             <div class="area-pie-card-header">
                                 <div class="area-pie-title">
                                     <span class="material-symbols-outlined text-accent">folder</span>
-                                    <span>Area: <span th:text="${area.areaName != null ? (area.areaName.equalsIgnoreCase('Default') ? 'Default' : (area.areaName.startsWith('@') ? area.areaName : '@' + area.areaName)) : 'Default'}">Checkout</span></span>
+                                    <span>Area: <span th:text="${area.areaName != null ? (area.areaName.equalsIgnoreCase('Default') ? 'Default' : (area.areaName.startsWith('@') ? area.areaName.substring(1) : area.areaName)) : 'Default'}">Checkout</span></span>
                                 </div>
                                 <button class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" th:data-area-group="${area.areaGroup}" onclick="openAllTestsAndExpandArea(this.getAttribute('data-area-group'))">
                                     Open Area in All Tests <span class="material-symbols-outlined">arrow_forward</span>
@@ -506,7 +506,7 @@
                                 <div class="area-group-title">
                                     <span class="material-symbols-outlined area-chevron">chevron_right</span>
                                     <span class="material-symbols-outlined text-accent">folder_open</span>
-                                    <span>Area: <span th:text="${area.areaName != null ? (area.areaName.equalsIgnoreCase('Default') ? 'Default' : (area.areaName.startsWith('@') ? area.areaName : '@' + area.areaName)) : 'Default'}">Checkout</span></span>
+                                    <span>Area: <span th:text="${area.areaName != null ? (area.areaName.equalsIgnoreCase('Default') ? 'Default' : (area.areaName.startsWith('@') ? area.areaName.substring(1) : area.areaName)) : 'Default'}">Checkout</span></span>
                                     <span class="tag-chip area-exec-count-chip" style="margin-left: 0.5rem;" th:text="${area.totalCount + ' Executions'}">5 Executions</span>
                                 </div>
                                 <div class="flex-gap-2 area-summary-badges" onclick="event.stopPropagation()">
@@ -528,7 +528,7 @@
                                             <div class="sub-area-title">
                                                 <span class="material-symbols-outlined sub-area-chevron">chevron_right</span>
                                                 <span class="material-symbols-outlined text-accent" style="font-size: 1.1rem;">subdirectory_arrow_right</span>
-                                                <span>Sub-Area: <span th:text="${sub.subAreaName != null ? (sub.subAreaName.startsWith('@') ? sub.subAreaName : '@' + sub.subAreaName) : ''}">Browsing</span></span>
+                                                <span>Sub-Area: <span th:text="${sub.subAreaName != null ? (sub.subAreaName.startsWith('@') ? sub.subAreaName.substring(1) : sub.subAreaName) : ''}">Browsing</span></span>
                                                 <span class="tag-chip sub-area-exec-count-chip" style="margin-left: 0.5rem;" th:text="${sub.totalCount + ' Executions'}">2 Executions</span>
                                             </div>
                                             <div class="flex-gap-2 sub-area-summary-badges" onclick="event.stopPropagation()">

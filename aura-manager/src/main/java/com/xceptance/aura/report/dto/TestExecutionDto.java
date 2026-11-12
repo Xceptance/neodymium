@@ -590,8 +590,7 @@ public final class TestExecutionDto
                     final String primary = entry.getValue().get(0);
                     if (primary != null && !primary.isBlank())
                     {
-                        final String clean = primary.trim();
-                        resolvedAreaName = clean.startsWith("@") ? clean : "@" + clean;
+                        resolvedAreaName = primary.trim();
                         break;
                     }
                 }
@@ -610,15 +609,19 @@ public final class TestExecutionDto
             final String a = this.localDataBindings.get("Area");
             if (a != null && !a.isBlank())
             {
-                final String clean = a.trim();
-                resolvedAreaName = clean.startsWith("@") ? clean : "@" + clean;
+                resolvedAreaName = a.trim();
             }
         }
         if (resolvedAreaName != null && !resolvedAreaName.isEmpty())
         {
-            if ("@Browsing (default)".equalsIgnoreCase(resolvedAreaName) || "Browsing (default)".equalsIgnoreCase(resolvedAreaName)
-                || "Default".equalsIgnoreCase(resolvedAreaName) || "@Default".equalsIgnoreCase(resolvedAreaName)
-                || "General".equalsIgnoreCase(resolvedAreaName) || "@General".equalsIgnoreCase(resolvedAreaName))
+            while (resolvedAreaName.startsWith("@"))
+            {
+                resolvedAreaName = resolvedAreaName.substring(1).trim();
+            }
+            if ("Browsing (default)".equalsIgnoreCase(resolvedAreaName)
+                || "Default".equalsIgnoreCase(resolvedAreaName)
+                || "General".equalsIgnoreCase(resolvedAreaName)
+                || resolvedAreaName.isEmpty())
             {
                 this.areaName = "Default";
             }
@@ -658,7 +661,11 @@ public final class TestExecutionDto
         }
         if (resolvedSubArea != null && !resolvedSubArea.isEmpty())
         {
-            this.subArea = resolvedSubArea.startsWith("@") ? resolvedSubArea : "@" + resolvedSubArea;
+            while (resolvedSubArea.startsWith("@"))
+            {
+                resolvedSubArea = resolvedSubArea.substring(1).trim();
+            }
+            this.subArea = resolvedSubArea.isEmpty() ? null : resolvedSubArea;
         }
         else
         {

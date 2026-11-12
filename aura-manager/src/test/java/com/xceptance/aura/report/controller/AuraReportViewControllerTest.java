@@ -422,7 +422,7 @@ public class AuraReportViewControllerTest
         @SuppressWarnings("unchecked")
         final List<String> filterAreas = (List<String>) model.getAttribute("filterAreas");
         Assertions.assertNotNull(filterAreas);
-        Assertions.assertTrue(filterAreas.contains("@Wikipedia"), "filterAreas must contain @Wikipedia");
+        Assertions.assertTrue(filterAreas.contains("Wikipedia"), "filterAreas must contain Wikipedia");
     }
 
     @Test
@@ -1168,7 +1168,7 @@ public class AuraReportViewControllerTest
         Assertions.assertNotNull(candidateEnvs);
         Assertions.assertTrue(candidateEnvs.contains("Staging"));
         Assertions.assertNotNull(candidateAreas);
-        Assertions.assertTrue(candidateAreas.contains("@Checkout"));
+        Assertions.assertTrue(candidateAreas.contains("Checkout"));
         Assertions.assertFalse(candidateAreas.contains("@Browsing (default)"));
     }
 
@@ -2185,11 +2185,11 @@ public class AuraReportViewControllerTest
             Mockito.anySet(),
             Mockito.anySet(),
             Mockito.anySet(),
-            Mockito.eq(Set.of("@Search")),
+            Mockito.eq(Set.of("Search")),
             Mockito.anySet()
         )).thenReturn(scopedRun);
 
-        final BatchSummaryDto summary = new BatchSummaryDto("summary", "@Search", "Default", "", "No runs", "N/A", "", List.of(), List.of());
+        final BatchSummaryDto summary = new BatchSummaryDto("summary", "Search", "Default", "", "No runs", "N/A", "", List.of(), List.of());
         final BatchLatestExecutionsDto mockResult = new BatchLatestExecutionsDto(
             summary,
             List.of(scopedRun),
@@ -2211,7 +2211,7 @@ public class AuraReportViewControllerTest
             Mockito.anySet(),
             Mockito.anySet(),
             Mockito.anySet(),
-            Mockito.eq(Set.of("@Search")),
+            Mockito.eq(Set.of("Search")),
             Mockito.anySet(),
             Mockito.anyMap()
         )).thenReturn(mockResult);
@@ -2236,19 +2236,19 @@ public class AuraReportViewControllerTest
         final List<TestRunEntity> runs = (List<TestRunEntity>) model.getAttribute("runs");
         Assertions.assertNotNull(runs);
         Assertions.assertEquals(1, runs.size());
-        Assertions.assertEquals(2, runs.get(0).getTotalTests(), "Displayed run in table must show only @Search executions");
+        Assertions.assertEquals(2, runs.get(0).getTotalTests(), "Displayed run in table must show only Search executions");
 
         @SuppressWarnings("unchecked")
         final List<TestRunEntity> contributingRuns = (List<TestRunEntity>) model.getAttribute("contributingRuns");
         Assertions.assertNotNull(contributingRuns);
         Assertions.assertEquals(1, contributingRuns.size());
-        Assertions.assertEquals(2, contributingRuns.get(0).getTotalTests(), "Contributing run must show only @Search executions");
+        Assertions.assertEquals(2, contributingRuns.get(0).getTotalTests(), "Contributing run must show only Search executions");
 
         @SuppressWarnings("unchecked")
         final List<BatchAreaTrendDto> areaTrends = (List<BatchAreaTrendDto>) model.getAttribute("areaTrends");
         Assertions.assertNotNull(areaTrends);
-        Assertions.assertEquals(1, areaTrends.size(), "Area trends should only contain @Search");
-        Assertions.assertEquals("@Search", areaTrends.get(0).getAreaName());
+        Assertions.assertEquals(1, areaTrends.size(), "Area trends should only contain Search");
+        Assertions.assertEquals("Search", areaTrends.get(0).getAreaName());
     }
 
     @Test

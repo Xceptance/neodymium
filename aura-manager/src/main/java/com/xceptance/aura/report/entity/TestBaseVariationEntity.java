@@ -123,11 +123,44 @@ public class TestBaseVariationEntity
         this.testClassName = testClassName;
         this.testMethodName = (testMethodName != null && !testMethodName.isBlank()) ? testMethodName.trim() : null;
         this.dataSetLabel = (dataSetLabel != null && !dataSetLabel.isBlank()) ? dataSetLabel.trim() : "Default";
-        this.areaTag = (areaTag != null && !areaTag.isBlank()
-            && !"@Browsing (default)".equalsIgnoreCase(areaTag.trim())
-            && !"Browsing (default)".equalsIgnoreCase(areaTag.trim())) ? areaTag.trim() : "Default";
+        this.areaTag = cleanAreaValue(areaTag);
         this.location = AuraReportDataService.normalizeLocation(location);
         this.browser = AuraReportDataService.normalizeBrowser(browser);
+    }
+
+    private static String cleanAreaValue(final String raw)
+    {
+        if (raw == null || raw.isBlank())
+        {
+            return "Default";
+        }
+        String trimmed = raw.trim();
+        while (trimmed.startsWith("@"))
+        {
+            trimmed = trimmed.substring(1).trim();
+        }
+        if (trimmed.isEmpty()
+            || "Browsing (default)".equalsIgnoreCase(trimmed)
+            || "General".equalsIgnoreCase(trimmed)
+            || "Default".equalsIgnoreCase(trimmed))
+        {
+            return "Default";
+        }
+        return trimmed;
+    }
+
+    private static String cleanSubAreaValue(final String raw)
+    {
+        if (raw == null || raw.isBlank())
+        {
+            return null;
+        }
+        String trimmed = raw.trim();
+        while (trimmed.startsWith("@"))
+        {
+            trimmed = trimmed.substring(1).trim();
+        }
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     public String getId()
@@ -172,26 +205,22 @@ public class TestBaseVariationEntity
 
     public String getAreaTag()
     {
-        return (areaTag != null && !areaTag.isBlank()
-            && !"@Browsing (default)".equalsIgnoreCase(areaTag.trim())
-            && !"Browsing (default)".equalsIgnoreCase(areaTag.trim())) ? areaTag.trim() : "Default";
+        return cleanAreaValue(this.areaTag);
     }
 
     public void setAreaTag(final String areaTag)
     {
-        this.areaTag = (areaTag != null && !areaTag.isBlank()
-            && !"@Browsing (default)".equalsIgnoreCase(areaTag.trim())
-            && !"Browsing (default)".equalsIgnoreCase(areaTag.trim())) ? areaTag.trim() : "Default";
+        this.areaTag = cleanAreaValue(areaTag);
     }
 
     public String getSubAreaTag()
     {
-        return subAreaTag;
+        return cleanSubAreaValue(this.subAreaTag);
     }
 
     public void setSubAreaTag(final String subAreaTag)
     {
-        this.subAreaTag = (subAreaTag != null && !subAreaTag.isBlank()) ? subAreaTag.trim() : null;
+        this.subAreaTag = cleanSubAreaValue(subAreaTag);
     }
 
     public String getLocation()

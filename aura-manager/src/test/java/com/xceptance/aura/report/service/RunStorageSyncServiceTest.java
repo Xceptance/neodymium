@@ -380,15 +380,15 @@ public class RunStorageSyncServiceTest
             final JsonNode runJsonRoot = new ObjectMapper().readTree(runJsonOpt.get());
             final JsonNode metrics = runJsonRoot.path("executionMetrics");
             Assertions.assertTrue(metrics.isObject() && metrics.size() > 0, "Expected run.json executionMetrics to be present");
-            Assertions.assertEquals("@Search", metrics.fields().next().getValue().path("areaName").asText(),
+            Assertions.assertEquals("Search", metrics.fields().next().getValue().path("areaName").asText(),
                 "Expected run.json executionMetrics to resolve area from tags.Area");
 
             final JsonNode enrichedExec = new ObjectMapper().readTree(execFile.toFile());
-            Assertions.assertEquals("@Search", enrichedExec.path("areaName").asText(),
+            Assertions.assertEquals("Search", enrichedExec.path("areaName").asText(),
                 "Enriched execution JSON on disk should carry the resolved area from tags");
 
-            Assertions.assertEquals("@Search", findAreaForClass(dataService.getRunReport(runId), "Aura_my_test_yaml_Test"),
-                "Run report should group test under @Search rather than Browsing (default)");
+            Assertions.assertEquals("Search", findAreaForClass(dataService.getRunReport(runId), "Aura_my_test_yaml_Test"),
+                "Run report should group test under Search rather than Browsing (default)");
         }
         finally
         {
@@ -439,7 +439,7 @@ public class RunStorageSyncServiceTest
             Assertions.assertFalse(Files.exists(runDir.resolve("Browsing (default)")), "No Browsing (default) folder should be created on disk");
 
             final RunReportDto report = dataService.getRunReport(mixedRunId);
-            Assertions.assertEquals("@Checkout", findAreaForClass(report, "CheckoutProcessTest"),
+            Assertions.assertEquals("Checkout", findAreaForClass(report, "CheckoutProcessTest"),
                 "Class folder inside a category folder should keep the category from its folder");
             Assertions.assertEquals("Default", findAreaForClass(report, "StandaloneTest"),
                 "Class folder without subfolders at the run root should be grouped under the default category");
