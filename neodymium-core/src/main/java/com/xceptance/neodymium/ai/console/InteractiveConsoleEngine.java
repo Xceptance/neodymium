@@ -48,6 +48,7 @@ import org.slf4j.LoggerFactory;
 import org.neodymium.ai.config.AiConfiguration;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
@@ -58,6 +59,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.URI;
 import java.net.URLEncoder;
+import org.neodymium.ai.model.ExecutionAttachment;
+import org.neodymium.util.Neodymium;
 
 /**
  * Core engine for the Interactive Console.
@@ -232,6 +235,18 @@ public final class InteractiveConsoleEngine {
      */
     private volatile String currentStateJson = "{}";
 
+    private volatile String executionLogContent;
+
+    public void setExecutionLogContent(final String executionLogContent)
+    {
+        this.executionLogContent = executionLogContent;
+    }
+
+    public String getExecutionLogContent()
+    {
+        return this.executionLogContent;
+    }
+
     private static final Map<String, Map<String, Integer>> CLASS_EXECUTION_INDEX_MAP = new ConcurrentHashMap<>();
     private static final Map<String, AtomicInteger> CLASS_EXECUTION_COUNTERS = new ConcurrentHashMap<>();
 
@@ -376,7 +391,25 @@ public final class InteractiveConsoleEngine {
         }
 
         saveLocalExecutionLog(minified);
-        broadcastSseEvent("state", minified);
+        broadcastSseEvent("state", stripPlaybookContentForSse(minified));
+    }
+
+    private static String stripPlaybookContentForSse(final String json)
+    {
+        if (json == null || !json.contains("\"playbookContent\""))
+        {
+            return json;
+        }
+        try
+        {
+            final JsonObject obj = JsonParser.parseString(json).getAsJsonObject();
+            obj.remove("playbookContent");
+            return obj.toString();
+        }
+        catch (final Exception e)
+        {
+            return json;
+        }
     }
 
     /**
@@ -409,7 +442,7 @@ public final class InteractiveConsoleEngine {
                     final String updatedJson = parsedState.toString();
                     this.currentStateJson = updatedJson;
                     saveLocalExecutionLog(updatedJson);
-                    broadcastSseEvent("state", updatedJson);
+                    broadcastSseEvent("state", stripPlaybookContentForSse(updatedJson));
                 }
             }
             else
@@ -432,7 +465,7 @@ public final class InteractiveConsoleEngine {
                     final String updatedJson = parsedState.toString();
                     this.currentStateJson = updatedJson;
                     saveLocalExecutionLog(updatedJson);
-                    broadcastSseEvent("state", updatedJson);
+                    broadcastSseEvent("state", stripPlaybookContentForSse(updatedJson));
                 }
             }
         }
@@ -502,7 +535,6 @@ public final class InteractiveConsoleEngine {
 
                 // 1. Root file for compatibility in default allure.results.directory
                 final File executionJson = new File(defaultResultsDir, "console-execution-" + index + ".json");
-                Files.writeString(executionJson.toPath(), contentToSave, StandardCharsets.UTF_8);
 
                 // 2. Structured run and test class folders in configured console logs directory
                 final String configuredResultsDirPath = AiConfiguration.getInstance().getConsoleExecutionLogsDirectory();
@@ -513,7 +545,6 @@ public final class InteractiveConsoleEngine {
                     structuredDir.mkdirs();
                 }
                 final File structuredJson = new File(structuredDir, "console-execution-" + index + ".json");
-                Files.writeString(structuredJson.toPath(), contentToSave, StandardCharsets.UTF_8);
 
                 // 3. Structured copy in configured target/ai-reports directory
                 final String reportsDirPath = AiConfiguration.getInstance().getDiskReportDirectory();
@@ -524,7 +555,44 @@ public final class InteractiveConsoleEngine {
                     reportsStructuredDir.mkdirs();
                 }
                 final File reportsStructuredJson = new File(reportsStructuredDir, "console-execution-" + index + ".json");
-                Files.writeString(reportsStructuredJson.toPath(), contentToSave, StandardCharsets.UTF_8);
+
+                // 4. Structured copy in Aura storage directory (if directory exists or is configured)
+                final String auraStorageRunsDirPath = AiConfiguration.getInstance().getAuraStorageRunsDirectory();
+                final File auraBaseDir = new File(auraStorageRunsDirPath);
+                final File auraStructuredDir = (auraBaseDir.exists() || !auraStorageRunsDirPath.isBlank())
+                    ? new File(auraBaseDir, runFolder + "/" + testClassFolder)
+                    : null;
+                if (auraStructuredDir != null && !auraStructuredDir.exists())
+                {
+                    auraStructuredDir.mkdirs();
+                }
+
+                // Write execution.log if content or source log is available
+                String logText = this.executionLogContent;
+                if (logText == null || logText.isBlank())
+                {
+                    final File aiLogFile = new File("target/neodymium-ai.log");
+                    if (aiLogFile.exists() && aiLogFile.isFile())
+                    {
+                        try
+                        {
+                            logText = Files.readString(aiLogFile.toPath(), StandardCharsets.UTF_8);
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+                }
+                if (logText != null && !logText.isBlank())
+                {
+                    Files.writeString(new File(structuredDir, "execution.log").toPath(), logText, StandardCharsets.UTF_8);
+                    Files.writeString(new File(reportsStructuredDir, "execution.log").toPath(), logText, StandardCharsets.UTF_8);
+                    if (auraStructuredDir != null)
+                    {
+                        Files.writeString(new File(auraStructuredDir, "execution.log").toPath(), logText, StandardCharsets.UTF_8);
+                    }
+                }
+
                 if (parsedState.has("playbookContent") && !parsedState.get("playbookContent").isJsonNull())
                 {
                     final String playbookYaml = parsedState.get("playbookContent").getAsString();
@@ -533,6 +601,10 @@ public final class InteractiveConsoleEngine {
                         final String playbookIndexed = "playbook-" + index + ".yaml";
                         Files.writeString(new File(structuredDir, playbookIndexed).toPath(), playbookYaml, StandardCharsets.UTF_8);
                         Files.writeString(new File(reportsStructuredDir, playbookIndexed).toPath(), playbookYaml, StandardCharsets.UTF_8);
+                        if (auraStructuredDir != null)
+                        {
+                            Files.writeString(new File(auraStructuredDir, playbookIndexed).toPath(), playbookYaml, StandardCharsets.UTF_8);
+                        }
 
                         final File defaultPb = new File(structuredDir, "playbook.yaml");
                         if (!defaultPb.exists())
@@ -543,6 +615,14 @@ public final class InteractiveConsoleEngine {
                         if (!reportsDefaultPb.exists())
                         {
                             Files.writeString(reportsDefaultPb.toPath(), playbookYaml, StandardCharsets.UTF_8);
+                        }
+                        if (auraStructuredDir != null)
+                        {
+                            final File auraDefaultPb = new File(auraStructuredDir, "playbook.yaml");
+                            if (!auraDefaultPb.exists())
+                            {
+                                Files.writeString(auraDefaultPb.toPath(), playbookYaml, StandardCharsets.UTF_8);
+                            }
                         }
                     }
                 }
@@ -556,11 +636,112 @@ public final class InteractiveConsoleEngine {
                         try
                         {
                             Files.copy(srcVideo.toPath(), new File(reportsStructuredDir, videoName).toPath(), StandardCopyOption.REPLACE_EXISTING);
+                            if (auraStructuredDir != null)
+                            {
+                                Files.copy(srcVideo.toPath(), new File(auraStructuredDir, videoName).toPath(), StandardCopyOption.REPLACE_EXISTING);
+                            }
                         }
                         catch (final Exception ignored)
                         {
                         }
                     }
+                }
+
+                // Build attachments list
+                final JsonArray attachmentsArray = new JsonArray();
+
+                // 1. Video attachment
+                if (parsedState.has("videoUrl") && !parsedState.get("videoUrl").isJsonNull())
+                {
+                    final String videoName = parsedState.get("videoUrl").getAsString();
+                    final File vf = new File(structuredDir, videoName);
+                    if (vf.exists())
+                    {
+                        final JsonObject videoAtt = new JsonObject();
+                        videoAtt.addProperty("name", videoName);
+                        videoAtt.addProperty("path", videoName);
+                        videoAtt.addProperty("type", "video");
+                        videoAtt.addProperty("contentType", videoName.endsWith(".webm") ? "video/webm" : "video/mp4");
+                        videoAtt.addProperty("openByDefault", true);
+                        attachmentsArray.add(videoAtt);
+                    }
+                }
+
+                // 2. Playbook YAML attachment
+                final File pbFile = new File(structuredDir, "playbook.yaml");
+                if (pbFile.exists())
+                {
+                    final JsonObject yamlAtt = new JsonObject();
+                    yamlAtt.addProperty("name", "playbook.yaml");
+                    yamlAtt.addProperty("path", "playbook.yaml");
+                    yamlAtt.addProperty("type", "yaml");
+                    yamlAtt.addProperty("contentType", "text/yaml");
+                    yamlAtt.addProperty("openByDefault", false);
+                    attachmentsArray.add(yamlAtt);
+                }
+
+                // 3. Execution Log attachment
+                final File logFile = new File(structuredDir, "execution.log");
+                if (logFile.exists())
+                {
+                    final JsonObject logAtt = new JsonObject();
+                    logAtt.addProperty("name", "execution.log");
+                    logAtt.addProperty("path", "execution.log");
+                    logAtt.addProperty("type", "log");
+                    logAtt.addProperty("contentType", "text/plain");
+                    logAtt.addProperty("openByDefault", false);
+                    attachmentsArray.add(logAtt);
+                }
+
+                // 4. Custom developer attachments from Neodymium.getAttachments()
+                final List<ExecutionAttachment> customAttachments = Neodymium.getAttachments();
+                for (final ExecutionAttachment att : customAttachments)
+                {
+                    final JsonObject attObj = new JsonObject();
+                    attObj.addProperty("name", att.getName());
+                    attObj.addProperty("path", att.getPath());
+                    attObj.addProperty("type", att.getType());
+                    attObj.addProperty("contentType", att.getContentType());
+                    attObj.addProperty("openByDefault", att.isOpenByDefault());
+                    attachmentsArray.add(attObj);
+
+                    try
+                    {
+                        if (att.getSourceFile() != null && att.getSourceFile().exists())
+                        {
+                            Files.copy(att.getSourceFile().toPath(), new File(structuredDir, att.getPath()).toPath(), StandardCopyOption.REPLACE_EXISTING);
+                            Files.copy(att.getSourceFile().toPath(), new File(reportsStructuredDir, att.getPath()).toPath(), StandardCopyOption.REPLACE_EXISTING);
+                            if (auraStructuredDir != null)
+                            {
+                                Files.copy(att.getSourceFile().toPath(), new File(auraStructuredDir, att.getPath()).toPath(), StandardCopyOption.REPLACE_EXISTING);
+                            }
+                        }
+                        else if (att.getTextContent() != null)
+                        {
+                            Files.writeString(new File(structuredDir, att.getPath()).toPath(), att.getTextContent(), StandardCharsets.UTF_8);
+                            Files.writeString(new File(reportsStructuredDir, att.getPath()).toPath(), att.getTextContent(), StandardCharsets.UTF_8);
+                            if (auraStructuredDir != null)
+                            {
+                                Files.writeString(new File(auraStructuredDir, att.getPath()).toPath(), att.getTextContent(), StandardCharsets.UTF_8);
+                            }
+                        }
+                    }
+                    catch (final Exception attEx)
+                    {
+                        LOG.warn("[InteractiveConsole] Could not persist custom attachment {}: {}", att.getName(), attEx.getMessage());
+                    }
+                }
+
+                parsedState.add("attachments", attachmentsArray);
+                contentToSave = parsedState.toString();
+
+                Files.writeString(executionJson.toPath(), contentToSave, StandardCharsets.UTF_8);
+                Files.writeString(structuredJson.toPath(), contentToSave, StandardCharsets.UTF_8);
+                Files.writeString(reportsStructuredJson.toPath(), contentToSave, StandardCharsets.UTF_8);
+                if (auraStructuredDir != null)
+                {
+                    final File auraStructuredJson = new File(auraStructuredDir, "console-execution-" + index + ".json");
+                    Files.writeString(auraStructuredJson.toPath(), contentToSave, StandardCharsets.UTF_8);
                 }
             }
             catch (final Exception e)
@@ -592,7 +773,7 @@ public final class InteractiveConsoleEngine {
             final String ext = videoFile.getName().toLowerCase().endsWith(".gif") ? ".gif" : ".mp4";
 
             final List<String> storageRoots = List.of(
-                "storage/runs",
+                AiConfiguration.getInstance().getAuraStorageRunsDirectory(),
                 AiConfiguration.getInstance().getConsoleExecutionLogsDirectory(),
                 AiConfiguration.getInstance().getDiskReportDirectory(),
                 System.getProperty("allure.results.directory", "target/aura-sandbox/allure-results")
@@ -605,7 +786,7 @@ public final class InteractiveConsoleEngine {
                     continue;
                 }
                 final File runDir = new File(rootPath, runFolder);
-                if (!runDir.exists() && !"storage/runs".equals(rootPath))
+                if (!runDir.exists() && !AiConfiguration.getInstance().getAuraStorageRunsDirectory().equals(rootPath))
                 {
                     continue;
                 }

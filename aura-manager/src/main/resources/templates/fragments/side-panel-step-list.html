@@ -291,53 +291,57 @@
             <!-- EMPIRICAL PLAYBOOK FINDINGS (POST-FLIGHT TELEMETRY) -->
             <div id="sidePagePostFlightFindingsContainer" style="display: none; margin-bottom: 0.75rem;"></div>
 
+            <!-- DIRECTLY VISIBLE VIDEO PLAYER (ABOVE STEPS LIST) -->
+            <div id="sidePanelVideoContainer" class="side-panel-video-card" style="display: none; margin-bottom: 0.85rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.65rem; overflow: hidden;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <div style="font-weight: 600; font-size: 0.8rem; color: var(--text-main); display: flex; align-items: center; gap: 0.4rem;">
+                        <span class="material-symbols-outlined text-accent" style="font-size: 1.1rem;">videocam</span> Video Recording
+                    </div>
+                    <div class="flex-gap-2">
+                        <span class="tag-chip" id="sidePanelVideoChip">video-0.mp4</span>
+                        <button type="button" class="btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.72rem;" title="Open video in separate browser window" onclick="openAttachmentWindow('video', document.getElementById('sidePanelVideoChip') ? document.getElementById('sidePanelVideoChip').textContent : 'video-0.mp4')">
+                            <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">open_in_new</span> Open in Separate Window
+                        </button>
+                    </div>
+                </div>
+                <div style="width: 100%; border-radius: 6px; overflow: hidden; background: #000; position: relative;">
+                    <video id="sidePanelVideoPlayer" controls preload="metadata" style="width: 100%; max-height: 280px; display: block; object-fit: contain;">
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
+            </div>
+
             <!-- DYNAMIC STEP EXECUTION LIST CONTAINER -->
             <div class="step-execution-list" id="sidePageStepList">
                 <!-- DYNAMICALLY POPULATED ON ROW CLICK BY renderStepsForExecution() -->
             </div>
 
             <!-- COLLAPSIBLE ATTACHMENT SECTION -->
-            <div class="attachment-section step-section" id="attachmentSectionContainer">
+            <div class="attachment-section step-section" id="attachmentSectionContainer" style="display: none;">
                 <div class="step-section-header" onclick="toggleStepSection(this)" style="border-left-color: var(--status-pass);">
                     <div class="step-section-title">
                         <span class="attachment-title" style="margin: 0;"><span class="material-symbols-outlined text-accent">attach_file</span> EXECUTION ATTACHMENTS</span>
                     </div>
                     <div class="flex-gap-2">
-                        <span class="tag-chip" style="background: var(--bg-card); color: var(--text-main); font-size: 0.65rem;">2 FILES</span>
+                        <span class="tag-chip" id="attachmentCountChip" style="background: var(--bg-card); color: var(--text-main); font-size: 0.65rem;">0 FILES</span>
                         <span class="material-symbols-outlined step-section-chevron">chevron_right</span>
                     </div>
                 </div>
 
                 <div class="step-section-body" style="margin-top: 0.5rem; gap: 0.85rem;">
-                    <div class="attachment-preview-box" id="attachmentScreenshotBox">
+                    <div class="attachment-preview-box" id="attachmentScreenshotBox" style="display: none;">
                         <div class="flex-between">
                             <span style="font-size: 0.8rem; font-weight: 600;"><span class="material-symbols-outlined text-accent">image</span> Failure Screenshot Attachment</span>
                             <div class="flex-gap-2">
-                                <span class="tag-chip" id="attachmentScreenshotChip">failure_screenshot_step3.png</span>
-                                <button type="button" class="btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.72rem;" title="Open attachment in separate browser window" onclick="openAttachmentWindow('image', 'failure_screenshot_step3.png')">
+                                <span class="tag-chip" id="attachmentScreenshotChip">failure_screenshot.png</span>
+                                <button type="button" class="btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.72rem;" title="Open attachment in separate browser window" onclick="openAttachmentWindow('image', document.getElementById('attachmentScreenshotChip').textContent)">
                                     <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">open_in_new</span> Open in Separate Window
                                 </button>
                             </div>
                         </div>
                         <div class="attachment-img-mock">
                             <span class="material-symbols-outlined" style="font-size: 2rem; color: #60a5fa;">image</span>
-                            <span>[ Embedded Screenshot: ZIP Validation Error Modal ]</span>
-                        </div>
-                    </div>
-
-                    <div class="attachment-preview-box" id="attachmentVideoBox" style="display: none;">
-                        <div class="flex-between">
-                            <span style="font-size: 0.8rem; font-weight: 600;"><span class="material-symbols-outlined text-accent">videocam</span> Video Recording Attachment</span>
-                            <div class="flex-gap-2">
-                                <span class="tag-chip" id="attachmentVideoChip">execution_replay.mp4</span>
-                                <button type="button" class="btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.72rem;" title="Open attachment in separate browser window" onclick="openAttachmentWindow('video', 'execution_replay.mp4')">
-                                    <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">open_in_new</span> Open in Separate Window
-                                </button>
-                            </div>
-                        </div>
-                        <div class="attachment-video-mock">
-                            <span class="material-symbols-outlined" style="font-size: 2.5rem; color: #3b82f6; cursor: pointer;">play_circle</span>
-                            <span>[ Embedded Video Replay Player: 00:45 Duration ]</span>
+                            <span>[ Failure Screenshot ]</span>
                         </div>
                     </div>
 
@@ -359,7 +363,7 @@
                         </div>
                     </div>
 
-                    <!-- Execution Log Attachment Box -->
+                    <!-- Execution Log Attachment Row -->
                     <div class="attachment-preview-box" id="attachmentLogBox" style="display: none;">
                         <div class="flex-between">
                             <span style="font-size: 0.8rem; font-weight: 600;"><span class="material-symbols-outlined text-accent">article</span> Test Execution Log</span>
@@ -370,10 +374,10 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="attachment-code-mock" id="attachmentLogPreview" style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem; font-family: var(--font-mono); font-size: 0.75rem; max-height: 140px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; color: var(--text-muted);">
-                            <span>[ Execution Log available for download / preview ]</span>
-                        </div>
                     </div>
+
+                    <!-- Dynamic Custom Attachments Container -->
+                    <div id="attachmentCustomItemsContainer" style="display: flex; flex-direction: column; gap: 0.5rem;"></div>
                 </div>
             </div>
 

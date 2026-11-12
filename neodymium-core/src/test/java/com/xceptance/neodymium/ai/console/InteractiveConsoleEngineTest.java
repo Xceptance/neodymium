@@ -48,6 +48,7 @@ import org.neodymium.ai.report.TestExecutionReport.ReportActionEntry;
 import org.neodymium.ai.report.TestExecutionReport.ReportLlmCallEntry;
 import org.neodymium.ai.report.TestExecutionReport.ReportMetrics;
 import org.neodymium.ai.report.TestExecutionReport.ReportStepEntry;
+import org.neodymium.util.Neodymium;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -100,6 +101,8 @@ public class InteractiveConsoleEngineTest
             System.clearProperty("neodymium.ai.consoleExecutionLogs");
         }
         System.clearProperty("neodymium.ai.consoleExecutionLogs.directory");
+        System.clearProperty("neodymium.ai.storageRuns.directory");
+        Neodymium.clearAttachments();
         AiConfiguration.resetInstance();
     }
 
@@ -544,6 +547,85 @@ public class InteractiveConsoleEngineTest
         assertTrue(playbookIndexedYaml.exists(), "playbook-1.yaml should exist in structured run directory");
         assertEquals(yamlContent, Files.readString(playbookYaml.toPath()));
         assertEquals(yamlContent, Files.readString(playbookIndexedYaml.toPath()));
+    }
+
+    @Test
+    public void testDualWriteToAuraStorageRunsDirectoryAndCustomAttachments(@TempDir final Path customDir, @TempDir final Path auraStorageDir) throws Exception
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        System.setProperty("neodymium.ai.storageRuns.directory", auraStorageDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final File sampleAttachmentFile = new File(tempResultsDir, "sample-payload.csv");
+        Files.writeString(sampleAttachmentFile.toPath(), "colA,colB\nval1,val2");
+
+        Neodymium.addAttachment("sample-payload.csv", sampleAttachmentFile, false);
+        Neodymium.addAttachment("response.json", "{\"status\":\"success\"}", "application/json", false);
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-dual-write");
+        engine.setExecutionLogContent("Test execution timeline:\n[Step 01] Navigate -> SUCCESS");
+
+        final String stateJson = "{\"testName\":\"DualWriteTestClass · ds1\",\"testFile\":\"com.xceptance.DualWriteTestClass#execute\",\"status\":\"passed\",\"steps\":[]}";
+        engine.pushState(stateJson);
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File localClassDir = new File(customDir.toFile(), runFolder + "/DualWriteTestClass");
+        final File auraClassDir = new File(auraStorageDir.toFile(), runFolder + "/DualWriteTestClass");
+
+        assertTrue(localClassDir.exists(), "Local test class directory must exist");
+        assertTrue(auraClassDir.exists(), "Aura storage test class directory must exist due to dual-write");
+
+        // Verify execution.log in both locations
+        final File localExecutionLog = new File(localClassDir, "execution.log");
+        final File auraExecutionLog = new File(auraClassDir, "execution.log");
+        assertTrue(localExecutionLog.exists(), "Local execution.log must exist");
+        assertTrue(auraExecutionLog.exists(), "Aura execution.log must exist");
+        assertEquals("Test execution timeline:\n[Step 01] Navigate -> SUCCESS", Files.readString(auraExecutionLog.toPath()));
+
+        // Verify custom attachments copied to both locations
+        final File auraCsv = new File(auraClassDir, "sample-payload.csv");
+        final File auraJson = new File(auraClassDir, "response.json");
+        assertTrue(auraCsv.exists(), "sample-payload.csv must exist in auraStorageDir");
+        assertTrue(auraJson.exists(), "response.json must exist in auraStorageDir");
+        assertEquals("colA,colB\nval1,val2", Files.readString(auraCsv.toPath()));
+        assertEquals("{\"status\":\"success\"}", Files.readString(auraJson.toPath()));
+
+        // Verify console-execution-1.json has attachments registered
+        final File auraExecutionJson = new File(auraClassDir, "console-execution-1.json");
+        assertTrue(auraExecutionJson.exists(), "Aura console-execution-1.json must exist");
+        final JsonNode root = new ObjectMapper().readTree(auraExecutionJson);
+        assertTrue(root.has("attachments"), "State JSON must contain attachments array");
+        final JsonNode attachmentsNode = root.get("attachments");
+        assertTrue(attachmentsNode.isArray(), "attachments should be an array");
+
+        boolean hasLogAttachment = false;
+        boolean hasCsvAttachment = false;
+        boolean hasJsonAttachment = false;
+        for (final JsonNode att : attachmentsNode)
+        {
+            final String name = att.path("name").asText();
+            if ("execution.log".equals(name))
+            {
+                hasLogAttachment = true;
+                assertEquals("text/plain", att.path("contentType").asText());
+                assertFalse(att.path("openByDefault").asBoolean());
+            }
+            else if ("sample-payload.csv".equals(name))
+            {
+                hasCsvAttachment = true;
+                assertFalse(att.path("openByDefault").asBoolean());
+            }
+            else if ("response.json".equals(name))
+            {
+                hasJsonAttachment = true;
+                assertEquals("application/json", att.path("contentType").asText());
+                assertFalse(att.path("openByDefault").asBoolean());
+            }
+        }
+        assertTrue(hasLogAttachment, "attachments array must include execution.log");
+        assertTrue(hasCsvAttachment, "attachments array must include sample-payload.csv");
+        assertTrue(hasJsonAttachment, "attachments array must include response.json");
     }
 
     @Test

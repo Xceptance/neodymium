@@ -1491,6 +1491,109 @@ public class AuraReportDataService
         {
             dto.setId(executionId);
         }
+
+        // Verify and populate attachments based on disk existence
+        final Path runDir = localRunJsonStorageService.getRunDir(effectiveRunId);
+        final List<TestExecutionDto.ExecutionAttachmentDto> resolvedAttachments = new ArrayList<>();
+        final String testClass = dto.getTestClass();
+        final String simpleClass = (testClass != null && testClass.contains(".")) ? testClass.substring(testClass.lastIndexOf('.') + 1) : (testClass != null ? testClass : "");
+
+        final List<Path> candidateDirs = new ArrayList<>();
+        if (Files.exists(runDir))
+        {
+            if (testClass != null && !testClass.isBlank())
+            {
+                candidateDirs.add(runDir.resolve(testClass));
+            }
+            if (!simpleClass.isEmpty() && !simpleClass.equals(testClass))
+            {
+                candidateDirs.add(runDir.resolve(simpleClass));
+            }
+            candidateDirs.add(runDir);
+        }
+
+        final List<TestExecutionDto.ExecutionAttachmentDto> rawAttachments = dto.getAttachments();
+        final Set<String> seenNames = new HashSet<>();
+
+        if (rawAttachments != null)
+        {
+            for (final TestExecutionDto.ExecutionAttachmentDto att : rawAttachments)
+            {
+                for (final Path cDir : candidateDirs)
+                {
+                    final Path fPath = cDir.resolve(att.getPath());
+                    if (Files.isRegularFile(fPath) && Files.isReadable(fPath))
+                    {
+                        try
+                        {
+                            att.setSize(Files.size(fPath));
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                        resolvedAttachments.add(att);
+                        seenNames.add(att.getName().toLowerCase(Locale.ROOT));
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Auto-discover standard attachments if not already present:
+        // 1. Video
+        if (!seenNames.contains("video") && dto.getVideoUrl() != null && !dto.getVideoUrl().isBlank())
+        {
+            final String videoName = dto.getVideoUrl().contains("/") ? dto.getVideoUrl().substring(dto.getVideoUrl().lastIndexOf('/') + 1) : dto.getVideoUrl();
+            for (final Path cDir : candidateDirs)
+            {
+                final Path vf = cDir.resolve(videoName);
+                if (Files.isRegularFile(vf) && Files.isReadable(vf))
+                {
+                    final TestExecutionDto.ExecutionAttachmentDto vAtt = new TestExecutionDto.ExecutionAttachmentDto(
+                        videoName, videoName, "video", videoName.endsWith(".webm") ? "video/webm" : "video/mp4", true, vf.toFile().length());
+                    resolvedAttachments.add(vAtt);
+                    seenNames.add(videoName.toLowerCase(Locale.ROOT));
+                    break;
+                }
+            }
+        }
+
+        // 2. Playbook YAML
+        if (!seenNames.contains("playbook.yaml"))
+        {
+            for (final Path cDir : candidateDirs)
+            {
+                final Path pf = cDir.resolve("playbook.yaml");
+                if (Files.isRegularFile(pf) && Files.isReadable(pf))
+                {
+                    final TestExecutionDto.ExecutionAttachmentDto pAtt = new TestExecutionDto.ExecutionAttachmentDto(
+                        "playbook.yaml", "playbook.yaml", "yaml", "text/yaml", false, pf.toFile().length());
+                    resolvedAttachments.add(pAtt);
+                    seenNames.add("playbook.yaml");
+                    break;
+                }
+            }
+        }
+
+        // 3. Execution Log
+        if (!seenNames.contains("execution.log"))
+        {
+            for (final Path cDir : candidateDirs)
+            {
+                final Path lf = cDir.resolve("execution.log");
+                if (Files.isRegularFile(lf) && Files.isReadable(lf))
+                {
+                    final TestExecutionDto.ExecutionAttachmentDto lAtt = new TestExecutionDto.ExecutionAttachmentDto(
+                        "execution.log", "execution.log", "log", "text/plain", false, lf.toFile().length());
+                    resolvedAttachments.add(lAtt);
+                    seenNames.add("execution.log");
+                    break;
+                }
+            }
+        }
+
+        dto.setAttachments(resolvedAttachments);
+
         resolveBugsForExecution(effectiveRunId, dto);
         return dto;
     }
@@ -3481,7 +3584,7 @@ public class AuraReportDataService
         }
         if (loc.length() == 2)
         {
-            return loc.toUpperCase(java.util.Locale.ROOT);
+            return loc.toUpperCase(Locale.ROOT);
         }
         return loc;
     }

@@ -3830,10 +3830,28 @@ function generateFullTestDiagnosticsMarkdown(execDto, activeRow) {
         }
     }
 
+    // Test Attachments
+    if (dto.attachments && Array.isArray(dto.attachments) && dto.attachments.length > 0) {
+        lines.push('');
+        lines.push('## Test Attachments');
+        dto.attachments.forEach(att => {
+            const sizeStr = att.size ? ` (${(att.size / 1024).toFixed(1)} KB)` : '';
+            lines.push(`- **${att.name || att.path}** [${att.type || 'file'}]${sizeStr}`);
+        });
+    }
+
     return lines.join('\n');
 }
 
 function copyFullTestDiagnostics(btn) {
+    if (btn && btn.disabled) return;
+    if (typeof isLiveStepFetchInFlight !== 'undefined' && isLiveStepFetchInFlight) {
+        if (typeof showActionNotification === 'function') {
+            showActionNotification('Diagnostics data is loading, please wait...', 'warning');
+        }
+        return;
+    }
+
     const activeRow = (typeof currentActiveRowId !== 'undefined' && currentActiveRowId)
         ? (document.getElementById(currentActiveRowId) || document.querySelector(`[data-row-id="${currentActiveRowId}"]`))
         : document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row');
@@ -3877,6 +3895,17 @@ function renderStepsForExecution(activeRow) {
 
         if (rowId) {
             stepListEl.innerHTML = '<div style="padding: 1.5rem; text-align: center; color: var(--text-muted);"><span class="material-symbols-outlined" style="font-size: 1.5rem; vertical-align: middle; animation: spin 1s linear infinite;">sync</span> Loading steps and screenshots...</div>';
+
+            const copyBtn = document.getElementById('copyFullTestDiagnosticsBtn');
+            if (copyBtn) {
+                copyBtn.disabled = true;
+                copyBtn.setAttribute('title', 'Loading diagnostics...');
+                const icon = copyBtn.querySelector('.material-symbols-outlined');
+                if (icon) {
+                    icon.textContent = 'sync';
+                    icon.style.animation = 'spin 1s linear infinite';
+                }
+            }
 
             const fetchId = ++activeStepFetchId;
             isLiveStepFetchInFlight = true;
@@ -3975,6 +4004,16 @@ function renderStepsForExecution(activeRow) {
                     }
                     if (fetchId === activeStepFetchId) {
                         isLiveStepFetchInFlight = false;
+                        const copyBtn = document.getElementById('copyFullTestDiagnosticsBtn');
+                        if (copyBtn) {
+                            copyBtn.disabled = false;
+                            copyBtn.setAttribute('title', 'Copy full test diagnostics (markdown format)');
+                            const icon = copyBtn.querySelector('.material-symbols-outlined');
+                            if (icon) {
+                                icon.textContent = 'content_copy';
+                                icon.style.animation = '';
+                            }
+                        }
                     }
                 });
             return;
@@ -4919,60 +4958,60 @@ function renderStepsForExecution(activeRow) {
 
     stepListEl.innerHTML = html;
 
-    const videoUrlAttr = activeRow.getAttribute('data-video-url') || activeRow.getAttribute('data-video');
-    const attachmentContainer = document.getElementById('attachmentSectionContainer');
-    const videoPreviewBox = document.getElementById('attachmentVideoBox') || (attachmentContainer ? attachmentContainer.querySelector('.attachment-video-mock')?.closest('.attachment-preview-box') : null);
+    // Video handling: directly visible above steps list
+    const videoContainer = document.getElementById('sidePanelVideoContainer');
+    const videoPlayer = document.getElementById('sidePanelVideoPlayer');
+    const videoChip = document.getElementById('sidePanelVideoChip');
 
+    let videoAttachment = null;
+    if (activeRow._execDto && activeRow._execDto.attachments) {
+        videoAttachment = activeRow._execDto.attachments.find(a => a.type === 'video' || (a.name && (a.name.endsWith('.mp4') || a.name.endsWith('.webm'))));
+    }
+    const videoUrlAttr = videoAttachment ? videoAttachment.path : (activeRow.getAttribute('data-video-url') || activeRow.getAttribute('data-video'));
     const hasVideo = videoUrlAttr && videoUrlAttr.trim().length > 0 && videoUrlAttr !== 'null';
 
-    if (hasVideo && attachmentContainer) {
-        if (videoPreviewBox) {
-            videoPreviewBox.style.display = 'flex';
-        }
+    if (hasVideo && videoContainer && videoPlayer) {
+        videoContainer.style.display = 'block';
         const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '');
         const testClass = resolveSimpleTestClassName(activeRow);
         const src = (videoUrlAttr.startsWith('http') || videoUrlAttr.startsWith('/'))
             ? videoUrlAttr
-            : `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(videoUrlAttr)}`;
+            : `/runs/${encodeURIComponent(runId)}/files/${encodeURIComponent(testClass)}/${encodeURIComponent(videoUrlAttr)}`;
 
-        const videoBox = videoPreviewBox ? videoPreviewBox.querySelector('.attachment-video-mock') : attachmentContainer.querySelector('.attachment-video-mock');
-        if (videoBox) {
-            videoBox.style.height = 'auto';
-            videoBox.style.padding = '0.5rem';
-            videoBox.innerHTML = `<video controls style="width:100%; max-height:280px; border-radius:6px; background:#000;" src="${src}"></video>`;
+        if (videoPlayer.getAttribute('src') !== src) {
+            videoPlayer.src = src;
+            videoPlayer.preload = 'metadata';
+            videoPlayer.autoplay = false;
         }
-        const tagChip = videoPreviewBox ? videoPreviewBox.querySelector('.tag-chip') : null;
-        if (tagChip) {
-            tagChip.textContent = videoUrlAttr;
+        if (videoChip) {
+            videoChip.textContent = videoUrlAttr;
         }
-        const openBtn = videoPreviewBox ? videoPreviewBox.querySelector('button[onclick*="openAttachmentWindow"]') : null;
-        if (openBtn) {
-            openBtn.setAttribute('onclick', `openAttachmentWindow('video', '${src}')`);
-        }
-    } else {
-        if (videoPreviewBox) {
-            videoPreviewBox.style.display = 'none';
+    } else if (videoContainer) {
+        videoContainer.style.display = 'none';
+        if (videoPlayer) {
+            videoPlayer.pause();
+            videoPlayer.removeAttribute('src');
         }
     }
 
     // Playbook YAML attachment handling
     const playbookBox = document.getElementById('attachmentPlaybookBox');
-    const playbookContent = activeRow.getAttribute('data-playbook-content') || (activeRow._execDto && activeRow._execDto.playbookContent) || '';
-    const playbookFileAttr = activeRow.getAttribute('data-playbook-file') || (activeRow._execDto && activeRow._execDto.playbookFile) || '';
-    let playbookFileName = 'playbook.yaml';
-    if (playbookFileAttr) {
-        const parts = playbookFileAttr.split(/[/\\]/);
-        playbookFileName = parts[parts.length - 1] || 'playbook.yaml';
+    let playbookAttachment = null;
+    if (activeRow._execDto && activeRow._execDto.attachments) {
+        playbookAttachment = activeRow._execDto.attachments.find(a => a.type === 'yaml' || (a.name && (a.name.endsWith('.yaml') || a.name.endsWith('.yml'))));
     }
+    const playbookContent = activeRow.getAttribute('data-playbook-content') || (activeRow._execDto && activeRow._execDto.playbookContent) || '';
+    const hasPlaybook = playbookAttachment || (playbookContent && playbookContent.trim().length > 0);
 
     if (playbookBox) {
-        if (playbookContent && playbookContent.trim().length > 0) {
+        if (hasPlaybook) {
             playbookBox.style.display = 'flex';
+            const playbookFileName = playbookAttachment ? playbookAttachment.name : 'playbook.yaml';
             const chip = playbookBox.querySelector('#attachmentPlaybookChip') || playbookBox.querySelector('.tag-chip');
             if (chip) chip.textContent = playbookFileName;
             const codePreview = playbookBox.querySelector('#attachmentPlaybookCodePreview');
             if (codePreview) {
-                codePreview.textContent = playbookContent;
+                codePreview.textContent = playbookContent || '[ Playbook YAML available ]';
             }
             const openBtn = playbookBox.querySelector('button[onclick*="openAttachmentWindow"]');
             if (openBtn) {
@@ -4985,21 +5024,60 @@ function renderStepsForExecution(activeRow) {
 
     // Execution Log attachment handling
     const logBox = document.getElementById('attachmentLogBox');
+    let logAttachment = null;
+    if (activeRow._execDto && activeRow._execDto.attachments) {
+        logAttachment = activeRow._execDto.attachments.find(a => a.type === 'log' || (a.name && (a.name.endsWith('.log') || a.name.endsWith('.txt'))));
+    }
+
     if (logBox) {
-        logBox.style.display = 'flex';
-        const openBtn = logBox.querySelector('button[onclick*="openAttachmentWindow"]');
-        if (openBtn) {
-            openBtn.setAttribute('onclick', `openAttachmentWindow('log', 'execution.log')`);
+        if (logAttachment) {
+            logBox.style.display = 'flex';
+            const chip = logBox.querySelector('#attachmentLogChip') || logBox.querySelector('.tag-chip');
+            if (chip) chip.textContent = logAttachment.name || 'execution.log';
+            const openBtn = logBox.querySelector('button[onclick*="openAttachmentWindow"]');
+            if (openBtn) {
+                openBtn.setAttribute('onclick', `openAttachmentWindow('log', '${logAttachment.name || 'execution.log'}')`);
+            }
+        } else {
+            logBox.style.display = 'none';
         }
     }
 
+    // Custom attachments handling
+    const customContainer = document.getElementById('attachmentCustomItemsContainer');
+    if (customContainer) {
+        customContainer.innerHTML = '';
+        if (activeRow._execDto && activeRow._execDto.attachments) {
+            const standardTypes = new Set(['video', 'yaml', 'log']);
+            const customAtts = activeRow._execDto.attachments.filter(a => !standardTypes.has(a.type) && a.name !== 'playbook.yaml' && a.name !== 'execution.log' && !a.name.endsWith('.mp4'));
+            customAtts.forEach(att => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'attachment-preview-box';
+                itemDiv.style.display = 'flex';
+                itemDiv.innerHTML = `
+                    <div class="flex-between">
+                        <span style="font-size: 0.8rem; font-weight: 600;"><span class="material-symbols-outlined text-accent">attach_file</span> ${escapeHtml(att.name)}</span>
+                        <div class="flex-gap-2">
+                            <span class="tag-chip">${escapeHtml(att.name)}</span>
+                            <button type="button" class="btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.72rem;" title="Open attachment in separate browser window" onclick="openAttachmentWindow('${escapeHtml(att.type)}', '${escapeHtml(att.path)}')">
+                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">open_in_new</span> Open in Separate Window
+                            </button>
+                        </div>
+                    </div>
+                `;
+                customContainer.appendChild(itemDiv);
+            });
+        }
+    }
+
+    const attachmentContainer = document.getElementById('attachmentSectionContainer');
     if (attachmentContainer) {
         const visibleAttachments = attachmentContainer.querySelectorAll('.attachment-preview-box:not([style*="display: none"])');
         if (visibleAttachments.length === 0) {
             attachmentContainer.style.display = 'none';
         } else {
             attachmentContainer.style.display = 'block';
-            const fileCountChip = attachmentContainer.querySelector('.step-section-header .tag-chip');
+            const fileCountChip = document.getElementById('attachmentCountChip') || attachmentContainer.querySelector('.step-section-header .tag-chip');
             if (fileCountChip) {
                 fileCountChip.textContent = `${visibleAttachments.length} FILE${visibleAttachments.length > 1 ? 'S' : ''}`;
             }

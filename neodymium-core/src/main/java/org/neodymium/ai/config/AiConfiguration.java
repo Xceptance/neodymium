@@ -1123,6 +1123,19 @@ public final class AiConfiguration
     }
 
     /**
+     * Gets the base storage directory for Aura persistent test runs.
+     * Defaults to the property {@code neodymium.ai.storageRuns.directory}, falling back to
+     * {@code aura.report.storage.runs.base-dir}, and defaulting to {@code storage/runs}.
+     *
+     * @return aura storage runs directory path
+     */
+    public String getAuraStorageRunsDirectory()
+    {
+        return getProperty("neodymium.ai.storageRuns.directory",
+            getProperty("aura.report.storage.runs.base-dir", "storage/runs"));
+    }
+
+    /**
      * Gets the active execution mode for the AI pipeline.
      * Defaults to REPLAY_WITH_HEALING.
      *

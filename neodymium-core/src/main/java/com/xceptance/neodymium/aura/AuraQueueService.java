@@ -524,7 +524,7 @@ public final class AuraQueueService
                     interactiveService.setCurrentConsoleEngine(engine);
 
                     final List<File> runStorageDirs = List.of(
-                        new File("storage/runs", runId),
+                        new File(AiConfiguration.getInstance().getAuraStorageRunsDirectory(), runId),
                         new File(AiConfiguration.getInstance().getConsoleExecutionLogsDirectory(), runId)
                     );
                     for (final File runDir : runStorageDirs)
