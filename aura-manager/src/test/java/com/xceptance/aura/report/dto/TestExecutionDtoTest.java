@@ -445,4 +445,21 @@ public final class TestExecutionDtoTest
         final TestExecutionDto dto4 = new TestExecutionDto("id4", null, "title", "passed", "engine", "loc", "chrome", null, null);
         Assertions.assertEquals("DefaultClass", dto4.getSimpleClassName());
     }
+
+    @Test
+    public void testPlaybookContentDeserialization() throws Exception
+    {
+        final String json = """
+            {
+                "id": "playbook-exec-1",
+                "testClass": "com.xceptance.test.PlaybookYamlTest",
+                "playbookFile": "scripts/login.yaml",
+                "playbookContent": "steps:\\n  - action: open('/login')\\n  - action: fill('#user', 'admin')"
+            }
+            """;
+        final TestExecutionDto dto = this.objectMapper.readValue(json, TestExecutionDto.class);
+        Assertions.assertNotNull(dto);
+        Assertions.assertEquals("scripts/login.yaml", dto.getPlaybookFile());
+        Assertions.assertEquals("steps:\n  - action: open('/login')\n  - action: fill('#user', 'admin')", dto.getPlaybookContent());
+    }
 }

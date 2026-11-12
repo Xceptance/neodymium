@@ -1062,8 +1062,14 @@ table.aura-table tr.clickable-row.active-selected-row td:first-child {
 .allure-side-page-panel.active { display: flex; }
 @keyframes slideInRight { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
 
-.side-page-header { padding: 1.25rem; border-bottom: 1px solid var(--border); background: var(--bg-card); display: flex; align-items: flex-start; justify-content: space-between; }
-.side-page-title { font-size: 1.1rem; font-weight: 700; color: var(--text-main); }
+.side-page-header { padding: 1.25rem; border-bottom: 1px solid var(--border); background: var(--bg-card); display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+.side-page-header-content { flex: 1 1 auto; min-width: 0; }
+.side-page-header-actions { display: flex; align-items: center; gap: 0.35rem; flex: 0 0 auto; flex-shrink: 0; }
+.side-page-header-actions .btn-icon { background: none; border: none; font-size: 1.2rem; color: var(--text-muted); cursor: pointer; padding: 0.25rem 0.5rem; border-radius: var(--radius-sm); display: inline-flex; align-items: center; justify-content: center; transition: color 0.15s ease, background 0.15s ease; }
+.side-page-header-actions .btn-icon:hover { background: var(--bg-hover); color: var(--text-main); }
+.side-page-header-actions .btn-icon.copied { color: #16a34a !important; }
+.side-page-header-actions .side-page-close { margin: 0; }
+.side-page-title { font-size: 1.1rem; font-weight: 700; color: var(--text-main); word-break: break-word; overflow-wrap: break-word; }
 .side-page-close { background: none; border: none; font-size: 1.2rem; color: var(--text-muted); cursor: pointer; padding: 0.25rem 0.5rem; border-radius: var(--radius-sm); }
 .side-page-close:hover { background: var(--bg-hover); color: var(--text-main); }
 

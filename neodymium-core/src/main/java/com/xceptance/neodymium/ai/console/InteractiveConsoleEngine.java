@@ -525,6 +525,28 @@ public final class InteractiveConsoleEngine {
                 }
                 final File reportsStructuredJson = new File(reportsStructuredDir, "console-execution-" + index + ".json");
                 Files.writeString(reportsStructuredJson.toPath(), contentToSave, StandardCharsets.UTF_8);
+                if (parsedState.has("playbookContent") && !parsedState.get("playbookContent").isJsonNull())
+                {
+                    final String playbookYaml = parsedState.get("playbookContent").getAsString();
+                    if (playbookYaml != null && !playbookYaml.isBlank())
+                    {
+                        final String playbookIndexed = "playbook-" + index + ".yaml";
+                        Files.writeString(new File(structuredDir, playbookIndexed).toPath(), playbookYaml, StandardCharsets.UTF_8);
+                        Files.writeString(new File(reportsStructuredDir, playbookIndexed).toPath(), playbookYaml, StandardCharsets.UTF_8);
+
+                        final File defaultPb = new File(structuredDir, "playbook.yaml");
+                        if (!defaultPb.exists())
+                        {
+                            Files.writeString(defaultPb.toPath(), playbookYaml, StandardCharsets.UTF_8);
+                        }
+                        final File reportsDefaultPb = new File(reportsStructuredDir, "playbook.yaml");
+                        if (!reportsDefaultPb.exists())
+                        {
+                            Files.writeString(reportsDefaultPb.toPath(), playbookYaml, StandardCharsets.UTF_8);
+                        }
+                    }
+                }
+
                 if (parsedState.has("videoUrl"))
                 {
                     final String videoName = parsedState.get("videoUrl").getAsString();

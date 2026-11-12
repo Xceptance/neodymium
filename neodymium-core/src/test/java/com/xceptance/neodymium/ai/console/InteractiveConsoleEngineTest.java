@@ -523,6 +523,30 @@ public class InteractiveConsoleEngineTest
     }
 
     @Test
+    public void testPlaybookYamlWrittenToExecutionDirectory(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-playbook-yaml");
+        final String yamlContent = "steps:\n  - action: open('/shop')\n  - action: click('#cart')";
+        final String stateJson = "{\"testName\":\"PlaybookTestClass · ds1\",\"testFile\":\"com.xceptance.PlaybookTestClass#execute\",\"status\":\"passed\",\"playbookContent\":\"steps:\\n  - action: open('/shop')\\n  - action: click('#cart')\",\"steps\":[]}";
+
+        engine.pushState(stateJson);
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File testClassFolder = new File(customDir.toFile(), runFolder + "/PlaybookTestClass");
+        final File playbookYaml = new File(testClassFolder, "playbook.yaml");
+        final File playbookIndexedYaml = new File(testClassFolder, "playbook-1.yaml");
+
+        assertTrue(playbookYaml.exists(), "playbook.yaml should exist in structured run directory");
+        assertTrue(playbookIndexedYaml.exists(), "playbook-1.yaml should exist in structured run directory");
+        assertEquals(yamlContent, Files.readString(playbookYaml.toPath()));
+        assertEquals(yamlContent, Files.readString(playbookIndexedYaml.toPath()));
+    }
+
+    @Test
     public void testStateJsonSerializesHealedActionTargetAndFlag() throws Exception
     {
         final ExecutionContext context = new ExecutionContext(new SessionData());

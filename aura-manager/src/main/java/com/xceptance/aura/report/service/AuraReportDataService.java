@@ -1454,6 +1454,35 @@ public class AuraReportDataService
                 blk.set("llmCalls", node.get("llmCalls"));
             }
         }
+        if (node instanceof ObjectNode objNode && (!objNode.has("playbookContent") || objNode.path("playbookContent").asText().isBlank()))
+        {
+            try
+            {
+                final Path runDir = localRunJsonStorageService.getRunDir(effectiveRunId);
+                if (Files.exists(runDir))
+                {
+                    final String testClass = objNode.path("testClass").asText("");
+                    final String simpleClass = testClass.contains(".") ? testClass.substring(testClass.lastIndexOf('.') + 1) : testClass;
+                    Path pbPath = runDir.resolve(testClass).resolve("playbook.yaml");
+                    if (!Files.exists(pbPath) && !simpleClass.isEmpty())
+                    {
+                        pbPath = runDir.resolve(simpleClass).resolve("playbook.yaml");
+                    }
+                    if (!Files.exists(pbPath))
+                    {
+                        pbPath = runDir.resolve("playbook.yaml");
+                    }
+                    if (Files.isRegularFile(pbPath) && Files.isReadable(pbPath))
+                    {
+                        final String yaml = Files.readString(pbPath, StandardCharsets.UTF_8);
+                        objNode.put("playbookContent", yaml);
+                    }
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
         final TestExecutionDto dto = objectMapper.treeToValue(node, TestExecutionDto.class);
         if (dto.getId() == null || dto.getId().isBlank()
                 || "bad".equalsIgnoreCase(dto.getId())

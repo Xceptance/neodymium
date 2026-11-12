@@ -3650,6 +3650,199 @@ function copyTurnConversation(stepId, cIdx, btn) {
     copyTextToClipboardWithFeedback(md, btn, 'Copied Turn!');
 }
 
+function copyAttachmentPlaybook(btn) {
+    const activeRow = (typeof currentActiveRowId !== 'undefined' && currentActiveRowId)
+        ? (document.getElementById(currentActiveRowId) || document.querySelector(`[data-row-id="${currentActiveRowId}"]`))
+        : document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row');
+
+    const yaml = (activeRow && activeRow.getAttribute('data-playbook-content'))
+        || (activeRow && activeRow._execDto && activeRow._execDto.playbookContent)
+        || (window._currentActiveExecDto && window._currentActiveExecDto.playbookContent)
+        || '';
+
+    if (!yaml) return;
+    copyTextToClipboardWithFeedback(yaml, btn, 'Copied YAML!');
+}
+
+function generateFullTestDiagnosticsMarkdown(execDto, activeRow) {
+    const row = activeRow || (typeof currentActiveRowId !== 'undefined' && currentActiveRowId
+        ? (document.getElementById(currentActiveRowId) || document.querySelector(`[data-row-id="${currentActiveRowId}"]`))
+        : document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row'));
+
+    const dto = execDto || (row && row._execDto) || (typeof window._currentActiveExecDto !== 'undefined' ? window._currentActiveExecDto : null) || {};
+
+    const testName = dto.testName || (row ? (row.getAttribute('data-test-name') || row.getAttribute('data-test-class')) : '') || document.getElementById('sidePageTestName')?.innerText || 'Test Execution';
+    const testClass = dto.testClass || (row ? row.getAttribute('data-test-class') : '') || '';
+    const testMethod = dto.testMethod || (row ? (row.getAttribute('data-test-method') || resolveTestMethod(row, null)) : '') || '';
+    const status = dto.status || (row ? row.getAttribute('data-status') : '') || 'UNKNOWN';
+    const runId = dto.runId || (row ? (row.getAttribute('data-run-id') || resolveActiveRunId(null, row)) : '') || (typeof activeRunId !== 'undefined' ? activeRunId : '');
+    const duration = dto.durationFormatted || (row ? row.getAttribute('data-duration-formatted') : '') || (dto.durationMs ? `${(dto.durationMs / 1000).toFixed(1)}s` : '');
+    const startTime = dto.startTime || (row ? row.getAttribute('data-start-time') : '') || '';
+    const browser = dto.browser || (row ? row.getAttribute('data-browser') : '') || 'Chrome';
+    const locale = dto.locale || (row ? (row.getAttribute('data-locale') || row.getAttribute('data-location')) : '') || 'Default';
+    const execMode = dto.executionMode || dto.mode || (row ? row.getAttribute('data-execution-mode') : '') || 'N/A';
+
+    const lines = [];
+    lines.push(`# Test Execution Diagnostics: ${testName}`);
+    lines.push('');
+    lines.push('## Test Summary');
+    lines.push(`- **Status:** ${status.toUpperCase()}`);
+    if (testClass) lines.push(`- **Test Class:** \`${testClass}\``);
+    if (testMethod) lines.push(`- **Test Method:** \`${testMethod}()\``);
+    if (runId) lines.push(`- **Run ID:** \`${runId}\``);
+    if (duration) lines.push(`- **Duration:** ${duration}`);
+    if (startTime) lines.push(`- **Start Time:** ${startTime}`);
+    lines.push(`- **Browser:** ${browser}`);
+    lines.push(`- **Locale:** ${locale}`);
+    lines.push(`- **Execution Mode:** ${execMode}`);
+    if (dto.llmCallsCount || (row && row.getAttribute('data-llm-calls'))) {
+        lines.push(`- **LLM Calls:** ${dto.llmCallsCount || row.getAttribute('data-llm-calls')}`);
+    }
+    if (dto.llmTotalTokens || (row && row.getAttribute('data-total-tokens'))) {
+        lines.push(`- **Total Tokens:** ${dto.llmTotalTokens || row.getAttribute('data-total-tokens')}`);
+    }
+
+    // Dataset / Data Bindings
+    let bindings = dto.localDataBindings || dto.dataBindings;
+    if (!bindings && row) {
+        const rawBindings = row.getAttribute('data-local-bindings') || row.getAttribute('data-bindings');
+        if (rawBindings) {
+            try { bindings = JSON.parse(rawBindings); } catch (e) {}
+        }
+    }
+    if (bindings && typeof bindings === 'object' && Object.keys(bindings).length > 0) {
+        lines.push('');
+        lines.push('### Dataset Parameters');
+        for (const [k, v] of Object.entries(bindings)) {
+            lines.push(`- \`${k}\`: ${v}`);
+        }
+    }
+
+    // Failure Details
+    const failureReason = dto.failureReason || dto.failure || (row ? (row.getAttribute('data-failure-reason') || row.getAttribute('data-failure')) : '') || '';
+    const failureTrace = dto.failureStackTrace || (row ? row.getAttribute('data-failure-stack-trace') : '') || '';
+    const visualRca = dto.visualRcaExplanation || (row ? row.getAttribute('data-visual-rca-explanation') : '') || '';
+
+    if (failureReason || failureTrace || visualRca || status.toLowerCase().includes('fail')) {
+        lines.push('');
+        lines.push('## Failure Details');
+        if (failureReason) {
+            lines.push('### Failure Reason');
+            lines.push('```');
+            lines.push(failureReason.trim());
+            lines.push('```');
+        }
+        if (visualRca) {
+            lines.push('### Visual RCA Explanation');
+            lines.push(visualRca.trim());
+        }
+        if (failureTrace) {
+            lines.push('### Stack Trace');
+            lines.push('```');
+            lines.push(failureTrace.trim());
+            lines.push('```');
+        }
+    }
+
+    // Initial Playbook / Test YAML
+    const playbookContent = dto.playbookContent || (row ? row.getAttribute('data-playbook-content') : '') || '';
+    if (playbookContent && playbookContent.trim().length > 0) {
+        lines.push('');
+        lines.push('## Initial Test YAML Playbook');
+        lines.push('```yaml');
+        lines.push(playbookContent.trim());
+        lines.push('```');
+    }
+
+    // Step Execution Summary
+    let stepsList = [];
+    const blocksAttr = row ? row.getAttribute('data-blocks') : null;
+    const stepsAttr = row ? row.getAttribute('data-steps') : null;
+    if (blocksAttr && blocksAttr !== '{}' && blocksAttr !== 'null') {
+        try {
+            const blocks = JSON.parse(blocksAttr);
+            const before = blocks.before || [];
+            const steps = blocks.steps || [];
+            const after = blocks.after || [];
+            stepsList = [...before, ...steps, ...after];
+        } catch (e) {}
+    }
+    if (stepsList.length === 0 && stepsAttr && stepsAttr !== '{}' && stepsAttr !== 'null') {
+        try {
+            const stepsObj = JSON.parse(stepsAttr);
+            if (stepsObj && stepsObj.tries) {
+                const try1 = stepsObj.tries['1'] || Object.values(stepsObj.tries)[0];
+                if (Array.isArray(try1)) stepsList = try1;
+            }
+        } catch (e) {}
+    }
+    if (stepsList.length === 0 && dto.blocks) {
+        const b = typeof dto.blocks === 'string' ? JSON.parse(dto.blocks) : dto.blocks;
+        stepsList = [...(b.before || []), ...(b.steps || []), ...(b.after || [])];
+    }
+
+    if (stepsList.length > 0) {
+        lines.push('');
+        lines.push('## Step Execution Summary');
+        stepsList.forEach((st, idx) => {
+            const stepNum = idx + 1;
+            const title = st.instruction || st.action || st.title || st.label || `Step ${stepNum}`;
+            const stepStatus = (st.status || (st.healed ? 'HEALED' : (st.error ? 'FAILED' : 'PASSED'))).toUpperCase();
+            const dur = st.durationMs ? ` (${(st.durationMs / 1000).toFixed(1)}s)` : '';
+            lines.push(`${stepNum}. [${stepStatus}] ${title}${dur}`);
+            if (st.error) {
+                lines.push(`   - Error: ${st.error}`);
+            }
+            if (st.action && st.action !== title) {
+                lines.push(`   - Action: ${st.action}`);
+            }
+        });
+    }
+
+    // Failing Step Diagnostics & LLM Forensics
+    const failedSteps = stepsList.filter(s => {
+        const sStatus = String(s.status || '').toLowerCase();
+        return sStatus.includes('fail') || sStatus.includes('error') || s.error;
+    });
+
+    if (failedSteps.length > 0 && window._neodymiumStepLlmData) {
+        lines.push('');
+        lines.push('## Failing Step Forensics & LLM Conversations');
+        for (const fStep of failedSteps) {
+            const stepTitle = fStep.instruction || fStep.action || fStep.title || fStep.label || '';
+            let matchedStepId = null;
+            for (const [sId, sData] of Object.entries(window._neodymiumStepLlmData)) {
+                if (sData.title === stepTitle || (fStep.id && sId.includes(fStep.id))) {
+                    matchedStepId = sId;
+                    break;
+                }
+            }
+            if (matchedStepId) {
+                const stepMd = generateStepConversationMarkdown(matchedStepId);
+                if (stepMd) {
+                    lines.push('');
+                    lines.push(stepMd);
+                }
+            } else if (fStep.error) {
+                lines.push(`### Failed: ${stepTitle}`);
+                lines.push(`- **Error:** ${fStep.error}`);
+            }
+        }
+    }
+
+    return lines.join('\n');
+}
+
+function copyFullTestDiagnostics(btn) {
+    const activeRow = (typeof currentActiveRowId !== 'undefined' && currentActiveRowId)
+        ? (document.getElementById(currentActiveRowId) || document.querySelector(`[data-row-id="${currentActiveRowId}"]`))
+        : document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row');
+
+    const md = generateFullTestDiagnosticsMarkdown(activeRow ? activeRow._execDto : null, activeRow);
+    if (!md) return;
+    copyTextToClipboardWithFeedback(md, btn, 'Copied Diagnostics!');
+}
+
 function renderStepsForExecution(activeRow) {
     const stepListEl = document.getElementById('sidePageStepList');
     if (!stepListEl) return;
@@ -3700,6 +3893,9 @@ function renderStepsForExecution(activeRow) {
                     if (fetchId !== activeStepFetchId || currentActiveRowId !== rowId) return;
                     activeRow.setAttribute('data-steps-fetched', 'true');
                     if (execDto) {
+                        activeRow._execDto = execDto;
+                        window._currentActiveExecDto = execDto;
+                        if (execDto.playbookContent) activeRow.setAttribute('data-playbook-content', execDto.playbookContent);
                         const newBlocks = extractBlocksJson(execDto);
                         const newSteps = extractStepsJson(execDto);
                         if (newBlocks) activeRow.setAttribute('data-blocks', newBlocks);
@@ -4759,6 +4955,44 @@ function renderStepsForExecution(activeRow) {
         }
     }
 
+    // Playbook YAML attachment handling
+    const playbookBox = document.getElementById('attachmentPlaybookBox');
+    const playbookContent = activeRow.getAttribute('data-playbook-content') || (activeRow._execDto && activeRow._execDto.playbookContent) || '';
+    const playbookFileAttr = activeRow.getAttribute('data-playbook-file') || (activeRow._execDto && activeRow._execDto.playbookFile) || '';
+    let playbookFileName = 'playbook.yaml';
+    if (playbookFileAttr) {
+        const parts = playbookFileAttr.split(/[/\\]/);
+        playbookFileName = parts[parts.length - 1] || 'playbook.yaml';
+    }
+
+    if (playbookBox) {
+        if (playbookContent && playbookContent.trim().length > 0) {
+            playbookBox.style.display = 'flex';
+            const chip = playbookBox.querySelector('#attachmentPlaybookChip') || playbookBox.querySelector('.tag-chip');
+            if (chip) chip.textContent = playbookFileName;
+            const codePreview = playbookBox.querySelector('#attachmentPlaybookCodePreview');
+            if (codePreview) {
+                codePreview.textContent = playbookContent;
+            }
+            const openBtn = playbookBox.querySelector('button[onclick*="openAttachmentWindow"]');
+            if (openBtn) {
+                openBtn.setAttribute('onclick', `openAttachmentWindow('yaml', '${playbookFileName}')`);
+            }
+        } else {
+            playbookBox.style.display = 'none';
+        }
+    }
+
+    // Execution Log attachment handling
+    const logBox = document.getElementById('attachmentLogBox');
+    if (logBox) {
+        logBox.style.display = 'flex';
+        const openBtn = logBox.querySelector('button[onclick*="openAttachmentWindow"]');
+        if (openBtn) {
+            openBtn.setAttribute('onclick', `openAttachmentWindow('log', 'execution.log')`);
+        }
+    }
+
     if (attachmentContainer) {
         const visibleAttachments = attachmentContainer.querySelectorAll('.attachment-preview-box:not([style*="display: none"])');
         if (visibleAttachments.length === 0) {
@@ -5147,6 +5381,9 @@ window.toggleDomSnapshot = toggleDomSnapshot;
 window.toggleSystemPrompt = toggleSystemPrompt;
 window.copyStepConversation = copyStepConversation;
 window.copyTurnConversation = copyTurnConversation;
+window.copyFullTestDiagnostics = copyFullTestDiagnostics;
+window.generateFullTestDiagnosticsMarkdown = generateFullTestDiagnosticsMarkdown;
+window.copyAttachmentPlaybook = copyAttachmentPlaybook;
 window.generateStepConversationMarkdown = generateStepConversationMarkdown;
 window.parseLlmPromptContent = parseLlmPromptContent;
 window.parseToolCallResponse = parseToolCallResponse;
