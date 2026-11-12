@@ -577,8 +577,8 @@ public final class AuraTestQueueControllerTest
         Assertions.assertNotNull(queueListHtml);
         Assertions.assertFalse(queueListHtml.contains("saveQueueAsBatchBtn"),
                 "queue list container must not contain saveQueueAsBatchBtn");
-        Assertions.assertTrue(queueListHtml.contains("addQueueTagBtn"),
-                "queue list container must contain addQueueTagBtn");
+        Assertions.assertFalse(queueListHtml.contains("addQueueTagBtn"),
+                "queue list container must not contain redundant addQueueTagBtn");
         Assertions.assertFalse(queueListHtml.contains("configPanel"),
                 "queueListContainerContent must not contain configPanel to prevent UI duplication in the middle column");
         Assertions.assertFalse(queueListHtml.contains("browserProfilesScrollContainer"),

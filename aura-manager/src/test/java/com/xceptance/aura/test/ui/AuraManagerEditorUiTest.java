@@ -2088,7 +2088,7 @@ public final class AuraManagerEditorUiTest
 
     /**
      * Verifies that the Playbooks & Queue page does not contain the legacy "Save Queue as Batch" buttons,
-     * and instead provides the "Add Tag" buttons in the Queue Action Bar and Run Configuration panel.
+     * and provides the single "Add Tag" button above the Run Queue button in the Run Configuration panel.
      */
     @Test
     public final void testPlaybooksQueuePageHasNoSaveAsBatchButtonAndProvidesRunTagging()
@@ -2132,8 +2132,8 @@ public final class AuraManagerEditorUiTest
         // Check the test in file list to add it to the run queue
         Selenide.executeJavaScript("document.querySelector(\".file-container[data-file='New Interactive Aura Test.yaml'] .file-select-cb\").click();");
 
-        // Queue is now non-empty: verify Add Tag button is visible in Queue Action Bar
-        $("#addQueueTagBtn").shouldBe(Condition.visible);
+        // Queue is now non-empty: verify redundant Add Tag button is NOT in Queue Action Bar
+        $("#addQueueTagBtn").shouldNotBe(Condition.exist);
         $("#queueActionRunTags").shouldHave(Condition.text("Environment: Staging"));
 
         // Remove tag via chip remove button

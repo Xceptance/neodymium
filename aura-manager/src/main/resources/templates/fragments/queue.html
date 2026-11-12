@@ -19,11 +19,6 @@
                 <span style="color: var(--accent); font-weight: 600;">(<span th:text="${totalRuns != null ? totalRuns : queue.size()}">0</span> runs)</span>
             </span>
             <div style="display: flex; gap: 6px; align-items: center;">
-                <button id="addQueueTagBtn" type="button" onclick="openRunTagModal()"
-                        class="btn-edit" style="padding: 4px 10px; font-size: 11px; cursor: pointer; color: var(--accent); display: inline-flex; align-items: center; gap: 4px;"
-                        title="Add tag to the run of the queue">
-                    <span class="material-symbols-outlined" style="font-size: 14px;">label</span> Add Tag
-                </button>
                 <button id="clearQueueBtn" hx-post="/api/queue/clear" hx-target="#queueListContainer" hx-swap="innerHTML" 
                         class="btn-edit" style="padding: 4px 10px; font-size: 11px; cursor: pointer; color: var(--danger);">
                     <span class="material-symbols-outlined">delete</span> Clear Queue
