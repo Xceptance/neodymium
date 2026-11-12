@@ -363,6 +363,51 @@ public class LocalRunJsonStorageService
                             continue;
                         }
 
+                        if (node.has("tags") && node.path("tags").isObject())
+                        {
+                            node.path("tags").fields().forEachRemaining(entry -> {
+                                final String k = entry.getKey().trim();
+                                if (!k.isEmpty())
+                                {
+                                    final List<String> list = existingTags.computeIfAbsent(k, key -> new ArrayList<>());
+                                    if (entry.getValue().isArray())
+                                    {
+                                        for (final JsonNode item : entry.getValue())
+                                        {
+                                            final String s = item.asText("").trim();
+                                            if (!s.isEmpty() && !list.contains(s))
+                                            {
+                                                list.add(s);
+                                            }
+                                        }
+                                    }
+                                    else
+                                    {
+                                        final String s = entry.getValue().asText("").trim();
+                                        if (!s.isEmpty() && !list.contains(s))
+                                        {
+                                            list.add(s);
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                        if (node.has("variationTags") && node.path("variationTags").isObject())
+                        {
+                            node.path("variationTags").fields().forEachRemaining(entry -> {
+                                final String k = entry.getKey().trim();
+                                if (!k.isEmpty())
+                                {
+                                    final List<String> list = existingTags.computeIfAbsent(k, key -> new ArrayList<>());
+                                    final String s = entry.getValue().asText("").trim();
+                                    if (!s.isEmpty() && !list.contains(s))
+                                    {
+                                        list.add(s);
+                                    }
+                                }
+                            });
+                        }
+
                         extractLocalesFromNode(node, localesSet);
                         extractBrowsersFromNode(node, browsersSet);
 
@@ -720,6 +765,15 @@ public class LocalRunJsonStorageService
                 }
             }
 
+            if (!AuraReportDataService.isRealBatch(batchName))
+            {
+                final String tagBatch = AuraReportDataService.resolveEffectiveBatchNameFromMap(batchName, existingTags);
+                if (AuraReportDataService.isRealBatch(tagBatch))
+                {
+                    batchName = tagBatch;
+                }
+            }
+
             final int total = totalExecsCount;
             final double passRate = total > 0 ? (double) Math.round((double)(pass + fixed) / total * 100.0) : 0.0;
 
@@ -994,19 +1048,15 @@ public class LocalRunJsonStorageService
                     }
                 });
             }
-            else
+            final boolean hasSuiteInTags = tagsNode.has("Suite") || tagsNode.has("suite") || tagsNode.has("Batch") || tagsNode.has("batch");
+            if (!hasSuiteInTags && AuraReportDataService.isRealBatch(batchName))
             {
-                if (batchName != null && !batchName.isBlank()
-                    && !"Default".equalsIgnoreCase(batchName)
-                    && !"Unknown".equalsIgnoreCase(batchName)
-                    && !"Queue".equalsIgnoreCase(batchName))
-                {
-                    tagsNode.put("Suite", batchName);
-                }
-                if (AuraReportDataService.isRealEnvironment(env))
-                {
-                    tagsNode.put("Instance", env);
-                }
+                tagsNode.put("Suite", batchName.trim());
+            }
+            final boolean hasEnvInTags = tagsNode.has("Instance") || tagsNode.has("Environment") || tagsNode.has("env");
+            if (!hasEnvInTags && AuraReportDataService.isRealEnvironment(env))
+            {
+                tagsNode.put("Instance", env.trim());
             }
             compactRootNode.set("locales", localesArray);
             compactRootNode.set("browsers", browsersArray);
@@ -1568,15 +1618,48 @@ public class LocalRunJsonStorageService
     public BatchInfo resolveOrCreateBatchJson(final File runDir, final List<File> testExecJsonFiles)
     {
         final File batchJsonFile = new File(runDir, "batch.json");
+        String existingName = null;
+        String existingDesc = null;
+        String existingEnv = null;
+        final Map<String, List<String>> existingTags = new LinkedHashMap<>();
+
         if (batchJsonFile.exists())
         {
             try
             {
                 final JsonNode batchNode = objectMapper.readTree(batchJsonFile);
-                final String name = batchNode.path("name").asText(batchNode.path("batchName").asText("Default"));
-                final String desc = batchNode.path("description").asText("");
-                final String env = batchNode.path("environment").asText(batchNode.path("env").asText("Default"));
-                return new BatchInfo(name, desc, env);
+                existingName = batchNode.path("name").asText(batchNode.path("batchName").asText(""));
+                existingDesc = batchNode.path("description").asText("");
+                existingEnv = batchNode.path("environment").asText(batchNode.path("env").asText(""));
+                if (batchNode.has("tags") && batchNode.path("tags").isObject())
+                {
+                    batchNode.path("tags").fields().forEachRemaining(entry -> {
+                        final String k = entry.getKey().trim();
+                        if (!k.isEmpty())
+                        {
+                            final List<String> list = existingTags.computeIfAbsent(k, key -> new ArrayList<>());
+                            if (entry.getValue().isArray())
+                            {
+                                for (final JsonNode item : entry.getValue())
+                                {
+                                    final String s = item.asText("").trim();
+                                    if (!s.isEmpty() && !list.contains(s))
+                                    {
+                                        list.add(s);
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                final String s = entry.getValue().asText("").trim();
+                                if (!s.isEmpty() && !list.contains(s))
+                                {
+                                    list.add(s);
+                                }
+                            }
+                        }
+                    });
+                }
             }
             catch (final Exception e)
             {
@@ -1585,6 +1668,7 @@ public class LocalRunJsonStorageService
         }
 
         String detectedEnv = null;
+        String detectedBatchName = null;
         if (testExecJsonFiles != null)
         {
             for (final File f : testExecJsonFiles)
@@ -1592,20 +1676,75 @@ public class LocalRunJsonStorageService
                 try
                 {
                     final JsonNode node = objectMapper.readTree(f);
-                    if (node.has("environment") && !node.path("environment").asText().isEmpty())
+                    if (node.has("tags") && node.path("tags").isObject())
                     {
-                        detectedEnv = node.path("environment").asText();
-                        break;
+                        node.path("tags").fields().forEachRemaining(entry -> {
+                            final String k = entry.getKey().trim();
+                            if (!k.isEmpty())
+                            {
+                                final List<String> list = existingTags.computeIfAbsent(k, key -> new ArrayList<>());
+                                if (entry.getValue().isArray())
+                                {
+                                    for (final JsonNode item : entry.getValue())
+                                    {
+                                        final String s = item.asText("").trim();
+                                        if (!s.isEmpty() && !list.contains(s))
+                                        {
+                                            list.add(s);
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    final String s = entry.getValue().asText("").trim();
+                                    if (!s.isEmpty() && !list.contains(s))
+                                    {
+                                        list.add(s);
+                                    }
+                                }
+                            }
+                        });
                     }
-                    if (node.has("env") && !node.path("env").asText().isEmpty())
+                    if (node.has("variationTags") && node.path("variationTags").isObject())
                     {
-                        detectedEnv = node.path("env").asText();
-                        break;
+                        node.path("variationTags").fields().forEachRemaining(entry -> {
+                            final String k = entry.getKey().trim();
+                            if (!k.isEmpty())
+                            {
+                                final List<String> list = existingTags.computeIfAbsent(k, key -> new ArrayList<>());
+                                final String s = entry.getValue().asText("").trim();
+                                if (!s.isEmpty() && !list.contains(s))
+                                {
+                                    list.add(s);
+                                }
+                            }
+                        });
                     }
-                    if (node.path("dataBindings").has("environment") && !node.path("dataBindings").path("environment").asText().isEmpty())
+                    if (detectedEnv == null)
                     {
-                        detectedEnv = node.path("dataBindings").path("environment").asText();
-                        break;
+                        if (node.has("environment") && !node.path("environment").asText().isEmpty())
+                        {
+                            detectedEnv = node.path("environment").asText();
+                        }
+                        else if (node.has("env") && !node.path("env").asText().isEmpty())
+                        {
+                            detectedEnv = node.path("env").asText();
+                        }
+                        else if (node.path("dataBindings").has("environment") && !node.path("dataBindings").path("environment").asText().isEmpty())
+                        {
+                            detectedEnv = node.path("dataBindings").path("environment").asText();
+                        }
+                    }
+                    if (detectedBatchName == null)
+                    {
+                        if (node.has("batchName") && AuraReportDataService.isRealBatch(node.path("batchName").asText()))
+                        {
+                            detectedBatchName = node.path("batchName").asText().trim();
+                        }
+                        else if (node.has("suite") && AuraReportDataService.isRealBatch(node.path("suite").asText()))
+                        {
+                            detectedBatchName = node.path("suite").asText().trim();
+                        }
                     }
                 }
                 catch (final Exception ignored)
@@ -1614,26 +1753,62 @@ public class LocalRunJsonStorageService
             }
         }
 
-        final String finalEnv = (detectedEnv != null && !detectedEnv.trim().isEmpty()) ? detectedEnv.trim() : "Default";
+        if (detectedBatchName == null)
+        {
+            final String tagBatch = AuraReportDataService.resolveEffectiveBatchNameFromMap("", existingTags);
+            if (AuraReportDataService.isRealBatch(tagBatch))
+            {
+                detectedBatchName = tagBatch;
+            }
+        }
+
         final String sysBatchName = System.getProperty("batchName", System.getProperty("neodymium.batchName", null));
-        final String defaultName = (sysBatchName != null && !sysBatchName.isBlank()) ? sysBatchName.trim() : "Default";
-        final String defaultDesc = "";
-
-        try
+        String finalName = (existingName != null && AuraReportDataService.isRealBatch(existingName)) ? existingName.trim() : null;
+        if (finalName == null && sysBatchName != null && !sysBatchName.isBlank())
         {
-            final ObjectNode batchNode = objectMapper.createObjectNode();
-            batchNode.put("name", defaultName);
-            batchNode.put("description", defaultDesc);
-            batchNode.put("environment", finalEnv);
-            objectMapper.writerWithDefaultPrettyPrinter().writeValue(batchJsonFile, batchNode);
-            LOG.info("Created batch.json for runDir={} with default name='{}', description='', environment='{}'", runDir.getName(), defaultName, finalEnv);
+            finalName = sysBatchName.trim();
         }
-        catch (final Exception e)
+        if (finalName == null && detectedBatchName != null && !detectedBatchName.isBlank())
         {
-            LOG.error("Failed to write default batch.json in {}: {}", runDir.getAbsolutePath(), e.getMessage());
+            finalName = detectedBatchName.trim();
+        }
+        if (finalName == null)
+        {
+            finalName = (existingName != null && !existingName.isBlank()) ? existingName.trim() : "Default";
         }
 
-        return new BatchInfo(defaultName, defaultDesc, finalEnv);
+        final String finalEnv = (existingEnv != null && !existingEnv.isBlank() && !existingEnv.equalsIgnoreCase("Default"))
+            ? existingEnv.trim()
+            : ((detectedEnv != null && !detectedEnv.trim().isEmpty()) ? detectedEnv.trim() : "Default");
+        final String finalDesc = existingDesc != null ? existingDesc : "";
+
+        if (!batchJsonFile.exists() || !existingTags.isEmpty() || (AuraReportDataService.isRealBatch(finalName) && !finalName.equals(existingName)))
+        {
+            try
+            {
+                final ObjectNode batchNode = objectMapper.createObjectNode();
+                batchNode.put("name", finalName);
+                batchNode.put("description", finalDesc);
+                batchNode.put("environment", finalEnv);
+                if (!existingTags.isEmpty())
+                {
+                    final ObjectNode tagsNode = objectMapper.createObjectNode();
+                    existingTags.forEach((k, vList) -> {
+                        final ArrayNode arr = objectMapper.createArrayNode();
+                        vList.forEach(arr::add);
+                        tagsNode.set(k, arr);
+                    });
+                    batchNode.set("tags", tagsNode);
+                }
+                objectMapper.writerWithDefaultPrettyPrinter().writeValue(batchJsonFile, batchNode);
+            }
+            catch (final Exception e)
+            {
+                LOG.error("Failed to write batch.json in {}: {}", runDir.getAbsolutePath(), e.getMessage());
+            }
+        }
+
+        return new BatchInfo(finalName, finalDesc, finalEnv);
     }
 
     private String buildFullRunJsonFromNestedDir(final String runId, final Path runJsonPath) throws IOException

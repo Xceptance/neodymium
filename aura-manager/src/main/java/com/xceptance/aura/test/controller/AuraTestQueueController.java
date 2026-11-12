@@ -1702,47 +1702,80 @@ public class AuraTestQueueController
 
         final RunRequest lastReq = queueService.getLastRunRequest();
         Integer scheduledCount = (isQueueRunning && lastReq != null && lastReq.datasets != null) ? lastReq.datasets.size() : null;
+        if (isQueueRunning && lastReq != null && (currentBatch == null || !AuraReportDataService.isRealBatch(currentBatch)))
+        {
+            currentBatch = AuraReportDataService.resolveEffectiveBatchNameFromMap(currentBatch, lastReq.tags);
+        }
+
+        final List<TestRunEntity> allRuns = reportDataService != null
+            ? reportDataService.getAllRuns()
+            : Collections.emptyList();
+
+        final String queueRunId = runId;
+        TestRunEntity activeEntity = null;
+        if (queueRunId != null && !queueRunId.isBlank())
+        {
+            activeEntity = allRuns.stream().filter(r -> queueRunId.equals(r.getId())).findFirst().orElse(null);
+        }
+        if (activeEntity == null)
+        {
+            activeEntity = allRuns.stream().filter(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus())).findFirst().orElse(null);
+        }
+        if (activeEntity == null && reportDataService != null)
+        {
+            activeEntity = allRuns.stream().filter(r -> reportDataService.isRunCurrentlyActiveOnDisk(r.getId())).findFirst().orElse(null);
+        }
+
         Integer executedCount = totalTestsRun;
         String progressText = "";
 
-        if (isQueueRunning)
+        if (activeEntity != null)
         {
-            if (scheduledCount != null && scheduledCount > 0)
-            {
-                progressText = executedCount + " of " + scheduledCount + " tests";
-            }
-            else
-            {
-                progressText = executedCount + " executed";
-            }
-        }
-        else if (runId == null || runId.isBlank())
-        {
-            final List<TestRunEntity> allRuns = reportDataService != null
-                ? reportDataService.getAllRuns()
-                : Collections.emptyList();
-
-            final TestRunEntity activeEntity = allRuns.stream()
-                .filter(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus()))
-                .findFirst()
-                .orElse(null);
-
-            if (activeEntity != null)
+            if (runId == null || runId.isBlank())
             {
                 runId = activeEntity.getId();
-                currentBatch = activeEntity.getBatchName();
-                running = true;
-                final int runningCount = activeEntity.getRunningCountSafe();
-                final int total = activeEntity.getTotalTestsSafe();
-                executedCount = Math.max(0, total - runningCount);
-                totalTestsRun = executedCount;
-                passedCount = activeEntity.getPassedCleanCount() + activeEntity.getFixedCleanCount() + activeEntity.getPassedHealedCountSafe() + activeEntity.getFixedHealedCountSafe();
-                failedCount = activeEntity.getFailedKnownCount() + activeEntity.getFailedUnknownCount();
-                skippedCount = activeEntity.getIgnoredCount() != null ? activeEntity.getIgnoredCount() : 0;
-                if (total > runningCount && total > 0)
+            }
+            running = isQueueRunning || "IN_PROGRESS".equalsIgnoreCase(activeEntity.getStatus())
+                || (reportDataService != null && reportDataService.isRunCurrentlyActiveOnDisk(activeEntity.getId()));
+            if (currentBatch == null || !AuraReportDataService.isRealBatch(currentBatch))
+            {
+                currentBatch = AuraReportDataService.resolveEffectiveBatchName(activeEntity.getBatchName(), activeEntity.getTags());
+                if ((currentBatch == null || !AuraReportDataService.isRealBatch(currentBatch)) && reportDataService != null)
                 {
-                    scheduledCount = total;
-                    progressText = executedCount + " of " + scheduledCount + " tests (" + runningCount + " running)";
+                    currentBatch = AuraReportDataService.resolveEffectiveBatchNameFromMap(activeEntity.getBatchName(), reportDataService.getRunTagsMap(activeEntity.getId()));
+                }
+            }
+
+            final int runningCount = activeEntity.getRunningCountSafe();
+            final int total = activeEntity.getTotalTestsSafe();
+            final int entityExecuted = Math.max(0, total - runningCount);
+            final int entityPassed = activeEntity.getPassedCleanCount() + activeEntity.getFixedCleanCount() + activeEntity.getPassedHealedCountSafe() + activeEntity.getFixedHealedCountSafe();
+            final int entityFailed = activeEntity.getFailedKnownCount() + activeEntity.getFailedUnknownCount();
+            final int entitySkipped = activeEntity.getIgnoredCount() != null ? activeEntity.getIgnoredCount() : 0;
+
+            totalTestsRun = Math.max(totalTestsRun, entityExecuted);
+            passedCount = Math.max(passedCount, entityPassed);
+            failedCount = Math.max(failedCount, entityFailed);
+            skippedCount = Math.max(skippedCount, entitySkipped);
+            executedCount = totalTestsRun;
+
+            if (scheduledCount == null && total > 0)
+            {
+                scheduledCount = total;
+            }
+
+            if (running)
+            {
+                if (scheduledCount != null && scheduledCount > 0)
+                {
+                    if (runningCount > 0)
+                    {
+                        progressText = executedCount + " of " + scheduledCount + " tests (" + runningCount + " running)";
+                    }
+                    else
+                    {
+                        progressText = executedCount + " of " + scheduledCount + " tests";
+                    }
                 }
                 else if (runningCount > 0)
                 {
@@ -1753,20 +1786,39 @@ public class AuraTestQueueController
                     progressText = executedCount + " executed";
                 }
             }
-            else if (!allRuns.isEmpty())
+            else
             {
-                final TestRunEntity latestRun = allRuns.get(0);
-                runId = latestRun.getId();
-                currentBatch = latestRun.getBatchName();
-                running = false;
-                executedCount = latestRun.getTotalTestsSafe();
-                scheduledCount = latestRun.getTotalTestsSafe();
-                totalTestsRun = executedCount;
-                passedCount = latestRun.getPassedCleanCount() + latestRun.getFixedCleanCount() + latestRun.getPassedHealedCountSafe() + latestRun.getFixedHealedCountSafe();
-                failedCount = latestRun.getFailedKnownCount() + latestRun.getFailedUnknownCount();
-                skippedCount = latestRun.getIgnoredCount() != null ? latestRun.getIgnoredCount() : 0;
                 progressText = executedCount + " tests completed";
             }
+        }
+        else if (running)
+        {
+            if (scheduledCount != null && scheduledCount > 0)
+            {
+                progressText = executedCount + " of " + scheduledCount + " tests";
+            }
+            else
+            {
+                progressText = executedCount + " executed";
+            }
+        }
+        else if (!allRuns.isEmpty())
+        {
+            final TestRunEntity latestRun = allRuns.get(0);
+            runId = latestRun.getId();
+            currentBatch = AuraReportDataService.resolveEffectiveBatchName(latestRun.getBatchName(), latestRun.getTags());
+            if ((currentBatch == null || !AuraReportDataService.isRealBatch(currentBatch)) && reportDataService != null)
+            {
+                currentBatch = AuraReportDataService.resolveEffectiveBatchNameFromMap(latestRun.getBatchName(), reportDataService.getRunTagsMap(latestRun.getId()));
+            }
+            running = false;
+            executedCount = latestRun.getTotalTestsSafe();
+            scheduledCount = latestRun.getTotalTestsSafe();
+            totalTestsRun = executedCount;
+            passedCount = latestRun.getPassedCleanCount() + latestRun.getFixedCleanCount() + latestRun.getPassedHealedCountSafe() + latestRun.getFixedHealedCountSafe();
+            failedCount = latestRun.getFailedKnownCount() + latestRun.getFailedUnknownCount();
+            skippedCount = latestRun.getIgnoredCount() != null ? latestRun.getIgnoredCount() : 0;
+            progressText = executedCount + " tests completed";
         }
 
         final Map<String, Object> statusObj = new HashMap<>();

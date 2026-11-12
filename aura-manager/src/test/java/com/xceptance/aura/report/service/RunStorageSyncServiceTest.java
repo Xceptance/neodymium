@@ -22,6 +22,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -2160,5 +2162,41 @@ public class RunStorageSyncServiceTest
         Assertions.assertFalse(AuraReportDataService.isLegitimateTag(defaultTag));
         Assertions.assertFalse(AuraReportDataService.isLegitimateTag(suiteTag));
         Assertions.assertFalse(AuraReportDataService.isLegitimateTag(queueTag));
+    }
+
+    @Test
+    public void testResolveEffectiveBatchNameFromTagsAndFallbacks()
+    {
+        // 1. Real batch name should be preserved directly
+        Assertions.assertEquals("BillingRegression", AuraReportDataService.resolveEffectiveBatchName("BillingRegression", Collections.emptyList()));
+        Assertions.assertEquals("Nightly", AuraReportDataService.resolveEffectiveBatchName("Nightly", Map.of()));
+        Assertions.assertEquals("ReleaseSuite", AuraReportDataService.resolveEffectiveBatchNameFromMap("ReleaseSuite", Collections.emptyMap()));
+
+        // 2. Synthetic placeholders should fall back to Suite or Batch tags
+        final TestRunTagEntity suiteTag = new TestRunTagEntity("run_1", "Suite", "CheckoutRegression");
+        final TestRunTagEntity batchTag = new TestRunTagEntity("run_2", "Batch", "NightlyOrderFlow");
+        final TestRunTagEntity dummyTag = new TestRunTagEntity("run_3", "browser", "Chrome");
+
+        Assertions.assertEquals("CheckoutRegression", AuraReportDataService.resolveEffectiveBatchName("Default", List.of(suiteTag, dummyTag)));
+        Assertions.assertEquals("CheckoutRegression", AuraReportDataService.resolveEffectiveBatchName("Queue", List.of(suiteTag)));
+        Assertions.assertEquals("CheckoutRegression", AuraReportDataService.resolveEffectiveBatchName("", List.of(suiteTag)));
+        Assertions.assertEquals("CheckoutRegression", AuraReportDataService.resolveEffectiveBatchName(null, List.of(suiteTag)));
+        Assertions.assertEquals("NightlyOrderFlow", AuraReportDataService.resolveEffectiveBatchName("Default", List.of(batchTag)));
+
+        // 3. Fallback placeholder with single map overload (RunReportDto)
+        Assertions.assertEquals("CheckoutRegression", AuraReportDataService.resolveEffectiveBatchName("Default", Map.of("Suite", "CheckoutRegression")));
+        Assertions.assertEquals("NightlyOrderFlow", AuraReportDataService.resolveEffectiveBatchName("Queue", Map.of("batch", "NightlyOrderFlow")));
+
+        // 4. Fallback placeholder with multi-map overload (RunRequest)
+        Assertions.assertEquals("CheckoutRegression", AuraReportDataService.resolveEffectiveBatchNameFromMap("Default", Map.of("Suite", List.of("CheckoutRegression"))));
+        Assertions.assertEquals("NightlyOrderFlow", AuraReportDataService.resolveEffectiveBatchNameFromMap("Queue", Map.of("batch", List.of("NightlyOrderFlow"))));
+
+        // 5. Placeholders with synthetic tag values should resolve to empty string
+        final TestRunTagEntity syntheticSuite = new TestRunTagEntity("run_4", "Suite", "Default");
+        final TestRunTagEntity syntheticQueue = new TestRunTagEntity("run_5", "Batch", "Queue");
+        Assertions.assertEquals("", AuraReportDataService.resolveEffectiveBatchName("Default", List.of(syntheticSuite)));
+        Assertions.assertEquals("", AuraReportDataService.resolveEffectiveBatchName("Queue", List.of(syntheticQueue)));
+        Assertions.assertEquals("", AuraReportDataService.resolveEffectiveBatchName("Default", Collections.emptyList()));
+        Assertions.assertEquals("", AuraReportDataService.resolveEffectiveBatchName(null, (Collection<TestRunTagEntity>) null));
     }
 }

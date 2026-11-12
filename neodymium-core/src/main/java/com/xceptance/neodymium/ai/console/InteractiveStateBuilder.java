@@ -23,10 +23,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import org.neodymium.util.TagUtils;
 
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.config.AiConfiguration;
@@ -209,12 +211,36 @@ public final class InteractiveStateBuilder
             }
 
             @SuppressWarnings("unchecked")
-            final Map<String, List<String>> variationTags = context != null
+            final Map<String, List<String>> transientTags = context != null
                 ? (Map<String, List<String>>) context.getTransientData().get("variationTags")
                 : null;
+            final Map<String, List<String>> cliOverrides = TagUtils.getSystemPropertyOverrides();
+            final Map<String, List<String>> variationTags = new LinkedHashMap<>();
+            if (transientTags != null)
+            {
+                variationTags.putAll(transientTags);
+            }
+            if (cliOverrides != null && !cliOverrides.isEmpty())
+            {
+                for (final Map.Entry<String, List<String>> cliEntry : cliOverrides.entrySet())
+                {
+                    variationTags.put(cliEntry.getKey(), cliEntry.getValue());
+                }
+            }
+            final String sysBatch = System.getProperty("batchName", System.getProperty("neodymium.batchName", null));
+            if (sysBatch != null && !sysBatch.isBlank() && !"Default".equalsIgnoreCase(sysBatch.trim()) && !"Unknown".equalsIgnoreCase(sysBatch.trim()) && !"Queue".equalsIgnoreCase(sysBatch.trim()))
+            {
+                final String cleanBatch = sysBatch.trim();
+                if (!variationTags.containsKey("Suite") && !variationTags.containsKey("suite") && !variationTags.containsKey("batch"))
+                {
+                    variationTags.put("Suite", List.of(cleanBatch));
+                }
+                state.addProperty("batchName", cleanBatch);
+            }
+
             String extractedArea = null;
             String extractedSubArea = null;
-            if (variationTags != null && !variationTags.isEmpty())
+            if (!variationTags.isEmpty())
             {
                 final JsonObject tagsObj = new JsonObject();
                 for (final Map.Entry<String, List<String>> entry : variationTags.entrySet())

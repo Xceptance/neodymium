@@ -5241,9 +5241,8 @@ public class AuraReportViewController
                 }
             }
         }
-        final String effectiveBatchName = report.getBatchName() != null && !report.getBatchName().isBlank()
-            ? report.getBatchName()
-            : "Default";
+        final String resolvedBatch = report != null ? AuraReportDataService.resolveEffectiveBatchName(report.getBatchName(), report.getTags()) : "";
+        final String effectiveBatchName = !resolvedBatch.isEmpty() ? resolvedBatch : "Default";
         final String activeSubTab = (targetExecutionId != null && !targetExecutionId.isBlank() && (subTab == null || subTab.isBlank()))
             ? "runReportSubTabAllTests"
             : (subTab != null && !subTab.isBlank() ? subTab : "runReportSubTabOverview");
@@ -5252,7 +5251,7 @@ public class AuraReportViewController
         model.addAttribute("activeSubTab", activeSubTab);
         model.addAttribute("report", report);
         model.addAttribute("batchName", effectiveBatchName);
-        model.addAttribute("activeBatchName", effectiveBatchName);
+        model.addAttribute("activeBatchName", resolvedBatch);
         model.addAttribute("filterModes", report.getFilterModes());
         model.addAttribute("filterBrowsers", report.getFilterBrowsers());
         model.addAttribute("filterLocales", report.getFilterLocales());

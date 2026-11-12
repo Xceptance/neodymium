@@ -1443,17 +1443,17 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
             // Resolve variation tags (dataset tags or playbook root tags + CLI overrides)
             Map<String, List<String>> variationTags = Collections.emptyMap();
+            final Map<String, List<String>> rootTags = playbook.getTags() != null ? playbook.getTags() : Collections.emptyMap();
             if (this.dataset != null)
             {
                 final SessionData.DataEntry tagEntry = this.dataset.get("tags") != null ? this.dataset.get("tags") : this.dataset.get("_tags");
                 if (tagEntry != null && tagEntry.value() instanceof Map<?, ?> map)
                 {
-                    variationTags = TagUtils.parseTags(map);
+                    variationTags = TagUtils.resolveTags(rootTags, map);
                 }
             }
             if (variationTags.isEmpty())
             {
-                final Map<String, List<String>> rootTags = playbook.getTags() != null ? playbook.getTags() : Collections.emptyMap();
                 variationTags = TagUtils.resolveTags(rootTags, null);
             }
             if (!variationTags.isEmpty())

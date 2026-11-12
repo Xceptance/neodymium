@@ -249,12 +249,14 @@ public class AuraReportDataService
         if (runId != null)
         {
             runReportCache.remove(runId);
+            liveRunBuffer.remove(runId);
         }
     }
 
     public void clearCache()
     {
         runReportCache.clear();
+        liveRunBuffer.clear();
     }
 
     @Transactional
@@ -438,9 +440,13 @@ public class AuraReportDataService
 
     public List<TestRunEntity> getAllRuns()
     {
-        return runRepository != null
-            ? runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc()
-            : Collections.emptyList();
+        if (runRepository == null)
+        {
+            return Collections.emptyList();
+        }
+        final List<TestRunEntity> runs = runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc();
+        populateRunTags(runs);
+        return runs;
     }
 
     public BatchOverviewDataDto getBatchOverviewData()
@@ -4294,13 +4300,32 @@ public class AuraReportDataService
                         boolean matched = false;
                         final String liveId = liveExec.getId();
                         final String liveVarId = generateVariationId(liveExec.getTestClass(), liveExec.getTestMethod(), liveExec.getTitle(), liveExec.getLocation(), liveExec.getBrowser());
+                        final String liveVarIdNoMethod = generateVariationId(liveExec.getTestClass(), null, liveExec.getTitle(), liveExec.getLocation(), liveExec.getBrowser());
+                        final String liveBrowser = normalizeBrowser(liveExec.getBrowser());
+                        final String liveTitle = liveExec.getTitle() != null ? liveExec.getTitle().trim() : "";
+                        final String liveLoc = normalizeLocation(liveExec.getLocation());
+
                         for (int idx = 0; idx < rawExecutions.size(); idx++)
                         {
                             final TestExecutionDto rawExec = rawExecutions.get(idx);
                             final boolean idMatch = (liveId != null && !liveId.isBlank() && !liveId.equalsIgnoreCase("default")
                                     && liveId.equalsIgnoreCase(rawExec.getId()));
                             final String rawVarId = generateVariationId(rawExec.getTestClass(), rawExec.getTestMethod(), rawExec.getTitle(), rawExec.getLocation(), rawExec.getBrowser());
-                            if (idMatch || (liveVarId != null && liveVarId.equalsIgnoreCase(rawVarId)))
+                            final String rawVarIdNoMethod = generateVariationId(rawExec.getTestClass(), null, rawExec.getTitle(), rawExec.getLocation(), rawExec.getBrowser());
+                            final boolean varIdMatch = (liveVarId != null && (liveVarId.equalsIgnoreCase(rawVarId) || liveVarId.equalsIgnoreCase(rawVarIdNoMethod)))
+                                    || (liveVarIdNoMethod != null && (liveVarIdNoMethod.equalsIgnoreCase(rawVarId) || liveVarIdNoMethod.equalsIgnoreCase(rawVarIdNoMethod)));
+
+                            final boolean sameClass = isSameTestClass(liveExec.getTestClass(), rawExec.getTestClass());
+                            final boolean sameBrowser = liveBrowser.equalsIgnoreCase(normalizeBrowser(rawExec.getBrowser()));
+                            final String rawTitle = rawExec.getTitle() != null ? rawExec.getTitle().trim() : "";
+                            final String rawLoc = normalizeLocation(rawExec.getLocation());
+
+                            final boolean sameTitleOrLocation = (liveTitle.equalsIgnoreCase(rawTitle) || liveTitle.isEmpty() || rawTitle.isEmpty() || "default".equalsIgnoreCase(liveTitle) || "default".equalsIgnoreCase(rawTitle))
+                                    && (liveLoc.equalsIgnoreCase(rawLoc) || "default".equalsIgnoreCase(liveLoc) || "default".equalsIgnoreCase(rawLoc));
+
+                            final boolean componentMatch = sameClass && sameBrowser && sameTitleOrLocation;
+
+                            if (idMatch || varIdMatch || componentMatch)
                             {
                                 if (liveExec.isFinished() || !rawExec.isFinished())
                                 {
@@ -5553,13 +5578,31 @@ public class AuraReportDataService
             boolean replaced = false;
             final String execId = dto.getId();
             final String varId = generateVariationId(dto.getTestClass(), dto.getTestMethod(), dto.getTitle(), dto.getLocation(), dto.getBrowser());
+            final String varIdNoMethod = generateVariationId(dto.getTestClass(), null, dto.getTitle(), dto.getLocation(), dto.getBrowser());
+            final String dtoBrowser = normalizeBrowser(dto.getBrowser());
+            final String dtoTitle = dto.getTitle() != null ? dto.getTitle().trim() : "";
+            final String dtoLoc = normalizeLocation(dto.getLocation());
+
             for (int i = 0; i < list.size(); i++)
             {
                 final TestExecutionDto existing = list.get(i);
                 final boolean idMatch = (execId != null && !execId.isBlank() && !execId.equalsIgnoreCase("default")
                         && execId.equalsIgnoreCase(existing.getId()));
                 final String existingVarId = generateVariationId(existing.getTestClass(), existing.getTestMethod(), existing.getTitle(), existing.getLocation(), existing.getBrowser());
-                if (idMatch || (varId != null && varId.equalsIgnoreCase(existingVarId)))
+                final String existingVarIdNoMethod = generateVariationId(existing.getTestClass(), null, existing.getTitle(), existing.getLocation(), existing.getBrowser());
+                final boolean varIdMatch = (varId != null && (varId.equalsIgnoreCase(existingVarId) || varId.equalsIgnoreCase(existingVarIdNoMethod)))
+                        || (varIdNoMethod != null && (varIdNoMethod.equalsIgnoreCase(existingVarId) || varIdNoMethod.equalsIgnoreCase(existingVarIdNoMethod)));
+
+                final boolean sameClass = isSameTestClass(dto.getTestClass(), existing.getTestClass());
+                final boolean sameBrowser = dtoBrowser.equalsIgnoreCase(normalizeBrowser(existing.getBrowser()));
+                final String existingTitle = existing.getTitle() != null ? existing.getTitle().trim() : "";
+                final String existingLoc = normalizeLocation(existing.getLocation());
+                final boolean sameTitleOrLocation = (dtoTitle.equalsIgnoreCase(existingTitle) || dtoTitle.isEmpty() || existingTitle.isEmpty() || "default".equalsIgnoreCase(dtoTitle) || "default".equalsIgnoreCase(existingTitle))
+                        && (dtoLoc.equalsIgnoreCase(existingLoc) || "default".equalsIgnoreCase(dtoLoc) || "default".equalsIgnoreCase(existingLoc));
+
+                final boolean componentMatch = sameClass && sameBrowser && sameTitleOrLocation;
+
+                if (idMatch || varIdMatch || componentMatch)
                 {
                     list.set(i, dto);
                     replaced = true;
@@ -5613,7 +5656,6 @@ public class AuraReportDataService
                             (a, b) -> a
                         ));
 
-                    final String varIdNoMethod = generateVariationId(dto.getTestClass(), null, dto.getTitle(), dto.getLocation(), dto.getBrowser());
                     final List<TestBaseBugEntity> candidateActiveBugs = bugRepository.findByVariationIdIn(List.of(varId, varIdNoMethod)).stream()
                         .filter(b -> (b.getBatchName().equalsIgnoreCase("ALL") || b.getBatchName().equalsIgnoreCase(runBatch))
                                   && (b.getEnvironment().equalsIgnoreCase("ALL") || b.getEnvironment().equalsIgnoreCase(runEnv)))
@@ -7051,6 +7093,49 @@ public class AuraReportDataService
         return null;
     }
 
+    public boolean isRunCurrentlyActiveOnDisk(final String runId)
+    {
+        return localRunJsonStorageService != null && runId != null && localRunJsonStorageService.isRunCurrentlyActiveOnDisk(runId.trim());
+    }
+
+    public static boolean isSameTestClass(final String c1, final String c2)
+    {
+        if (c1 == null || c2 == null)
+        {
+            return false;
+        }
+        if (c1.equalsIgnoreCase(c2))
+        {
+            return true;
+        }
+        final String s1 = extractSimpleClassName(c1);
+        final String s2 = extractSimpleClassName(c2);
+        return !s1.isEmpty() && s1.equalsIgnoreCase(s2);
+    }
+
+    public static String extractSimpleClassName(final String raw)
+    {
+        if (raw == null)
+        {
+            return "";
+        }
+        String s = raw.trim();
+        if (s.endsWith(".json"))
+        {
+            s = s.substring(0, s.length() - 5);
+        }
+        if (s.contains("#"))
+        {
+            s = s.substring(0, s.indexOf('#'));
+        }
+        final int lastDot = s.lastIndexOf('.');
+        if (lastDot >= 0 && lastDot < s.length() - 1)
+        {
+            s = s.substring(lastDot + 1);
+        }
+        return s;
+    }
+
     public static String normalizeLocation(final String raw)
     {
         if (raw == null || raw.trim().isEmpty())
@@ -7254,6 +7339,109 @@ public class AuraReportDataService
             return false;
         }
         return true;
+    }
+
+    /**
+     * Resolves an effective batch or suite name from a raw batch string and an optional collection of tags.
+     * If the batch name is a real user-defined batch (not a synthetic placeholder), it is returned.
+     * Otherwise, looks for a "suite" or "batch" tag with a real batch name.
+     * If none found, returns an empty string.
+     *
+     * @param batchName the raw batch name
+     * @param tags collection of test run tags
+     * @return the resolved batch name, or empty string if no valid name found
+     */
+    public static String resolveEffectiveBatchName(final String batchName, final Collection<TestRunTagEntity> tags)
+    {
+        if (isRealBatch(batchName))
+        {
+            return batchName.trim();
+        }
+        if (tags != null)
+        {
+            for (final TestRunTagEntity tag : tags)
+            {
+                if (tag != null && tag.getTagKey() != null)
+                {
+                    final String key = tag.getTagKey().trim();
+                    if (("suite".equalsIgnoreCase(key) || "batch".equalsIgnoreCase(key)) && isRealBatch(tag.getTagValue()))
+                    {
+                        return tag.getTagValue().trim();
+                    }
+                }
+            }
+        }
+        return "";
+    }
+
+    /**
+     * Resolves an effective batch or suite name from a raw batch string and an optional tag map (e.g. from RunRequest).
+     *
+     * @param batchName the raw batch name
+     * @param tagsMap map of tag key to list of tag values
+     * @return the resolved batch name, or empty string if no valid name found
+     */
+    public static String resolveEffectiveBatchNameFromMap(final String batchName, final Map<String, List<String>> tagsMap)
+    {
+        if (isRealBatch(batchName))
+        {
+            return batchName.trim();
+        }
+        if (tagsMap != null)
+        {
+            for (final Map.Entry<String, List<String>> entry : tagsMap.entrySet())
+            {
+                if (entry.getKey() != null)
+                {
+                    final String key = entry.getKey().trim();
+                    if ("suite".equalsIgnoreCase(key) || "batch".equalsIgnoreCase(key))
+                    {
+                        final List<String> values = entry.getValue();
+                        if (values != null)
+                        {
+                            for (final String val : values)
+                            {
+                                if (isRealBatch(val))
+                                {
+                                    return val.trim();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return "";
+    }
+
+    /**
+     * Resolves an effective batch or suite name from a raw batch string and an optional single-value tag map (e.g. from RunReportDto).
+     *
+     * @param batchName the raw batch name
+     * @param tagsMap map of tag key to tag value
+     * @return the resolved batch name, or empty string if no valid name found
+     */
+    public static String resolveEffectiveBatchName(final String batchName, final Map<String, String> tagsMap)
+    {
+        if (isRealBatch(batchName))
+        {
+            return batchName.trim();
+        }
+        if (tagsMap != null)
+        {
+            for (final Map.Entry<String, String> entry : tagsMap.entrySet())
+            {
+                if (entry.getKey() != null)
+                {
+                    final String key = entry.getKey().trim();
+                    if (("suite".equalsIgnoreCase(key) || "batch".equalsIgnoreCase(key)) && isRealBatch(entry.getValue()))
+                    {
+                        return entry.getValue().trim();
+                    }
+                }
+            }
+        }
+        return "";
     }
 
     public List<TestBaseVariationHistoryDto> getVariationHistory(
@@ -7911,21 +8099,101 @@ public class AuraReportDataService
 
     public Map<String, List<String>> getRunTagsMap(final String runId)
     {
-        if (tagRepository == null || runId == null || runId.isBlank())
-        {
-            return Collections.emptyMap();
-        }
-        final List<TestRunTagEntity> tags = tagRepository.findByRunId(runId.trim());
-        if (tags == null || tags.isEmpty())
+        if (runId == null || runId.isBlank())
         {
             return Collections.emptyMap();
         }
         final Map<String, List<String>> result = new LinkedHashMap<>();
-        for (final TestRunTagEntity t : tags)
+        if (tagRepository != null)
         {
-            if (t.getTagKey() != null && !t.getTagKey().isBlank() && t.getTagValue() != null)
+            final List<TestRunTagEntity> tags = tagRepository.findByRunId(runId.trim());
+            if (tags != null && !tags.isEmpty())
             {
-                result.computeIfAbsent(t.getTagKey().toLowerCase(Locale.ROOT), k -> new ArrayList<>()).add(t.getTagValue().trim());
+                for (final TestRunTagEntity t : tags)
+                {
+                    if (t.getTagKey() != null && !t.getTagKey().isBlank() && t.getTagValue() != null)
+                    {
+                        result.computeIfAbsent(t.getTagKey().toLowerCase(Locale.ROOT), k -> new ArrayList<>()).add(t.getTagValue().trim());
+                    }
+                }
+            }
+        }
+        if (localRunJsonStorageService != null)
+        {
+            try
+            {
+                final Path runDir = localRunJsonStorageService.getRunDir(runId.trim());
+                if (Files.exists(runDir))
+                {
+                    final Path batchFile = runDir.resolve("batch.json");
+                    if (Files.exists(batchFile))
+                    {
+                        final JsonNode batchNode = objectMapper.readTree(batchFile.toFile());
+                        if (batchNode.has("name") && isRealBatch(batchNode.path("name").asText()))
+                        {
+                            final String bName = batchNode.path("name").asText().trim();
+                            final List<String> list = result.computeIfAbsent("suite", k -> new ArrayList<>());
+                            if (!list.contains(bName))
+                            {
+                                list.add(bName);
+                            }
+                        }
+                        if (batchNode.has("tags") && batchNode.path("tags").isObject())
+                        {
+                            batchNode.path("tags").fields().forEachRemaining(entry -> {
+                                final String k = entry.getKey().trim().toLowerCase(Locale.ROOT);
+                                if (!k.isEmpty())
+                                {
+                                    final List<String> list = result.computeIfAbsent(k, key -> new ArrayList<>());
+                                    if (entry.getValue().isArray())
+                                    {
+                                        for (final JsonNode item : entry.getValue())
+                                        {
+                                            final String s = item.asText("").trim();
+                                            if (!s.isEmpty() && !list.contains(s)) list.add(s);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        final String s = entry.getValue().asText("").trim();
+                                        if (!s.isEmpty() && !list.contains(s)) list.add(s);
+                                    }
+                                }
+                            });
+                        }
+                    }
+                    final Path runJsonFile = runDir.resolve("run.json");
+                    if (Files.exists(runJsonFile))
+                    {
+                        final JsonNode runNode = objectMapper.readTree(runJsonFile.toFile());
+                        if (runNode.has("tags") && runNode.path("tags").isObject())
+                        {
+                            runNode.path("tags").fields().forEachRemaining(entry -> {
+                                final String k = entry.getKey().trim().toLowerCase(Locale.ROOT);
+                                if (!k.isEmpty())
+                                {
+                                    final List<String> list = result.computeIfAbsent(k, key -> new ArrayList<>());
+                                    if (entry.getValue().isArray())
+                                    {
+                                        for (final JsonNode item : entry.getValue())
+                                        {
+                                            final String s = item.asText("").trim();
+                                            if (!s.isEmpty() && !list.contains(s)) list.add(s);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        final String s = entry.getValue().asText("").trim();
+                                        if (!s.isEmpty() && !list.contains(s)) list.add(s);
+                                    }
+                                }
+                            });
+                        }
+                    }
+                }
+            }
+            catch (final Exception ignored)
+            {
             }
         }
         return result;
@@ -7991,14 +8259,35 @@ public class AuraReportDataService
                         }
                     }
                     final boolean hasSuiteTag = rTags.stream().anyMatch(t -> t.getTagKey() != null && ("suite".equalsIgnoreCase(t.getTagKey()) || "batch".equalsIgnoreCase(t.getTagKey())));
-                    if (!hasSuiteTag && isRealBatch(r.getBatchName()))
+                    if (!hasSuiteTag)
                     {
-                        rTags.add(0, new TestRunTagEntity(r.getId(), "Suite", r.getBatchName().trim()));
+                        final Map<String, List<String>> diskTags = getRunTagsMap(r.getId());
+                        final String resolvedBatch = resolveEffectiveBatchNameFromMap(r.getBatchName(), diskTags);
+                        if (isRealBatch(resolvedBatch))
+                        {
+                            rTags.add(0, new TestRunTagEntity(r.getId(), "Suite", resolvedBatch.trim()));
+                            if (!isRealBatch(r.getBatchName()))
+                            {
+                                r.setBatchName(resolvedBatch.trim());
+                            }
+                        }
+                        else if (isRealBatch(r.getBatchName()))
+                        {
+                            rTags.add(0, new TestRunTagEntity(r.getId(), "Suite", r.getBatchName().trim()));
+                        }
                     }
                     final boolean hasEnvTag = rTags.stream().anyMatch(t -> t.getTagKey() != null && ("environment".equalsIgnoreCase(t.getTagKey()) || "env".equalsIgnoreCase(t.getTagKey())));
-                    if (!hasEnvTag && isRealEnvironment(r.getEnvironment()))
+                    if (!hasEnvTag)
                     {
-                        rTags.add(new TestRunTagEntity(r.getId(), "Environment", r.getEnvironment().trim()));
+                        final Map<String, List<String>> diskTags = getRunTagsMap(r.getId());
+                        final List<String> envVals = diskTags.getOrDefault("instance", diskTags.get("environment"));
+                        final String resolvedEnv = (envVals != null && !envVals.isEmpty() && isRealEnvironment(envVals.get(0)))
+                            ? envVals.get(0).trim()
+                            : (isRealEnvironment(r.getEnvironment()) ? r.getEnvironment().trim() : null);
+                        if (resolvedEnv != null)
+                        {
+                            rTags.add(new TestRunTagEntity(r.getId(), "Environment", resolvedEnv));
+                        }
                     }
                     r.setTags(rTags);
                 }
@@ -8020,14 +8309,35 @@ public class AuraReportDataService
                     }
                 }
                 final boolean hasSuiteTag = rTags.stream().anyMatch(t -> t.getTagKey() != null && ("suite".equalsIgnoreCase(t.getTagKey()) || "batch".equalsIgnoreCase(t.getTagKey())));
-                if (!hasSuiteTag && isRealBatch(r.getBatchName()))
+                if (!hasSuiteTag)
                 {
-                    rTags.add(0, new TestRunTagEntity(r.getId(), "Suite", r.getBatchName().trim()));
+                    final Map<String, List<String>> diskTags = getRunTagsMap(r.getId());
+                    final String resolvedBatch = resolveEffectiveBatchNameFromMap(r.getBatchName(), diskTags);
+                    if (isRealBatch(resolvedBatch))
+                    {
+                        rTags.add(0, new TestRunTagEntity(r.getId(), "Suite", resolvedBatch.trim()));
+                        if (!isRealBatch(r.getBatchName()))
+                        {
+                            r.setBatchName(resolvedBatch.trim());
+                        }
+                    }
+                    else if (isRealBatch(r.getBatchName()))
+                    {
+                        rTags.add(0, new TestRunTagEntity(r.getId(), "Suite", r.getBatchName().trim()));
+                    }
                 }
                 final boolean hasEnvTag = rTags.stream().anyMatch(t -> t.getTagKey() != null && ("environment".equalsIgnoreCase(t.getTagKey()) || "env".equalsIgnoreCase(t.getTagKey())));
-                if (!hasEnvTag && isRealEnvironment(r.getEnvironment()))
+                if (!hasEnvTag)
                 {
-                    rTags.add(new TestRunTagEntity(r.getId(), "Environment", r.getEnvironment().trim()));
+                    final Map<String, List<String>> diskTags = getRunTagsMap(r.getId());
+                    final List<String> envVals = diskTags.getOrDefault("instance", diskTags.get("environment"));
+                    final String resolvedEnv = (envVals != null && !envVals.isEmpty() && isRealEnvironment(envVals.get(0)))
+                        ? envVals.get(0).trim()
+                        : (isRealEnvironment(r.getEnvironment()) ? r.getEnvironment().trim() : null);
+                    if (resolvedEnv != null)
+                    {
+                        rTags.add(new TestRunTagEntity(r.getId(), "Environment", resolvedEnv));
+                    }
                 }
                 r.setTags(rTags);
             }

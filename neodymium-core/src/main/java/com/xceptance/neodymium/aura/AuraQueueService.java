@@ -422,6 +422,7 @@ public final class AuraQueueService
                 currentRunLogs.clear();
                 currentRunEvents.clear();
                 completedFiles.clear();
+                ingestedExecutionFiles.clear();
                 interactiveService.resetExecutionIndexes();
 
                 runStartTimeMs.set(System.currentTimeMillis());
@@ -429,9 +430,53 @@ public final class AuraQueueService
                 currentRunId.set(generatedRunId);
                 lastRunRequest.set(req);
 
-                final String effectiveBatchName = (req.batchName != null && !req.batchName.isBlank())
-                        ? req.batchName
-                        : System.getProperty("batchName", System.getProperty("neodymium.batchName", "Queue"));
+                String suiteTagVal = "";
+                if (req.tags != null)
+                {
+                    for (final Map.Entry<String, List<String>> tagEntry : req.tags.entrySet())
+                    {
+                        if (tagEntry.getKey() != null && ("suite".equalsIgnoreCase(tagEntry.getKey().trim()) || "batch".equalsIgnoreCase(tagEntry.getKey().trim())))
+                        {
+                            if (tagEntry.getValue() != null)
+                            {
+                                for (final String val : tagEntry.getValue())
+                                {
+                                    if (val != null && !val.isBlank()
+                                            && !"Default".equalsIgnoreCase(val.trim())
+                                            && !"Unknown".equalsIgnoreCase(val.trim())
+                                            && !"Queue".equalsIgnoreCase(val.trim())
+                                            && !"Suite".equalsIgnoreCase(val.trim())
+                                            && !"ALL".equalsIgnoreCase(val.trim())
+                                            && !"N/A".equalsIgnoreCase(val.trim()))
+                                    {
+                                        suiteTagVal = val.trim();
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        if (!suiteTagVal.isBlank())
+                        {
+                            break;
+                        }
+                    }
+                }
+
+                final String configuredBatch = (req.batchName != null && !req.batchName.isBlank())
+                        ? req.batchName.trim()
+                        : System.getProperty("batchName", System.getProperty("neodymium.batchName", ""));
+
+                final String resolvedBatch = (!configuredBatch.isBlank()
+                        && !"Default".equalsIgnoreCase(configuredBatch)
+                        && !"Unknown".equalsIgnoreCase(configuredBatch)
+                        && !"Queue".equalsIgnoreCase(configuredBatch)
+                        && !"Suite".equalsIgnoreCase(configuredBatch)
+                        && !"ALL".equalsIgnoreCase(configuredBatch)
+                        && !"N/A".equalsIgnoreCase(configuredBatch))
+                        ? configuredBatch
+                        : suiteTagVal;
+
+                final String effectiveBatchName = resolvedBatch;
                 currentBatchName.set(effectiveBatchName);
 
                 final String effectiveEnv = (req.environment != null && !req.environment.isBlank())
@@ -698,6 +743,8 @@ public final class AuraQueueService
                     // Scan for finished execution JSONs while the subprocess is still alive, so that
                     // completed tests show up in the run report without waiting for the whole batch
                     // (one Maven subprocess runs all datasets of a test file) to terminate.
+                    final AtomicInteger batchIngestedRuns = new AtomicInteger(0);
+                    final AtomicInteger batchReportedSurefireRuns = new AtomicInteger(0);
                     final AtomicBoolean midRunScanActive = new AtomicBoolean(true);
                     final Thread midRunScanThread;
                     if (queueRunProgressListener != null)
@@ -720,7 +767,7 @@ public final class AuraQueueService
                                 }
                                 try
                                 {
-                                    ingestBatchExecutionFiles(queueRunProgressListener, runId, className, runStorageDirs, true);
+                                    ingestBatchExecutionFiles(queueRunProgressListener, runId, className, runStorageDirs, true, batchIngestedRuns, batchReportedSurefireRuns);
                                 }
                                 catch (final Exception e)
                                 {
@@ -777,32 +824,35 @@ public final class AuraQueueService
                                 fileErrors.set(Integer.parseInt(m.group(3)));
                                 fileSkipped.set(currentSkipped);
 
-                                final int deltaRuns = currentRuns - prevReportedRuns;
-                                final int deltaPassed = currentPassed - prevReportedPassed;
-                                final int deltaFailed = currentFailures - prevReportedFailed;
-                                final int deltaSkipped = currentSkipped - prevReportedSkipped;
+                                final int alreadyIngested = batchIngestedRuns.get();
+                                final int uningestedCurrentRuns = Math.max(0, currentRuns - alreadyIngested);
 
-                                if (deltaRuns > 0)
+                                if (uningestedCurrentRuns > prevReportedRuns)
                                 {
-                                    globalTestsRun.addAndGet(deltaRuns);
+                                    final int deltaToApply = uningestedCurrentRuns - prevReportedRuns;
+                                    globalTestsRun.addAndGet(deltaToApply);
+                                    final int deltaPassed = currentPassed - prevReportedPassed;
+                                    final int deltaFailed = currentFailures - prevReportedFailed;
+                                    final int deltaSkipped = currentSkipped - prevReportedSkipped;
+
                                     if (deltaPassed > 0)
                                     {
-                                        globalPassed.addAndGet(deltaPassed);
+                                        globalPassed.addAndGet(Math.min(deltaPassed, deltaToApply));
                                     }
                                     if (deltaFailed > 0)
                                     {
-                                        globalFailed.addAndGet(deltaFailed);
+                                        globalFailed.addAndGet(Math.min(deltaFailed, deltaToApply));
                                     }
                                     if (deltaSkipped > 0)
                                     {
-                                        globalSkipped.addAndGet(deltaSkipped);
+                                        globalSkipped.addAndGet(Math.min(deltaSkipped, deltaToApply));
                                     }
-
-                                    prevReportedRuns = currentRuns;
-                                    prevReportedPassed = currentPassed;
-                                    prevReportedFailed = currentFailures;
-                                    prevReportedSkipped = currentSkipped;
                                 }
+                                prevReportedRuns = Math.max(prevReportedRuns, uningestedCurrentRuns);
+                                batchReportedSurefireRuns.set(currentRuns);
+                                prevReportedPassed = currentPassed;
+                                prevReportedFailed = currentFailures;
+                                prevReportedSkipped = currentSkipped;
                             }
                         }
                     }
@@ -874,7 +924,7 @@ public final class AuraQueueService
                             {
                                 try
                                 {
-                                    ingestBatchExecutionFiles(queueRunProgressListener, runId, stopClassName, runStorageDirs, false);
+                                    ingestBatchExecutionFiles(queueRunProgressListener, runId, stopClassName, runStorageDirs, false, batchIngestedRuns, batchReportedSurefireRuns);
                                 }
                                 catch (final Exception e)
                                 {
@@ -885,7 +935,7 @@ public final class AuraQueueService
                         break;
                     }
 
-                    if (fileTestsRun.get() == 0)
+                    if (fileTestsRun.get() == 0 && batchIngestedRuns.get() == 0)
                     {
                         globalTestsRun.incrementAndGet();
                         if (testWasCancelled)
@@ -929,7 +979,7 @@ public final class AuraQueueService
                     {
                         try
                         {
-                            ingestBatchExecutionFiles(queueRunProgressListener, runId, className, runStorageDirs, false);
+                            ingestBatchExecutionFiles(queueRunProgressListener, runId, className, runStorageDirs, false, batchIngestedRuns, batchReportedSurefireRuns);
                         }
                         catch (final Exception e)
                         {
@@ -1232,13 +1282,17 @@ public final class AuraQueueService
      * @param className the batch runner class name
      * @param runStorageDirs the run storage base directories to scan
      * @param onlyFinalStatus whether to report only completed executions
+     * @param batchIngestedRuns counter of ingested executions for the current batch
+     * @param batchReportedSurefireRuns counter of executions reported by Surefire stdout for the current batch
      */
     private void ingestBatchExecutionFiles(
             final QueueRunProgressListener listener,
             final String runId,
             final String className,
             final List<File> runStorageDirs,
-            final boolean onlyFinalStatus)
+            final boolean onlyFinalStatus,
+            final AtomicInteger batchIngestedRuns,
+            final AtomicInteger batchReportedSurefireRuns)
     {
         final ObjectMapper mapper = new ObjectMapper();
         for (final File baseDir : runStorageDirs)
@@ -1297,6 +1351,43 @@ public final class AuraQueueService
                         continue;
                     }
                     ingestedExecutionFiles.add(execFile.getAbsoluteFile());
+
+                    final int newlyIngested = (batchIngestedRuns != null) ? batchIngestedRuns.incrementAndGet() : 1;
+                    final int surefireReported = (batchReportedSurefireRuns != null) ? batchReportedSurefireRuns.get() : 0;
+                    if (newlyIngested > surefireReported)
+                    {
+                        final String finalStatus = String.valueOf(payload.get("status"));
+                        globalTestsRun.incrementAndGet();
+                        if ("passed".equalsIgnoreCase(finalStatus) || "passed-clean".equalsIgnoreCase(finalStatus)
+                                || "passed-healed".equalsIgnoreCase(finalStatus) || "fixed-clean".equalsIgnoreCase(finalStatus)
+                                || "fixed-healed".equalsIgnoreCase(finalStatus))
+                        {
+                            globalPassed.incrementAndGet();
+                        }
+                        else if ("skipped".equalsIgnoreCase(finalStatus) || "ignored".equalsIgnoreCase(finalStatus) || "cancelled".equalsIgnoreCase(finalStatus))
+                        {
+                            globalSkipped.incrementAndGet();
+                        }
+                        else
+                        {
+                            globalFailed.incrementAndGet();
+                        }
+                    }
+                }
+                if (!payload.containsKey("id") || payload.get("id") == null || String.valueOf(payload.get("id")).isBlank())
+                {
+                    if (payload.containsKey("testId") && payload.get("testId") != null && !String.valueOf(payload.get("testId")).isBlank())
+                    {
+                        payload.put("id", String.valueOf(payload.get("testId")).trim());
+                    }
+                    else if (payload.containsKey("datasetId") && payload.get("datasetId") != null && !String.valueOf(payload.get("datasetId")).isBlank())
+                    {
+                        payload.put("id", String.valueOf(payload.get("datasetId")).trim());
+                    }
+                    else
+                    {
+                        payload.put("id", execFile.getName().replaceAll("\\.json$", ""));
+                    }
                 }
                 payload.put("runId", runId);
                 payload.put("testClass", className);

@@ -218,47 +218,92 @@ public class AuraGlobalModelAdvice
             String currentBatch = isQueueRunning ? queueService.getCurrentBatchName() : null;
             Integer executedCount = isQueueRunning ? queueService.getGlobalTestsRun() : null;
             Integer scheduledCount = null;
-            if (isQueueRunning && queueService.getLastRunRequest() != null && queueService.getLastRunRequest().datasets != null)
+            if (isQueueRunning && queueService.getLastRunRequest() != null)
             {
-                scheduledCount = queueService.getLastRunRequest().datasets.size();
-            }
-            String progressText = "";
-
-            if (running && executedCount != null)
-            {
-                if (scheduledCount != null && scheduledCount > 0)
+                if (queueService.getLastRunRequest().datasets != null)
                 {
-                    progressText = executedCount + " of " + scheduledCount + " tests";
+                    scheduledCount = queueService.getLastRunRequest().datasets.size();
                 }
-                else
+                if (currentBatch == null || !AuraReportDataService.isRealBatch(currentBatch))
                 {
-                    progressText = executedCount + " executed";
+                    currentBatch = AuraReportDataService.resolveEffectiveBatchNameFromMap(currentBatch, queueService.getLastRunRequest().tags);
                 }
             }
 
-            if ((activeRunId == null || activeRunId.isBlank()) && (runRepository != null || dataService != null))
+            final List<TestRunEntity> allRuns = runRepository != null
+                ? runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc()
+                : (dataService != null ? dataService.getAllRuns() : Collections.emptyList());
+            if (dataService != null && !allRuns.isEmpty())
             {
-                final List<TestRunEntity> allRuns = runRepository != null
-                    ? runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc()
-                    : (dataService != null ? dataService.getAllRuns() : Collections.emptyList());
+                dataService.populateRunTags(allRuns);
+            }
 
-                final TestRunEntity activeEntity = allRuns.stream()
+            final String queueRunId = activeRunId;
+            TestRunEntity activeEntity = null;
+            if (queueRunId != null && !queueRunId.isBlank())
+            {
+                activeEntity = allRuns.stream()
+                    .filter(r -> queueRunId.equals(r.getId()))
+                    .findFirst()
+                    .orElse(null);
+            }
+            if (activeEntity == null)
+            {
+                activeEntity = allRuns.stream()
                     .filter(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus()))
                     .findFirst()
                     .orElse(null);
+            }
+            if (activeEntity == null && dataService != null)
+            {
+                activeEntity = allRuns.stream()
+                    .filter(r -> dataService.isRunCurrentlyActiveOnDisk(r.getId()))
+                    .findFirst()
+                    .orElse(null);
+            }
 
-                if (activeEntity != null)
+            String progressText = "";
+            if (activeEntity != null)
+            {
+                if (activeRunId == null || activeRunId.isBlank())
                 {
                     activeRunId = activeEntity.getId();
-                    running = true;
-                    currentBatch = activeEntity.getBatchName();
-                    final int runningCount = activeEntity.getRunningCountSafe();
-                    final int total = activeEntity.getTotalTestsSafe();
-                    executedCount = Math.max(0, total - runningCount);
-                    if (total > runningCount && total > 0)
+                }
+                running = isQueueRunning || "IN_PROGRESS".equalsIgnoreCase(activeEntity.getStatus())
+                    || (dataService != null && dataService.isRunCurrentlyActiveOnDisk(activeEntity.getId()));
+                if (currentBatch == null || !AuraReportDataService.isRealBatch(currentBatch))
+                {
+                    currentBatch = AuraReportDataService.resolveEffectiveBatchName(activeEntity.getBatchName(), activeEntity.getTags());
+                    if ((currentBatch == null || !AuraReportDataService.isRealBatch(currentBatch)) && dataService != null)
                     {
-                        scheduledCount = total;
-                        progressText = executedCount + " of " + scheduledCount + " tests (" + runningCount + " running)";
+                        currentBatch = AuraReportDataService.resolveEffectiveBatchNameFromMap(activeEntity.getBatchName(), dataService.getRunTagsMap(activeEntity.getId()));
+                    }
+                }
+
+                final int runningCount = activeEntity.getRunningCountSafe();
+                final int total = activeEntity.getTotalTestsSafe();
+                final int entityExecuted = Math.max(0, total - runningCount);
+                if (executedCount == null || entityExecuted > executedCount)
+                {
+                    executedCount = entityExecuted;
+                }
+                if (scheduledCount == null && total > 0)
+                {
+                    scheduledCount = total;
+                }
+
+                if (running)
+                {
+                    if (scheduledCount != null && scheduledCount > 0)
+                    {
+                        if (runningCount > 0)
+                        {
+                            progressText = executedCount + " of " + scheduledCount + " tests (" + runningCount + " running)";
+                        }
+                        else
+                        {
+                            progressText = executedCount + " of " + scheduledCount + " tests";
+                        }
                     }
                     else if (runningCount > 0)
                     {
@@ -269,16 +314,39 @@ public class AuraGlobalModelAdvice
                         progressText = executedCount + " executed";
                     }
                 }
-                else if (!allRuns.isEmpty())
+                else
                 {
-                    final TestRunEntity latestRun = allRuns.get(0);
-                    activeRunId = latestRun.getId();
-                    running = false;
-                    currentBatch = latestRun.getBatchName();
-                    executedCount = latestRun.getTotalTestsSafe();
-                    scheduledCount = latestRun.getTotalTestsSafe();
                     progressText = executedCount + " tests completed";
                 }
+            }
+            else if (running)
+            {
+                if (executedCount == null)
+                {
+                    executedCount = 0;
+                }
+                if (scheduledCount != null && scheduledCount > 0)
+                {
+                    progressText = executedCount + " of " + scheduledCount + " tests";
+                }
+                else
+                {
+                    progressText = executedCount + " executed";
+                }
+            }
+            else if (!allRuns.isEmpty())
+            {
+                final TestRunEntity latestRun = allRuns.get(0);
+                activeRunId = latestRun.getId();
+                running = false;
+                currentBatch = AuraReportDataService.resolveEffectiveBatchName(latestRun.getBatchName(), latestRun.getTags());
+                if ((currentBatch == null || !AuraReportDataService.isRealBatch(currentBatch)) && dataService != null)
+                {
+                    currentBatch = AuraReportDataService.resolveEffectiveBatchNameFromMap(latestRun.getBatchName(), dataService.getRunTagsMap(latestRun.getId()));
+                }
+                executedCount = latestRun.getTotalTestsSafe();
+                scheduledCount = latestRun.getTotalTestsSafe();
+                progressText = executedCount + " tests completed";
             }
 
             final String effectiveBatch = (currentBatch != null && AuraReportDataService.isRealBatch(currentBatch)) ? currentBatch.trim() : "";
