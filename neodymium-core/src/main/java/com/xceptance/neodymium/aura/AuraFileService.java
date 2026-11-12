@@ -627,7 +627,36 @@ public final class AuraFileService
             result.put("rawJson", rawContent);
 
             final ObjectMapper mapper = new ObjectMapper();
-            final List<?> stepsList = mapper.readValue(rawContent, List.class);
+            final Object parsedRoot = mapper.readValue(rawContent, Object.class);
+            final List<?> stepsList;
+            if (parsedRoot instanceof List)
+            {
+                stepsList = (List<?>) parsedRoot;
+            }
+            else if (parsedRoot instanceof Map)
+            {
+                final Map<?, ?> rootMap = (Map<?, ?>) parsedRoot;
+                final Object idObj = rootMap.get("id");
+                if (idObj != null)
+                {
+                    result.put("playbookId", idObj.toString());
+                }
+                final Object candidateSteps = rootMap.containsKey("steps") ? rootMap.get("steps")
+                        : (rootMap.containsKey("_steps") ? rootMap.get("_steps") : rootMap.get("recordedSteps"));
+                if (candidateSteps instanceof List)
+                {
+                    stepsList = (List<?>) candidateSteps;
+                }
+                else
+                {
+                    stepsList = Collections.emptyList();
+                }
+            }
+            else
+            {
+                stepsList = Collections.emptyList();
+            }
+
             result.put("steps", stepsList);
             result.put("totalSteps", stepsList.size());
 
@@ -642,6 +671,23 @@ public final class AuraFileService
                 {
                     @SuppressWarnings("unchecked")
                     final Map<String, Object> stepMap = (Map<String, Object>) stepObj;
+
+                    if (stepMap.get("instruction") == null)
+                    {
+                        if (stepMap.get("promptLine") != null)
+                        {
+                            stepMap.put("instruction", stepMap.get("promptLine"));
+                        }
+                        else if (stepMap.get("step") != null)
+                        {
+                            stepMap.put("instruction", stepMap.get("step"));
+                        }
+                        else if (stepMap.get("description") != null)
+                        {
+                            stepMap.put("instruction", stepMap.get("description"));
+                        }
+                    }
+
                     final Object statusObj = stepMap.get("status");
                     final String status = statusObj != null ? String.valueOf(statusObj) : "SUCCESS";
                     final boolean isStepHealed = "HEALED".equalsIgnoreCase(status);
@@ -662,6 +708,26 @@ public final class AuraFileService
                     if (durObj instanceof Number)
                     {
                         totalDur += ((Number) durObj).longValue();
+                    }
+                    else
+                    {
+                        final Object actionsObj = stepMap.get("actions");
+                        if (actionsObj instanceof List)
+                        {
+                            long actTotalDur = 0;
+                            for (final Object actItem : (List<?>) actionsObj)
+                            {
+                                if (actItem instanceof Map && ((Map<?, ?>) actItem).get("durationMs") instanceof Number)
+                                {
+                                    actTotalDur += ((Number) ((Map<?, ?>) actItem).get("durationMs")).longValue();
+                                }
+                            }
+                            if (actTotalDur > 0)
+                            {
+                                stepMap.put("durationMs", actTotalDur);
+                                totalDur += actTotalDur;
+                            }
+                        }
                     }
 
                     // Reconcile and surface healed targets for actions
@@ -808,14 +874,53 @@ public final class AuraFileService
         {
             final String rawContent = Files.readString(pbFile.toPath(), StandardCharsets.UTF_8);
             final ObjectMapper mapper = new ObjectMapper();
-            final List<?> rawStepsList = mapper.readValue(rawContent, List.class);
-            if (rawStepsList == null || rawStepsList.isEmpty())
+            final Object parsedRoot = mapper.readValue(rawContent, Object.class);
+            if (parsedRoot == null)
             {
                 return false;
             }
 
-            @SuppressWarnings("unchecked")
-            final List<Map<String, Object>> stepsList = (List<Map<String, Object>>) rawStepsList;
+            final List<Map<String, Object>> stepsList;
+            final Map<String, Object> rootMap;
+            final String stepsKey;
+
+            if (parsedRoot instanceof List)
+            {
+                @SuppressWarnings("unchecked")
+                final List<Map<String, Object>> list = (List<Map<String, Object>>) parsedRoot;
+                stepsList = list;
+                rootMap = null;
+                stepsKey = null;
+            }
+            else if (parsedRoot instanceof Map)
+            {
+                @SuppressWarnings("unchecked")
+                final Map<String, Object> map = (Map<String, Object>) parsedRoot;
+                rootMap = map;
+                stepsKey = rootMap.containsKey("steps") ? "steps"
+                        : (rootMap.containsKey("_steps") ? "_steps" : "recordedSteps");
+                final Object candidateSteps = rootMap.get(stepsKey);
+                if (candidateSteps instanceof List)
+                {
+                    @SuppressWarnings("unchecked")
+                    final List<Map<String, Object>> list = (List<Map<String, Object>>) candidateSteps;
+                    stepsList = list;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                return false;
+            }
+
+            if (stepsList.isEmpty())
+            {
+                return false;
+            }
+
             boolean modified = false;
 
             for (int sIdx = 0; sIdx < stepsList.size(); sIdx++)
@@ -918,7 +1023,17 @@ public final class AuraFileService
 
             if (modified)
             {
-                final String updatedJson = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(stepsList);
+                final Object toSerialize;
+                if (rootMap != null && stepsKey != null)
+                {
+                    rootMap.put(stepsKey, stepsList);
+                    toSerialize = rootMap;
+                }
+                else
+                {
+                    toSerialize = stepsList;
+                }
+                final String updatedJson = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(toSerialize);
                 AtomicFileUtils.writeStringAtomic(pbFile.toPath(), updatedJson);
                 LOGGER.info("Successfully accepted healing and updated playbook JSON at {}", pbFile.getAbsolutePath());
                 return true;

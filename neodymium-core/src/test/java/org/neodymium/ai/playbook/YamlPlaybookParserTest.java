@@ -1688,5 +1688,50 @@ public class YamlPlaybookParserTest
         assertNull(playbook.getAreaName());
         assertEquals(1, playbook.getSteps().size());
     }
+
+    @Test
+    public void testParseObjectRootedJsonPlaybook() throws IOException
+    {
+        final String jsonContent = """
+            {
+              "id": "com.xceptance.Test :: executeYamlTest :: sample",
+              "steps": [
+                {
+                  "promptLine": "Open https://www.wikipedia.org",
+                  "reasoning": "Step 1 reasoning",
+                  "actions": [
+                    {
+                      "type": "NAVIGATE",
+                      "value": ["https://www.wikipedia.org"]
+                    }
+                  ]
+                },
+                {
+                  "promptLine": "Click Search",
+                  "reasoning": "Step 2 reasoning",
+                  "actions": [
+                    {
+                      "type": "CLICK",
+                      "target": "#search"
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("object-playbook.json", jsonContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("object-playbook.json", manager);
+
+        assertNotNull(playbook);
+        assertEquals(2, playbook.getSteps().size());
+        assertEquals("Open https://www.wikipedia.org", playbook.getSteps().get(0).getInstruction());
+        assertEquals("Click Search", playbook.getSteps().get(1).getInstruction());
+        assertEquals(1, playbook.getSteps().get(0).getActions().size());
+        assertEquals("NAVIGATE", playbook.getSteps().get(0).getActions().get(0).getType());
+    }
 }
 

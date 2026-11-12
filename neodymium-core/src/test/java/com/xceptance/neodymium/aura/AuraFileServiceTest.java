@@ -1345,4 +1345,132 @@ public class AuraFileServiceTest
             fileService.deleteYamlFile(testFile);
         }
     }
+
+    @Test
+    public void testLoadPlaybookDetailsWithObjectRootedPlaybookJson() throws IOException
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final File resourcesDir = fileService.getResourcesDirectory();
+        final String testFileName = "test_object_playbook.yaml";
+        final File testFile = new File(resourcesDir, testFileName);
+        final File jsonFile = new File(resourcesDir, "test_object_playbook.json");
+
+        try
+        {
+            Files.writeString(testFile.toPath(), "test:\n  - step: Open URL\n", StandardCharsets.UTF_8);
+            final String samplePlaybook = """
+                {
+                  "id": "com.xceptance.Test :: executeYamlTest :: default",
+                  "steps": [
+                    {
+                      "promptLine": "Open https://example.com",
+                      "reasoning": "Navigating to page",
+                      "actions": [
+                        {
+                          "type": "NAVIGATE",
+                          "target": "https://example.com",
+                          "description": "Open https://example.com",
+                          "durationMs": 150
+                        }
+                      ],
+                      "status": "SUCCESS"
+                    }
+                  ]
+                }
+                """;
+            Files.writeString(jsonFile.toPath(), samplePlaybook, StandardCharsets.UTF_8);
+
+            final Map<String, Object> details = fileService.loadPlaybookDetails(testFileName, null);
+            Assertions.assertNotNull(details, "Details map should not be null");
+            Assertions.assertNull(details.get("error"), "Parsing should succeed with 0 errors: " + details.get("error"));
+            Assertions.assertEquals("com.xceptance.Test :: executeYamlTest :: default", details.get("playbookId"));
+            Assertions.assertEquals(1, details.get("totalSteps"));
+            Assertions.assertEquals(1, details.get("passedSteps"));
+            Assertions.assertEquals(0, details.get("healedSteps"));
+            Assertions.assertEquals(0, details.get("failedSteps"));
+            Assertions.assertEquals(150L, details.get("totalDurationMs"));
+
+            @SuppressWarnings("unchecked")
+            final List<Map<String, Object>> steps = (List<Map<String, Object>>) details.get("steps");
+            Assertions.assertEquals(1, steps.size());
+            final Map<String, Object> step = steps.get(0);
+            Assertions.assertEquals("Open https://example.com", step.get("instruction"), "Instruction should be normalized from promptLine");
+        }
+        finally
+        {
+            testFile.delete();
+            jsonFile.delete();
+        }
+    }
+
+    @Test
+    public void testAcceptPlaybookHealingWithObjectRootedPlaybookJson() throws IOException
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final File resourcesDir = fileService.getResourcesDirectory();
+        final String testFileName = "test_object_healing.yaml";
+        final File testFile = new File(resourcesDir, testFileName);
+        final File jsonFile = new File(resourcesDir, "test_object_healing.json");
+
+        try
+        {
+            Files.writeString(testFile.toPath(), "test:\n  - step: Click button\n", StandardCharsets.UTF_8);
+            final String samplePlaybook = """
+                {
+                  "id": "com.xceptance.Test :: executeYamlTest :: healing_test",
+                  "steps": [
+                    {
+                      "promptLine": "Click button",
+                      "status": "HEALED",
+                      "actions": [
+                        {
+                          "type": "CLICK",
+                          "target": "#healedBtn",
+                          "originalTarget": null,
+                          "expectedTarget": null,
+                          "healed": false
+                        }
+                      ],
+                      "toolCalls": [
+                        {
+                          "callId": "c1",
+                          "toolName": "click",
+                          "arguments": {
+                            "selector": "#oldBtn"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """;
+            Files.writeString(jsonFile.toPath(), samplePlaybook, StandardCharsets.UTF_8);
+
+            final Map<String, Object> details = fileService.loadPlaybookDetails(testFileName, null);
+            Assertions.assertNotNull(details);
+            Assertions.assertNull(details.get("error"));
+            Assertions.assertEquals(1, details.get("healedSteps"));
+
+            final boolean accepted = fileService.acceptPlaybookHealing(testFileName, null, 0, 0);
+            Assertions.assertTrue(accepted, "Healing acceptance should return true");
+
+            final String updatedContent = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
+            Assertions.assertTrue(updatedContent.contains("\"id\" : \"com.xceptance.Test :: executeYamlTest :: healing_test\""), "Root ID should be preserved");
+
+            final Map<String, Object> updatedDetails = fileService.loadPlaybookDetails(testFileName, null);
+            Assertions.assertNotNull(updatedDetails);
+            Assertions.assertEquals(0, updatedDetails.get("healedSteps"));
+            Assertions.assertEquals(1, updatedDetails.get("passedSteps"));
+
+            @SuppressWarnings("unchecked")
+            final List<Map<String, Object>> updatedSteps = (List<Map<String, Object>>) updatedDetails.get("steps");
+            final Map<String, Object> updatedStep = updatedSteps.get(0);
+            Assertions.assertEquals("SUCCESS", updatedStep.get("status"));
+        }
+        finally
+        {
+            testFile.delete();
+            jsonFile.delete();
+        }
+    }
 }

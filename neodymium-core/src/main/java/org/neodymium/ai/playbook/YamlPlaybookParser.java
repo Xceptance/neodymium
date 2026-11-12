@@ -47,6 +47,7 @@ import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -359,11 +360,30 @@ public final class YamlPlaybookParser implements PlaybookParser
             }
             final byte[] bytes = in.readAllBytes();
             final String content = new String(bytes, StandardCharsets.UTF_8).trim();
-            if (content.startsWith("["))
+            if (content.startsWith("[") || (content.startsWith("{") && identifier.endsWith(".json")))
             {
                 try
                 {
-                    final List<PlaybookStep> parsedSteps = MAPPER.readValue(content, new TypeReference<List<PlaybookStep>>(){});
+                    final List<PlaybookStep> parsedSteps;
+                    if (content.startsWith("["))
+                    {
+                        parsedSteps = MAPPER.readValue(content, new TypeReference<List<PlaybookStep>>(){});
+                    }
+                    else
+                    {
+                        final JsonNode rootNode = MAPPER.readTree(content);
+                        final JsonNode stepsNode = rootNode.has("steps") ? rootNode.get("steps")
+                                : (rootNode.has("_steps") ? rootNode.get("_steps") : rootNode.get("recordedSteps"));
+                        if (stepsNode != null && stepsNode.isArray())
+                        {
+                            parsedSteps = MAPPER.convertValue(stepsNode, new TypeReference<List<PlaybookStep>>(){});
+                        }
+                        else
+                        {
+                            parsedSteps = null;
+                        }
+                    }
+
                     if (parsedSteps != null)
                     {
                         if (!allowEmptySteps && parsedSteps.isEmpty())
@@ -404,53 +424,56 @@ public final class YamlPlaybookParser implements PlaybookParser
                     // Fall back to legacy Action list parsing
                 }
 
-                final List<Action> actions = MAPPER.readValue(content, new TypeReference<List<Action>>(){});
-                final String fileName = new File(identifier).getName();
-                PlaybookStep currentStep = null;
-                if (actions != null)
+                if (content.startsWith("["))
                 {
-                    for (final Action action : actions)
+                    final List<Action> actions = MAPPER.readValue(content, new TypeReference<List<Action>>(){});
+                    final String fileName = new File(identifier).getName();
+                    PlaybookStep currentStep = null;
+                    if (actions != null)
                     {
-                        final String stepDesc = (action.getStepInstruction() != null && !action.getStepInstruction().trim().isEmpty())
-                            ? action.getStepInstruction()
-                            : action.getDescription();
-
-                        final String stepFile = (action.getStepFile() != null && !action.getStepFile().trim().isEmpty())
-                            ? action.getStepFile()
-                            : fileName;
-
-                        final int stepLine = action.getStepLine();
-
-                        if (currentStep != null 
-                            && Objects.equals(currentStep.getInstruction(), stepDesc)
-                            && Objects.equals(currentStep.getSourceFile(), stepFile)
-                            && currentStep.getLineNumber() == stepLine)
+                        for (final Action action : actions)
                         {
-                            currentStep.getActions().add(action);
-                            if (action.getStepScreenshotHash() != null && !action.getStepScreenshotHash().isEmpty())
+                            final String stepDesc = (action.getStepInstruction() != null && !action.getStepInstruction().trim().isEmpty())
+                                ? action.getStepInstruction()
+                                : action.getDescription();
+
+                            final String stepFile = (action.getStepFile() != null && !action.getStepFile().trim().isEmpty())
+                                ? action.getStepFile()
+                                : fileName;
+
+                            final int stepLine = action.getStepLine();
+
+                            if (currentStep != null 
+                                && Objects.equals(currentStep.getInstruction(), stepDesc)
+                                && Objects.equals(currentStep.getSourceFile(), stepFile)
+                                && currentStep.getLineNumber() == stepLine)
                             {
-                                currentStep.setScreenshotHash(action.getStepScreenshotHash());
+                                currentStep.getActions().add(action);
+                                if (action.getStepScreenshotHash() != null && !action.getStepScreenshotHash().isEmpty())
+                                {
+                                    currentStep.setScreenshotHash(action.getStepScreenshotHash());
+                                }
                             }
-                        }
-                        else
-                        {
-                            currentStep = new PlaybookStep(stepDesc);
-                            currentStep.setBlock("steps");
-                            currentStep.getActions().add(action);
-                            currentStep.setSourceFile(stepFile);
-                            if (stepLine != -1)
+                            else
                             {
-                                currentStep.setLineNumber(stepLine);
+                                currentStep = new PlaybookStep(stepDesc);
+                                currentStep.setBlock("steps");
+                                currentStep.getActions().add(action);
+                                currentStep.setSourceFile(stepFile);
+                                if (stepLine != -1)
+                                {
+                                    currentStep.setLineNumber(stepLine);
+                                }
+                                if (action.getStepScreenshotHash() != null && !action.getStepScreenshotHash().isEmpty())
+                                {
+                                    currentStep.setScreenshotHash(action.getStepScreenshotHash());
+                                }
+                                steps.add(currentStep);
                             }
-                            if (action.getStepScreenshotHash() != null && !action.getStepScreenshotHash().isEmpty())
-                            {
-                                currentStep.setScreenshotHash(action.getStepScreenshotHash());
-                            }
-                            steps.add(currentStep);
                         }
                     }
+                    return new Playbook(beforeSteps, steps, afterSteps, dataSets, promptAddons, description, rootTags);
                 }
-                return new Playbook(beforeSteps, steps, afterSteps, dataSets, promptAddons, description, rootTags);
             }
         }
 
@@ -1446,44 +1469,73 @@ public final class YamlPlaybookParser implements PlaybookParser
             final byte[] bytes = in.readAllBytes();
             final String content = new String(bytes, StandardCharsets.UTF_8).trim();
             final ObjectMapper mapper = new ObjectMapper();
-            if (content.startsWith("["))
+            if (content.startsWith("[") || (content.startsWith("{") && jsonIdentifier.endsWith(".json")))
             {
                 try
                 {
-                    final List<PlaybookStep> jsonSteps = mapper.readValue(content, new TypeReference<List<PlaybookStep>>(){});
-                    final List<PlaybookStep> jBefore = new ArrayList<>();
-                    final List<PlaybookStep> jSteps = new ArrayList<>();
-                    final List<PlaybookStep> jAfter = new ArrayList<>();
-                    for (final PlaybookStep s : jsonSteps)
+                    final List<PlaybookStep> jsonSteps;
+                    if (content.startsWith("["))
                     {
-                        if ("before".equalsIgnoreCase(s.getBlock()))
+                        jsonSteps = mapper.readValue(content, new TypeReference<List<PlaybookStep>>(){});
+                    }
+                    else
+                    {
+                        final JsonNode rootNode = mapper.readTree(content);
+                        final JsonNode stepsNode = rootNode.has("steps") ? rootNode.get("steps")
+                                : (rootNode.has("_steps") ? rootNode.get("_steps") : rootNode.get("recordedSteps"));
+                        if (stepsNode != null && stepsNode.isArray())
                         {
-                            jBefore.add(s);
-                        }
-                        else if ("after".equalsIgnoreCase(s.getBlock()))
-                        {
-                            jAfter.add(s);
+                            jsonSteps = mapper.convertValue(stepsNode, new TypeReference<List<PlaybookStep>>(){});
                         }
                         else
                         {
-                            jSteps.add(s);
+                            jsonSteps = null;
                         }
                     }
-                    setParentReferences(jBefore, null);
-                    setParentReferences(jSteps, null);
-                    setParentReferences(jAfter, null);
-                    resetExecutionState(jBefore);
-                    resetExecutionState(jSteps);
-                    resetExecutionState(jAfter);
-                    return new Playbook(jBefore, jSteps, jAfter, yamlPlaybook.getDataSets(), yamlPlaybook.getPromptAddons(), yamlPlaybook.getDescription(), yamlPlaybook.getTags());
+
+                    if (jsonSteps != null)
+                    {
+                        final List<PlaybookStep> jBefore = new ArrayList<>();
+                        final List<PlaybookStep> jSteps = new ArrayList<>();
+                        final List<PlaybookStep> jAfter = new ArrayList<>();
+                        for (final PlaybookStep s : jsonSteps)
+                        {
+                            if ("before".equalsIgnoreCase(s.getBlock()))
+                            {
+                                jBefore.add(s);
+                            }
+                            else if ("after".equalsIgnoreCase(s.getBlock()))
+                            {
+                                jAfter.add(s);
+                            }
+                            else
+                            {
+                                jSteps.add(s);
+                            }
+                        }
+                        setParentReferences(jBefore, null);
+                        setParentReferences(jSteps, null);
+                        setParentReferences(jAfter, null);
+                        resetExecutionState(jBefore);
+                        resetExecutionState(jSteps);
+                        resetExecutionState(jAfter);
+                        return new Playbook(jBefore, jSteps, jAfter, yamlPlaybook.getDataSets(), yamlPlaybook.getPromptAddons(), yamlPlaybook.getDescription(), yamlPlaybook.getTags());
+                    }
                 }
                 catch (final Exception e)
                 {
-                    e.printStackTrace();
+                    LOG.error("Failed to parse companion JSON steps for {}: ", jsonIdentifier, e);
                     // Fall back to legacy merge logic
                 }
             }
-            actions = mapper.readValue(content, new TypeReference<List<Action>>(){});
+            if (content.startsWith("["))
+            {
+                actions = mapper.readValue(content, new TypeReference<List<Action>>(){});
+            }
+            else
+            {
+                actions = Collections.emptyList();
+            }
         }
 
         // 3. Merge actions into YAML steps sequentially
