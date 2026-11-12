@@ -22,6 +22,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -37,6 +39,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.util.FileSystemUtils;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -53,6 +56,7 @@ import com.xceptance.aura.report.entity.TestRunTagEntity;
 import com.xceptance.aura.report.repository.TestBaseBugRepository;
 import com.xceptance.aura.report.repository.TestBaseVariationRepository;
 import com.xceptance.aura.report.repository.TestRunRepository;
+import com.xceptance.aura.report.repository.TestRunTagRepository;
 
 /**
  * Tests report storage synchronization and dynamic run.json generation on report read.
@@ -82,6 +86,9 @@ public class RunStorageSyncServiceTest
 
     @Autowired
     private TestBaseVariationRepository variationRepository;
+
+    @Autowired
+    private TestRunTagRepository tagRepository;
 
     @AfterEach
     public void cleanup() throws IOException
@@ -2198,5 +2205,79 @@ public class RunStorageSyncServiceTest
         Assertions.assertEquals("", AuraReportDataService.resolveEffectiveBatchName("Queue", List.of(syntheticQueue)));
         Assertions.assertEquals("", AuraReportDataService.resolveEffectiveBatchName("Default", Collections.emptyList()));
         Assertions.assertEquals("", AuraReportDataService.resolveEffectiveBatchName(null, (Collection<TestRunTagEntity>) null));
+    }
+
+    @Test
+    public void testPopulateRunTagsDeduplicatesAreaTagsWithAndWithoutAtPrefix()
+    {
+        final TestRunEntity run = new TestRunEntity();
+        run.setId("run-area-dedup");
+        run.setBatchName("Default");
+
+        final TestRunTagEntity tagWithoutAt = new TestRunTagEntity("run-area-dedup", "Area", "Browse");
+        final TestRunTagEntity tagWithAt = new TestRunTagEntity("run-area-dedup", "Area", "@Browse");
+        final TestRunTagEntity tagWithMultipleAt = new TestRunTagEntity("run-area-dedup", "Area", "@@Browse");
+
+        run.setTags(new ArrayList<>(List.of(tagWithoutAt, tagWithAt, tagWithMultipleAt)));
+
+        dataService.populateRunTags(List.of(run));
+
+        Assertions.assertNotNull(run.getTags());
+        final List<TestRunTagEntity> areaTags = run.getTags().stream()
+            .filter(t -> "Area".equalsIgnoreCase(t.getTagKey()))
+            .toList();
+
+        Assertions.assertEquals(1, areaTags.size(), "Area tag must only appear once, collapsing 'Browse' and '@Browse'");
+        Assertions.assertEquals("Browse", areaTags.get(0).getTagValue(), "Area tag must be normalized without '@'");
+    }
+
+    @Test
+    public void testSyncRunReportDeduplicatesAreaTagsWithAndWithoutAtPrefix() throws Exception
+    {
+        final String runId = "run-sync-area-dedup-test";
+        final File runDir = new File("storage/runs/" + runId);
+        runDir.mkdirs();
+        try
+        {
+            final String runJson = """
+                {
+                  "timestamp": "2026-11-12T12:00:00.000Z",
+                  "status": "COMPLETED",
+                  "summary": { "total": 1, "pass": 1 },
+                  "tags": {
+                    "Suite": "Aura",
+                    "Area": "Browse"
+                  },
+                  "executionMetrics": {
+                    "Test#1": {
+                      "testClass": "SearchTest",
+                      "title": "Dataset 1",
+                      "status": "passed-clean",
+                      "areaName": "@Browse",
+                      "tags": {
+                        "Area": ["Browse"]
+                      }
+                    }
+                  }
+                }
+                """;
+            Files.writeString(new File(runDir, "run.json").toPath(), runJson, StandardCharsets.UTF_8);
+
+            final boolean synced = syncService.importOrUpdateRunReport(runId);
+            Assertions.assertTrue(synced, "Expected run.json to sync successfully");
+
+            final List<TestRunTagEntity> tags = tagRepository.findByRunId(runId);
+            final List<TestRunTagEntity> areaTags = tags.stream()
+                .filter(t -> "Area".equalsIgnoreCase(t.getTagKey()))
+                .toList();
+
+            Assertions.assertEquals(1, areaTags.size(), "Expected only one Area tag persisted in DB");
+            Assertions.assertEquals("Browse", areaTags.get(0).getTagValue(), "Expected Area tag to be normalized without '@'");
+        }
+        finally
+        {
+            FileSystemUtils.deleteRecursively(runDir);
+            tagRepository.deleteByRunId(runId);
+        }
     }
 }

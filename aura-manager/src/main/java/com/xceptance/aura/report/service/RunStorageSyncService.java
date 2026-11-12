@@ -841,8 +841,20 @@ public class RunStorageSyncService
                 {
                     return;
                 }
-                final String trimmedVal = t.getTagValue().trim();
+                String trimmedVal = t.getTagValue().trim();
                 if ("Default".equalsIgnoreCase(trimmedVal) || "Unknown".equalsIgnoreCase(trimmedVal))
+                {
+                    return;
+                }
+                if (t.getTagKey() != null && "area".equalsIgnoreCase(t.getTagKey().trim()))
+                {
+                    while (trimmedVal.startsWith("@"))
+                    {
+                        trimmedVal = trimmedVal.substring(1).trim();
+                    }
+                    t.setTagValue(trimmedVal);
+                }
+                if (trimmedVal.isEmpty() || "Default".equalsIgnoreCase(trimmedVal) || "Unknown".equalsIgnoreCase(trimmedVal))
                 {
                     return;
                 }
@@ -947,7 +959,12 @@ public class RunStorageSyncService
             {
                 if (AuraReportDataService.isRealArea(area))
                 {
-                    addTagSafe.accept(new TestRunTagEntity(runId, "Area", area.trim()));
+                    String cleanArea = area.trim();
+                    while (cleanArea.startsWith("@"))
+                    {
+                        cleanArea = cleanArea.substring(1).trim();
+                    }
+                    addTagSafe.accept(new TestRunTagEntity(runId, "Area", cleanArea));
                 }
             }
             tagRepository.deleteByRunId(runId);

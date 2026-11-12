@@ -7902,7 +7902,7 @@ public class AuraReportDataService
             {
                 return;
             }
-            final String cleanVal = rawVal.trim();
+            String cleanVal = rawVal.trim();
             if (cleanVal.isEmpty() || "unknown".equalsIgnoreCase(cleanVal) || "default".equalsIgnoreCase(cleanVal) || "all".equalsIgnoreCase(cleanVal) || "queue".equalsIgnoreCase(cleanVal))
             {
                 return;
@@ -7934,13 +7934,20 @@ public class AuraReportDataService
             else if ("area".equals(lowerKey) || "areatag".equals(lowerKey))
             {
                 canonicalKey = "area";
+                while (cleanVal.startsWith("@"))
+                {
+                    cleanVal = cleanVal.substring(1).trim();
+                }
             }
             else
             {
                 canonicalKey = lowerKey;
             }
 
-            rawTagMap.computeIfAbsent(canonicalKey, k -> new TreeSet<>(String.CASE_INSENSITIVE_ORDER)).add(cleanVal);
+            if (!cleanVal.isEmpty() && !"unknown".equalsIgnoreCase(cleanVal) && !"default".equalsIgnoreCase(cleanVal) && !"all".equalsIgnoreCase(cleanVal))
+            {
+                rawTagMap.computeIfAbsent(canonicalKey, k -> new TreeSet<>(String.CASE_INSENSITIVE_ORDER)).add(cleanVal);
+            }
         };
 
         // 1. Query batchRepository
@@ -8074,7 +8081,14 @@ public class AuraReportDataService
                 if (t.getTagKey() != null && !t.getTagKey().isBlank())
                 {
                     final String key = t.getTagKey().trim();
-                    final String val = t.getTagValue() != null ? t.getTagValue().trim() : "";
+                    String val = t.getTagValue() != null ? t.getTagValue().trim() : "";
+                    if ("area".equalsIgnoreCase(key))
+                    {
+                        while (val.startsWith("@"))
+                        {
+                            val = val.substring(1).trim();
+                        }
+                    }
                     if (!val.isEmpty())
                     {
                         tagMap.computeIfAbsent(key, k -> new TreeSet<>(String.CASE_INSENSITIVE_ORDER)).add(val);
@@ -8100,9 +8114,18 @@ public class AuraReportDataService
             {
                 if (t.getRunId() != null && t.getTagKey() != null && t.getTagValue() != null)
                 {
+                    final String k = t.getTagKey().toLowerCase(Locale.ROOT);
+                    String val = t.getTagValue().trim();
+                    if ("area".equalsIgnoreCase(k))
+                    {
+                        while (val.startsWith("@"))
+                        {
+                            val = val.substring(1).trim();
+                        }
+                    }
                     runTags.computeIfAbsent(t.getRunId(), r -> new HashMap<>())
-                        .computeIfAbsent(t.getTagKey().toLowerCase(Locale.ROOT), k -> new HashSet<>())
-                        .add(t.getTagValue().trim());
+                        .computeIfAbsent(k, key -> new HashSet<>())
+                        .add(val);
                 }
             }
         }
@@ -8125,7 +8148,20 @@ public class AuraReportDataService
                 {
                     if (t.getTagKey() != null && !t.getTagKey().isBlank() && t.getTagValue() != null)
                     {
-                        result.computeIfAbsent(t.getTagKey().toLowerCase(Locale.ROOT), k -> new ArrayList<>()).add(t.getTagValue().trim());
+                        final String k = t.getTagKey().toLowerCase(Locale.ROOT);
+                        String val = t.getTagValue().trim();
+                        if ("area".equalsIgnoreCase(k))
+                        {
+                            while (val.startsWith("@"))
+                            {
+                                val = val.substring(1).trim();
+                            }
+                        }
+                        final List<String> list = result.computeIfAbsent(k, key -> new ArrayList<>());
+                        if (!list.contains(val))
+                        {
+                            list.add(val);
+                        }
                     }
                 }
             }
@@ -8224,7 +8260,20 @@ public class AuraReportDataService
             {
                 if (t.getTagKey() != null && !t.getTagKey().isBlank() && t.getTagValue() != null)
                 {
-                    result.computeIfAbsent(t.getTagKey().toLowerCase(Locale.ROOT), k -> new ArrayList<>()).add(t.getTagValue().trim());
+                    final String k = t.getTagKey().toLowerCase(Locale.ROOT);
+                    String val = t.getTagValue().trim();
+                    if ("area".equalsIgnoreCase(k))
+                    {
+                        while (val.startsWith("@"))
+                        {
+                            val = val.substring(1).trim();
+                        }
+                    }
+                    final List<String> list = result.computeIfAbsent(k, key -> new ArrayList<>());
+                    if (!list.contains(val))
+                    {
+                        list.add(val);
+                    }
                 }
             }
             return result;
@@ -8250,13 +8299,31 @@ public class AuraReportDataService
                 if (r.getId() != null)
                 {
                     final List<TestRunTagEntity> rTags = new ArrayList<>();
+                    final Set<String> seenTagKeys = new HashSet<>();
                     if (tagsByRunId.containsKey(r.getId()))
                     {
                         for (final TestRunTagEntity t : tagsByRunId.get(r.getId()))
                         {
                             if (isLegitimateTag(t))
                             {
-                                rTags.add(t);
+                                final String rawVal = t.getTagValue().trim();
+                                String normVal = rawVal;
+                                if (t.getTagKey() != null && "area".equalsIgnoreCase(t.getTagKey().trim()))
+                                {
+                                    while (normVal.startsWith("@"))
+                                    {
+                                        normVal = normVal.substring(1).trim();
+                                    }
+                                }
+                                final String compKey = t.getTagKey().toLowerCase(Locale.ROOT) + "::" + normVal.toLowerCase(Locale.ROOT);
+                                if (seenTagKeys.add(compKey))
+                                {
+                                    if (!normVal.equals(rawVal))
+                                    {
+                                        t.setTagValue(normVal);
+                                    }
+                                    rTags.add(t);
+                                }
                             }
                         }
                     }
@@ -8264,9 +8331,26 @@ public class AuraReportDataService
                     {
                         for (final TestRunTagEntity existing : r.getTags())
                         {
-                            if (isLegitimateTag(existing) && rTags.stream().noneMatch(t -> Objects.equals(t.getTagKey(), existing.getTagKey()) && Objects.equals(t.getTagValue(), existing.getTagValue())))
+                            if (isLegitimateTag(existing))
                             {
-                                rTags.add(existing);
+                                final String rawVal = existing.getTagValue().trim();
+                                String normVal = rawVal;
+                                if (existing.getTagKey() != null && "area".equalsIgnoreCase(existing.getTagKey().trim()))
+                                {
+                                    while (normVal.startsWith("@"))
+                                    {
+                                        normVal = normVal.substring(1).trim();
+                                    }
+                                }
+                                final String compKey = existing.getTagKey().toLowerCase(Locale.ROOT) + "::" + normVal.toLowerCase(Locale.ROOT);
+                                if (seenTagKeys.add(compKey))
+                                {
+                                    if (!normVal.equals(rawVal))
+                                    {
+                                        existing.setTagValue(normVal);
+                                    }
+                                    rTags.add(existing);
+                                }
                             }
                         }
                     }
@@ -8310,13 +8394,31 @@ public class AuraReportDataService
             for (final TestRunEntity r : runs)
             {
                 final List<TestRunTagEntity> rTags = new ArrayList<>();
+                final Set<String> seenTagKeys = new HashSet<>();
                 if (r.getTags() != null)
                 {
                     for (final TestRunTagEntity existing : r.getTags())
                     {
                         if (isLegitimateTag(existing))
                         {
-                            rTags.add(existing);
+                            final String rawVal = existing.getTagValue().trim();
+                            String normVal = rawVal;
+                            if (existing.getTagKey() != null && "area".equalsIgnoreCase(existing.getTagKey().trim()))
+                            {
+                                while (normVal.startsWith("@"))
+                                {
+                                    normVal = normVal.substring(1).trim();
+                                }
+                            }
+                            final String compKey = existing.getTagKey().toLowerCase(Locale.ROOT) + "::" + normVal.toLowerCase(Locale.ROOT);
+                            if (seenTagKeys.add(compKey))
+                            {
+                                if (!normVal.equals(rawVal))
+                                {
+                                    existing.setTagValue(normVal);
+                                }
+                                rTags.add(existing);
+                            }
                         }
                     }
                 }
