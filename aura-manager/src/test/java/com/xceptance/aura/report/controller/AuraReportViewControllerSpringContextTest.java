@@ -742,9 +742,26 @@ public class AuraReportViewControllerSpringContextTest
 
         // Verify that report has real areas, so area headers are rendered
         Assertions.assertTrue(report.hasRealAreas(), "RunReportDto must report hasRealAreas() == true");
-        Assertions.assertTrue(html.contains("@Checkout"), "Must render tagged area @Checkout");
+        Assertions.assertTrue(html.contains("Checkout"), "Must render tagged area Checkout");
+        Assertions.assertFalse(html.contains("@Checkout"), "Must not render tagged area with @ prefix");
         Assertions.assertTrue(html.contains("<span>Default</span>"), "Must render untagged tests under Default area");
         Assertions.assertFalse(html.contains("@Browsing (default)"), "Must not render legacy @Browsing (default)");
         Assertions.assertFalse(html.contains("@Default"), "Must not render @Default with prepended @");
+    }
+
+    /**
+     * Regression safety net for DEF-20261112-1550: Verifies that spring.datasource.url
+     * contains ';DB_CLOSE_ON_EXIT=FALSE' to prevent H2 database shutdown hooks from racing
+     * with Spring Boot context teardown and failing EntityManager release.
+     */
+    @Test
+    public void testDatasourceUrlDisablesDbCloseOnExit()
+    {
+        final String datasourceUrl = applicationContext.getEnvironment().getProperty("spring.datasource.url");
+        Assertions.assertNotNull(datasourceUrl, "spring.datasource.url property must be configured");
+        Assertions.assertTrue(
+            datasourceUrl.contains(";DB_CLOSE_ON_EXIT=FALSE"),
+            "spring.datasource.url must contain ';DB_CLOSE_ON_EXIT=FALSE' to prevent premature H2 shutdown during JVM exit"
+        );
     }
 }
