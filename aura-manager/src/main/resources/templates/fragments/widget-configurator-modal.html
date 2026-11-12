@@ -153,13 +153,11 @@
                             <span class="font-mono text-muted" style="font-size: 0.72rem;">e.g. Browser, Locale, Area, Branch</span>
                         </label>
                         <!-- Quick preset pills -->
-                        <div class="d-flex align-items-center gap-1 flex-wrap mb-2">
-                            <button type="button" class="btn-secondary btn-compact" onclick="selectTagKeyPreset('Browser')">Browser</button>
-                            <button type="button" class="btn-secondary btn-compact" onclick="selectTagKeyPreset('Locale')">Locale</button>
-                            <button type="button" class="btn-secondary btn-compact" onclick="selectTagKeyPreset('Area')">Area</button>
-                            <button type="button" class="btn-secondary btn-compact" onclick="selectTagKeyPreset('Environment')">Environment</button>
-                            <button type="button" class="btn-secondary btn-compact" onclick="selectTagKeyPreset('Branch')">Branch</button>
-                            <button type="button" class="btn-secondary btn-compact" onclick="selectTagKeyPreset('Release')">Release</button>
+                        <div class="d-flex align-items-center gap-1 flex-wrap mb-2" th:if="${availableWidgetTags != null && !availableWidgetTags.isEmpty()}">
+                            <button type="button" th:each="tg : ${availableWidgetTags}"
+                                    class="btn-secondary btn-compact"
+                                    th:attr="onclick='selectTagKeyPreset(\'' + ${tg} + '\')'"
+                                    th:text="${tg}">Browser</button>
                         </div>
                         <select name="tagKey" id="widgetTagKeySelect" class="form-select form-select-sm"
                                 onchange="updateSuggestedWidgetTitle()"
@@ -450,13 +448,15 @@
                                 <span class="material-symbols-outlined pill-icon" style="font-size: 0.75rem;">lock</span>
                                 <span>Browser</span>
                             </span>
-                            <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                            <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;"
+                                   th:if="${(candidateLocales != null && !candidateLocales.isEmpty()) or (widget != null && widget.executionIdentityDimensions != null && #lists.contains(widget.executionIdentityDimensions, 'locale'))}">
                                 <input type="checkbox" name="identityDimCheckbox" value="locale"
                                        th:checked="${widget != null && widget.executionIdentityDimensions != null && #lists.contains(widget.executionIdentityDimensions, 'locale')}"
                                        onchange="updateExecutionIdentityDimensionsInput()" />
                                 <span>Locale</span>
                             </label>
-                            <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                            <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;"
+                                   th:if="${(candidateEnvs != null && !candidateEnvs.isEmpty()) or (widget != null && widget.executionIdentityDimensions != null && #lists.contains(widget.executionIdentityDimensions, 'environment'))}">
                                 <input type="checkbox" name="identityDimCheckbox" value="environment"
                                        th:checked="${widget != null && widget.executionIdentityDimensions != null && #lists.contains(widget.executionIdentityDimensions, 'environment')}"
                                        onchange="updateExecutionIdentityDimensionsInput()" />
@@ -464,7 +464,7 @@
                             </label>
                             <th:block th:if="${availableIdentityTags != null}">
                                 <label th:each="tg : ${availableIdentityTags}"
-                                       th:if="${!#strings.equalsIgnoreCase(tg, 'browser') and !#strings.equalsIgnoreCase(tg, 'locale') and !#strings.equalsIgnoreCase(tg, 'environment')}"
+                                       th:if="${!#strings.equalsIgnoreCase(tg, 'browser') and !#strings.equalsIgnoreCase(tg, 'locale') and !#strings.equalsIgnoreCase(tg, 'environment') and !#strings.equalsIgnoreCase(tg, 'batch')}"
                                        class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
                                     <input type="checkbox" name="identityDimCheckbox" th:value="${tg}"
                                            th:checked="${widget != null && widget.executionIdentityDimensions != null && (#lists.contains(widget.executionIdentityDimensions, tg.toLowerCase()) or #lists.contains(widget.executionIdentityDimensions, tg) or #lists.contains(widget.executionIdentityDimensions, 'tag:' + tg.toLowerCase()))}"

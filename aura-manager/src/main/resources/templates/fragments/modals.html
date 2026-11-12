@@ -238,21 +238,27 @@
                             <span class="material-symbols-outlined" style="font-size: 0.85rem;">web</span>
                             <span>Browser</span>
                         </button>
-                        <button type="button" class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill" data-group-by="environment" onclick="setCreatePageGroupBy('environment', this)">
+                        <button type="button" class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill" data-group-by="environment"
+                                th:if="${candidateEnvs != null && !candidateEnvs.isEmpty()}"
+                                onclick="setCreatePageGroupBy('environment', this)">
                             <span class="material-symbols-outlined" style="font-size: 0.85rem;">dns</span>
                             <span>Environment</span>
                         </button>
-                        <button type="button" class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill" data-group-by="locale" onclick="setCreatePageGroupBy('locale', this)">
+                        <button type="button" class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill" data-group-by="locale"
+                                th:if="${candidateLocales != null && !candidateLocales.isEmpty()}"
+                                onclick="setCreatePageGroupBy('locale', this)">
                             <span class="material-symbols-outlined" style="font-size: 0.85rem;">public</span>
                             <span>Locale</span>
                         </button>
-                        <button type="button" class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill" data-group-by="area" onclick="setCreatePageGroupBy('area', this)">
+                        <button type="button" class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill" data-group-by="area"
+                                th:if="${candidateAreas != null && !candidateAreas.isEmpty()}"
+                                onclick="setCreatePageGroupBy('area', this)">
                             <span class="material-symbols-outlined" style="font-size: 0.85rem;">category</span>
                             <span>Area</span>
                         </button>
                         <th:block th:if="${availableIdentityTags != null}">
                             <button type="button" th:each="tg : ${availableIdentityTags}"
-                                    th:if="${!#strings.equalsIgnoreCase(tg, 'browser') and !#strings.equalsIgnoreCase(tg, 'locale') and !#strings.equalsIgnoreCase(tg, 'environment')}"
+                                    th:if="${!#strings.equalsIgnoreCase(tg, 'browser') and !#strings.equalsIgnoreCase(tg, 'locale') and !#strings.equalsIgnoreCase(tg, 'environment') and !#strings.equalsIgnoreCase(tg, 'batch') and !#strings.equalsIgnoreCase(tg, 'area')}"
                                     class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill"
                                     th:attr="data-group-by=${tg}"
                                     onclick="setCreatePageGroupBy(this.getAttribute('data-group-by'), this)">
@@ -314,17 +320,19 @@
                             <span class="material-symbols-outlined pill-icon" style="font-size: 0.75rem;">lock</span>
                             <span>Browser</span>
                         </span>
-                        <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                        <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;"
+                               th:if="${candidateLocales != null && !candidateLocales.isEmpty()}">
                             <input type="checkbox" name="createPageIdentityDimCheckbox" value="locale" onchange="updateCreatePageIdentityDimensionsInput()" />
                             <span>Locale</span>
                         </label>
-                        <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                        <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;"
+                               th:if="${candidateEnvs != null && !candidateEnvs.isEmpty()}">
                             <input type="checkbox" name="createPageIdentityDimCheckbox" value="environment" onchange="updateCreatePageIdentityDimensionsInput()" />
                             <span>Environment</span>
                         </label>
                         <th:block th:if="${availableIdentityTags != null}">
                             <label th:each="tg : ${availableIdentityTags}"
-                                   th:if="${!#strings.equalsIgnoreCase(tg, 'browser') and !#strings.equalsIgnoreCase(tg, 'locale') and !#strings.equalsIgnoreCase(tg, 'environment')}"
+                                   th:if="${!#strings.equalsIgnoreCase(tg, 'browser') and !#strings.equalsIgnoreCase(tg, 'locale') and !#strings.equalsIgnoreCase(tg, 'environment') and !#strings.equalsIgnoreCase(tg, 'batch')}"
                                    class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
                                 <input type="checkbox" name="createPageIdentityDimCheckbox" th:value="${tg}" onchange="updateCreatePageIdentityDimensionsInput()" />
                                 <span th:text="${'+ Tag: ' + tg}">+ Tag: Area</span>
@@ -539,21 +547,27 @@
                             <span class="material-symbols-outlined" style="font-size: 0.85rem;">inventory_2</span>
                             <span>Batch / Suite</span>
                         </button>
-                        <button type="button" class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill" data-group-by="environment" onclick="setConvertToGroupGroupBy('environment', this)">
+                        <button type="button" class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill" data-group-by="environment"
+                                th:if="${candidateEnvs != null && !candidateEnvs.isEmpty()}"
+                                onclick="setConvertToGroupGroupBy('environment', this)">
                             <span class="material-symbols-outlined" style="font-size: 0.85rem;">dns</span>
                             <span>Environment</span>
                         </button>
-                        <button type="button" class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill" data-group-by="locale" onclick="setConvertToGroupGroupBy('locale', this)">
+                        <button type="button" class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill" data-group-by="locale"
+                                th:if="${candidateLocales != null && !candidateLocales.isEmpty()}"
+                                onclick="setConvertToGroupGroupBy('locale', this)">
                             <span class="material-symbols-outlined" style="font-size: 0.85rem;">public</span>
                             <span>Locale</span>
                         </button>
-                        <button type="button" class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill" data-group-by="area" onclick="setConvertToGroupGroupBy('area', this)">
+                        <button type="button" class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill" data-group-by="area"
+                                th:if="${candidateAreas != null && !candidateAreas.isEmpty()}"
+                                onclick="setConvertToGroupGroupBy('area', this)">
                             <span class="material-symbols-outlined" style="font-size: 0.85rem;">category</span>
                             <span>Area</span>
                         </button>
                         <th:block th:if="${availableIdentityTags != null}">
                             <button type="button" th:each="tg : ${availableIdentityTags}"
-                                    th:if="${!#strings.equalsIgnoreCase(tg, 'browser') and !#strings.equalsIgnoreCase(tg, 'locale') and !#strings.equalsIgnoreCase(tg, 'environment')}"
+                                    th:if="${!#strings.equalsIgnoreCase(tg, 'browser') and !#strings.equalsIgnoreCase(tg, 'locale') and !#strings.equalsIgnoreCase(tg, 'environment') and !#strings.equalsIgnoreCase(tg, 'batch') and !#strings.equalsIgnoreCase(tg, 'area')}"
                                     class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill"
                                     th:attr="data-group-by=${tg}"
                                     onclick="setConvertToGroupGroupBy(this.getAttribute('data-group-by'), this)">
@@ -601,17 +615,19 @@
                             <span class="material-symbols-outlined pill-icon" style="font-size: 0.75rem;">lock</span>
                             <span>Browser</span>
                         </span>
-                        <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                        <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;"
+                               th:if="${candidateLocales != null && !candidateLocales.isEmpty()}">
                             <input type="checkbox" name="convertToGroupIdentityDimCheckbox" value="locale" onchange="updateConvertToGroupIdentityDimensionsInput()" />
                             <span>Locale</span>
                         </label>
-                        <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                        <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;"
+                               th:if="${candidateEnvs != null && !candidateEnvs.isEmpty()}">
                             <input type="checkbox" name="convertToGroupIdentityDimCheckbox" value="environment" onchange="updateConvertToGroupIdentityDimensionsInput()" />
                             <span>Environment</span>
                         </label>
                         <th:block th:if="${availableIdentityTags != null}">
                             <label th:each="tg : ${availableIdentityTags}"
-                                   th:if="${!#strings.equalsIgnoreCase(tg, 'browser') and !#strings.equalsIgnoreCase(tg, 'locale') and !#strings.equalsIgnoreCase(tg, 'environment')}"
+                                   th:if="${!#strings.equalsIgnoreCase(tg, 'browser') and !#strings.equalsIgnoreCase(tg, 'locale') and !#strings.equalsIgnoreCase(tg, 'environment') and !#strings.equalsIgnoreCase(tg, 'batch')}"
                                    class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
                                 <input type="checkbox" name="convertToGroupIdentityDimCheckbox" th:value="${tg}" onchange="updateConvertToGroupIdentityDimensionsInput()" />
                                 <span th:text="${'+ Tag: ' + tg}">+ Tag: Area</span>

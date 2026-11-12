@@ -386,6 +386,7 @@ public class AuraReportTagBoundBugSeverityTest
         // 4. Add custom tags in tagRepository
         tagRepository.save(new TestRunTagEntity("run-dev-fr", "Branch", "develop"));
         tagRepository.save(new TestRunTagEntity("run-dev-fr", "Release", "2026.11"));
+        tagRepository.save(new TestRunTagEntity("run-dev-fr", "Suite", "Aura"));
 
         // 5. Query getAllKnownTagMap
         final Map<String, List<String>> tagMap = dataService.getAllKnownTagMap();
@@ -440,8 +441,9 @@ public class AuraReportTagBoundBugSeverityTest
         Assertions.assertFalse(candidateCustomTags.containsKey("location"), "Standard location dimension must be excluded");
         Assertions.assertFalse(candidateCustomTags.containsKey("area"), "Standard area dimension must be excluded");
         Assertions.assertFalse(candidateCustomTags.containsKey("batch"), "Standard batch dimension must be excluded");
-        Assertions.assertFalse(candidateCustomTags.containsKey("suite"), "Standard suite dimension must be excluded");
         Assertions.assertFalse(candidateCustomTags.containsKey("batchname"), "Standard batchname dimension must be excluded");
+        Assertions.assertTrue(candidateCustomTags.containsKey("Suite"), "Suite custom tag must be present with preserved casing");
+        Assertions.assertTrue(candidateCustomTags.get("Suite").contains("Aura"), "Suite must contain Aura");
         Assertions.assertTrue(candidateCustomTags.containsKey("Branch"), "Branch custom tag must be present with preserved casing");
         Assertions.assertTrue(candidateCustomTags.get("Branch").contains("develop"), "Branch must contain develop");
         Assertions.assertTrue(candidateCustomTags.containsKey("Release"), "Release custom tag must be present with preserved casing");
@@ -518,5 +520,31 @@ public class AuraReportTagBoundBugSeverityTest
         Assertions.assertEquals(List.of("BUG-DEV-ONLY"), loadedDevExec.getBugs(), "DEV execution must actively have BUG-DEV-ONLY");
         Assertions.assertEquals("failed-known", loadedDevExec.getStatus(), "DEV execution must be marked as failed-known");
         Assertions.assertTrue(loadedDevExec.getInactiveBugDetails().isEmpty(), "DEV execution must have 0 inactive bugs");
+    }
+
+    @Test
+    public void testCandidateBrowsersDerivedOnlyFromRunsWithoutHardcodedStandardBrowsers()
+    {
+        runRepository.deleteAll();
+        batchRepository.deleteAll();
+        variationRepository.deleteAll();
+        tagRepository.deleteAll();
+        dataService.clearCache();
+
+        final TestRunEntity customRun = new TestRunEntity(
+            "run-custom-browser", "CustomBatch", "COMPLETED", "Manual", "Default", "Default", "Chrome_1500x1000", "12:00", System.currentTimeMillis()
+        );
+        runRepository.save(customRun);
+
+        final Map<String, List<String>> tagMap = dataService.getAllKnownTagMap();
+        Assertions.assertTrue(tagMap.containsKey("browser"), "browser key must exist");
+        final List<String> browsers = tagMap.get("browser");
+        Assertions.assertEquals(1, browsers.size());
+        Assertions.assertTrue(browsers.contains("Chrome_1500x1000"));
+        Assertions.assertFalse(browsers.contains("Firefox"));
+        Assertions.assertFalse(browsers.contains("Safari"));
+        Assertions.assertFalse(browsers.contains("Edge"));
+        Assertions.assertFalse(browsers.contains("Chrome_headless"));
+        Assertions.assertFalse(browsers.contains("Firefox_headless"));
     }
 }

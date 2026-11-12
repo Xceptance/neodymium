@@ -1173,7 +1173,7 @@ public class ReportDashboardSettingService
         {
             return "area";
         }
-        if ("batch".equals(clean) || "suite".equals(clean))
+        if ("batch".equals(clean) || "batchname".equals(clean))
         {
             return "batch";
         }

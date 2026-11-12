@@ -21,6 +21,8 @@ package com.xceptance.aura.config;
 import com.xceptance.aura.report.entity.TestRunEntity;
 import com.xceptance.aura.report.entity.TestRunTagEntity;
 import com.xceptance.aura.report.repository.TestRunRepository;
+import com.xceptance.aura.report.service.AuraReportDataService;
+import com.xceptance.aura.report.service.ReportDashboardSettingService;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.AuraQueueService;
 import com.xceptance.neodymium.aura.dto.DatasetSelection;
@@ -276,5 +278,42 @@ public final class AuraGlobalModelAdviceTest
         Assertions.assertEquals(2, model.getAttribute("activeRunExecutedCount"));
         Assertions.assertEquals(3, model.getAttribute("activeRunScheduledCount"));
         Assertions.assertEquals("2 of 3 tests (1 running)", model.getAttribute("activeRunProgress"));
+    }
+
+    @Test
+    public final void testAvailableIdentityTagsPopulationAndExclusions()
+    {
+        final AuraQueueService mockQueueService = Mockito.mock(AuraQueueService.class);
+        final ReportDashboardSettingService mockSettingService = Mockito.mock(ReportDashboardSettingService.class);
+        final TestRunRepository mockRunRepo = Mockito.mock(TestRunRepository.class);
+        final AuraReportDataService mockDataService = Mockito.mock(AuraReportDataService.class);
+
+        Mockito.when(mockSettingService.getExecutionIdentityDimensions()).thenReturn(List.of("browser"));
+        Mockito.when(mockSettingService.getUniquenessDimensions()).thenReturn(List.of("browser"));
+        Mockito.when(mockRunRepo.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of());
+
+        Mockito.when(mockDataService.getAllTagKeys()).thenReturn(List.of("batch", "browser", "locale", "environment", "suite", "project"));
+        Mockito.when(mockDataService.getCandidateCustomTags()).thenReturn(Map.of(
+            "Project", List.of("Neodymium"),
+            "Suite", List.of("Aura", "Console")
+        ));
+
+        final AuraGlobalModelAdvice globalAdvice = new AuraGlobalModelAdvice(mockQueueService, mockSettingService, mockRunRepo, mockDataService);
+        final Model model = new ConcurrentModel();
+        globalAdvice.addGlobalAttributes(model);
+
+        @SuppressWarnings("unchecked")
+        final List<String> availableIdentityTags = (List<String>) model.getAttribute("availableIdentityTags");
+        Assertions.assertNotNull(availableIdentityTags);
+        Assertions.assertTrue(availableIdentityTags.contains("Suite"));
+        Assertions.assertTrue(availableIdentityTags.contains("Project"));
+        Assertions.assertFalse(availableIdentityTags.contains("batch"));
+        Assertions.assertFalse(availableIdentityTags.contains("browser"));
+        Assertions.assertFalse(availableIdentityTags.contains("locale"));
+        Assertions.assertFalse(availableIdentityTags.contains("environment"));
+        final long projectCount = availableIdentityTags.stream().filter("Project"::equalsIgnoreCase).count();
+        Assertions.assertEquals(1, projectCount);
+        final long suiteCount = availableIdentityTags.stream().filter("Suite"::equalsIgnoreCase).count();
+        Assertions.assertEquals(1, suiteCount);
     }
 }

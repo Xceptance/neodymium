@@ -6622,6 +6622,17 @@ public class AuraReportDataService
         // 2. Mark run as deleted
         run.setIsDeleted(true);
         runRepository.save(run);
+        if (tagRepository != null)
+        {
+            try
+            {
+                tagRepository.deleteByRunId(cleanRunId);
+            }
+            catch (final Exception e)
+            {
+                LOG.warn("Failed to delete tags for runId={}: {}", cleanRunId, e.getMessage());
+            }
+        }
         LOG.info("Soft-deleted run runId={}", cleanRunId);
 
         // 3. Storage cleanup (disk JSON and attachments)
@@ -7827,7 +7838,7 @@ public class AuraReportDataService
                     final Set<String> targetSet = customTagMap.computeIfAbsent(key.trim(), k -> new TreeSet<>(String.CASE_INSENSITIVE_ORDER));
                     for (final String v : vals)
                     {
-                        if (v != null && !v.isBlank())
+                        if (v != null && !v.isBlank() && !"unknown".equalsIgnoreCase(v) && !"default".equalsIgnoreCase(v) && !"queue".equalsIgnoreCase(v) && !"all".equalsIgnoreCase(v))
                         {
                             targetSet.add(v.trim());
                         }
@@ -7849,7 +7860,7 @@ public class AuraReportDataService
             {
                 for (final String v : entry.getValue())
                 {
-                    if (v != null && !v.isBlank())
+                    if (v != null && !v.isBlank() && !"unknown".equalsIgnoreCase(v) && !"default".equalsIgnoreCase(v) && !"queue".equalsIgnoreCase(v) && !"all".equalsIgnoreCase(v))
                     {
                         targetSet.add(v.trim());
                     }
@@ -7879,8 +7890,7 @@ public class AuraReportDataService
             || "locale".equals(lower) || "location".equals(lower)
             || "environment".equals(lower) || "env".equals(lower) || "instance".equals(lower)
             || "area".equals(lower) || "areatag".equals(lower)
-            || "batch".equals(lower) || "batchname".equals(lower)
-            || "suite".equals(lower);
+            || "batch".equals(lower) || "batchname".equals(lower);
     }
 
     public Map<String, List<String>> getAllKnownTagMap()
@@ -7893,7 +7903,7 @@ public class AuraReportDataService
                 return;
             }
             final String cleanVal = rawVal.trim();
-            if (cleanVal.isEmpty() || "unknown".equalsIgnoreCase(cleanVal) || "default".equalsIgnoreCase(cleanVal) || "all".equalsIgnoreCase(cleanVal))
+            if (cleanVal.isEmpty() || "unknown".equalsIgnoreCase(cleanVal) || "default".equalsIgnoreCase(cleanVal) || "all".equalsIgnoreCase(cleanVal) || "queue".equalsIgnoreCase(cleanVal))
             {
                 return;
             }
@@ -7905,9 +7915,13 @@ public class AuraReportDataService
             {
                 canonicalKey = "environment";
             }
-            else if ("batch".equals(lowerKey) || "suite".equals(lowerKey) || "batchname".equals(lowerKey))
+            else if ("batch".equals(lowerKey) || "batchname".equals(lowerKey))
             {
                 canonicalKey = "batch";
+            }
+            else if ("suite".equals(lowerKey))
+            {
+                canonicalKey = "Suite";
             }
             else if ("browser".equals(lowerKey))
             {
@@ -7929,13 +7943,7 @@ public class AuraReportDataService
             rawTagMap.computeIfAbsent(canonicalKey, k -> new TreeSet<>(String.CASE_INSENSITIVE_ORDER)).add(cleanVal);
         };
 
-        // 1. Standard browsers
-        for (final String br : List.of("Chrome", "Chrome_headless", "Firefox", "Firefox_headless", "Safari", "Edge"))
-        {
-            addTag.accept("browser", br);
-        }
-
-        // 2. Query batchRepository
+        // 1. Query batchRepository
         if (batchRepository != null)
         {
             for (final TestBatchEntity b : batchRepository.findAll())
@@ -7959,10 +7967,10 @@ public class AuraReportDataService
             }
         }
 
-        // 3. Query runRepository (all runs)
+        // 2. Query runRepository (non-deleted runs only)
         if (runRepository != null)
         {
-            for (final TestRunEntity r : runRepository.findAll())
+            for (final TestRunEntity r : runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc())
             {
                 addTag.accept("environment", r.getEnvironment());
                 addTag.accept("batch", r.getBatchName());
@@ -7983,7 +7991,7 @@ public class AuraReportDataService
             }
         }
 
-        // 4. Query variationRepository
+        // 3. Query variationRepository
         if (variationRepository != null)
         {
             for (final TestBaseVariationEntity v : variationRepository.findAll())
@@ -8000,12 +8008,16 @@ public class AuraReportDataService
             }
         }
 
-        // 5. Query tagRepository
+        // 4. Query tagRepository (non-deleted runs only)
         if (tagRepository != null)
         {
-            for (final TestRunTagEntity t : tagRepository.findAll())
+            final List<String> distinctKeys = tagRepository.findDistinctTagKeys();
+            for (final String key : distinctKeys)
             {
-                addTag.accept(t.getTagKey(), t.getTagValue());
+                for (final String val : tagRepository.findDistinctTagValuesByTagKey(key))
+                {
+                    addTag.accept(key, val);
+                }
             }
         }
 

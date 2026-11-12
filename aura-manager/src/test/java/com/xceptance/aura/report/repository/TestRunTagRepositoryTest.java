@@ -18,6 +18,7 @@
  */
 package com.xceptance.aura.report.repository;
 
+import com.xceptance.aura.report.entity.TestRunEntity;
 import com.xceptance.aura.report.entity.TestRunTagEntity;
 import java.util.List;
 import org.junit.jupiter.api.Assertions;
@@ -38,10 +39,14 @@ public class TestRunTagRepositoryTest
     @Autowired
     private TestRunTagRepository tagRepository;
 
+    @Autowired
+    private TestRunRepository runRepository;
+
     @BeforeEach
     public void setUp()
     {
         tagRepository.deleteAll();
+        runRepository.deleteAll();
     }
 
     @Test
@@ -131,5 +136,37 @@ public class TestRunTagRepositoryTest
 
         tagRepository.deleteByRunId(runId);
         Assertions.assertTrue(tagRepository.findByRunId(runId).isEmpty());
+    }
+
+    @Test
+    public void testFindDistinctKeysAndValuesExcludesSoftDeletedRuns()
+    {
+        final TestRunEntity activeRun = new TestRunEntity();
+        activeRun.setId("run_active_1");
+        activeRun.setBatchName("ActiveBatch");
+        activeRun.setStatus("COMPLETED");
+        activeRun.setIsDeleted(false);
+        runRepository.save(activeRun);
+
+        final TestRunEntity deletedRun = new TestRunEntity();
+        deletedRun.setId("run_deleted_1");
+        deletedRun.setBatchName("DeletedBatch");
+        deletedRun.setStatus("COMPLETED");
+        deletedRun.setIsDeleted(true);
+        runRepository.save(deletedRun);
+
+        tagRepository.save(new TestRunTagEntity("run_active_1", "Suite", "Aura"));
+        tagRepository.save(new TestRunTagEntity("run_deleted_1", "DeletedKey", "DeletedVal"));
+        tagRepository.save(new TestRunTagEntity("run_deleted_1", "Suite", "OldDeletedSuite"));
+
+        final List<String> distinctKeys = tagRepository.findDistinctTagKeys();
+        Assertions.assertEquals(1, distinctKeys.size());
+        Assertions.assertTrue(distinctKeys.contains("Suite"));
+        Assertions.assertFalse(distinctKeys.contains("DeletedKey"));
+
+        final List<String> suiteValues = tagRepository.findDistinctTagValuesByTagKey("Suite");
+        Assertions.assertEquals(1, suiteValues.size());
+        Assertions.assertTrue(suiteValues.contains("Aura"));
+        Assertions.assertFalse(suiteValues.contains("OldDeletedSuite"));
     }
 }

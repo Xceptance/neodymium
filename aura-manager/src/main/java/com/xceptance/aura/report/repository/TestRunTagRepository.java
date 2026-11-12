@@ -43,10 +43,10 @@ public interface TestRunTagRepository extends JpaRepository<TestRunTagEntity, Te
 
     List<TestRunTagEntity> findByTagKeyAndTagValue(String tagKey, String tagValue);
 
-    @Query("SELECT DISTINCT t.tagKey FROM TestRunTagEntity t ORDER BY t.tagKey ASC")
+    @Query("SELECT DISTINCT t.tagKey FROM TestRunTagEntity t WHERE t.runId NOT IN (SELECT r.id FROM TestRunEntity r WHERE r.isDeleted = true) ORDER BY t.tagKey ASC")
     List<String> findDistinctTagKeys();
 
-    @Query("SELECT DISTINCT t.tagValue FROM TestRunTagEntity t WHERE t.tagKey = :tagKey ORDER BY t.tagValue ASC")
+    @Query("SELECT DISTINCT t.tagValue FROM TestRunTagEntity t WHERE t.tagKey = :tagKey AND t.runId NOT IN (SELECT r.id FROM TestRunEntity r WHERE r.isDeleted = true) ORDER BY t.tagValue ASC")
     List<String> findDistinctTagValuesByTagKey(@Param("tagKey") String tagKey);
 
     @Query("SELECT t.runId FROM TestRunTagEntity t WHERE CONCAT(t.tagKey, ':::', t.tagValue) IN :compositeTags GROUP BY t.runId HAVING COUNT(DISTINCT t.tagKey) = :tagCount")

@@ -1779,17 +1779,19 @@ public class AuraReportViewController
         tagKeySet.add("Locale");
         tagKeySet.add("Area");
         tagKeySet.add("Environment");
-        tagKeySet.add("Branch");
-        tagKeySet.add("Release");
         if (dataService != null)
         {
-            tagKeySet.addAll(dataService.getAllKnownTagMap().keySet());
             for (final String key : dataService.getAllTagKeys())
             {
-                if (key != null && !key.isBlank() && !"batch".equalsIgnoreCase(key))
+                if (key != null && !key.isBlank() && !"batch".equalsIgnoreCase(key) && !"batchname".equalsIgnoreCase(key))
                 {
                     tagKeySet.add(key.trim());
                 }
+            }
+            final Map<String, List<String>> custom = dataService.getCandidateCustomTags();
+            if (custom != null)
+            {
+                tagKeySet.addAll(custom.keySet());
             }
         }
         return new ArrayList<>(tagKeySet);
@@ -1932,19 +1934,27 @@ public class AuraReportViewController
 
         if (dataService != null)
         {
-            for (final String key : dataService.getAllTagKeys())
+            final List<String> rawKeys = new ArrayList<>(dataService.getAllTagKeys());
+            final Map<String, List<String>> customMap = dataService.getCandidateCustomTags();
+            if (customMap != null)
             {
-                if (key != null && !key.isBlank() && !"batch".equalsIgnoreCase(key) && !availableIdentityTags.contains(key.trim()))
-                {
-                    availableIdentityTags.add(key.trim());
-                }
+                rawKeys.addAll(customMap.keySet());
             }
-        }
-        for (final String t : availableTags)
-        {
-            if (t != null && !t.isBlank() && !availableIdentityTags.contains(t.trim()))
+            for (final String key : rawKeys)
             {
-                availableIdentityTags.add(t.trim());
+                final String trimmedKey = (key != null) ? key.trim() : "";
+                if (!trimmedKey.isBlank()
+                    && !"batch".equalsIgnoreCase(trimmedKey) && !"batchname".equalsIgnoreCase(trimmedKey)
+                    && !"browser".equalsIgnoreCase(trimmedKey)
+                    && !"locale".equalsIgnoreCase(trimmedKey) && !"location".equalsIgnoreCase(trimmedKey)
+                    && !"environment".equalsIgnoreCase(trimmedKey) && !"env".equalsIgnoreCase(trimmedKey)
+                    && availableIdentityTags.stream().noneMatch(existing -> existing.equalsIgnoreCase(trimmedKey)))
+                {
+                    final String displayKey = (trimmedKey.length() > 1 && Character.isLowerCase(trimmedKey.charAt(0)))
+                        ? Character.toUpperCase(trimmedKey.charAt(0)) + trimmedKey.substring(1)
+                        : trimmedKey;
+                    availableIdentityTags.add(displayKey);
+                }
             }
         }
         availableIdentityTags.sort(String.CASE_INSENSITIVE_ORDER);

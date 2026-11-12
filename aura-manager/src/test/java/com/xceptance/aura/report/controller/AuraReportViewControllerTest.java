@@ -6010,5 +6010,169 @@ public class AuraReportViewControllerTest
             Files.deleteIfExists(Paths.get("storage/runs", runId));
         }
     }
+
+    @Test
+    public void testAvailableIdentityTagsAndCandidateCustomTagsPopulation()
+    {
+        final DashboardPageConfigDto page = new DashboardPageConfigDto(
+            "page-suite-test",
+            "Suite Dashboard",
+            Collections.emptyList(),
+            0,
+            0L
+        );
+        Mockito.when(settingService.getCustomPage("page-suite-test")).thenReturn(page);
+        Mockito.when(dataService.getAllTagKeys()).thenReturn(List.of("batch", "browser", "locale", "environment", "suite", "project", "PROJECT"));
+        Mockito.when(dataService.getCandidateCustomTags()).thenReturn(Map.of(
+            "Suite", List.of("Aura", "Console"),
+            "Project", List.of("Neodymium")
+        ));
+        Mockito.when(dataService.getAllKnownTagMap()).thenReturn(Map.of(
+            "browser", List.of("Chrome_1500x1000")
+        ));
+
+        final HttpServletResponse response = Mockito.mock(HttpServletResponse.class);
+        final Model model = new ConcurrentModel();
+        controller.getCustomDashboardPage("page-suite-test", "true", response, model);
+
+        @SuppressWarnings("unchecked")
+        final List<String> identityTags = (List<String>) model.getAttribute("availableIdentityTags");
+        Assertions.assertNotNull(identityTags);
+        Assertions.assertTrue(identityTags.contains("Suite"), "availableIdentityTags must contain Suite");
+        Assertions.assertTrue(identityTags.contains("Project"), "availableIdentityTags must contain Project");
+        Assertions.assertFalse(identityTags.contains("batch"), "availableIdentityTags must not contain batch");
+        Assertions.assertFalse(identityTags.contains("browser"), "availableIdentityTags must not contain browser");
+        Assertions.assertFalse(identityTags.contains("locale"), "availableIdentityTags must not contain locale");
+        Assertions.assertFalse(identityTags.contains("environment"), "availableIdentityTags must not contain environment");
+        Assertions.assertFalse(identityTags.contains("Branch"), "availableIdentityTags must not contain Branch when unconfigured");
+        Assertions.assertFalse(identityTags.contains("Release"), "availableIdentityTags must not contain Release when unconfigured");
+
+        final long projectCount = identityTags.stream().filter("Project"::equalsIgnoreCase).count();
+        Assertions.assertEquals(1, projectCount, "Duplicate case variants of Project must be deduplicated");
+
+        @SuppressWarnings("unchecked")
+        final Map<String, List<String>> candidateCustomTags = (Map<String, List<String>>) model.getAttribute("candidateCustomTags");
+        Assertions.assertNotNull(candidateCustomTags);
+        Assertions.assertTrue(candidateCustomTags.containsKey("Suite"), "candidateCustomTags must contain Suite");
+        Assertions.assertEquals(List.of("Aura", "Console"), candidateCustomTags.get("Suite"));
+
+        @SuppressWarnings("unchecked")
+        final List<String> candidateBrowsers = (List<String>) model.getAttribute("candidateBrowsers");
+        Assertions.assertNotNull(candidateBrowsers);
+        Assertions.assertTrue(candidateBrowsers.contains("Chrome_1500x1000"));
+        Assertions.assertFalse(candidateBrowsers.contains("Firefox"));
+        Assertions.assertFalse(candidateBrowsers.contains("Safari"));
+    }
+
+    @Test
+    public void testModalsHtml_SuppressesUnusedDimensionsAndRendersSuiteTag()
+    {
+        final SpringTemplateEngine engine = new SpringTemplateEngine();
+        final ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setPrefix("templates/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCharacterEncoding("UTF-8");
+        resolver.setCacheable(false);
+        engine.setTemplateResolver(resolver);
+
+        final StandardLinkBuilder linkBuilder = new StandardLinkBuilder()
+        {
+            @Override
+            protected String computeContextPath(
+                final IExpressionContext expressionContext,
+                final String base,
+                final Map<String, Object> parameters)
+            {
+                return "";
+            }
+        };
+        engine.setLinkBuilder(linkBuilder);
+
+        final Context context = new Context(Locale.US);
+        context.setVariable("candidateLocales", List.of());
+        context.setVariable("candidateEnvs", List.of());
+        context.setVariable("candidateAreas", List.of());
+        context.setVariable("candidateBrowsers", List.of("Chrome_1500x1000"));
+        context.setVariable("availableIdentityTags", List.of("Suite"));
+        context.setVariable("candidateCustomTags", Map.of("Suite", List.of("Aura", "Console")));
+
+        final String html = engine.process("fragments/modals", Set.of("createPageModal"), context);
+        Assertions.assertNotNull(html);
+
+        // Grouping section: Locale, Environment, and Area should be suppressed when collections are empty
+        Assertions.assertFalse(html.contains("data-group-by=\"locale\""), "Grouping Locale button must be suppressed when candidateLocales is empty");
+        Assertions.assertFalse(html.contains("data-group-by=\"environment\""), "Grouping Environment button must be suppressed when candidateEnvs is empty");
+        Assertions.assertFalse(html.contains("data-group-by=\"area\""), "Grouping Area button must be suppressed when candidateAreas is empty");
+        Assertions.assertTrue(html.contains("data-group-by=\"Suite\""), "Custom Suite grouping tag button must be rendered");
+
+        // Execution Identity section: Locale and Environment checkboxes should be suppressed
+        Assertions.assertFalse(html.contains("value=\"locale\""), "Identity Locale checkbox must be suppressed when candidateLocales is empty");
+        Assertions.assertFalse(html.contains("value=\"environment\""), "Identity Environment checkbox must be suppressed when candidateEnvs is empty");
+        Assertions.assertTrue(html.contains("value=\"Suite\""), "Custom Suite execution identity checkbox must be rendered");
+        Assertions.assertTrue(html.contains("+ Tag: Suite"), "Custom Suite execution identity label must be rendered");
+
+        // Filter Runs section: Custom tag filter rendered, empty standard dimensions suppressed
+        Assertions.assertTrue(html.contains("Filter by Suite:"), "Filter by Suite must be rendered in run filters");
+        Assertions.assertFalse(html.contains("Filter by Locale:"), "Filter by Locale must be suppressed when candidateLocales is empty");
+        Assertions.assertFalse(html.contains("Filter by Environment:"), "Filter by Environment must be suppressed when candidateEnvs is empty");
+    }
+
+    @Test
+    public void testWidgetConfiguratorModal_CandidateCustomTagsAndGuards()
+    {
+        final SpringTemplateEngine engine = new SpringTemplateEngine();
+        final ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setPrefix("templates/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCharacterEncoding("UTF-8");
+        resolver.setCacheable(false);
+        engine.setTemplateResolver(resolver);
+
+        final StandardLinkBuilder linkBuilder = new StandardLinkBuilder()
+        {
+            @Override
+            protected String computeContextPath(
+                final IExpressionContext expressionContext,
+                final String base,
+                final Map<String, Object> parameters)
+            {
+                return "";
+            }
+        };
+        engine.setLinkBuilder(linkBuilder);
+
+        final DashboardWidgetConfigDto widget = new DashboardWidgetConfigDto(
+            "w-suite", "Suite Test Widget", WidgetMetric.BUGS, null,
+            WidgetPresentation.PERLENKETTE, WidgetTrendMode.DAILY, WidgetValueFormat.ABSOLUTE,
+            "full", 1
+        );
+
+        final Context context = new Context(Locale.US);
+        context.setVariable("widget", widget);
+        context.setVariable("isOpen", true);
+        context.setVariable("availableWidgetTags", List.of("Browser", "Suite"));
+        context.setVariable("candidateBrowsers", List.of("Chrome_1500x1000"));
+        context.setVariable("candidateLocales", List.of());
+        context.setVariable("candidateEnvs", List.of());
+        context.setVariable("candidateAreas", List.of());
+        context.setVariable("availableIdentityTags", List.of("Suite"));
+        context.setVariable("candidateCustomTags", Map.of("Suite", List.of("Aura", "Console")));
+        context.setVariable("dashboardWidgets", List.of(widget));
+
+        final String html = engine.process("fragments/widget-configurator-modal", Set.of("widgetConfiguratorModal"), context);
+        Assertions.assertNotNull(html);
+
+        // Filter by Suite must be rendered with Aura and Console values
+        Assertions.assertTrue(html.contains("Filter by Suite:"), "Widget modal must render Filter by Suite:");
+        Assertions.assertTrue(html.contains("data-tag-key=\"Suite\""), "Widget modal must render Suite tag key attribute");
+        Assertions.assertTrue(html.contains("value=\"Aura\""), "Widget modal must render Aura option");
+        Assertions.assertTrue(html.contains("value=\"Console\""), "Widget modal must render Console option");
+
+        // Locale and Environment filter blocks must be suppressed when collections are empty
+        Assertions.assertFalse(html.contains("Filter by Locale:"), "Filter by Locale must be suppressed when candidateLocales is empty");
+        Assertions.assertFalse(html.contains("Filter by Environment:"), "Filter by Environment must be suppressed when candidateEnvs is empty");
+    }
 }
 
