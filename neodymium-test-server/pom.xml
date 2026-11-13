@@ -13,7 +13,7 @@
 
 	<artifactId>neodymium-test-server</artifactId>
 	<name>neodymium-test-server</name>
-	<description>Embedded HTTP and HTTPS test server hosting the VÉRLA e-commerce storefronts, dynamic HTMX APIs, and Aura Glance test sandboxes.</description>
+	<description>Embedded HTTP and HTTPS test server hosting the VÉRLA e-commerce storefronts, dynamic HTMX APIs, and AI Glance test sandboxes.</description>
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -198,7 +198,23 @@
 			</properties>
 		</profile>
 
-		<!-- 8. Aura Glance visual defect & baseline sandbox tests -->
+		<!-- 8. AI Glance visual defect & baseline sandbox tests (legacy alias: aura-sandbox) -->
+		<profile>
+			<id>ai-sandbox</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<includes combine.self="override">
+								<include>**/JavalinAuraGlanceServerTest.java</include>
+							</includes>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
 		<profile>
 			<id>aura-sandbox</id>
 			<build>
@@ -216,7 +232,13 @@
 			</build>
 		</profile>
 
-		<!-- 9. Aura Manager Spring Boot hub test suite -->
+		<!-- 9. AI Manager Spring Boot hub test suite (legacy alias: aura-manager) -->
+		<profile>
+			<id>ai-manager</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
 		<profile>
 			<id>aura-manager</id>
 			<properties>
