@@ -20,6 +20,7 @@
     <properties>
         <java.version>21</java.version>
         <surefire.failIfNoSpecifiedTests>false</surefire.failIfNoSpecifiedTests>
+        <spring-framework.version>7.0.9</spring-framework.version>
     </properties>
 
     <dependencies>
