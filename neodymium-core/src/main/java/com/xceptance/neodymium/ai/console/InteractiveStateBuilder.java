@@ -23,12 +23,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import org.neodymium.util.TagUtils;
 
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.config.AiConfiguration;
@@ -37,6 +37,7 @@ import org.openqa.selenium.HasCapabilities;
 import org.openqa.selenium.WebDriver;
 
 import com.codeborne.selenide.WebDriverRunner;
+import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.util.Neodymium;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
@@ -69,80 +70,6 @@ import com.google.gson.JsonParser;
 public final class InteractiveStateBuilder
 {
     private static final Gson GSON = new Gson();
-
-    private static final Set<String> KNOWN_LOCALE_CODES = new HashSet<>();
-
-    static
-    {
-        for (final String country : Locale.getISOCountries())
-        {
-            KNOWN_LOCALE_CODES.add(country.toUpperCase());
-            KNOWN_LOCALE_CODES.add(country.toLowerCase());
-        }
-        for (final String lang : Locale.getISOLanguages())
-        {
-            KNOWN_LOCALE_CODES.add(lang.toUpperCase());
-            KNOWN_LOCALE_CODES.add(lang.toLowerCase());
-        }
-        final String[] extraCodes = {
-            "UK", "uk", "GBR", "gbr", "USA", "usa", "DEU", "deu", "GER", "ger",
-            "ENG", "eng", "FRA", "fra", "FRE", "fre", "SPA", "spa", "ITA", "ita",
-            "JPN", "jpn", "ZHO", "zho", "CHI", "chi", "NLD", "nld", "DUT", "dut",
-            "POL", "pol", "SWE", "swe", "NOR", "nor", "DNK", "dnk", "FIN", "fin",
-            "RUS", "rus", "POR", "por", "AUS", "aus", "CAN", "can", "IND", "ind",
-            "KOR", "kor", "BRA", "bra", "MEX", "mex"
-        };
-        for (final String code : extraCodes)
-        {
-            KNOWN_LOCALE_CODES.add(code);
-        }
-    }
-
-    /**
-     * Guesses a locale or location indicator from a dataset ID / label.
-     *
-     * @param datasetId the dataset ID or dataset label (e.g. "homepage test DE", "guest checkout deu")
-     * @return guessed locale string (e.g. "DE", "deu", "en_US"), or null if none detected
-     */
-    public static String extractLocaleFromDatasetId(final String datasetId)
-    {
-        if (datasetId == null || datasetId.isBlank())
-        {
-            return null;
-        }
-
-        final String trimmed = datasetId.trim();
-
-        // 1. Check for compound locale pattern like "en_US", "de_DE", "fr-FR", "en_GB", "jp_JP"
-        final Pattern localePattern = Pattern.compile("(?i)(?:^|[^a-zA-Z0-9])([a-zA-Z]{2,3}[_-][a-zA-Z]{2,3})(?:$|[^a-zA-Z0-9])");
-        final Matcher matcher = localePattern.matcher(trimmed);
-        if (matcher.find())
-        {
-            final String match = matcher.group(1);
-            final String[] parts = match.split("[_-]");
-            if (parts.length == 2 && (KNOWN_LOCALE_CODES.contains(parts[0]) || KNOWN_LOCALE_CODES.contains(parts[1])))
-            {
-                return match;
-            }
-        }
-
-        // 2. Tokenize by non-alphanumeric characters and inspect tokens from right to left
-        final String[] tokens = trimmed.split("[^a-zA-Z0-9]+");
-        for (int i = tokens.length - 1; i >= 0; i--)
-        {
-            final String token = tokens[i];
-            if (token.isEmpty())
-            {
-                continue;
-            }
-            if (KNOWN_LOCALE_CODES.contains(token))
-            {
-                return token;
-            }
-        }
-
-        return null;
-    }
 
     private InteractiveStateBuilder()
     {
@@ -257,6 +184,10 @@ public final class InteractiveStateBuilder
             if (testClass != null)
             {
                 state.addProperty("testClass", testClass);
+                if (simpleClass != null)
+                {
+                    state.addProperty("simpleClassName", simpleClass);
+                }
                 state.addProperty("testFile", testClass + (testMethod != null ? "#" + testMethod : ""));
             }
             if (testMethod != null && !testMethod.isEmpty())
@@ -270,15 +201,101 @@ public final class InteractiveStateBuilder
                 state.addProperty("testId", datasetLabel);
                 state.addProperty("datasetId", datasetLabel);
             }
-
-            String locale = context != null ? (String) context.getTransientData().get("locale") : null;
-            if ((locale == null || locale.isEmpty()) && datasetLabel != null && !datasetLabel.isEmpty())
+            else if (testName != null && !testName.isEmpty())
             {
-                locale = extractLocaleFromDatasetId(datasetLabel);
+                state.addProperty("title", testName);
             }
-            if (locale != null && !locale.isEmpty())
+            else
             {
-                state.addProperty("locale", locale);
+                state.addProperty("title", "Default");
+            }
+
+            @SuppressWarnings("unchecked")
+            final Map<String, List<String>> transientTags = context != null
+                ? (Map<String, List<String>>) context.getTransientData().get("variationTags")
+                : null;
+            final Map<String, List<String>> cliOverrides = TagUtils.getSystemPropertyOverrides();
+            final Map<String, List<String>> variationTags = new LinkedHashMap<>();
+            if (transientTags != null)
+            {
+                variationTags.putAll(transientTags);
+            }
+            if (cliOverrides != null && !cliOverrides.isEmpty())
+            {
+                for (final Map.Entry<String, List<String>> cliEntry : cliOverrides.entrySet())
+                {
+                    variationTags.put(cliEntry.getKey(), cliEntry.getValue());
+                }
+            }
+            final String sysBatch = System.getProperty("batchName", System.getProperty("neodymium.batchName", null));
+            if (sysBatch != null && !sysBatch.isBlank() && !"Default".equalsIgnoreCase(sysBatch.trim()) && !"Unknown".equalsIgnoreCase(sysBatch.trim()) && !"Queue".equalsIgnoreCase(sysBatch.trim()))
+            {
+                final String cleanBatch = sysBatch.trim();
+                if (!variationTags.containsKey("Suite") && !variationTags.containsKey("suite") && !variationTags.containsKey("batch"))
+                {
+                    variationTags.put("Suite", List.of(cleanBatch));
+                }
+                state.addProperty("batchName", cleanBatch);
+            }
+
+            String extractedArea = null;
+            String extractedSubArea = null;
+            if (!variationTags.isEmpty())
+            {
+                final JsonObject tagsObj = new JsonObject();
+                for (final Map.Entry<String, List<String>> entry : variationTags.entrySet())
+                {
+                    final JsonArray arr = new JsonArray();
+                    for (final String v : entry.getValue())
+                    {
+                        arr.add(v);
+                    }
+                    tagsObj.add(entry.getKey(), arr);
+                    if (extractedArea == null && "area".equalsIgnoreCase(entry.getKey()) && entry.getValue() != null && !entry.getValue().isEmpty())
+                    {
+                        final String primary = entry.getValue().get(0);
+                        if (primary != null && !primary.isBlank())
+                        {
+                            final String trimmed = primary.trim();
+                            extractedArea = trimmed.startsWith("@") ? trimmed : "@" + trimmed;
+                        }
+                        if (entry.getValue().size() > 1)
+                        {
+                            final String secondary = entry.getValue().get(1);
+                            if (secondary != null && !secondary.isBlank())
+                            {
+                                final String trimmedSec = secondary.trim();
+                                extractedSubArea = trimmedSec.startsWith("@") ? trimmedSec : "@" + trimmedSec;
+                            }
+                        }
+                    }
+                }
+                state.add("tags", tagsObj);
+            }
+
+            if (playbookFile != null && !playbookFile.isBlank() && (extractedArea == null || extractedSubArea == null))
+            {
+                final List<String> fileAreas = AuraFileService.extractAreaTagsFromFileSystem(playbookFile);
+                if (!fileAreas.isEmpty())
+                {
+                    if (extractedArea == null)
+                    {
+                        extractedArea = fileAreas.get(0).trim();
+                    }
+                    if (extractedSubArea == null && fileAreas.size() > 1)
+                    {
+                        extractedSubArea = fileAreas.get(1).trim();
+                    }
+                }
+            }
+
+            if (extractedArea != null && !state.has("areaName"))
+            {
+                state.addProperty("areaName", extractedArea);
+            }
+            if (extractedSubArea != null && !state.has("subArea"))
+            {
+                state.addProperty("subArea", extractedSubArea);
             }
 
             if (testClass != null)

@@ -1,0 +1,27 @@
+# [DEF-20261026-1816] Contributing Runs Filter Premature Reload on Deselect All and Missing Exclusion Semantics
+
+- **Status:** `Resolved`
+- **Opened:** 2026-10-26 18:16
+- **Closed:** 2026-10-26 18:25
+- **Component:** `aura-manager`
+- **Scope:** `Framework`
+- **Symptom:** On the `/batch-history` view, clicking "Select All" in the run scope toolbar to uncheck it immediately reloaded the page with `_none_`, closing the dropdown before the user could pick a specific value. Furthermore, deselecting an individual option from the filter list caused all remaining candidate values to be listed as active inclusion chips rather than displaying the deselected value as excluded.
+- **Root Cause:** In `report-manager.js`, `selectAllBatchRunScopeFilter` unconditionally executed `htmx.ajax` with `paramName=_none_` when unchecked, instead of client-side unchecking options and waiting for a user selection. Additionally, filter state management only supported inclusion lists (`runBrowsers`), forcing deselection to be represented as an exhaustive list of remaining candidate values instead of explicit exclusion parameters (`excludeRunBrowsers`, `excludeRunLocales`, etc.).
+- **Detection Gap ("What did we miss?"):** Previous controller and template tests asserted that `selectAllBatchRunScopeFilter` was rendered in HTML and verified `_none_` chip rendering, but did not test the multi-step user interaction flow of deselecting "Select All" followed by picking an isolated value, nor did they verify exclusion parameter behavior.
+- **Resolution:**
+  - In `report-manager.js`:
+    - Updated `selectAllBatchRunScopeFilter`: when unchecked, do not dispatch requests or reload; uncheck all checkboxes client-side and wait for a selection.
+    - Updated `toggleBatchRunScopeFilter`: when selecting a value after deselecting "Select all", enable inclusion mode for that value and do not list others as excluded; when deselecting a value from the active filter list, enable exclusion mode (`excludeRun...`) and display the deselected value as excluded.
+    - Updated `removeBatchRunScopeFilter` and `resetAllBatchRunScopeFilters` to handle both inclusion and exclusion parameters.
+  - In `AuraReportViewController.java` & `RunTagTypeFilterDto.java`:
+    - Added support for `excludeRunBrowsers`, `excludeRunLocales`, `excludeRunEnvs`, `excludeRunAreas`, `excludeRunTags`, and dynamic tag exclusions (`excludeRunTag_<id>`).
+    - Passed exclusion sets to `AuraReportDataService` and the template model.
+  - In `AuraReportDataService.java`:
+    - Updated `matchesRunCriteria`, `scopeRunToCriteria`, and `getBatchTestBaseClasses` to honor exclusion sets.
+  - In `batch-history.html`:
+    - Rendered active filter chips with `tag-excluded` styling for excluded values (`[Excluded Safari ×]`).
+    - Preserved single-value inclusion display without listing other candidates as excluded.
+- **Safety Net Added:**
+  - `AuraReportViewControllerTest.testBatchHistoryRunScopeExclusionAndInclusionDisplay`: Asserts dropdown and active filter chip rendering for both exclusion and inclusion modes.
+  - `TestBaseVariationHistoryTest.testBatchLatestTestExecutionsSummaryWithExcludedDimensions`: Verifies contributing runs and executions correctly omit excluded browsers, locales, environments, and areas.
+  - `StaticResourceSyntaxTest.testBatchRunScopeFilterDeselectAllAndExclusionSyntax`: Verifies JavaScript client-side wait and toggle behavior.

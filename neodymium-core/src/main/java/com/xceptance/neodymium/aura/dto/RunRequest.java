@@ -19,11 +19,12 @@
 package com.xceptance.neodymium.aura.dto;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Data transfer object representing a request to run a selection of tests/datasets.
  *
- * @author AI-generated: Antigravity
+ * @author AI-generated: Gemini 3.8 Flash (High)
  * @author Xceptance GmbH 2026
  */
 public final class RunRequest
@@ -35,6 +36,9 @@ public final class RunRequest
     public boolean video;
     public String executionMode = "LLM_RECORDING";
     public List<String> globalBrowserProfiles;
+    public String batchName;
+    public String environment;
+    public Map<String, List<String>> tags;
 
     public RunRequest()
     {
@@ -43,11 +47,25 @@ public final class RunRequest
     public RunRequest(final List<DatasetSelection> datasets, final boolean headless, final boolean interactive,
             final boolean allure, final boolean video, final String executionMode)
     {
-        this(datasets, headless, interactive, allure, video, executionMode, null);
+        this(datasets, headless, interactive, allure, video, executionMode, null, null, null);
     }
 
     public RunRequest(final List<DatasetSelection> datasets, final boolean headless, final boolean interactive,
             final boolean allure, final boolean video, final String executionMode, final List<String> globalBrowserProfiles)
+    {
+        this(datasets, headless, interactive, allure, video, executionMode, globalBrowserProfiles, null, null);
+    }
+
+    public RunRequest(final List<DatasetSelection> datasets, final boolean headless, final boolean interactive,
+            final boolean allure, final boolean video, final String executionMode, final List<String> globalBrowserProfiles,
+            final String batchName)
+    {
+        this(datasets, headless, interactive, allure, video, executionMode, globalBrowserProfiles, batchName, null);
+    }
+
+    public RunRequest(final List<DatasetSelection> datasets, final boolean headless, final boolean interactive,
+            final boolean allure, final boolean video, final String executionMode, final List<String> globalBrowserProfiles,
+            final String batchName, final Map<String, List<String>> tags)
     {
         this.datasets = datasets;
         this.headless = headless;
@@ -56,5 +74,7 @@ public final class RunRequest
         this.video = video;
         this.executionMode = executionMode != null ? executionMode : "LLM_RECORDING";
         this.globalBrowserProfiles = globalBrowserProfiles;
+        this.batchName = batchName;
+        this.tags = tags;
     }
 }

@@ -18,10 +18,15 @@
  */
 package com.xceptance.neodymium.aura.dto;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 /**
  * Data transfer object representing a dataset of a YAML test file.
  *
- * @author AI-generated: Antigravity
+ * @author AI-generated: Gemini 3.8 Flash (High)
  * @author Xceptance GmbH 2026
  */
 public final class DatasetDto
@@ -31,19 +36,31 @@ public final class DatasetDto
     public final boolean hasTestId;
     public final boolean hasPlaybook;
     public final String playbookPath;
+    public final Map<String, List<String>> tags;
 
     public DatasetDto(final String id, final String label, final boolean hasTestId)
     {
-        this(id, label, hasTestId, false, null);
+        this(id, label, hasTestId, false, null, Collections.emptyMap());
     }
 
     public DatasetDto(final String id, final String label, final boolean hasTestId, final boolean hasPlaybook, final String playbookPath)
+    {
+        this(id, label, hasTestId, hasPlaybook, playbookPath, Collections.emptyMap());
+    }
+
+    public DatasetDto(final String id, final String label, final boolean hasTestId, final boolean hasPlaybook, final String playbookPath, final Map<String, List<String>> tags)
     {
         this.id = id;
         this.label = label;
         this.hasTestId = hasTestId;
         this.hasPlaybook = hasPlaybook;
         this.playbookPath = playbookPath;
+        this.tags = tags != null ? Collections.unmodifiableMap(new LinkedHashMap<>(tags)) : Collections.emptyMap();
+    }
+
+    public Map<String, List<String>> getTags()
+    {
+        return tags;
     }
 
     public boolean isHasPlaybook()

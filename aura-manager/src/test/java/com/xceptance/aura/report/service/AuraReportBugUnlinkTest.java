@@ -598,7 +598,6 @@ public class AuraReportBugUnlinkTest
         final TestBaseVariationEntity varEntity = new TestBaseVariationEntity(
             varId, "SearchTest", null, "testSearchFlow", "@Browsing (default)", "Unknown", "Chrome"
         );
-        varEntity.setHistoryLinks("/run-report?runId=" + runId + "&executionId=row-hist-1&batch=History+Sanitize+Batch&engine=Java&ts=Recently&status=failed-known&bugs=BUG-HIST-99");
         varEntity.setLastStatus("failed-known");
         variationRepository.save(varEntity);
 
@@ -656,7 +655,7 @@ public class AuraReportBugUnlinkTest
         node1.put("datasetId", "wikipedia_search_1");
         node1.put("title", "wikipedia_search_1");
         node1.put("browser", "Chrome_1500x1000");
-        node1.put("location", "Unknown");
+        node1.put("location", "Default");
         node1.put("status", "failed");
         final ArrayNode bugs1 = new ObjectMapper().createArrayNode();
         bugs1.add("BUG-COMPOSITE-1");
@@ -673,7 +672,7 @@ public class AuraReportBugUnlinkTest
         node2.put("datasetId", "wikipedia_search_2");
         node2.put("title", "wikipedia_search_2");
         node2.put("browser", "Chrome_1500x1000");
-        node2.put("location", "Unknown");
+        node2.put("location", "Default");
         node2.put("status", "passed");
         new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(execFile2.toFile(), node2);
 
@@ -798,7 +797,6 @@ public class AuraReportBugUnlinkTest
         varEntity.setLastStatus("failed-known");
         varEntity.setLastExecutedAt(runEntity.getStartTimeMs());
         varEntity.setTotalExecutionsCount(1);
-        varEntity.setHistoryLinks(historyUrl);
         variationRepository.save(varEntity);
 
         // 1. Initial report verification
@@ -829,9 +827,11 @@ public class AuraReportBugUnlinkTest
         Assertions.assertEquals("failed-unknown", reloadedExec.getStatus(), "After refresh, execution status must remain failed-unknown");
         Assertions.assertTrue(reloadedExec.getBugs() == null || reloadedExec.getBugs().isEmpty(), "After refresh, bugs list must remain empty");
 
-        // 5. Verify variation entity history links and status in DB
+        // 5. Verify variation entity history and status in DB
         final TestBaseVariationEntity updatedVar = variationRepository.findById(varIdNoMethod).orElseThrow();
-        Assertions.assertFalse(updatedVar.getHistoryLinks().contains(ticket), "Variation history links must not contain unlinked bug ticket");
+        final List<TestBaseVariationHistoryDto> history = dataService.getVariationHistory(testClass, null, dataSet, "en_US", browser);
+        Assertions.assertFalse(history.isEmpty());
+        Assertions.assertTrue(history.get(0).getBugs().isEmpty(), "Variation history must not contain unlinked bug ticket");
         Assertions.assertEquals("failed-unknown", updatedVar.getLastStatus(), "Variation last status must be failed-unknown");
     }
 
@@ -865,7 +865,7 @@ public class AuraReportBugUnlinkTest
         execNode.put("testMethod", "executeYamlTest");
         execNode.put("title", "Default");
         execNode.put("status", "failed-unknown");
-        execNode.put("location", "Unknown");
+        execNode.put("location", "Default");
         execNode.put("browser", "Chrome_1920x1080");
         execNode.put("testFile", "com.xceptance.neodymium.aura.sandbox.Aura_google_test_yaml_Test#executeYamlTest");
         execNode.put("testId", "Default");

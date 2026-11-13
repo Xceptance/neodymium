@@ -18,6 +18,7 @@
  */
 package com.xceptance.neodymium.ai.console;
 
+import org.neodymium.ai.util.AtomicFileUtils;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -30,8 +31,10 @@ import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
@@ -111,7 +114,7 @@ public final class InteractiveConsoleEngine {
         {
             return (sysRunId.startsWith("run_") || sysRunId.startsWith("run-")) ? sysRunId : "run_" + sysRunId;
         }
-        return "run_" + new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date());
+        return "run_" + new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
     }
 
     public static String getRunFolder()
@@ -502,7 +505,7 @@ public final class InteractiveConsoleEngine {
 
                 // 1. Root file for compatibility in default allure.results.directory
                 final File executionJson = new File(defaultResultsDir, "console-execution-" + index + ".json");
-                Files.writeString(executionJson.toPath(), contentToSave, StandardCharsets.UTF_8);
+                AtomicFileUtils.writeStringAtomic(executionJson, contentToSave);
 
                 // 2. Structured run and test class folders in configured console logs directory
                 final String configuredResultsDirPath = AiConfiguration.getInstance().getConsoleExecutionLogsDirectory();
@@ -513,7 +516,7 @@ public final class InteractiveConsoleEngine {
                     structuredDir.mkdirs();
                 }
                 final File structuredJson = new File(structuredDir, "console-execution-" + index + ".json");
-                Files.writeString(structuredJson.toPath(), contentToSave, StandardCharsets.UTF_8);
+                AtomicFileUtils.writeStringAtomic(structuredJson, contentToSave);
 
                 // 3. Structured copy in configured target/ai-reports directory
                 final String reportsDirPath = AiConfiguration.getInstance().getDiskReportDirectory();
@@ -524,7 +527,7 @@ public final class InteractiveConsoleEngine {
                     reportsStructuredDir.mkdirs();
                 }
                 final File reportsStructuredJson = new File(reportsStructuredDir, "console-execution-" + index + ".json");
-                Files.writeString(reportsStructuredJson.toPath(), contentToSave, StandardCharsets.UTF_8);
+                AtomicFileUtils.writeStringAtomic(reportsStructuredJson, contentToSave);
                 if (parsedState.has("videoUrl"))
                 {
                     final String videoName = parsedState.get("videoUrl").getAsString();
@@ -675,7 +678,7 @@ public final class InteractiveConsoleEngine {
                             parsedState.addProperty("videoPath", videoName);
                             final String updatedJson = parsedState.toString();
 
-                            Files.writeString(jsonFileToUpdate.toPath(), updatedJson, StandardCharsets.UTF_8);
+                            AtomicFileUtils.writeStringAtomic(jsonFileToUpdate, updatedJson);
                         }
                         catch (final Exception ignored)
                         {

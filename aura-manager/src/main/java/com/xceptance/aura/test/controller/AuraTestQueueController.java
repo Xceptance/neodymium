@@ -18,8 +18,13 @@
  */
 package com.xceptance.aura.test.controller;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.JsonObject;
+import com.xceptance.aura.report.entity.TestBatchEntity;
+import com.xceptance.aura.report.entity.TestRunEntity;
+import com.xceptance.aura.report.repository.TestBatchRepository;
+import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import com.google.gson.Gson;
 import com.xceptance.neodymium.aura.AuraFileService;
@@ -47,10 +52,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.neodymium.ai.config.ExecutionMode;
-import org.neodymium.common.browser.configuration.BrowserConfiguration;
-import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -79,6 +83,10 @@ public class AuraTestQueueController
 
     private final AuraInteractiveService interactiveService;
 
+    private final TestBatchRepository batchRepository;
+
+    private final AuraReportDataService reportDataService;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final List<DatasetSelection> selectedQueue = Collections.synchronizedList(new ArrayList<>());
@@ -93,12 +101,24 @@ public class AuraTestQueueController
 
     private boolean interactive = false;
 
+    private final Map<String, List<String>> runTags = Collections.synchronizedMap(new LinkedHashMap<>());
+
     public AuraTestQueueController(final AuraQueueService queueService, final AuraFileService fileService,
         final AuraInteractiveService interactiveService)
+    {
+        this(queueService, fileService, interactiveService, null, null);
+    }
+
+    @Autowired
+    public AuraTestQueueController(final AuraQueueService queueService, final AuraFileService fileService,
+        final AuraInteractiveService interactiveService, final TestBatchRepository batchRepository,
+        final AuraReportDataService reportDataService)
     {
         this.queueService = queueService;
         this.fileService = fileService;
         this.interactiveService = interactiveService;
+        this.batchRepository = batchRepository;
+        this.reportDataService = reportDataService;
 
         final List<BrowserProfileDto> available = getAvailableBrowserProfiles();
         if (!available.isEmpty())
@@ -154,6 +174,12 @@ public class AuraTestQueueController
         model.addAttribute("totalRuns", getTotalExecutionRuns());
         model.addAttribute("queueController", this);
         model.addAttribute("activeEditingFile", fileService.getActiveEditingFile());
+        model.addAttribute("runTags", runTags);
+    }
+
+    public Map<String, List<String>> getRunTags()
+    {
+        return runTags;
     }
 
     private Map<String, String> extractParams(final HttpServletRequest request)
@@ -1229,6 +1255,105 @@ public class AuraTestQueueController
         return clearQueue(null, model);
     }
 
+    @PostMapping(
+    {
+      "/api/queue/tags/add", "/api/queue/tag/add", "/api/config/tags/add", "/api/config/tag/add"
+    })
+    public String addQueueTag(
+        @RequestParam(name = "key", required = false) final String keyParam,
+        @RequestParam(name = "value", required = false) final String valueParam,
+        final HttpServletRequest request,
+        final Model model)
+    {
+        final Map<String, String> params = extractParams(request);
+        final String rawKey = keyParam != null ? keyParam : params.get("key");
+        final String rawValue = valueParam != null ? valueParam : params.get("value");
+
+        if (rawKey != null && !rawKey.isBlank())
+        {
+            final String cleanKey = rawKey.trim();
+            final String cleanVal = rawValue != null ? rawValue.trim() : "";
+            if (!cleanVal.isEmpty())
+            {
+                final String[] parts = cleanVal.contains(",") ? cleanVal.split(",") : new String[] { cleanVal };
+                for (final String part : parts)
+                {
+                    final String val = part.trim();
+                    if (!val.isEmpty())
+                    {
+                        runTags.compute(cleanKey, (k, list) -> {
+                            final List<String> targetList = (list != null) ? list : new ArrayList<>();
+                            if (!targetList.contains(val))
+                            {
+                                targetList.add(val);
+                            }
+                            return targetList;
+                        });
+                    }
+                }
+            }
+        }
+
+        populateQueueModel(model);
+        return "fragments/queue :: queueListContainerContent";
+    }
+
+    @PostMapping(
+    {
+      "/api/queue/tags/remove", "/api/queue/tag/remove", "/api/config/tags/remove", "/api/config/tag/remove"
+    })
+    public String removeQueueTag(
+        @RequestParam(name = "key", required = false) final String keyParam,
+        @RequestParam(name = "value", required = false) final String valueParam,
+        final HttpServletRequest request,
+        final Model model)
+    {
+        final Map<String, String> params = extractParams(request);
+        final String rawKey = keyParam != null ? keyParam : params.get("key");
+        final String rawValue = valueParam != null ? valueParam : params.get("value");
+
+        if (rawKey != null && !rawKey.isBlank())
+        {
+            final String cleanKey = rawKey.trim();
+            if (rawValue != null && !rawValue.isBlank())
+            {
+                final String cleanVal = rawValue.trim();
+                runTags.computeIfPresent(cleanKey, (k, list) -> {
+                    list.remove(cleanVal);
+                    return list.isEmpty() ? null : list;
+                });
+            }
+            else
+            {
+                runTags.remove(cleanKey);
+            }
+        }
+
+        populateQueueModel(model);
+        return "fragments/queue :: queueListContainerContent";
+    }
+
+    @PostMapping(
+    {
+      "/api/queue/tags/clear", "/api/queue/tag/clear", "/api/config/tags/clear", "/api/config/tag/clear"
+    })
+    public String clearQueueTags(final Model model)
+    {
+        runTags.clear();
+        populateQueueModel(model);
+        return "fragments/queue :: queueListContainerContent";
+    }
+
+    @GetMapping(
+    {
+      "/api/config/panel", "/api/config/refresh"
+    })
+    public String getConfigPanel(final Model model)
+    {
+        populateQueueModel(model);
+        return "fragments/queue :: configPanel";
+    }
+
     @PostMapping("/api/config/toggle")
     public String toggleConfig(final HttpServletRequest request, final Model model)
     {
@@ -1510,6 +1635,21 @@ public class AuraTestQueueController
             req.globalBrowserProfiles = new ArrayList<>(globalBrowserProfiles);
         }
 
+        final String paramBatchName = request != null ? request.getParameter("batchName") : null;
+        if (req.batchName == null && paramBatchName != null && !paramBatchName.isBlank())
+        {
+            req.batchName = paramBatchName.trim();
+        }
+
+        if (req.tags == null && !runTags.isEmpty())
+        {
+            req.tags = new LinkedHashMap<>();
+            for (final Map.Entry<String, List<String>> entry : runTags.entrySet())
+            {
+                req.tags.put(entry.getKey(), new ArrayList<>(entry.getValue()));
+            }
+        }
+
         if (req.datasets == null || req.datasets.isEmpty())
         {
             LOGGER.error("[Aura Server] Run queue request failed: No datasets in queue");
@@ -1551,17 +1691,153 @@ public class AuraTestQueueController
     {
         final String clientId = (clientIdParam != null && !clientIdParam.isBlank()) ? clientIdParam : "fallback-" + UUID.randomUUID().toString();
 
+        final boolean isQueueRunning = queueService.isRunningQueue();
+        String runId = isQueueRunning ? queueService.getCurrentRunId() : null;
+        String currentBatch = isQueueRunning ? queueService.getCurrentBatchName() : null;
+        boolean running = isQueueRunning;
+        int totalTestsRun = isQueueRunning ? queueService.getGlobalTestsRun() : 0;
+        int passedCount = isQueueRunning ? queueService.getGlobalPassed() : 0;
+        int failedCount = isQueueRunning ? queueService.getGlobalFailed() : 0;
+        int skippedCount = isQueueRunning ? queueService.getGlobalSkipped() : 0;
+
+        final RunRequest lastReq = queueService.getLastRunRequest();
+        Integer scheduledCount = (isQueueRunning && lastReq != null && lastReq.datasets != null) ? lastReq.datasets.size() : null;
+        if (isQueueRunning && lastReq != null && (currentBatch == null || !AuraReportDataService.isRealBatch(currentBatch)))
+        {
+            currentBatch = AuraReportDataService.resolveEffectiveBatchNameFromMap(currentBatch, lastReq.tags);
+        }
+
+        final List<TestRunEntity> allRuns = reportDataService != null
+            ? reportDataService.getAllRuns()
+            : Collections.emptyList();
+
+        final String queueRunId = runId;
+        TestRunEntity activeEntity = null;
+        if (queueRunId != null && !queueRunId.isBlank())
+        {
+            activeEntity = allRuns.stream().filter(r -> queueRunId.equals(r.getId())).findFirst().orElse(null);
+        }
+        if (activeEntity == null)
+        {
+            activeEntity = allRuns.stream().filter(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus())).findFirst().orElse(null);
+        }
+        if (activeEntity == null && reportDataService != null)
+        {
+            activeEntity = allRuns.stream().filter(r -> reportDataService.isRunCurrentlyActiveOnDisk(r.getId())).findFirst().orElse(null);
+        }
+
+        Integer executedCount = totalTestsRun;
+        String progressText = "";
+
+        if (activeEntity != null)
+        {
+            if (runId == null || runId.isBlank())
+            {
+                runId = activeEntity.getId();
+            }
+            running = isQueueRunning || "IN_PROGRESS".equalsIgnoreCase(activeEntity.getStatus())
+                || (reportDataService != null && reportDataService.isRunCurrentlyActiveOnDisk(activeEntity.getId()));
+            if (currentBatch == null || !AuraReportDataService.isRealBatch(currentBatch))
+            {
+                currentBatch = AuraReportDataService.resolveEffectiveBatchName(activeEntity.getBatchName(), activeEntity.getTags());
+                if ((currentBatch == null || !AuraReportDataService.isRealBatch(currentBatch)) && reportDataService != null)
+                {
+                    currentBatch = AuraReportDataService.resolveEffectiveBatchNameFromMap(activeEntity.getBatchName(), reportDataService.getRunTagsMap(activeEntity.getId()));
+                }
+            }
+
+            final int runningCount = activeEntity.getRunningCountSafe();
+            final int total = activeEntity.getTotalTestsSafe();
+            final int entityExecuted = Math.max(0, total - runningCount);
+            final int entityPassed = activeEntity.getPassedCleanCount() + activeEntity.getFixedCleanCount() + activeEntity.getPassedHealedCountSafe() + activeEntity.getFixedHealedCountSafe();
+            final int entityFailed = activeEntity.getFailedKnownCount() + activeEntity.getFailedUnknownCount();
+            final int entitySkipped = activeEntity.getIgnoredCount() != null ? activeEntity.getIgnoredCount() : 0;
+
+            totalTestsRun = Math.max(totalTestsRun, entityExecuted);
+            passedCount = Math.max(passedCount, entityPassed);
+            failedCount = Math.max(failedCount, entityFailed);
+            skippedCount = Math.max(skippedCount, entitySkipped);
+            executedCount = totalTestsRun;
+
+            if (scheduledCount == null && total > 0)
+            {
+                scheduledCount = total;
+            }
+
+            if (running)
+            {
+                if (scheduledCount != null && scheduledCount > 0)
+                {
+                    if (runningCount > 0)
+                    {
+                        progressText = executedCount + " of " + scheduledCount + " tests (" + runningCount + " running)";
+                    }
+                    else
+                    {
+                        progressText = executedCount + " of " + scheduledCount + " tests";
+                    }
+                }
+                else if (runningCount > 0)
+                {
+                    progressText = executedCount + " executed (" + runningCount + " running)";
+                }
+                else
+                {
+                    progressText = executedCount + " executed";
+                }
+            }
+            else
+            {
+                progressText = executedCount + " tests completed";
+            }
+        }
+        else if (running)
+        {
+            if (scheduledCount != null && scheduledCount > 0)
+            {
+                progressText = executedCount + " of " + scheduledCount + " tests";
+            }
+            else
+            {
+                progressText = executedCount + " executed";
+            }
+        }
+        else if (!allRuns.isEmpty())
+        {
+            final TestRunEntity latestRun = allRuns.get(0);
+            runId = latestRun.getId();
+            currentBatch = AuraReportDataService.resolveEffectiveBatchName(latestRun.getBatchName(), latestRun.getTags());
+            if ((currentBatch == null || !AuraReportDataService.isRealBatch(currentBatch)) && reportDataService != null)
+            {
+                currentBatch = AuraReportDataService.resolveEffectiveBatchNameFromMap(latestRun.getBatchName(), reportDataService.getRunTagsMap(latestRun.getId()));
+            }
+            running = false;
+            executedCount = latestRun.getTotalTestsSafe();
+            scheduledCount = latestRun.getTotalTestsSafe();
+            totalTestsRun = executedCount;
+            passedCount = latestRun.getPassedCleanCount() + latestRun.getFixedCleanCount() + latestRun.getPassedHealedCountSafe() + latestRun.getFixedHealedCountSafe();
+            failedCount = latestRun.getFailedKnownCount() + latestRun.getFailedUnknownCount();
+            skippedCount = latestRun.getIgnoredCount() != null ? latestRun.getIgnoredCount() : 0;
+            progressText = executedCount + " tests completed";
+        }
+
         final Map<String, Object> statusObj = new HashMap<>();
         statusObj.put("type", "status");
         statusObj.put("sessionId", "aura-test-manager-session");
-        statusObj.put("total", queueService.getGlobalTestsRun());
-        statusObj.put("passed", queueService.getGlobalPassed());
-        statusObj.put("failed", queueService.getGlobalFailed());
-        statusObj.put("skipped", queueService.getGlobalSkipped());
-        final String runId = queueService.getCurrentRunId();
+        statusObj.put("total", totalTestsRun);
+        statusObj.put("passed", passedCount);
+        statusObj.put("failed", failedCount);
+        statusObj.put("skipped", skippedCount);
         statusObj.put("runId", runId != null ? runId : "");
+        statusObj.put("batchName", (currentBatch != null && AuraReportDataService.isRealBatch(currentBatch)) ? currentBatch.trim() : "");
         statusObj.put("runReportUrl", (runId != null && !runId.isEmpty()) ? "/run-report?runId=" + runId : "");
-        statusObj.put("running", queueService.isRunningQueue());
+        statusObj.put("running", running);
+        statusObj.put("progressText", progressText);
+        statusObj.put("executedCount", executedCount);
+        if (scheduledCount != null)
+        {
+            statusObj.put("scheduledCount", scheduledCount);
+        }
         statusObj.put("activeFile", queueService.getActiveFile());
 
         String activeTestId = "";
@@ -1591,7 +1867,6 @@ public class AuraTestQueueController
         statusObj.put("activeTestId", activeTestId);
 
         final List<Map<String, String>> datasetsList = new ArrayList<>();
-        final RunRequest lastReq = queueService.getLastRunRequest();
         if (lastReq != null && lastReq.datasets != null)
         {
             for (final DatasetSelection selection : lastReq.datasets)
@@ -1714,5 +1989,257 @@ public class AuraTestQueueController
             fileService.acceptPlaybookHealing(file, datasetId, stepIndex, actionIndex);
         }
         return renderPlaybookSidePanel(file, datasetId, model);
+    }
+
+    public ResponseEntity<Map<String, Object>> saveQueueAsBatch(
+        final String batchName,
+        final String environment,
+        final String description)
+    {
+        return saveQueueAsBatch(null, batchName, environment, description);
+    }
+
+    @PostMapping("/api/batch/save")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> saveQueueAsBatch(
+        final HttpServletRequest request,
+        @RequestParam(value = "batchName", required = false) final String batchNameParam,
+        @RequestParam(value = "environment", required = false) final String envParam,
+        @RequestParam(value = "description", required = false) final String descParam)
+    {
+        String name = batchNameParam;
+        String env = envParam;
+        String desc = descParam;
+
+        if ((name == null || name.isBlank()) && request != null)
+        {
+            try
+            {
+                final String body = new String(request.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+                if (body.startsWith("{"))
+                {
+                    final JsonObject obj = GSON.fromJson(body, JsonObject.class);
+                    if (obj.has("batchName") && !obj.get("batchName").isJsonNull())
+                    {
+                        name = obj.get("batchName").getAsString();
+                    }
+                    else if (obj.has("name") && !obj.get("name").isJsonNull())
+                    {
+                        name = obj.get("name").getAsString();
+                    }
+                    if (obj.has("environment") && !obj.get("environment").isJsonNull())
+                    {
+                        env = obj.get("environment").getAsString();
+                    }
+                    if (obj.has("description") && !obj.get("description").isJsonNull())
+                    {
+                        desc = obj.get("description").getAsString();
+                    }
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        if (name == null || name.isBlank())
+        {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "status", "error",
+                "message", "Batch name is required."
+            ));
+        }
+
+        final String finalBatchName = name.trim();
+        final String finalEnv = (env != null && !env.isBlank()) ? env.trim() : "Default";
+        final String finalDesc = (desc != null) ? desc.trim() : "";
+
+        final List<DatasetSelection> queueToSave = new ArrayList<>(selectedQueue);
+        if (queueToSave.isEmpty())
+        {
+            final String activeFile = fileService != null ? fileService.getActiveEditingFile() : null;
+            if (activeFile != null && !activeFile.isBlank())
+            {
+                final DatasetSelection sel = new DatasetSelection();
+                sel.file = activeFile;
+                sel.id = null;
+                queueToSave.add(sel);
+            }
+        }
+
+        if (queueToSave.isEmpty())
+        {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "status", "error",
+                "message", "Cannot save an empty queue as a batch."
+            ));
+        }
+
+        final Set<String> containedBrowsers = new LinkedHashSet<>(globalBrowserProfiles);
+        for (final DatasetSelection ds : queueToSave)
+        {
+            if (ds.browserProfiles != null && !ds.browserProfiles.isEmpty())
+            {
+                containedBrowsers.addAll(ds.browserProfiles);
+            }
+        }
+        final String browsersCsv = !containedBrowsers.isEmpty() ? String.join(", ", containedBrowsers) : "Chrome";
+        final String localesCsv = "Default";
+
+        String testsJson = "[]";
+        try
+        {
+            testsJson = objectMapper.writeValueAsString(queueToSave);
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("Failed to serialize batch test queue: {}", e.getMessage());
+        }
+
+        if (batchRepository != null)
+        {
+            final TestBatchEntity existing = batchRepository.findById(finalBatchName).orElse(null);
+            final String latestRunId = existing != null ? existing.getLatestRunId() : null;
+            final TestBatchEntity batchEntity = new TestBatchEntity(
+                finalBatchName,
+                finalEnv,
+                finalDesc,
+                localesCsv,
+                browsersCsv,
+                latestRunId,
+                testsJson
+            );
+            batchRepository.save(batchEntity);
+            LOGGER.info("Saved batch '{}' to database with {} queued test(s)", finalBatchName, queueToSave.size());
+        }
+
+        if (reportDataService != null)
+        {
+            reportDataService.clearCache();
+        }
+
+        return ResponseEntity.ok(Map.of(
+            "success", true,
+            "status", "success",
+            "batchName", finalBatchName,
+            "testCount", queueToSave.size(),
+            "message", "Batch '" + finalBatchName + "' saved successfully."
+        ));
+    }
+
+    public ResponseEntity<Map<String, Object>> runBatch(final String batchName)
+    {
+        return runBatch(null, batchName);
+    }
+
+    @PostMapping({"/api/batch/run", "/api/batch/execute"})
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> runBatch(
+        final HttpServletRequest request,
+        @RequestParam(value = "batchName", required = false) final String batchNameParam)
+    {
+        String name = batchNameParam;
+        if ((name == null || name.isBlank()) && request != null)
+        {
+            try
+            {
+                final String body = new String(request.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+                if (body.startsWith("{"))
+                {
+                    final JsonObject obj = GSON.fromJson(body, JsonObject.class);
+                    if (obj.has("batchName") && !obj.get("batchName").isJsonNull())
+                    {
+                        name = obj.get("batchName").getAsString();
+                    }
+                    else if (obj.has("name") && !obj.get("name").isJsonNull())
+                    {
+                        name = obj.get("name").getAsString();
+                    }
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        if (name == null || name.isBlank())
+        {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "status", "error", "message", "Batch name cannot be empty."));
+        }
+
+        final String finalBatchName = name.trim();
+
+        if (queueService.isRunningQueue())
+        {
+            return ResponseEntity.status(409).body(Map.of("success", false, "status", "error", "message", "A test queue execution is already in progress."));
+        }
+
+        List<DatasetSelection> datasets = new ArrayList<>();
+        boolean batchFound = false;
+
+        if (batchRepository != null)
+        {
+            final TestBatchEntity entity = batchRepository.findById(finalBatchName).orElse(null);
+            if (entity != null)
+            {
+                batchFound = true;
+                if (entity.getTestsJson() != null && !entity.getTestsJson().isBlank())
+                {
+                    try
+                    {
+                        datasets = objectMapper.readValue(entity.getTestsJson(), new TypeReference<List<DatasetSelection>>() {});
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.warn("Failed to parse testsJson from database entity for batch '{}': {}", finalBatchName, e.getMessage());
+                    }
+                }
+            }
+        }
+
+        if (!batchFound && selectedQueue.isEmpty())
+        {
+            return ResponseEntity.status(404).body(Map.of(
+                "success", false,
+                "status", "error",
+                "message", "Batch '" + finalBatchName + "' not found."
+            ));
+        }
+
+        if (datasets.isEmpty() && !selectedQueue.isEmpty())
+        {
+            datasets = new ArrayList<>(selectedQueue);
+        }
+
+        if (datasets.isEmpty())
+        {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "status", "error",
+                "message", "No test cases configured for batch '" + finalBatchName + "'. Please populate the queue and save the batch."
+            ));
+        }
+
+        final RunRequest req = new RunRequest();
+        req.datasets = datasets;
+        req.batchName = finalBatchName;
+        req.headless = headless;
+        req.video = video;
+        req.executionMode = executionMode;
+        req.interactive = interactive;
+        req.globalBrowserProfiles = new ArrayList<>(globalBrowserProfiles);
+
+        final int port = request != null && request.getServerPort() > 0 ? request.getServerPort() : 8080;
+        queueService.executeQueue(req, port);
+
+        return ResponseEntity.ok(Map.of(
+            "success", true,
+            "status", "success",
+            "batchName", finalBatchName,
+            "testCount", datasets.size(),
+            "message", "Started execution for batch '" + finalBatchName + "'."
+        ));
     }
 }
