@@ -1,0 +1,22 @@
+# [DEF-20261026-0918] Batch History Heading Displays Hardcoded Dimension Prefixes Instead of Direct Grouping Value
+
+- **Status:** `Resolved`
+- **Opened:** 2026-10-26 09:15
+- **Closed:** 2026-10-26 09:25
+- **Component:** `aura-manager`
+- **Scope:** `Framework`
+- **Symptom:** When viewing grouped run histories (such as `http://localhost:8080/batch-history?groupType=environment&groupValue=Default` or `http://localhost:8080/batch-history?groupType=browser&groupValue=Chrome`), the top header title and card headings rendered with redundant, hardcoded dimension prefixes like `Environment: Default` or `Browser: Chrome` instead of cleanly showing the grouping name itself (`Default`, `Chrome`). Furthermore, during client-side HTMX swaps into batch history, the dynamic header failed to cleanly reflect the target grouping value and corresponding icon without breadcrumb clobbering.
+- **Root Cause:** In `AuraReportViewController.batchHistory(...)`, single-dimension groupings explicitly prepended dimension labels to `scopeTitle` (e.g., `scopeTitle = "Environment: " + effectiveGroupValue;`). Because `scopeTitle` also defined `pageTitle` and card headers, the redundant dimension text leaked into every display surface. Additionally, `report-manager.js` did not distinguish single-dimension groupings from the global `All Runs` trend view when updating `#pageTitle` on client navigation, and `fragments/batch-history.html` lacked data attributes for `groupType`, `groupValue`, and `scopeTitle`.
+- **Detection Gap ("What did we miss?"):** Existing controller tests only asserted that `batchHistory` returned the expected view name and populated `batchName` on multi-dimensional groupings or default batches, without asserting on `pageTitle` and `scopeTitle` values for single-dimension filters like environment, locale, and browser.
+- **Resolution:**
+  - In `AuraReportViewController.java`:
+    - Removed `"Environment: "`, `"Locale: "`, `"Browser: "`, and `"Tag: "` prefixes from single-dimension `scopeTitle` assignments in `batchHistory(...)`, directly setting `scopeTitle` to the clean group value.
+    - Set `pageTitle` to `"Runs overview"` when `effectiveGroupType.equals("all")`, and to `scopeTitle` otherwise.
+    - Restored `model.addAttribute("totalBatchVariationsCount", totalBatchVariationsCount)`.
+  - In `fragments/batch-history.html`:
+    - Added `data-group-type`, `data-group-value`, and `data-scope-title` attributes to `#pageBatchHistoryOverview`.
+  - In `fragments/header.html`:
+    - Enhanced icon resolution for `pageTitle` to render grouping-specific icons (`dns` for environment, `public` for locale, `web` for browser, `sell` for batch, `grid_view` for Group overview, and `format_list_bulleted` for Runs overview).
+  - In `report-manager.js`:
+    - Updated `bindGlobalListeners()` on `#mainTrendSvg` to dynamically extract the grouping name and icon from DOM data attributes, rendering the exact grouping name as `#pageTitle` while hiding `#headerBreadcrumb`.
+- **Safety Net Added:** `com.xceptance.aura.report.controller.AuraReportViewControllerTest.testBatchHistorySingleDimensionGroupingHeading` explicitly verifying `pageTitle` and `scopeTitle` for `environment`, `browser`, and `batch` single-dimension requests.

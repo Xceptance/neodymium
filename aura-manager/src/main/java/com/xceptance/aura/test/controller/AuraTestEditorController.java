@@ -23,6 +23,10 @@ import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.aura.AuraFileService.IssueSeverity;
 import com.xceptance.neodymium.aura.AuraFileService.ValidationIssue;
 import jakarta.servlet.http.HttpServletRequest;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -31,8 +35,17 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.neodymium.ai.model.Playbook;
+import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.playbook.YamlPlaybookParser;
+import org.neodymium.ai.playbook.linter.PlaybookLinter;
+import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
+import org.neodymium.ai.playbook.linter.PlaybookLinterResult;
+import org.neodymium.ai.resources.ClasspathResourceManager;
+import org.neodymium.ai.resources.PlaybookResourceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -57,10 +70,18 @@ public class AuraTestEditorController
 
     private final AuraFileService fileService;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final PlaybookLinter playbookLinter;
 
+    @Autowired
     public AuraTestEditorController(final AuraFileService fileService)
     {
+        this(fileService, new PlaybookLinter());
+    }
+
+    public AuraTestEditorController(final AuraFileService fileService, final PlaybookLinter playbookLinter)
+    {
         this.fileService = fileService;
+        this.playbookLinter = playbookLinter;
     }
 
     @RequestMapping(value = "/api/editor", method = {RequestMethod.GET, RequestMethod.POST})
@@ -107,13 +128,17 @@ public class AuraTestEditorController
             model.addAttribute("varKeys", sections.get("varKeys"));
             final Object scopesObj = sections.get("fragmentVarScopes");
             model.addAttribute("fragmentVarScopes", scopesObj != null ? scopesObj : Map.of());
+            final Object rootTagsObj = sections.get("rootTags");
+            model.addAttribute("rootTags", rootTagsObj != null ? rootTagsObj : Map.of());
+            final Object dsTagsObj = sections.get("datasetTagsList");
+            model.addAttribute("datasetTagsList", dsTagsObj != null ? dsTagsObj : List.of());
+            model.addAttribute("areaTag", sections.get("areaTag"));
             model.addAttribute("propertiesYaml", sections.get("propertiesYaml") != null ? sections.get("propertiesYaml") : "");
             model.addAttribute("propertiesList", sections.get("propertiesList") != null ? sections.get("propertiesList") : List.of());
             model.addAttribute("metaYaml", sections.get("metaYaml") != null ? sections.get("metaYaml") : "");
             model.addAttribute("description", sections.get("description") != null ? sections.get("description") : "");
             model.addAttribute("promptAddonYaml", sections.get("promptAddonYaml") != null ? sections.get("promptAddonYaml") : "");
             model.addAttribute("rootVariables", sections.get("rootVariables") != null ? sections.get("rootVariables") : Map.of());
-            model.addAttribute("yamlFiles", fileService.getYamlFilesList());
         }
         else
         {
@@ -132,13 +157,15 @@ public class AuraTestEditorController
             model.addAttribute("dataMatrix", List.of());
             model.addAttribute("varKeys", List.of());
             model.addAttribute("fragmentVarScopes", Map.of());
+            model.addAttribute("rootTags", Map.of());
+            model.addAttribute("datasetTagsList", List.of());
+            model.addAttribute("areaTag", null);
             model.addAttribute("propertiesYaml", "");
             model.addAttribute("propertiesList", List.of());
             model.addAttribute("metaYaml", "");
             model.addAttribute("description", "");
             model.addAttribute("promptAddonYaml", "");
             model.addAttribute("rootVariables", Map.of());
-            model.addAttribute("yamlFiles", fileService.getYamlFilesList());
         }
         return "fragments/editor :: editorPanelContent";
     }
@@ -605,6 +632,219 @@ public class AuraTestEditorController
         response.put("hasWarnings", hasWarnings);
         response.put("file", file != null ? file : "");
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Executes AI review on the currently-edited playbook content using {@link PlaybookLinter}.
+     *
+     * <p>Runs local structural and YAML validation first as an offline pre-gate to protect
+     * token quota and prevent sending malformed syntax to the model.</p>
+     *
+     * @param request the raw HTTP request carrying the JSON body or form parameters
+     * @return structured validation and findings response
+     */
+    @PostMapping("/api/editor/ai-review")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> aiReview(final HttpServletRequest request)
+    {
+        String file = null;
+        String content = null;
+
+        // Parse JSON body
+        if (request.getContentType() != null && request.getContentType().contains("application/json"))
+        {
+            try
+            {
+                @SuppressWarnings("unchecked")
+                final Map<String, Object> body = objectMapper.readValue(request.getInputStream(), Map.class);
+                if (body != null)
+                {
+                    file = body.get("file") != null ? String.valueOf(body.get("file")) : null;
+                    content = body.get("content") != null ? String.valueOf(body.get("content")) : null;
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.debug("Could not parse JSON payload for aiReview", e);
+            }
+        }
+
+        // Fallback to form params
+        if (file == null || file.isBlank())
+        {
+            file = request.getParameter("file");
+        }
+        if (content == null)
+        {
+            content = request.getParameter("content");
+        }
+
+        final Map<String, Object> response = new HashMap<>();
+
+        // Validation Pre-Gate: protect token quota if local syntax errors exist
+        final List<ValidationIssue> issues = fileService.validateFileContent(
+                file != null ? file : "",
+                content != null ? content : "");
+        boolean hasErrors = false;
+        boolean hasSyntaxError = false;
+        final List<Map<String, Object>> issueList = new ArrayList<>();
+        for (final ValidationIssue issue : issues)
+        {
+            final Map<String, Object> m = new HashMap<>();
+            m.put("severity", issue.severity().name());
+            m.put("message", issue.message());
+            m.put("context", issue.context());
+            issueList.add(m);
+            if (issue.severity() == IssueSeverity.ERROR)
+            {
+                hasErrors = true;
+                final boolean isNonSyntaxValidation = issue.message() != null
+                        && (issue.message().startsWith("Included file does not exist")
+                            || issue.message().startsWith("Undefined variable"));
+                if (!isNonSyntaxValidation)
+                {
+                    hasSyntaxError = true;
+                }
+            }
+        }
+
+        if (hasErrors)
+        {
+            final String status = hasSyntaxError ? "SYNTAX_ERROR" : "VALIDATION_ERROR";
+            final String message = hasSyntaxError
+                    ? "File has syntax errors. Please resolve syntax errors before running AI Review."
+                    : "File has validation errors (unresolved variables or missing includes). Please resolve them before running AI Review.";
+            response.put("status", status);
+            response.put("message", message);
+            response.put("issues", issueList);
+            response.put("findings", List.of());
+            return ResponseEntity.ok(response);
+        }
+
+        if (content == null || content.isBlank())
+        {
+            response.put("status", "OK");
+            response.put("findings", List.of());
+            return ResponseEntity.ok(response);
+        }
+
+        try
+        {
+            final PlaybookResourceManager resourceManager = new PlaybookResourceManager()
+            {
+                private final ClasspathResourceManager classpathManager = new ClasspathResourceManager();
+
+                @Override
+                public InputStream read(final String identifier) throws IOException
+                {
+                    if (fileService != null && identifier != null)
+                    {
+                        try
+                        {
+                            final String fileContent = fileService.readYamlFileContent(identifier);
+                            if (fileContent != null)
+                            {
+                                return new ByteArrayInputStream(fileContent.getBytes(StandardCharsets.UTF_8));
+                            }
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+                    return this.classpathManager.read(identifier);
+                }
+
+                @Override
+                public void write(final String identifier, final String content) throws IOException
+                {
+                    if (fileService != null && identifier != null)
+                    {
+                        fileService.saveYamlFileContent(identifier, content);
+                        return;
+                    }
+                    this.classpathManager.write(identifier, content);
+                }
+
+                @Override
+                public void delete(final String identifier) throws IOException
+                {
+                    if (fileService != null && identifier != null)
+                    {
+                        fileService.deleteYamlFile(identifier);
+                        return;
+                    }
+                    this.classpathManager.delete(identifier);
+                }
+
+                @Override
+                public String resolveInclude(final String parentIdentifier, final String relativePath)
+                {
+                    return this.classpathManager.resolveInclude(parentIdentifier, relativePath);
+                }
+            };
+
+            final YamlPlaybookParser parser = new YamlPlaybookParser();
+            final Playbook playbook = parser.parseString(content, resourceManager);
+            final List<PlaybookStep> steps = playbook != null ? playbook.getAllSteps() : List.of();
+            final String description = playbook != null ? playbook.getDescription() : null;
+
+            if (steps == null || steps.isEmpty())
+            {
+                response.put("status", "OK");
+                response.put("findings", List.of());
+                return ResponseEntity.ok(response);
+            }
+
+            final PlaybookLinter linter = this.playbookLinter != null
+                    ? this.playbookLinter
+                    : new PlaybookLinter();
+            final PlaybookLinterResult linterResult = linter.lintWithResult(steps, description);
+
+            if (!linterResult.successful())
+            {
+                response.put("status", "ERROR");
+                response.put("error", "AI Review unavailable: " + linterResult.errorMessage());
+                response.put("findings", List.of());
+                return ResponseEntity.ok(response);
+            }
+
+            final List<PlaybookLinterFinding> findings = linterResult.findings();
+
+            final List<Map<String, Object>> findingList = new ArrayList<>();
+            if (findings != null)
+            {
+                for (final PlaybookLinterFinding f : findings)
+                {
+                    final Map<String, Object> fm = new HashMap<>();
+                    fm.put("stepIndex", f.stepIndex());
+                    fm.put("lineNumber", f.lineNumber());
+                    final String rawSource = f.sourceFile();
+                    final String displaySource = ("inline.yaml".equals(rawSource) && file != null && !file.isBlank())
+                            ? file
+                            : rawSource;
+                    fm.put("sourceFile", displaySource);
+                    fm.put("rawInstruction", f.rawInstruction());
+                    fm.put("category", f.category() != null ? f.category().name() : "");
+                    fm.put("severity", f.severity() != null ? f.severity().name() : "WARNING");
+                    fm.put("message", f.message());
+                    fm.put("suggestedRewrite", f.suggestedRewrite());
+                    fm.put("scope", f.scope());
+                    findingList.add(fm);
+                }
+            }
+
+            response.put("status", "OK");
+            response.put("findings", findingList);
+            return ResponseEntity.ok(response);
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("AI Review encountered an error during playbook linting", e);
+            response.put("status", "ERROR");
+            response.put("error", "AI Review failed: " + e.getMessage());
+            response.put("findings", List.of());
+            return ResponseEntity.ok(response);
+        }
     }
 
     @PostMapping("/api/editor/close")

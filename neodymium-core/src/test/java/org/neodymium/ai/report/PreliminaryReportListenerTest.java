@@ -3439,4 +3439,70 @@ public class PreliminaryReportListenerTest
         final TestExecutionReport.ReportLlmCallEntry entry = report.getLlmCalls().get(0);
         assertEquals("Entering user email address", entry.getThinking());
     }
+
+    @Test
+    @DisplayName("Verify downstream unreached StepFinishedEvent with NOT_RUN does not clobber earlier completed identical steps")
+    public void testDownstreamUnreachedStepFinishedEventDoesNotClobberEarlierCompletedIdenticalSteps(@TempDir final Path tempDir)
+    {
+        final PreliminaryReportListener listener = new PreliminaryReportListener(tempDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        // 1. Step 1 (first include): "Open search field" -> executes and succeeds
+        final PlaybookStep pbStep1 = new PlaybookStep("Open search field");
+        bus.dispatch(new StepStartedEvent(pbStep1, 0));
+        pbStep1.setStatus(PlaybookStepStatus.SUCCESS);
+        bus.dispatch(new StepFinishedEvent(pbStep1, PlaybookStepStatus.SUCCESS));
+
+        // 2. Step 2 (first include): "Type search term" -> executes and succeeds
+        final PlaybookStep pbStep2 = new PlaybookStep("Type search term");
+        bus.dispatch(new StepStartedEvent(pbStep2, 1));
+        pbStep2.setStatus(PlaybookStepStatus.SUCCESS);
+        bus.dispatch(new StepFinishedEvent(pbStep2, PlaybookStepStatus.SUCCESS));
+
+        // 3. Step 3 (intermediate): "Set variable" -> executes and succeeds
+        final PlaybookStep pbStep3 = new PlaybookStep("Set variable");
+        bus.dispatch(new StepStartedEvent(pbStep3, 2));
+        pbStep3.setStatus(PlaybookStepStatus.SUCCESS);
+        bus.dispatch(new StepFinishedEvent(pbStep3, PlaybookStepStatus.SUCCESS));
+
+        // 4. Step 4 (second include): "Open search field" -> executes and FAILS
+        final PlaybookStep pbStep4 = new PlaybookStep("Open search field");
+        bus.dispatch(new StepStartedEvent(pbStep4, 3));
+        pbStep4.setStatus(PlaybookStepStatus.FAILED);
+        pbStep4.setFailureReason("Token budget exceeded");
+        bus.dispatch(new StepFinishedEvent(pbStep4, PlaybookStepStatus.FAILED));
+
+        // 5. Step 5 (second include, unreached): "Type search term" -> NEVER started, marked NOT_RUN downstream
+        final PlaybookStep pbStep5 = new PlaybookStep("Type search term");
+        pbStep5.setStatus(PlaybookStepStatus.NOT_RUN);
+        pbStep5.setNotRunReason("Not executed because step #4 failed.");
+        bus.dispatch(new StepFinishedEvent(pbStep5, PlaybookStepStatus.NOT_RUN));
+
+        // 6. Step 6 (unreached, identical instruction to failing Step 4): "Open search field" -> NEVER started, marked NOT_RUN downstream
+        final PlaybookStep pbStep6 = new PlaybookStep("Open search field");
+        pbStep6.setStatus(PlaybookStepStatus.NOT_RUN);
+        pbStep6.setNotRunReason("Not executed because step #4 failed.");
+        bus.dispatch(new StepFinishedEvent(pbStep6, PlaybookStepStatus.NOT_RUN));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertEquals(4, report.getSteps().size(), "Only steps that started should be present in report");
+
+        final TestExecutionReport.ReportStepEntry reportStep1 = report.getSteps().get(0);
+        assertEquals("SUCCESS", reportStep1.getStatus(), "Step 1 must remain SUCCESS");
+        assertNull(reportStep1.getNotRunReason(), "Step 1 must not have notRunReason");
+
+        final TestExecutionReport.ReportStepEntry reportStep2 = report.getSteps().get(1);
+        assertEquals("SUCCESS", reportStep2.getStatus(), "Step 2 must remain SUCCESS and not be clobbered by downstream Step 5");
+        assertNull(reportStep2.getNotRunReason(), "Step 2 must not have notRunReason");
+
+        final TestExecutionReport.ReportStepEntry reportStep3 = report.getSteps().get(2);
+        assertEquals("SUCCESS", reportStep3.getStatus(), "Step 3 must remain SUCCESS");
+        assertNull(reportStep3.getNotRunReason(), "Step 3 must not have notRunReason");
+
+        final TestExecutionReport.ReportStepEntry reportStep4 = report.getSteps().get(3);
+        assertEquals("FAILED", reportStep4.getStatus(), "Step 4 must remain FAILED and not be clobbered by downstream Step 6");
+        assertEquals("Token budget exceeded", reportStep4.getFailureReason(), "Step 4 failureReason must be preserved");
+    }
 }

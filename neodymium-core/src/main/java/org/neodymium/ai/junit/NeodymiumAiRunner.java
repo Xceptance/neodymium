@@ -21,6 +21,7 @@ package org.neodymium.ai.junit;
 import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.neodymium.util.TagUtils;
 import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -1034,7 +1035,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final PlaybookResourceManager manager = new HybridResourceManager(new ClasspathResourceManager());
             this.resourceManager = manager;
 
-            if (FilmTestExecution.getContextVideo().enableFilming())
+            final boolean browserRunnerFilming = this.browser != null && FilmTestExecution.getContextVideo().filmAutomatically();
+            if (FilmTestExecution.getContextVideo().enableFilming() && !browserRunnerFilming)
             {
                 final String recordingID = (testClass != null ? testClass.getSimpleName() + "_" : "") + java.util.UUID.randomUUID().toString();
                 executionContext.getTransientData().put("recordingID", recordingID);
@@ -1437,6 +1439,26 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             if (playbook.getPromptAddons() != null)
             {
                 executionContext.getTransientData().put("playbook.promptAddons", playbook.getPromptAddons());
+            }
+
+            // Resolve variation tags (dataset tags or playbook root tags + CLI overrides)
+            Map<String, List<String>> variationTags = Collections.emptyMap();
+            final Map<String, List<String>> rootTags = playbook.getTags() != null ? playbook.getTags() : Collections.emptyMap();
+            if (this.dataset != null)
+            {
+                final SessionData.DataEntry tagEntry = this.dataset.get("tags") != null ? this.dataset.get("tags") : this.dataset.get("_tags");
+                if (tagEntry != null && tagEntry.value() instanceof Map<?, ?> map)
+                {
+                    variationTags = TagUtils.resolveTags(rootTags, map);
+                }
+            }
+            if (variationTags.isEmpty())
+            {
+                variationTags = TagUtils.resolveTags(rootTags, null);
+            }
+            if (!variationTags.isEmpty())
+            {
+                executionContext.getTransientData().put("variationTags", variationTags);
             }
 
             executionContext.getTransientData().put("playbook.resolvedPath", resolvedPlaybookPath);

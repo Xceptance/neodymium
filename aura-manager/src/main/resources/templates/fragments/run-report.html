@@ -4,7 +4,7 @@
 <body>
 
 <!-- Run Report Fragment -->
-<div th:fragment="runReport" class="d-flex flex-column gap-4" th:data-target-execution-id="${targetExecutionId}" th:data-run-id="${report?.runId ?: runId}">
+<div th:fragment="runReport" class="d-flex flex-column gap-4" th:data-target-execution-id="${targetExecutionId}" th:data-run-id="${report?.runId ?: runId}" th:data-batch-name="${report?.batchName ?: (batchName ?: 'Default')}" th:data-environment="${report?.environment ?: (runEntity?.environment ?: '')}" th:data-run-tags="${report?.tags != null and not #maps.isEmpty(report.tags) ? #strings.arrayJoin(report.tags.entrySet().![key + ': ' + value], ',') : ''}">
 
     <!-- PAGE HEADER / SUB-TABS BAR -->
     <div class="sub-tab-bar">
@@ -82,14 +82,14 @@
                         <div class="kpi-sub">Failures with Bugs</div>
                     </div>
                     <div class="kpi-card card-failed" onclick="filterAllTestsByStatus('FAILED_UNKNOWN')">
-                        <div class="kpi-label">Unknown Fail</div>
+                        <div class="kpi-label">Fail</div>
                         <div class="kpi-value-dual" id="overviewKpiUnknown" th:if="${(report?.unknownHealedCount ?: 0) > 0}">
-                            <span class="kpi-healed-part text-unknown-healed" onclick="event.stopPropagation(); filterAllTestsByHealedStatus('FAILED_UNKNOWN', 'HEALED')" title="Filter Unknown Fail Healed Tests">
+                            <span class="kpi-healed-part text-unknown-healed" onclick="event.stopPropagation(); filterAllTestsByHealedStatus('FAILED_UNKNOWN', 'HEALED')" title="Filter Fail Healed Tests">
                                 <span class="material-symbols-outlined kpi-sparkle-icon">auto_fix_high</span> <span th:text="${report?.unknownHealedCount}">0</span> healed
                             </span>
                             <span class="kpi-slash">/</span>
-                            <span class="kpi-total-part text-fail" onclick="event.stopPropagation(); filterAllTestsByStatus('FAILED_UNKNOWN')" title="Filter All Unknown Fail Tests">
-                                <span th:text="${report?.unknownCount ?: 0}">0</span> unknown fail
+                            <span class="kpi-total-part text-fail" onclick="event.stopPropagation(); filterAllTestsByStatus('FAILED_UNKNOWN')" title="Filter All Fail Tests">
+                                <span th:text="${report?.unknownCount ?: 0}">0</span> fail
                             </span>
                         </div>
                         <div class="kpi-value text-fail" id="overviewKpiUnknown" th:unless="${(report?.unknownHealedCount ?: 0) > 0}" th:text="${report?.unknownCount ?: 0}">0</div>
@@ -117,7 +117,179 @@
                     </div>
                 </div>
 
-                <div class="panel" style="margin-top: 1rem;">
+                <!-- RUN OVERVIEW STATUS PIE CHART & ENVIRONMENT BREAKDOWNS PANEL -->
+                <div class="panel run-overview-distribution-panel" style="margin-top: 1rem;" th:if="${(report?.totalCount ?: 0) > 0}">
+                    <div class="panel-header">
+                        <div>
+                            <div class="panel-title"><span class="material-symbols-outlined text-accent">pie_chart</span> Execution Status &amp; Environment Distribution</div>
+                            <div class="panel-subtitle">Comprehensive run status donut breakdown alongside browser and locale distributions.</div>
+                        </div>
+                    </div>
+                    <div class="run-overview-split-body">
+                        <!-- LEFT: STATUS DONUT PIE-CHART (LIKE ON BATCH CARDS) -->
+                        <div class="run-status-pie-section">
+                            <div class="last-run-header">
+                                <div class="last-run-header-top">
+                                    <span class="last-run-header-title">
+                                        <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;">donut_large</span>
+                                        <span>Status Breakdown</span>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="last-run-body">
+                                <div class="pie-chart-wrapper-batch">
+                                    <svg width="100%" height="100%" viewBox="0 0 36 36">
+                                        <defs>
+                                            <pattern th:id="'sparkle-pat-run-' + ${report.runId}" width="4" height="4" patternUnits="userSpaceOnUse">
+                                                <path d="M2,0.5 L2.3,1.7 L3.5,2 L2.3,2.3 L2,3.5 L1.7,2.3 L0.5,2 L1.7,1.7 Z" fill="#ffffff" opacity="0.95"/>
+                                                <circle cx="0.8" cy="0.8" r="0.25" fill="#fef08a" opacity="0.85"/>
+                                            </pattern>
+                                            <pattern th:id="'ai-pat-run-' + ${report.runId}" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                                                <line x1="0" y1="0" x2="0" y2="4" stroke="rgba(255,255,255,0.75)" stroke-width="1.2" />
+                                            </pattern>
+                                        </defs>
+                                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="var(--border)" stroke-width="4.5"/>
+                                        <!-- Clean sub-arcs (deep solid) -->
+                                        <circle th:if="${report.passCleanCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-pass)" stroke-width="5" th:attr="stroke-dasharray=${report.passCleanDashArray},stroke-dashoffset=${report.passCleanDashOffset}"/>
+                                        <circle th:if="${report.fixedCleanCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-fixed)" stroke-width="5" th:attr="stroke-dasharray=${report.fixedCleanDashArray},stroke-dashoffset=${report.fixedCleanDashOffset}"/>
+                                        <circle th:if="${report.knownCleanCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-known-fail)" stroke-width="5" th:attr="stroke-dasharray=${report.knownCleanDashArray},stroke-dashoffset=${report.knownCleanDashOffset}"/>
+                                        <circle th:if="${report.unknownCleanCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-unknown-fail)" stroke-width="5" th:attr="stroke-dasharray=${report.unknownCleanDashArray},stroke-dashoffset=${report.unknownCleanDashOffset}"/>
+                                        <circle th:if="${report.ignoredCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-ignored)" stroke-width="5" th:attr="stroke-dasharray=${report.ignoredDashArray},stroke-dashoffset=${report.ignoredDashOffset}"/>
+
+                                        <!-- Healed sub-arcs: Luminous base tint + sparkle pattern overlay -->
+                                        <circle th:if="${report.passHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-pass-healed, #34d399)" stroke-width="5" th:attr="stroke-dasharray=${report.passHealedDashArray},stroke-dashoffset=${report.passHealedDashOffset}"/>
+                                        <circle th:if="${report.passHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#sparkle-pat-run-' + ${report.runId} + ')',stroke-dasharray=${report.passHealedDashArray},stroke-dashoffset=${report.passHealedDashOffset}" stroke-width="5"/>
+
+                                        <circle th:if="${report.fixedHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-fixed-healed, #60a5fa)" stroke-width="5" th:attr="stroke-dasharray=${report.fixedHealedDashArray},stroke-dashoffset=${report.fixedHealedDashOffset}"/>
+                                        <circle th:if="${report.fixedHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#sparkle-pat-run-' + ${report.runId} + ')',stroke-dasharray=${report.fixedHealedDashArray},stroke-dashoffset=${report.fixedHealedDashOffset}" stroke-width="5"/>
+
+                                        <circle th:if="${report.knownHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-known-healed, #fb923c)" stroke-width="5" th:attr="stroke-dasharray=${report.knownHealedDashArray},stroke-dashoffset=${report.knownHealedDashOffset}"/>
+                                        <circle th:if="${report.knownHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#sparkle-pat-run-' + ${report.runId} + ')',stroke-dasharray=${report.knownHealedDashArray},stroke-dashoffset=${report.knownHealedDashOffset}" stroke-width="5"/>
+
+                                        <circle th:if="${report.unknownHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-unknown-healed, #f87171)" stroke-width="5" th:attr="stroke-dasharray=${report.unknownHealedDashArray},stroke-dashoffset=${report.unknownHealedDashOffset}"/>
+                                        <circle th:if="${report.unknownHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#sparkle-pat-run-' + ${report.runId} + ')',stroke-dasharray=${report.unknownHealedDashArray},stroke-dashoffset=${report.unknownHealedDashOffset}" stroke-width="5"/>
+
+                                        <!-- AI-Driven sub-arcs: Base status color + pinstripe pattern overlay -->
+                                        <circle th:if="${report.passAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-pass)" stroke-width="5" th:attr="stroke-dasharray=${report.passAiDashArray},stroke-dashoffset=${report.passAiDashOffset}"/>
+                                        <circle th:if="${report.passAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#ai-pat-run-' + ${report.runId} + ')',stroke-dasharray=${report.passAiDashArray},stroke-dashoffset=${report.passAiDashOffset}" stroke-width="5"/>
+
+                                        <circle th:if="${report.fixedAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-fixed)" stroke-width="5" th:attr="stroke-dasharray=${report.fixedAiDashArray},stroke-dashoffset=${report.fixedAiDashOffset}"/>
+                                        <circle th:if="${report.fixedAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#ai-pat-run-' + ${report.runId} + ')',stroke-dasharray=${report.fixedAiDashArray},stroke-dashoffset=${report.fixedAiDashOffset}" stroke-width="5"/>
+
+                                        <circle th:if="${report.knownAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-known-fail)" stroke-width="5" th:attr="stroke-dasharray=${report.knownAiDashArray},stroke-dashoffset=${report.knownAiDashOffset}"/>
+                                        <circle th:if="${report.knownAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#ai-pat-run-' + ${report.runId} + ')',stroke-dasharray=${report.knownAiDashArray},stroke-dashoffset=${report.knownAiDashOffset}" stroke-width="5"/>
+
+                                        <circle th:if="${report.unknownAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-unknown-fail)" stroke-width="5" th:attr="stroke-dasharray=${report.unknownAiDashArray},stroke-dashoffset=${report.unknownAiDashOffset}"/>
+                                        <circle th:if="${report.unknownAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#ai-pat-run-' + ${report.runId} + ')',stroke-dasharray=${report.unknownAiDashArray},stroke-dashoffset=${report.unknownAiDashOffset}" stroke-width="5"/>
+                                    </svg>
+                                    <!-- Center of Donut KPI Rate -->
+                                    <div class="pie-center-label">
+                                        <span class="pie-center-rate" th:text="${report.passRateInt}">100%</span>
+                                        <span class="pie-center-sub">PASS</span>
+                                    </div>
+                                </div>
+                                <div class="pie-breakdown-list-sm">
+                                    <div class="pie-breakdown-item" th:if="${report.passCount > 0}">
+                                        <div class="label"><div class="dot" style="background: var(--status-pass);"></div> Passed</div>
+                                        <div class="val-group">
+                                            <span th:if="${report.passHealedCount > 0}" class="badge-healed-inline badge-pass-healed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="'✨ ' + ${report.passHealedCount} + ' healed'">✨ 1 healed</span>
+                                            <span th:if="${report.passAiCount > 0}" class="badge-ai-inline badge-pass-ai" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="${report.passAiCount} + ' AI'">1 AI</span>
+                                            <span class="val" style="color: var(--status-pass);" th:text="${report.passCount}">0</span>
+                                        </div>
+                                    </div>
+                                    <div class="pie-breakdown-item" th:if="${report.fixedCount > 0}">
+                                        <div class="label"><div class="dot" style="background: var(--status-fixed);"></div> Fixed</div>
+                                        <div class="val-group">
+                                            <span th:if="${report.fixedHealedCount > 0}" class="badge-healed-inline badge-fixed-healed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="'✨ ' + ${report.fixedHealedCount} + ' healed'">✨ 1 healed</span>
+                                            <span th:if="${report.fixedAiCount > 0}" class="badge-ai-inline badge-fixed-ai" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="${report.fixedAiCount} + ' AI'">1 AI</span>
+                                            <span class="val" style="color: var(--status-fixed);" th:text="${report.fixedCount}">0</span>
+                                        </div>
+                                    </div>
+                                    <div class="pie-breakdown-item" th:if="${report.knownCount > 0}">
+                                        <div class="label"><div class="dot" style="background: var(--status-known-fail);"></div> Known Fail</div>
+                                        <div class="val-group">
+                                            <span th:if="${report.knownHealedCount > 0}" class="badge-healed-inline badge-known-healed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="'✨ ' + ${report.knownHealedCount} + ' healed'">✨ 1 healed</span>
+                                            <span th:if="${report.knownAiCount > 0}" class="badge-ai-inline badge-known-ai" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="${report.knownAiCount} + ' AI'">1 AI</span>
+                                            <span class="val" style="color: var(--status-known-fail);" th:text="${report.knownCount}">0</span>
+                                        </div>
+                                    </div>
+                                    <div class="pie-breakdown-item" th:if="${report.unknownCount > 0}">
+                                        <div class="label"><div class="dot" style="background: var(--status-unknown-fail);"></div> Fail</div>
+                                        <div class="val-group">
+                                            <span th:if="${report.unknownHealedCount > 0}" class="badge-healed-inline badge-unknown-healed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="'✨ ' + ${report.unknownHealedCount} + ' healed'">✨ 1 healed</span>
+                                            <span th:if="${report.unknownAiCount > 0}" class="badge-ai-inline badge-unknown-ai" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="${report.unknownAiCount} + ' AI'">1 AI</span>
+                                            <span class="val" style="color: var(--status-unknown-fail);" th:text="${report.unknownCount}">0</span>
+                                        </div>
+                                    </div>
+                                    <div class="pie-breakdown-item" th:if="${report.ignoredCount > 0}">
+                                        <div class="label"><div class="dot" style="background: var(--status-ignored);"></div> Ignored</div>
+                                        <div class="val-group">
+                                            <span class="val" style="color: var(--status-ignored);" th:text="${report.ignoredCount}">0</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- VERTICAL DIVIDER -->
+                        <div class="run-overview-split-divider"></div>
+
+                        <!-- RIGHT: BARS WITH BROWSERS AND LOCALES BREAKDOWNS -->
+                        <div class="run-distributions-section">
+                            <!-- BROWSERS BREAKDOWN BAR -->
+                            <div class="run-distribution-group">
+                                <div class="run-distribution-group-header">
+                                    <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;">web</span>
+                                    <strong style="font-size: 0.85rem; color: var(--text-main);">Browsers Breakdown</strong>
+                                </div>
+                                <div class="ratio-stacked-bar" th:if="${not #lists.isEmpty(report.browserRatios)}">
+                                    <div th:each="br : ${report.browserRatios}" 
+                                         class="ratio-bar-seg" 
+                                         th:style="'width: ' + ${#numbers.formatDecimal(br.percentage, 1, 'POINT', 2, 'POINT')} + '%; background-color: ' + ${br.color} + ';'"
+                                         th:title="${br.name + ': ' + br.count + ' executions (' + br.formattedPercentage + ')'}"
+                                         th:text="${br.percentage >= 15 ? br.formattedPercentage : ''}">100%</div>
+                                </div>
+                                <div class="ratio-legend-list" th:if="${not #lists.isEmpty(report.browserRatios)}">
+                                    <div th:each="br : ${report.browserRatios}" class="ratio-legend-chip">
+                                        <span class="dot" th:style="'background: ' + ${br.color} + ';'"></span>
+                                        <span th:text="${br.name}">Chrome</span>
+                                        <span class="val" th:text="${br.count + ' (' + br.formattedPercentage + ')'}">1 (100%)</span>
+                                    </div>
+                                </div>
+                                <div class="text-muted" style="font-size: 0.8rem; padding: 0.25rem 0;" th:if="${#lists.isEmpty(report.browserRatios)}">
+                                    No browser data recorded.
+                                </div>
+                            </div>
+
+                            <!-- LOCALES BREAKDOWN BAR -->
+                            <div class="run-distribution-group">
+                                <div class="run-distribution-group-header">
+                                    <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;">public</span>
+                                    <strong style="font-size: 0.85rem; color: var(--text-main);">Locales Breakdown</strong>
+                                </div>
+                                <div class="ratio-stacked-bar" th:if="${not #lists.isEmpty(report.localeRatios)}">
+                                    <div th:each="loc : ${report.localeRatios}" 
+                                         class="ratio-bar-seg" 
+                                         th:style="'width: ' + ${#numbers.formatDecimal(loc.percentage, 1, 'POINT', 2, 'POINT')} + '%; background-color: ' + ${loc.color} + ';'"
+                                         th:title="${loc.name + ': ' + loc.count + ' executions (' + loc.formattedPercentage + ')'}"
+                                         th:text="${loc.percentage >= 15 ? loc.formattedPercentage : ''}">100%</div>
+                                </div>
+                                <div class="ratio-legend-list" th:if="${not #lists.isEmpty(report.localeRatios)}">
+                                    <div th:each="loc : ${report.localeRatios}" class="ratio-legend-chip">
+                                        <span class="dot" th:style="'background: ' + ${loc.color} + ';'"></span>
+                                        <span th:text="${loc.name}">en_US</span>
+                                        <span class="val" th:text="${loc.count + ' (' + loc.formattedPercentage + ')'}">1 (100%)</span>
+                                    </div>
+                                </div>
+                                <div class="text-muted" style="font-size: 0.8rem; padding: 0.25rem 0;" th:if="${#lists.isEmpty(report.localeRatios)}">
+                                    No locale data recorded.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel" style="margin-top: 1rem;" th:if="${report?.hasRealAreas()}">
                     <div class="panel-header">
                         <div>
                             <div class="panel-title"><span class="material-symbols-outlined text-accent">pie_chart</span> Test Area Breakdown</div>
@@ -131,7 +303,7 @@
                             <div class="area-pie-card-header">
                                 <div class="area-pie-title">
                                     <span class="material-symbols-outlined text-accent">folder</span>
-                                    <span>Area: @<span th:text="${area.areaName}">Checkout</span></span>
+                                    <span>Area: <span th:text="${area.areaName != null ? (area.areaName.equalsIgnoreCase('Default') ? 'Default' : (area.areaName.startsWith('@') ? area.areaName.substring(1) : area.areaName)) : 'Default'}">Checkout</span></span>
                                 </div>
                                 <button class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" th:data-area-group="${area.areaGroup}" onclick="openAllTestsAndExpandArea(this.getAttribute('data-area-group'))">
                                     Open Area in All Tests <span class="material-symbols-outlined">arrow_forward</span>
@@ -203,7 +375,7 @@
                                         </div>
                                     </div>
                                     <div class="pie-breakdown-item" th:if="${area.unknownCount > 0}">
-                                        <div class="label"><div class="dot" style="background: var(--status-unknown-fail);"></div> Unknown Failed</div>
+                                        <div class="label"><div class="dot" style="background: var(--status-unknown-fail);"></div> Failed</div>
                                         <div class="val-group">
                                             <span class="badge-healed-inline badge-unknown-healed" th:if="${area.unknownHealedCount > 0}" th:text="${'✨ ' + area.unknownHealedCount + ' healed'}">1 healed</span>
                                             <span class="badge-ai-inline badge-unknown-ai" th:if="${area.unknownAiCount > 0}" th:text="${area.unknownAiCount + ' AI'}">1 AI</span>
@@ -310,9 +482,10 @@
                             <span class="badge-status badge-pass clickable-badge js-filter-badge" data-status-key="PASSED" onclick="filterByGlobalStatusBadge('PASSED', this)" title="Filter Passed Clean">Passed: <span th:text="${report?.passCount}">0</span></span>
                             <span class="badge-status badge-fixed clickable-badge js-filter-badge" data-status-key="SUCCEEDED_FIXED" onclick="filterByGlobalStatusBadge('SUCCEEDED_FIXED', this)" title="Filter Succeeded-Fixed">Succeeded-Fixed: <span th:text="${report?.fixedCount ?: (report?.healedCount ?: 0)}">0</span></span>
                             <span class="badge-status badge-known-fail clickable-badge js-filter-badge" data-status-key="FAILED_KNOWN" onclick="filterByGlobalStatusBadge('FAILED_KNOWN', this)" title="Filter Known Fail">Known Fail: <span th:text="${report?.knownCount}">0</span></span>
-                            <span class="badge-status badge-unknown-fail clickable-badge js-filter-badge" data-status-key="FAILED_UNKNOWN" onclick="filterByGlobalStatusBadge('FAILED_UNKNOWN', this)" title="Filter Unknown Fail">Unknown Fail: <span th:text="${report?.unknownCount}">0</span></span>
+                            <span class="badge-status badge-unknown-fail clickable-badge js-filter-badge" data-status-key="FAILED_UNKNOWN" onclick="filterByGlobalStatusBadge('FAILED_UNKNOWN', this)" title="Filter Fail">Fail: <span th:text="${report?.unknownCount}">0</span></span>
                             <span class="badge-status badge-ignored clickable-badge js-filter-badge" data-status-key="SKIPPED" onclick="filterByGlobalStatusBadge('SKIPPED', this)" title="Filter Ignored/Skipped">Ignored: <span th:text="${report?.ignoredCount ?: 0}">0</span></span>
                             <span class="badge-status badge-running clickable-badge js-filter-badge" th:if="${(report?.runningCount ?: 0) > 0}" data-status-key="RUNNING" onclick="filterByGlobalStatusBadge('RUNNING', this)" title="Filter Running">Running: <span th:text="${report?.runningCount}">0</span></span>
+                            <span class="badge-status badge-flaky clickable-badge js-filter-badge" th:if="${(report?.flakyCount ?: 0) > 0}" data-status-key="FLAKY" onclick="filterByGlobalStatusBadge('FLAKY', this)" title="Filter Flaky Tests (frequent unknown failures in previous runs)">Flaky: <span th:text="${report?.flakyCount}">0</span></span>
                         </div>
                     </div>
 
@@ -326,158 +499,76 @@
                         </button>
                     </div>
 
-                    <!-- DYNAMIC AREA GROUPS -->
-                    <div th:each="area : ${report?.areaSummaries}" class="area-group test-row-group expanded" th:id="${area.areaGroup}" th:data-area="${area.areaName}">
-                        <div class="area-group-header" onclick="toggleAreaGroup(this)">
-                            <div class="area-group-title">
-                                <span class="material-symbols-outlined area-chevron">chevron_right</span>
-                                <span class="material-symbols-outlined text-accent">folder_open</span>
-                                <span>Area: @<span th:text="${area.areaName}">Checkout</span></span>
-                                <span class="tag-chip area-exec-count-chip" style="margin-left: 0.5rem;" th:text="${area.totalCount + ' Executions'}">5 Executions</span>
-                            </div>
-                            
-                            <div class="flex-gap-2 area-summary-badges" onclick="event.stopPropagation()">
-                                <span class="badge-status badge-pass clickable-badge" th:if="${area.passCount > 0}" onclick="filterAreaByStatusBadge(this, 'PASSED')" title="Filter Passed in Area" th:text="${'Passed: ' + area.passCount}">Passed: 1</span>
-                                <span class="badge-status badge-fixed clickable-badge" th:if="${area.fixedCount > 0}" onclick="filterAreaByStatusBadge(this, 'SUCCEEDED_FIXED')" title="Filter Succeeded-Fixed in Area" th:text="${'Succeeded-Fixed: ' + area.fixedCount}">Succeeded-Fixed: 1</span>
-                                <span class="badge-status badge-known-fail clickable-badge" th:if="${area.knownCount > 0}" onclick="filterAreaByStatusBadge(this, 'FAILED_KNOWN')" title="Filter Known Fail in Area" th:text="${'Known: ' + area.knownCount}">Known: 1</span>
-                                <span class="badge-status badge-unknown-fail clickable-badge" th:if="${area.unknownCount > 0}" onclick="filterAreaByStatusBadge(this, 'FAILED_UNKNOWN')" title="Filter Unknown Fail in Area" th:text="${'Unknown: ' + area.unknownCount}">Unknown: 1</span>
-                                <span class="badge-status badge-ignored clickable-badge" th:if="${area.ignoredCount > 0}" onclick="filterAreaByStatusBadge(this, 'SKIPPED')" title="Filter Skipped in Area" th:text="${'Ignored: ' + area.ignoredCount}">Ignored: 1</span>
-                                <span class="badge-status badge-running clickable-badge" th:if="${area.runningCount > 0}" onclick="filterAreaByStatusBadge(this, 'RUNNING')" title="Filter Running in Area" th:text="${'Running: ' + area.runningCount}">Running: 1</span>
-                            </div>
-                        </div>
-
-                        <div class="area-group-body">
-                            <!-- DYNAMIC TEST CLASS GROUPS -->
-                            <div th:each="cls : ${area.testClasses}" class="test-class-container expanded" th:id="${cls.classContainer}">
-                                <div class="test-class-header" onclick="toggleTestClassGroup(this)">
-                                    <div class="test-class-title">
-                                        <span class="material-symbols-outlined test-class-chevron">chevron_right</span>
-                                        <span class="material-symbols-outlined text-accent">folder</span>
-                                        <span th:text="${cls.className}">CheckoutProcessTest</span>
-                                        <span class="tag-chip class-exec-count-chip" style="margin-left: 0.5rem;" th:text="${cls.totalCount + ' Executions'}">4 Executions</span>
-                                    </div>
-                                    <div class="flex-gap-2" onclick="event.stopPropagation()">
-                                        <span class="badge-status badge-pass clickable-badge" th:if="${cls.passCount > 0}" onclick="filterClassByStatusBadge(this, 'PASSED')" title="Filter Passed in Class" th:text="${'Passed: ' + cls.passCount}">Passed: 1</span>
-                                        <span class="badge-status badge-fixed clickable-badge" th:if="${cls.fixedCount > 0}" onclick="filterClassByStatusBadge(this, 'SUCCEEDED_FIXED')" title="Filter Succeeded-Fixed in Class" th:text="${'Succeeded-Fixed: ' + cls.fixedCount}">Succeeded-Fixed: 1</span>
-                                        <span class="badge-status badge-known-fail clickable-badge" th:if="${cls.knownCount > 0}" onclick="filterClassByStatusBadge(this, 'FAILED_KNOWN')" title="Filter Known Fail in Class" th:text="${'Known: ' + cls.knownCount}">Known: 1</span>
-                                        <span class="badge-status badge-unknown-fail clickable-badge" th:if="${cls.unknownCount > 0}" onclick="filterClassByStatusBadge(this, 'FAILED_UNKNOWN')" title="Filter Unknown Fail in Class" th:text="${'Unknown: ' + cls.unknownCount}">Unknown: 1</span>
-                                        <span class="badge-status badge-ignored clickable-badge" th:if="${cls.ignoredCount > 0}" onclick="filterClassByStatusBadge(this, 'SKIPPED')" title="Filter Skipped in Class" th:text="${'Ignored: ' + cls.ignoredCount}">Ignored: 1</span>
-                                        <span class="badge-status badge-running clickable-badge" th:if="${cls.runningCount > 0}" onclick="filterClassByStatusBadge(this, 'RUNNING')" title="Filter Running in Class" th:text="${'Running: ' + cls.runningCount}">Running: 1</span>
-                                    </div>
+                    <!-- DYNAMIC AREA GROUPS (rendered when real area tags exist) -->
+                    <th:block th:if="${report?.hasRealAreas()}">
+                        <div th:each="area : ${report?.areaSummaries}" class="area-group test-row-group expanded" th:id="${area.areaGroup}" th:data-area="${area.areaName}">
+                            <div class="area-group-header" onclick="toggleAreaGroup(this)">
+                                <div class="area-group-title">
+                                    <span class="material-symbols-outlined area-chevron">chevron_right</span>
+                                    <span class="material-symbols-outlined text-accent">folder_open</span>
+                                    <span>Area: <span th:text="${area.areaName != null ? (area.areaName.equalsIgnoreCase('Default') ? 'Default' : (area.areaName.startsWith('@') ? area.areaName.substring(1) : area.areaName)) : 'Default'}">Checkout</span></span>
+                                    <span class="tag-chip area-exec-count-chip" style="margin-left: 0.5rem;" th:text="${area.totalCount + ' Executions'}">5 Executions</span>
                                 </div>
-
-                                <div class="test-class-executions">
-                                    <div class="table-responsive">
-                                        <table class="executions-table aura-table" id="executionsTable">
-                                            <thead>
-                                                <tr>
-                                                    <th onclick="sortTable(0)" style="cursor: pointer;">Timestamp <span class="material-symbols-outlined" style="font-size: 0.8rem; vertical-align: middle;">unfold_more</span></th>
-                                                    <th onclick="sortTable(1)" style="cursor: pointer;">Status <span class="material-symbols-outlined" style="font-size: 0.8rem; vertical-align: middle;">unfold_more</span></th>
-                                                    <th onclick="sortTable(2)" style="cursor: pointer;">Test Case & Details <span class="material-symbols-outlined" style="font-size: 0.8rem; vertical-align: middle;">unfold_more</span></th>
-                                                    <th>Mode</th>
-                                                    <th onclick="sortTable(4)" style="cursor: pointer;">Steps <span class="material-symbols-outlined" style="font-size: 0.8rem; vertical-align: middle;">unfold_more</span></th>
-                                                    <th onclick="sortTable(5)" style="cursor: pointer;">Duration <span class="material-symbols-outlined" style="font-size: 0.8rem; vertical-align: middle;">unfold_more</span></th>
-                                                    <th>AI Usage</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <tr th:each="exec : ${cls.executions}" class="execution-row clickable-row test-row js-open-side-panel" 
-                                                    th:id="${exec.id}" 
-                                                    th:data-run-id="${report?.runId ?: runId}"
-                                                    th:data-row-id="${exec.id}" 
-                                                    th:data-test-name="${exec.testClass}" 
-                                                    th:data-test-class="${exec.testClass}" 
-                                                    th:data-dataset="${exec.title}" 
-                                                    th:data-status="${exec.displayStatusKey}"
-                                                    th:data-status-raw="${exec.status}" 
-                                                    th:data-mode="${exec.displayMode}"
-                                                    th:data-test-method="${exec.testMethod ?: ''}"
-                                                    th:data-search="${(exec.testClass ?: '') + ' ' + (exec.testMethod ?: '') + ' ' + (exec.title ?: '') + ' ' + (exec.location ?: '') + ' ' + (exec.browser ?: '') + ' ' + (exec.displayMode ?: '')}"
-                                                    th:data-location="${exec.location}" 
-                                                    th:data-browser="${exec.browser}" 
-                                                    th:data-bugs="${exec.bugs != null and not #lists.isEmpty(exec.bugs) ? #strings.arrayJoin(exec.bugs, ',') : 'NONE'}" 
-                                                    th:data-healed="${exec.healed}"
-                                                    th:data-ai="${exec.aiDriven}"
-                                                    th:data-healed-passed="${exec.passedHealed}"
-                                                    th:data-healed-failed="${exec.failedHealed}"
-                                                    th:data-failure="${exec.failure}"
-                                                    th:data-steps-total="${exec.totalStepsCount}"
-                                                    th:data-healed-count="${exec.healedStepsCount}"
-                                                    th:data-failed-count="${exec.failedStepsCount}"
-                                                    th:data-duration-ms="${exec.durationMs}"
-                                                    th:data-duration-formatted="${exec.durationFormatted}"
-                                                    th:data-start-time="${exec.startTime != null and not #strings.isEmpty(exec.startTime) ? exec.startTime : ((exec.dateFormatted != null ? exec.dateFormatted : '') + ' ' + (exec.timeFormatted != null ? exec.timeFormatted : ''))}"
-                                                    th:data-date-formatted="${exec.dateFormatted}"
-                                                    th:data-time-formatted="${exec.timeFormatted}"
-                                                    th:data-timestamp-ms="${exec.timestampMs}"
-                                                    th:data-llm-calls="${exec.llmCallsCount}"
-                                                    th:data-total-tokens="${exec.totalTokensCount}"
-                                                    th:data-input-tokens="${exec.inputTokensCount}"
-                                                    th:data-output-tokens="${exec.outputTokensCount}"
-                                                    th:data-cached-tokens="${exec.cachedTokensCount}"
-                                                    th:data-est-cost="${exec.llmCostFormatted}"
-                                                    th:data-has-visual-changes="${exec.hasVisualChanges ?: false}"
-                                                    th:data-video="${exec.videoPath ?: ''}"
-                                                    th:data-log-path="${exec.logPath ?: ''}">
-                                                    
-                                                    <td th:attr="data-sort=${exec.timestampMs}">
-                                                        <span class="text-mono js-format-timestamp" style="font-weight: 600;" th:data-timestamp-ms="${exec.timestampMs}" th:text="${exec.formattedTime != null and not #strings.isEmpty(exec.formattedTime) ? exec.formattedTime : ((exec.dateFormatted != null and not #strings.isEmpty(exec.dateFormatted) ? exec.dateFormatted : '2026-08-20') + ' ' + (exec.timeFormatted != null and not #strings.isEmpty(exec.timeFormatted) ? exec.timeFormatted : '12:31:21'))}">2026-08-20 12:31:21</span>
-                                                    </td>
-
-                                                    <td class="col-status-badge">
-                                                        <span class="badge-status badge-running" th:if="${exec.displayStatusKey == 'RUNNING'}"><span class="material-symbols-outlined spin" style="font-size: 0.85rem; vertical-align: middle;">sync</span> RUNNING</span>
-                                                        <span class="badge-status badge-pass" th:if="${exec.displayStatusKey == 'PASSED'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">check_circle</span> PASSED</span>
-                                                        <span class="badge-status badge-fixed" th:if="${exec.displayStatusKey == 'SUCCEEDED_FIXED'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> SUCCEEDED-FIXED</span>
-                                                        <span class="badge-status badge-known-fail" th:if="${exec.displayStatusKey == 'FAILED_KNOWN'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> KNOWN FAIL</span>
-                                                        <span class="badge-status badge-unknown-fail" th:if="${exec.displayStatusKey == 'FAILED_UNKNOWN'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">cancel</span> UNKNOWN FAIL</span>
-                                                        <span class="badge-status badge-ignored" th:if="${exec.displayStatusKey == 'SKIPPED'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">skip_next</span> SKIPPED</span>
-                                                    </td>
-
-                                                    <td>
-                                                        <div class="test-name-line">
-                                                            <a href="javascript:void(0)" class="test-title-link" th:text="${exec.testMethod != null and not #strings.isEmpty(exec.testMethod) ? (exec.testMethod + ' [' + (exec.title != null and not #strings.isEmpty(exec.title) ? exec.title : 'default') + ']') : (exec.title != null and not #strings.isEmpty(exec.title) ? exec.title : exec.testClass)}">CheckoutProcessTest</a>
-                                                            <span class="location-highlight-badge"><span class="material-symbols-outlined">location_on</span> <span th:text="${exec.location}">US</span></span>
-                                                            <span class="badge-status badge-mode-java" style="font-size: 0.7rem;"><span class="material-symbols-outlined">language</span> <span th:text="${exec.browser}">Chrome</span></span>
-                                                        </div>
-                                                        <div class="test-meta-line" th:text="${exec.testClass + (exec.testMethod != null and not #strings.isEmpty(exec.testMethod) ? (' :: ' + exec.testMethod) : '')}">com.xceptance.aura.CheckoutProcessTest</div>
-                                                        <div class="failure-reason-snip" th:if="${exec.failureSnippet != null and not #strings.isEmpty(exec.failureSnippet)}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle; color: #ef4444;">warning</span> <span th:text="${exec.failureSnippet}">Element not found</span></div>
-                                                    </td>
-
-                                                    <td>
-                                                        <div style="display: inline-flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
-                                                            <span class="badge-status" 
-                                                                  th:classappend="${exec.displayMode == 'AI' ? 'badge-mode-ai' : (exec.displayMode == 'PLAYBOOK' ? 'badge-mode-playbook' : (exec.displayMode == 'HEALED' ? 'badge-mode-healed' : 'badge-mode-java'))}"
-                                                                  onclick="event.stopPropagation(); filterByMode(this.innerText)" 
-                                                                  style="cursor: pointer; font-size: 0.72rem; padding: 0.15rem 0.45rem;"
-                                                                  th:title="${'Execution Mode: ' + (exec.executionMode ?: 'JAVA')}"
-                                                                  th:text="${exec.displayMode}">PLAYBOOK</span>
-                                                        </div>
-                                                    </td>
-
-                                                    <td th:attr="data-sort=${exec.totalStepsCount}">
-                                                        <div class="steps-count" th:text="${exec.totalStepsCount + ' steps'}">12 steps</div>
-                                                        <div class="steps-sub text-fail" th:if="${exec.failedStepsCount > 0}" th:text="${exec.failedStepsCount + ' failed'}">1 failed</div>
-                                                    </td>
-
-                                                    <td th:attr="data-sort=${exec.durationMs}">
-                                                        <span class="text-mono js-format-duration" style="font-weight: 600;" th:data-duration-ms="${exec.durationMs}" th:text="${exec.durationFormatted ?: '0 min 0 s'}">0 min 0 s</span>
-                                                    </td>
-
-                                                    <td>
-                                                        <div th:if="${exec.llmCallsCount > 0}">
-                                                            <div class="llm-stat"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">smart_toy</span> <span th:text="${exec.llmCallsCount + ' call(s)'}">1 call(s)</span></div>
-                                                            <div class="llm-tokens" th:text="${exec.llmTotalTokens + ' toks ($' + exec.llmCostFormatted + ')'}">2,450 toks ($0.0012)</div>
-                                                        </div>
-                                                        <div class="llm-muted" th:if="${exec.llmCallsCount == 0}">—</div>
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                <div class="flex-gap-2 area-summary-badges" onclick="event.stopPropagation()">
+                                    <span class="badge-status badge-pass clickable-badge" th:if="${area.passCount > 0}" onclick="filterAreaByStatusBadge(this, 'PASSED')" title="Filter Passed in Area" th:text="${'Passed: ' + area.passCount}">Passed: 1</span>
+                                    <span class="badge-status badge-fixed clickable-badge" th:if="${area.fixedCount > 0}" onclick="filterAreaByStatusBadge(this, 'SUCCEEDED_FIXED')" title="Filter Succeeded-Fixed in Area" th:text="${'Succeeded-Fixed: ' + area.fixedCount}">Succeeded-Fixed: 1</span>
+                                    <span class="badge-status badge-known-fail clickable-badge" th:if="${area.knownCount > 0}" onclick="filterAreaByStatusBadge(this, 'FAILED_KNOWN')" title="Filter Known Fail in Area" th:text="${'Known: ' + area.knownCount}">Known: 1</span>
+                                    <span class="badge-status badge-unknown-fail clickable-badge" th:if="${area.unknownCount > 0}" onclick="filterAreaByStatusBadge(this, 'FAILED_UNKNOWN')" title="Filter Fail in Area" th:text="${'Fail: ' + area.unknownCount}">Fail: 1</span>
+                                    <span class="badge-status badge-ignored clickable-badge" th:if="${area.ignoredCount > 0}" onclick="filterAreaByStatusBadge(this, 'SKIPPED')" title="Filter Skipped in Area" th:text="${'Ignored: ' + area.ignoredCount}">Ignored: 1</span>
+                                    <span class="badge-status badge-running clickable-badge" th:if="${area.runningCount > 0}" onclick="filterAreaByStatusBadge(this, 'RUNNING')" title="Filter Running in Area" th:text="${'Running: ' + area.runningCount}">Running: 1</span>
+                                    <span class="badge-status badge-flaky clickable-badge" th:if="${area.flakyCount > 0}" onclick="filterAreaByStatusBadge(this, 'FLAKY')" title="Filter Flaky in Area" th:text="${'Flaky: ' + area.flakyCount}">Flaky: 1</span>
                                 </div>
                             </div>
+
+                            <div class="area-group-body">
+                                <!-- If Area has Sub-Areas, render nested Sub-Area groups -->
+                                <th:block th:if="${area.hasSubAreas()}">
+                                    <div th:each="sub : ${area.subAreas}" class="sub-area-group expanded" th:id="${sub.subAreaGroup}" th:data-sub-area="${sub.subAreaName}">
+                                        <div class="sub-area-header" onclick="toggleSubAreaGroup(this)">
+                                            <div class="sub-area-title">
+                                                <span class="material-symbols-outlined sub-area-chevron">chevron_right</span>
+                                                <span class="material-symbols-outlined text-accent" style="font-size: 1.1rem;">subdirectory_arrow_right</span>
+                                                <span>Sub-Area: <span th:text="${sub.subAreaName != null ? (sub.subAreaName.startsWith('@') ? sub.subAreaName.substring(1) : sub.subAreaName) : ''}">Browsing</span></span>
+                                                <span class="tag-chip sub-area-exec-count-chip" style="margin-left: 0.5rem;" th:text="${sub.totalCount + ' Executions'}">2 Executions</span>
+                                            </div>
+                                            <div class="flex-gap-2 sub-area-summary-badges" onclick="event.stopPropagation()">
+                                                <span class="badge-status badge-pass clickable-badge" th:if="${sub.passCount > 0}" onclick="filterSubAreaByStatusBadge(this, 'PASSED')" title="Filter Passed in Sub-Area" th:text="${'Passed: ' + sub.passCount}">Passed: 1</span>
+                                                <span class="badge-status badge-fixed clickable-badge" th:if="${sub.fixedCount > 0}" onclick="filterSubAreaByStatusBadge(this, 'SUCCEEDED_FIXED')" title="Filter Succeeded-Fixed in Sub-Area" th:text="${'Succeeded-Fixed: ' + sub.fixedCount}">Succeeded-Fixed: 1</span>
+                                                <span class="badge-status badge-known-fail clickable-badge" th:if="${sub.knownCount > 0}" onclick="filterSubAreaByStatusBadge(this, 'FAILED_KNOWN')" title="Filter Known Fail in Sub-Area" th:text="${'Known: ' + sub.knownCount}">Known: 1</span>
+                                                <span class="badge-status badge-unknown-fail clickable-badge" th:if="${sub.unknownCount > 0}" onclick="filterSubAreaByStatusBadge(this, 'FAILED_UNKNOWN')" title="Filter Fail in Sub-Area" th:text="${'Fail: ' + sub.unknownCount}">Fail: 1</span>
+                                                <span class="badge-status badge-ignored clickable-badge" th:if="${sub.ignoredCount > 0}" onclick="filterSubAreaByStatusBadge(this, 'SKIPPED')" title="Filter Skipped in Sub-Area" th:text="${'Ignored: ' + sub.ignoredCount}">Ignored: 1</span>
+                                                <span class="badge-status badge-running clickable-badge" th:if="${sub.runningCount > 0}" onclick="filterSubAreaByStatusBadge(this, 'RUNNING')" title="Filter Running in Sub-Area" th:text="${'Running: ' + sub.runningCount}">Running: 1</span>
+                                                <span class="badge-status badge-flaky clickable-badge" th:if="${sub.flakyCount > 0}" onclick="filterSubAreaByStatusBadge(this, 'FLAKY')" title="Filter Flaky in Sub-Area" th:text="${'Flaky: ' + sub.flakyCount}">Flaky: 1</span>
+                                            </div>
+                                        </div>
+                                        <div class="sub-area-body">
+                                            <th:block th:each="cls : ${sub.testClasses}">
+                                                <th:block th:replace="~{fragments/run-report :: renderRunReportTestClass(cls=${cls})}"></th:block>
+                                            </th:block>
+                                        </div>
+                                    </div>
+                                </th:block>
+
+                                <!-- If Area has NO Sub-Areas, render flat Test Classes directly -->
+                                <th:block th:unless="${area.hasSubAreas()}">
+                                    <th:block th:each="cls : ${area.testClasses}">
+                                        <th:block th:replace="~{fragments/run-report :: renderRunReportTestClass(cls=${cls})}"></th:block>
+                                    </th:block>
+                                </th:block>
+                            </div>
                         </div>
-                    </div>
+                    </th:block>
+
+                    <!-- FLAT TEST CLASSES (rendered directly without Area hierarchy when no real area tags exist) -->
+                    <th:block th:unless="${report?.hasRealAreas()}">
+                        <div class="flat-test-classes-container">
+                            <th:block th:each="area : ${report?.areaSummaries}">
+                                <th:block th:each="cls : ${area.testClasses}">
+                                    <th:block th:replace="~{fragments/run-report :: renderRunReportTestClass(cls=${cls})}"></th:block>
+                                </th:block>
+                            </th:block>
+                        </div>
+                    </th:block>
                 </div>
             </div>
 
@@ -523,7 +614,159 @@
 
         </div>
     </div>
+
+    <!-- OUT-OF-BAND SIDEBAR CONTEXT CARD SYNC -->
+    <th:block th:if="${isHxRequest == true}">
+        <th:block th:replace="~{fragments/sidebar :: sidebarContextCard}"></th:block>
+    </th:block>
 </div>
+
+<!-- Test Class Fragment for Run Report (reusable for both Flat and Sub-Area modes) -->
+<th:block th:fragment="renderRunReportTestClass(cls)" th:if="${cls != null}">
+    <div class="test-class-container expanded" th:id="${cls.classContainer}">
+        <div class="test-class-header" onclick="toggleTestClassGroup(this)">
+            <div class="test-class-title">
+                <span class="material-symbols-outlined test-class-chevron">chevron_right</span>
+                <span class="material-symbols-outlined text-accent">folder</span>
+                <span th:text="${cls.className}">CheckoutProcessTest</span>
+                <span class="tag-chip class-exec-count-chip" style="margin-left: 0.5rem;" th:text="${cls.totalCount + ' Executions'}">4 Executions</span>
+            </div>
+            <div class="flex-gap-2" onclick="event.stopPropagation()">
+                <span class="badge-status badge-pass clickable-badge" th:if="${cls.passCount > 0}" onclick="filterClassByStatusBadge(this, 'PASSED')" title="Filter Passed in Class" th:text="${'Passed: ' + cls.passCount}">Passed: 1</span>
+                <span class="badge-status badge-fixed clickable-badge" th:if="${cls.fixedCount > 0}" onclick="filterClassByStatusBadge(this, 'SUCCEEDED_FIXED')" title="Filter Succeeded-Fixed in Class" th:text="${'Succeeded-Fixed: ' + cls.fixedCount}">Succeeded-Fixed: 1</span>
+                <span class="badge-status badge-known-fail clickable-badge" th:if="${cls.knownCount > 0}" onclick="filterClassByStatusBadge(this, 'FAILED_KNOWN')" title="Filter Known Fail in Class" th:text="${'Known: ' + cls.knownCount}">Known: 1</span>
+                <span class="badge-status badge-unknown-fail clickable-badge" th:if="${cls.unknownCount > 0}" onclick="filterClassByStatusBadge(this, 'FAILED_UNKNOWN')" title="Filter Fail in Class" th:text="${'Fail: ' + cls.unknownCount}">Fail: 1</span>
+                <span class="badge-status badge-ignored clickable-badge" th:if="${cls.ignoredCount > 0}" onclick="filterClassByStatusBadge(this, 'SKIPPED')" title="Filter Skipped in Class" th:text="${'Ignored: ' + cls.ignoredCount}">Ignored: 1</span>
+                <span class="badge-status badge-running clickable-badge" th:if="${cls.runningCount > 0}" onclick="filterClassByStatusBadge(this, 'RUNNING')" title="Filter Running in Class" th:text="${'Running: ' + cls.runningCount}">Running: 1</span>
+                <span class="badge-status badge-flaky clickable-badge" th:if="${cls.flakyCount > 0}" onclick="filterClassByStatusBadge(this, 'FLAKY')" title="Filter Flaky in Class" th:text="${'Flaky: ' + cls.flakyCount}">Flaky: 1</span>
+            </div>
+        </div>
+
+        <div class="test-class-executions">
+            <div class="table-responsive">
+                <table class="executions-table aura-table" id="executionsTable">
+                    <thead>
+                        <tr>
+                            <th onclick="sortTable(0)" style="cursor: pointer;">Timestamp <span class="material-symbols-outlined" style="font-size: 0.8rem; vertical-align: middle;">unfold_more</span></th>
+                            <th onclick="sortTable(1)" style="cursor: pointer;">Status <span class="material-symbols-outlined" style="font-size: 0.8rem; vertical-align: middle;">unfold_more</span></th>
+                            <th onclick="sortTable(2)" style="cursor: pointer;">Test Case & Details <span class="material-symbols-outlined" style="font-size: 0.8rem; vertical-align: middle;">unfold_more</span></th>
+                            <th>Mode</th>
+                            <th onclick="sortTable(4)" style="cursor: pointer;">Steps <span class="material-symbols-outlined" style="font-size: 0.8rem; vertical-align: middle;">unfold_more</span></th>
+                            <th onclick="sortTable(5)" style="cursor: pointer;">Duration <span class="material-symbols-outlined" style="font-size: 0.8rem; vertical-align: middle;">unfold_more</span></th>
+                            <th>AI Usage</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="exec : ${cls.executions}" class="execution-row clickable-row test-row js-open-side-panel" 
+                            th:id="${exec.id}" 
+                            th:data-run-id="${report?.runId ?: runId}"
+                            th:data-environment="${exec.environment != null and not #strings.isEmpty(exec.environment) ? exec.environment : (report?.environment ?: '')}"
+                            th:data-batch="${exec.batchName != null and not #strings.isEmpty(exec.batchName) ? exec.batchName : (report?.batchName ?: '')}"
+                            th:data-row-id="${exec.id}" 
+                            th:data-test-name="${exec.testClass}" 
+                            th:data-test-class="${exec.simpleClassName}" 
+                            th:data-dataset="${exec.title}" 
+                            th:data-status="${exec.displayStatusKey}"
+                            th:data-status-raw="${exec.status}" 
+                            th:data-mode="${exec.displayMode}"
+                            th:data-test-method="${exec.testMethod ?: ''}"
+                            th:data-search="${(exec.testClass ?: '') + ' ' + (exec.testMethod ?: '') + ' ' + (exec.title ?: '') + ' ' + (exec.location ?: '') + ' ' + (exec.browser ?: '') + ' ' + (exec.displayMode ?: '')}"
+                            th:data-location="${exec.location}" 
+                            th:data-browser="${exec.browser}" 
+                            th:data-tags="${exec.tagsSummary}"
+                            th:data-bugs="${exec.bugs != null and not #lists.isEmpty(exec.bugs) ? #strings.arrayJoin(exec.bugs, ',') : 'NONE'}" 
+                            th:data-healed="${exec.healed}"
+                            th:data-ai="${exec.aiDriven}"
+                            th:data-healed-passed="${exec.passedHealed}"
+                            th:data-healed-failed="${exec.failedHealed}"
+                            th:data-failure="${exec.failure}"
+                            th:data-steps-total="${exec.totalStepsCount}"
+                            th:data-healed-count="${exec.healedStepsCount}"
+                            th:data-failed-count="${exec.failedStepsCount}"
+                            th:data-duration-ms="${exec.durationMs}"
+                            th:data-duration-formatted="${exec.durationFormatted}"
+                            th:data-start-time="${exec.startTime != null and not #strings.isEmpty(exec.startTime) ? exec.startTime : ((exec.dateFormatted != null ? exec.dateFormatted : '') + ' ' + (exec.timeFormatted != null ? exec.timeFormatted : ''))}"
+                            th:data-date-formatted="${exec.dateFormatted}"
+                            th:data-time-formatted="${exec.timeFormatted}"
+                            th:data-timestamp-ms="${exec.timestampMs}"
+                            th:data-llm-calls="${exec.llmCallsCount}"
+                            th:data-total-tokens="${exec.totalTokensCount}"
+                            th:data-input-tokens="${exec.inputTokensCount}"
+                            th:data-output-tokens="${exec.outputTokensCount}"
+                            th:data-cached-tokens="${exec.cachedTokensCount}"
+                            th:data-est-cost="${exec.llmCostFormatted}"
+                            th:data-has-visual-changes="${exec.hasVisualChanges ?: false}"
+                            th:data-video="${exec.videoPath ?: ''}"
+                            th:data-log-path="${exec.logPath ?: ''}"
+                            th:data-flaky="${exec.flaky ?: false}"
+                            th:data-flaky-reason="${exec.flakyReason ?: ''}"
+                            th:data-flaky-failure-count="${exec.flakyFailureCount ?: 0}"
+                            th:data-flaky-total-runs="${exec.flakyTotalRuns ?: 0}">
+                            
+                            <td th:attr="data-sort=${exec.timestampMs}">
+                                <span class="text-mono js-format-timestamp" style="font-weight: 600;" th:data-timestamp-ms="${exec.timestampMs}" th:text="${exec.formattedTime != null and not #strings.isEmpty(exec.formattedTime) ? exec.formattedTime : ((exec.dateFormatted != null and not #strings.isEmpty(exec.dateFormatted) ? exec.dateFormatted : '2026-08-20') + ' ' + (exec.timeFormatted != null and not #strings.isEmpty(exec.timeFormatted) ? exec.timeFormatted : '12:31:21'))}">2026-08-20 12:31:21</span>
+                            </td>
+
+                            <td class="col-status-badge">
+                                <div style="display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;">
+                                    <span class="badge-status badge-running" th:if="${exec.displayStatusKey == 'RUNNING'}"><span class="material-symbols-outlined spin" style="font-size: 0.85rem; vertical-align: middle;">sync</span> RUNNING</span>
+                                    <span class="badge-status badge-pass" th:if="${exec.displayStatusKey == 'PASSED'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">check_circle</span> PASSED</span>
+                                    <span class="badge-status badge-fixed" th:if="${exec.displayStatusKey == 'SUCCEEDED_FIXED'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> SUCCEEDED-FIXED</span>
+                                    <span class="badge-status badge-known-fail" th:if="${exec.displayStatusKey == 'FAILED_KNOWN'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> KNOWN FAIL</span>
+                                    <span class="badge-status badge-unknown-fail" th:if="${exec.displayStatusKey == 'FAILED_UNKNOWN'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">cancel</span> FAIL</span>
+                                    <span class="badge-status badge-ignored" th:if="${exec.displayStatusKey == 'SKIPPED'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">skip_next</span> SKIPPED</span>
+                                    <span class="badge-status badge-flaky" th:if="${exec.flaky}" th:title="${exec.flakyReason}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">shuffle</span> FLAKY</span>
+                                </div>
+                            </td>
+
+                            <td>
+                                <div class="test-name-line">
+                                    <a th:href="@{/run-report(runId=${report?.runId ?: runId}, executionId=${exec.id})}"
+                                       class="test-title-link"
+                                       onclick="if (!event.ctrlKey && !event.metaKey && !event.shiftKey && event.button === 0) { event.preventDefault(); }"
+                                       th:text="${exec.testMethod != null and not #strings.isEmpty(exec.testMethod) ? (exec.testMethod + ' [' + (exec.title != null and not #strings.isEmpty(exec.title) ? exec.title : 'default') + ']') : (exec.title != null and not #strings.isEmpty(exec.title) ? exec.title : exec.testClass)}">CheckoutProcessTest</a>
+                                    <span class="location-highlight-badge"><span class="material-symbols-outlined">location_on</span> <span th:text="${exec.location}">US</span></span>
+                                    <span class="badge-status badge-mode-java" style="font-size: 0.7rem;"><span class="material-symbols-outlined">language</span> <span th:text="${exec.browser}">Chrome</span></span>
+                                    <span class="badge-status badge-flaky" th:if="${exec.flaky}" th:title="${exec.flakyReason}" style="font-size: 0.7rem;"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">shuffle</span> FLAKY</span>
+                                </div>
+                                <div class="test-meta-line" th:text="${exec.testClass + (exec.testMethod != null and not #strings.isEmpty(exec.testMethod) ? (' :: ' + exec.testMethod) : '')}">com.xceptance.aura.CheckoutProcessTest</div>
+                                <div class="failure-reason-snip" th:if="${exec.failureSnippet != null and not #strings.isEmpty(exec.failureSnippet)}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle; color: #ef4444;">warning</span> <span th:text="${exec.failureSnippet}">Element not found</span></div>
+                            </td>
+
+                            <td>
+                                <div style="display: inline-flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+                                    <span class="badge-status" 
+                                          th:classappend="${exec.displayMode == 'AI' ? 'badge-mode-ai' : (exec.displayMode == 'RECORDING' or exec.displayMode == 'PLAYBOOK' ? 'badge-mode-recording' : (exec.displayMode == 'HEALED' ? 'badge-mode-healed' : 'badge-mode-java'))}"
+                                          onclick="event.stopPropagation(); filterByMode(this.innerText)" 
+                                          style="cursor: pointer; font-size: 0.72rem; padding: 0.15rem 0.45rem;"
+                                          th:title="${'Execution Mode: ' + (exec.executionMode ?: 'JAVA')}"
+                                          th:text="${exec.displayMode}">RECORDING</span>
+                                </div>
+                            </td>
+
+                            <td th:attr="data-sort=${exec.totalStepsCount}">
+                                <div class="steps-count" th:text="${exec.totalStepsCount + ' steps'}">12 steps</div>
+                                <div class="steps-sub text-fail" th:if="${exec.failedStepsCount > 0}" th:text="${exec.failedStepsCount + ' failed'}">1 failed</div>
+                            </td>
+
+                            <td th:attr="data-sort=${exec.durationMs}">
+                                <span class="text-mono js-format-duration" style="font-weight: 600;" th:data-duration-ms="${exec.durationMs}" th:text="${exec.durationFormatted ?: '0 min 0 s'}">0 min 0 s</span>
+                            </td>
+
+                            <td>
+                                <div th:if="${exec.llmCallsCount > 0}">
+                                    <div class="llm-stat"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">smart_toy</span> <span th:text="${exec.llmCallsCount + ' call(s)'}">1 call(s)</span></div>
+                                    <div class="llm-tokens" th:text="${exec.llmTotalTokens + ' toks ($' + exec.llmCostFormatted + ')'}">2,450 toks ($0.0012)</div>
+                                </div>
+                                <div class="llm-muted" th:if="${exec.llmCallsCount == 0}">—</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</th:block>
 
 </body>
 </html>

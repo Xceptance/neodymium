@@ -22,17 +22,24 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.util.FileSystemUtils;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -45,9 +52,11 @@ import com.xceptance.aura.report.dto.TestExecutionDto;
 import com.xceptance.aura.report.entity.TestBaseBugEntity;
 import com.xceptance.aura.report.entity.TestBaseVariationEntity;
 import com.xceptance.aura.report.entity.TestRunEntity;
+import com.xceptance.aura.report.entity.TestRunTagEntity;
 import com.xceptance.aura.report.repository.TestBaseBugRepository;
 import com.xceptance.aura.report.repository.TestBaseVariationRepository;
 import com.xceptance.aura.report.repository.TestRunRepository;
+import com.xceptance.aura.report.repository.TestRunTagRepository;
 
 /**
  * Tests report storage synchronization and dynamic run.json generation on report read.
@@ -77,6 +86,9 @@ public class RunStorageSyncServiceTest
 
     @Autowired
     private TestBaseVariationRepository variationRepository;
+
+    @Autowired
+    private TestRunTagRepository tagRepository;
 
     @AfterEach
     public void cleanup() throws IOException
@@ -275,11 +287,11 @@ public class RunStorageSyncServiceTest
             Assertions.assertTrue(Files.exists(flatExecFile), "Flat execution JSON file must stay at the run root");
             Assertions.assertFalse(Files.exists(runDir.resolve("Browsing (default)")), "No Browsing (default) folder should be created on disk");
 
-            Assertions.assertEquals("Browsing (default)", findAreaForClass(dataService.getRunReport(unassignedRunId), "UnassignedTest"),
+            Assertions.assertEquals("Default", findAreaForClass(dataService.getRunReport(unassignedRunId), "UnassignedTest"),
                 "Flat execution without a category should be grouped under the default category in the run report");
 
             final JsonNode enrichedExec = new ObjectMapper().readTree(flatExecFile.toFile());
-            Assertions.assertEquals("Browsing (default)", enrichedExec.path("areaName").asText(),
+            Assertions.assertEquals("Default", enrichedExec.path("areaName").asText(),
                 "Enriched execution JSON should carry the default category while staying in place");
         }
         finally
@@ -321,13 +333,62 @@ public class RunStorageSyncServiceTest
             final JsonNode runJsonRoot = new ObjectMapper().readTree(runJsonOpt.get());
             final JsonNode metrics = runJsonRoot.path("executionMetrics");
             Assertions.assertTrue(metrics.isObject() && metrics.size() > 0, "Expected run.json executionMetrics to be present");
-            Assertions.assertEquals("Browsing (default)", metrics.fields().next().getValue().path("areaName").asText(),
+            Assertions.assertEquals("Default", metrics.fields().next().getValue().path("areaName").asText(),
                 "Expected run.json executionMetrics to carry the default category for the uncategorized class");
             Assertions.assertEquals("GoogleTest", metrics.fields().next().getValue().path("testClass").asText(),
                 "Expected run.json executionMetrics to map the execution to the class folder name");
 
-            Assertions.assertEquals("Browsing (default)", findAreaForClass(dataService.getRunReport(twoLevelRunId), "GoogleTest"),
+            Assertions.assertEquals("Default", findAreaForClass(dataService.getRunReport(twoLevelRunId), "GoogleTest"),
                 "Class folder without a category should be grouped under the default category in the run report");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
+    public void testExecutionWithAreaTagsResolvesAreaWithoutFolder() throws IOException
+    {
+        final String runId = "run-area-tags-888";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path classDir = runDir.resolve("Aura_my_test_yaml_Test");
+        Files.createDirectories(classDir);
+
+        final Path execFile = classDir.resolve("console-execution-1.json");
+        final String execJson = """
+            {
+                "runId": "run_888",
+                "status": "passed",
+                "testName": "my-test.yaml · en",
+                "testClass": "Aura_my_test_yaml_Test",
+                "testFile": "com.xceptance.neodymium.aura.sandbox.Aura_my_test_yaml_Test#executeYamlTest",
+                "tags": {
+                    "Area": ["Search", "Browsing"],
+                    "locale": ["ENG"],
+                    "Project": ["Wiki"]
+                }
+            }
+            """;
+        Files.writeString(execFile, execJson);
+
+        try
+        {
+            final Optional<String> runJsonOpt = storageService.readRunJson(runId);
+            Assertions.assertTrue(runJsonOpt.isPresent(), "readRunJson should return generated run.json");
+
+            final JsonNode runJsonRoot = new ObjectMapper().readTree(runJsonOpt.get());
+            final JsonNode metrics = runJsonRoot.path("executionMetrics");
+            Assertions.assertTrue(metrics.isObject() && metrics.size() > 0, "Expected run.json executionMetrics to be present");
+            Assertions.assertEquals("Search", metrics.fields().next().getValue().path("areaName").asText(),
+                "Expected run.json executionMetrics to resolve area from tags.Area");
+
+            final JsonNode enrichedExec = new ObjectMapper().readTree(execFile.toFile());
+            Assertions.assertEquals("Search", enrichedExec.path("areaName").asText(),
+                "Enriched execution JSON on disk should carry the resolved area from tags");
+
+            Assertions.assertEquals("Search", findAreaForClass(dataService.getRunReport(runId), "Aura_my_test_yaml_Test"),
+                "Run report should group test under Search rather than Browsing (default)");
         }
         finally
         {
@@ -380,11 +441,11 @@ public class RunStorageSyncServiceTest
             final RunReportDto report = dataService.getRunReport(mixedRunId);
             Assertions.assertEquals("Checkout", findAreaForClass(report, "CheckoutProcessTest"),
                 "Class folder inside a category folder should keep the category from its folder");
-            Assertions.assertEquals("Browsing (default)", findAreaForClass(report, "StandaloneTest"),
+            Assertions.assertEquals("Default", findAreaForClass(report, "StandaloneTest"),
                 "Class folder without subfolders at the run root should be grouped under the default category");
 
             final JsonNode enrichedExec = new ObjectMapper().readTree(uncategorizedExecFile.toFile());
-            Assertions.assertEquals("Browsing (default)", enrichedExec.path("areaName").asText(),
+            Assertions.assertEquals("Default", enrichedExec.path("areaName").asText(),
                 "Enriched uncategorized execution JSON should carry the default category while staying in place");
             Assertions.assertEquals("StandaloneTest", enrichedExec.path("testClass").asText(),
                 "Enriched uncategorized execution JSON should keep its class name");
@@ -567,7 +628,7 @@ public class RunStorageSyncServiceTest
         Files.writeString(execDir.resolve("exec-1.json"), execJson);
 
         final String varId = AuraReportDataService.generateVariationId("SyncBugTest", "SyncBugTest [US Chrome]", "US", "Chrome");
-        final TestBaseBugEntity bug = new TestBaseBugEntity(varId, "BUG-SYNC-999", "Unknown", "Unknown", System.currentTimeMillis(), runId);
+        final TestBaseBugEntity bug = new TestBaseBugEntity(varId, "BUG-SYNC-999", "Default", "Default", System.currentTimeMillis(), runId);
         bugRepository.save(bug);
 
         try
@@ -726,7 +787,7 @@ public class RunStorageSyncServiceTest
             Assertions.assertTrue(runJson.contains("test7_AnnotationDrivenExternalPlaybookConvention"), "run.json should contain test7 method key");
             Assertions.assertTrue(runJson.contains("test6_AnnotationDrivenExternalPlaybookExplicit"), "run.json should contain test6 method key");
 
-            final com.xceptance.aura.report.dto.TestExecutionDto exec3Details = dataService.getExecutionDetails(runId, "VerlaProgrammaticDemoTest#test3_AnnotationDrivenInlinePlaybookTextBlocks#Default#Chrome");
+            final TestExecutionDto exec3Details = dataService.getExecutionDetails(runId, "VerlaProgrammaticDemoTest#test3_AnnotationDrivenInlinePlaybookTextBlocks#Default#Chrome");
             Assertions.assertNotNull(exec3Details, "getExecutionDetails should locate execution by test method key");
             Assertions.assertNotNull(exec3Details.getSteps(), "Steps list should be populated for test3 execution");
         }
@@ -1023,8 +1084,7 @@ public class RunStorageSyncServiceTest
             Assertions.assertTrue(varOpt.isPresent(), "Variation entity should be created/updated in database");
             final TestBaseVariationEntity varEntity = varOpt.get();
             Assertions.assertTrue(varEntity.isHealed(), "Variation entity should be marked as healed");
-            Assertions.assertNotNull(varEntity.getHistoryLinks(), "History links should not be null");
-            Assertions.assertTrue(varEntity.getHistoryLinks().contains("&healed=true"), "History link should contain &healed=true");
+            Assertions.assertEquals("HEALED", varEntity.getExecutionMode(), "Variation execution mode should be HEALED");
         }
         finally
         {
@@ -1160,6 +1220,247 @@ public class RunStorageSyncServiceTest
             final String finishLabel = finishedRun.getTimestampLabel();
             Assertions.assertTrue(finishLabel != null && (finishLabel.contains("08:15:00") || finishLabel.contains("10:15:00")),
                 "Expected finished run timestamp to remain earliest test '08:15:00', but was: " + finishLabel);
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+            runRepository.findById(runId).ifPresent(runRepository::delete);
+        }
+    }
+
+    @Test
+    public void testMixedLocalesAndBrowsersIncludesDefaultAndSpecificInLocalesCsvAndBrowsersCsv() throws IOException
+    {
+        final String runId = "run-mixed-locales-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        if (Files.exists(runDir))
+        {
+            deleteRecursively(runDir);
+        }
+
+        final Path classDir = runDir.resolve("WikipediaTest");
+        Files.createDirectories(classDir);
+
+        // Exec 1: locale = "en", browser = "Chrome_1920x1080"
+        Files.writeString(classDir.resolve("exec-1.json"), """
+            {
+                "id": "exec-mixed-1",
+                "title": "Wikipedia Search [en]",
+                "testClass": "WikipediaTest",
+                "status": "passed",
+                "locale": "en",
+                "browser": "Chrome_1920x1080"
+            }
+            """);
+
+        // Exec 2: no locale, browser = "Chrome_1920x1080"
+        Files.writeString(classDir.resolve("exec-2.json"), """
+            {
+                "id": "exec-mixed-2",
+                "title": "Wikipedia Search [Default 1]",
+                "testClass": "WikipediaTest",
+                "status": "passed",
+                "browser": "Chrome_1920x1080"
+            }
+            """);
+
+        // Exec 3: no locale, browser = "Chrome_1920x1080"
+        Files.writeString(classDir.resolve("exec-3.json"), """
+            {
+                "id": "exec-mixed-3",
+                "title": "Wikipedia Search [Default 2]",
+                "testClass": "WikipediaTest",
+                "status": "failed",
+                "browser": "Chrome_1920x1080"
+            }
+            """);
+
+        try
+        {
+            final Optional<String> runJsonOpt = storageService.readRunJson(runId);
+            Assertions.assertTrue(runJsonOpt.isPresent(), "readRunJson should generate run.json");
+
+            final ObjectMapper mapper = new ObjectMapper();
+            final JsonNode runJsonNode = mapper.readTree(runJsonOpt.get());
+
+            // Verify top-level locales in generated run.json includes both Default and EN
+            final JsonNode localesNode = runJsonNode.path("locales");
+            Assertions.assertTrue(localesNode.isArray(), "locales in run.json must be an array");
+            final Set<String> localesInJson = new HashSet<>();
+            localesNode.forEach(l -> localesInJson.add(l.asText()));
+            Assertions.assertTrue(localesInJson.contains("Default"), "locales in run.json must contain Default");
+            Assertions.assertTrue(localesInJson.contains("EN") || localesInJson.contains("en"), "locales in run.json must contain EN");
+
+            // Verify top-level browsers in generated run.json is Chrome_1920x1080
+            final JsonNode browsersNode = runJsonNode.path("browsers");
+            Assertions.assertTrue(browsersNode.isArray(), "browsers in run.json must be an array");
+            final Set<String> browsersInJson = new HashSet<>();
+            browsersNode.forEach(b -> browsersInJson.add(b.asText()));
+            Assertions.assertTrue(browsersInJson.contains("Chrome_1920x1080"), "browsers in run.json must contain Chrome_1920x1080");
+
+            final boolean synced = syncService.importOrUpdateRunReport(runId);
+            Assertions.assertTrue(synced, "importOrUpdateRunReport should succeed");
+
+            // Verify DB entity TestRunEntity created by syncService
+            final Optional<TestRunEntity> entityOpt = runRepository.findById(runId);
+            Assertions.assertTrue(entityOpt.isPresent(), "TestRunEntity should be saved in DB");
+            final TestRunEntity entity = entityOpt.get();
+            final String localesCsv = entity.getLocalesCsv();
+            Assertions.assertNotNull(localesCsv);
+            Assertions.assertTrue(localesCsv.contains("Default"), "localesCsv must contain Default");
+            Assertions.assertTrue(localesCsv.contains("EN") || localesCsv.contains("en"), "localesCsv must contain EN");
+
+            final String browsersCsv = entity.getBrowsersCsv();
+            Assertions.assertNotNull(browsersCsv);
+            Assertions.assertTrue(browsersCsv.contains("Chrome_1920x1080"), "browsersCsv must contain Chrome_1920x1080");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+            runRepository.findById(runId).ifPresent(runRepository::delete);
+        }
+    }
+
+    @Test
+    public void testExtractLocationFromNode() throws Exception
+    {
+        final ObjectMapper mapper = new ObjectMapper();
+
+        // 1. From direct "locale" field
+        final JsonNode nodeDirectLocale = mapper.readTree("{\"locale\": \"de_DE\"}");
+        Assertions.assertEquals("de_DE", RunStorageSyncService.extractLocationFromNode(nodeDirectLocale));
+
+        // 2. From direct "location" field
+        final JsonNode nodeDirectLocation = mapper.readTree("{\"location\": \"US\"}");
+        Assertions.assertEquals("US", RunStorageSyncService.extractLocationFromNode(nodeDirectLocation));
+
+        // 3. From tags.locale array
+        final JsonNode nodeTagLocaleArray = mapper.readTree("{\"tags\": {\"locale\": [\"RUS\", \"ENG\"]}}");
+        Assertions.assertEquals("RUS", RunStorageSyncService.extractLocationFromNode(nodeTagLocaleArray));
+
+        // 4. From tags.locale string
+        final JsonNode nodeTagLocaleString = mapper.readTree("{\"tags\": {\"locale\": \"ENG\"}}");
+        Assertions.assertEquals("ENG", RunStorageSyncService.extractLocationFromNode(nodeTagLocaleString));
+
+        // 5. From tags.location string
+        final JsonNode nodeTagLocationString = mapper.readTree("{\"tags\": {\"location\": \"FR\"}}");
+        Assertions.assertEquals("FR", RunStorageSyncService.extractLocationFromNode(nodeTagLocationString));
+
+        // 6. When empty or absent
+        final JsonNode nodeEmpty = mapper.readTree("{}");
+        Assertions.assertEquals("", RunStorageSyncService.extractLocationFromNode(nodeEmpty));
+    }
+
+    @Test
+    public void testImportOrUpdateRunReportExtractsLocalesFromTags() throws IOException
+    {
+        final String runId = "run-tags-locale-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path classDir = runDir.resolve("Search").resolve("LocaleTagTest");
+        Files.createDirectories(classDir);
+
+        Files.writeString(classDir.resolve("exec-en.json"), """
+            {
+                "id": "exec-en",
+                "title": "Search [en]",
+                "testClass": "LocaleTagTest",
+                "status": "passed",
+                "browser": "Chrome",
+                "tags": {
+                    "locale": ["ENG"]
+                }
+            }
+            """);
+
+        Files.writeString(classDir.resolve("exec-ru.json"), """
+            {
+                "id": "exec-ru",
+                "title": "Search [ru]",
+                "testClass": "LocaleTagTest",
+                "status": "passed",
+                "browser": "Chrome",
+                "tags": {
+                    "locale": ["RUS"]
+                }
+            }
+            """);
+
+        try
+        {
+            final boolean synced = syncService.importOrUpdateRunReport(runId);
+            Assertions.assertTrue(synced, "importOrUpdateRunReport should succeed");
+
+            final Optional<TestRunEntity> entityOpt = runRepository.findById(runId);
+            Assertions.assertTrue(entityOpt.isPresent(), "TestRunEntity should be saved in DB");
+            final TestRunEntity entity = entityOpt.get();
+            final String localesCsv = entity.getLocalesCsv();
+            Assertions.assertNotNull(localesCsv);
+            Assertions.assertTrue(localesCsv.contains("ENG"), "localesCsv must contain ENG");
+            Assertions.assertTrue(localesCsv.contains("RUS"), "localesCsv must contain RUS");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+            runRepository.findById(runId).ifPresent(runRepository::delete);
+        }
+    }
+
+    @Test
+    public void testExecutionMetricsDeserializationWithObjectBugs() throws IOException
+    {
+        final String runId = "run-obj-bugs-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path classDir = runDir.resolve("@Orders").resolve("OrderHistoryTest");
+        Files.createDirectories(classDir);
+
+        final Path execFile = classDir.resolve("console-execution-34.json");
+        Files.writeString(execFile, """
+            {
+                "runId": "run-obj-bugs-test",
+                "testName": "OrderHistoryTest · US",
+                "status": "failed",
+                "areaName": "@Orders",
+                "testClass": "OrderHistoryTest",
+                "testMethod": "verifyCustomerOrderHistory",
+                "title": "US",
+                "id": "console-execution-34",
+                "location": "US",
+                "browser": "Chrome_iPhoneX",
+                "bugs": [
+                    {
+                        "id": "HUG-85323",
+                        "title": "Identified issue in OrderHistoryTest",
+                        "url": "https://jira.xceptance.de/browse/HUG-85323",
+                        "status": "Open"
+                    }
+                ]
+            }
+            """);
+
+        try
+        {
+            final Optional<String> runJsonOpt = storageService.readRunJson(runId);
+            Assertions.assertTrue(runJsonOpt.isPresent(), "readRunJson should return generated run.json");
+
+            final RunReportDto report = dataService.getRunReport(runId);
+            Assertions.assertNotNull(report, "RunReportDto should not be null");
+            Assertions.assertEquals(1, report.getExecutions().size(), "Report must contain the test execution");
+
+            final TestExecutionDto exec = report.getExecutions().get(0);
+            Assertions.assertEquals("OrderHistoryTest", exec.getTestClass());
+            Assertions.assertEquals("verifyCustomerOrderHistory", exec.getTestMethod());
+            Assertions.assertEquals(1, exec.getBugs().size());
+            Assertions.assertEquals("HUG-85323", exec.getBugs().get(0));
+            Assertions.assertEquals("failed-known", exec.getStatus());
+
+            final JsonNode runJsonRoot = new ObjectMapper().readTree(runJsonOpt.get());
+            final JsonNode metrics = runJsonRoot.path("executionMetrics");
+            Assertions.assertTrue(metrics.isObject() && metrics.size() > 0, "run.json executionMetrics must be present");
+            final String execKey = LocalRunJsonStorageService.buildExecutionKey("OrderHistoryTest", "verifyCustomerOrderHistory", "US", "Chrome_iPhoneX");
+            final JsonNode metricObj = metrics.path(execKey);
+            Assertions.assertTrue(metricObj.isObject(), "Execution metric should be mapped under composite key: " + execKey);
+            Assertions.assertTrue(metricObj.path("bugs").isArray(), "Bugs in executionMetrics must be serialized as an array");
+            Assertions.assertEquals("HUG-85323", metricObj.path("bugs").get(0).asText());
         }
         finally
         {
@@ -1516,6 +1817,45 @@ public class RunStorageSyncServiceTest
     }
 
     @Test
+    public void testRunningExecutionClassification() throws IOException
+    {
+        final String runningRunId = "run-sync-running-test";
+        final Path runDir = Paths.get("storage", "runs", runningRunId);
+        final Path execDir = runDir.resolve("Checkout").resolve("CheckoutProcessTest");
+
+        try
+        {
+            Files.createDirectories(execDir);
+
+            final String execJson = """
+                {
+                    "id": "exec-running-1",
+                    "title": "CheckoutProcessTest [US Chrome]",
+                    "testClass": "CheckoutProcessTest",
+                    "status": "running",
+                    "location": "US",
+                    "browser": "Chrome"
+                }
+                """;
+            Files.writeString(execDir.resolve("exec-1.json"), execJson);
+
+            syncService.importOrUpdateRunReport(runningRunId);
+
+            final Optional<TestRunEntity> runOpt = runRepository.findById(runningRunId);
+            Assertions.assertTrue(runOpt.isPresent(), "Running run should be ingested into database");
+            final TestRunEntity entity = runOpt.get();
+            Assertions.assertEquals("IN_PROGRESS", entity.getStatus(), "Run status should be IN_PROGRESS");
+            Assertions.assertEquals(1, entity.getRunningCountSafe(), "runningCount should be 1");
+            Assertions.assertEquals(0, entity.getFailedUnknownCount(), "failedUnknownCount should be 0");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+            runRepository.findById(runningRunId).ifPresent(runRepository::delete);
+        }
+    }
+
+    @Test
     public void testExpectedFailureAndSyntheticRunExclusionInStorageAndDto() throws Exception
     {
         final String runId = "run-expected-failure-test";
@@ -1595,6 +1935,63 @@ public class RunStorageSyncServiceTest
     }
 
     @Test
+    public void testLiveBufferOverridesIntermediateDiskRunningStatusInGetRunReport() throws IOException
+    {
+        final String runId = "run-live-override-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path execDir = runDir.resolve("Checkout").resolve("CheckoutProcessTest");
+
+        try
+        {
+            Files.createDirectories(execDir);
+
+            final String intermediateExecJson = """
+                {
+                    "id": "exec-running-override-1",
+                    "title": "Dataset US",
+                    "testClass": "CheckoutProcessTest",
+                    "testMethod": "testCheckout",
+                    "status": "running",
+                    "location": "US",
+                    "browser": "Chrome"
+                }
+                """;
+            Files.writeString(execDir.resolve("console-execution-1.json"), intermediateExecJson);
+
+            final TestRunEntity initialRun = new TestRunEntity(
+                runId, "Default", "IN_PROGRESS", "Aura", "Default", "US", "Chrome", "Recently", System.currentTimeMillis()
+            );
+            runRepository.save(initialRun);
+
+            final Map<String, Object> finishedPayload = new HashMap<>();
+            finishedPayload.put("id", "exec-running-override-1");
+            finishedPayload.put("testClass", "CheckoutProcessTest");
+            finishedPayload.put("testMethod", "testCheckout");
+            finishedPayload.put("title", "Dataset US");
+            finishedPayload.put("location", "US");
+            finishedPayload.put("browser", "Chrome");
+            finishedPayload.put("status", "passed");
+
+            dataService.ingestExecution(runId, finishedPayload);
+
+            final RunReportDto report = dataService.getRunReport(runId);
+            Assertions.assertNotNull(report, "RunReportDto must not be null");
+            Assertions.assertEquals(1, report.getTotalCount(), "Report total count should be 1");
+            Assertions.assertEquals(1, report.getPassCount(), "Report pass count should be 1");
+            Assertions.assertEquals(0, report.getRunningCount(), "Report running count should be 0");
+
+            final List<TestExecutionDto> executions = report.getExecutions();
+            Assertions.assertEquals(1, executions.size(), "Executions list should have 1 item");
+            Assertions.assertEquals("passed-clean", executions.get(0).getStatus(), "Live completed status must override disk running status");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+            runRepository.findById(runId).ifPresent(runRepository::delete);
+        }
+    }
+
+    @Test
     public void testSyncLocalRunStoragePopulatesStepReasoningAndReasonings() throws IOException
     {
         final String runId = "run-sync-reasoning-test";
@@ -1669,6 +2066,218 @@ public class RunStorageSyncServiceTest
             deleteRecursively(runDir);
         }
     }
+
+    @Test
+    public void testIngestExecutionMaintainsAndClearsRunningCount()
+    {
+        final String runId = "run-ingest-running-count-test";
+        try
+        {
+            final TestRunEntity initialRun = new TestRunEntity(
+                runId, "Default", "IN_PROGRESS", "Aura", "Default", "US", "Chrome", "Recently", System.currentTimeMillis()
+            );
+            runRepository.save(initialRun);
+
+            final Map<String, Object> runningPayload = new HashMap<>();
+            runningPayload.put("id", "exec-step-1");
+            runningPayload.put("testClass", "PaymentProcessTest");
+            runningPayload.put("testMethod", "testPay");
+            runningPayload.put("title", "Dataset 1");
+            runningPayload.put("location", "US");
+            runningPayload.put("browser", "Chrome");
+            runningPayload.put("status", "running");
+
+            dataService.ingestExecution(runId, runningPayload);
+
+            final TestRunEntity runningEntity = runRepository.findById(runId).orElseThrow();
+            Assertions.assertEquals(1, runningEntity.getRunningCountSafe(), "Running count must be 1 while test is running");
+            Assertions.assertEquals(0, runningEntity.getPassedCount(), "Passed count must be 0 while test is running");
+
+            final Map<String, Object> passedPayload = new HashMap<>(runningPayload);
+            passedPayload.put("status", "passed");
+
+            dataService.ingestExecution(runId, passedPayload);
+
+            final TestRunEntity completedEntity = runRepository.findById(runId).orElseThrow();
+            Assertions.assertEquals(0, completedEntity.getRunningCountSafe(), "Running count must drop to 0 after test passes");
+            Assertions.assertEquals(1, completedEntity.getPassedCount(), "Passed count must increase to 1");
+
+            dataService.finishRun(runId);
+
+            final TestRunEntity finishedEntity = runRepository.findById(runId).orElseThrow();
+            Assertions.assertEquals(0, finishedEntity.getRunningCountSafe(), "Running count must be 0 after finishRun");
+            Assertions.assertEquals("COMPLETED", finishedEntity.getStatus(), "Run status must be COMPLETED");
+        }
+        finally
+        {
+            runRepository.findById(runId).ifPresent(runRepository::delete);
+        }
+    }
+
+    @Test
+    public void testPopulateRunTagsSuppressesSyntheticBatchNames()
+    {
+        final TestRunEntity runWithDefault = new TestRunEntity();
+        runWithDefault.setId("run_test_default");
+        runWithDefault.setBatchName("Default");
+
+        final TestRunEntity runWithSuite = new TestRunEntity();
+        runWithSuite.setId("run_test_suite");
+        runWithSuite.setBatchName("Suite");
+
+        final TestRunEntity runWithQueue = new TestRunEntity();
+        runWithQueue.setId("run_test_queue");
+        runWithQueue.setBatchName("Queue");
+
+        final TestRunEntity runWithRealBatch = new TestRunEntity();
+        runWithRealBatch.setId("run_test_real");
+        runWithRealBatch.setBatchName("BillingRegression");
+
+        final List<TestRunEntity> runs = List.of(runWithDefault, runWithSuite, runWithQueue, runWithRealBatch);
+        dataService.populateRunTags(runs);
+
+        Assertions.assertTrue(
+            runWithDefault.getTags() == null || runWithDefault.getTags().stream().noneMatch(t -> "Suite".equalsIgnoreCase(t.getTagKey())),
+            "Run with batch name 'Default' must not receive synthetic Suite tag"
+        );
+        Assertions.assertTrue(
+            runWithSuite.getTags() == null || runWithSuite.getTags().stream().noneMatch(t -> "Suite".equalsIgnoreCase(t.getTagKey())),
+            "Run with batch name 'Suite' must not receive synthetic Suite tag"
+        );
+        Assertions.assertTrue(
+            runWithQueue.getTags() == null || runWithQueue.getTags().stream().noneMatch(t -> "Suite".equalsIgnoreCase(t.getTagKey())),
+            "Run with batch name 'Queue' must not receive synthetic Suite tag"
+        );
+
+        Assertions.assertNotNull(runWithRealBatch.getTags());
+        Assertions.assertTrue(
+            runWithRealBatch.getTags().stream().anyMatch(t -> "Suite".equalsIgnoreCase(t.getTagKey()) && "BillingRegression".equals(t.getTagValue())),
+            "Run with legitimate batch name 'BillingRegression' must receive synthetic Suite tag"
+        );
+
+        final TestRunTagEntity legitTag = new TestRunTagEntity("run_1", "Suite", "BillingRegression");
+        final TestRunTagEntity defaultTag = new TestRunTagEntity("run_2", "Suite", "Default");
+        final TestRunTagEntity suiteTag = new TestRunTagEntity("run_3", "Suite", "Suite");
+        final TestRunTagEntity queueTag = new TestRunTagEntity("run_4", "Batch", "Queue");
+
+        Assertions.assertTrue(AuraReportDataService.isRealBatch("BillingRegression"));
+        Assertions.assertFalse(AuraReportDataService.isRealBatch("Default"));
+        Assertions.assertFalse(AuraReportDataService.isRealBatch("Suite"));
+        Assertions.assertFalse(AuraReportDataService.isRealBatch("Queue"));
+
+        Assertions.assertTrue(AuraReportDataService.isLegitimateTag(legitTag));
+        Assertions.assertFalse(AuraReportDataService.isLegitimateTag(defaultTag));
+        Assertions.assertFalse(AuraReportDataService.isLegitimateTag(suiteTag));
+        Assertions.assertFalse(AuraReportDataService.isLegitimateTag(queueTag));
+    }
+
+    @Test
+    public void testResolveEffectiveBatchNameFromTagsAndFallbacks()
+    {
+        // 1. Real batch name should be preserved directly
+        Assertions.assertEquals("BillingRegression", AuraReportDataService.resolveEffectiveBatchName("BillingRegression", Collections.emptyList()));
+        Assertions.assertEquals("Nightly", AuraReportDataService.resolveEffectiveBatchName("Nightly", Map.of()));
+        Assertions.assertEquals("ReleaseSuite", AuraReportDataService.resolveEffectiveBatchNameFromMap("ReleaseSuite", Collections.emptyMap()));
+
+        // 2. Synthetic placeholders should fall back to Suite or Batch tags
+        final TestRunTagEntity suiteTag = new TestRunTagEntity("run_1", "Suite", "CheckoutRegression");
+        final TestRunTagEntity batchTag = new TestRunTagEntity("run_2", "Batch", "NightlyOrderFlow");
+        final TestRunTagEntity dummyTag = new TestRunTagEntity("run_3", "browser", "Chrome");
+
+        Assertions.assertEquals("CheckoutRegression", AuraReportDataService.resolveEffectiveBatchName("Default", List.of(suiteTag, dummyTag)));
+        Assertions.assertEquals("CheckoutRegression", AuraReportDataService.resolveEffectiveBatchName("Queue", List.of(suiteTag)));
+        Assertions.assertEquals("CheckoutRegression", AuraReportDataService.resolveEffectiveBatchName("", List.of(suiteTag)));
+        Assertions.assertEquals("CheckoutRegression", AuraReportDataService.resolveEffectiveBatchName(null, List.of(suiteTag)));
+        Assertions.assertEquals("NightlyOrderFlow", AuraReportDataService.resolveEffectiveBatchName("Default", List.of(batchTag)));
+
+        // 3. Fallback placeholder with single map overload (RunReportDto)
+        Assertions.assertEquals("CheckoutRegression", AuraReportDataService.resolveEffectiveBatchName("Default", Map.of("Suite", "CheckoutRegression")));
+        Assertions.assertEquals("NightlyOrderFlow", AuraReportDataService.resolveEffectiveBatchName("Queue", Map.of("batch", "NightlyOrderFlow")));
+
+        // 4. Fallback placeholder with multi-map overload (RunRequest)
+        Assertions.assertEquals("CheckoutRegression", AuraReportDataService.resolveEffectiveBatchNameFromMap("Default", Map.of("Suite", List.of("CheckoutRegression"))));
+        Assertions.assertEquals("NightlyOrderFlow", AuraReportDataService.resolveEffectiveBatchNameFromMap("Queue", Map.of("batch", List.of("NightlyOrderFlow"))));
+
+        // 5. Placeholders with synthetic tag values should resolve to empty string
+        final TestRunTagEntity syntheticSuite = new TestRunTagEntity("run_4", "Suite", "Default");
+        final TestRunTagEntity syntheticQueue = new TestRunTagEntity("run_5", "Batch", "Queue");
+        Assertions.assertEquals("", AuraReportDataService.resolveEffectiveBatchName("Default", List.of(syntheticSuite)));
+        Assertions.assertEquals("", AuraReportDataService.resolveEffectiveBatchName("Queue", List.of(syntheticQueue)));
+        Assertions.assertEquals("", AuraReportDataService.resolveEffectiveBatchName("Default", Collections.emptyList()));
+        Assertions.assertEquals("", AuraReportDataService.resolveEffectiveBatchName(null, (Collection<TestRunTagEntity>) null));
+    }
+
+    @Test
+    public void testPopulateRunTagsDeduplicatesAreaTagsWithAndWithoutAtPrefix()
+    {
+        final TestRunEntity run = new TestRunEntity();
+        run.setId("run-area-dedup");
+        run.setBatchName("Default");
+
+        final TestRunTagEntity tagWithoutAt = new TestRunTagEntity("run-area-dedup", "Area", "Browse");
+        final TestRunTagEntity tagWithAt = new TestRunTagEntity("run-area-dedup", "Area", "@Browse");
+        final TestRunTagEntity tagWithMultipleAt = new TestRunTagEntity("run-area-dedup", "Area", "@@Browse");
+
+        run.setTags(new ArrayList<>(List.of(tagWithoutAt, tagWithAt, tagWithMultipleAt)));
+
+        dataService.populateRunTags(List.of(run));
+
+        Assertions.assertNotNull(run.getTags());
+        final List<TestRunTagEntity> areaTags = run.getTags().stream()
+            .filter(t -> "Area".equalsIgnoreCase(t.getTagKey()))
+            .toList();
+
+        Assertions.assertEquals(1, areaTags.size(), "Area tag must only appear once, collapsing 'Browse' and '@Browse'");
+        Assertions.assertEquals("Browse", areaTags.get(0).getTagValue(), "Area tag must be normalized without '@'");
+    }
+
+    @Test
+    public void testSyncRunReportDeduplicatesAreaTagsWithAndWithoutAtPrefix() throws Exception
+    {
+        final String runId = "run-sync-area-dedup-test";
+        final File runDir = new File("storage/runs/" + runId);
+        runDir.mkdirs();
+        try
+        {
+            final String runJson = """
+                {
+                  "timestamp": "2026-11-12T12:00:00.000Z",
+                  "status": "COMPLETED",
+                  "summary": { "total": 1, "pass": 1 },
+                  "tags": {
+                    "Suite": "Aura",
+                    "Area": "Browse"
+                  },
+                  "executionMetrics": {
+                    "Test#1": {
+                      "testClass": "SearchTest",
+                      "title": "Dataset 1",
+                      "status": "passed-clean",
+                      "areaName": "@Browse",
+                      "tags": {
+                        "Area": ["Browse"]
+                      }
+                    }
+                  }
+                }
+                """;
+            Files.writeString(new File(runDir, "run.json").toPath(), runJson, StandardCharsets.UTF_8);
+
+            final boolean synced = syncService.importOrUpdateRunReport(runId);
+            Assertions.assertTrue(synced, "Expected run.json to sync successfully");
+
+            final List<TestRunTagEntity> tags = tagRepository.findByRunId(runId);
+            final List<TestRunTagEntity> areaTags = tags.stream()
+                .filter(t -> "Area".equalsIgnoreCase(t.getTagKey()))
+                .toList();
+
+            Assertions.assertEquals(1, areaTags.size(), "Expected only one Area tag persisted in DB");
+            Assertions.assertEquals("Browse", areaTags.get(0).getTagValue(), "Expected Area tag to be normalized without '@'");
+        }
+        finally
+        {
+            FileSystemUtils.deleteRecursively(runDir);
+            tagRepository.deleteByRunId(runId);
+        }
+    }
 }
-
-

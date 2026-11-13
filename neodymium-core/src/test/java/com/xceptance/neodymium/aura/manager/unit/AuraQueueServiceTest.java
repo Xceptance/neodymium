@@ -444,5 +444,58 @@ public final class AuraQueueServiceTest
             AuraQueueService.deleteDirRecursively(tempDir.toFile());
         }
     }
+
+    @Test
+    public final void testGetCurrentBatchNameDefaultAndSet()
+    {
+        Assertions.assertNotNull(queueService.getCurrentBatchName());
+        Assertions.assertEquals("", queueService.getCurrentBatchName());
+    }
+
+    @Test
+    public final void testUpdateExecutionSnapshotsFinalizesRunningExecutionsOnSuccess() throws Exception
+    {
+        final Path tempDir = Files.createTempDirectory("aura-queue-test-success-");
+        try
+        {
+            final File runDir = tempDir.toFile();
+            final String className = "Aura_tests_checkout_process_yaml_Test";
+            final File testDir = new File(runDir, className);
+            Assertions.assertTrue(testDir.mkdirs());
+
+            final File exec1 = new File(testDir, "console-execution-1.json");
+            final ObjectMapper mapper = new ObjectMapper();
+            final ObjectNode node = mapper.createObjectNode();
+            node.put("id", 1);
+            node.put("name", "CheckoutDataset1");
+            node.put("status", "running");
+            mapper.writeValue(exec1, node);
+
+            queueService.updateExecutionSnapshotsAndFallbacks(
+                "run_success_123",
+                className,
+                List.of("CheckoutDataset1", "CheckoutDataset2"),
+                List.of("Default"),
+                List.of(runDir),
+                0,
+                false,
+                false,
+                null
+            );
+
+            Assertions.assertTrue(exec1.exists());
+            final ObjectNode updatedNode1 = (ObjectNode) mapper.readTree(exec1);
+            Assertions.assertEquals("passed", updatedNode1.path("status").asText(), "Running execution must be updated to passed on successful batch completion");
+
+            final File exec2 = new File(testDir, "console-execution-2.json");
+            Assertions.assertTrue(exec2.exists(), "Fallback execution snapshot must be created for dataset 2");
+            final ObjectNode createdNode2 = (ObjectNode) mapper.readTree(exec2);
+            Assertions.assertEquals("passed", createdNode2.path("status").asText(), "Dataset 2 snapshot must have passed status");
+        }
+        finally
+        {
+            AuraQueueService.deleteDirRecursively(tempDir.toFile());
+        }
+    }
 }
 

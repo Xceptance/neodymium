@@ -1546,5 +1546,192 @@ public class YamlPlaybookParserTest
         assertEquals("Teardown test database", playbook.getAfterSteps().get(0).getInstruction());
         assertEquals("after", playbook.getAfterSteps().get(0).getBlock());
     }
+
+
+    @Test
+    public void testParseYamlPlaybookWithRootTags() throws IOException
+    {
+        final String yamlContent = """
+            tags:
+              tag3: value
+              tag4:
+                - value2
+                - value3
+            steps:
+              - instruction: "Open cart"
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("root-tags-test.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("root-tags-test.yaml", manager);
+
+        assertNotNull(playbook);
+        assertNotNull(playbook.getTags());
+        assertEquals(List.of("value"), playbook.getTags().get("tag3"));
+        assertEquals(List.of("value2", "value3"), playbook.getTags().get("tag4"));
+        assertEquals(1, playbook.getSteps().size());
+    }
+
+    @Test
+    public void testParseYamlPlaybookWithDatasetTagsAndInheritance() throws IOException
+    {
+        final String yamlContent = """
+            tags:
+              tag3: rootVal
+              tag4:
+                - valRoot1
+                - valRoot2
+            steps:
+              - instruction: "Open cart"
+            data:
+              - tags:
+                  tag1: datasetVal1
+                  tag2:
+                    - datasetVal2
+                    - datasetVal3
+                testId: "variation1"
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("dataset-tags-test.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("dataset-tags-test.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(1, playbook.getDataSets().size());
+        final Map<String, SessionData.DataEntry> dataset = playbook.getDataSets().get(0);
+        assertEquals("variation1", dataset.get("testId").value());
+        @SuppressWarnings("unchecked")
+        final Map<String, List<String>> rowTags = (Map<String, List<String>>) dataset.get("tags").value();
+        assertNotNull(rowTags);
+        assertEquals(List.of("datasetVal1"), rowTags.get("tag1"));
+        assertEquals(List.of("datasetVal2", "datasetVal3"), rowTags.get("tag2"));
+        assertEquals(List.of("rootVal"), rowTags.get("tag3"));
+        assertEquals(List.of("valRoot1", "valRoot2"), rowTags.get("tag4"));
+    }
+
+    @Test
+    public void testParseYamlPlaybookWithCliTagOverride() throws IOException
+    {
+        System.setProperty("neodymium.tag.tag1", "cliOverrideVal");
+        try
+        {
+            final String yamlContent = """
+                tags:
+                  tag1: yamlVal
+                steps:
+                  - instruction: "Open cart"
+                data:
+                  - testId: "variation1"
+                """;
+
+            final InMemoryResourceManager manager = new InMemoryResourceManager();
+            manager.write("cli-override-test.yaml", yamlContent);
+
+            final YamlPlaybookParser parser = new YamlPlaybookParser();
+            final Playbook playbook = parser.parse("cli-override-test.yaml", manager);
+
+            assertNotNull(playbook);
+            final Map<String, SessionData.DataEntry> dataset = playbook.getDataSets().get(0);
+            @SuppressWarnings("unchecked")
+            final Map<String, List<String>> rowTags = (Map<String, List<String>>) dataset.get("tags").value();
+            assertNotNull(rowTags);
+            assertEquals(List.of("cliOverrideVal"), rowTags.get("tag1"));
+        }
+        finally
+        {
+            System.clearProperty("neodymium.tag.tag1");
+        }
+    }
+
+    @Test
+    public void testParseYamlPlaybookWithAreaTagInTags() throws IOException
+    {
+        final String yamlContent = """
+            tags:
+              area: "@Checkout"
+            steps:
+              - instruction: "Open cart"
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("area-tag-test.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("area-tag-test.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals("@Checkout", playbook.getAreaName());
+    }
+
+    @Test
+    public void testParseYamlPlaybookWithoutTags() throws IOException
+    {
+        final String yamlContent = """
+            # Neodymium YAML Test Data File
+            steps:
+              - instruction: "Open cart"
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("no-tags-test.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("no-tags-test.yaml", manager);
+
+        assertNotNull(playbook);
+        assertNotNull(playbook.getTags());
+        assertTrue(playbook.getTags().isEmpty());
+        assertNull(playbook.getAreaName());
+        assertEquals(1, playbook.getSteps().size());
+    }
+
+    @Test
+    public void testParseObjectRootedJsonPlaybook() throws IOException
+    {
+        final String jsonContent = """
+            {
+              "id": "com.xceptance.Test :: executeYamlTest :: sample",
+              "steps": [
+                {
+                  "promptLine": "Open https://www.wikipedia.org",
+                  "reasoning": "Step 1 reasoning",
+                  "actions": [
+                    {
+                      "type": "NAVIGATE",
+                      "value": ["https://www.wikipedia.org"]
+                    }
+                  ]
+                },
+                {
+                  "promptLine": "Click Search",
+                  "reasoning": "Step 2 reasoning",
+                  "actions": [
+                    {
+                      "type": "CLICK",
+                      "target": "#search"
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("object-playbook.json", jsonContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("object-playbook.json", manager);
+
+        assertNotNull(playbook);
+        assertEquals(2, playbook.getSteps().size());
+        assertEquals("Open https://www.wikipedia.org", playbook.getSteps().get(0).getInstruction());
+        assertEquals("Click Search", playbook.getSteps().get(1).getInstruction());
+        assertEquals(1, playbook.getSteps().get(0).getActions().size());
+        assertEquals("NAVIGATE", playbook.getSteps().get(0).getActions().get(0).getType());
+    }
 }
 

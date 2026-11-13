@@ -20,6 +20,7 @@ package com.xceptance.aura.report.dto;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -174,7 +175,112 @@ public final class RunReportDtoTest
 
         Assertions.assertEquals(List.of("HEALING", "RECORDING"), report.getFilterModes());
         Assertions.assertEquals(List.of("Chrome", "Firefox"), report.getFilterBrowsers());
-        Assertions.assertEquals(List.of("UNKNOWN", "en_US"), report.getFilterLocales());
-        Assertions.assertEquals(List.of("UNKNOWN", "en_US"), report.getFilterLocations());
+        Assertions.assertEquals(List.of("Default", "en_US"), report.getFilterLocales());
+        Assertions.assertEquals(List.of("Default", "en_US"), report.getFilterLocations());
+    }
+
+    @Test
+    public void testPassRateAndCleanCountCalculations()
+    {
+        final RunReportDto emptyReport = new RunReportDto("run0", "batch0", "2026-08-20", "0s", 0, 0, 0, 0, 0, 0, List.of());
+        Assertions.assertEquals("0%", emptyReport.getPassRateInt());
+        Assertions.assertEquals("N/A", emptyReport.getPassRateText());
+
+        // 3 executions: 2 passed (clean), 1 unknown fail
+        final RunReportDto report = new RunReportDto("run1", "batch1", "2026-08-20", "8m 34s", 3, 2, 0, 0, 1, 0, List.of());
+        Assertions.assertEquals("67%", report.getPassRateInt());
+        Assertions.assertEquals("67% Pass", report.getPassRateText());
+        Assertions.assertEquals(2, report.getPassCleanCount());
+        Assertions.assertEquals(1, report.getUnknownCleanCount());
+        Assertions.assertEquals(0, report.getFixedCleanCount());
+        Assertions.assertEquals(0, report.getKnownCleanCount());
+
+        // Dash arrays & offsets
+        Assertions.assertEquals("25", report.getPassCleanDashOffset());
+        Assertions.assertTrue(report.getPassCleanDashArray().startsWith("66.67"));
+        Assertions.assertTrue(report.getUnknownCleanDashArray().startsWith("33.33"));
+    }
+
+    @Test
+    public void testBrowserAndLocaleRatios()
+    {
+        final TestExecutionDto exec1 = new TestExecutionDto(
+            "id1", "run1", "TestClassA", "TitleA", "testA", "playbookA", "testA.json",
+            "passed-clean", "Java", "US", "en_US", "Chrome", "NONE", new ArrayList<>(),
+            "", "Browsing", new ArrayList<>(), null, null, null, null,
+            "t1", "d1", "RECORDING", "RECORDING", "10:00:00", "2026-08-20",
+            "10:00:00", 1000L, 5, 0, 5000L, "5.0s", 0, 0L, 0.0, ""
+        );
+        final TestExecutionDto exec2 = new TestExecutionDto(
+            "id2", "run1", "TestClassB", "TitleB", "testB", "playbookB", "testB.json",
+            "passed-clean", "Java", "US", "en_US", "Chrome", "NONE", new ArrayList<>(),
+            "", "Browsing", new ArrayList<>(), null, null, null, null,
+            "t2", "d2", "RECORDING", "RECORDING", "10:00:01", "2026-08-20",
+            "10:00:01", 2000L, 5, 0, 3000L, "3.0s", 0, 0L, 0.0, ""
+        );
+        final TestExecutionDto exec3 = new TestExecutionDto(
+            "id3", "run1", "TestClassC", "TitleC", "testC", "playbookC", "testC.json",
+            "failed-unknown", "Java", "US", "en_US", "Firefox", "NONE", new ArrayList<>(),
+            "", "Browsing", new ArrayList<>(), null, null, null, null,
+            "t3", "d3", "RECORDING", "RECORDING", "10:00:02", "2026-08-20",
+            "10:00:02", 3000L, 5, 0, 2000L, "2.0s", 0, 0L, 0.0, ""
+        );
+
+        final List<TestExecutionDto> execs = List.of(exec1, exec2, exec3);
+        final RunReportDto report = new RunReportDto("run1", "batch1", "2026-08-20", "8m 34s", 3, 2, 0, 0, 1, 0, execs);
+
+        final List<DistributionRatioDto> browserRatios = report.getBrowserRatios();
+        Assertions.assertEquals(2, browserRatios.size());
+        Assertions.assertEquals("Chrome", browserRatios.get(0).getName());
+        Assertions.assertEquals(2, browserRatios.get(0).getCount());
+        Assertions.assertEquals("67%", browserRatios.get(0).getFormattedPercentage());
+        Assertions.assertEquals("Firefox", browserRatios.get(1).getName());
+        Assertions.assertEquals(1, browserRatios.get(1).getCount());
+        Assertions.assertEquals("33%", browserRatios.get(1).getFormattedPercentage());
+
+        final List<DistributionRatioDto> localeRatios = report.getLocaleRatios();
+        Assertions.assertEquals(1, localeRatios.size());
+        Assertions.assertEquals("en_US", localeRatios.get(0).getName());
+        Assertions.assertEquals(3, localeRatios.get(0).getCount());
+        Assertions.assertEquals("100%", localeRatios.get(0).getFormattedPercentage());
+    }
+
+    @Test
+    public void testHasRealAreas()
+    {
+        // 1. Empty area summaries -> false
+        final RunReportDto emptyReport = new RunReportDto("run1", "batch1", "2026-11-10", "10s", 0, 0, 0, 0, 0, 0, List.of());
+        Assertions.assertFalse(emptyReport.hasRealAreas());
+
+        // 2. Only fallback default area -> false
+        final AreaSummaryDto defaultArea = new AreaSummaryDto("@Browsing (default)", "areaBrowsing", List.of(), 1, 0, 0, 0, 0);
+        final RunReportDto defaultReport = new RunReportDto("run2", "batch1", "2026-11-10", "10s", 1, 1, 0, 0, 0, 0, 0, List.of(), List.of(defaultArea));
+        Assertions.assertFalse(defaultReport.hasRealAreas());
+
+        // 3. General fallback area -> false
+        final AreaSummaryDto generalArea = new AreaSummaryDto("General", "areaGeneral", List.of(), 1, 0, 0, 0, 0);
+        final RunReportDto generalReport = new RunReportDto("run3", "batch1", "2026-11-10", "10s", 1, 1, 0, 0, 0, 0, 0, List.of(), List.of(generalArea));
+        Assertions.assertFalse(generalReport.hasRealAreas());
+
+        // 4. Real custom area -> true
+        final AreaSummaryDto realArea = new AreaSummaryDto("@Checkout", "areaCheckout", List.of(), 1, 0, 0, 0, 0);
+        final RunReportDto realReport = new RunReportDto("run4", "batch1", "2026-11-10", "10s", 1, 1, 0, 0, 0, 0, 0, List.of(), List.of(realArea));
+        Assertions.assertTrue(realReport.hasRealAreas());
+
+        // 5. TestBaseDataDto with only fallback -> false
+        final TestBaseDataDto testBaseDefault = new TestBaseDataDto(
+            List.of(), List.of(), List.of(),
+            List.of(new TestBaseAreaDto("@Browsing (default)", "tb1", "btn1", "folder", 1, List.of())),
+            Map.of(), 1, 1
+        );
+        Assertions.assertFalse(testBaseDefault.hasRealAreas());
+
+        // 6. TestBaseDataDto with real area -> true
+        final TestBaseDataDto testBaseReal = new TestBaseDataDto(
+            List.of(), List.of(), List.of(),
+            List.of(new TestBaseAreaDto("@Search", "tb2", "btn2", "folder", 1, List.of())),
+            Map.of(), 1, 1
+        );
+        Assertions.assertTrue(testBaseReal.hasRealAreas());
     }
 }

@@ -528,6 +528,7 @@ public final class AuraReportingService
                         }
                         
                         final String execStatus = manuallyStoppedVal ? "skipped" : status;
+                        final String areaTag = AuraFileService.extractAreaTagFromFileSystem(file);
                         if (!datasets.isEmpty())
                         {
                             for (final String ds : datasets)
@@ -536,6 +537,10 @@ public final class AuraReportingService
                                 testData.put("testName", yamlLabel + " (" + ds + ")");
                                 testData.put("testId", ds);
                                 testData.put("playbookFile", file);
+                                if (areaTag != null && !areaTag.isEmpty())
+                                {
+                                    testData.put("areaName", areaTag);
+                                }
                                 testData.put("status", execStatus);
                                 testData.put("steps", Collections.emptyList());
                                 
@@ -548,6 +553,10 @@ public final class AuraReportingService
                             final Map<String, Object> testData = new HashMap<>();
                             testData.put("testName", yamlLabel);
                             testData.put("playbookFile", file);
+                            if (areaTag != null && !areaTag.isEmpty())
+                            {
+                                testData.put("areaName", areaTag);
+                            }
                             testData.put("status", execStatus);
                             testData.put("steps", Collections.emptyList());
                             
