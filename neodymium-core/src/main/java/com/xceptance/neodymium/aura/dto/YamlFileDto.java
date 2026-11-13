@@ -18,12 +18,15 @@
  */
 package com.xceptance.neodymium.aura.dto;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Data transfer object representing a scanned YAML test file and its associated datasets.
  *
- * @author AI-generated: Antigravity
+ * @author AI-generated: Gemini 3.8 Flash (High)
  * @author Xceptance GmbH 2026
  */
 public final class YamlFileDto
@@ -33,24 +36,36 @@ public final class YamlFileDto
     public final boolean hasError;
     public final String errorMessage;
     public final boolean hasPlaybook;
+    public final Map<String, List<String>> tags;
 
     public YamlFileDto(final String file, final List<DatasetDto> datasets)
     {
-        this(file, datasets, false, null, false);
+        this(file, datasets, false, null, false, Collections.emptyMap());
     }
 
     public YamlFileDto(final String file, final List<DatasetDto> datasets, final boolean hasError, final String errorMessage)
     {
-        this(file, datasets, hasError, errorMessage, false);
+        this(file, datasets, hasError, errorMessage, false, Collections.emptyMap());
     }
 
     public YamlFileDto(final String file, final List<DatasetDto> datasets, final boolean hasError, final String errorMessage, final boolean hasPlaybook)
+    {
+        this(file, datasets, hasError, errorMessage, hasPlaybook, Collections.emptyMap());
+    }
+
+    public YamlFileDto(final String file, final List<DatasetDto> datasets, final boolean hasError, final String errorMessage, final boolean hasPlaybook, final Map<String, List<String>> tags)
     {
         this.file = file;
         this.datasets = datasets;
         this.hasError = hasError;
         this.errorMessage = errorMessage;
         this.hasPlaybook = hasPlaybook;
+        this.tags = tags != null ? Collections.unmodifiableMap(new LinkedHashMap<>(tags)) : Collections.emptyMap();
+    }
+
+    public Map<String, List<String>> getTags()
+    {
+        return tags;
     }
 
     public boolean isHasPlaybook()

@@ -33,6 +33,25 @@ public final class TestBaseAreaDto
     private final String icon;
     private final int classCount;
     private final List<TestBaseClassDto> testClasses;
+    private final List<TestBaseSubAreaDto> subAreas;
+
+    public TestBaseAreaDto(
+        final String areaName,
+        final String areaPaneId,
+        final String tabBtnId,
+        final String icon,
+        final int classCount,
+        final List<TestBaseClassDto> testClasses,
+        final List<TestBaseSubAreaDto> subAreas)
+    {
+        this.areaName = areaName;
+        this.areaPaneId = areaPaneId;
+        this.tabBtnId = tabBtnId;
+        this.icon = icon;
+        this.classCount = classCount;
+        this.testClasses = testClasses;
+        this.subAreas = subAreas != null ? subAreas : List.of();
+    }
 
     public TestBaseAreaDto(
         final String areaName,
@@ -42,12 +61,7 @@ public final class TestBaseAreaDto
         final int classCount,
         final List<TestBaseClassDto> testClasses)
     {
-        this.areaName = areaName;
-        this.areaPaneId = areaPaneId;
-        this.tabBtnId = tabBtnId;
-        this.icon = icon;
-        this.classCount = classCount;
-        this.testClasses = testClasses;
+        this(areaName, areaPaneId, tabBtnId, icon, classCount, testClasses, List.of());
     }
 
     public String getAreaName()
@@ -78,5 +92,26 @@ public final class TestBaseAreaDto
     public List<TestBaseClassDto> getTestClasses()
     {
         return testClasses;
+    }
+
+    public List<TestBaseSubAreaDto> getSubAreas()
+    {
+        return subAreas;
+    }
+
+    public boolean hasSubAreas()
+    {
+        return subAreas != null && !subAreas.isEmpty();
+    }
+
+    public int getTotalVariationsCount()
+    {
+        if (testClasses == null)
+        {
+            return 0;
+        }
+        return testClasses.stream()
+            .mapToInt(TestBaseClassDto::getVariationCount)
+            .sum();
     }
 }

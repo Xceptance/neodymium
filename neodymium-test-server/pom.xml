@@ -23,7 +23,7 @@
 		<log4j.version>2.25.3</log4j.version>
 		<junit.jupiter.version>6.1.0-M1</junit.jupiter.version>
 		<javalin.version>6.4.0</javalin.version>
-		<thymeleaf.version>3.1.3.RELEASE</thymeleaf.version>
+		<thymeleaf.version>3.1.5.RELEASE</thymeleaf.version>
 	</properties>
 
 	<dependencies>

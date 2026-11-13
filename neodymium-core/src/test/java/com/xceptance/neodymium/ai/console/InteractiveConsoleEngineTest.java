@@ -27,7 +27,9 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +50,7 @@ import org.neodymium.ai.report.TestExecutionReport.ReportActionEntry;
 import org.neodymium.ai.report.TestExecutionReport.ReportLlmCallEntry;
 import org.neodymium.ai.report.TestExecutionReport.ReportMetrics;
 import org.neodymium.ai.report.TestExecutionReport.ReportStepEntry;
+import org.neodymium.util.Neodymium;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -100,6 +103,9 @@ public class InteractiveConsoleEngineTest
             System.clearProperty("neodymium.ai.consoleExecutionLogs");
         }
         System.clearProperty("neodymium.ai.consoleExecutionLogs.directory");
+        System.clearProperty("neodymium.ai.consoleExecutionLogs.captureGlobalLog");
+        System.clearProperty("neodymium.ai.storageRuns.directory");
+        Neodymium.clearAttachments();
         AiConfiguration.resetInstance();
     }
 
@@ -409,25 +415,19 @@ public class InteractiveConsoleEngineTest
     }
 
     @Test
-    public void testExtractLocaleFromDatasetId()
-    {
-        assertEquals("DE", InteractiveStateBuilder.extractLocaleFromDatasetId("homepage test DE"));
-        assertEquals("deu", InteractiveStateBuilder.extractLocaleFromDatasetId("guest checkout deu"));
-        assertEquals("en_US", InteractiveStateBuilder.extractLocaleFromDatasetId("checkout_en_US"));
-        assertEquals("FR", InteractiveStateBuilder.extractLocaleFromDatasetId("search_test_FR"));
-        assertEquals("uk", InteractiveStateBuilder.extractLocaleFromDatasetId("test.uk"));
-        assertNull(InteractiveStateBuilder.extractLocaleFromDatasetId("wikipedia_search_example_1"));
-    }
-
-    @Test
-    public void testBuildStateJsonSerializesLocale()
+    public void testBuildStateJsonSerializesVariationTags()
     {
         final ExecutionContext context = new ExecutionContext(null);
-        context.getTransientData().put("datasetLabel", "homepage test DE");
+        final Map<String, List<String>> tags = new LinkedHashMap<>();
+        tags.put("tag3", List.of("value"));
+        tags.put("tag4", List.of("value2", "value3"));
+        context.getTransientData().put("variationTags", tags);
 
-        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "test-run-locale", 0, "running");
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "test-run-tags", 0, "running");
 
-        assertTrue(stateJson.contains("\"locale\":\"DE\""), "Top-level state JSON should contain guessed locale 'DE'");
+        assertTrue(stateJson.contains("\"tags\":{"), "Top-level state JSON should contain tags object");
+        assertTrue(stateJson.contains("\"tag3\":[\"value\"]"), "Tags should contain tag3");
+        assertTrue(stateJson.contains("\"tag4\":[\"value2\",\"value3\"]"), "Tags should contain tag4 array");
     }
 
     @Test
@@ -520,6 +520,109 @@ public class InteractiveConsoleEngineTest
         final String updatedJsonContent = Files.readString(customJson.toPath());
         assertTrue(updatedJsonContent.contains("\"videoUrl\":\"video-1.mp4\""), "Custom execution JSON should contain videoUrl attribute");
         assertTrue(updatedJsonContent.contains("\"videoPath\":\"video-1.mp4\""), "Custom execution JSON should contain videoPath attribute");
+    }
+
+    @Test
+    public void testPlaybookYamlWrittenToExecutionDirectory(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-playbook-yaml");
+        final String yamlContent = "steps:\n  - action: open('/shop')\n  - action: click('#cart')";
+        final String stateJson = "{\"testName\":\"PlaybookTestClass · ds1\",\"testFile\":\"com.xceptance.PlaybookTestClass#execute\",\"status\":\"passed\",\"playbookContent\":\"steps:\\n  - action: open('/shop')\\n  - action: click('#cart')\",\"steps\":[]}";
+
+        engine.pushState(stateJson);
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File testClassFolder = new File(customDir.toFile(), runFolder + "/PlaybookTestClass");
+        final File playbookYaml = new File(testClassFolder, "playbook.yaml");
+        final File playbookIndexedYaml = new File(testClassFolder, "playbook-1.yaml");
+
+        assertTrue(playbookYaml.exists(), "playbook.yaml should exist in structured run directory");
+        assertTrue(playbookIndexedYaml.exists(), "playbook-1.yaml should exist in structured run directory");
+        assertEquals(yamlContent, Files.readString(playbookYaml.toPath()));
+        assertEquals(yamlContent, Files.readString(playbookIndexedYaml.toPath()));
+    }
+
+    @Test
+    public void testDualWriteToAuraStorageRunsDirectoryAndCustomAttachments(@TempDir final Path customDir, @TempDir final Path auraStorageDir) throws Exception
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        System.setProperty("neodymium.ai.storageRuns.directory", auraStorageDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final File sampleAttachmentFile = new File(tempResultsDir, "sample-payload.csv");
+        Files.writeString(sampleAttachmentFile.toPath(), "colA,colB\nval1,val2");
+
+        Neodymium.addAttachment("sample-payload.csv", sampleAttachmentFile, false);
+        Neodymium.addAttachment("response.json", "{\"status\":\"success\"}", "application/json", false);
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-dual-write");
+        engine.setExecutionLogContent("Test execution timeline:\n[Step 01] Navigate -> SUCCESS");
+
+        final String stateJson = "{\"testName\":\"DualWriteTestClass · ds1\",\"testFile\":\"com.xceptance.DualWriteTestClass#execute\",\"status\":\"passed\",\"steps\":[]}";
+        engine.pushState(stateJson);
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File localClassDir = new File(customDir.toFile(), runFolder + "/DualWriteTestClass");
+        final File auraClassDir = new File(auraStorageDir.toFile(), runFolder + "/DualWriteTestClass");
+
+        assertTrue(localClassDir.exists(), "Local test class directory must exist");
+        assertTrue(auraClassDir.exists(), "Aura storage test class directory must exist due to dual-write");
+
+        // Verify execution.log in both locations
+        final File localExecutionLog = new File(localClassDir, "execution.log");
+        final File auraExecutionLog = new File(auraClassDir, "execution.log");
+        assertTrue(localExecutionLog.exists(), "Local execution.log must exist");
+        assertTrue(auraExecutionLog.exists(), "Aura execution.log must exist");
+        assertEquals("Test execution timeline:\n[Step 01] Navigate -> SUCCESS", Files.readString(auraExecutionLog.toPath()));
+
+        // Verify custom attachments copied to both locations
+        final File auraCsv = new File(auraClassDir, "sample-payload.csv");
+        final File auraJson = new File(auraClassDir, "response.json");
+        assertTrue(auraCsv.exists(), "sample-payload.csv must exist in auraStorageDir");
+        assertTrue(auraJson.exists(), "response.json must exist in auraStorageDir");
+        assertEquals("colA,colB\nval1,val2", Files.readString(auraCsv.toPath()));
+        assertEquals("{\"status\":\"success\"}", Files.readString(auraJson.toPath()));
+
+        // Verify console-execution-1.json has attachments registered
+        final File auraExecutionJson = new File(auraClassDir, "console-execution-1.json");
+        assertTrue(auraExecutionJson.exists(), "Aura console-execution-1.json must exist");
+        final JsonNode root = new ObjectMapper().readTree(auraExecutionJson);
+        assertTrue(root.has("attachments"), "State JSON must contain attachments array");
+        final JsonNode attachmentsNode = root.get("attachments");
+        assertTrue(attachmentsNode.isArray(), "attachments should be an array");
+
+        boolean hasLogAttachment = false;
+        boolean hasCsvAttachment = false;
+        boolean hasJsonAttachment = false;
+        for (final JsonNode att : attachmentsNode)
+        {
+            final String name = att.path("name").asText();
+            if ("execution.log".equals(name))
+            {
+                hasLogAttachment = true;
+                assertEquals("text/plain", att.path("contentType").asText());
+                assertFalse(att.path("openByDefault").asBoolean());
+            }
+            else if ("sample-payload.csv".equals(name))
+            {
+                hasCsvAttachment = true;
+                assertFalse(att.path("openByDefault").asBoolean());
+            }
+            else if ("response.json".equals(name))
+            {
+                hasJsonAttachment = true;
+                assertEquals("application/json", att.path("contentType").asText());
+                assertFalse(att.path("openByDefault").asBoolean());
+            }
+        }
+        assertTrue(hasLogAttachment, "attachments array must include execution.log");
+        assertTrue(hasCsvAttachment, "attachments array must include sample-payload.csv");
+        assertTrue(hasJsonAttachment, "attachments array must include response.json");
     }
 
     @Test
@@ -892,7 +995,7 @@ public class InteractiveConsoleEngineTest
 
         final JsonNode cartNode = stepsNode.get(2);
         assertEquals("Add to cart", cartNode.path("instruction").asText());
-        assertEquals("skipped", cartNode.path("status").asText());
+        assertEquals("not_run", cartNode.path("status").asText());
         assertTrue(cartNode.path("hasSubSteps").asBoolean());
         assertEquals(2, cartNode.path("subSteps").size());
     }
@@ -1338,4 +1441,379 @@ public class InteractiveConsoleEngineTest
         assertEquals("after", afterBlockUpdated.get(0).path("llmCalls").get(0).path("block").asText());
         assertEquals("Clear cookies and close session", afterBlockUpdated.get(0).path("llmCalls").get(0).path("userPrompt").asText());
     }
+
+    @Test
+    public void testInteractiveConsoleEngineDoesNotCreatePhantomAuraManagerStorageDirectory() throws IOException
+    {
+        final String testRunId = "run_no_phantom_aura_manager_dir";
+        System.setProperty("batchName", "Wikipedia");
+        try
+        {
+            final InteractiveConsoleEngine engine = new InteractiveConsoleEngine(testRunId);
+            final String rawStateJson = "{\"testName\":\"WikipediaTest\",\"status\":\"passed\"}";
+            engine.pushState(rawStateJson);
+
+            final File phantomDir = new File("aura-manager/storage/runs/" + testRunId);
+            assertFalse(phantomDir.exists(), "InteractiveConsoleEngine must never create phantom aura-manager/storage/runs directory");
+        }
+        finally
+        {
+            System.clearProperty("batchName");
+        }
+    }
+
+    @Test
+    public void testPushStateLogsVariationTagsFromTransientData() throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        AiConfiguration.resetInstance();
+
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        final Map<String, List<String>> tags = new LinkedHashMap<>();
+        tags.put("tag1", List.of("val1"));
+        tags.put("tag2", List.of("val2", "val3"));
+        context.getTransientData().put("variationTags", tags);
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run_tag_test", 0, "passed");
+        final JsonNode stateRoot = new ObjectMapper().readTree(stateJson);
+        assertTrue(stateRoot.has("tags"), "stateJson should contain tags object");
+        assertEquals("val1", stateRoot.path("tags").path("tag1").get(0).asText());
+        assertEquals("val2", stateRoot.path("tags").path("tag2").get(0).asText());
+        assertEquals("val3", stateRoot.path("tags").path("tag2").get(1).asText());
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("run_tag_test");
+        engine.pushState(stateJson);
+
+        final File logFile = new File(tempResultsDir, "console-execution-1.json");
+        assertTrue(logFile.exists(), "console-execution-1.json should exist on disk");
+
+        final String loggedContent = Files.readString(logFile.toPath());
+        final JsonNode loggedRoot = new ObjectMapper().readTree(loggedContent);
+        assertTrue(loggedRoot.has("tags"), "console-execution-1.json must contain tags property");
+        assertEquals("val1", loggedRoot.path("tags").path("tag1").get(0).asText());
+    }
+
+    @Test
+    public void testAreaNameExtractedFromVariationTags() throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        AiConfiguration.resetInstance();
+
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        final Map<String, List<String>> tags = new LinkedHashMap<>();
+        tags.put("Area", List.of("Search", "Browsing"));
+        tags.put("locale", List.of("ENG"));
+        context.getTransientData().put("variationTags", tags);
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run_area_test", 0, "passed");
+        final JsonNode stateRoot = new ObjectMapper().readTree(stateJson);
+        assertTrue(stateRoot.has("areaName"), "stateJson should contain areaName property");
+        assertEquals("@Search", stateRoot.path("areaName").asText());
+        assertTrue(stateRoot.has("subArea"), "stateJson should contain subArea property");
+        assertEquals("@Browsing", stateRoot.path("subArea").asText());
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("run_area_test");
+        engine.pushState(stateJson);
+
+        final File logFile = new File(tempResultsDir, "console-execution-1.json");
+        assertTrue(logFile.exists(), "console-execution-1.json should exist on disk");
+
+        final String loggedContent = Files.readString(logFile.toPath());
+        final JsonNode loggedRoot = new ObjectMapper().readTree(loggedContent);
+        assertTrue(loggedRoot.has("areaName"), "console-execution-1.json must contain areaName property");
+        assertEquals("@Search", loggedRoot.path("areaName").asText());
+        assertTrue(loggedRoot.has("subArea"), "console-execution-1.json must contain subArea property");
+        assertEquals("@Browsing", loggedRoot.path("subArea").asText());
+    }
+
+    @Test
+    public void testStateJsonSerializesNotRunStatusAndReasonForUnexecutedDownstreamSteps() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+
+        final PlaybookStep step1 = new PlaybookStep("Open homepage");
+        step1.setStatus(PlaybookStepStatus.FAILED);
+        step1.setFailureReason("Connection timed out");
+
+        final PlaybookStep step2 = new PlaybookStep("Search for item");
+        step2.setStatus(PlaybookStepStatus.PENDING);
+
+        final PlaybookStep step3 = new PlaybookStep("Click search");
+        step3.setStatus(PlaybookStepStatus.PENDING);
+
+        context.getTransientData().put("playbook.flatSteps", List.of(step1, step2, step3));
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run-not-run-test", 0, "failed");
+        final JsonNode root = new ObjectMapper().readTree(stateJson);
+
+        final JsonNode stepsNode = root.path("blocks").path("steps");
+        assertEquals(3, stepsNode.size());
+
+        // Step 1: Failed
+        assertEquals("failed", stepsNode.get(0).path("status").asText());
+
+        // Step 2: Unexecuted downstream -> not_run with explanation
+        assertEquals("not_run", stepsNode.get(1).path("status").asText());
+        assertEquals("Not executed because step #1 failed.", stepsNode.get(1).path("notRunReason").asText());
+
+        // Step 3: Unexecuted downstream -> not_run with explanation
+        assertEquals("not_run", stepsNode.get(2).path("status").asText());
+        assertEquals("Not executed because step #1 failed.", stepsNode.get(2).path("notRunReason").asText());
+    }
+
+    @Test
+    public void testStateJsonSerializesMetricsWithNotRunSteps() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        final TestExecutionReport report = new TestExecutionReport();
+        final ReportMetrics metrics = new ReportMetrics();
+        metrics.setTotalSteps(5);
+        metrics.setFailedSteps(1);
+        metrics.setSkippedSteps(1);
+        metrics.setNotRunSteps(3);
+        report.setMetrics(metrics);
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run-metrics-test", 0, "failed", null, report);
+        final JsonNode root = new ObjectMapper().readTree(stateJson);
+
+        final JsonNode metricsNode = root.path("metrics");
+        assertEquals(5, metricsNode.path("totalSteps").asInt());
+        assertEquals(1, metricsNode.path("failedSteps").asInt());
+        assertEquals(1, metricsNode.path("skippedSteps").asInt());
+        assertEquals(3, metricsNode.path("notRunSteps").asInt());
+    }
+
+    @Test
+    public void testStateJsonEnrichesNotRunStatusFromReportStep() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        final PlaybookStep pbStep = new PlaybookStep("Checkout cart");
+        context.getTransientData().put("playbook.flatSteps", List.of(pbStep));
+
+        final TestExecutionReport report = new TestExecutionReport();
+        final ReportStepEntry repStep = new ReportStepEntry(0, "Checkout cart");
+        repStep.setStatus("NOT RUN");
+        repStep.setNotRunReason("Not executed because step #1 failed.");
+        report.addStep(repStep);
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run-report-step-not-run", 0, "failed", null, report);
+        final JsonNode root = new ObjectMapper().readTree(stateJson);
+
+        final JsonNode stepNode = root.path("blocks").path("steps").get(0);
+        assertEquals("not_run", stepNode.path("status").asText());
+        assertEquals("Not executed because step #1 failed.", stepNode.path("notRunReason").asText());
+    }
+
+    @Test
+    public void testSuccessfulAfterStepPreservesPassedStatusWhenPrecedingStepFailed() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+
+        final PlaybookStep coreStep = new PlaybookStep("Process payment");
+        coreStep.setStatus(PlaybookStepStatus.FAILED);
+        coreStep.setFailureReason("Credit card rejected");
+
+        final PlaybookStep afterStep = new PlaybookStep("Close browser session");
+        afterStep.setBlock("after");
+        afterStep.setStatus(PlaybookStepStatus.SUCCESS);
+
+        context.getTransientData().put("playbook.steps", List.of(coreStep));
+        context.getTransientData().put("playbook.flatSteps", List.of(coreStep, afterStep));
+        context.getTransientData().put("playbook.afterSteps", List.of(afterStep));
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run-after-success", 0, "failed");
+        final JsonNode root = new ObjectMapper().readTree(stateJson);
+
+        final JsonNode afterNode = root.path("blocks").path("after").get(0);
+        assertEquals("passed", afterNode.path("status").asText(),
+            "Teardown (after) step that succeeded must retain 'passed' status even when preceding core step failed");
+        assertFalse(afterNode.has("notRunReason"),
+            "Successful after step must not be assigned a notRunReason");
+    }
+
+    @Test
+    public void testUnexecutedAfterStepSerializesAsNotRunWhenPrecedingStepFailed() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+
+        final PlaybookStep coreStep = new PlaybookStep("Process payment");
+        coreStep.setStatus(PlaybookStepStatus.FAILED);
+        coreStep.setFailureReason("Credit card rejected");
+
+        final PlaybookStep afterStep = new PlaybookStep("Close browser session");
+        afterStep.setBlock("after");
+        afterStep.setStatus(PlaybookStepStatus.PENDING);
+
+        context.getTransientData().put("playbook.steps", List.of(coreStep));
+        context.getTransientData().put("playbook.flatSteps", List.of(coreStep, afterStep));
+        context.getTransientData().put("playbook.afterSteps", List.of(afterStep));
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run-after-pending", 0, "failed");
+        final JsonNode root = new ObjectMapper().readTree(stateJson);
+
+        final JsonNode afterNode = root.path("blocks").path("after").get(0);
+        assertEquals("not_run", afterNode.path("status").asText(),
+            "Unexecuted teardown step must be marked 'not_run' when execution aborted");
+        assertEquals("Not executed because step #1 failed.", afterNode.path("notRunReason").asText());
+    }
+
+    @Test
+    public void testMultiDatasetExecutionLogIndexingIsolated(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-datasets");
+
+        // Push state for Dataset 1
+        engine.setExecutionLogContent("Execution log for Dataset 1");
+        final String stateDs1 = "{\"testName\":\"MyDatasetTest · ds1\",\"testFile\":\"com.xceptance.MyDatasetTest#execute\",\"datasetId\":\"ds1\",\"status\":\"passed\",\"steps\":[]}";
+        engine.pushState(stateDs1);
+
+        // Push state for Dataset 2
+        engine.setExecutionLogContent("Execution log for Dataset 2");
+        final String stateDs2 = "{\"testName\":\"MyDatasetTest · ds2\",\"testFile\":\"com.xceptance.MyDatasetTest#execute\",\"datasetId\":\"ds2\",\"status\":\"passed\",\"steps\":[]}";
+        engine.pushState(stateDs2);
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File testDir = new File(customDir.toFile(), runFolder + "/MyDatasetTest");
+
+        final File log1 = new File(testDir, "execution-1.log");
+        final File log2 = new File(testDir, "execution-2.log");
+        final File defaultLog = new File(testDir, "execution.log");
+
+        assertTrue(log1.exists(), "execution-1.log must exist for dataset 1");
+        assertTrue(log2.exists(), "execution-2.log must exist for dataset 2");
+        assertTrue(defaultLog.exists(), "default execution.log must exist");
+
+        assertEquals("Execution log for Dataset 1", Files.readString(log1.toPath()));
+        assertEquals("Execution log for Dataset 2", Files.readString(log2.toPath()));
+
+        // Verify that console-execution-2.json points to execution-2.log
+        final File json2 = new File(testDir, "console-execution-2.json");
+        assertTrue(json2.exists());
+        final JsonNode root = new ObjectMapper().readTree(json2);
+        assertTrue(root.has("attachments"));
+        final JsonNode attNode = root.get("attachments");
+        boolean foundLog2 = false;
+        for (final JsonNode att : attNode)
+        {
+            if ("execution.log".equals(att.path("name").asText()))
+            {
+                assertEquals("execution-2.log", att.path("path").asText(), "Dataset 2 must reference its own indexed execution-2.log");
+                foundLog2 = true;
+            }
+        }
+        assertTrue(foundLog2, "execution.log attachment must be registered for dataset 2");
+    }
+
+    @Test
+    public void testReconciliationWithoutStatusChangeFlushesUpdatedExecutionLog(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-reconcile-flush");
+        final String stateFailed = "{\"testName\":\"ReconcileTest · ds1\",\"testFile\":\"com.xceptance.ReconcileTest#execute\",\"status\":\"failed\",\"steps\":[]}";
+        engine.setExecutionLogContent("Initial failure log without stacktrace");
+        engine.pushState(stateFailed);
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File testDir = new File(customDir.toFile(), runFolder + "/ReconcileTest");
+        final File logFile = new File(testDir, "execution.log");
+        assertTrue(logFile.exists());
+        assertEquals("Initial failure log without stacktrace", Files.readString(logFile.toPath()));
+
+        // Now update executionLogContent with final stacktrace and reconcile without status change (still failed)
+        engine.setExecutionLogContent("Final failure log with full exception stacktrace");
+        engine.reconcileTestOutcome(false, new RuntimeException("Trailing assertion error"));
+
+        assertEquals("Final failure log with full exception stacktrace", Files.readString(logFile.toPath()),
+            "reconcileTestOutcome must flush updated executionLogContent to disk even when status does not flip");
+    }
+
+    @Test
+    public void testMultiDatasetPlaybookIndexingIsolated(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-playbooks");
+
+        // Push state for Dataset 1
+        final String stateDs1 = "{\"testName\":\"MyDatasetPlaybookTest · ds1\",\"testFile\":\"com.xceptance.MyDatasetPlaybookTest#execute\",\"datasetId\":\"ds1\",\"status\":\"passed\",\"playbookContent\":\"playbook: version 1\",\"steps\":[]}";
+        engine.pushState(stateDs1);
+
+        // Push state for Dataset 2
+        final String stateDs2 = "{\"testName\":\"MyDatasetPlaybookTest · ds2\",\"testFile\":\"com.xceptance.MyDatasetPlaybookTest#execute\",\"datasetId\":\"ds2\",\"status\":\"passed\",\"playbookContent\":\"playbook: version 2\",\"steps\":[]}";
+        engine.pushState(stateDs2);
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File testDir = new File(customDir.toFile(), runFolder + "/MyDatasetPlaybookTest");
+
+        final File pb1 = new File(testDir, "playbook-1.yaml");
+        final File pb2 = new File(testDir, "playbook-2.yaml");
+        final File defaultPb = new File(testDir, "playbook.yaml");
+
+        assertTrue(pb1.exists(), "playbook-1.yaml must exist for dataset 1");
+        assertTrue(pb2.exists(), "playbook-2.yaml must exist for dataset 2");
+        assertTrue(defaultPb.exists(), "default playbook.yaml must exist");
+
+        assertEquals("playbook: version 1", Files.readString(pb1.toPath()));
+        assertEquals("playbook: version 2", Files.readString(pb2.toPath()));
+
+        // Verify that console-execution-2.json points to playbook-2.yaml
+        final File json2 = new File(testDir, "console-execution-2.json");
+        assertTrue(json2.exists());
+        final JsonNode root = new ObjectMapper().readTree(json2);
+        assertTrue(root.has("attachments"));
+        final JsonNode attNode = root.get("attachments");
+        boolean foundPb2 = false;
+        for (final JsonNode att : attNode)
+        {
+            if ("playbook.yaml".equals(att.path("name").asText()))
+            {
+                assertEquals("playbook-2.yaml", att.path("path").asText(), "Dataset 2 must reference its own indexed playbook-2.yaml");
+                foundPb2 = true;
+            }
+        }
+        assertTrue(foundPb2, "playbook.yaml attachment must be registered for dataset 2");
+    }
+
+    @Test
+    public void testReconcilePreservesCustomAttachmentsAfterThreadContextClearedAndHandlesNullVideoUrl(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        Neodymium.addAttachment("custom-note.txt", "important context", "text/plain", false);
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-reconcile-att");
+        final String stateJson = "{\"testName\":\"ReconcileAttTest · ds1\",\"testFile\":\"com.xceptance.ReconcileAttTest#execute\",\"status\":\"passed\",\"videoUrl\":null,\"steps\":[]}";
+        engine.pushState(stateJson);
+
+        // Simulate thread context cleared before reconciliation runs
+        Neodymium.clearThreadContext();
+        engine.reconcileTestOutcome(false, new RuntimeException("Post-test failure"));
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File json1 = new File(customDir.toFile(), runFolder + "/ReconcileAttTest/console-execution-1.json");
+        assertTrue(json1.exists());
+        final JsonNode root = new ObjectMapper().readTree(json1);
+        final JsonNode attNode = root.get("attachments");
+        boolean foundCustom = false;
+        for (final JsonNode att : attNode)
+        {
+            if ("custom-note.txt".equals(att.path("name").asText()))
+            {
+                foundCustom = true;
+            }
+        }
+        assertTrue(foundCustom, "reconcileTestOutcome must preserve cached custom attachments even after thread context is cleared");
+    }
 }
+

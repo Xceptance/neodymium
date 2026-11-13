@@ -18,16 +18,32 @@
  */
 package com.xceptance.aura.test.controller;
 
+import com.xceptance.aura.mcp.config.AuraMcpProperties;
+import com.xceptance.aura.mcp.session.McpSubscriptionManager;
+import com.xceptance.aura.mcp.tool.AuraMcpToolService;
 import com.xceptance.neodymium.aura.AuraSettingsService;
 import com.xceptance.neodymium.aura.AuraSettingsService.SettingsDataDto;
 import java.io.IOException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.mcp.annotation.McpTool;
+import org.springframework.ai.mcp.annotation.McpToolParam;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
+import org.springframework.boot.web.server.context.WebServerInitializedEvent;
+import org.springframework.context.ApplicationListener;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.util.MultiValueMap;
@@ -46,15 +62,53 @@ import org.springframework.web.bind.annotation.ResponseBody;
  */
 @Controller
 @RequestMapping("/api/settings")
-public class AuraTestSettingsController
+public class AuraTestSettingsController implements ApplicationListener<WebServerInitializedEvent>
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(AuraTestSettingsController.class);
 
     private final AuraSettingsService settingsService;
+    private final AuraMcpProperties mcpProperties;
+    private final McpSubscriptionManager subscriptionManager;
+    private final AuraMcpToolService toolService;
 
-    public AuraTestSettingsController(final AuraSettingsService settingsService)
+    @Value("${server.port:8080}")
+    private int configuredServerPort = 8080;
+
+    private volatile int activeServerPort = -1;
+
+    @Value("${spring.ai.mcp.server.protocol:SSE}")
+    private String serverProtocol = "SSE";
+
+    public AuraTestSettingsController(final AuraSettingsService settingsService,
+                                      final AuraMcpProperties mcpProperties,
+                                      final McpSubscriptionManager subscriptionManager,
+                                      final AuraMcpToolService toolService)
     {
         this.settingsService = settingsService;
+        this.mcpProperties = mcpProperties;
+        this.subscriptionManager = subscriptionManager;
+        this.toolService = toolService;
+    }
+
+    @Override
+    public void onApplicationEvent(final WebServerInitializedEvent event)
+    {
+        this.activeServerPort = event.getWebServer().getPort();
+    }
+
+    private int getServerPort()
+    {
+        return (activeServerPort > 0) ? activeServerPort : configuredServerPort;
+    }
+
+    private String resolveEndpointPath()
+    {
+        return "SSE".equalsIgnoreCase(serverProtocol) ? "/sse" : "/mcp";
+    }
+
+    private String resolveFullEndpointUrl()
+    {
+        return "http://localhost:" + getServerPort() + resolveEndpointPath();
     }
 
     private void populateSettingsModel(final Model model, final String activeTab, final String saveMessage)
@@ -66,10 +120,75 @@ public class AuraTestSettingsController
         model.addAttribute("overriddenKeys", settingsData.getOverriddenKeys());
         model.addAttribute("activeTab", (activeTab != null && !activeTab.isBlank()) ? activeTab : "general");
         model.addAttribute("isOpenModal", true);
+
+        // MCP Server Tab Attributes
+        final String endpointUrl = resolveFullEndpointUrl();
+        final String protocolName = serverProtocol != null ? serverProtocol.toUpperCase() : "SSE";
+        final int registeredToolsCount = resolveMcpToolsList().size();
+
+        model.addAttribute("mcpEnabled", mcpProperties.isEnabled());
+        model.addAttribute("mcpToken", mcpProperties.getAuth() != null ? mcpProperties.getAuth().getToken() : "");
+        model.addAttribute("mcpHeartbeat", mcpProperties.getHeartbeatIntervalSeconds());
+        model.addAttribute("mcpEndpointUrl", endpointUrl);
+        model.addAttribute("mcpServerPort", getServerPort());
+        model.addAttribute("mcpProtocol", protocolName);
+        final String endpointDesc = switch (protocolName)
+        {
+            case "STATELESS" -> "Stateless HTTP POST endpoint URL for Antigravity, Claude Desktop, or Cursor agents.";
+            case "STREAMABLE" -> "Streamable HTTP endpoint URL for Claude Desktop, Cursor, or Antigravity agents.";
+            default -> "Server-Sent Events (SSE) endpoint URL for Claude Desktop, Cursor, or Antigravity agents.";
+        };
+        model.addAttribute("mcpEndpointDesc", endpointDesc);
+        model.addAttribute("mcpToolsCount", registeredToolsCount);
+        model.addAttribute("mcpToolsList", resolveMcpToolsList());
+        model.addAttribute("mcpActiveSessionsCount", subscriptionManager != null ? subscriptionManager.getActiveSessionCount() : 0);
+        model.addAttribute("mcpClientConfigSnippet", String.format("""
+{
+  "mcpServers": {
+    "neodymium": {
+      "serverUrl": "%s"
+    }
+  }
+}""", endpointUrl));
+
         if (saveMessage != null && !saveMessage.isBlank())
         {
             model.addAttribute("saveMessage", saveMessage);
         }
+    }
+
+    private List<Map<String, String>> resolveMcpToolsList()
+    {
+        final List<Map<String, String>> tools = new ArrayList<>();
+        if (toolService != null)
+        {
+            for (final Method method : toolService.getClass().getDeclaredMethods())
+            {
+                if (method.isAnnotationPresent(McpTool.class))
+                {
+                    final McpTool toolAnn = method.getAnnotation(McpTool.class);
+                    final StringBuilder paramsDesc = new StringBuilder();
+                    for (final Parameter param : method.getParameters())
+                    {
+                        if (param.isAnnotationPresent(McpToolParam.class))
+                        {
+                            final McpToolParam paramAnn = param.getAnnotation(McpToolParam.class);
+                            if (!paramsDesc.isEmpty())
+                            {
+                                paramsDesc.append(", ");
+                            }
+                            paramsDesc.append(param.getName()).append(" (").append(paramAnn.description()).append(")");
+                        }
+                    }
+                    final Map<String, String> item = new HashMap<>();
+                    item.put("name", toolAnn.name());
+                    item.put("description", toolAnn.description());
+                    item.put("parameters", paramsDesc.isEmpty() ? "None" : paramsDesc.toString());
+                    tools.add(item);
+                }
+            }
+        }
+        return tools;
     }
 
     @GetMapping
@@ -160,6 +279,30 @@ public class AuraTestSettingsController
                 }
 
                 settingsService.saveDevNeoProperties(devNeoEntries);
+
+                // Update runtime MCP properties if present in formData
+                if (formData.containsKey("mcpEnabled"))
+                {
+                    mcpProperties.setEnabled(Boolean.parseBoolean(formData.getFirst("mcpEnabled")));
+                }
+                if (formData.containsKey("mcpToken"))
+                {
+                    if (mcpProperties.getAuth() == null)
+                    {
+                        mcpProperties.setAuth(new AuraMcpProperties.Auth());
+                    }
+                    mcpProperties.getAuth().setToken(formData.getFirst("mcpToken"));
+                }
+                if (formData.containsKey("mcpHeartbeat"))
+                {
+                    try
+                    {
+                        mcpProperties.setHeartbeatIntervalSeconds(Integer.parseInt(formData.getFirst("mcpHeartbeat")));
+                    }
+                    catch (final NumberFormatException ignored)
+                    {
+                    }
+                }
             }
 
             populateSettingsModel(model, activeTab, "Settings saved successfully!");
@@ -214,5 +357,114 @@ public class AuraTestSettingsController
             populateSettingsModel(model, "browser", "Error adding property: " + e.getMessage());
         }
         return "fragments/settings-modal :: settingsModal";
+    }
+
+    @GetMapping("/mcp/sessions")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> getMcpSessions()
+    {
+        final Map<String, Object> result = new HashMap<>();
+        if (subscriptionManager != null)
+        {
+            final Map<String, Instant> sessions = subscriptionManager.getSessionDetails();
+            final List<Map<String, String>> sessionList = new ArrayList<>();
+            for (final Map.Entry<String, Instant> entry : sessions.entrySet())
+            {
+                final Map<String, String> item = new HashMap<>();
+                item.put("sessionId", entry.getKey());
+                item.put("lastActive", entry.getValue().toString());
+                sessionList.add(item);
+            }
+            result.put("activeCount", sessions.size());
+            result.put("sessions", sessionList);
+        }
+        else
+        {
+            result.put("activeCount", 0);
+            result.put("sessions", List.of());
+        }
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/mcp/self-test")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> runMcpSelfTest()
+    {
+        final Map<String, Object> response = new HashMap<>();
+        final boolean enabled = mcpProperties != null && mcpProperties.isEnabled();
+        final String endpointUrl = resolveFullEndpointUrl();
+        final String protocolName = serverProtocol != null ? serverProtocol.toUpperCase() : "SSE";
+
+        response.put("enabled", enabled);
+        response.put("protocol", protocolName);
+        response.put("endpoint", endpointUrl);
+        response.put("messageEndpoint", "http://localhost:" + getServerPort() + "/mcp/message");
+
+        if (!enabled)
+        {
+            response.put("status", "DISABLED");
+            response.put("message", "MCP Server is disabled in settings.");
+            return ResponseEntity.ok(response);
+        }
+
+        try
+        {
+            final URI uri = URI.create(endpointUrl);
+            final HttpClient client = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofMillis(1500))
+                    .build();
+
+            final HttpRequest.Builder reqBuilder = HttpRequest.newBuilder(uri)
+                    .timeout(Duration.ofMillis(2000));
+
+            if (mcpProperties != null && mcpProperties.getAuth() != null && mcpProperties.getAuth().getToken() != null && !mcpProperties.getAuth().getToken().isBlank())
+            {
+                reqBuilder.header("Authorization", "Bearer " + mcpProperties.getAuth().getToken().trim());
+            }
+
+            final HttpRequest request;
+            if ("STREAMABLE".equalsIgnoreCase(protocolName) || "STATELESS".equalsIgnoreCase(protocolName))
+            {
+                final String initPayload = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":"
+                        + "{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},"
+                        + "\"clientInfo\":{\"name\":\"aura-manager-selftest\",\"version\":\"1.0\"}}}";
+                request = reqBuilder
+                        .header("Content-Type", "application/json")
+                        .header("Accept", "application/json, text/event-stream")
+                        .POST(HttpRequest.BodyPublishers.ofString(initPayload))
+                        .build();
+            }
+            else
+            {
+                request = reqBuilder
+                        .header("Accept", "text/event-stream")
+                        .GET()
+                        .build();
+            }
+
+            final HttpResponse<Void> httpResponse = client.send(
+                    request, HttpResponse.BodyHandlers.discarding());
+
+            final int statusCode = httpResponse.statusCode();
+            response.put("httpStatus", statusCode);
+            if (statusCode == 200)
+            {
+                response.put("status", "HEALTHY");
+                response.put("message", protocolName + " handshake successful (HTTP 200). Server is listening.");
+            }
+            else
+            {
+                response.put("status", "UNEXPECTED_STATUS");
+                response.put("message", "Endpoint responded with HTTP " + statusCode);
+            }
+        }
+        catch (final Exception e)
+        {
+            LOGGER.warn("[Aura MCP] Self-test handshake failed: {}", e.getMessage(), e);
+            response.put("status", "ERROR");
+            response.put("message", "Handshake test failed: " + e.getMessage());
+        }
+
+        return ResponseEntity.ok(response);
     }
 }

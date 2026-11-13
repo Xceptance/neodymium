@@ -59,5 +59,11 @@ public enum PlaybookStepStatus
     /**
      * The step was skipped by the user or control flow.
      */
-    SKIPPED
+    SKIPPED,
+
+    /**
+     * The step was not run because a previous step failed or encountered an error.
+     */
+    NOT_RUN
 }
+

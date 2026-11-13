@@ -39,6 +39,35 @@ public final class AreaSummaryDto
     private final int ignoredCount;
     private final int runningCount;
     private final List<TestClassSummaryDto> testClasses;
+    private final List<SubAreaSummaryDto> subAreas;
+
+    public AreaSummaryDto(
+        final String areaName,
+        final String areaGroup,
+        final String folder,
+        final int totalCount,
+        final int passCount,
+        final int fixedCount,
+        final int knownCount,
+        final int unknownCount,
+        final int ignoredCount,
+        final int runningCount,
+        final List<TestClassSummaryDto> testClasses,
+        final List<SubAreaSummaryDto> subAreas)
+    {
+        this.areaName = areaName;
+        this.areaGroup = areaGroup;
+        this.folder = folder;
+        this.totalCount = totalCount;
+        this.passCount = passCount;
+        this.fixedCount = fixedCount;
+        this.knownCount = knownCount;
+        this.unknownCount = unknownCount;
+        this.ignoredCount = ignoredCount;
+        this.runningCount = runningCount;
+        this.testClasses = testClasses;
+        this.subAreas = subAreas != null ? subAreas : List.of();
+    }
 
     public AreaSummaryDto(
         final String areaName,
@@ -53,17 +82,7 @@ public final class AreaSummaryDto
         final int runningCount,
         final List<TestClassSummaryDto> testClasses)
     {
-        this.areaName = areaName;
-        this.areaGroup = areaGroup;
-        this.folder = folder;
-        this.totalCount = totalCount;
-        this.passCount = passCount;
-        this.fixedCount = fixedCount;
-        this.knownCount = knownCount;
-        this.unknownCount = unknownCount;
-        this.ignoredCount = ignoredCount;
-        this.runningCount = runningCount;
-        this.testClasses = testClasses;
+        this(areaName, areaGroup, folder, totalCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, runningCount, testClasses, List.of());
     }
 
     public AreaSummaryDto(
@@ -147,6 +166,25 @@ public final class AreaSummaryDto
     public List<TestClassSummaryDto> getTestClasses()
     {
         return testClasses;
+    }
+
+    public List<SubAreaSummaryDto> getSubAreas()
+    {
+        return subAreas;
+    }
+
+    public boolean hasSubAreas()
+    {
+        return subAreas != null && !subAreas.isEmpty();
+    }
+
+    public int getFlakyCount()
+    {
+        if (testClasses != null)
+        {
+            return testClasses.stream().mapToInt(TestClassSummaryDto::getFlakyCount).sum();
+        }
+        return 0;
     }
 
     public int getPassedHealedCount()

@@ -18,6 +18,8 @@
  */
 package com.xceptance.aura.report.dto;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -31,7 +33,7 @@ import java.util.regex.Pattern;
 /**
  * DTO representing a historical execution of a test variation across test runs.
  *
- * @author AI-generated: Antigravity
+ * @author AI-generated: Gemini 3.8 Flash (High)
  * @author Xceptance GmbH 2026
  */
 public final class TestBaseVariationHistoryDto
@@ -87,7 +89,7 @@ public final class TestBaseVariationHistoryDto
     {
         this.runId = runId != null ? runId : "";
         this.executionId = executionId != null ? executionId : "";
-        this.batchName = batchName != null ? batchName : "Unknown";
+        this.batchName = batchName != null ? batchName : "Default";
         this.mode = mode != null && !mode.isBlank() ? mode : "JAVA";
         this.engine = engine != null ? engine : "Java";
         this.timestamp = formatTimestamp(timestamp);
@@ -238,6 +240,17 @@ public final class TestBaseVariationHistoryDto
         return executionId;
     }
 
+    public String getExecutionUrl()
+    {
+        final String encRunId = URLEncoder.encode(runId != null ? runId : "", StandardCharsets.UTF_8);
+        final String encExecId = URLEncoder.encode(executionId != null ? executionId : "", StandardCharsets.UTF_8);
+        if (encExecId.isEmpty())
+        {
+            return "/run-report?runId=" + encRunId;
+        }
+        return "/run-report?runId=" + encRunId + "&subTab=runReportSubTabAllTests&executionId=" + encExecId;
+    }
+
     public String getBatchName()
     {
         return batchName;
@@ -294,7 +307,7 @@ public final class TestBaseVariationHistoryDto
     }
 
     /**
-     * Resolves the display execution mode string (AI, HEALED, PLAYBOOK, or JAVA).
+     * Resolves the display execution mode string (AI, HEALED, RECORDING, or JAVA).
      *
      * @return display mode string
      */
@@ -314,9 +327,9 @@ public final class TestBaseVariationHistoryDto
         {
             return "HEALED";
         }
-        if ("REPLAY_STRICT".equals(upper) || "PLAYBOOK".equals(upper) || "REPLAY_WITH_HEALING".equals(upper) || "AUTO".equals(upper))
+        if ("REPLAY_STRICT".equals(upper) || "PLAYBOOK".equals(upper) || "RECORDING".equals(upper) || "REPLAY_WITH_HEALING".equals(upper) || "AUTO".equals(upper))
         {
-            return "PLAYBOOK";
+            return "RECORDING";
         }
         if ("JAVA".equals(upper))
         {

@@ -591,5 +591,98 @@ public class AssertActionTest extends BaseAiTest
             plugin.execute(new Action("ASSERT_ELEMENT_STATE", "#disabled-input", List.of("visible, enabled"), "assert enabled on disabled element", "fail", false));
         });
     }
+
+    @Test
+    @DisplayName("AssertAction handles empty text assertions on inputs, textareas, and DOM containers")
+    public void testAssertActionEmptyTextAssertions() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+
+        // 1. ASSERT_TEXT with empty string passes on empty input, empty div, empty textarea, and whitespace div
+        plugin.execute(new Action("ASSERT_TEXT", "#empty-input", List.of(""), "check empty input", "reasoning", false));
+        plugin.execute(new Action("ASSERT_TEXT", "#empty-div", List.of(""), "check empty div", "reasoning", false));
+        plugin.execute(new Action("ASSERT_TEXT", "#whitespace-div", List.of(""), "check whitespace div", "reasoning", false));
+        plugin.execute(new Action("ASSERT_TEXT", "#empty-textarea", List.of(""), "check empty textarea", "reasoning", false));
+
+        // 2. ASSERT_TEXT with empty string fails on populated input (#username) and populated textarea (#populated-textarea)
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_TEXT", "#username", List.of(""), "assert empty on populated input", "fail", false));
+        });
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_TEXT", "#populated-textarea", List.of(""), "assert empty on populated textarea", "fail", false));
+        });
+
+        // 3. Negated ASSERT_TEXT with empty string passes on populated elements
+        plugin.execute(new Action("ASSERT_TEXT", "#username", List.of(""), "check username not empty", "negated text", false, true));
+        plugin.execute(new Action("ASSERT_TEXT", "#populated-textarea", List.of(""), "check textarea not empty", "negated text", false, true));
+
+        // 4. Negated ASSERT_TEXT with empty string fails on empty elements
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_TEXT", "#empty-input", List.of(""), "assert not empty on empty input", "fail", false, true));
+        });
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_TEXT", "#empty-div", List.of(""), "assert not empty on empty div", "fail", false, true));
+        });
+    }
+
+    @Test
+    @DisplayName("AssertAction handles ASSERT_ELEMENT_STATE for empty and not_empty")
+    public void testAssertActionEmptyElementState() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+
+        // 1. "empty" state on empty input, textarea, and div
+        plugin.execute(new Action("ASSERT_ELEMENT_STATE", "#empty-input", List.of("empty"), "check input empty", "reasoning", false));
+        plugin.execute(new Action("ASSERT_ELEMENT_STATE", "#empty-textarea", List.of("empty"), "check textarea empty", "reasoning", false));
+        plugin.execute(new Action("ASSERT_ELEMENT_STATE", "#empty-div", List.of("empty"), "check div empty", "reasoning", false));
+
+        // 2. "not_empty" state on populated input and textarea
+        plugin.execute(new Action("ASSERT_ELEMENT_STATE", "#username", List.of("not_empty"), "check username not empty", "reasoning", false));
+        plugin.execute(new Action("ASSERT_ELEMENT_STATE", "#populated-textarea", List.of("not_empty"), "check textarea not empty", "reasoning", false));
+
+        // 3. Negated "empty" state (isNegated = true) on populated elements passes
+        plugin.execute(new Action("ASSERT_ELEMENT_STATE", "#username", List.of("empty"), "check username not empty via negation", "reasoning", false, true));
+
+        // 4. Negative: "empty" state fails on populated input
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_ELEMENT_STATE", "#username", List.of("empty"), "assert empty on populated input", "fail", false));
+        });
+
+        // 5. Negative: "not_empty" state fails on empty input
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_ELEMENT_STATE", "#empty-input", List.of("not_empty"), "assert not empty on empty input", "fail", false));
+        });
+
+        // 6. Legacy ASSERT with 'empty' and '[empty]'
+        plugin.execute(new Action("ASSERT", "#empty-input", List.of("empty"), "legacy assert empty", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#empty-textarea", List.of("[empty]"), "legacy assert [empty]", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#username", List.of("empty"), "legacy assert not empty", "reasoning", false, true));
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT", "#username", List.of("empty"), "legacy assert empty on populated", "fail", false));
+        });
+
+        // 7. Legacy ASSERT with 'not_empty', '[not_empty]', 'non-empty'
+        plugin.execute(new Action("ASSERT", "#username", List.of("not_empty"), "legacy assert not_empty", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#welcome-message", List.of("non-empty"), "legacy assert non-empty", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#populated-textarea", List.of("[not_empty]"), "legacy assert [not_empty]", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#empty-input", List.of("not_empty"), "legacy assert not_empty on empty negated", "reasoning", false, true));
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT", "#empty-input", List.of("not_empty"), "legacy assert not_empty on empty", "fail", false));
+        });
+    }
 }
 

@@ -21,6 +21,7 @@ package com.xceptance.aura.report.entity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 
 /**
@@ -51,11 +52,20 @@ public class TestBatchEntity
     @Column(name = "latest_run_id", length = 80)
     private String latestRunId;
 
+    @Lob
+    @Column(name = "tests_json", columnDefinition = "TEXT")
+    private String testsJson;
+
     public TestBatchEntity()
     {
     }
 
     public TestBatchEntity(final String batchName, final String environment, final String description, final String localesCsv, final String browsersCsv, final String latestRunId)
+    {
+        this(batchName, environment, description, localesCsv, browsersCsv, latestRunId, null);
+    }
+
+    public TestBatchEntity(final String batchName, final String environment, final String description, final String localesCsv, final String browsersCsv, final String latestRunId, final String testsJson)
     {
         this.batchName = batchName;
         this.environment = environment;
@@ -63,6 +73,7 @@ public class TestBatchEntity
         this.localesCsv = localesCsv;
         this.browsersCsv = browsersCsv;
         this.latestRunId = latestRunId;
+        this.testsJson = testsJson;
     }
 
     public String getBatchName()
@@ -123,5 +134,15 @@ public class TestBatchEntity
     public void setLatestRunId(final String latestRunId)
     {
         this.latestRunId = latestRunId;
+    }
+
+    public String getTestsJson()
+    {
+        return testsJson;
+    }
+
+    public void setTestsJson(final String testsJson)
+    {
+        this.testsJson = testsJson;
     }
 }

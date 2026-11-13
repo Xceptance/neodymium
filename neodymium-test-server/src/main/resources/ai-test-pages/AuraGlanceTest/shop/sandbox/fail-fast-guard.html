@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Fail-Fast &amp; Navigation Guard Challenge - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+</head>
+<body class="aura-theme-dark">
+    <div class="aura-container">
+        <header class="aura-header">
+            <div class="aura-logo">Aura AI <span>Sandbox</span></div>
+            <nav class="aura-nav">
+                <a id="headerHomeLink" href="../index.html">← Back to Storefront</a>
+            </nav>
+        </header>
+
+        <main class="aura-main" id="sandboxRoot">
+        </main>
+    </div>
+
+    <script>
+        (function () {
+            const params = new URLSearchParams(window.location.search);
+            const mode = (params.get('mode') || 'product').toLowerCase();
+            const root = document.getElementById('sandboxRoot');
+
+            if (mode === 'captcha') {
+                root.innerHTML = [
+                    '<section class="aura-card" id="captchaBlockerSection">',
+                    '  <h1 id="challengeHeadline">Security Challenge Required</h1>',
+                    '  <p id="challengeDescription" class="aura-desc">',
+                    '    Automated traffic check active. Complete the security verification challenge to access the storefront.',
+                    '  </p>',
+                    '  <div class="aura-status-box" id="captchaBox" style="padding: 1.5rem; border: 1px solid #e63946; border-radius: 8px; text-align: center;">',
+                    '    <span>Verification widget active — catalog unavailable</span>',
+                    '  </div>',
+                    '</section>'
+                ].join('\n');
+            } else if (mode === '404') {
+                root.innerHTML = [
+                    '<section class="aura-card" id="error404Section">',
+                    '  <h1 id="errorHeadline">404 - Page Not Found</h1>',
+                    '  <p id="errorDescription" class="aura-desc">',
+                    '    The requested product or checkout route could not be found on this server.',
+                    '  </p>',
+                    '  <div style="margin-top: 1.5rem; text-align: center;">',
+                    '    <a id="backToHomeLink" class="aura-btn" href="?mode=product" style="background: #457b9d; color: #fff; text-decoration: none; padding: 0.75rem 1.25rem; border-radius: 6px;">',
+                    '      Back to Homepage',
+                    '    </a>',
+                    '  </div>',
+                    '</section>'
+                ].join('\n');
+            } else {
+                root.innerHTML = [
+                    '<section class="aura-card" id="productCatalogSection">',
+                    '  <h1 id="catalogHeadline">Featured Collection</h1>',
+                    '  <p class="aura-desc">Select an available item below to view product details.</p>',
+                    '  <div id="productGrid" style="display: flex; gap: 1.5rem; margin: 1.5rem 0;">',
+                    '    <button id="firstProductCard" class="aura-btn" style="background: #2a9d8f; color: #fff; padding: 1rem 1.5rem;">',
+                    '      Aura Minimalist Watch',
+                    '    </button>',
+                    '  </div>',
+                    '  <div class="aura-status-box" style="margin-top: 1rem; padding: 1rem; background: rgba(0,0,0,0.3); border-radius: 8px;">',
+                    '    Catalog Status: <span id="productSelectedStatus">Ready</span>',
+                    '  </div>',
+                    '  <footer id="recaptchaFooterBadge" style="margin-top: 2rem; opacity: 0.65; font-size: 0.8rem;">',
+                    '    Protected by reCAPTCHA — Privacy &amp; Terms apply.',
+                    '  </footer>',
+                    '</section>'
+                ].join('\n');
+
+                document.getElementById('firstProductCard').addEventListener('click', function () {
+                    document.getElementById('productSelectedStatus').textContent = 'Selected: Aura Minimalist Watch';
+                });
+            }
+        })();
+    </script>
+</body>
+</html>

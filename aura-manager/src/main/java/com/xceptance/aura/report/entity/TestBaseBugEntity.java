@@ -25,6 +25,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import java.util.Locale;
 
 /**
  * JPA entity representing a persistent bug assignment linked to a Test Base variation and environment.
@@ -68,6 +69,12 @@ public class TestBaseBugEntity
     @Column(name = "removed_run_id", length = 80)
     private String removedRunId;
 
+    @Column(name = "severity", length = 32)
+    private String severity = "MAJOR";
+
+    @Column(name = "tag_criteria", length = 1000)
+    private String tagCriteria;
+
     public TestBaseBugEntity()
     {
     }
@@ -89,12 +96,19 @@ public class TestBaseBugEntity
 
     public TestBaseBugEntity(final String variationId, final String bugTicket, final String batchName, final String environment, final Long createdAtMs, final String linkedRunId)
     {
+        this(variationId, bugTicket, batchName, environment, createdAtMs, linkedRunId, "MAJOR", null);
+    }
+
+    public TestBaseBugEntity(final String variationId, final String bugTicket, final String batchName, final String environment, final Long createdAtMs, final String linkedRunId, final String severity, final String tagCriteria)
+    {
         this.variationId = variationId;
         this.bugTicket = bugTicket;
         this.batchName = (batchName != null && !batchName.trim().isEmpty()) ? batchName.trim() : "ALL";
         this.environment = (environment != null && !environment.trim().isEmpty()) ? environment.trim() : "ALL";
         this.createdAtMs = createdAtMs;
         this.linkedRunId = linkedRunId;
+        this.severity = (severity != null && !severity.trim().isEmpty()) ? severity.trim().toUpperCase(Locale.ROOT) : "MAJOR";
+        this.tagCriteria = (tagCriteria != null && !tagCriteria.trim().isEmpty()) ? tagCriteria.trim() : null;
     }
 
     public Long getId()
@@ -185,5 +199,25 @@ public class TestBaseBugEntity
     public void setRemovedRunId(final String removedRunId)
     {
         this.removedRunId = removedRunId;
+    }
+
+    public String getSeverity()
+    {
+        return severity != null ? severity : "MAJOR";
+    }
+
+    public void setSeverity(final String severity)
+    {
+        this.severity = (severity != null && !severity.trim().isEmpty()) ? severity.trim().toUpperCase(Locale.ROOT) : "MAJOR";
+    }
+
+    public String getTagCriteria()
+    {
+        return tagCriteria;
+    }
+
+    public void setTagCriteria(final String tagCriteria)
+    {
+        this.tagCriteria = (tagCriteria != null && !tagCriteria.trim().isEmpty()) ? tagCriteria.trim() : null;
     }
 }

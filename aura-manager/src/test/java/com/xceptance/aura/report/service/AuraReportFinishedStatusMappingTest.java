@@ -222,7 +222,7 @@ public class AuraReportFinishedStatusMappingTest
 
         final ObjectNode nullNode = mapper.createObjectNode();
         final TestExecutionDto nullDto = mapper.treeToValue(nullNode, TestExecutionDto.class);
-        Assertions.assertEquals("PASSED", nullDto.getDisplayStatusKey(), "DTO deserialized without status field defaults to passed-clean");
+        Assertions.assertEquals("RUNNING", nullDto.getDisplayStatusKey(), "DTO deserialized without status field defaults to running");
 
         final TestExecutionDto explicitNullDto = new TestExecutionDto();
         explicitNullDto.setStatus(null);

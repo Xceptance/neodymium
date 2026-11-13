@@ -45,6 +45,7 @@ import org.yaml.snakeyaml.Yaml;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.neodymium.util.Neodymium;
+import org.neodymium.util.TagUtils;
 
 /**
  * Utility class to read and parse YAML test scripts with support for dynamic and static inclusions,
@@ -57,7 +58,8 @@ public class YamlFileReader
     private static final Set<String> ALLOWED_KEYS = Set.of(
         "_meta", "_properties", "_context", "_data", "_beforeAll", "_beforeEach", "_steps",
         "_onSuccessEach", "_onFailureEach", "_afterEach", "_onSuccessAll", "_onFailureAll",
-        "_afterAll", "_include", "_id", "_testId", "_sensitive", "_onSuccess", "_onFailure"
+        "_afterAll", "_include", "_id", "_testId", "_sensitive", "_onSuccess", "_onFailure",
+        "_tags", "tags"
     );
 
     /**
@@ -212,7 +214,8 @@ public class YamlFileReader
                             && !k.equals("after") && !k.equals("_afterEach") && !k.equals("afterAll") && !k.equals("_afterAll")
                             && !k.equals("_onSuccess") && !k.equals("_onSuccessEach") && !k.equals("onSuccessAll") && !k.equals("_onSuccessAll")
                             && !k.equals("_onFailure") && !k.equals("_onFailureEach") && !k.equals("onFailureAll") && !k.equals("_onFailureAll")
-                            && !k.equals("_meta") && !k.equals("_properties") && !k.equals("properties") && !k.equals("_include"))
+                            && !k.equals("_meta") && !k.equals("_properties") && !k.equals("properties") && !k.equals("_include")
+                            && !k.equals("tags") && !k.equals("_tags"))
                         {
                             if (!variables.containsKey(k) && entry.getValue() != null)
                             {
@@ -363,12 +366,17 @@ public class YamlFileReader
                     throw new MalformedPlaybookException("Inclusion depth exceeded maximum of 10. Circular dependency likely.");
                 }
 
+                // Resolve tags (CLI > Dataset > Root)
+                final Object rootTagsObj = rootMap != null ? (rootMap.get("tags") != null ? rootMap.get("tags") : rootMap.get("_tags")) : null;
+                final Object rowTagsObj = variables.get("tags") != null ? variables.get("tags") : variables.get("_tags");
+                final Map<String, List<String>> resolvedTags = TagUtils.resolveTags(rootTagsObj, rowTagsObj);
+
                 // Construct final row dataset map
                 final Map<String, String> finalRow = new LinkedHashMap<>();
                 for (final Map.Entry<String, Object> entry : variables.entrySet())
                 {
                     final String key = entry.getKey();
-                    if ("_properties".equals(key) || "properties".equals(key))
+                    if ("_properties".equals(key) || "properties".equals(key) || "_tags".equals(key) || "tags".equals(key))
                     {
                         continue;
                     }
@@ -385,6 +393,11 @@ public class YamlFileReader
                     {
                         finalRow.put(key, String.valueOf(val));
                     }
+                }
+
+                if (!resolvedTags.isEmpty())
+                {
+                    finalRow.put("tags", GSON.toJson(resolvedTags));
                 }
 
                 serializeStepsBlock(finalRow, "before", beforeEachSteps);

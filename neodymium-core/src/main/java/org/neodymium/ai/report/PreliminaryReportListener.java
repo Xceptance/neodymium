@@ -57,9 +57,13 @@ import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.neodymium.ai.pipeline.StepStats;
+import org.neodymium.ai.prompt.LlmResponseSanitizer;
 import org.neodymium.ai.prompt.VisualRcaResult;
 import org.neodymium.ai.telemetry.MetricsCollector;
+import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.ai.tool.ToolDefinition;
 import org.neodymium.util.Neodymium;
 import org.slf4j.Logger;
@@ -77,6 +81,7 @@ import org.slf4j.LoggerFactory;
 public final class PreliminaryReportListener implements ExecutionListener
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(PreliminaryReportListener.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final SimpleDateFormat FILE_TIMESTAMP_FORMAT = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US);
 
     private final boolean isCustomOutputDirectory;
@@ -387,7 +392,7 @@ public final class PreliminaryReportListener implements ExecutionListener
             {
                 final String pbInstr = pbStep.getInstruction();
                 final String pbRaw = pbStep.getRawInstruction();
-                if (this.currentStep != null)
+                if (this.currentStep != null && !isTerminalCompleted(this.currentStep.getStatus()))
                 {
                     final boolean matchesCurrent = (pbInstr != null && (pbInstr.equals(this.currentStep.getRawInstruction()) || pbInstr.equals(this.currentStep.getInstruction())))
                         || (pbRaw != null && (pbRaw.equals(this.currentStep.getRawInstruction()) || pbRaw.equals(this.currentStep.getInstruction())));
@@ -402,8 +407,9 @@ public final class PreliminaryReportListener implements ExecutionListener
                     for (int i = this.report.getSteps().size() - 1; i >= 0; i--)
                     {
                         final TestExecutionReport.ReportStepEntry rootEntry = this.report.getSteps().get(i);
-                        if ((pbInstr != null && (pbInstr.equals(rootEntry.getRawInstruction()) || pbInstr.equals(rootEntry.getInstruction())))
-                            || (pbRaw != null && (pbRaw.equals(rootEntry.getRawInstruction()) || pbRaw.equals(rootEntry.getInstruction()))))
+                        if (!isTerminalCompleted(rootEntry.getStatus())
+                            && ((pbInstr != null && (pbInstr.equals(rootEntry.getRawInstruction()) || pbInstr.equals(rootEntry.getInstruction())))
+                                || (pbRaw != null && (pbRaw.equals(rootEntry.getRawInstruction()) || pbRaw.equals(rootEntry.getInstruction())))))
                         {
                             targetStep = rootEntry;
                             break;
@@ -411,8 +417,9 @@ public final class PreliminaryReportListener implements ExecutionListener
                         for (int j = rootEntry.getSubSteps().size() - 1; j >= 0; j--)
                         {
                             final TestExecutionReport.ReportStepEntry sub = rootEntry.getSubSteps().get(j);
-                            if ((pbInstr != null && (pbInstr.equals(sub.getRawInstruction()) || pbInstr.equals(sub.getInstruction())))
-                                || (pbRaw != null && (pbRaw.equals(sub.getRawInstruction()) || pbRaw.equals(sub.getInstruction()))))
+                            if (!isTerminalCompleted(sub.getStatus())
+                                && ((pbInstr != null && (pbInstr.equals(sub.getRawInstruction()) || pbInstr.equals(sub.getInstruction())))
+                                    || (pbRaw != null && (pbRaw.equals(sub.getRawInstruction()) || pbRaw.equals(sub.getInstruction())))))
                             {
                                 targetStep = sub;
                                 break;
@@ -437,6 +444,10 @@ public final class PreliminaryReportListener implements ExecutionListener
 
             if (targetStep != null)
             {
+                if (isTerminalCompleted(targetStep.getStatus()))
+                {
+                    return;
+                }
                 targetStep.setStatus(status != null ? status.name() : "SUCCESS");
                 if (status == PlaybookStepStatus.FAILED && !targetStep.isOptional())
                 {
@@ -480,6 +491,10 @@ public final class PreliminaryReportListener implements ExecutionListener
                     if (pbStep.getFailureReason() != null)
                     {
                         targetStep.setFailureReason(pbStep.getFailureReason());
+                    }
+                    if (pbStep.getNotRunReason() != null)
+                    {
+                        targetStep.setNotRunReason(pbStep.getNotRunReason());
                     }
                     if (pbStep.getSsimScore() != null)
                     {
@@ -762,7 +777,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                             failureEncountered = true;
                             continue;
                         }
-                        if ("SKIPPED".equalsIgnoreCase(sub.getStatus()))
+                        if ("SKIPPED".equalsIgnoreCase(sub.getStatus()) || sub.isNotRun())
                         {
                             continue;
                         }
@@ -792,7 +807,8 @@ public final class PreliminaryReportListener implements ExecutionListener
                             }
                             else
                             {
-                                sub.setStatus("SKIPPED");
+                                sub.setStatus("NOT RUN");
+                                sub.setNotRunReason("Not executed because of failure in step #" + (targetStep.getStepIndex() + 1));
                             }
                         }
                         else
@@ -820,7 +836,11 @@ public final class PreliminaryReportListener implements ExecutionListener
                             else if (sub.getStatus() == null || "PENDING".equalsIgnoreCase(sub.getStatus()) || "RUNNING".equalsIgnoreCase(sub.getStatus()))
                             {
                                 final boolean hasLaterBug = targetStep.getSubSteps().stream().anyMatch(TestExecutionReport.ReportStepEntry::isBug);
-                                sub.setStatus((isStepSuccess || hasLaterBug) ? "SUCCESS" : "SKIPPED");
+                                sub.setStatus((isStepSuccess || hasLaterBug) ? "SUCCESS" : "NOT RUN");
+                                if (!isStepSuccess && !hasLaterBug)
+                                {
+                                    sub.setNotRunReason("Not executed because of failure in step #" + (targetStep.getStepIndex() + 1));
+                                }
                             }
                         }
                     }
@@ -994,7 +1014,58 @@ public final class PreliminaryReportListener implements ExecutionListener
             if (llmReceived.getResponse() != null)
             {
                 callEntry.setModelName(llmReceived.getResponse().modelName());
+                if (llmReceived.getResponse().hasThinking())
+                {
+                    callEntry.setThinking(llmReceived.getResponse().thinking().trim());
+                }
+                else if (llmReceived.getResponse().hasToolCalls())
+                {
+                    for (final ToolCall tc : llmReceived.getResponse().toolCalls())
+                    {
+                        if ("complete_step".equals(tc.toolName()) && tc.arguments() != null && tc.arguments().hasNonNull("summary"))
+                        {
+                            final String s = tc.arguments().path("summary").asText("").trim();
+                            if (!s.isBlank())
+                            {
+                                callEntry.setThinking(s);
+                                break;
+                            }
+                        }
+                    }
+                }
+
                 final String content = llmReceived.getResponse().content();
+                if (callEntry.getThinking() == null && content != null && !content.isBlank())
+                {
+                    try
+                    {
+                        final String json = LlmResponseSanitizer.extractJson(content);
+                        if (!json.isBlank())
+                        {
+                            final JsonNode node = OBJECT_MAPPER.readTree(json);
+                            if (node.hasNonNull("thought") && !node.path("thought").asText().isBlank())
+                            {
+                                callEntry.setThinking(node.path("thought").asText().trim());
+                            }
+                            else if (node.hasNonNull("reasoning") && !node.path("reasoning").asText().isBlank())
+                            {
+                                callEntry.setThinking(node.path("reasoning").asText().trim());
+                            }
+                            else if (node.hasNonNull("actions") && node.path("actions").isArray() && !node.path("actions").isEmpty())
+                            {
+                                final JsonNode firstAction = node.path("actions").get(0);
+                                if (firstAction.hasNonNull("reasoning") && !firstAction.path("reasoning").asText().isBlank())
+                                {
+                                    callEntry.setThinking(firstAction.path("reasoning").asText().trim());
+                                }
+                            }
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
+
                 if (content != null && !content.isBlank())
                 {
                     if (llmReceived.getResponse().hasToolCalls())
@@ -1228,7 +1299,7 @@ public final class PreliminaryReportListener implements ExecutionListener
         return false;
     }
 
-    private void resolveUnfinishedSteps()
+    void resolveUnfinishedSteps()
     {
         final List<TestExecutionReport.ReportStepEntry> rootSteps = this.report.getSteps();
         if (rootSteps.isEmpty())
@@ -1289,6 +1360,9 @@ public final class PreliminaryReportListener implements ExecutionListener
                 }
             }
 
+            final TestExecutionReport.ReportStepEntry failedLeaf = leafSteps.get(failedIndex);
+            final String failedStepLabel = resolveStepDisplayLabel(failedLeaf, rootSteps, failedIndex);
+
             for (int i = 0; i < leafSteps.size(); i++)
             {
                 final TestExecutionReport.ReportStepEntry leaf = leafSteps.get(i);
@@ -1320,10 +1394,15 @@ public final class PreliminaryReportListener implements ExecutionListener
                 else
                 {
                     // Steps after the failure were not executed
-                    if ("RUNNING".equalsIgnoreCase(leaf.getStatus()) || "PENDING".equalsIgnoreCase(leaf.getStatus()) || leaf.getStatus() == null)
+                    if ("RUNNING".equalsIgnoreCase(leaf.getStatus()) || "PENDING".equalsIgnoreCase(leaf.getStatus())
+                        || leaf.isNotRun() || leaf.getStatus() == null)
                     {
-                        leaf.setStatus("SKIPPED");
+                        leaf.setStatus("NOT RUN");
                         leaf.setFailureReason(null);
+                        if (leaf.getNotRunReason() == null || leaf.getNotRunReason().isBlank())
+                        {
+                            leaf.setNotRunReason("Not executed because step " + failedStepLabel + " failed.");
+                        }
                     }
                 }
             }
@@ -1334,6 +1413,55 @@ public final class PreliminaryReportListener implements ExecutionListener
         {
             resolveParentStepStatus(root);
         }
+    }
+
+    private static boolean isTerminalCompleted(final String status)
+    {
+        if (status == null || status.isBlank())
+        {
+            return false;
+        }
+        final String upper = status.trim().toUpperCase();
+        return "SUCCESS".equals(upper)
+            || "PASSED".equals(upper)
+            || "FAILED".equals(upper)
+            || "HEALED".equals(upper)
+            || "SKIPPED".equals(upper)
+            || "NOT RUN".equals(upper)
+            || "NOT_RUN".equals(upper);
+    }
+
+    private String resolveStepDisplayLabel(final TestExecutionReport.ReportStepEntry leaf, final List<TestExecutionReport.ReportStepEntry> rootSteps, final int leafIndex)
+    {
+        if (leaf != null)
+        {
+            for (int r = 0; r < rootSteps.size(); r++)
+            {
+                final TestExecutionReport.ReportStepEntry root = rootSteps.get(r);
+                if (root == leaf)
+                {
+                    return "#" + (r + 1);
+                }
+                for (int s = 0; s < root.getSubSteps().size(); s++)
+                {
+                    if (root.getSubSteps().get(s) == leaf)
+                    {
+                        return "#" + (r + 1) + "." + (s + 1);
+                    }
+                }
+            }
+            if (leaf.getParent() != null)
+            {
+                final int parentIdx = Math.max(0, leaf.getParent().getStepIndex());
+                final int subIdx = Math.max(0, leaf.getStepIndex());
+                return "#" + (parentIdx + 1) + "." + (subIdx + 1);
+            }
+            if (leaf.getStepIndex() >= 0)
+            {
+                return "#" + (leaf.getStepIndex() + 1);
+            }
+        }
+        return "#" + (leafIndex + 1);
     }
 
     private void collectLeafSteps(final TestExecutionReport.ReportStepEntry entry, final List<TestExecutionReport.ReportStepEntry> leafList)
@@ -1366,7 +1494,9 @@ public final class PreliminaryReportListener implements ExecutionListener
         boolean anyFailed = false;
         boolean allSuccess = true;
         boolean allSkipped = true;
+        boolean allNotRun = true;
         String firstFailedReason = null;
+        String firstNotRunReason = null;
 
         for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
         {
@@ -1380,6 +1510,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                     anyFailed = true;
                     allSuccess = false;
                     allSkipped = false;
+                    allNotRun = false;
                     if (firstFailedReason == null && sub.getFailureReason() != null)
                     {
                         firstFailedReason = sub.getFailureReason();
@@ -1388,20 +1519,33 @@ public final class PreliminaryReportListener implements ExecutionListener
                 else
                 {
                     allSkipped = false;
+                    allNotRun = false;
                 }
             }
             else if ("SUCCESS".equalsIgnoreCase(subStatus) || "PASSED".equalsIgnoreCase(subStatus) || "HEALED".equalsIgnoreCase(subStatus))
             {
                 allSkipped = false;
+                allNotRun = false;
             }
             else if ("SKIPPED".equalsIgnoreCase(subStatus))
             {
                 allSuccess = false;
+                allNotRun = false;
+            }
+            else if ("NOT RUN".equalsIgnoreCase(subStatus) || "NOT_RUN".equalsIgnoreCase(subStatus) || "UNREACHED".equalsIgnoreCase(subStatus))
+            {
+                allSuccess = false;
+                allSkipped = false;
+                if (firstNotRunReason == null && sub.getNotRunReason() != null)
+                {
+                    firstNotRunReason = sub.getNotRunReason();
+                }
             }
             else
             {
                 allSuccess = false;
                 allSkipped = false;
+                allNotRun = false;
             }
         }
 
@@ -1431,19 +1575,29 @@ public final class PreliminaryReportListener implements ExecutionListener
                 }
             }
         }
+        else if (allNotRun)
+        {
+            step.setStatus("NOT RUN");
+            step.setFailureReason(null);
+            step.setNotRunReason(firstNotRunReason);
+        }
         else if (allSkipped)
         {
             step.setStatus("SKIPPED");
             step.setFailureReason(null);
         }
-        else if (allSuccess)
+        else if (allSuccess || (firstNotRunReason == null && !anyFailed))
         {
             step.setStatus("SUCCESS");
             step.setFailureReason(null);
         }
         else
         {
-            step.setStatus(this.report.isSuccess() ? "SUCCESS" : "SKIPPED");
+            step.setStatus(this.report.isSuccess() ? "SUCCESS" : "NOT RUN");
+            if (!this.report.isSuccess() && step.getNotRunReason() == null)
+            {
+                step.setNotRunReason(firstNotRunReason);
+            }
         }
 
         if (step.getDurationMs() <= 0)
@@ -1723,7 +1877,7 @@ public final class PreliminaryReportListener implements ExecutionListener
         return value;
     }
 
-    private void recalculateMetrics()
+    void recalculateMetrics()
     {
         final TestExecutionReport.ReportMetrics m = this.report.getMetrics();
         final List<TestExecutionReport.ReportStepEntry> steps = this.report.getSteps();
@@ -1732,6 +1886,7 @@ public final class PreliminaryReportListener implements ExecutionListener
         int healed = 0;
         int failed = 0;
         int skipped = 0;
+        int notRun = 0;
 
         for (final TestExecutionReport.ReportStepEntry step : steps)
         {
@@ -1751,10 +1906,15 @@ public final class PreliminaryReportListener implements ExecutionListener
             {
                 skipped++;
             }
+            else if ("NOT RUN".equals(st) || "NOT_RUN".equals(st) || "UNREACHED".equals(st))
+            {
+                notRun++;
+            }
         }
         m.setHealedSteps(healed);
         m.setFailedSteps(failed);
         m.setSkippedSteps(skipped);
+        m.setNotRunSteps(notRun);
 
         final ExecutionContext ctx = ExecutionContext.getActiveContext();
         if (ctx != null)

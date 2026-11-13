@@ -18,10 +18,13 @@
  */
 package org.neodymium.ai.executor.selenide.plugins;
 
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
+import org.openqa.selenium.JavascriptException;
+import org.openqa.selenium.StaleElementReferenceException;
 import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebElement;
 import org.slf4j.Logger;
@@ -51,6 +54,120 @@ import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 public final class AssertAction implements BrowserActionPlugin
 {
     private static final Logger LOG = LoggerFactory.getLogger(AssertAction.class);
+
+    /**
+     * Shared condition asserting that an element is focused according to either WebDriver activeElement
+     * or document activeElement / :focus pseudo-class, with automatic polling until timeout.
+     */
+    public static final WebElementCondition FOCUSED = new WebElementCondition("focused")
+    {
+        @Override
+        public CheckResult check(final Driver driver, final WebElement element)
+        {
+            try
+            {
+                final WebElement active = driver.switchTo().activeElement();
+                if (element.equals(active))
+                {
+                    return new CheckResult(true, "element matches activeElement");
+                }
+            }
+            catch (final StaleElementReferenceException e)
+            {
+                throw e;
+            }
+            catch (final Exception ignored)
+            {
+            }
+
+            try
+            {
+                final Object result = driver.executeJavaScript(
+                        "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
+                        element);
+                if (Boolean.TRUE.equals(result))
+                {
+                    return new CheckResult(true, "element is focused in document");
+                }
+            }
+            catch (final StaleElementReferenceException e)
+            {
+                throw e;
+            }
+            catch (final JavascriptException e)
+            {
+                final String msg = e.getMessage() != null ? e.getMessage().toLowerCase(Locale.ROOT) : "";
+                if (e.getCause() instanceof StaleElementReferenceException
+                        || msg.contains("stale")
+                        || msg.contains("not attached"))
+                {
+                    throw new StaleElementReferenceException(e.getMessage(), e);
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+
+            return new CheckResult(false, "not focused");
+        }
+    };
+
+    /**
+     * Shared condition asserting that an element is not focused according to both WebDriver activeElement
+     * and document activeElement / :focus pseudo-class, with automatic polling until timeout.
+     */
+    public static final WebElementCondition UNFOCUSED = new WebElementCondition("unfocused")
+    {
+        @Override
+        public CheckResult check(final Driver driver, final WebElement element)
+        {
+            try
+            {
+                final WebElement active = driver.switchTo().activeElement();
+                if (element.equals(active))
+                {
+                    return new CheckResult(false, "element matches activeElement");
+                }
+            }
+            catch (final StaleElementReferenceException e)
+            {
+                throw e;
+            }
+            catch (final Exception ignored)
+            {
+            }
+
+            try
+            {
+                final Object result = driver.executeJavaScript(
+                        "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
+                        element);
+                if (Boolean.TRUE.equals(result))
+                {
+                    return new CheckResult(false, "element is focused in document");
+                }
+            }
+            catch (final StaleElementReferenceException e)
+            {
+                throw e;
+            }
+            catch (final JavascriptException e)
+            {
+                final String msg = e.getMessage() != null ? e.getMessage().toLowerCase(Locale.ROOT) : "";
+                if (e.getCause() instanceof StaleElementReferenceException
+                        || msg.contains("stale")
+                        || msg.contains("not attached"))
+                {
+                    throw new StaleElementReferenceException(e.getMessage(), e);
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+
+            return new CheckResult(true, "unfocused");
+        }
+    };
 
     /**
      * Constructs an AssertAction.
@@ -172,25 +289,13 @@ public final class AssertAction implements BrowserActionPlugin
                 }
                 case "ASSERT_FOCUSED" ->
                 {
-                    final Boolean isFocused = Selenide.executeJavaScript(
-                            "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
-                            element);
-                    if (!Boolean.TRUE.equals(isFocused))
-                    {
-                        element.shouldBe(Condition.focused);
-                    }
+                    element.should(FOCUSED);
                     LOG.debug("   ✅ Element focused: {}", action);
                     return;
                 }
                 case "ASSERT_UNFOCUSED" ->
                 {
-                    final Boolean isFocused = Selenide.executeJavaScript(
-                            "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
-                            element);
-                    if (Boolean.TRUE.equals(isFocused))
-                    {
-                        element.shouldNotBe(Condition.focused);
-                    }
+                    element.should(UNFOCUSED);
                     LOG.debug("   ✅ Element unfocused: {}", action);
                     return;
                 }
@@ -551,6 +656,21 @@ public final class AssertAction implements BrowserActionPlugin
     private void executeTextAssertion(final SelenideElement element, final Action action, final String expected)
     {
         final String matchText = expected != null ? expected : "";
+        if (matchText.isEmpty())
+        {
+            if (action.isNegated())
+            {
+                element.shouldNotBe(Condition.empty);
+                LOG.debug("   ✅ Text Non-Empty Assertion passed for: '{}'", action);
+            }
+            else
+            {
+                element.shouldBe(Condition.empty);
+                LOG.debug("   ✅ Text Empty Assertion passed for: '{}'", action);
+            }
+            return;
+        }
+
         final WebElementCondition cond;
         if (action.isRegex())
         {
@@ -579,18 +699,6 @@ public final class AssertAction implements BrowserActionPlugin
 
     private void executeLegacyAssert(final SelenideElement element, final Action action, final String expected)
     {
-        final boolean isAbsenceCheck = "hidden".equalsIgnoreCase(expected) || "[hidden]".equalsIgnoreCase(expected)
-                || "absent".equalsIgnoreCase(expected) || "[absent]".equalsIgnoreCase(expected)
-                || "not_exist".equalsIgnoreCase(expected) || "[not_exist]".equalsIgnoreCase(expected)
-                || "not_exists".equalsIgnoreCase(expected) || "[not_exists]".equalsIgnoreCase(expected)
-                || "invisible".equalsIgnoreCase(expected) || "[invisible]".equalsIgnoreCase(expected);
-
-        if (isAbsenceCheck)
-        {
-            element.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
-            return;
-        }
-
         if (expected == null || expected.isEmpty())
         {
             element.should(Condition.exist);
@@ -598,173 +706,264 @@ public final class AssertAction implements BrowserActionPlugin
             return;
         }
 
-        // Focus assertion
-        if ("focused".equalsIgnoreCase(expected) || "[focused]".equalsIgnoreCase(expected))
+        final String normalized = BrowserToolProvider.normalizeElementState(expected);
+
+        switch (normalized)
         {
-            final Boolean isFocused = Selenide.executeJavaScript(
-                    "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
-                    element);
-            if (!Boolean.TRUE.equals(isFocused))
+            case "focused":
             {
-                element.shouldBe(Condition.focused);
+                element.should(FOCUSED);
+                break;
             }
-        }
-        // Visibility assertion
-        else if ("visible".equalsIgnoreCase(expected) || "[visible]".equalsIgnoreCase(expected) || "present".equalsIgnoreCase(expected) || "[present]".equalsIgnoreCase(expected))
-        {
-            element.shouldBe(Condition.visible);
-        }
-        // Checked assertion
-        else if ("checked".equalsIgnoreCase(expected) || "[checked]".equalsIgnoreCase(expected))
-        {
-            element.shouldBe(Condition.checked);
-        }
-        // Unchecked assertion
-        else if ("unchecked".equalsIgnoreCase(expected) || "[unchecked]".equalsIgnoreCase(expected) || "not_checked".equalsIgnoreCase(expected) || "[not_checked]".equalsIgnoreCase(expected))
-        {
-            element.shouldNotBe(Condition.checked);
-        }
-        // Disabled assertion
-        else if ("disabled".equalsIgnoreCase(expected) || "[disabled]".equalsIgnoreCase(expected))
-        {
-            element.shouldBe(Condition.disabled);
-        }
-        // Enabled assertion
-        else if ("enabled".equalsIgnoreCase(expected) || "[enabled]".equalsIgnoreCase(expected))
-        {
-            element.shouldBe(Condition.enabled);
-        }
-        // Selected assertion
-        else if ("selected".equalsIgnoreCase(expected) || "[selected]".equalsIgnoreCase(expected))
-        {
-            if ("SELECT".equalsIgnoreCase(element.getTagName()))
+            case "unfocused":
             {
-                element.getSelectedOption().shouldBe(Condition.exist);
+                element.should(UNFOCUSED);
+                break;
             }
-            else
+            case "visible":
             {
-                element.shouldBe(Condition.selected);
+                element.shouldBe(Condition.visible);
+                break;
             }
-        }
-        // Readonly assertion
-        else if ("readonly".equalsIgnoreCase(expected) || "[readonly]".equalsIgnoreCase(expected) || "read_only".equalsIgnoreCase(expected) || "[read_only]".equalsIgnoreCase(expected))
-        {
-            element.shouldBe(Condition.readonly);
-        }
-        // Editable assertion
-        else if ("editable".equalsIgnoreCase(expected) || "[editable]".equalsIgnoreCase(expected))
-        {
-            element.shouldBe(Condition.editable);
-        }
-        // Checkbox/radio boolean state shortcut
-        else if (("true".equalsIgnoreCase(expected) || "false".equalsIgnoreCase(expected)) && isCheckboxOrRadio(element))
-        {
-            if ("true".equalsIgnoreCase(expected))
+            case "hidden", "absent":
+            {
+                element.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
+                break;
+            }
+            case "exists":
+            {
+                element.should(Condition.exist);
+                break;
+            }
+            case "checked":
             {
                 element.shouldBe(Condition.checked);
+                break;
             }
-            else
+            case "unchecked":
             {
                 element.shouldNotBe(Condition.checked);
+                break;
             }
-        }
-        // Content assertions
-        else
-        {
-            final WebElementCondition cond;
-            if (action.isRegex())
+            case "disabled":
             {
-                cond = new RegexMatch(expected);
+                element.shouldBe(Condition.disabled);
+                break;
             }
-            else
+            case "enabled":
             {
-                final Matcher attributeMatcher = Pattern.compile("^([a-zA-Z0-9_-]+)=[\"']?(.*?)[\"']?$").matcher(expected);
-                if (attributeMatcher.matches())
+                element.shouldBe(Condition.enabled);
+                break;
+            }
+            case "selected":
+            {
+                if ("SELECT".equalsIgnoreCase(element.getTagName()))
                 {
-                    final String rawAttrName = attributeMatcher.group(1);
-                    final String rawAttrValue = attributeMatcher.group(2);
-                    final String attrName = rawAttrName.toLowerCase();
-                    final String attrValue = rawAttrValue.toLowerCase();
-
-                    if ("checked".equals(attrName))
-                    {
-                        if ("false".equals(attrValue))
-                        {
-                            element.shouldNotBe(Condition.checked);
-                        }
-                        else
-                        {
-                            element.shouldBe(Condition.checked);
-                        }
-                        return;
-                    }
-                    if ("disabled".equals(attrName))
-                    {
-                        if ("false".equals(attrValue))
-                        {
-                            element.shouldBe(Condition.enabled);
-                        }
-                        else
-                        {
-                            element.shouldBe(Condition.disabled);
-                        }
-                        return;
-                    }
-                    if ("enabled".equals(attrName))
-                    {
-                        if ("false".equals(attrValue))
-                        {
-                            element.shouldBe(Condition.disabled);
-                        }
-                        else
-                        {
-                            element.shouldBe(Condition.enabled);
-                        }
-                        return;
-                    }
-                    if ("selected".equals(attrName))
-                    {
-                        if ("false".equals(attrValue))
-                        {
-                            element.shouldNotBe(Condition.selected);
-                        }
-                        else
-                        {
-                            element.shouldBe(Condition.selected);
-                        }
-                        return;
-                    }
-                    if ("readonly".equals(attrName) || "read_only".equals(attrName))
-                    {
-                        if ("false".equals(attrValue))
-                        {
-                            element.shouldBe(Condition.editable);
-                        }
-                        else
-                        {
-                            element.shouldBe(Condition.readonly);
-                        }
-                        return;
-                    }
-
-                    cond = Condition.or("Assertion for " + expected,
-                            Condition.attribute(rawAttrName, rawAttrValue),
-                            Condition.exactText(expected),
-                            Condition.partialText(expected),
-                            Condition.value(expected),
-                            new PartialTextContent(expected));
+                    element.getSelectedOption().shouldBe(Condition.exist);
                 }
                 else
                 {
-                    cond = Condition.or("Assertion for " + expected,
-                            Condition.exactText(expected),
-                            Condition.partialText(expected),
-                            Condition.value(expected),
-                            new PartialTextContent(expected),
-                            new AnyAttributeContains(expected));
+                    element.shouldBe(Condition.selected);
+                }
+                break;
+            }
+            case "unselected":
+            {
+                if ("SELECT".equalsIgnoreCase(element.getTagName()))
+                {
+                    element.getSelectedOption().shouldNotBe(Condition.exist);
+                }
+                else
+                {
+                    element.shouldNotBe(Condition.selected);
+                }
+                break;
+            }
+            case "readonly":
+            {
+                if (action.isNegated())
+                {
+                    element.shouldNotBe(Condition.readonly);
+                }
+                else
+                {
+                    element.shouldBe(Condition.readonly);
+                }
+                break;
+            }
+            case "not_readonly":
+            {
+                if (action.isNegated())
+                {
+                    element.shouldBe(Condition.readonly);
+                }
+                else
+                {
+                    element.shouldNotBe(Condition.readonly);
+                }
+                break;
+            }
+            case "editable":
+            {
+                if (action.isNegated())
+                {
+                    element.shouldNotBe(Condition.editable);
+                }
+                else
+                {
+                    element.shouldBe(Condition.editable);
+                }
+                break;
+            }
+            case "not_editable":
+            {
+                if (action.isNegated())
+                {
+                    element.shouldBe(Condition.editable);
+                }
+                else
+                {
+                    element.shouldNotBe(Condition.editable);
+                }
+                break;
+            }
+            case "empty":
+            {
+                if (action.isNegated())
+                {
+                    element.shouldNotBe(Condition.empty);
+                }
+                else
+                {
+                    element.shouldBe(Condition.empty);
+                }
+                break;
+            }
+            case "not_empty":
+            {
+                if (action.isNegated())
+                {
+                    element.shouldBe(Condition.empty);
+                }
+                else
+                {
+                    element.shouldNotBe(Condition.empty);
+                }
+                break;
+            }
+            default:
+            {
+                // Checkbox/radio boolean state shortcut
+                if (("true".equalsIgnoreCase(expected) || "false".equalsIgnoreCase(expected)) && isCheckboxOrRadio(element))
+                {
+                    if ("true".equalsIgnoreCase(expected))
+                    {
+                        element.shouldBe(Condition.checked);
+                    }
+                    else
+                    {
+                        element.shouldNotBe(Condition.checked);
+                    }
+                }
+                // Content assertions
+                else
+                {
+                    final WebElementCondition cond;
+                    if (action.isRegex())
+                    {
+                        cond = new RegexMatch(expected);
+                    }
+                    else
+                    {
+                        final Matcher attributeMatcher = Pattern.compile("^([a-zA-Z0-9_-]+)=[\"']?(.*?)[\"']?$").matcher(expected);
+                        if (attributeMatcher.matches())
+                        {
+                            final String rawAttrName = attributeMatcher.group(1);
+                            final String rawAttrValue = attributeMatcher.group(2);
+                            final String attrName = rawAttrName.toLowerCase();
+                            final String attrValue = rawAttrValue.toLowerCase();
+
+                            if ("checked".equals(attrName))
+                            {
+                                if ("false".equals(attrValue))
+                                {
+                                    element.shouldNotBe(Condition.checked);
+                                }
+                                else
+                                {
+                                    element.shouldBe(Condition.checked);
+                                }
+                                return;
+                            }
+                            if ("disabled".equals(attrName))
+                            {
+                                if ("false".equals(attrValue))
+                                {
+                                    element.shouldBe(Condition.enabled);
+                                }
+                                else
+                                {
+                                    element.shouldBe(Condition.disabled);
+                                }
+                                return;
+                            }
+                            if ("enabled".equals(attrName))
+                            {
+                                if ("false".equals(attrValue))
+                                {
+                                    element.shouldBe(Condition.disabled);
+                                }
+                                else
+                                {
+                                    element.shouldBe(Condition.enabled);
+                                }
+                                return;
+                            }
+                            if ("selected".equals(attrName))
+                            {
+                                if ("false".equals(attrValue))
+                                {
+                                    element.shouldNotBe(Condition.selected);
+                                }
+                                else
+                                {
+                                    element.shouldBe(Condition.selected);
+                                }
+                                return;
+                            }
+                            if ("readonly".equals(attrName) || "read_only".equals(attrName))
+                            {
+                                if ("false".equals(attrValue))
+                                {
+                                    element.shouldBe(Condition.editable);
+                                }
+                                else
+                                {
+                                    element.shouldBe(Condition.readonly);
+                                }
+                                return;
+                            }
+
+                            cond = Condition.or("Assertion for " + expected,
+                                    Condition.attribute(rawAttrName, rawAttrValue),
+                                    Condition.exactText(expected),
+                                    Condition.partialText(expected),
+                                    Condition.value(expected),
+                                    new PartialTextContent(expected));
+                        }
+                        else
+                        {
+                            cond = Condition.or("Assertion for " + expected,
+                                    Condition.exactText(expected),
+                                    Condition.partialText(expected),
+                                    Condition.value(expected),
+                                    new PartialTextContent(expected),
+                                    new AnyAttributeContains(expected));
+                        }
+                    }
+                    element.should(cond);
                 }
             }
-            element.should(cond);
         }
         LOG.debug("   ✅ Legacy Assertion passed for: '{}'", expected);
     }
@@ -1030,6 +1229,12 @@ public final class AssertAction implements BrowserActionPlugin
                 case "unfocused" -> "focused";
                 case "exists" -> "absent";
                 case "absent" -> "exists";
+                case "editable" -> "not_editable";
+                case "not_editable" -> "editable";
+                case "readonly" -> "not_readonly";
+                case "not_readonly" -> "readonly";
+                case "empty" -> "not_empty";
+                case "not_empty" -> "empty";
                 default -> normalized;
             } : normalized;
 
@@ -1040,7 +1245,9 @@ public final class AssertAction implements BrowserActionPlugin
                 case "enabled" -> element.shouldBe(Condition.enabled);
                 case "disabled" -> element.shouldBe(Condition.disabled);
                 case "editable" -> element.shouldBe(Condition.editable);
+                case "not_editable" -> element.shouldNotBe(Condition.editable);
                 case "readonly" -> element.shouldBe(Condition.readonly);
+                case "not_readonly" -> element.shouldNotBe(Condition.readonly);
                 case "checked" -> element.shouldBe(Condition.checked);
                 case "unchecked" -> element.shouldNotBe(Condition.checked);
                 case "selected" ->
@@ -1065,29 +1272,13 @@ public final class AssertAction implements BrowserActionPlugin
                         element.shouldNotBe(Condition.selected);
                     }
                 }
-                case "focused" ->
-                {
-                    final Boolean isFocused = Selenide.executeJavaScript(
-                            "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
-                            element);
-                    if (!Boolean.TRUE.equals(isFocused))
-                    {
-                        element.shouldBe(Condition.focused);
-                    }
-                }
-                case "unfocused" ->
-                {
-                    final Boolean isFocused = Selenide.executeJavaScript(
-                            "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
-                            element);
-                    if (Boolean.TRUE.equals(isFocused))
-                    {
-                        element.shouldNotBe(Condition.focused);
-                    }
-                }
+                case "focused" -> element.should(FOCUSED);
+                case "unfocused" -> element.should(UNFOCUSED);
                 case "exists" -> element.should(Condition.exist);
                 case "absent" -> element.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
-                default -> throw new AssertionError("Unsupported element state assertion: '" + trimmed + "'. Allowed states: visible, hidden, enabled, disabled, editable, readonly, checked, unchecked, selected, unselected, focused, unfocused, exists, absent.");
+                case "empty" -> element.shouldBe(Condition.empty);
+                case "not_empty" -> element.shouldNotBe(Condition.empty);
+                default -> throw new AssertionError("Unsupported element state assertion: '" + trimmed + "'. Allowed states: visible, hidden, enabled, disabled, editable, not_editable, readonly, not_readonly, checked, unchecked, selected, unselected, focused, unfocused, exists, absent, empty, not_empty.");
             }
             LOG.debug("   ✅ Element satisfied state '{}': {}", state, action);
         }

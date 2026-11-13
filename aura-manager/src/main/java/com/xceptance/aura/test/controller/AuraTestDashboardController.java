@@ -64,7 +64,7 @@ public class AuraTestDashboardController
 
     @GetMapping(
     {
-      "/", "/manager", "/aura-test-manager", "/dashboard"
+      "/playbooks", "/manager", "/aura-test-manager", "/dashboard"
     })
     public String renderDashboard(
         @RequestHeader(value = "HX-Request", required = false) final String hxRequest,
@@ -117,6 +117,7 @@ public class AuraTestDashboardController
         model.addAttribute("selectedKeys", queueController.getSelectedQueueKeys());
         model.addAttribute("selectedFileKeys", queueController.getFullySelectedFileKeys(testFiles));
         model.addAttribute("partiallySelectedFileKeys", queueController.getPartiallySelectedFileKeys(testFiles));
+        model.addAttribute("availableTags", AuraFileService.extractAvailableTestTags(testFiles));
         model.addAttribute("folderSelectionStatesJson", queueController.getFolderSelectionStatesJson());
         model.addAttribute("folderTotalDatasetsJson", queueController.getFolderTotalDatasetsJson());
         model.addAttribute("selectedBrowser", queueController.getSelectedBrowser());
@@ -130,6 +131,7 @@ public class AuraTestDashboardController
         model.addAttribute("browserGroups", queueController.getGroupedBrowserProfiles(queueController.getGlobalBrowserProfiles()));
         model.addAttribute("totalRuns", queueController.getTotalExecutionRuns());
         model.addAttribute("queueController", queueController);
+        model.addAttribute("runTags", queueController.getRunTags());
 
         final List<ChatSessionDto> chatSessions = sessionService != null ? sessionService.getSessions() : List.of();
         final String currentSessionId = chatSessions.isEmpty() ? "" : chatSessions.get(0).id;
@@ -207,10 +209,13 @@ public class AuraTestDashboardController
             model.addAttribute("yamlFiles", testFiles);
         }
 
-        final String activeRunId = queueController.getCurrentRunId();
-        model.addAttribute("activeRunId", activeRunId != null ? activeRunId : "");
-        model.addAttribute("activeRunStatus", running ? "running" : "finished");
-        model.addAttribute("activeRunReportUrl", (activeRunId != null && !activeRunId.isEmpty()) ? "/run-report?runId=" + activeRunId : "/report");
+        if (!model.containsAttribute("activeRunId") || (model.getAttribute("activeRunId") != null && ((String) model.getAttribute("activeRunId")).isEmpty()))
+        {
+            final String activeRunId = queueController.getCurrentRunId();
+            model.addAttribute("activeRunId", activeRunId != null ? activeRunId : "");
+            model.addAttribute("activeRunStatus", running ? "running" : "finished");
+            model.addAttribute("activeRunReportUrl", (activeRunId != null && !activeRunId.isEmpty()) ? "/run-report?runId=" + activeRunId : "/");
+        }
 
         if (running)
         {

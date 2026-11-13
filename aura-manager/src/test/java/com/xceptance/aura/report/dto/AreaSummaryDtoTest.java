@@ -281,4 +281,96 @@ public class AreaSummaryDtoTest
         assertEquals("25.00 75.00", areaSummary.getFixedAiDashArray());
         assertEquals("-25.00", areaSummary.getFixedAiDashOffset());
     }
+
+    @Test
+    public void testSubAreaAggregationAndHierarchy()
+    {
+        final TestExecutionDto exec1 = new TestExecutionDto();
+        exec1.setStatus("passed");
+
+        final TestClassSummaryDto classSummary = new TestClassSummaryDto(
+            "MyTest",
+            "class-mytest",
+            "Search",
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            List.of(exec1)
+        );
+
+        final SubAreaSummaryDto subAreaSummary = new SubAreaSummaryDto(
+            "@Browsing",
+            "subarea-search-browsing",
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            List.of(classSummary)
+        );
+
+        final AreaSummaryDto areaSummary = new AreaSummaryDto(
+            "@Search",
+            "area-search",
+            "Search Area",
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            List.of(classSummary),
+            List.of(subAreaSummary)
+        );
+
+        assertTrue(areaSummary.hasSubAreas());
+        assertEquals(1, areaSummary.getSubAreas().size());
+        assertEquals("@Browsing", areaSummary.getSubAreas().get(0).getSubAreaName());
+        assertEquals(1, areaSummary.getSubAreas().get(0).getTotalCount());
+        assertEquals(1, areaSummary.getSubAreas().get(0).getPassCount());
+        assertEquals(1, areaSummary.getTestClasses().size());
+        assertEquals("MyTest", areaSummary.getTestClasses().get(0).getClassName());
+    }
+
+    @Test
+    public void testAreaSummaryWithoutSubAreasBackwardCompatibility()
+    {
+        final TestClassSummaryDto classSummary = new TestClassSummaryDto(
+            "BrowsingTest",
+            "class-browsing",
+            "Browsing",
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            List.of()
+        );
+
+        final AreaSummaryDto areaSummary = new AreaSummaryDto(
+            "@Browsing",
+            "area-browsing",
+            "Browsing",
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            List.of(classSummary)
+        );
+
+        assertFalse(areaSummary.hasSubAreas());
+        assertTrue(areaSummary.getSubAreas().isEmpty());
+    }
 }

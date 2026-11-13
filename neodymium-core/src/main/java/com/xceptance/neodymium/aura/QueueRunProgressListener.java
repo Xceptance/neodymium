@@ -18,16 +18,23 @@
  */
 package com.xceptance.neodymium.aura;
 
+import java.util.List;
 import java.util.Map;
 
 /**
  * Callback interface for reporting progress of a queue run to external consumers.
  *
+ * @author AI-generated: Gemini 3.8 Flash (High)
  * @author Xceptance GmbH 2026
  */
 public interface QueueRunProgressListener
 {
     void onRunStarted(String runId, String batchName, String environment);
+
+    default void onRunStarted(final String runId, final String batchName, final String environment, final Map<String, List<String>> tags)
+    {
+        onRunStarted(runId, batchName, environment);
+    }
 
     void onTestExecutionCompleted(String runId, Map<String, Object> executionData);
 

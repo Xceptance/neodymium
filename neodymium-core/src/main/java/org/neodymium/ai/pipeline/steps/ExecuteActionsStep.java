@@ -612,8 +612,9 @@ public final class ExecuteActionsStep
                             }
                             else
                             {
-                                sub.setStatus(PlaybookStepStatus.SKIPPED);
+                                sub.setStatus(PlaybookStepStatus.NOT_RUN);
                                 sub.setFailed(false);
+                                sub.setNotRunReason("Not executed because sub-step #" + (failIdx + 1) + " failed.");
                             }
                         }
                     }
@@ -846,6 +847,16 @@ public final class ExecuteActionsStep
 
                         final Integer replays = (Integer) c.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_REPLAYS, 0);
                         c.getTransientData().put(ExecutionContext.KEY_TOTAL_REPLAYS, replays + 1);
+
+                        if (effectiveStatus == PlaybookStepStatus.FAILED || step.isFailed())
+                        {
+                            final String reason = step.getFailureReason() != null && !step.getFailureReason().trim().isEmpty()
+                                    ? step.getFailureReason()
+                                    : (step.getRecordedFailureReason() != null && !step.getRecordedFailureReason().trim().isEmpty()
+                                            ? step.getRecordedFailureReason()
+                                            : "Recorded step execution failed.");
+                            throw new ConclusiveFailureException(reason);
+                        }
                     }
                     catch (final Throwable t)
                     {

@@ -1,0 +1,26 @@
+# [DEF-20261026-1015] Batch History Known Test Base Variations Ignores Active Run Scope Filters
+
+- **Status:** `Resolved`
+- **Opened:** 2026-10-26 10:15
+- **Closed:** 2026-10-26 10:20
+- **Component:** `aura-manager`
+- **Scope:** `Framework`
+- **Symptom:** When users apply Run Scope Filters in the Contributing Runs toolbar on the `/batch-history` view (such as filtering by specific browsers, locales, environments, areas, tags, cutoff date, or manual run exclusions), the "Known Test Base Variations" table and variation count badge continued to display variations and execution counters derived from all eligible runs rather than the contributing runs matching the active filters. Furthermore, selecting `_none_` for any dimension (yielding 0 contributing runs) left obsolete test base variation rows rendered instead of clearing the list and displaying the empty state notice.
+- **Root Cause:** In `AuraReportViewController.batchHistory(...)`, `dataService.getBatchTestBaseClasses(batchName, eligibleRuns)` was invoked with `eligibleRuns` (which only respected the cutoff date and manual run exclusions) instead of `contributingRuns` (the filtered set matching run browsers, locales, environments, areas, tags, cutoff date, and manual exclusions). Additionally, `AuraReportDataService.getBatchTestBaseClasses` only accepted `List<TestRunEntity> allRuns` and lacked execution-level dimension checks (`runBrowsers`, `runLocales`, `runEnvs`, `runAreas`, `runTags`), meaning execution status counters and variation mappings could not filter individual dimension mismatches or recognize the `_none_` empty sentinel set. Lastly, on the client side, ratio bar interactions filtered the visible variations table but failed to update the total variations count badge (`#batchTotalVariationsCountBadge`) and toggle the no-match message (`#batchVariationsNoMatchMsg`).
+- **Detection Gap ("What did we miss?"):** Previous integration tests for Run Scope Filters (`testBatchHistoryWithRunScopeFilters`) verified that `getBatchLatestTestExecutionsSummary` received the filter sets and updated the contributing runs table, but did not assert the arguments passed to `getBatchTestBaseClasses` or verify execution-level dimension filtering within `AuraReportDataService`.
+- **Resolution:**
+  - In `AuraReportDataService.java`:
+    - Overloaded `getBatchTestBaseClasses` to accept dimension filter sets: `getBatchTestBaseClasses(batchName, allRuns, runBrowsers, runLocales, runEnvs, runAreas, runTags)`.
+    - Added fast-path short-circuit returning `List.of()` when any filter set contains the sentinel `_none_`.
+    - Filtered execution iterations within each variation against normalized browser, locale, area, run environment, and tag filter sets so status counters (total, passed, ai, failed) accurately reflect only matching executions.
+    - Maintained backward compatibility with the existing 2-parameter signature delegating with empty filter sets.
+  - In `AuraReportViewController.java`:
+    - Passed `contributingRuns` (falling back safely to `defaultEligibleRuns` when `latestExecResult` is null) and the five active run scope filter sets (`selectedRunBrowsers`, `selectedRunLocales`, `selectedRunEnvs`, `selectedRunAreas`, `selectedRunTags`) to `dataService.getBatchTestBaseClasses(...)`.
+  - In `fragments/batch-history.html`:
+    - Added `id="batchTotalVariationsCountBadge"` to the variation count badge.
+    - Added `#batchVariationsNoMatchMsg` container to display when active client-side filters match zero variations.
+  - In `report-manager.js`:
+    - Updated `applyBatchDirectoryFilters()` to dynamically calculate visible variations, update `#batchTotalVariationsCountBadge` text, and toggle `#batchVariationsNoMatchMsg`.
+- **Safety Net Added:**
+  - `com.xceptance.aura.report.service.TestBaseVariationHistoryTest.testBatchTestBaseClassesFilteredByRunDimensions` verifying variation extraction, execution filtering by browser/area, and `_none_` sentinel handling.
+  - `com.xceptance.aura.report.controller.AuraReportViewControllerTest.testBatchHistoryWithRunScopeFilters` verifying controller delegation of `contributingRuns` and dimension filter sets to `dataService.getBatchTestBaseClasses`.

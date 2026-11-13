@@ -66,6 +66,7 @@ import org.neodymium.ai.telemetry.TokenBudgetGuard;
 import org.neodymium.common.browser.Browser;
 import org.neodymium.common.browser.WebDriverCache;
 import org.neodymium.common.browser.WebDriverStateContainer;
+import org.neodymium.common.recording.FilmTestExecution;
 import org.neodymium.util.Neodymium;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WrapsDriver;
@@ -882,6 +883,50 @@ public class NeodymiumAiRunnerTest
         }
         finally
         {
+            WebDriverRunner.closeWebDriver();
+            Neodymium.clearThreadContext();
+        }
+    }
+
+    /**
+     * Goal: Verifies that AiInvocationExtension does not initiate duplicate video recording
+     * when a browser is present and automatic filming is enabled, delegating to BrowserRunner instead.
+     */
+    @Test
+    public void testAiInvocationExtensionDoesNotDuplicateBrowserRunnerFilming() throws Exception
+    {
+        try
+        {
+            FilmTestExecution.getContextVideo().setProperty("video.enableFilming", "true");
+            FilmTestExecution.getContextVideo().setProperty("video.filmAutomatically", "true");
+
+            final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+            final Method method = SampleBrowserAiTestClass.class.getMethod("sampleMethod");
+            final ExtensionContext extensionContext = createMockExtensionContext(SampleBrowserAiTestClass.class, method);
+
+            final List<TestTemplateInvocationContext> invocations =
+                runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+            Assertions.assertFalse(invocations.isEmpty());
+
+            final List<Extension> extensions = invocations.get(0).getAdditionalExtensions();
+            final List<BeforeEachCallback> beforeCallbacks = extensions.stream()
+                .filter(e -> e instanceof BeforeEachCallback)
+                .map(e -> (BeforeEachCallback) e)
+                .toList();
+            Assertions.assertEquals(2, beforeCallbacks.size());
+
+            // Execute AiInvocationExtension.beforeEach
+            beforeCallbacks.get(1).beforeEach(extensionContext);
+
+            final ExecutionContext execCtx = (ExecutionContext) extensionContext.getStore(null).get(ExecutionContext.class);
+            Assertions.assertNotNull(execCtx);
+            Assertions.assertNull(execCtx.getTransientData().get("recordingID"),
+                "recordingID must NOT be registered by AiInvocationExtension when browser is active and filmAutomatically is true");
+        }
+        finally
+        {
+            FilmTestExecution.getContextVideo().setProperty("video.enableFilming", "false");
+            FilmTestExecution.getContextVideo().setProperty("video.filmAutomatically", "false");
             WebDriverRunner.closeWebDriver();
             Neodymium.clearThreadContext();
         }

@@ -91,6 +91,8 @@ public final class HtmlIndexReportGenerator
         private int passedSteps;
         private int healedSteps;
         private int failedSteps;
+        private int skippedSteps;
+        private int notRunSteps;
         private int llmCalls;
         private long totalTokens;
         private double estimatedCostUsd;
@@ -128,9 +130,11 @@ public final class HtmlIndexReportGenerator
             if (m != null)
             {
                 entry.setStepCount(m.getTotalSteps());
-                entry.setPassedSteps(Math.max(0, m.getTotalSteps() - m.getHealedSteps() - m.getFailedSteps() - m.getSkippedSteps()));
+                entry.setPassedSteps(Math.max(0, m.getTotalSteps() - m.getHealedSteps() - m.getFailedSteps() - m.getSkippedSteps() - m.getNotRunSteps()));
                 entry.setHealedSteps(m.getHealedSteps());
                 entry.setFailedSteps(m.getFailedSteps());
+                entry.setSkippedSteps(m.getSkippedSteps());
+                entry.setNotRunSteps(m.getNotRunSteps());
                 entry.setLlmCalls(m.getTotalLlmCalls());
                 entry.setTotalTokens(m.getTotalTokens());
                 entry.setEstimatedCostUsd(m.getEstimatedCostUsd());
@@ -353,6 +357,26 @@ public final class HtmlIndexReportGenerator
         public void setFailedSteps(final int failedSteps)
         {
             this.failedSteps = failedSteps;
+        }
+
+        public int getSkippedSteps()
+        {
+            return this.skippedSteps;
+        }
+
+        public void setSkippedSteps(final int skippedSteps)
+        {
+            this.skippedSteps = skippedSteps;
+        }
+
+        public int getNotRunSteps()
+        {
+            return this.notRunSteps;
+        }
+
+        public void setNotRunSteps(final int notRunSteps)
+        {
+            this.notRunSteps = notRunSteps;
         }
 
         public int getLlmCalls()
@@ -787,17 +811,20 @@ public final class HtmlIndexReportGenerator
                 final String statusCategory = (st.contains("FAIL")) ? "FAILED"
                     : (st.contains("HEAL") || (entry.getHealedSteps() > 0 && (st.contains("PASS") || st.contains("SUCC")))) ? "HEALED"
                     : (st.contains("PASS") || st.contains("SUCC")) ? "PASSED"
-                    : (st.contains("SKIP")) ? "SKIPPED" : "OTHER";
+                    : (st.contains("SKIP")) ? "SKIPPED"
+                    : (st.contains("NOT RUN") || st.contains("NOT_RUN") || st.contains("UNREACHED")) ? "NOT RUN" : "OTHER";
 
                 final String pillClass = "PASSED".equals(statusCategory) ? "pill-pass"
                     : "HEALED".equals(statusCategory) ? "pill-heal"
                     : "FAILED".equals(statusCategory) ? "pill-fail"
-                    : "SKIPPED".equals(statusCategory) ? "pill-skip" : "pill-pending";
+                    : "SKIPPED".equals(statusCategory) ? "pill-skip"
+                    : "NOT RUN".equals(statusCategory) ? "pill-not-run" : "pill-pending";
 
                 final String statusEmoji = "PASSED".equals(statusCategory) ? "✅"
                     : "HEALED".equals(statusCategory) ? "✨"
                     : "FAILED".equals(statusCategory) ? "❌"
-                    : "SKIPPED".equals(statusCategory) ? "⏭️" : "⏳";
+                    : "SKIPPED".equals(statusCategory) ? "⏭️"
+                    : "NOT RUN".equals(statusCategory) ? "⏹️" : "⏳";
 
                 final String formattedDate = DATE_PART_FORMAT.format(new Date(entry.getTimestamp()));
                 final String formattedTime = TIME_PART_FORMAT.format(new Date(entry.getTimestamp()));
@@ -869,7 +896,7 @@ public final class HtmlIndexReportGenerator
                 // 4. Steps Count
                 sb.append("            <td data-sort=\"").append(entry.getStepCount()).append("\">\n");
                 sb.append("              <span class=\"steps-count\">").append(entry.getStepCount()).append("</span>\n");
-                if (entry.getHealedSteps() > 0 || entry.getFailedSteps() > 0)
+                if (entry.getHealedSteps() > 0 || entry.getFailedSteps() > 0 || entry.getSkippedSteps() > 0 || entry.getNotRunSteps() > 0)
                 {
                     sb.append("              <div class=\"steps-sub\">");
                     if (entry.getHealedSteps() > 0)
@@ -878,7 +905,15 @@ public final class HtmlIndexReportGenerator
                     }
                     if (entry.getFailedSteps() > 0)
                     {
-                        sb.append("<span class=\"text-fail\">❌ ").append(entry.getFailedSteps()).append(" failed</span>");
+                        sb.append("<span class=\"text-fail\">❌ ").append(entry.getFailedSteps()).append(" failed</span> ");
+                    }
+                    if (entry.getSkippedSteps() > 0)
+                    {
+                        sb.append("<span class=\"text-muted\">⏭️ ").append(entry.getSkippedSteps()).append(" skipped</span> ");
+                    }
+                    if (entry.getNotRunSteps() > 0)
+                    {
+                        sb.append("<span class=\"text-muted\">⏹️ ").append(entry.getNotRunSteps()).append(" not run</span>");
                     }
                     sb.append("</div>\n");
                 }
@@ -1222,6 +1257,7 @@ public final class HtmlIndexReportGenerator
             .pill-heal { background: var(--healed-bg); color: var(--healed); border: 1px solid var(--healed-border); }
             .pill-fail { background: var(--fail-bg); color: var(--fail); border: 1px solid var(--fail-border); }
             .pill-skip { background: var(--skip-bg); color: var(--skip); border: 1px solid var(--border); }
+            .pill-not-run { background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
             .pill-pending { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
             .test-name-line {
                 display: flex;

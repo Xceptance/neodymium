@@ -24,14 +24,14 @@ import com.xceptance.aura.report.entity.TestBaseBugEntity;
 import com.xceptance.aura.report.entity.TestBaseVariationEntity;
 import com.xceptance.aura.report.entity.TestBatchEntity;
 import com.xceptance.aura.report.entity.TestRunEntity;
+import com.xceptance.aura.report.entity.TestRunTagEntity;
 import com.xceptance.aura.report.repository.TestBaseBugRepository;
 import com.xceptance.aura.report.repository.TestBaseVariationRepository;
 import com.xceptance.aura.report.repository.TestBatchRepository;
 import com.xceptance.aura.report.repository.TestRunRepository;
+import com.xceptance.aura.report.repository.TestRunTagRepository;
 import java.io.File;
 import java.io.IOException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -41,15 +41,17 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.neodymium.util.TagUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -65,6 +67,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * Format aligned with console-execution-1.json schema while retaining all features (bugs, comments, failure details).
  *
+ * @author AI-generated: Gemini 3.8 Flash (High)
  * @author Xceptance GmbH 2026
  */
 @Service
@@ -76,6 +79,7 @@ public class RunStorageSyncService
     private final TestBatchRepository batchRepository;
     private final TestBaseVariationRepository variationRepository;
     private final TestBaseBugRepository bugRepository;
+    private final TestRunTagRepository tagRepository;
     private final LocalRunJsonStorageService localRunJsonStorageService;
     private final ObjectMapper objectMapper;
 
@@ -88,12 +92,14 @@ public class RunStorageSyncService
         final TestBatchRepository batchRepository,
         final TestBaseVariationRepository variationRepository,
         final TestBaseBugRepository bugRepository,
+        final TestRunTagRepository tagRepository,
         final LocalRunJsonStorageService localRunJsonStorageService)
     {
         this.runRepository = runRepository;
         this.batchRepository = batchRepository;
         this.variationRepository = variationRepository;
         this.bugRepository = bugRepository;
+        this.tagRepository = tagRepository;
         this.localRunJsonStorageService = localRunJsonStorageService;
         this.objectMapper = new ObjectMapper();
     }
@@ -130,7 +136,8 @@ public class RunStorageSyncService
                     if (localRunJsonStorageService.hasRunJsonFile(runId) && existingRunOpt.isPresent())
                     {
                         final TestRunEntity existingRun = existingRunOpt.get();
-                        if (existingRun.getPassedHealedCount() != null && existingRun.getSucceededFixedHealedCount() != null
+                        final boolean isStillActive = "IN_PROGRESS".equalsIgnoreCase(existingRun.getStatus()) || localRunJsonStorageService.isRunCurrentlyActiveOnDisk(runId);
+                        if (!isStillActive && existingRun.getPassedHealedCount() != null && existingRun.getSucceededFixedHealedCount() != null
                             && existingRun.getFailedKnownHealedCount() != null && existingRun.getFailedUnknownHealedCount() != null)
                         {
                             LOG.debug("Skipping already initialized run report: runId={}", runId);
@@ -149,132 +156,7 @@ public class RunStorageSyncService
         {
             LOG.error("Error scanning storage directory {}: {}", baseDir, e.getMessage());
         }
-
-        upgradeLegacyHistoryLinks();
-
         return importedCount;
-    }
-
-    @Transactional
-    public void upgradeLegacyHistoryLinks()
-    {
-        final List<TestBaseVariationEntity> variations = variationRepository.findAll();
-        for (final TestBaseVariationEntity varEntity : variations)
-        {
-            final String history = varEntity.getHistoryLinks();
-            if (history != null && history.contains("/run-report?") && !history.contains("&batch="))
-            {
-                final String[] links = history.split(",");
-                final List<String> upgradedLinks = new ArrayList<>();
-                boolean modified = false;
-
-                for (final String link : links)
-                {
-                    final String trimmed = link.trim();
-                    if (trimmed.isEmpty())
-                    {
-                        continue;
-                    }
-                    final Map<String, String> params = AuraReportDataService.parseQueryParams(trimmed);
-                    if (!params.containsKey("batch"))
-                    {
-                        final String rId = params.get("runId");
-                        final String eId = params.get("executionId");
-                        if (rId != null && !rId.isEmpty())
-                        {
-                            final Optional<String> runJsonOpt = localRunJsonStorageService.readRunJson(rId);
-                            if (runJsonOpt.isPresent())
-                            {
-                                try
-                                {
-                                    final JsonNode root = objectMapper.readTree(runJsonOpt.get());
-                                    final File runDir = new File(baseDir, rId);
-                                    final LocalRunJsonStorageService.BatchInfo batchInfo = localRunJsonStorageService.resolveOrCreateBatchJson(runDir, null);
-                                    final String bName = root.path("batchName").asText(batchInfo.name);
-                                    final String ts = root.path("timestamp").asText(root.path("startTime").asText("Recently"));
-                                    final JsonNode execArray = root.path("executions");
-
-                                    if (execArray.isArray())
-                                    {
-                                        for (final JsonNode exec : execArray)
-                                        {
-                                            final String curExecId = exec.path("id").asText("");
-                                            if (eId == null || eId.isEmpty() || eId.equals(curExecId))
-                                            {
-                                                final String engine = exec.has("engine") ? exec.path("engine").asText("Java") : "Java";
-                                                final String rawStatus = exec.path("status").asText("failed-unknown");
-                                                final boolean isHealed = (exec.has("healed") && exec.path("healed").asBoolean(false))
-                                                                      || (exec.has("healedStepsCount") && exec.path("healedStepsCount").asInt(0) > 0)
-                                                                      || "healed".equalsIgnoreCase(rawStatus);
-                                                final List<String> bugList = new ArrayList<>();
-                                                if (exec.has("bugs") && exec.path("bugs").isArray())
-                                                {
-                                                    for (final JsonNode bugNode : exec.path("bugs"))
-                                                    {
-                                                        if (!bugNode.asText().trim().isEmpty())
-                                                        {
-                                                            bugList.add(bugNode.asText().trim());
-                                                        }
-                                                    }
-                                                }
-                                                final String bugsStr = !bugList.isEmpty() ? String.join(";", bugList) : "";
-
-                                                final String enrichedUrl = "/run-report?runId=" + URLEncoder.encode(rId, StandardCharsets.UTF_8)
-                                                    + (curExecId != null && !curExecId.trim().isEmpty() ? "&executionId=" + URLEncoder.encode(curExecId.trim(), StandardCharsets.UTF_8) : "")
-                                                    + "&batch=" + URLEncoder.encode(bName, StandardCharsets.UTF_8)
-                                                    + "&engine=" + URLEncoder.encode(engine, StandardCharsets.UTF_8)
-                                                    + "&ts=" + URLEncoder.encode(ts, StandardCharsets.UTF_8)
-                                                    + "&status=" + URLEncoder.encode(rawStatus, StandardCharsets.UTF_8)
-                                                    + (isHealed ? "&healed=true" : "")
-                                                    + (!bugsStr.isEmpty() ? "&bugs=" + URLEncoder.encode(bugsStr, StandardCharsets.UTF_8) : "");
-
-                                                upgradedLinks.add(enrichedUrl);
-                                                modified = true;
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                                catch (final Exception e)
-                                {
-                                    upgradedLinks.add(trimmed);
-                                }
-                            }
-                            else
-                            {
-                                upgradedLinks.add(trimmed);
-                            }
-                        }
-                        else
-                        {
-                            upgradedLinks.add(trimmed);
-                        }
-                    }
-                    else
-                    {
-                        upgradedLinks.add(trimmed);
-                    }
-                }
-
-                if (modified && !upgradedLinks.isEmpty())
-                {
-                    varEntity.setHistoryLinks(String.join(",", upgradedLinks));
-                    variationRepository.save(varEntity);
-                }
-            }
-            if ("Chrome".equalsIgnoreCase(varEntity.getBrowser()) && varEntity.getHistoryLinks() != null && !varEntity.getHistoryLinks().isBlank())
-            {
-                final String firstLink = varEntity.getHistoryLinks().split(",")[0].trim();
-                final Map<String, String> params = AuraReportDataService.parseQueryParams(firstLink);
-                final String linkExecId = params.get("executionId");
-                final String extracted = AuraReportDataService.extractBrowserFromIdOrKey(linkExecId);
-                if (extracted != null && !extracted.isBlank() && !"Chrome".equalsIgnoreCase(extracted))
-                {
-                    varEntity.setBrowser(AuraReportDataService.normalizeBrowser(extracted));
-                    variationRepository.save(varEntity);
-                }
-            }
-        }
     }
 
     @Transactional
@@ -342,49 +224,77 @@ public class RunStorageSyncService
 
             final JsonNode execMetricsNode = root.path("executionMetrics");
 
-            final List<String> localesList = new ArrayList<>();
+            final List<JsonNode> execList = new ArrayList<>();
+            if (execMetricsNode.isObject() && !execMetricsNode.isEmpty())
+            {
+                execMetricsNode.elements().forEachRemaining(execList::add);
+            }
+            else if (root.path("executions").isArray())
+            {
+                root.path("executions").elements().forEachRemaining(execList::add);
+            }
+
+            final Set<String> locSet = new LinkedHashSet<>();
             final JsonNode localesArr = root.path("locales");
             if (localesArr.isArray())
             {
                 for (final JsonNode l : localesArr)
                 {
-                    if (!l.asText().trim().isEmpty())
+                    final String val = l.asText().trim();
+                    if (!val.isEmpty())
                     {
-                        localesList.add(l.asText().trim());
+                        locSet.add(AuraReportDataService.normalizeLocation(val));
                     }
                 }
             }
-            if (localesList.isEmpty() && execMetricsNode.isObject())
+            if (!execList.isEmpty())
             {
-                final Set<String> locSet = new LinkedHashSet<>();
-                for (final JsonNode mNode : execMetricsNode)
+                for (final JsonNode mNode : execList)
                 {
-                    final String loc = mNode.path("location").asText(mNode.path("locale").asText("")).trim();
-                    if (!loc.isEmpty() && !"Unknown".equalsIgnoreCase(loc))
+                    final String loc = extractLocationFromNode(mNode);
+                    if (!loc.isEmpty())
                     {
-                        locSet.add(loc);
+                        locSet.add(AuraReportDataService.normalizeLocation(loc));
+                    }
+                    if (mNode.has("tags") && mNode.path("tags").isObject())
+                    {
+                        final JsonNode locTag = mNode.path("tags").has("locale") ? mNode.path("tags").path("locale") : mNode.path("tags").path("location");
+                        if (locTag.isArray())
+                        {
+                            for (final JsonNode el : locTag)
+                            {
+                                final String val = el.asText().trim();
+                                if (!val.isEmpty())
+                                {
+                                    locSet.add(AuraReportDataService.normalizeLocation(val));
+                                }
+                            }
+                        }
                     }
                 }
-                localesList.addAll(locSet);
             }
-            final String localesCsv = !localesList.isEmpty() ? String.join(",", localesList) : "Unknown";
+            if (locSet.isEmpty())
+            {
+                locSet.add("Default");
+            }
+            final String localesCsv = String.join(",", locSet);
 
-            final List<String> browsersList = new ArrayList<>();
+            final Set<String> bSet = new LinkedHashSet<>();
             final JsonNode browsersArr = root.path("browsers");
             if (browsersArr.isArray())
             {
                 for (final JsonNode b : browsersArr)
                 {
-                    if (!b.asText().trim().isEmpty())
+                    final String val = b.asText().trim();
+                    if (!val.isEmpty() && !"Unknown".equalsIgnoreCase(val))
                     {
-                        browsersList.add(b.asText().trim());
+                        bSet.add(AuraReportDataService.normalizeBrowser(val));
                     }
                 }
             }
-            if (browsersList.isEmpty() && execMetricsNode.isObject())
+            if (!execList.isEmpty())
             {
-                final Set<String> bSet = new LinkedHashSet<>();
-                for (final JsonNode mNode : execMetricsNode)
+                for (final JsonNode mNode : execList)
                 {
                     String br = mNode.path("browser").asText("").trim();
                     if (br.isEmpty() || "Chrome".equalsIgnoreCase(br) || "Unknown".equalsIgnoreCase(br))
@@ -401,19 +311,38 @@ public class RunStorageSyncService
                         bSet.add(AuraReportDataService.normalizeBrowser(br));
                     }
                 }
-                browsersList.addAll(bSet);
             }
-            final String browsersCsv = !browsersList.isEmpty() ? String.join(",", browsersList) : "Chrome";
+            if (bSet.size() > 1 && bSet.contains("Chrome") && bSet.stream().anyMatch(s -> s.startsWith("Chrome_")))
+            {
+                bSet.remove("Chrome");
+            }
+            if (bSet.isEmpty())
+            {
+                bSet.add("Chrome_1920x1080");
+            }
+            final String browsersCsv = String.join(",", bSet);
 
-            final List<JsonNode> execList = new ArrayList<>();
-            if (execMetricsNode.isObject() && !execMetricsNode.isEmpty())
+            final Set<String> aSet = new LinkedHashSet<>();
+            if (!execList.isEmpty())
             {
-                execMetricsNode.elements().forEachRemaining(execList::add);
+                for (final JsonNode mNode : execList)
+                {
+                    final String area = mNode.has("areaName") && !mNode.path("areaName").asText().trim().isEmpty()
+                        ? mNode.path("areaName").asText().trim()
+                        : (mNode.has("area") && !mNode.path("area").asText().trim().isEmpty()
+                            ? mNode.path("area").asText().trim()
+                            : mNode.path("testArea").asText("").trim());
+                    if (!area.isEmpty())
+                    {
+                        aSet.add(AuraReportDataService.normalizeArea(area));
+                    }
+                }
             }
-            else if (root.path("executions").isArray())
+            if (aSet.isEmpty())
             {
-                root.path("executions").elements().forEachRemaining(execList::add);
+                aSet.add("Default");
             }
+            final String areasCsv = String.join(",", aSet);
 
             Long minStartTimeMs = null;
             Long maxStartTimeMs = null;
@@ -488,15 +417,12 @@ public class RunStorageSyncService
 
             final List<TestBaseBugEntity> allRunBugs = bugRepository.findByBatchNameInAndEnvironmentIn(List.of(runBatch, "ALL"), List.of(runEnv, "ALL"));
 
-            final Map<String, List<String>> dbBugsByVarId = allRunBugs.stream()
+            final Map<String, List<TestBaseBugEntity>> dbBugsByVarId = allRunBugs.stream()
                 .filter(b -> (b.getLinkedRunId() == null || AuraReportDataService.isRunAtOrAfter(runId, b.getLinkedRunId(), runStartTimes))
                           && (b.getRemovedRunId() == null || !AuraReportDataService.isRunAtOrAfter(runId, b.getRemovedRunId(), runStartTimes)))
-                .collect(Collectors.groupingBy(
-                    TestBaseBugEntity::getVariationId,
-                    Collectors.mapping(TestBaseBugEntity::getBugTicket, Collectors.toList())
-                ));
+                .collect(Collectors.groupingBy(TestBaseBugEntity::getVariationId));
 
-            final Map<String, java.util.Set<String>> removedBugsByVarId = allRunBugs.stream()
+            final Map<String, Set<String>> removedBugsByVarId = allRunBugs.stream()
                 .filter(b -> b.getRemovedRunId() != null && AuraReportDataService.isRunAtOrAfter(runId, b.getRemovedRunId(), runStartTimes))
                 .collect(Collectors.groupingBy(
                     TestBaseBugEntity::getVariationId,
@@ -507,6 +433,7 @@ public class RunStorageSyncService
             int calcFixed = 0;
             int calcKnown = 0;
             int calcUnknown = 0;
+            int calcRunning = 0;
             int calcIgnored = 0;
             int calcPassHealed = 0;
             int calcFixedHealed = 0;
@@ -516,9 +443,11 @@ public class RunStorageSyncService
             int calcFixedAi = 0;
             int calcKnownAi = 0;
             int calcUnknownAi = 0;
+            int calcPlaybook = 0;
 
             long sumDurationMs = 0L;
-            final boolean isRunActive = runRepository.findById(runId).map(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus())).orElse(false);
+            final boolean isRunActive = runRepository.findById(runId).map(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus())).orElse(false)
+                || localRunJsonStorageService.isRunCurrentlyActiveOnDisk(runId);
 
             if (!execList.isEmpty())
             {
@@ -539,8 +468,8 @@ public class RunStorageSyncService
                         rawTitle = exec.path("testId").asText("").trim();
                     }
                     final String dataSet = !rawTitle.isEmpty() ? rawTitle : "Default";
-                    final String rawLoc = exec.has("locale") && !exec.path("locale").asText().trim().isEmpty() ? exec.path("locale").asText().trim() : exec.path("location").asText("Unknown");
-                    final String location = AuraReportDataService.normalizeLocation(rawLoc);
+                    final String rawLoc = extractLocationFromNode(exec);
+                    final String location = AuraReportDataService.normalizeLocation(!rawLoc.isEmpty() ? rawLoc : "Default");
                     String rawBrowser = exec.path("browser").asText("").trim();
                     if (rawBrowser.isEmpty() || "Chrome".equalsIgnoreCase(rawBrowser) || "Unknown".equalsIgnoreCase(rawBrowser))
                     {
@@ -551,7 +480,7 @@ public class RunStorageSyncService
                         }
                     }
                     final String browser = AuraReportDataService.normalizeBrowser(!rawBrowser.isEmpty() ? rawBrowser : "Chrome");
-                    final String rawStatus = exec.path("status").asText("failed-unknown");
+                    final String rawStatus = exec.path("status").asText("").trim();
 
                     final boolean isHealed = (exec.has("healed") && exec.path("healed").asBoolean(false))
                                           || (exec.has("healedStepsCount") && exec.path("healedStepsCount").asInt(0) > 0)
@@ -567,30 +496,71 @@ public class RunStorageSyncService
 
                     final String varId = generateVariationId(testClass, testMethod, dataSet, location, browser);
                     final String varIdNoMethod = generateVariationId(testClass, null, dataSet, location, browser);
-                    final List<String> dbBugTickets = new ArrayList<>(dbBugsByVarId.getOrDefault(varId, List.of()));
-                    for (final String t : dbBugsByVarId.getOrDefault(varIdNoMethod, List.of()))
+                    final List<TestBaseBugEntity> candidateActiveBugs = new ArrayList<>(dbBugsByVarId.getOrDefault(varId, List.of()));
+                    for (final TestBaseBugEntity b : dbBugsByVarId.getOrDefault(varIdNoMethod, List.of()))
                     {
-                        if (!dbBugTickets.contains(t))
+                        if (!candidateActiveBugs.contains(b))
                         {
-                            dbBugTickets.add(t);
+                            candidateActiveBugs.add(b);
                         }
                     }
 
                     final Set<String> removedTickets = new HashSet<>(removedBugsByVarId.getOrDefault(varId, Set.of()));
                     removedTickets.addAll(removedBugsByVarId.getOrDefault(varIdNoMethod, Set.of()));
+
+                    final Map<String, List<String>> execTags = exec.has("tags")
+                        ? TagUtils.parseTags(exec.path("tags"))
+                        : Collections.emptyMap();
+                    final List<String> execJunitTags = new ArrayList<>();
+                    if (exec.has("junitTags") && exec.path("junitTags").isArray())
+                    {
+                        for (final JsonNode jt : exec.path("junitTags"))
+                        {
+                            if (!jt.asText().isBlank())
+                            {
+                                execJunitTags.add(jt.asText().trim());
+                            }
+                        }
+                    }
+
+                    final List<TestBaseBugEntity> matchedBugs = new ArrayList<>();
+                    final Set<String> matchedNormTickets = new HashSet<>();
+                    for (final TestBaseBugEntity b : candidateActiveBugs)
+                    {
+                        if (TagUtils.matchesTagCriteria(execTags, execJunitTags, browser, location, b.getTagCriteria()))
+                        {
+                            matchedBugs.add(b);
+                            matchedNormTickets.add(AuraReportDataService.normalizeTicket(b.getBugTicket()));
+                        }
+                    }
+
+                    final Set<String> mismatchedTickets = new HashSet<>();
+                    for (final TestBaseBugEntity b : candidateActiveBugs)
+                    {
+                        final String norm = AuraReportDataService.normalizeTicket(b.getBugTicket());
+                        if (!matchedNormTickets.contains(norm))
+                        {
+                            mismatchedTickets.add(norm);
+                        }
+                    }
+
                     final Set<String> combinedBugs = new LinkedHashSet<>();
                     if (exec.has("bugs") && exec.path("bugs").isArray())
                     {
                         for (final JsonNode bugNode : exec.path("bugs"))
                         {
-                            final String rawB = bugNode.asText().trim();
-                            if (!rawB.isEmpty() && !removedTickets.contains(AuraReportDataService.normalizeTicket(rawB)))
+                            final String rawB = AuraReportDataService.extractTicket(bugNode);
+                            final String normB = AuraReportDataService.normalizeTicket(rawB);
+                            if (!rawB.isEmpty() && !removedTickets.contains(normB) && !mismatchedTickets.contains(normB))
                             {
                                 combinedBugs.add(rawB);
                             }
                         }
                     }
-                    combinedBugs.addAll(dbBugTickets);
+                    for (final TestBaseBugEntity b : matchedBugs)
+                    {
+                        combinedBugs.add(b.getBugTicket());
+                    }
 
                     final List<String> bugList = new ArrayList<>(combinedBugs);
                     final boolean hasBugs = !bugList.isEmpty();
@@ -655,7 +625,7 @@ public class RunStorageSyncService
                     }
                     else if ("running".equals(effectiveStatus))
                     {
-                        // In-flight execution during active run
+                        calcRunning++;
                     }
                     else
                     {
@@ -688,12 +658,15 @@ public class RunStorageSyncService
                         }
                         else
                         {
-                            varEntity = new TestBaseVariationEntity(varId, testClass, testMethod, dataSet, "@General", location, browser);
+                            final String areaTag = (exec.has("areaName") && !exec.path("areaName").asText("").isBlank())
+                                ? exec.path("areaName").asText("")
+                                : "@General";
+                            varEntity = new TestBaseVariationEntity(varId, testClass, testMethod, dataSet, areaTag, location, browser);
                         }
-
-                        varEntity.setLastStatus(effectiveStatus);
-                        varEntity.setLastExecutedAt(System.currentTimeMillis());
-                        varEntity.setHealed(isHealed);
+                        if (exec.has("subArea") && !exec.path("subArea").asText("").isBlank())
+                        {
+                            varEntity.setSubAreaTag(exec.path("subArea").asText(""));
+                        }
 
                         final String calculatedMode;
                         if (isAi)
@@ -712,134 +685,22 @@ public class RunStorageSyncService
                         {
                             calculatedMode = "JAVA";
                         }
-                        final String engine = exec.has("engine") ? exec.path("engine").asText("Java") : "Java";
 
-                        final String relUrl = "/run-report?runId=" + URLEncoder.encode(runId, StandardCharsets.UTF_8)
-                            + (execId != null && !execId.trim().isEmpty() ? "&executionId=" + URLEncoder.encode(execId.trim(), StandardCharsets.UTF_8) : "")
-                            + "&batch=" + URLEncoder.encode(batchName, StandardCharsets.UTF_8)
-                            + "&engine=" + URLEncoder.encode(engine, StandardCharsets.UTF_8)
-                            + "&ts=" + URLEncoder.encode(timestamp, StandardCharsets.UTF_8)
-                            + "&status=" + URLEncoder.encode(effectiveStatus, StandardCharsets.UTF_8)
-                            + (isHealed ? "&healed=true" : "")
-                            + "&mode=" + URLEncoder.encode(calculatedMode, StandardCharsets.UTF_8)
-                            + (!bugsStr.isEmpty() ? "&bugs=" + URLEncoder.encode(bugsStr, StandardCharsets.UTF_8) : "");
-
-                        final String currentHistory = varEntity.getHistoryLinks();
-                        final List<String> linksList;
-                        if (currentHistory == null || currentHistory.trim().isEmpty())
+                        if ("PLAYBOOK".equalsIgnoreCase(calculatedMode) && !isHealed)
                         {
-                            linksList = new ArrayList<>();
-                            linksList.add(relUrl);
-                        }
-                        else
-                        {
-                            linksList = new ArrayList<>(List.of(currentHistory.split(",")));
-                            boolean replaced = false;
-                            for (int i = 0; i < linksList.size(); i++)
-                            {
-                                final String existing = linksList.get(i).trim();
-                                final Map<String, String> existingParams = AuraReportDataService.parseQueryParams(existing);
-                                final String existingRunId = existingParams.get("runId");
-                                final String existingExecId = existingParams.get("executionId");
-
-                                if (runId.equals(existingRunId) && Objects.equals(execId, existingExecId))
-                                {
-                                    linksList.set(i, relUrl);
-                                    replaced = true;
-                                    break;
-                                }
-                            }
-                            if (!replaced && !linksList.contains(relUrl))
-                            {
-                                linksList.add(relUrl);
-                            }
+                            calcPlaybook++;
                         }
 
-                        final List<String> sortedLinks = AuraReportDataService.sortHistoryLinksDescending(String.join(",", linksList));
-                        varEntity.setHistoryLinks(String.join(",", sortedLinks));
-                        varEntity.setTotalExecutionsCount(sortedLinks.size());
-
-                        if (!sortedLinks.isEmpty())
+                        final Long runTimeMs = (minStartTimeMs != null && minStartTimeMs > 0L) ? minStartTimeMs : System.currentTimeMillis();
+                        final Long currentVarTime = varEntity.getLastExecutedAt();
+                        if (currentVarTime == null || runTimeMs >= currentVarTime)
                         {
-                            final Map<String, String> latestParams = AuraReportDataService.parseQueryParams(sortedLinks.get(0));
-                            final String latestStatus = latestParams.get("status");
-                            final String latestHealed = latestParams.get("healed");
-                            String latestMode = latestParams.get("mode");
-                            final boolean latestIsHealed = "true".equalsIgnoreCase(latestHealed) || "healed".equalsIgnoreCase(latestStatus);
-                            varEntity.setHealed(latestIsHealed);
-
-                            if (latestMode == null || latestMode.isBlank())
-                            {
-                                final String latestRunId = latestParams.get("runId");
-                                if (runId.equals(latestRunId))
-                                {
-                                    latestMode = calculatedMode;
-                                }
-                                else if (latestRunId != null)
-                                {
-                                    final Optional<String> rJsonOpt = localRunJsonStorageService.readRunJson(latestRunId);
-                                    if (rJsonOpt.isPresent())
-                                    {
-                                        try
-                                        {
-                                            final JsonNode rRoot = objectMapper.readTree(rJsonOpt.get());
-                                            final JsonNode exMetrics = rRoot.path("executionMetrics");
-                                            final String latestExecId = latestParams.get("executionId");
-                                            if (exMetrics.isObject())
-                                            {
-                                                for (final JsonNode mNode : exMetrics)
-                                                {
-                                                    final String mId = mNode.path("id").asText("");
-                                                    if (latestExecId != null && !latestExecId.isEmpty() && latestExecId.equals(mId))
-                                                    {
-                                                        final String mMode = mNode.path("executionMode").asText(mNode.path("mode").asText("")).trim();
-                                                        final boolean mHealed = mNode.path("healed").asBoolean(false) || mNode.path("healedStepsCount").asInt(0) > 0;
-                                                        final int mLlm = mNode.path("llmCallsCount").asInt(0);
-                                                        final boolean mAi = "AI".equalsIgnoreCase(mMode) || "LLM_RECORDING".equalsIgnoreCase(mMode) || mLlm > 0;
-                                                        if (mAi)
-                                                        {
-                                                            latestMode = "AI";
-                                                        }
-                                                        else if (mHealed)
-                                                        {
-                                                            latestMode = "HEALED";
-                                                        }
-                                                        else if ("PLAYBOOK".equalsIgnoreCase(mMode) || "REPLAY_STRICT".equalsIgnoreCase(mMode) || testClass.contains("_yaml_") || testClass.contains("_yml_"))
-                                                        {
-                                                            latestMode = "PLAYBOOK";
-                                                        }
-                                                        else
-                                                        {
-                                                            latestMode = "JAVA";
-                                                        }
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        catch (final Exception ex)
-                                        {
-                                            LOG.debug("Unable to parse execution mode from latest run JSON for runId {}: {}", latestRunId, ex.getMessage());
-                                        }
-                                    }
-                                }
-                            }
-
-                            if (latestMode != null && !latestMode.isBlank())
-                            {
-                                varEntity.setExecutionMode(latestMode);
-                            }
-                            if (latestStatus != null && !latestStatus.isBlank())
-                            {
-                                varEntity.setLastStatus("healed".equalsIgnoreCase(latestStatus) ? "passed-clean" : latestStatus);
-                            }
-                        }
-                        else
-                        {
-                            varEntity.setExecutionMode(calculatedMode);
+                            varEntity.setLastExecutedAt(runTimeMs);
                             varEntity.setLastStatus("healed".equalsIgnoreCase(effectiveStatus) ? "passed-clean" : effectiveStatus);
                             varEntity.setHealed(isHealed);
+                            varEntity.setExecutionMode(calculatedMode);
                         }
+                        varEntity.setTotalExecutionsCount((varEntity.getTotalExecutionsCount() != null ? varEntity.getTotalExecutionsCount() : 0) + 1);
 
                         variationRepository.save(varEntity);
                     }
@@ -849,6 +710,9 @@ public class RunStorageSyncService
             final Optional<TestRunEntity> existingRunOpt = runRepository.findById(runId);
             final TestRunEntity runEntity;
             final Long initialStartMs = minStartTimeMs != null ? minStartTimeMs : parseTimestampToMs(timestamp);
+            final boolean isStillActive = localRunJsonStorageService.isRunCurrentlyActiveOnDisk(runId);
+            final String runStatus = (isStillActive || calcRunning > 0) ? "IN_PROGRESS" : "COMPLETED";
+
             if (existingRunOpt.isPresent())
             {
                 runEntity = existingRunOpt.get();
@@ -856,6 +720,10 @@ public class RunStorageSyncService
                 runEntity.setEnvironment(env);
                 runEntity.setTriggerSource(trigger);
                 runEntity.setTimestampLabel(timestamp);
+                if (!"CANCELLED".equalsIgnoreCase(runEntity.getStatus()))
+                {
+                    runEntity.setStatus(runStatus);
+                }
                 if (minStartTimeMs != null)
                 {
                     runEntity.setStartTimeMs(minStartTimeMs);
@@ -866,7 +734,7 @@ public class RunStorageSyncService
                 runEntity = new TestRunEntity(
                     runId,
                     batchName,
-                    "COMPLETED",
+                    runStatus,
                     trigger,
                     env,
                     localesCsv,
@@ -882,6 +750,7 @@ public class RunStorageSyncService
             final int finalFixed = hasExecCounts ? calcFixed : fixed;
             final int finalKnown = hasExecCounts ? calcKnown : known;
             final int finalUnknown = hasExecCounts ? calcUnknown : unknown;
+            final int finalRunning = hasExecCounts ? calcRunning : summaryNode.path("running").asInt(0);
             final int finalIgnored = hasExecCounts ? calcIgnored : ignored;
             final int finalPassHealed = hasExecCounts ? calcPassHealed : passHealed;
             final int finalFixedHealed = hasExecCounts ? calcFixedHealed : fixedHealed;
@@ -891,7 +760,8 @@ public class RunStorageSyncService
             final int finalFixedAi = hasExecCounts ? calcFixedAi : fixedAi;
             final int finalKnownAi = hasExecCounts ? calcKnownAi : knownAi;
             final int finalUnknownAi = hasExecCounts ? calcUnknownAi : unknownAi;
-            final double finalPassRate = finalTotal > 0 ? (double)(finalPass + finalFixed) / finalTotal * 100.0 : passRate;
+            final int finalPlaybook = hasExecCounts ? calcPlaybook : 0;
+            final double finalPassRate = finalTotal > 0 ? (double) Math.round((double)(finalPass + finalFixed) / finalTotal * 100.0) : passRate;
 
             final long calculatedRunDurationMs;
             if (minStartTimeMs != null && maxStartTimeMs != null && maxStartTimeMs >= minStartTimeMs)
@@ -913,11 +783,13 @@ public class RunStorageSyncService
 
             runEntity.setLocalesCsv(localesCsv);
             runEntity.setBrowsersCsv(browsersCsv);
+            runEntity.setAreasCsv(areasCsv);
             runEntity.setTotalTests(finalTotal);
             runEntity.setPassedCount(finalPass);
             runEntity.setSucceededFixedCount(finalFixed);
             runEntity.setFailedKnownCount(finalKnown);
             runEntity.setFailedUnknownCount(finalUnknown);
+            runEntity.setRunningCount(finalRunning);
             runEntity.setIgnoredCount(finalIgnored);
             runEntity.setPassedHealedCount(finalPassHealed);
             runEntity.setSucceededFixedHealedCount(finalFixedHealed);
@@ -927,6 +799,7 @@ public class RunStorageSyncService
             runEntity.setSucceededFixedAiCount(finalFixedAi);
             runEntity.setFailedKnownAiCount(finalKnownAi);
             runEntity.setFailedUnknownAiCount(finalUnknownAi);
+            runEntity.setPlaybookCount(finalPlaybook);
             runEntity.setPassRate(finalPassRate);
             runEntity.setTotalLlmCalls(sumLlmCalls);
             runEntity.setTotalLlmTokens(sumLlmTokens);
@@ -959,6 +832,145 @@ public class RunStorageSyncService
                     browsersCsv,
                     runId
                 ));
+            }
+
+            final List<TestRunTagEntity> tagEntities = new ArrayList<>();
+            final Set<String> seenTagPairs = new HashSet<>();
+            final Consumer<TestRunTagEntity> addTagSafe = t -> {
+                if (t.getTagValue() == null || t.getTagValue().isBlank())
+                {
+                    return;
+                }
+                String trimmedVal = t.getTagValue().trim();
+                if ("Default".equalsIgnoreCase(trimmedVal) || "Unknown".equalsIgnoreCase(trimmedVal))
+                {
+                    return;
+                }
+                if (t.getTagKey() != null && "area".equalsIgnoreCase(t.getTagKey().trim()))
+                {
+                    while (trimmedVal.startsWith("@"))
+                    {
+                        trimmedVal = trimmedVal.substring(1).trim();
+                    }
+                    t.setTagValue(trimmedVal);
+                }
+                if (trimmedVal.isEmpty() || "Default".equalsIgnoreCase(trimmedVal) || "Unknown".equalsIgnoreCase(trimmedVal))
+                {
+                    return;
+                }
+                final String composite = t.getTagKey().toLowerCase() + "::" + trimmedVal.toLowerCase();
+                if (seenTagPairs.add(composite))
+                {
+                    tagEntities.add(t);
+                }
+            };
+
+            // 1. Process root-level tags in run.json
+            final JsonNode tagsNode = root.path("tags");
+            if (tagsNode.isObject() && !tagsNode.isEmpty())
+            {
+                tagsNode.fields().forEachRemaining(entry -> {
+                    final String tagKey = entry.getKey().trim();
+                    final JsonNode valNode = entry.getValue();
+                    if (valNode.isArray())
+                    {
+                        for (final JsonNode item : valNode)
+                        {
+                            final String tagVal = item.asText("").trim();
+                            if (!tagKey.isEmpty() && !tagVal.isEmpty())
+                            {
+                                addTagSafe.accept(new TestRunTagEntity(runId, tagKey, tagVal));
+                            }
+                        }
+                    }
+                    else
+                    {
+                        final String tagVal = valNode.asText("").trim();
+                        if (!tagKey.isEmpty() && !tagVal.isEmpty())
+                        {
+                            addTagSafe.accept(new TestRunTagEntity(runId, tagKey, tagVal));
+                        }
+                    }
+                });
+            }
+
+            // 2. Process execution variation tags
+            if (!execList.isEmpty())
+            {
+                for (final JsonNode mNode : execList)
+                {
+                    final JsonNode mTagsNode = mNode.path("tags");
+                    if (mTagsNode.isObject() && !mTagsNode.isEmpty())
+                    {
+                        mTagsNode.fields().forEachRemaining(entry -> {
+                            final String tagKey = entry.getKey().trim();
+                            final JsonNode valNode = entry.getValue();
+                            if (valNode.isArray())
+                            {
+                                for (final JsonNode item : valNode)
+                                {
+                                    final String tagVal = item.asText("").trim();
+                                    if (!tagKey.isEmpty() && !tagVal.isEmpty())
+                                    {
+                                        addTagSafe.accept(new TestRunTagEntity(runId, tagKey, tagVal));
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                final String tagVal = valNode.asText("").trim();
+                                if (!tagKey.isEmpty() && !tagVal.isEmpty())
+                                {
+                                    addTagSafe.accept(new TestRunTagEntity(runId, tagKey, tagVal));
+                                }
+                            }
+                        });
+                    }
+                }
+            }
+
+            // 3. Fallback standard Suite, Environment, Browser tags if present
+            if (batchName != null && !batchName.isBlank()
+                && !"Default".equalsIgnoreCase(batchName)
+                && !"Unknown".equalsIgnoreCase(batchName)
+                && !"Queue".equalsIgnoreCase(batchName))
+            {
+                addTagSafe.accept(new TestRunTagEntity(runId, "Suite", batchName.trim()));
+            }
+            if (AuraReportDataService.isRealEnvironment(env))
+            {
+                addTagSafe.accept(new TestRunTagEntity(runId, "Environment", env.trim()));
+            }
+            for (final String br : bSet)
+            {
+                if (!br.isBlank() && !"Unknown".equalsIgnoreCase(br))
+                {
+                    addTagSafe.accept(new TestRunTagEntity(runId, "Browser", br.trim()));
+                }
+            }
+            for (final String loc : locSet)
+            {
+                if (!loc.isBlank() && !"Unknown".equalsIgnoreCase(loc) && !"Default".equalsIgnoreCase(loc))
+                {
+                    addTagSafe.accept(new TestRunTagEntity(runId, "Locale", loc.trim()));
+                }
+            }
+            for (final String area : aSet)
+            {
+                if (AuraReportDataService.isRealArea(area))
+                {
+                    String cleanArea = area.trim();
+                    while (cleanArea.startsWith("@"))
+                    {
+                        cleanArea = cleanArea.substring(1).trim();
+                    }
+                    addTagSafe.accept(new TestRunTagEntity(runId, "Area", cleanArea));
+                }
+            }
+            tagRepository.deleteByRunId(runId);
+            if (!tagEntities.isEmpty())
+            {
+                tagRepository.saveAll(tagEntities);
             }
 
             LOG.info("Imported/Updated run JSON report from storage into DB: runId={}, batch={}, totalTests={}, pass={}, fixed={}, known={}, unknown={}",
@@ -1075,5 +1087,39 @@ public class RunStorageSyncService
         final long minutes = totalSeconds / 60L;
         final long seconds = totalSeconds % 60L;
         return minutes + " min " + seconds + " s";
+    }
+
+    static String extractLocationFromNode(final JsonNode node)
+    {
+        if (node == null || node.isMissingNode() || node.isNull())
+        {
+            return "";
+        }
+        if (node.has("locale") && !node.path("locale").asText().trim().isEmpty())
+        {
+            return node.path("locale").asText().trim();
+        }
+        if (node.has("location") && !node.path("location").asText().trim().isEmpty())
+        {
+            return node.path("location").asText().trim();
+        }
+        if (node.has("tags") && node.path("tags").isObject())
+        {
+            final JsonNode tagsNode = node.path("tags");
+            final JsonNode locTag = tagsNode.has("locale") ? tagsNode.path("locale") : tagsNode.path("location");
+            if (locTag.isArray() && locTag.size() > 0)
+            {
+                final String first = locTag.get(0).asText("").trim();
+                if (!first.isEmpty())
+                {
+                    return first;
+                }
+            }
+            else if (!locTag.isMissingNode() && !locTag.asText("").trim().isEmpty())
+            {
+                return locTag.asText("").trim();
+            }
+        }
+        return "";
     }
 }

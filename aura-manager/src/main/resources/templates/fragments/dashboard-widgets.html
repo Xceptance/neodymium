@@ -1,0 +1,1886 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  GNU Affero General Public License (AGPLv3)
+  Copyright (c) 2026 Xceptance Software Technologies GmbH
+-->
+<body>
+
+<!-- DASHBOARD WIDGETS SECTION FRAGMENT -->
+<div th:fragment="dashboardWidgetsSection" id="dashboardWidgetsContainer" class="d-flex flex-column gap-3">
+    <!-- WARNING ALERT (E.G. WHEN WIDGETS CANNOT BE COMBINED) -->
+    <div class="alert alert-warning d-flex align-items-center justify-content-between p-2 mb-2"
+         th:if="${widgetWarningMessage != null and !widgetWarningMessage.isEmpty()}"
+         style="font-size: 0.85rem; border-radius: var(--radius-md, 6px); background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #f59e0b;">
+        <div class="d-flex align-items-center gap-2">
+            <span class="material-symbols-outlined" style="font-size: 1.15rem; color: #f59e0b;">warning</span>
+            <span th:text="${widgetWarningMessage}">Cannot unite widgets: they are based on different contributing runs.</span>
+        </div>
+        <button type="button" class="btn-close" style="font-size: 0.75rem; filter: invert(1); opacity: 0.7; cursor: pointer; background: transparent; border: none; color: inherit;" onclick="this.closest('.alert').remove()">✕</button>
+    </div>
+
+    <!-- DASHBOARD WIDGETS TOOLBAR / HEADER -->
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 pt-1 pb-1" id="dashboardWidgetsHeader">
+        <div class="d-flex align-items-center gap-2">
+            <span class="material-symbols-outlined text-accent" style="font-size: 1.15rem;">dashboard_customize</span>
+            <span style="font-size: 0.9rem; font-weight: 700; color: var(--text-main); text-transform: uppercase; letter-spacing: 0.05em;">Dashboard Widgets</span>
+            <span class="badge-status" style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.72rem; padding: 0.1rem 0.45rem;"
+                  th:text="${dashboardWidgets != null ? #lists.size(dashboardWidgets) + ' Active' : '0 Active'}">4 Active</span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button"
+                    class="btn-primary btn-compact d-inline-flex align-items-center gap-1"
+                    id="btnAddWidgetDashboard"
+                    th:if="${customPage == null}"
+                    onclick="openWidgetConfiguratorModal()"
+                    title="Add a custom widget to this dashboard">
+                <span class="material-symbols-outlined" style="font-size: 0.9rem;">add_chart</span>
+                <span>Add Widget</span>
+            </button>
+            <button type="button"
+                    class="btn-secondary btn-compact d-inline-flex align-items-center gap-1"
+                    id="btnResetWidgetsDashboard"
+                    th:if="${isCustomWidgetsConfigured == true and customPage == null}"
+                    hx-post="/widgets/reset"
+                    hx-target="#mainViewContainer"
+                    hx-swap="innerHTML"
+                    title="Reset dashboard widgets to default layout">
+                <span class="material-symbols-outlined" style="font-size: 0.9rem;">restart_alt</span>
+                <span>Reset</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- DYNAMIC WIDGETS GRID -->
+    <div class="dashboard-widgets-grid" id="dashboardWidgetsGrid" th:if="${dashboardWidgets != null and !#lists.isEmpty(dashboardWidgets)}">
+        <th:block th:each="w : ${dashboardWidgets}">
+
+            <!-- 0. UNIFIED WIDGET CONTAINER -->
+            <div th:if="${w.presentation.name() == 'CONTAINER'}"
+                 class="widget-card widget-container-card"
+                 th:classappend="${' ' + w.widthClass}"
+                 th:id="'widgetCard-' + ${w.id}"
+                 draggable="true"
+                 th:attr="data-widget-id=${w.id},data-contributing-runs=${w.contributingRunIdsCsv},data-is-container='true'">
+                <div class="widget-drop-overlay">
+                    <span class="material-symbols-outlined drop-overlay-icon">layers</span>
+                    <span class="drop-overlay-text">Combine into Container</span>
+                    <span class="drop-overlay-sub">Must share contributing runs</span>
+                </div>
+                <div class="widget-card-header widget-container-header d-flex align-items-center justify-content-between">
+                    <div class="widget-card-title d-flex align-items-center gap-2">
+                        <span class="material-symbols-outlined drag-handle" title="Drag to reorder or unite into container">drag_indicator</span>
+                        <span class="material-symbols-outlined text-accent" style="font-size: 1.25rem;">layers</span>
+                        <span th:text="${w.title}">Container</span>
+                        <button type="button" class="btn-icon-widget btn-rename-inline"
+                                th:attr="onclick='openRenameWidgetModal(\'' + ${w.id} + '\', \'' + ${#strings.escapeJavaScript(w.title)} + '\', true)'"
+                                title="Rename widget group">
+                            <span class="material-symbols-outlined" style="font-size: 0.95rem;">edit</span>
+                        </button>
+                        <span class="badge-status" style="background: rgba(59, 130, 246, 0.15); color: #3b82f6; font-size: 0.72rem; padding: 0.1rem 0.45rem;">
+                            <span th:text="${w.childViews != null ? #lists.size(w.childViews) + ' Linked Widgets' : 'Container'}">2 Linked Widgets</span>
+                        </span>
+                        <span class="badge-status" style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.72rem; padding: 0.1rem 0.45rem;"
+                              th:text="${w.pointScope.displayName}">Latest Test Status</span>
+                        <span class="badge-status" th:if="${w.hasOwnExecutionIdentity()}" th:title="${'Execution Identity: ' + w.identityDimensionsSummary}"
+                              style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6; font-size: 0.68rem; padding: 0.1rem 0.35rem; display: inline-flex; align-items: center; gap: 0.2rem;">
+                            <span class="material-symbols-outlined" style="font-size: 0.75rem;">fingerprint</span>
+                            <span th:text="${w.identityDimensionsSummary}">Identity</span>
+                            <span class="material-symbols-outlined text-muted execution-identity-info-icon" style="font-size: 0.75rem; cursor: help;" title="Execution Identity defines which dimensions (such as Test, Browser, Environment, or Tags) are used to uniquely distinguish and track test execution instances across runs and variations.">info</span>
+                        </span>
+                    </div>
+                    <div class="widget-card-actions d-flex align-items-center gap-1" onclick="event.stopPropagation()">
+                        <button type="button" class="btn-icon-widget"
+                                th:attr="onclick='openRenameWidgetModal(\'' + ${w.id} + '\', \'' + ${#strings.escapeJavaScript(w.title)} + '\', true)'"
+                                title="Rename widget group">
+                            <span class="material-symbols-outlined">edit</span>
+                        </button>
+                        <button type="button" class="btn-icon-widget"
+                                th:attr="onclick='openWidgetExecutionsModal(\'' + ${w.id} + '\')'"
+                                title="View contributing test executions">
+                            <span class="material-symbols-outlined">format_list_bulleted</span>
+                        </button>
+                        <button type="button" class="btn-icon-widget"
+                                th:attr="hx-post='/widgets/separate?containerId=' + ${w.id}"
+                                hx-target="#mainViewContainer"
+                                hx-swap="innerHTML"
+                                title="Separate into individual widgets">
+                            <span class="material-symbols-outlined">call_split</span>
+                        </button>
+                        <button type="button" class="btn-icon-widget"
+                                th:attr="hx-post='/widgets/delete?widgetId=' + ${w.id}"
+                                hx-target="#mainViewContainer"
+                                hx-swap="innerHTML"
+                                title="Remove container">
+                            <span class="material-symbols-outlined">close</span>
+                        </button>
+                    </div>
+                </div>
+                <!-- DEDICATED CONTAINER ACTIVE FILTER STRIP -->
+                <div class="container-active-filter-strip d-flex align-items-center gap-2 flex-wrap px-3 py-1-5 border-bottom" style="display: none;">
+                    <span class="d-inline-flex align-items-center gap-1 text-muted" style="font-size: 0.68rem; font-weight: 600;">
+                        <span class="material-symbols-outlined" style="font-size: 0.75rem; color: #3b82f6;">filter_alt</span>
+                        <span>Active Filter:</span>
+                    </span>
+                    <div class="container-filter-chips d-inline-flex align-items-center gap-1 flex-wrap"></div>
+                    <button type="button" class="btn-clear-all-container-filters btn-clear-ratio ms-1" style="display: none;" onclick="clearContainerCrossFilter(this, event)" title="Clear all filters">Clear all</button>
+                </div>
+                <!-- WIDGET FILTER DETAILS STRIP -->
+                <div class="widget-filter-strip d-flex align-items-center gap-1 flex-wrap" th:if="${w.hasOwnRunFilters()}">
+                    <span class="d-inline-flex align-items-center gap-1 text-muted" style="font-size: 0.68rem; font-weight: 600;">
+                        <span class="material-symbols-outlined" style="font-size: 0.75rem; color: #3b82f6;">filter_alt</span>
+                        <span>Filtered:</span>
+                    </span>
+                    <span th:each="chip : ${w.filterChips}"
+                          class="active-scope-tag widget-scope-tag"
+                          th:classappend="${chip.excluded ? 'tag-excluded' : 'tag-' + chip.category}"
+                          th:title="${chip.label}">
+                        <span class="material-symbols-outlined" style="font-size: 0.7rem;" th:text="${chip.icon}">web</span>
+                        <span th:text="${chip.label}">Chrome</span>
+                    </span>
+                </div>
+                <div class="widget-card-body widget-container-body p-3">
+                    <!-- EMBEDDED CONTAINER DATASET FOR INSTANT CROSS-FILTERING -->
+                    <script type="application/json" class="widget-container-dataset" th:utext="${w.containerVariationsJson}">[]</script>
+                    <div class="widget-container-unified-row">
+                        <th:block th:each="child, iterStat : ${w.childViews}">
+                            <div class="widget-container-section"
+                                 th:classappend="${(child.presentation.name() == 'PIE_CHART' ? ' widget-container-pie-section' : (child.presentation.name() == 'RATIO_BAR' ? ' widget-container-ratios-section' : ' widget-container-generic-section')) + (child.presentation.name() == 'TREND_GRAPH' or child.presentation.name() == 'PERLENKETTE' ? ' widget-container-full-span' : '')}"
+                                 th:id="'widgetContainerSection-' + ${child.id}"
+                                 draggable="true"
+                                 th:attr="data-child-id=${child.id},data-presentation=${child.presentation.name()},data-metric=${child.metric.name()},data-tag-key=${child.tagKey}">
+                                <!-- SECTION HEADER -->
+                                <div class="widget-section-header d-flex align-items-center justify-content-between mb-2">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="material-symbols-outlined drag-handle child-drag-handle"
+                                              style="font-size: 0.95rem; cursor: grab;"
+                                              title="Drag to reorder in widget group">drag_indicator</span>
+                                        <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;" th:text="${child.metric.icon}">view_column</span>
+                                        <span style="font-weight: 600; font-size: 0.8rem; color: var(--text-main);" th:text="${child.title}">Widget</span>
+                                        <button type="button" class="btn-icon-widget btn-rename-inline"
+                                                th:attr="onclick='openRenameWidgetModal(\'' + ${child.id} + '\', \'' + ${#strings.escapeJavaScript(child.title)} + '\', false)'"
+                                                title="Rename widget"
+                                                style="padding: 1px;">
+                                            <span class="material-symbols-outlined" style="font-size: 0.75rem;">edit</span>
+                                        </button>
+                                        <span class="text-muted font-mono" style="font-size: 0.68rem;" th:text="${child.summaryLabel}">10 Items</span>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-1" onclick="event.stopPropagation()">
+                                        <button type="button" class="btn-icon-widget"
+                                                th:attr="onclick='openRenameWidgetModal(\'' + ${child.id} + '\', \'' + ${#strings.escapeJavaScript(child.title)} + '\', false)'"
+                                                title="Rename widget">
+                                            <span class="material-symbols-outlined" style="font-size: 0.8rem;">edit</span>
+                                        </button>
+                                        <button type="button" class="btn-icon-widget btn-widget-section-span"
+                                                onclick="toggleWidgetSectionSpan(this, event)"
+                                                title="Expand to full width">
+                                            <span class="material-symbols-outlined" style="font-size: 0.8rem;">open_in_full</span>
+                                        </button>
+                                        <button type="button" class="btn-icon-widget"
+                                                th:attr="hx-post='/widgets/separate-child?containerId=' + ${w.id} + '&widgetId=' + ${child.id}"
+                                                hx-target="#mainViewContainer"
+                                                hx-swap="innerHTML"
+                                                title="Separate from group">
+                                            <span class="material-symbols-outlined" style="font-size: 0.8rem;">call_split</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <!-- CHILD FILTER DETAILS STRIP -->
+                                <div class="widget-filter-strip d-flex align-items-center gap-1 flex-wrap mb-2" th:if="${child.hasOwnRunFilters()}">
+                                    <span class="d-inline-flex align-items-center gap-1 text-muted" style="font-size: 0.65rem; font-weight: 600;">
+                                        <span class="material-symbols-outlined" style="font-size: 0.7rem; color: #3b82f6;">filter_alt</span>
+                                        <span>Filtered:</span>
+                                    </span>
+                                    <span th:each="chip : ${child.filterChips}"
+                                          class="active-scope-tag widget-scope-tag"
+                                          th:classappend="${chip.excluded ? 'tag-excluded' : 'tag-' + chip.category}"
+                                          th:title="${chip.label}">
+                                        <span class="material-symbols-outlined" style="font-size: 0.65rem;" th:text="${chip.icon}">web</span>
+                                        <span th:text="${chip.label}">Chrome</span>
+                                    </span>
+                                </div>
+                                <!-- CHILD BODY ACCORDING TO PRESENTATION (Separated into th:block to prevent Thymeleaf precedence bug) -->
+                                <th:block th:if="${child.presentation.name() == 'PIE_CHART'}">
+                                    <div th:replace="~{fragments/dashboard-widgets :: pieChartBody(w=${child})}"></div>
+                                </th:block>
+                                <th:block th:if="${child.presentation.name() == 'RATIO_BAR'}">
+                                    <div th:replace="~{fragments/dashboard-widgets :: ratioBarBody(w=${child})}"></div>
+                                </th:block>
+                                <th:block th:if="${child.presentation.name() == 'PERLENKETTE'}">
+                                    <div th:replace="~{fragments/dashboard-widgets :: perlenketteBody(w=${child})}"></div>
+                                </th:block>
+                                <th:block th:if="${child.presentation.name() == 'TREND_GRAPH'}">
+                                    <div th:replace="~{fragments/dashboard-widgets :: trendGraphBody(w=${child})}"></div>
+                                </th:block>
+                                <th:block th:if="${child.presentation.name() == 'TEXT'}">
+                                    <div th:replace="~{fragments/dashboard-widgets :: textBody(w=${child})}"></div>
+                                </th:block>
+                                <th:block th:if="${child.presentation.name() == 'TEXT_WITH_SMALL_TREND'}">
+                                    <div th:replace="~{fragments/dashboard-widgets :: textSmallTrendBody(w=${child})}"></div>
+                                </th:block>
+                                <th:block th:if="${child.presentation.name() == 'LIST'}">
+                                    <div th:replace="~{fragments/dashboard-widgets :: listBody(w=${child})}"></div>
+                                </th:block>
+                                <th:block th:if="${child.presentation.name() == 'TEST_VARIATIONS'}">
+                                    <div th:replace="~{fragments/dashboard-widgets :: testVariationsBody(w=${child})}"></div>
+                                </th:block>
+                                <th:block th:if="${child.presentation.name() == 'RUNS' or child.metric.name() == 'RUNS' or child.metric.name() == 'RUN_HISTORY'}">
+                                    <div th:replace="~{fragments/dashboard-widgets :: testRunsBody(w=${child})}"></div>
+                                </th:block>
+                            </div>
+                            <!-- VERTICAL DIVIDER BETWEEN SECTIONS -->
+                            <div class="widget-container-divider" th:if="${!iterStat.last}"></div>
+                        </th:block>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 1. PIE / DONUT CHART WIDGET -->
+            <div th:if="${w.presentation.name() == 'PIE_CHART'}"
+                 class="widget-card widget-pie-card"
+                 th:classappend="${' ' + w.widthClass}"
+                 th:id="'widgetCard-' + ${w.id}"
+                 draggable="true"
+                 th:attr="data-widget-id=${w.id},data-contributing-runs=${w.contributingRunIdsCsv}">
+                <div class="widget-drop-overlay">
+                    <span class="material-symbols-outlined drop-overlay-icon">layers</span>
+                    <span class="drop-overlay-text">Combine into Container</span>
+                    <span class="drop-overlay-sub">Must share contributing runs</span>
+                </div>
+                <div class="widget-card-header d-flex align-items-center justify-content-between">
+                    <div class="widget-card-title d-flex align-items-center gap-2">
+                        <span class="material-symbols-outlined drag-handle" title="Drag to reorder or unite into container">drag_indicator</span>
+                        <span class="material-symbols-outlined text-accent" th:text="${w.metric.icon}">pie_chart</span>
+                        <span th:text="${w.title}">Status Donut</span>
+                        <span class="text-muted font-mono" style="font-size: 0.72rem; font-weight: normal;" th:text="${w.summaryLabel}">10 Tests</span>
+                        <span class="badge-status" style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.72rem; padding: 0.1rem 0.45rem;"
+                              th:text="${w.pointScope.displayName}">Latest Test Status</span>
+                        <span class="badge-status" th:if="${w.hasOwnExecutionIdentity()}" th:title="${'Execution Identity: ' + w.identityDimensionsSummary}"
+                              style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6; font-size: 0.68rem; padding: 0.1rem 0.35rem; display: inline-flex; align-items: center; gap: 0.2rem;">
+                            <span class="material-symbols-outlined" style="font-size: 0.75rem;">fingerprint</span>
+                            <span th:text="${w.identityDimensionsSummary}">Identity</span>
+                            <span class="material-symbols-outlined text-muted execution-identity-info-icon" style="font-size: 0.75rem; cursor: help;" title="Execution Identity defines which dimensions (such as Test, Browser, Environment, or Tags) are used to uniquely distinguish and track test execution instances across runs and variations.">info</span>
+                        </span>
+                    </div>
+                    <div class="widget-card-actions d-flex align-items-center gap-1" onclick="event.stopPropagation()">
+                        <button type="button" class="btn-icon-widget" th:attr="onclick='openWidgetExecutionsModal(\'' + ${w.id} + '\')'" title="View contributing test executions">
+                            <span class="material-symbols-outlined">format_list_bulleted</span>
+                        </button>
+                        <button type="button" class="btn-icon-widget" th:attr="onclick='openWidgetConfiguratorModal(\'' + ${w.id} + '\')'" title="Edit widget">
+                            <span class="material-symbols-outlined">edit</span>
+                        </button>
+                        <button type="button" class="btn-icon-widget"
+                                th:attr="hx-post='/widgets/delete?widgetId=' + ${w.id}"
+                                hx-target="#mainViewContainer"
+                                hx-swap="innerHTML"
+                                title="Remove widget">
+                            <span class="material-symbols-outlined">close</span>
+                        </button>
+                    </div>
+                </div>
+                <!-- WIDGET FILTER DETAILS STRIP -->
+                <div class="widget-filter-strip d-flex align-items-center gap-1 flex-wrap" th:if="${w.hasOwnRunFilters()}">
+                    <span class="d-inline-flex align-items-center gap-1 text-muted" style="font-size: 0.68rem; font-weight: 600;">
+                        <span class="material-symbols-outlined" style="font-size: 0.75rem; color: #3b82f6;">filter_alt</span>
+                        <span>Filtered:</span>
+                    </span>
+                    <span th:each="chip : ${w.filterChips}"
+                          class="active-scope-tag widget-scope-tag"
+                          th:classappend="${chip.excluded ? 'tag-excluded' : 'tag-' + chip.category}"
+                          th:title="${chip.label}">
+                        <span class="material-symbols-outlined" style="font-size: 0.7rem;" th:text="${chip.icon}">web</span>
+                        <span th:text="${chip.label}">Chrome</span>
+                    </span>
+                </div>
+                <th:block th:replace="~{fragments/dashboard-widgets :: pieChartBody(w=${w})}"></th:block>
+            </div>
+
+            <!-- 2. RATIO BAR WIDGET -->
+            <div th:if="${w.presentation.name() == 'RATIO_BAR'}"
+                 class="widget-card widget-ratio-card"
+                 th:classappend="${' ' + w.widthClass}"
+                 th:id="'widgetCard-' + ${w.id}"
+                 draggable="true"
+                 th:attr="data-widget-id=${w.id},data-contributing-runs=${w.contributingRunIdsCsv}">
+                <div class="widget-drop-overlay">
+                    <span class="material-symbols-outlined drop-overlay-icon">layers</span>
+                    <span class="drop-overlay-text">Combine into Container</span>
+                    <span class="drop-overlay-sub">Must share contributing runs</span>
+                </div>
+                <div class="widget-card-header d-flex align-items-center justify-content-between">
+                    <div class="widget-card-title d-flex align-items-center gap-2">
+                        <span class="material-symbols-outlined drag-handle" title="Drag to reorder or unite into container">drag_indicator</span>
+                        <span class="material-symbols-outlined text-accent" th:text="${w.metric.icon}">view_column</span>
+                        <span th:text="${w.title}">Ratio Bar</span>
+                        <span class="text-muted font-mono" style="font-size: 0.72rem; font-weight: normal;" th:text="${w.summaryLabel}">10 Items</span>
+                        <span class="badge-status" style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.72rem; padding: 0.1rem 0.45rem;"
+                              th:text="${w.pointScope.displayName}">Latest Test Status</span>
+                        <span class="badge-status" th:if="${w.hasOwnExecutionIdentity()}" th:title="${'Execution Identity: ' + w.identityDimensionsSummary}"
+                              style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6; font-size: 0.68rem; padding: 0.1rem 0.35rem; display: inline-flex; align-items: center; gap: 0.2rem;">
+                            <span class="material-symbols-outlined" style="font-size: 0.75rem;">fingerprint</span>
+                            <span th:text="${w.identityDimensionsSummary}">Identity</span>
+                            <span class="material-symbols-outlined text-muted execution-identity-info-icon" style="font-size: 0.75rem; cursor: help;" title="Execution Identity defines which dimensions (such as Test, Browser, Environment, or Tags) are used to uniquely distinguish and track test execution instances across runs and variations.">info</span>
+                        </span>
+                    </div>
+                    <div class="widget-card-actions d-flex align-items-center gap-1" onclick="event.stopPropagation()">
+                        <button type="button" class="btn-icon-widget" th:attr="onclick='openWidgetExecutionsModal(\'' + ${w.id} + '\')'" title="View contributing test executions">
+                            <span class="material-symbols-outlined">format_list_bulleted</span>
+                        </button>
+                        <button type="button" class="btn-icon-widget" th:attr="onclick='openWidgetConfiguratorModal(\'' + ${w.id} + '\')'" title="Edit widget">
+                            <span class="material-symbols-outlined">edit</span>
+                        </button>
+                        <button type="button" class="btn-icon-widget"
+                                th:attr="hx-post='/widgets/delete?widgetId=' + ${w.id}"
+                                hx-target="#mainViewContainer"
+                                hx-swap="innerHTML"
+                                title="Remove widget">
+                            <span class="material-symbols-outlined">close</span>
+                        </button>
+                    </div>
+                </div>
+                <!-- WIDGET FILTER DETAILS STRIP -->
+                <div class="widget-filter-strip d-flex align-items-center gap-1 flex-wrap" th:if="${w.hasOwnRunFilters()}">
+                    <span class="d-inline-flex align-items-center gap-1 text-muted" style="font-size: 0.68rem; font-weight: 600;">
+                        <span class="material-symbols-outlined" style="font-size: 0.75rem; color: #3b82f6;">filter_alt</span>
+                        <span>Filtered:</span>
+                    </span>
+                    <span th:each="chip : ${w.filterChips}"
+                          class="active-scope-tag widget-scope-tag"
+                          th:classappend="${chip.excluded ? 'tag-excluded' : 'tag-' + chip.category}"
+                          th:title="${chip.label}">
+                        <span class="material-symbols-outlined" style="font-size: 0.7rem;" th:text="${chip.icon}">web</span>
+                        <span th:text="${chip.label}">Chrome</span>
+                    </span>
+                </div>
+                <th:block th:replace="~{fragments/dashboard-widgets :: ratioBarBody(w=${w})}"></th:block>
+            </div>
+
+            <!-- 3. PERLENKETTE (BEAD CHAIN) WIDGET -->
+            <div th:if="${w.presentation.name() == 'PERLENKETTE'}"
+                 class="widget-card widget-perlenkette-card"
+                 th:classappend="${' ' + w.widthClass}"
+                 th:id="'widgetCard-' + ${w.id}"
+                 draggable="true"
+                 th:attr="data-widget-id=${w.id},data-contributing-runs=${w.contributingRunIdsCsv}">
+                <div class="widget-drop-overlay">
+                    <span class="material-symbols-outlined drop-overlay-icon">layers</span>
+                    <span class="drop-overlay-text">Combine into Container</span>
+                    <span class="drop-overlay-sub">Must share contributing runs</span>
+                </div>
+                <div class="widget-card-header d-flex align-items-center justify-content-between">
+                    <div class="widget-card-title d-flex align-items-center gap-2">
+                        <span class="material-symbols-outlined drag-handle" title="Drag to reorder or unite into container">drag_indicator</span>
+                        <span class="material-symbols-outlined text-accent">linear_scale</span>
+                        <span th:text="${w.title}">Pass Rate Perlenkette</span>
+                        <span class="badge-status badge-pass font-mono" style="font-size: 0.72rem; padding: 0.1rem 0.45rem;"
+                              th:text="${w.summaryLabel}">15 Milestones</span>
+                        <span class="badge-status" style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.72rem; padding: 0.1rem 0.45rem;"
+                              th:if="${w.metric.name() != 'TAG'}"
+                              th:text="${w.trendMode.displayName}">Daily</span>
+                        <span class="badge-status" style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.72rem; padding: 0.1rem 0.45rem;"
+                              th:if="${w.metric.name() == 'TAG'}"
+                              th:text="${w.pointScope.displayName}">Latest Test Status</span>
+                        <span class="badge-status" th:if="${w.hasOwnExecutionIdentity()}" th:title="${'Execution Identity: ' + w.identityDimensionsSummary}"
+                              style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6; font-size: 0.68rem; padding: 0.1rem 0.35rem; display: inline-flex; align-items: center; gap: 0.2rem;">
+                            <span class="material-symbols-outlined" style="font-size: 0.75rem;">fingerprint</span>
+                            <span th:text="${w.identityDimensionsSummary}">Identity</span>
+                            <span class="material-symbols-outlined text-muted execution-identity-info-icon" style="font-size: 0.75rem; cursor: help;" title="Execution Identity defines which dimensions (such as Test, Browser, Environment, or Tags) are used to uniquely distinguish and track test execution instances across runs and variations.">info</span>
+                        </span>
+                    </div>
+                    <div class="widget-card-actions d-flex align-items-center gap-1" onclick="event.stopPropagation()">
+                        <button type="button" class="btn-icon-widget" th:attr="onclick='openWidgetExecutionsModal(\'' + ${w.id} + '\')'" title="View contributing test executions">
+                            <span class="material-symbols-outlined">format_list_bulleted</span>
+                        </button>
+                        <button type="button" class="btn-icon-widget" th:attr="onclick='openWidgetConfiguratorModal(\'' + ${w.id} + '\')'" title="Edit widget">
+                            <span class="material-symbols-outlined">edit</span>
+                        </button>
+                        <button type="button" class="btn-icon-widget"
+                                th:attr="hx-post='/widgets/delete?widgetId=' + ${w.id}"
+                                hx-target="#mainViewContainer"
+                                hx-swap="innerHTML"
+                                title="Remove widget">
+                            <span class="material-symbols-outlined">close</span>
+                        </button>
+                    </div>
+                </div>
+                <!-- WIDGET FILTER DETAILS STRIP -->
+                <div class="widget-filter-strip d-flex align-items-center gap-1 flex-wrap" th:if="${w.hasOwnRunFilters()}">
+                    <span class="d-inline-flex align-items-center gap-1 text-muted" style="font-size: 0.68rem; font-weight: 600;">
+                        <span class="material-symbols-outlined" style="font-size: 0.75rem; color: #3b82f6;">filter_alt</span>
+                        <span>Filtered:</span>
+                    </span>
+                    <span th:each="chip : ${w.filterChips}"
+                          class="active-scope-tag widget-scope-tag"
+                          th:classappend="${chip.excluded ? 'tag-excluded' : 'tag-' + chip.category}"
+                          th:title="${chip.label}">
+                        <span class="material-symbols-outlined" style="font-size: 0.7rem;" th:text="${chip.icon}">web</span>
+                        <span th:text="${chip.label}">Chrome</span>
+                    </span>
+                </div>
+                <th:block th:replace="~{fragments/dashboard-widgets :: perlenketteBody(w=${w})}"></th:block>
+            </div>
+
+            <!-- 4. TREND GRAPH WIDGET -->
+            <div th:if="${w.presentation.name() == 'TREND_GRAPH'}"
+                 class="widget-card widget-trend-card"
+                 th:classappend="${' ' + w.widthClass}"
+                 th:id="'widgetCard-' + ${w.id}"
+                 draggable="true"
+                 th:attr="data-widget-id=${w.id},data-contributing-runs=${w.contributingRunIdsCsv}">
+                <div class="widget-drop-overlay">
+                    <span class="material-symbols-outlined drop-overlay-icon">layers</span>
+                    <span class="drop-overlay-text">Combine into Container</span>
+                    <span class="drop-overlay-sub">Must share contributing runs</span>
+                </div>
+                <div class="widget-card-header d-flex align-items-center justify-content-between">
+                    <div class="widget-card-title d-flex align-items-center gap-2">
+                        <span class="material-symbols-outlined drag-handle" title="Drag to reorder or unite into container">drag_indicator</span>
+                        <span class="material-symbols-outlined text-accent">insights</span>
+                        <span th:text="${w.title}">Trend Graph</span>
+                        <span class="font-mono text-muted" style="font-size: 0.72rem;" th:text="${w.trendDeltaLabel}">+2.4%</span>
+                        <span class="badge-status" style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.72rem; padding: 0.1rem 0.45rem;"
+                              th:text="${w.trendMode.displayName}">By Runs</span>
+                        <span class="badge-status" th:if="${w.hasOwnExecutionIdentity()}" th:title="${'Execution Identity: ' + w.identityDimensionsSummary}"
+                              style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6; font-size: 0.68rem; padding: 0.1rem 0.35rem; display: inline-flex; align-items: center; gap: 0.2rem;">
+                            <span class="material-symbols-outlined" style="font-size: 0.75rem;">fingerprint</span>
+                            <span th:text="${w.identityDimensionsSummary}">Identity</span>
+                            <span class="material-symbols-outlined text-muted execution-identity-info-icon" style="font-size: 0.75rem; cursor: help;" title="Execution Identity defines which dimensions (such as Test, Browser, Environment, or Tags) are used to uniquely distinguish and track test execution instances across runs and variations.">info</span>
+                        </span>
+                    </div>
+                    <div class="widget-card-actions d-flex align-items-center gap-1" onclick="event.stopPropagation()">
+                        <label class="d-inline-flex align-items-center gap-1 font-mono text-muted widget-fill-trend-toggle"
+                               style="font-size: 0.72rem; cursor: pointer; user-select: none; margin-right: 0.35rem;"
+                               title="Toggle filled area on trend chart">
+                            <input type="checkbox"
+                                   class="form-check-input widget-fill-toggle-input"
+                                   style="cursor: pointer; width: 13px; height: 13px; margin: 0;"
+                                   th:checked="${w.filled}"
+                                   th:attr="data-widget-id=${w.id}"
+                                   onchange="toggleTrendFilled(this, this.getAttribute('data-widget-id'))" />
+                            <span>Fill</span>
+                        </label>
+                        <label class="d-inline-flex align-items-center gap-1 font-mono text-muted widget-show-dots-toggle"
+                               style="font-size: 0.72rem; cursor: pointer; user-select: none; margin-right: 0.35rem;"
+                               title="Toggle data point dots on chart">
+                            <input type="checkbox"
+                                   class="form-check-input"
+                                   style="cursor: pointer; width: 13px; height: 13px; margin: 0;"
+                                   th:checked="${w.showDots}"
+                                   th:attr="data-widget-id=${w.id}"
+                                   onchange="toggleTrendDots(this, this.getAttribute('data-widget-id'))" />
+                            <span>Dots</span>
+                        </label>
+                        <button type="button" class="btn-icon-widget" th:attr="onclick='openWidgetExecutionsModal(\'' + ${w.id} + '\')'" title="View contributing test executions">
+                            <span class="material-symbols-outlined">format_list_bulleted</span>
+                        </button>
+                        <button type="button" class="btn-icon-widget" th:attr="onclick='openWidgetConfiguratorModal(\'' + ${w.id} + '\')'" title="Edit widget">
+                            <span class="material-symbols-outlined">edit</span>
+                        </button>
+                        <button type="button" class="btn-icon-widget"
+                                th:attr="hx-post='/widgets/delete?widgetId=' + ${w.id}"
+                                hx-target="#mainViewContainer"
+                                hx-swap="innerHTML"
+                                title="Remove widget">
+                            <span class="material-symbols-outlined">close</span>
+                        </button>
+                    </div>
+                </div>
+                <!-- WIDGET FILTER DETAILS STRIP -->
+                <div class="widget-filter-strip d-flex align-items-center gap-1 flex-wrap" th:if="${w.hasOwnRunFilters()}">
+                    <span class="d-inline-flex align-items-center gap-1 text-muted" style="font-size: 0.68rem; font-weight: 600;">
+                        <span class="material-symbols-outlined" style="font-size: 0.75rem; color: #3b82f6;">filter_alt</span>
+                        <span>Filtered:</span>
+                    </span>
+                    <span th:each="chip : ${w.filterChips}"
+                          class="active-scope-tag widget-scope-tag"
+                          th:classappend="${chip.excluded ? 'tag-excluded' : 'tag-' + chip.category}"
+                          th:title="${chip.label}">
+                        <span class="material-symbols-outlined" style="font-size: 0.7rem;" th:text="${chip.icon}">web</span>
+                        <span th:text="${chip.label}">Chrome</span>
+                    </span>
+                </div>
+                <th:block th:replace="~{fragments/dashboard-widgets :: trendGraphBody(w=${w})}"></th:block>
+            </div>
+
+            <!-- 5. TEXT (KPI) WIDGET -->
+            <div th:if="${w.presentation.name() == 'TEXT'}"
+                 class="widget-card widget-text-card"
+                 th:classappend="${' ' + w.widthClass}"
+                 th:id="'widgetCard-' + ${w.id}"
+                 draggable="true"
+                 th:attr="data-widget-id=${w.id},data-contributing-runs=${w.contributingRunIdsCsv}">
+                <div class="widget-drop-overlay">
+                    <span class="material-symbols-outlined drop-overlay-icon">layers</span>
+                    <span class="drop-overlay-text">Combine into Container</span>
+                    <span class="drop-overlay-sub">Must share contributing runs</span>
+                </div>
+                <div class="widget-card-header d-flex align-items-center justify-content-between">
+                    <div class="widget-card-title d-flex align-items-center gap-2">
+                        <span class="material-symbols-outlined drag-handle" title="Drag to reorder or unite into container">drag_indicator</span>
+                        <span class="material-symbols-outlined text-accent" th:text="${w.metric.icon}">numbers</span>
+                        <span th:text="${w.title}">Text Widget</span>
+                        <span class="badge-status" style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.72rem; padding: 0.1rem 0.45rem;"
+                              th:text="${w.pointScope.displayName}">Latest Test Status</span>
+                        <span class="badge-status" th:if="${w.hasOwnExecutionIdentity()}" th:title="${'Execution Identity: ' + w.identityDimensionsSummary}"
+                              style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6; font-size: 0.68rem; padding: 0.1rem 0.35rem; display: inline-flex; align-items: center; gap: 0.2rem;">
+                            <span class="material-symbols-outlined" style="font-size: 0.75rem;">fingerprint</span>
+                            <span th:text="${w.identityDimensionsSummary}">Identity</span>
+                            <span class="material-symbols-outlined text-muted execution-identity-info-icon" style="font-size: 0.75rem; cursor: help;" title="Execution Identity defines which dimensions (such as Test, Browser, Environment, or Tags) are used to uniquely distinguish and track test execution instances across runs and variations.">info</span>
+                        </span>
+                    </div>
+                    <div class="widget-card-actions d-flex align-items-center gap-1" onclick="event.stopPropagation()">
+                        <button type="button" class="btn-icon-widget" th:attr="onclick='openWidgetExecutionsModal(\'' + ${w.id} + '\')'" title="View contributing test executions">
+                            <span class="material-symbols-outlined">format_list_bulleted</span>
+                        </button>
+                        <button type="button" class="btn-icon-widget" th:attr="onclick='openWidgetConfiguratorModal(\'' + ${w.id} + '\')'" title="Edit widget">
+                            <span class="material-symbols-outlined">edit</span>
+                        </button>
+                        <button type="button" class="btn-icon-widget"
+                                th:attr="hx-post='/widgets/delete?widgetId=' + ${w.id}"
+                                hx-target="#mainViewContainer"
+                                hx-swap="innerHTML"
+                                title="Remove widget">
+                            <span class="material-symbols-outlined">close</span>
+                        </button>
+                    </div>
+                </div>
+                <!-- WIDGET FILTER DETAILS STRIP -->
+                <div class="widget-filter-strip d-flex align-items-center gap-1 flex-wrap" th:if="${w.hasOwnRunFilters()}">
+                    <span class="d-inline-flex align-items-center gap-1 text-muted" style="font-size: 0.68rem; font-weight: 600;">
+                        <span class="material-symbols-outlined" style="font-size: 0.75rem; color: #3b82f6;">filter_alt</span>
+                        <span>Filtered:</span>
+                    </span>
+                    <span th:each="chip : ${w.filterChips}"
+                          class="active-scope-tag widget-scope-tag"
+                          th:classappend="${chip.excluded ? 'tag-excluded' : 'tag-' + chip.category}"
+                          th:title="${chip.label}">
+                        <span class="material-symbols-outlined" style="font-size: 0.7rem;" th:text="${chip.icon}">web</span>
+                        <span th:text="${chip.label}">Chrome</span>
+                    </span>
+                </div>
+                <th:block th:replace="~{fragments/dashboard-widgets :: textBody(w=${w})}"></th:block>
+            </div>
+
+            <!-- 6. TEXT WITH SMALL TREND (SPARKLINE) WIDGET -->
+            <div th:if="${w.presentation.name() == 'TEXT_WITH_SMALL_TREND'}"
+                 class="widget-card widget-text-trend-card"
+                 th:classappend="${' ' + w.widthClass}"
+                 th:id="'widgetCard-' + ${w.id}"
+                 draggable="true"
+                 th:attr="data-widget-id=${w.id},data-contributing-runs=${w.contributingRunIdsCsv}">
+                <div class="widget-drop-overlay">
+                    <span class="material-symbols-outlined drop-overlay-icon">layers</span>
+                    <span class="drop-overlay-text">Combine into Container</span>
+                    <span class="drop-overlay-sub">Must share contributing runs</span>
+                </div>
+                <div class="widget-card-header d-flex align-items-center justify-content-between">
+                    <div class="widget-card-title d-flex align-items-center gap-2">
+                        <span class="material-symbols-outlined drag-handle" title="Drag to reorder or unite into container">drag_indicator</span>
+                        <span class="material-symbols-outlined text-accent" th:text="${w.metric.icon}">trending_up</span>
+                        <span th:text="${w.title}">Text with Trend</span>
+                        <span class="badge-status" style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.72rem; padding: 0.1rem 0.45rem;"
+                              th:text="${w.trendMode.displayName}">Daily</span>
+                        <span class="badge-status" th:if="${w.hasOwnExecutionIdentity()}" th:title="${'Execution Identity: ' + w.identityDimensionsSummary}"
+                              style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6; font-size: 0.68rem; padding: 0.1rem 0.35rem; display: inline-flex; align-items: center; gap: 0.2rem;">
+                            <span class="material-symbols-outlined" style="font-size: 0.75rem;">fingerprint</span>
+                            <span th:text="${w.identityDimensionsSummary}">Identity</span>
+                            <span class="material-symbols-outlined text-muted execution-identity-info-icon" style="font-size: 0.75rem; cursor: help;" title="Execution Identity defines which dimensions (such as Test, Browser, Environment, or Tags) are used to uniquely distinguish and track test execution instances across runs and variations.">info</span>
+                        </span>
+                    </div>
+                    <div class="widget-card-actions d-flex align-items-center gap-1" onclick="event.stopPropagation()">
+                        <button type="button" class="btn-icon-widget" th:attr="onclick='openWidgetExecutionsModal(\'' + ${w.id} + '\')'" title="View contributing test executions">
+                            <span class="material-symbols-outlined">format_list_bulleted</span>
+                        </button>
+                        <button type="button" class="btn-icon-widget" th:attr="onclick='openWidgetConfiguratorModal(\'' + ${w.id} + '\')'" title="Edit widget">
+                            <span class="material-symbols-outlined">edit</span>
+                        </button>
+                        <button type="button" class="btn-icon-widget"
+                                th:attr="hx-post='/widgets/delete?widgetId=' + ${w.id}"
+                                hx-target="#mainViewContainer"
+                                hx-swap="innerHTML"
+                                title="Remove widget">
+                            <span class="material-symbols-outlined">close</span>
+                        </button>
+                    </div>
+                </div>
+                <!-- WIDGET FILTER DETAILS STRIP -->
+                <div class="widget-filter-strip d-flex align-items-center gap-1 flex-wrap" th:if="${w.hasOwnRunFilters()}">
+                    <span class="d-inline-flex align-items-center gap-1 text-muted" style="font-size: 0.68rem; font-weight: 600;">
+                        <span class="material-symbols-outlined" style="font-size: 0.75rem; color: #3b82f6;">filter_alt</span>
+                        <span>Filtered:</span>
+                    </span>
+                    <span th:each="chip : ${w.filterChips}"
+                          class="active-scope-tag widget-scope-tag"
+                          th:classappend="${chip.excluded ? 'tag-excluded' : 'tag-' + chip.category}"
+                          th:title="${chip.label}">
+                        <span class="material-symbols-outlined" style="font-size: 0.7rem;" th:text="${chip.icon}">web</span>
+                        <span th:text="${chip.label}">Chrome</span>
+                    </span>
+                </div>
+                <th:block th:replace="~{fragments/dashboard-widgets :: textSmallTrendBody(w=${w})}"></th:block>
+            </div>
+
+            <!-- 7. LIST PRESENTATION WIDGET -->
+            <div th:if="${w.presentation.name() == 'LIST'}"
+                 class="widget-card widget-list-card"
+                 th:classappend="${' ' + w.widthClass}"
+                 th:id="'widgetCard-' + ${w.id}"
+                 draggable="true"
+                 th:attr="data-widget-id=${w.id},data-contributing-runs=${w.contributingRunIdsCsv}">
+                <div class="widget-drop-overlay">
+                    <span class="material-symbols-outlined drop-overlay-icon">layers</span>
+                    <span class="drop-overlay-text">Combine into Container</span>
+                    <span class="drop-overlay-sub">Must share contributing runs</span>
+                </div>
+                <div class="widget-card-header d-flex align-items-center justify-content-between">
+                    <div class="widget-card-title d-flex align-items-center gap-2">
+                        <span class="material-symbols-outlined drag-handle" title="Drag to reorder or unite into container">drag_indicator</span>
+                        <span class="material-symbols-outlined text-accent" th:text="${w.metric.icon}">format_list_bulleted</span>
+                        <span th:text="${w.title}">List Widget</span>
+                        <span class="badge-status" style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.72rem; padding: 0.1rem 0.45rem;"
+                              th:text="${w.pointScope.displayName}">Latest Test Status</span>
+                        <span class="badge-status" th:if="${w.hasOwnExecutionIdentity()}" th:title="${'Execution Identity: ' + w.identityDimensionsSummary}"
+                              style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6; font-size: 0.68rem; padding: 0.1rem 0.35rem; display: inline-flex; align-items: center; gap: 0.2rem;">
+                            <span class="material-symbols-outlined" style="font-size: 0.75rem;">fingerprint</span>
+                            <span th:text="${w.identityDimensionsSummary}">Identity</span>
+                            <span class="material-symbols-outlined text-muted execution-identity-info-icon" style="font-size: 0.75rem; cursor: help;" title="Execution Identity defines which dimensions (such as Test, Browser, Environment, or Tags) are used to uniquely distinguish and track test execution instances across runs and variations.">info</span>
+                        </span>
+                    </div>
+                    <div class="widget-card-actions d-flex align-items-center gap-1" onclick="event.stopPropagation()">
+                        <button type="button" class="btn-icon-widget" th:attr="onclick='openWidgetExecutionsModal(\'' + ${w.id} + '\')'" title="View contributing test executions">
+                            <span class="material-symbols-outlined">format_list_bulleted</span>
+                        </button>
+                        <button type="button" class="btn-icon-widget" th:attr="onclick='openWidgetConfiguratorModal(\'' + ${w.id} + '\')'" title="Edit widget">
+                            <span class="material-symbols-outlined">edit</span>
+                        </button>
+                        <button type="button" class="btn-icon-widget"
+                                th:attr="hx-post='/widgets/delete?widgetId=' + ${w.id}"
+                                hx-target="#mainViewContainer"
+                                hx-swap="innerHTML"
+                                title="Remove widget">
+                            <span class="material-symbols-outlined">close</span>
+                        </button>
+                    </div>
+                </div>
+                <!-- WIDGET FILTER DETAILS STRIP -->
+                <div class="widget-filter-strip d-flex align-items-center gap-1 flex-wrap" th:if="${w.hasOwnRunFilters()}">
+                    <span class="d-inline-flex align-items-center gap-1 text-muted" style="font-size: 0.68rem; font-weight: 600;">
+                        <span class="material-symbols-outlined" style="font-size: 0.75rem; color: #3b82f6;">filter_alt</span>
+                        <span>Filtered:</span>
+                    </span>
+                    <span th:each="chip : ${w.filterChips}"
+                          class="active-scope-tag widget-scope-tag"
+                          th:classappend="${chip.excluded ? 'tag-excluded' : 'tag-' + chip.category}"
+                          th:title="${chip.label}">
+                        <span class="material-symbols-outlined" style="font-size: 0.7rem;" th:text="${chip.icon}">web</span>
+                        <span th:text="${chip.label}">Chrome</span>
+                    </span>
+                </div>
+                <th:block th:replace="~{fragments/dashboard-widgets :: listBody(w=${w})}"></th:block>
+            </div>
+
+            <!-- 8. KNOWN TEST VARIATIONS WIDGET -->
+            <div th:if="${w.presentation.name() == 'TEST_VARIATIONS'}"
+                 class="widget-card widget-test-variations-card collapsible-panel"
+                 th:classappend="${' ' + w.widthClass}"
+                 th:id="'widgetCard-' + ${w.id}"
+                 draggable="true"
+                 th:attr="data-widget-id=${w.id},data-contributing-runs=${w.contributingRunIdsCsv}">
+                <div class="widget-drop-overlay">
+                    <span class="material-symbols-outlined drop-overlay-icon">layers</span>
+                    <span class="drop-overlay-text">Combine into Container</span>
+                    <span class="drop-overlay-sub">Must share contributing runs</span>
+                </div>
+                <div class="widget-card-header d-flex align-items-center justify-content-between" onclick="toggleBatchVariationsPanel(this)" style="cursor: pointer; user-select: none;">
+                    <div class="widget-card-title d-flex align-items-center gap-2 flex-wrap">
+                        <span class="material-symbols-outlined drag-handle" title="Drag to reorder or unite into container" onclick="event.stopPropagation()">drag_indicator</span>
+                        <span class="material-symbols-outlined panel-collapse-chevron" style="transition: transform 0.2s ease; font-size: 1.15rem; color: var(--text-muted);">chevron_right</span>
+                        <span class="material-symbols-outlined text-accent" th:text="${w.metric.icon}">database</span>
+                        <span th:text="${w.title}">Known Test Base Variations</span>
+                        <span class="badge-status badge-pass" style="background: var(--bg-hover); color: var(--text-main); font-weight: 700; font-size: 0.72rem; padding: 0.1rem 0.45rem;"
+                              th:text="${(w.totalVariationsCount ?: 0) + ((w.totalVariationsCount == 1) ? ' Variation' : ' Variations')}">0 Variations</span>
+                        <span class="badge-status" th:if="${w.hasOwnExecutionIdentity()}" th:title="${'Execution Identity: ' + w.identityDimensionsSummary}"
+                              style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6; font-size: 0.68rem; padding: 0.1rem 0.35rem; display: inline-flex; align-items: center; gap: 0.2rem;">
+                            <span class="material-symbols-outlined" style="font-size: 0.75rem;">fingerprint</span>
+                            <span th:text="${w.identityDimensionsSummary}">Identity</span>
+                            <span class="material-symbols-outlined text-muted execution-identity-info-icon" style="font-size: 0.75rem; cursor: help;" title="Execution Identity defines which dimensions (such as Test, Browser, Environment, or Tags) are used to uniquely distinguish and track test execution instances across runs and variations.">info</span>
+                        </span>
+                    </div>
+                    <div class="widget-card-actions d-flex align-items-center gap-1" onclick="event.stopPropagation()">
+                        <button type="button" class="btn-secondary btn-compact" style="font-size: 0.72rem; padding: 0.15rem 0.4rem; display: inline-flex; align-items: center; gap: 0.2rem;" onclick="toggleAllBatchClassGroups(true, this)" title="Expand all classes and areas">
+                            <span class="material-symbols-outlined" style="font-size: 0.8rem;">unfold_more</span> Expand
+                        </button>
+                        <button type="button" class="btn-secondary btn-compact" style="font-size: 0.72rem; padding: 0.15rem 0.4rem; display: inline-flex; align-items: center; gap: 0.2rem;" onclick="toggleAllBatchClassGroups(false, this)" title="Collapse all classes and areas">
+                            <span class="material-symbols-outlined" style="font-size: 0.8rem;">unfold_less</span> Collapse
+                        </button>
+                        <button type="button" class="btn-icon-widget" th:attr="onclick='openWidgetExecutionsModal(\'' + ${w.id} + '\')'" title="View contributing test executions">
+                            <span class="material-symbols-outlined">format_list_bulleted</span>
+                        </button>
+                        <button type="button" class="btn-icon-widget" th:attr="onclick='openWidgetConfiguratorModal(\'' + ${w.id} + '\')'" title="Edit widget">
+                            <span class="material-symbols-outlined">edit</span>
+                        </button>
+                        <button type="button" class="btn-icon-widget"
+                                th:attr="hx-post='/widgets/delete?widgetId=' + ${w.id}"
+                                hx-target="#mainViewContainer"
+                                hx-swap="innerHTML"
+                                title="Remove widget">
+                            <span class="material-symbols-outlined">close</span>
+                        </button>
+                    </div>
+                </div>
+                <!-- WIDGET FILTER DETAILS STRIP -->
+                <div class="widget-filter-strip d-flex align-items-center gap-1 flex-wrap" th:if="${w.hasOwnRunFilters()}">
+                    <span class="d-inline-flex align-items-center gap-1 text-muted" style="font-size: 0.68rem; font-weight: 600;">
+                        <span class="material-symbols-outlined" style="font-size: 0.75rem; color: #3b82f6;">filter_alt</span>
+                        <span>Filtered:</span>
+                    </span>
+                    <span th:each="chip : ${w.filterChips}"
+                          class="active-scope-tag widget-scope-tag"
+                          th:classappend="${chip.excluded ? 'tag-excluded' : 'tag-' + chip.category}"
+                          th:title="${chip.label}">
+                        <span class="material-symbols-outlined" style="font-size: 0.7rem;" th:text="${chip.icon}">web</span>
+                        <span th:text="${chip.label}">Chrome</span>
+                    </span>
+                </div>
+                <th:block th:replace="~{fragments/dashboard-widgets :: testVariationsBody(w=${w})}"></th:block>
+            </div>
+
+            <!-- 9. RUNS LIST WIDGET -->
+            <div th:if="${w.presentation.name() == 'RUNS' or w.metric.name() == 'RUNS' or w.metric.name() == 'RUN_HISTORY'}"
+                 class="widget-card widget-runs-card collapsible-panel expanded"
+                 th:classappend="${' ' + w.widthClass}"
+                 th:id="'widgetCard-' + ${w.id}"
+                 draggable="false"
+                 th:attr="data-widget-id=${w.id},data-contributing-runs=${w.contributingRunIdsCsv}">
+                <div class="widget-card-header d-flex align-items-center justify-content-between" onclick="toggleRunsWidgetPanel(this)" style="cursor: pointer; user-select: none;">
+                    <div class="widget-card-title d-flex align-items-center gap-2 flex-wrap">
+                        <span class="material-symbols-outlined drag-handle" title="Runs list panel" onclick="event.stopPropagation()">drag_indicator</span>
+                        <span class="material-symbols-outlined panel-collapse-chevron" style="transition: transform 0.2s ease; font-size: 1.15rem; color: var(--text-muted);">chevron_right</span>
+                        <span class="material-symbols-outlined text-accent" th:text="${w.metric.icon}">history</span>
+                        <span th:text="${w.title}">List of Runs</span>
+                        <span class="badge-status badge-pass" style="background: var(--bg-hover); color: var(--text-main); font-weight: 700; font-size: 0.72rem; padding: 0.1rem 0.45rem;"
+                              th:text="${(w.showingRunsCount < w.totalRunsCount) ? (w.showingRunsCount + ' of ' + w.totalRunsCount + ' Runs') : (w.totalRunsCount + ((w.totalRunsCount == 1) ? ' Run' : ' Runs'))}">0 Runs</span>
+                    </div>
+                    <div class="widget-card-actions d-flex align-items-center gap-1" onclick="event.stopPropagation()">
+                        <button type="button" class="btn-icon-widget" th:attr="onclick='openWidgetExecutionsModal(\'' + ${w.id} + '\')'" title="View contributing test executions">
+                            <span class="material-symbols-outlined">format_list_bulleted</span>
+                        </button>
+                        <button type="button" class="btn-icon-widget" th:attr="onclick='openWidgetConfiguratorModal(\'' + ${w.id} + '\')'" title="Edit widget">
+                            <span class="material-symbols-outlined">edit</span>
+                        </button>
+                        <button type="button" class="btn-icon-widget"
+                                th:attr="hx-post='/widgets/delete?widgetId=' + ${w.id}"
+                                hx-target="#mainViewContainer"
+                                hx-swap="innerHTML"
+                                title="Remove widget">
+                            <span class="material-symbols-outlined">close</span>
+                        </button>
+                    </div>
+                </div>
+                <!-- WIDGET FILTER DETAILS STRIP -->
+                <div class="widget-filter-strip d-flex align-items-center gap-1 flex-wrap" th:if="${w.hasOwnRunFilters()}">
+                    <span class="d-inline-flex align-items-center gap-1 text-muted" style="font-size: 0.68rem; font-weight: 600;">
+                        <span class="material-symbols-outlined" style="font-size: 0.75rem; color: #3b82f6;">filter_alt</span>
+                        <span>Filtered:</span>
+                    </span>
+                    <span th:each="chip : ${w.filterChips}"
+                          class="active-scope-tag widget-scope-tag"
+                          th:classappend="${chip.excluded ? 'tag-excluded' : 'tag-' + chip.category}"
+                          th:title="${chip.label}">
+                        <span class="material-symbols-outlined" style="font-size: 0.7rem;" th:text="${chip.icon}">web</span>
+                        <span th:text="${chip.label}">Chrome</span>
+                    </span>
+                </div>
+                <th:block th:replace="~{fragments/dashboard-widgets :: testRunsBody(w=${w})}"></th:block>
+            </div>
+
+        </th:block>
+    </div>
+
+    <!-- EMPTY STATE WHEN ALL WIDGETS ARE REMOVED -->
+    <div th:if="${dashboardWidgets == null or #lists.isEmpty(dashboardWidgets)}" class="text-center py-5" style="color: var(--text-muted); background: var(--bg-card); border-radius: var(--radius-lg); border: 1px dashed var(--border-color); padding: 3rem 1rem;">
+        <span class="material-symbols-outlined mb-2" style="font-size: 2.5rem; color: var(--text-muted);">dashboard_customize</span>
+        <h5 style="font-weight: 600; color: var(--text-main); margin-bottom: 0.5rem;">No Dashboard Widgets</h5>
+        <p style="max-width: 500px; margin: 0 auto 1.25rem; font-size: 0.875rem;">
+            Your dashboard currently has no configured widgets. Add custom widgets to monitor status, costs, bugs, or tags.
+        </p>
+        <div class="d-flex align-items-center justify-content-center gap-2">
+            <button type="button" class="btn-primary" onclick="openWidgetConfiguratorModal()">
+                <span class="material-symbols-outlined">add_chart</span> Add Your First Widget
+            </button>
+            <button type="button" class="btn-secondary" hx-post="/widgets/reset" hx-target="#mainViewContainer" hx-swap="innerHTML">
+                <span class="material-symbols-outlined">restart_alt</span> Restore Default Widgets
+            </button>
+        </div>
+    </div>
+
+    <!-- RENAME WIDGET / WIDGET GROUP MODAL FRAGMENT -->
+    <div class="modal-overlay" id="renameWidgetModal" th:fragment="renameWidgetModal" style="display: none;" onclick="if (event.target === this) closeRenameWidgetModal();">
+        <div class="modal-card" style="max-width: 460px; width: 95%;">
+            <div class="modal-header d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="material-symbols-outlined text-accent" id="renameWidgetModalIcon" style="font-size: 1.25rem;">edit</span>
+                    <span id="renameWidgetModalTitle" style="font-weight: 700; font-size: 1.05rem; color: var(--text-main);">Rename Widget</span>
+                </div>
+                <button type="button" class="btn-icon-widget" onclick="closeRenameWidgetModal()" title="Close dialog">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <form id="renameWidgetForm"
+                  hx-post="/widgets/rename"
+                  hx-target="#mainViewContainer"
+                  hx-swap="innerHTML"
+                  onsubmit="closeRenameWidgetModal()">
+                <input type="hidden" name="widgetId" id="renameWidgetIdInput" value="" />
+                <input type="hidden" name="pageId" id="renameWidgetPageIdInput" value="" />
+                <div class="modal-body p-3">
+                    <label class="form-label mb-1" for="renameWidgetTitleInput" style="font-weight: 600; font-size: 0.85rem; color: var(--text-main);">
+                        Name / Title
+                    </label>
+                    <input type="text"
+                           name="title"
+                           id="renameWidgetTitleInput"
+                           class="form-control form-control-sm"
+                           placeholder="Enter widget name..."
+                           required
+                           autocomplete="off"
+                           style="background: var(--bg-hover); color: var(--text-main); border-color: var(--border);" />
+                    <div class="text-muted mt-1" id="renameWidgetModalSubtitle" style="font-size: 0.72rem;">
+                        Give a descriptive custom title to this widget.
+                    </div>
+                </div>
+                <div class="modal-footer d-flex align-items-center justify-content-between p-3">
+                    <button type="button" class="btn-editor" onclick="closeRenameWidgetModal()">Cancel</button>
+                    <button type="submit" class="btn-primary d-inline-flex align-items-center gap-1" id="btnSubmitRenameWidget">
+                        <span class="material-symbols-outlined" style="font-size: 0.95rem;">check</span>
+                        <span>Save</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- REUSABLE WIDGET PRESENTATION BODIES -->
+<!-- ============================================================ -->
+
+<!-- 1. PIE / DONUT BODY -->
+<div th:fragment="pieChartBody(w)" th:if="${w != null}" class="widget-card-body d-flex align-items-center justify-content-around gap-4 flex-wrap">
+    <div class="pie-chart-wrapper-batch">
+        <svg width="100%" height="100%" viewBox="-2 -2 40 40" style="overflow: visible;">
+            <defs>
+                <pattern th:id="'sparkle-pat-donut-' + ${w.id}" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(25)">
+                    <path d="M 2.5, 0.7 Q 2.5, 2.5 4.2, 2.5 Q 2.5, 2.5 2.5, 4.2 Q 2.5, 2.5 0.7, 2.5 Q 2.5, 2.5 2.5, 0.7 Z" fill="#ffffff" opacity="0.95"/>
+                    <circle cx="4.2" cy="0.9" r="0.4" fill="#fef08a" opacity="0.95"/>
+                </pattern>
+                <pattern th:id="'ai-pat-donut-' + ${w.id}" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                    <line x1="0" y1="0" x2="0" y2="4" stroke="rgba(255,255,255,0.75)" stroke-width="1.2" />
+                </pattern>
+            </defs>
+            <circle cx="18" cy="18" r="15.915" fill="none" stroke="var(--border)" stroke-width="4.5"/>
+            <th:block th:each="s : ${w.pieSlices}">
+                <g class="pie-slice-group widget-interactive-filter"
+                   th:attr="data-filter-dim=${w.metric.name() == 'STATUS' ? 'status' : (w.metric.name() == 'TAG' ? (w.tagKey != null ? w.tagKey : 'tag') : (w.metric.name() == 'AI_USAGE' ? 'mode' : (w.metric.name() == 'COSTS' ? 'costs' : (w.metric.name() == 'BUGS' ? 'severity' : (w.metric.name() == 'FLAKINESS' ? 'flaky' : 'generic')))))},data-filter-val=${s.label}"
+                   onclick="onContainerWidgetFilterClick(this, event)"
+                   style="cursor: pointer;">
+                    <circle cx="18" cy="18" r="15.915" fill="none"
+                            class="pie-slice-base"
+                            th:attr="stroke=${s.color},stroke-dasharray=${s.dashArray},stroke-dashoffset=${s.dashOffset}"
+                            stroke-width="5"/>
+                    <th:block th:if="${w.showHealedAi}">
+                        <circle th:if="${s.healedCount > 0}" cx="18" cy="18" r="15.915" fill="none"
+                                class="pie-slice-healed"
+                                th:attr="stroke=${s.healedColor},stroke-dasharray=${s.healedDashArray},stroke-dashoffset=${s.healedDashOffset}"
+                                stroke-width="5" pointer-events="none"/>
+                        <circle th:if="${s.healedCount > 0}" cx="18" cy="18" r="15.915" fill="none"
+                                class="pie-slice-sparkle"
+                                th:attr="stroke='url(#sparkle-pat-donut-' + ${w.id} + ')',stroke-dasharray=${s.healedDashArray},stroke-dashoffset=${s.healedDashOffset}"
+                                stroke-width="5" pointer-events="none"/>
+                        <circle th:if="${s.aiCount > 0}" cx="18" cy="18" r="15.915" fill="none"
+                                class="pie-slice-ai"
+                                th:attr="stroke=${s.color},stroke-dasharray=${s.aiDashArray},stroke-dashoffset=${s.aiDashOffset}"
+                                stroke-width="5" pointer-events="none"/>
+                        <circle th:if="${s.aiCount > 0}" cx="18" cy="18" r="15.915" fill="none"
+                                class="pie-slice-stripes"
+                                th:attr="stroke='url(#ai-pat-donut-' + ${w.id} + ')',stroke-dasharray=${s.aiDashArray},stroke-dashoffset=${s.aiDashOffset}"
+                                stroke-width="5" pointer-events="none"/>
+                    </th:block>
+                </g>
+            </th:block>
+        </svg>
+        <div class="pie-center-label">
+            <span class="pie-center-rate" th:text="${w.pieCenterRate}">100%</span>
+            <span class="pie-center-sub" th:text="${w.pieCenterLabel}">PASS</span>
+        </div>
+    </div>
+    <div class="pie-breakdown-list-sm" style="flex: 1; min-width: 150px;">
+        <div class="pie-breakdown-item widget-interactive-filter"
+             th:each="s : ${w.pieSlices}"
+             th:attr="data-filter-dim=${w.metric.name() == 'STATUS' ? 'status' : (w.metric.name() == 'TAG' ? (w.tagKey != null ? w.tagKey : 'tag') : (w.metric.name() == 'AI_USAGE' ? 'mode' : (w.metric.name() == 'COSTS' ? 'costs' : (w.metric.name() == 'BUGS' ? 'severity' : (w.metric.name() == 'FLAKINESS' ? 'flaky' : 'generic')))))},data-filter-val=${s.label}"
+             onclick="onContainerWidgetFilterClick(this, event)">
+            <div class="pie-breakdown-main-row">
+                <div class="label"><div class="dot" th:style="'background: ' + ${s.color} + ';'"></div> <span th:text="${s.label}">Slice</span></div>
+                <span class="val" th:style="'color: ' + ${s.color} + ';'" th:text="${s.formattedCount + ' (' + s.formattedPercentage + ')'}">1 (100%)</span>
+            </div>
+            <div class="pie-breakdown-sub-row d-flex align-items-center gap-1 mt-1" th:if="${w.showHealedAi and (s.healedCount > 0 or s.aiCount > 0)}" style="margin-left: 0.85rem;">
+                <span class="badge-healed-inline seg-healed-print widget-interactive-filter"
+                      th:if="${s.healedCount > 0}"
+                      style="font-size: 0.62rem; padding: 0.05rem 0.3rem; border-radius: 4px; background: rgba(52, 211, 153, 0.15); color: #34d399; font-weight: 500; cursor: pointer;"
+                      th:attr="data-filter-dim=${w.metric.name() == 'STATUS' ? 'status' : (w.metric.name() == 'TAG' ? (w.tagKey != null ? w.tagKey : 'tag') : (w.metric.name() == 'AI_USAGE' ? 'mode' : (w.metric.name() == 'BUGS' ? 'severity' : (w.metric.name() == 'FLAKINESS' ? 'flaky' : 'category'))))},data-filter-val=${s.label + ' (Healed)'}"
+                      onclick="onContainerWidgetFilterClick(this, event)"
+                      th:title="${'Filter healed ' + s.label + ' tests'}"
+                      th:text="'✨ ' + ${s.healedCount} + ' healed'">✨ 1 healed</span>
+                <span class="badge-ai-inline seg-ai-print widget-interactive-filter"
+                      th:if="${s.aiCount > 0}"
+                      style="font-size: 0.62rem; padding: 0.05rem 0.3rem; border-radius: 4px; background: rgba(139, 92, 246, 0.15); color: #a78bfa; font-weight: 500; cursor: pointer;"
+                      th:attr="data-filter-dim=${w.metric.name() == 'STATUS' ? 'status' : (w.metric.name() == 'TAG' ? (w.tagKey != null ? w.tagKey : 'tag') : (w.metric.name() == 'AI_USAGE' ? 'mode' : (w.metric.name() == 'BUGS' ? 'severity' : (w.metric.name() == 'FLAKINESS' ? 'flaky' : 'category'))))},data-filter-val=${s.label + ' (AI)'}"
+                      onclick="onContainerWidgetFilterClick(this, event)"
+                      th:title="${'Filter AI ' + s.label + ' tests'}"
+                      th:text="${s.aiCount} + ' AI'">1 AI</span>
+            </div>
+        </div>
+        <div th:if="${#lists.isEmpty(w.pieSlices)}" class="text-muted" style="font-size: 0.75rem;">
+            <span th:text="${w.emptyMessage}">No data available</span>
+        </div>
+    </div>
+</div>
+
+<!-- 2. RATIO BAR BODY -->
+<div th:fragment="ratioBarBody(w)" th:if="${w != null}" class="widget-card-body d-flex flex-column gap-2">
+    <div class="ratio-stacked-bar" th:if="${not #lists.isEmpty(w.ratioSegments)}">
+        <div th:each="seg : ${w.ratioSegments}"
+             class="ratio-bar-seg widget-interactive-filter"
+             th:style="'width: ' + ${#numbers.formatDecimal(seg.percentage, 1, 'POINT', 2, 'POINT')} + '%; background-color: ' + ${seg.color} + ';'"
+             th:title="${seg.name + ': ' + seg.formattedCount + ' (' + seg.formattedPercentage + ')'}"
+             th:attr="data-filter-dim=${w.metric.name() == 'TAG' ? (w.tagKey != null ? w.tagKey : 'tag') : (w.metric.name() == 'STATUS' ? 'status' : (w.metric.name() == 'AI_USAGE' ? 'mode' : (w.metric.name() == 'COSTS' ? 'costs' : (w.metric.name() == 'BUGS' ? 'severity' : (w.metric.name() == 'FLAKINESS' ? 'flaky' : 'generic')))))},data-filter-val=${seg.name}"
+             onclick="onContainerWidgetFilterClick(this, event)"
+             th:text="${seg.percentage >= 15 ? seg.formattedPercentage : ''}">100%</div>
+    </div>
+    <div class="ratio-legend-list" th:if="${not #lists.isEmpty(w.ratioSegments)}">
+        <div th:each="seg : ${w.ratioSegments}"
+             class="ratio-legend-chip widget-interactive-filter d-inline-flex align-items-center gap-1"
+             th:attr="data-filter-dim=${w.metric.name() == 'TAG' ? (w.tagKey != null ? w.tagKey : 'tag') : (w.metric.name() == 'STATUS' ? 'status' : (w.metric.name() == 'AI_USAGE' ? 'mode' : (w.metric.name() == 'COSTS' ? 'costs' : (w.metric.name() == 'BUGS' ? 'severity' : (w.metric.name() == 'FLAKINESS' ? 'flaky' : 'generic')))))},data-filter-val=${seg.name}"
+             onclick="onContainerWidgetFilterClick(this, event)">
+            <span class="dot" th:style="'background: ' + ${seg.color} + ';'"></span>
+            <span th:text="${seg.name}">Segment</span>
+            <span class="val" th:text="${seg.formattedCount + ' (' + seg.formattedPercentage + ')'}">1 (100%)</span>
+            <th:block th:if="${w.showHealedAi and (seg.healedCount > 0 or seg.aiCount > 0)}">
+                <span class="badge-healed-inline seg-healed-print widget-interactive-filter"
+                      th:if="${seg.healedCount > 0}"
+                      style="font-size: 0.62rem; padding: 0.05rem 0.3rem; border-radius: 4px; background: rgba(52, 211, 153, 0.15); color: #34d399; font-weight: 500; cursor: pointer;"
+                      th:attr="data-filter-dim=${w.metric.name() == 'TAG' ? (w.tagKey != null ? w.tagKey : 'tag') : (w.metric.name() == 'STATUS' ? 'status' : (w.metric.name() == 'AI_USAGE' ? 'mode' : (w.metric.name() == 'COSTS' ? 'costs' : (w.metric.name() == 'BUGS' ? 'severity' : (w.metric.name() == 'FLAKINESS' ? 'flaky' : 'generic')))))},data-filter-val=${seg.name + ' (Healed)'}"
+                      onclick="onContainerWidgetFilterClick(this, event)"
+                      th:title="${'Filter healed ' + seg.name + ' tests'}"
+                      th:text="'✨ ' + ${seg.healedCount}">✨ 1</span>
+                <span class="badge-ai-inline seg-ai-print widget-interactive-filter"
+                      th:if="${seg.aiCount > 0}"
+                      style="font-size: 0.62rem; padding: 0.05rem 0.3rem; border-radius: 4px; background: rgba(139, 92, 246, 0.15); color: #a78bfa; font-weight: 500; cursor: pointer;"
+                      th:attr="data-filter-dim=${w.metric.name() == 'TAG' ? (w.tagKey != null ? w.tagKey : 'tag') : (w.metric.name() == 'STATUS' ? 'status' : (w.metric.name() == 'AI_USAGE' ? 'mode' : (w.metric.name() == 'COSTS' ? 'costs' : (w.metric.name() == 'BUGS' ? 'severity' : (w.metric.name() == 'FLAKINESS' ? 'flaky' : 'generic')))))},data-filter-val=${seg.name + ' (AI)'}"
+                      onclick="onContainerWidgetFilterClick(this, event)"
+                      th:title="${'Filter AI ' + seg.name + ' tests'}"
+                      th:text="${seg.aiCount} + ' AI'">1 AI</span>
+            </th:block>
+        </div>
+    </div>
+    <div th:if="${#lists.isEmpty(w.ratioSegments)}" class="text-muted" style="font-size: 0.75rem;">
+        <span th:text="${w.emptyMessage}">No distribution data available</span>
+    </div>
+</div>
+
+<!-- 3. PERLENKETTE BODY -->
+<div th:fragment="perlenketteBody(w)" th:if="${w != null}" class="widget-card-body perlenkette-card-body">
+    <div class="perlenkette-container" th:if="${w.perlenkette != null and w.perlenkette.hasBeads()}">
+        <svg class="perlenkette-svg" width="100%" height="100%"
+             th:attr="viewBox='0 0 ' + ${#numbers.formatInteger(w.perlenkette.svgWidth, 1)} + ' ' + ${#numbers.formatInteger(w.perlenkette.svgHeight, 1)}"
+             viewBox="0 0 800 180"
+             preserveAspectRatio="xMidYMid meet"
+             style="overflow: visible;">
+            <defs>
+                <filter th:id="'pearl-shadow-' + ${w.id}" x="-30%" y="-30%" width="160%" height="160%">
+                    <feDropShadow dx="0" dy="2" stdDeviation="3.5" flood-color="rgba(0,0,0,0.22)" />
+                </filter>
+            </defs>
+
+            <!-- Horizontal Timeline Rail & Directional Chevrons -->
+            <path th:if="${w.perlenkette.svgWavePath != null and !w.perlenkette.svgWavePath.isEmpty()}"
+                  th:attr="d=${w.perlenkette.svgWavePath}"
+                  fill="none"
+                  class="perlenkette-wave-path perlenkette-timeline-rail"
+                  stroke="#1c2d4a"
+                  stroke-width="2.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round" />
+
+            <!-- Minor Accent Beads along Rail -->
+            <g class="perlenkette-minor-dots">
+                <circle th:each="dot : ${w.perlenkette.minorDots}"
+                        th:attr="cx=${dot.cx},cy=${dot.cy},r=${dot.radius},fill=${dot.color}"
+                        class="perlenkette-minor-dot"
+                        stroke="#1c2d4a"
+                        stroke-width="1.2" />
+            </g>
+
+            <!-- Major Milestone Pearls -->
+            <g class="perlenkette-major-pearls">
+                <g th:each="bead, beadStat : ${w.perlenkette.beads}"
+                   class="perlenkette-pearl-node"
+                   th:classappend="${bead.statusClass} + (${beadStat.last} ? ' is-latest' : '')"
+                   th:attr="data-index=${bead.index}">
+
+                    <a class="perlenkette-pearl-anchor"
+                       th:href="${bead.linkUrl != null and !bead.linkUrl.isEmpty() ? bead.linkUrl : '#'}"
+                       th:attr="hx-get=${bead.linkUrl != null and !bead.linkUrl.isEmpty() ? bead.linkUrl : null}"
+                       hx-target="#mainViewContainer"
+                       hx-push-url="true">
+                        <title th:text="${(bead.id != null and !bead.id.isEmpty() ? ('#' + bead.id.replaceAll('^#+', '')) : bead.label) + ' (' + (bead.details != null and bead.details.containsKey('Timestamp') ? bead.details.get('Timestamp') : bead.timestampLabel) + ') - ' + bead.valueFormatted}"></title>
+
+                        <!-- Top Milestone Pill Tag (Fixed Permanent Label) -->
+                        <g class="perlenkette-top-pill-group">
+                            <rect th:attr="x=${bead.cx - (bead.pillWidth / 2.0)},y=${bead.cy - bead.radius - (w.isQuarterWidth() ? 22 : 26)},width=${bead.pillWidth},height=${w.isQuarterWidth() ? 16 : 20},rx=${w.isQuarterWidth() ? 8 : 10}"
+                                  class="perlenkette-top-pill-bg" />
+                            <text th:attr="x=${bead.cx},y=${bead.cy - bead.radius - (w.isQuarterWidth() ? 12 : 14)}"
+                                  th:style="'font-size: ' + ${w.isQuarterWidth() ? '9.5' : '10.5'} + 'px;'"
+                                  font-weight="700"
+                                  font-family="JetBrains Mono, monospace"
+                                  text-anchor="middle"
+                                  dominant-baseline="central"
+                                  class="perlenkette-top-pill-text"
+                                  th:text="${bead.label}">#1</text>
+                        </g>
+
+                        <!-- Latest Indicator Badge on the Most Recent Pearl -->
+                        <g th:if="${w.metric.name() != 'TAG' and beadStat.last and w.perlenkette.beads.size() > 1}" class="perlenkette-latest-badge-group">
+                            <rect th:attr="x=${bead.cx - 20},y=${bead.cy - bead.radius - (w.isQuarterWidth() ? 40 : 47)},width='40',height='16',rx='8'"
+                                  class="perlenkette-latest-pill-bg" />
+                            <text th:attr="x=${bead.cx},y=${bead.cy - bead.radius - (w.isQuarterWidth() ? 31 : 38)}"
+                                  font-size="8.5"
+                                  font-weight="700"
+                                  font-family="system-ui, -apple-system, sans-serif"
+                                  text-anchor="middle"
+                                  dominant-baseline="central"
+                                  class="perlenkette-latest-pill-text">LATEST</text>
+                        </g>
+
+                        <!-- Circular Milestone Pearl Node (Concentric Ring Gauge) -->
+                        <g class="perlenkette-pearl-sphere">
+                            <!-- Outer Status Ring -->
+                            <circle th:attr="cx=${bead.cx},cy=${bead.cy},r=${bead.radius},fill=${bead.color}"
+                                    th:style="'filter: url(#pearl-shadow-' + ${w.id} + ');'"
+                                    stroke="#0f172a"
+                                    stroke-width="2.5"
+                                    class="perlenkette-pearl-outer" />
+                            <!-- Inner Saturated Core -->
+                            <circle th:attr="cx=${bead.cx},cy=${bead.cy},r=${bead.radius * 0.82},fill=${bead.darkColor}"
+                                    stroke="rgba(255, 255, 255, 0.25)"
+                                    stroke-width="1.5"
+                                    class="perlenkette-pearl-inner" />
+                        </g>
+
+                        <!-- Centered Bold Value inside Pearl (No underline) -->
+                        <text th:attr="x=${bead.cx},y=${bead.cy}"
+                              fill="#ffffff"
+                              font-weight="700"
+                              th:style="'font-size: ' + ${#numbers.formatDecimal(bead.radius * 0.52, 1, 1)} + 'px;'"
+                              font-family="system-ui, -apple-system, sans-serif"
+                              text-anchor="middle"
+                              dominant-baseline="central"
+                              pointer-events="none"
+                              class="perlenkette-pearl-value"
+                              th:text="${bead.innerValue + (w.perlenkette.valueFormat != null and w.perlenkette.valueFormat.name() == 'PERCENT' and !bead.innerValue.endsWith('%') and !bead.innerValue.startsWith('$') ? '%' : '')}">90%</text>
+
+                        <!-- Bottom Timestamp Label (Fixed Permanent Label) -->
+                        <text th:attr="x=${bead.cx},y=${bead.cy + bead.radius + (w.isQuarterWidth() ? 18 : 22)}"
+                              th:style="'font-size: ' + ${w.isQuarterWidth() ? '10' : '11'} + 'px;'"
+                              font-weight="500"
+                              font-family="JetBrains Mono, monospace"
+                              text-anchor="middle"
+                              class="perlenkette-bottom-label"
+                              th:text="${bead.timestampLabel}">10:45 AM</text>
+                    </a>
+                </g>
+            </g>
+        </svg>
+    </div>
+    <div th:if="${w.perlenkette == null or !w.perlenkette.hasBeads()}" class="text-muted text-center py-3" style="font-size: 0.78rem;">
+        <span th:text="${w.emptyMessage}">No historical progression milestones found</span>
+    </div>
+</div>
+
+<!-- 4. TREND GRAPH BODY -->
+<div th:fragment="trendGraphBody(w)" th:if="${w != null}" class="widget-card-body d-flex flex-column gap-2">
+    <div class="widget-trend-svg-container" th:if="${not #lists.isEmpty(w.trendPoints)}">
+        <svg width="100%" height="100%"
+             class="widget-trend-svg"
+             viewBox="0 0 800 200"
+             th:attr="viewBox='0 0 ' + ${#numbers.formatInteger(w.trendWidth, 1)} + ' ' + ${#numbers.formatInteger(w.trendHeight, 1)},data-trend-width=${w.trendWidth},data-trend-height=${w.trendHeight},data-pad-left=${w.trendPadLeft},data-pad-right=${w.trendPadRight},data-pad-top=${w.trendPadTop},data-pad-bottom=${w.trendPadBottom},data-baseline-y=${w.trendBaselineY}"
+             preserveAspectRatio="none" style="overflow: visible;">
+            <defs>
+                <linearGradient th:id="'trendGrad-' + ${w.id}" x1="0" y1="0" x2="0" y2="1">
+                     <stop offset="0%" th:style="'stop-color: ' + ${w.trendColor} + '; stop-opacity: 0.35;'"/>
+                     <stop offset="100%" th:style="'stop-color: ' + ${w.trendColor} + '; stop-opacity: 0.0;'"/>
+                 </linearGradient>
+                 <pattern th:id="'sparkle-pat-widget-' + ${w.id}" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(25)">
+                     <path d="M 2.5, 0.7 Q 2.5, 2.5 4.2, 2.5 Q 2.5, 2.5 2.5, 4.2 Q 2.5, 2.5 0.7, 2.5 Q 2.5, 2.5 2.5, 0.7 Z" fill="#ffffff" opacity="0.95"/>
+                     <circle cx="4.2" cy="0.9" r="0.4" fill="#fef08a" opacity="0.95"/>
+                 </pattern>
+                 <pattern th:id="'ai-pat-widget-' + ${w.id}" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                     <line x1="0" y1="0" x2="0" y2="4" stroke="rgba(255,255,255,0.75)" stroke-width="1.2" />
+                 </pattern>
+            </defs>
+
+            <!-- Dynamic Y-Axis Grid Lines & Labels -->
+            <g class="widget-trend-y-axis">
+                <th:block th:each="ytick : ${w.yAxisTicks}">
+                    <line th:if="${ytick.showGridLine}"
+                          th:x1="${w.trendPadLeft}" th:y1="${ytick.coordinate}"
+                          th:x2="${w.trendWidth - w.trendPadRight}" th:y2="${ytick.coordinate}"
+                          stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3" opacity="0.6"/>
+                    <text th:x="${w.trendPadLeft - 8}" th:y="${ytick.coordinate + 3.5}"
+                          fill="var(--text-muted)" font-size="10" font-family="JetBrains Mono, monospace"
+                          text-anchor="end" th:text="${ytick.label}">0%</text>
+                </th:block>
+            </g>
+
+            <!-- Axes Baseline & Vertical Line -->
+            <line th:x1="${w.trendPadLeft}" th:y1="${w.trendPadTop - 5}" th:x2="${w.trendPadLeft}" th:y2="${w.trendBaselineY}" stroke="var(--border)" stroke-width="1.2"/>
+            <line th:x1="${w.trendPadLeft - 5}" th:y1="${w.trendBaselineY}" th:x2="${w.trendWidth - w.trendPadRight}" th:y2="${w.trendBaselineY}" stroke="var(--border)" stroke-width="1.2"/>
+
+            <!-- Dynamic X-Axis Ticks & Labels -->
+            <g class="widget-trend-x-axis">
+                <th:block th:each="xtick : ${w.xAxisTicks}">
+                    <line th:x1="${xtick.coordinate}" th:y1="${w.trendBaselineY}"
+                          th:x2="${xtick.coordinate}" th:y2="${w.trendBaselineY + 4}"
+                          stroke="var(--border)" stroke-width="1.2">
+                        <title th:text="${xtick.tooltip}"></title>
+                    </line>
+                    <text th:x="${xtick.coordinate}" th:y="${w.trendBaselineY + 16}"
+                          fill="var(--text-muted)" font-size="10" font-family="JetBrains Mono, monospace"
+                          th:attr="text-anchor=${xtick.coordinate <= w.trendPadLeft + 10 ? 'start' : (xtick.coordinate >= w.trendWidth - w.trendPadRight - 10 ? 'end' : 'middle')}"
+                          th:text="${xtick.label}">
+                        <title th:text="${xtick.tooltip}"></title>
+                        #1
+                    </text>
+                </th:block>
+            </g>
+
+            <!-- Stacked Layers or Line Paths -->
+            <th:block th:if="${w.hasTrendLayers()}">
+                <th:block th:each="layer : ${w.trendLayers}">
+                    <path th:if="${layer.hasPath()}" class="widget-trend-layer-area" th:attr="data-layer-name=${layer.name},d=${layer.svgAreaPath}"
+                          th:style="'fill: ' + ${layer.color} + '; fill-opacity: 0.75; stroke: ' + ${layer.color} + '; stroke-width: 0.75;' + (${w.filled} ? '' : ' display: none;')"/>
+                    <path th:if="${layer.hasPath() and layer.hasPattern()}" class="widget-trend-layer-pattern" th:attr="data-layer-name=${layer.name},d=${layer.svgAreaPath},fill=${layer.patternUrl}"
+                          th:style="${w.filled} ? '' : 'display: none;'" pointer-events="none"/>
+                    <path th:if="${layer.hasLinePath()}" class="widget-trend-layer-line"
+                          th:attr="data-layer-name=${layer.name},data-raw-values=${layer.rawValuesCsv},data-max-val=${layer.peakCount},data-orig-d=${layer.svgLinePath},d=${layer.svgLinePath}"
+                          fill="none" th:style="'stroke: ' + ${layer.color} + ';' + (${w.filled} ? ' display: none;' : '')" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                </th:block>
+                <path class="widget-trend-top-stroke" th:if="${w.trendSvgPath != null and !w.trendSvgPath.isEmpty()}" th:attr="d=${w.trendSvgPath}"
+                      fill="none" th:style="'stroke: ' + ${w.trendColor} + ';' + (${w.filled} ? '' : ' display: none;')" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+            </th:block>
+            <th:block th:if="${!w.hasTrendLayers()}">
+                <path th:if="${w.trendSvgAreaPath != null and !w.trendSvgAreaPath.isEmpty()}" class="widget-trend-single-area" th:attr="d=${w.trendSvgAreaPath}"
+                      th:style="'fill: url(#trendGrad-' + ${w.id} + ');' + (${w.filled} ? '' : ' display: none;')"/>
+                <path th:if="${w.trendSvgPath != null and !w.trendSvgPath.isEmpty()}" th:attr="d=${w.trendSvgPath}" fill="none" th:style="'stroke: ' + ${w.trendColor} + ';'" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+            </th:block>
+        </svg>
+        <div class="widget-trend-points-overlay"
+             th:style="${w.showDots ? 'display: block;' : 'display: none;'}"
+             style="position: absolute; inset: 0; pointer-events: none;">
+            <div th:each="pt : ${w.trendPoints}"
+                 class="widget-trend-point-wrapper"
+                 th:classappend="${((pt.x * 100.0 / w.trendWidth) <= 20 ? ' align-left' : ((pt.x * 100.0 / w.trendWidth) >= 80 ? ' align-right' : '')) + ((pt.y * 100.0 / w.trendHeight) <= 35 ? ' popover-below' : '')}"
+                 th:attr="data-orig-top=(${pt.y} * 100.0 / ${w.trendHeight})"
+                 th:style="'left: ' + (${pt.x} * 100.0 / ${w.trendWidth}) + '%; top: ' + (${pt.y} * 100.0 / ${w.trendHeight}) + '%;'">
+                <span class="widget-trend-point-dot"
+                      th:style="'background-color: ' + ${w.trendColor} + ';'"></span>
+
+                <div class="widget-trend-dot-popover">
+                    <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+                        <div class="d-flex align-items-center gap-1 font-mono" style="font-weight: 700; color: var(--text-main);">
+                            <span class="material-symbols-outlined" style="font-size: 0.85rem; color: #3b82f6;">flag</span>
+                            <span th:text="${pt.label}">#1</span>
+                        </div>
+                        <span class="badge-status" th:classappend="${pt.stateBadgeClass}" th:text="${pt.stateBadgeText}">100% PASS</span>
+                    </div>
+                    <div class="font-mono text-muted mb-1" th:if="${pt.timestampLabel != null and !pt.timestampLabel.isEmpty()}" th:text="${pt.timestampLabel}" style="font-size: 0.65rem;">
+                        2026-10-30 14:20
+                    </div>
+                    <!-- Detailed status state breakdown -->
+                    <div class="d-flex flex-column gap-1 pt-1" th:if="${pt.hasDetailedStatus()}" style="border-top: 1px dashed var(--border);">
+                        <div class="d-flex align-items-center justify-content-between gap-3 text-muted" style="padding-bottom: 0.15rem;">
+                            <span>Total Tests:</span>
+                            <strong class="font-mono" style="color: var(--text-main);" th:text="${pt.totalTests}">12</strong>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between gap-3" th:if="${pt.passTotal > 0}">
+                            <span class="d-inline-flex align-items-center gap-1" style="color: var(--status-pass, #10b981);">
+                                <span class="dot" style="background: var(--status-pass, #10b981); width: 7px; height: 7px; border-radius: 50%;"></span>
+                                <span>Passed:</span>
+                            </span>
+                            <span class="font-mono font-bold" th:text="${pt.passTotal}">10</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between gap-3" th:if="${pt.fixedTotal > 0}">
+                            <span class="d-inline-flex align-items-center gap-1" style="color: var(--status-fixed, #3b82f6);">
+                                <span class="dot" style="background: var(--status-fixed, #3b82f6); width: 7px; height: 7px; border-radius: 50%;"></span>
+                                <span>Succeeded Fixed:</span>
+                            </span>
+                            <span class="font-mono font-bold" th:text="${pt.fixedTotal}">1</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between gap-3" th:if="${pt.knownTotal > 0}">
+                            <span class="d-inline-flex align-items-center gap-1" style="color: var(--status-known-fail, #f97316);">
+                                <span class="dot" style="background: var(--status-known-fail, #f97316); width: 7px; height: 7px; border-radius: 50%;"></span>
+                                <span>Failed Known:</span>
+                            </span>
+                            <span class="font-mono font-bold" th:text="${pt.knownTotal}">1</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between gap-3" th:if="${pt.unknownTotal > 0}">
+                            <span class="d-inline-flex align-items-center gap-1" style="color: var(--status-unknown-fail, #ef4444);">
+                                <span class="dot" style="background: var(--status-unknown-fail, #ef4444); width: 7px; height: 7px; border-radius: 50%;"></span>
+                                <span>Failed Unknown:</span>
+                            </span>
+                            <span class="font-mono font-bold" th:text="${pt.unknownTotal}">0</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between gap-3" th:if="${pt.ignoredCount > 0}">
+                            <span class="d-inline-flex align-items-center gap-1 text-muted">
+                                <span class="dot" style="background: var(--status-ignored, #94a3b8); width: 7px; height: 7px; border-radius: 50%;"></span>
+                                <span>Ignored:</span>
+                            </span>
+                            <span class="font-mono" th:text="${pt.ignoredCount}">0</span>
+                        </div>
+                    </div>
+                    <!-- Non-status metric summary -->
+                    <div class="d-flex flex-column gap-1 pt-1" th:if="${!pt.hasDetailedStatus()}" style="border-top: 1px dashed var(--border);">
+                        <div class="d-flex align-items-center justify-content-between gap-3">
+                            <span class="text-muted">Value:</span>
+                            <strong class="font-mono" style="color: var(--text-main);" th:text="${pt.valueFormatted}">$0.0420</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="ratio-legend-list mt-1" th:if="${not #lists.isEmpty(w.trendLayers)}">
+        <div th:each="layer : ${w.trendLayers}"
+             class="ratio-legend-chip"
+             th:classappend="${w.trendLayers.size() > 1 ? 'is-clickable' : ''}"
+             th:attr="data-widget-id=${w.id},data-layer-name=${layer.name},data-max-val=${layer.peakCount}"
+             onclick="event.stopPropagation(); toggleWidgetTrendLayerSelect(this)"
+             th:title="${w.trendLayers.size() > 1} ? 'Click to display non-filled line trend for ' + ${layer.name} : null">
+            <span class="dot" th:classappend="${layer.patternClass}" th:style="'background: ' + ${layer.color} + ';'"></span>
+            <span th:text="${layer.name}">Layer</span>
+        </div>
+    </div>
+    <div th:if="${#lists.isEmpty(w.trendPoints)}" class="text-muted text-center py-3" style="font-size: 0.78rem;">
+        <span th:text="${w.emptyMessage}">No trend data points found</span>
+    </div>
+</div>
+
+<!-- 5. TEXT BODY -->
+<div th:fragment="textBody(w)" th:if="${w != null}" class="widget-card-body widget-text-card-body d-flex flex-column justify-content-center align-items-center py-4 px-3 text-center">
+    <div class="widget-kpi-primary-val" th:unless="${w.metric.name() == 'AI_USAGE' and not #lists.isEmpty(w.ratioSegments)}" th:style="'color: ' + ${w.textValueColor} + ';'" th:text="${w.primaryTextValue}">100% PASS</div>
+    <div class="d-flex align-items-center justify-content-center gap-3 w-100 flex-wrap py-2" th:if="${w.metric.name() == 'AI_USAGE' and not #lists.isEmpty(w.ratioSegments)}">
+        <th:block th:each="seg, iterStat : ${w.ratioSegments}">
+            <div class="d-flex flex-column align-items-center px-2 widget-interactive-filter"
+                 th:attr="data-filter-dim='mode',data-filter-val=${seg.name}"
+                 onclick="onContainerWidgetFilterClick(this, event)">
+                <div class="d-flex align-items-center gap-1">
+                    <span class="material-symbols-outlined" style="font-size: 1.1rem;" th:styleappend="'color: ' + ${seg.color} + ';'" th:text="${seg.name == 'AI-Driven' ? 'psychology' : (seg.name == 'Healed' ? 'auto_fix_high' : 'menu_book')}">psychology</span>
+                    <span class="widget-kpi-primary-val" th:style="'color: ' + ${seg.color} + '; font-size: 1.8rem;'" th:text="${w.valueFormat != null and w.valueFormat.name() == 'ABSOLUTE' ? seg.count : seg.formattedPercentage}">100%</span>
+                </div>
+                <span class="text-muted" style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;" th:text="${seg.name}">AI-Driven</span>
+                <span class="text-muted font-mono" style="font-size: 0.7rem;" th:text="${w.valueFormat != null and w.valueFormat.name() == 'ABSOLUTE' ? seg.formattedPercentage : seg.count + ' tests'}">118 tests</span>
+            </div>
+            <div th:if="${!iterStat.last}" style="width: 1px; height: 36px; background: var(--border-color);"></div>
+        </th:block>
+    </div>
+    <div class="widget-kpi-secondary-val text-muted mt-1" th:text="${w.secondaryTextValue}">12 Tests Passing</div>
+    <div class="d-flex align-items-center gap-2 mt-2 flex-wrap justify-content-center" th:if="${w.showHealedAi and not #lists.isEmpty(w.pieSlices)}">
+        <th:block th:each="s : ${w.pieSlices}">
+            <span class="badge-healed-inline seg-healed-print widget-interactive-filter"
+                  th:if="${s.healedCount > 0}"
+                  style="font-size: 0.68rem; padding: 0.1rem 0.4rem; border-radius: 4px; background: rgba(52, 211, 153, 0.15); color: #34d399; font-weight: 500; cursor: pointer;"
+                  th:attr="data-filter-dim=${w.metric.name() == 'STATUS' ? 'status' : (w.metric.name() == 'TAG' ? (w.tagKey != null ? w.tagKey : 'tag') : (w.metric.name() == 'AI_USAGE' ? 'mode' : (w.metric.name() == 'BUGS' ? 'severity' : (w.metric.name() == 'FLAKINESS' ? 'flaky' : 'category'))))},data-filter-val=${s.label + ' (Healed)'}"
+                  onclick="onContainerWidgetFilterClick(this, event)"
+                  th:title="${'Filter healed ' + s.label + ' tests'}"
+                  th:text="'✨ ' + ${s.healedCount} + ' healed'">✨ 1 healed</span>
+            <span class="badge-ai-inline seg-ai-print widget-interactive-filter"
+                  th:if="${s.aiCount > 0}"
+                  style="font-size: 0.68rem; padding: 0.1rem 0.4rem; border-radius: 4px; background: rgba(139, 92, 246, 0.15); color: #a78bfa; font-weight: 500; cursor: pointer;"
+                  th:attr="data-filter-dim=${w.metric.name() == 'STATUS' ? 'status' : (w.metric.name() == 'TAG' ? (w.tagKey != null ? w.tagKey : 'tag') : (w.metric.name() == 'AI_USAGE' ? 'mode' : (w.metric.name() == 'BUGS' ? 'severity' : (w.metric.name() == 'FLAKINESS' ? 'flaky' : 'category'))))},data-filter-val=${s.label + ' (AI)'}"
+                  onclick="onContainerWidgetFilterClick(this, event)"
+                  th:title="${'Filter AI ' + s.label + ' tests'}"
+                  th:text="${s.aiCount} + ' AI'">1 AI</span>
+        </th:block>
+    </div>
+</div>
+
+<!-- 6. TEXT WITH SMALL TREND (SPARKLINE) BODY -->
+<div th:fragment="textSmallTrendBody(w)" th:if="${w != null}" class="widget-card-body widget-text-trend-card-body">
+    <!-- METRICS SECTION -->
+    <div class="widget-text-trend-metrics">
+        <!-- Standard metric -->
+        <div class="d-flex flex-column" th:unless="${w.metric.name() == 'AI_USAGE' and not #lists.isEmpty(w.ratioSegments)}">
+            <div class="widget-kpi-primary-val" th:style="'color: ' + ${w.textValueColor} + ';'" th:text="${w.primaryTextValue}">100% PASS</div>
+            <div class="widget-kpi-secondary-val text-muted mt-1" th:text="${w.secondaryTextValue}">12 Tests Passing</div>
+        </div>
+
+        <!-- Specialized AI_USAGE segments breakdown -->
+        <div class="d-flex flex-column" th:if="${w.metric.name() == 'AI_USAGE' and not #lists.isEmpty(w.ratioSegments)}">
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+                <th:block th:each="seg, iterStat : ${w.ratioSegments}">
+                    <div class="d-flex flex-column align-items-center px-1 widget-interactive-filter"
+                         th:attr="data-filter-dim='mode',data-filter-val=${seg.name}"
+                         onclick="onContainerWidgetFilterClick(this, event)">
+                        <div class="d-flex align-items-center gap-1">
+                            <span class="material-symbols-outlined" style="font-size: 0.95rem;" th:styleappend="'color: ' + ${seg.color} + ';'" th:text="${seg.name == 'AI-Driven' ? 'psychology' : (seg.name == 'Healed' ? 'auto_fix_high' : 'menu_book')}">psychology</span>
+                            <span class="widget-kpi-primary-val" th:style="'color: ' + ${seg.color} + '; font-size: 1.35rem;'" th:text="${w.valueFormat != null and w.valueFormat.name() == 'ABSOLUTE' ? seg.count : seg.formattedPercentage}">100%</span>
+                        </div>
+                        <span class="text-muted" style="font-size: 0.7rem; font-weight: 600; text-transform: uppercase;" th:text="${seg.name}">AI-Driven</span>
+                        <span class="text-muted font-mono" style="font-size: 0.65rem;" th:text="${w.valueFormat != null and w.valueFormat.name() == 'ABSOLUTE' ? seg.formattedPercentage : seg.count + ' tests'}">118 tests</span>
+                    </div>
+                    <div th:if="${!iterStat.last}" style="width: 1px; height: 28px; background: var(--border-color);"></div>
+                </th:block>
+            </div>
+            <div class="widget-kpi-secondary-val text-muted mt-1" th:text="${w.secondaryTextValue}">12 Tests Passing</div>
+        </div>
+
+        <!-- DELTA PILL (COUPLED TO METRIC) -->
+        <div class="token-cost-delta-group mt-2" th:if="${w.trendDeltaLabel != null and !w.trendDeltaLabel.isEmpty()}"
+             th:classappend="${w.isTrendPositive ? 'trend-up' : 'trend-down'}">
+            <span class="token-cost-delta" th:text="${w.trendDeltaLabel}">+0.0% vs prev run</span>
+        </div>
+    </div>
+
+    <!-- EXPANSIVE SPARKLINE CHART -->
+    <div class="widget-sparkline-container">
+        <svg class="widget-sparkline-svg" width="100%" height="100%" viewBox="0 0 300 70" preserveAspectRatio="none">
+            <defs th:if="${w.sparklineAreaSvgPath != null && !w.sparklineAreaSvgPath.isEmpty()}">
+                <linearGradient th:id="'sparklineGrad-' + ${w.id}" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" th:stop-color="${w.trendColor}" stop-opacity="0.25" />
+                    <stop offset="100%" th:stop-color="${w.trendColor}" stop-opacity="0.0" />
+                </linearGradient>
+            </defs>
+            <path th:if="${w.sparklineAreaSvgPath != null && !w.sparklineAreaSvgPath.isEmpty()}"
+                  th:attr="d=${w.sparklineAreaSvgPath}"
+                  th:fill="'url(#sparklineGrad-' + ${w.id} + ')'" />
+            <path th:attr="d=${w.sparklineSvgPath != null && !w.sparklineSvgPath.isEmpty() ? w.sparklineSvgPath : 'M 6.0 35.0 L 294.0 35.0'}"
+                  d="M 6.0 35.0 L 294.0 35.0"
+                  fill="none"
+                  th:style="'stroke: ' + ${w.trendColor} + ';'"
+                  stroke-width="2.5"
+                  vector-effect="non-scaling-stroke"
+                  stroke-linecap="round"
+                  stroke-linejoin="round" />
+            <circle th:if="${w.sparklineHasEndpoint}"
+                    th:attr="cx=${w.sparklineLastX},cy=${w.sparklineLastY}"
+                    r="5"
+                    th:fill="${w.trendColor}"
+                    opacity="0.25" />
+            <circle th:if="${w.sparklineHasEndpoint}"
+                    th:attr="cx=${w.sparklineLastX},cy=${w.sparklineLastY}"
+                    r="3"
+                    th:fill="${w.trendColor}" />
+        </svg>
+    </div>
+</div>
+
+<!-- 7. LIST PRESENTATION BODY -->
+<div th:fragment="listBody(w)" th:if="${w != null}" class="widget-card-body widget-list-card-body p-2">
+    <div class="widget-itemized-list d-flex flex-column gap-1" th:if="${w.hasListItems()}">
+        <div class="widget-list-group collapsed d-flex flex-column gap-1" th:each="item : ${w.listItems}">
+            <!-- LIST ITEM ROW -->
+            <div class="widget-list-row d-flex align-items-center justify-content-between p-2 rounded"
+                 style="background: var(--bg-hover, rgba(255,255,255,0.03)); border: 1px solid var(--border, rgba(255,255,255,0.06)); font-size: 0.82rem;">
+                <div class="d-flex align-items-center gap-2" style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    <!-- COLLAPSE/EXPAND BUTTON (ONLY TOGGLES SUBITEMS, DOES NOT FILTER) -->
+                    <span class="material-symbols-outlined text-muted widget-list-chevron"
+                          th:if="${item.hasSubItems()}"
+                          onclick="event.stopPropagation(); toggleWidgetListItemCollapse(this, event)"
+                          title="Collapse / expand subitems"
+                          role="button"
+                          tabindex="0"
+                          style="font-size: 1.05rem; flex-shrink: 0; cursor: pointer; transform: rotate(-90deg);">expand_more</span>
+                    <!-- FILTER AREA: SCOPED TO LABEL ONLY -->
+                    <span class="widget-list-label widget-interactive-filter d-inline-flex align-items-center gap-1"
+                          th:attr="data-filter-dim=${w.metric.name() == 'STATUS' ? 'status' : (w.metric.name() == 'TAG' ? (w.tagKey != null ? w.tagKey : 'tag') : (w.metric.name() == 'AI_USAGE' ? 'mode' : (w.metric.name() == 'BUGS' ? 'severity' : (w.metric.name() == 'FLAKINESS' ? 'flaky' : 'category'))))},data-filter-val=${item.label}"
+                          onclick="event.stopPropagation(); onContainerWidgetFilterClick(this, event)"
+                          th:title="${'Filter by ' + item.label}"
+                          style="cursor: pointer; min-width: 0; border-radius: 4px; padding: 1px 4px;">
+                        <span class="dot" th:style="'background: ' + ${item.color} + '; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;'"></span>
+                        <span class="material-symbols-outlined text-muted" style="font-size: 0.95rem; flex-shrink: 0;" th:if="${item.icon != null and !item.icon.isEmpty()}" th:text="${item.icon}">label</span>
+                        <span style="font-weight: 600; color: var(--text-main);" th:text="${item.label}">Item</span>
+                        <span class="text-muted" style="font-size: 0.75rem;" th:if="${item.hasSecondaryLabel()}" th:text="${item.secondaryLabel}"></span>
+                    </span>
+                    <span class="badge-healed-inline seg-healed-print widget-interactive-filter"
+                          th:if="${w.showHealedAi and item.healedCount > 0}"
+                          style="font-size: 0.62rem; padding: 0.05rem 0.3rem; border-radius: 4px; background: rgba(52, 211, 153, 0.15); color: #34d399; font-weight: 500; cursor: pointer;"
+                          th:attr="data-filter-dim=${w.metric.name() == 'STATUS' ? 'status' : (w.metric.name() == 'TAG' ? (w.tagKey != null ? w.tagKey : 'tag') : (w.metric.name() == 'AI_USAGE' ? 'mode' : (w.metric.name() == 'BUGS' ? 'severity' : (w.metric.name() == 'FLAKINESS' ? 'flaky' : 'category'))))},data-filter-val=${item.label + ' (Healed)'}"
+                          onclick="event.stopPropagation(); onContainerWidgetFilterClick(this, event)"
+                          th:title="${'Filter healed ' + item.label + ' tests'}"
+                          th:text="'✨ ' + ${item.healedCount}">✨ 1</span>
+                    <span class="badge-ai-inline seg-ai-print widget-interactive-filter"
+                          th:if="${w.showHealedAi and item.aiCount > 0}"
+                          style="font-size: 0.62rem; padding: 0.05rem 0.3rem; border-radius: 4px; background: rgba(139, 92, 246, 0.15); color: #a78bfa; font-weight: 500; cursor: pointer;"
+                          th:attr="data-filter-dim=${w.metric.name() == 'STATUS' ? 'status' : (w.metric.name() == 'TAG' ? (w.tagKey != null ? w.tagKey : 'tag') : (w.metric.name() == 'AI_USAGE' ? 'mode' : (w.metric.name() == 'BUGS' ? 'severity' : (w.metric.name() == 'FLAKINESS' ? 'flaky' : 'category'))))},data-filter-val=${item.label + ' (AI)'}"
+                          onclick="event.stopPropagation(); onContainerWidgetFilterClick(this, event)"
+                          th:title="${'Filter AI ' + item.label + ' tests'}"
+                          th:text="${item.aiCount} + ' AI'">1 AI</span>
+                </div>
+                <div class="d-flex align-items-center gap-2" style="flex-shrink: 0;">
+                    <a th:if="${!item.hasSubItems() and item.hasReportUrl()}"
+                       class="font-mono run-id-link d-inline-flex align-items-center gap-1"
+                       style="font-size: 0.8rem; text-decoration: none;"
+                       th:href="${item.reportUrl}"
+                       th:attr="hx-get=${item.reportUrl}"
+                       hx-target="#mainViewContainer"
+                       hx-swap="innerHTML"
+                       hx-push-url="true"
+                       onclick="event.stopPropagation();"
+                       th:title="'Open report for ' + ${item.label}">
+                        <span style="font-weight: 700; color: var(--text-main);" th:text="${item.valueFormatted}">$0.0012</span>
+                        <span class="material-symbols-outlined" style="font-size: 0.8rem; color: #3b82f6;">open_in_new</span>
+                    </a>
+                    <span th:if="${item.hasSubItems() or !item.hasReportUrl()}"
+                          class="font-mono" style="font-weight: 700; color: var(--text-main);" th:text="${item.valueFormatted}">10 (100%)</span>
+                </div>
+            </div>
+            <!-- NESTED SUB-ITEMS TREE -->
+            <div class="widget-list-subitems is-collapsed-hidden d-flex flex-column gap-1 ms-3 ps-2 my-1" th:if="${item.hasSubItems()}" style="display: none;">
+                <div class="widget-list-subitem-row d-flex flex-column gap-1 p-2 rounded"
+                     th:each="sub : ${item.subItems}"
+                     th:attr="data-subitem-badge=${sub.badge},data-subitem-label=${sub.label},data-subitem-secondary=${sub.secondaryLabel},data-variation-key=${sub.variationKey},data-variation-id=${sub.variationId},data-run-id=${sub.runId},data-execution-id=${sub.executionId},data-report-url=${sub.reportUrl},data-subitem-healed=${sub.healedCount > 0},data-subitem-ai=${sub.aiCount > 0},data-subitem-tags=${sub.hasTags() ? #strings.listJoin(sub.tags, ',') : ''}">
+                    <!-- LINE 1: STATUS/ICON + TEST NAME / TICKET + CLASS + VALUE -->
+                    <div class="d-flex align-items-center justify-content-between gap-2">
+                        <div class="d-flex align-items-center gap-2" style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            <span class="material-symbols-outlined" style="font-size: 0.9rem; flex-shrink: 0;" th:style="'color: ' + ${sub.color} + ';'" th:text="${sub.icon != null && !sub.icon.isEmpty() ? sub.icon : 'subdirectory_arrow_right'}">subdirectory_arrow_right</span>
+                            <!-- Ticket badge if Bug -->
+                            <a th:if="${(w.metric.name() == 'BUGS' or (sub.badge != null and !sub.badge.isEmpty())) and sub.hasReportUrl()}"
+                               class="badge-status font-mono widget-subitem-ticket-link d-inline-flex align-items-center gap-1"
+                               style="font-size: 0.72rem; padding: 0.1rem 0.45rem; background: var(--bg-card, rgba(255,255,255,0.05)); border: 1px solid var(--border, rgba(255,255,255,0.1)); text-decoration: none;"
+                               th:href="${sub.reportUrl}"
+                               th:attr="hx-get=${sub.reportUrl}"
+                               hx-target="#mainViewContainer"
+                               hx-swap="innerHTML"
+                               hx-push-url="true"
+                               onclick="event.stopPropagation();"
+                               th:title="'Open execution details in run report'"
+                               th:text="${sub.label}">BUG-12345</a>
+                            <span class="badge-status font-mono"
+                                  th:if="${(w.metric.name() == 'BUGS' or (sub.badge != null and !sub.badge.isEmpty())) and !sub.hasReportUrl()}"
+                                  style="font-size: 0.72rem; padding: 0.1rem 0.45rem; background: var(--bg-card, rgba(255,255,255,0.05)); border: 1px solid var(--border, rgba(255,255,255,0.1));"
+                                  th:text="${sub.label}">BUG-12345</span>
+                            <!-- Method name if Test -->
+                            <a th:if="${w.metric.name() != 'BUGS' and (sub.badge == null or sub.badge.isEmpty()) and sub.hasReportUrl()}"
+                               class="widget-subitem-test-link text-truncate"
+                               style="font-weight: 600; color: var(--text-main); font-size: 0.8rem; text-decoration: none;"
+                               th:href="${sub.reportUrl}"
+                               th:attr="hx-get=${sub.reportUrl}"
+                               hx-target="#mainViewContainer"
+                               hx-swap="innerHTML"
+                               hx-push-url="true"
+                               onclick="event.stopPropagation();"
+                               th:title="'Open execution details in run report'"
+                               th:text="${sub.label}">verifyPriceDisplayPerMarket</a>
+                            <span th:if="${w.metric.name() != 'BUGS' and (sub.badge == null or sub.badge.isEmpty()) and !sub.hasReportUrl()}"
+                                  style="font-weight: 600; color: var(--text-main); font-size: 0.8rem;"
+                                  th:text="${sub.label}">verifyPriceDisplayPerMarket</span>
+                            <!-- Secondary class subtitle -->
+                            <span class="text-muted text-truncate"
+                                  style="font-size: 0.72rem; max-width: 320px;"
+                                  th:if="${sub.hasSecondaryLabel()}"
+                                  th:title="${sub.secondaryLabel}"
+                                  th:text="${sub.secondaryLabel}">CurrencySwitchTest</span>
+                            <span class="badge-healed-inline seg-healed-print widget-interactive-filter"
+                                  th:if="${w.showHealedAi and sub.healedCount > 0}"
+                                  style="font-size: 0.6rem; padding: 0.05rem 0.25rem; border-radius: 4px; background: rgba(52, 211, 153, 0.15); color: #34d399; cursor: pointer;"
+                                  th:attr="data-filter-dim=${w.metric.name() == 'STATUS' ? 'status' : (w.metric.name() == 'TAG' ? (w.tagKey != null ? w.tagKey : 'tag') : (w.metric.name() == 'AI_USAGE' ? 'mode' : (w.metric.name() == 'BUGS' ? 'severity' : (w.metric.name() == 'FLAKINESS' ? 'flaky' : 'category'))))},data-filter-val=${item.label + ' (Healed)'}"
+                                  onclick="event.stopPropagation(); onContainerWidgetFilterClick(this, event)"
+                                  th:title="${'Filter healed ' + item.label + ' tests'}"
+                                  th:text="'✨ healed'">✨ healed</span>
+                            <span class="badge-ai-inline seg-ai-print widget-interactive-filter"
+                                  th:if="${w.showHealedAi and sub.aiCount > 0}"
+                                  style="font-size: 0.6rem; padding: 0.05rem 0.25rem; border-radius: 4px; background: rgba(139, 92, 246, 0.15); color: #a78bfa; cursor: pointer;"
+                                  th:attr="data-filter-dim=${w.metric.name() == 'STATUS' ? 'status' : (w.metric.name() == 'TAG' ? (w.tagKey != null ? w.tagKey : 'tag') : (w.metric.name() == 'AI_USAGE' ? 'mode' : (w.metric.name() == 'BUGS' ? 'severity' : (w.metric.name() == 'FLAKINESS' ? 'flaky' : 'category'))))},data-filter-val=${item.label + ' (AI)'}"
+                                  onclick="event.stopPropagation(); onContainerWidgetFilterClick(this, event)"
+                                  th:title="${'Filter AI ' + item.label + ' tests'}"
+                                  th:text="'AI'">AI</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-1" style="flex-shrink: 0;" th:if="${sub.valueFormatted != null and !sub.valueFormatted.isEmpty()}">
+                            <a th:if="${sub.hasReportUrl()}"
+                               class="font-mono run-id-link d-inline-flex align-items-center gap-1"
+                               style="font-size: 0.72rem; text-decoration: none; padding: 0.1rem 0.35rem; border-radius: 4px; background: var(--bg-hover, rgba(255,255,255,0.05)); border: 1px solid var(--border, rgba(255,255,255,0.08));"
+                               th:href="${sub.reportUrl}"
+                               th:attr="hx-get=${sub.reportUrl}"
+                               hx-target="#mainViewContainer"
+                               hx-swap="innerHTML"
+                               hx-push-url="true"
+                               onclick="event.stopPropagation();"
+                               th:title="'Open execution details in run report'">
+                                <span th:text="${sub.valueFormatted}">#104</span>
+                                <span class="material-symbols-outlined" style="font-size: 0.75rem; color: #3b82f6;">open_in_new</span>
+                            </a>
+                            <span th:if="${!sub.hasReportUrl()}"
+                                  class="font-mono text-muted" style="font-size: 0.72rem;" th:text="${sub.valueFormatted}">#104</span>
+                        </div>
+                    </div>
+                    <!-- LINE 2: METADATA & TAG CHIPS STRIP -->
+                    <div class="d-flex align-items-center gap-1 flex-wrap ms-4" th:if="${sub.hasTags()}">
+                        <span th:each="t : ${sub.tags}"
+                              class="active-scope-tag widget-scope-tag widget-subitem-tag"
+                              th:text="${t}">Chrome</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div th:if="${!w.hasListItems()}" class="text-muted text-center py-3" style="font-size: 0.78rem;">
+        <span th:text="${w.emptyMessage}">No data items available</span>
+    </div>
+</div>
+
+<!-- 8. TEST VARIATIONS PRESENTATION BODY -->
+<div th:fragment="testVariationsBody(w)" th:if="${w != null}" class="widget-card-body widget-test-variations-body p-2 d-flex flex-column gap-2 w-100">
+    <!-- DYNAMIC AREA GROUPS -->
+    <th:block th:if="${w.hasRealAreas()}">
+    <div th:each="area : ${w.testAreas}" class="area-group test-row-group" th:id="'widget-' + ${w.id} + '-' + ${area.areaPaneId}" th:data-area="${area.areaName}">
+        <div class="area-group-header" onclick="toggleAreaGroup(this)">
+            <div class="area-group-title">
+                <span class="material-symbols-outlined area-chevron">chevron_right</span>
+                <span class="material-symbols-outlined text-accent" th:text="${area.icon ?: 'folder'}">folder</span>
+                <span>Area: <span th:text="${area.areaName != null ? (area.areaName.equalsIgnoreCase('Default') ? 'Default' : (area.areaName.startsWith('@') ? area.areaName.substring(1) : area.areaName)) : 'Default'}">Default</span></span>
+                <span class="tag-chip area-exec-count-chip" style="margin-left: 0.5rem;" th:text="${area.classCount + (area.classCount == 1 ? ' Class' : ' Classes') + ', ' + area.totalVariationsCount + (area.totalVariationsCount == 1 ? ' Variation' : ' Variations')}">1 Class, 2 Variations</span>
+            </div>
+        </div>
+
+        <div class="area-group-body">
+            <div th:each="cls : ${area.testClasses}" class="test-class-container tb-class-item" th:id="'widget-' + ${w.id} + '-' + ${cls.classContainerId}">
+                <div class="test-class-header" onclick="toggleTestClassGroup(this)">
+                    <div class="test-class-title">
+                        <span class="material-symbols-outlined test-class-chevron">chevron_right</span>
+                        <span class="material-symbols-outlined text-accent">folder</span>
+                        <span th:text="${cls.className}">CheckoutProcessTest</span>
+                    </div>
+                    <span class="badge-status badge-pass" style="background: var(--bg-hover); color: var(--text-main); font-weight: 700; font-size: 0.75rem;" th:text="${cls.variationCount + (cls.variationCount == 1 ? ' Variation' : ' Variations')}">1 Variation</span>
+                </div>
+                <div class="test-class-executions">
+                    <div class="table-responsive">
+                        <table class="aura-table">
+                            <colgroup>
+                                <col style="width: 30%;">
+                                <col style="width: 13%;">
+                                <col style="width: 25%;">
+                                <col style="width: 14%;">
+                                <col style="width: 18%;">
+                            </colgroup>
+                            <thead>
+                                <tr>
+                                    <th>Data Set / Variation</th>
+                                    <th>Locale</th>
+                                    <th>Browser</th>
+                                    <th th:if="${w.applyIdentityToVariations == true and w.activeIdentityCustomTags != null and !w.activeIdentityCustomTags.isEmpty()}" th:each="tg : ${w.activeIdentityCustomTags}" th:text="${tg}">Tag</th>
+                                    <th>Execution Mode</th>
+                                    <th>Last Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:each="var : ${cls.variations}" class="tb-entry-row clickable-row js-open-side-panel"
+                                    th:id="'widget-' + ${w.id} + '-row-var-' + ${var.id}"
+                                    th:data-row-id="'widget-' + ${w.id} + '-row-var-' + ${var.id}"
+                                    th:data-run-id="${var.lastRunId}"
+                                    th:data-env="${var.lastEnvironment ?: 'Default'}"
+                                    th:data-test-name="${var.testClassName}"
+                                    th:data-test-method="${var.testMethodName ?: ''}"
+                                    th:data-dataset="${var.dataSetLabel}"
+                                    th:data-status="${var.lastStatus}"
+                                    th:data-mode="${var.displayMode}"
+                                    th:data-healed="${var.healed or var.lastStatus == 'healed'}"
+                                    th:data-location="${var.location}"
+                                    th:data-browser="${var.browser}"
+                                    th:data-flaky="${var.flaky ?: false}"
+                                    th:data-flaky-reason="${var.flakyReason ?: ''}"
+                                    th:data-area="${var.areaTag}"
+                                    th:data-batch="${var.lastBatch ?: 'Default'}"
+                                    th:data-tags="${var.tagsJson}">
+                                    <td>
+                                        <div style="display: flex; flex-direction: column; gap: 0.15rem;">
+                                            <div style="display: flex; align-items: baseline; gap: 0.45rem; flex-wrap: wrap;">
+                                                <a class="test-title-link text-mono" style="text-decoration: none; color: var(--text-main); font-weight: 700;"
+                                                   th:href="@{/test-base(testName=${var.testClassName}, dataSet=${var.dataSetLabel}, location=${var.location}, browser=${var.browser})}"
+                                                   onclick="if (!event.ctrlKey && !event.metaKey && !event.shiftKey && event.button === 0) { event.preventDefault(); }"
+                                                   th:title="'Open variation in Test Base'"
+                                                   th:text="${(var.testMethodName != null and !#strings.isEmpty(var.testMethodName)) ? var.testMethodName : ((var.dataSetLabel != null and !#strings.isEmpty(var.dataSetLabel) and !var.dataSetLabel.equalsIgnoreCase(cls.className)) ? var.dataSetLabel : 'Default')}">testMethodName</a>
+                                                <span class="font-mono text-muted" style="font-size: 0.78rem; font-weight: normal;" th:text="${'(' + var.totalExecutionsCount + (var.totalExecutionsCount == 1 ? ' run' : ' runs') + ')'}">(1 runs)</span>
+                                            </div>
+                                            <span th:if="${var.testMethodName != null and !#strings.isEmpty(var.testMethodName) and var.dataSetLabel != null and !#strings.isEmpty(var.dataSetLabel) and !var.dataSetLabel.equalsIgnoreCase('Default') and !var.dataSetLabel.equalsIgnoreCase(cls.className)}" class="font-mono" style="font-size: 0.78rem; color: var(--status-fixed); font-weight: 600;" th:text="${'Data Set: ' + var.dataSetLabel}">Data Set: bad</span>
+                                        </div>
+                                    </td>
+                                    <td><span class="location-highlight-badge"><span class="material-symbols-outlined">location_on</span> <span th:text="${var.location}">US</span></span></td>
+                                    <td><span class="material-symbols-outlined text-accent" style="font-size: 0.95rem; vertical-align: middle; margin-right: 0.25rem;">language</span><span th:text="${var.browser}">Chrome</span></td>
+                                    <td th:if="${w.applyIdentityToVariations == true and w.activeIdentityCustomTags != null and !w.activeIdentityCustomTags.isEmpty()}" th:each="tg : ${w.activeIdentityCustomTags}">
+                                        <span class="tag-chip" th:text="${var.getIdentityProperty(tg) ?: 'Default'}">21</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge-status"
+                                              th:classappend="${var.displayMode == 'AI' ? 'badge-mode-ai' : (var.displayMode == 'RECORDING' or var.displayMode == 'PLAYBOOK' ? 'badge-mode-recording' : (var.displayMode == 'HEALED' ? 'badge-mode-healed' : 'badge-mode-java'))}"
+                                              style="font-size: 0.72rem; padding: 0.15rem 0.45rem;"
+                                              th:text="${var.displayMode}">RECORDING</span>
+                                    </td>
+                                    <td class="col-status-badge">
+                                        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                            <span class="badge-status badge-pass" th:if="${var.lastStatus == 'passed-clean' or var.lastStatus == 'passed' or var.lastStatus == 'succeeded' or var.lastStatus == null}">
+                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">check_circle</span> PASSED
+                                            </span>
+                                            <span class="badge-status badge-fixed" th:if="${var.lastStatus == 'succeeded-fixed' or var.lastStatus == 'fixed'}">
+                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> SUCCEEDED-FIXED
+                                            </span>
+                                            <span class="badge-status badge-known-fail" th:if="${var.lastStatus == 'failed-known' or var.lastStatus == 'known'}">
+                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> KNOWN FAIL
+                                            </span>
+                                            <span class="badge-status badge-unknown-fail" th:if="${var.lastStatus == 'failed-unknown' or var.lastStatus == 'unknown' or var.lastStatus == 'failed' or var.lastStatus == 'error'}">
+                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">cancel</span> FAIL
+                                            </span>
+                                            <span class="badge-status badge-ignored" th:if="${var.lastStatus == 'ignored' or var.lastStatus == 'skipped'}">
+                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">skip_next</span> SKIPPED
+                                            </span>
+                                            <span class="badge-status badge-flaky" th:if="${var.flaky}" th:title="${var.flakyReason != null ? var.flakyReason : 'Flaky test: frequent unknown failures in previous runs'}">
+                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">shuffle</span> FLAKY
+                                            </span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </th:block>
+
+    <!-- Plain test classes rendered directly when no real user-defined areas exist -->
+    <th:block th:if="${!w.hasRealAreas() and w.testClasses != null and !w.testClasses.isEmpty()}">
+        <div th:each="cls : ${w.testClasses}" class="test-class-container tb-class-item" th:id="'widget-' + ${w.id} + '-' + ${cls.classContainerId}">
+            <div class="test-class-header" onclick="toggleTestClassGroup(this)">
+                <div class="test-class-title">
+                    <span class="material-symbols-outlined test-class-chevron">chevron_right</span>
+                    <span class="material-symbols-outlined text-accent">folder</span>
+                    <span th:text="${cls.className}">CheckoutProcessTest</span>
+                </div>
+                <span class="badge-status badge-pass" style="background: var(--bg-hover); color: var(--text-main); font-weight: 700; font-size: 0.75rem;" th:text="${cls.variationCount + (cls.variationCount == 1 ? ' Variation' : ' Variations')}">1 Variation</span>
+            </div>
+            <div class="test-class-executions">
+                <div class="table-responsive">
+                    <table class="aura-table">
+                        <thead>
+                            <tr>
+                                <th>Data Set / Variation</th>
+                                <th>Locale</th>
+                                <th>Browser</th>
+                                <th th:if="${w.applyIdentityToVariations == true and w.activeIdentityCustomTags != null and !w.activeIdentityCustomTags.isEmpty()}" th:each="tg : ${w.activeIdentityCustomTags}" th:text="${tg}">Tag</th>
+                                <th>Execution Mode</th>
+                                <th>Last Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="var : ${cls.variations}" class="tb-entry-row clickable-row js-open-side-panel"
+                                th:id="'widget-' + ${w.id} + '-row-var-' + ${var.id}"
+                                th:data-row-id="'widget-' + ${w.id} + '-row-var-' + ${var.id}"
+                                th:data-run-id="${var.lastRunId}"
+                                th:data-env="${var.lastEnvironment ?: 'Default'}"
+                                th:data-test-name="${var.testClassName}"
+                                th:data-test-method="${var.testMethodName ?: ''}"
+                                th:data-dataset="${var.dataSetLabel}"
+                                th:data-status="${var.lastStatus}"
+                                th:data-mode="${var.displayMode}"
+                                th:data-healed="${var.healed or var.lastStatus == 'healed'}"
+                                th:data-location="${var.location}"
+                                th:data-browser="${var.browser}"
+                                th:data-flaky="${var.flaky ?: false}"
+                                th:data-flaky-reason="${var.flakyReason ?: ''}"
+                                th:data-area="${var.areaTag}"
+                                th:data-batch="${var.lastBatch ?: 'Default'}"
+                                th:data-tags="${var.tagsJson}">
+                                <td>
+                                    <div style="display: flex; flex-direction: column; gap: 0.15rem;">
+                                        <div style="display: flex; align-items: baseline; gap: 0.45rem; flex-wrap: wrap;">
+                                            <a class="test-title-link text-mono" style="text-decoration: none; color: var(--text-main); font-weight: 700;"
+                                               th:href="@{/test-base(testName=${var.testClassName}, dataSet=${var.dataSetLabel}, location=${var.location}, browser=${var.browser})}"
+                                               onclick="if (!event.ctrlKey && !event.metaKey && !event.shiftKey && event.button === 0) { event.preventDefault(); }"
+                                               th:title="'Open variation in Test Base'"
+                                               th:text="${(var.testMethodName != null and !#strings.isEmpty(var.testMethodName)) ? var.testMethodName : ((var.dataSetLabel != null and !#strings.isEmpty(var.dataSetLabel) and !var.dataSetLabel.equalsIgnoreCase(cls.className)) ? var.dataSetLabel : 'Default')}">testMethodName</a>
+                                            <span class="font-mono text-muted" style="font-size: 0.78rem; font-weight: normal;" th:text="${'(' + var.totalExecutionsCount + (var.totalExecutionsCount == 1 ? ' run' : ' runs') + ')'}">(1 runs)</span>
+                                        </div>
+                                        <span th:if="${var.testMethodName != null and !#strings.isEmpty(var.testMethodName) and var.dataSetLabel != null and !#strings.isEmpty(var.dataSetLabel) and !var.dataSetLabel.equalsIgnoreCase('Default') and !var.dataSetLabel.equalsIgnoreCase(cls.className)}" class="font-mono" style="font-size: 0.78rem; color: var(--status-fixed); font-weight: 600;" th:text="${'Data Set: ' + var.dataSetLabel}">Data Set: bad</span>
+                                    </div>
+                                </td>
+                                <td><span class="location-highlight-badge"><span class="material-symbols-outlined">location_on</span> <span th:text="${var.location}">US</span></span></td>
+                                <td><span class="material-symbols-outlined text-accent" style="font-size: 0.95rem; vertical-align: middle; margin-right: 0.25rem;">language</span><span th:text="${var.browser}">Chrome</span></td>
+                                <td th:if="${w.applyIdentityToVariations == true and w.activeIdentityCustomTags != null and !w.activeIdentityCustomTags.isEmpty()}" th:each="tg : ${w.activeIdentityCustomTags}">
+                                    <span class="tag-chip" th:text="${var.getIdentityProperty(tg) ?: 'Default'}">21</span>
+                                </td>
+                                <td>
+                                    <span class="badge-status"
+                                          th:classappend="${var.displayMode == 'AI' ? 'badge-mode-ai' : (var.displayMode == 'RECORDING' or var.displayMode == 'PLAYBOOK' ? 'badge-mode-recording' : (var.displayMode == 'HEALED' ? 'badge-mode-healed' : 'badge-mode-java'))}"
+                                          style="font-size: 0.72rem; padding: 0.15rem 0.45rem;"
+                                          th:text="${var.displayMode}">RECORDING</span>
+                                </td>
+                                <td class="col-status-badge">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                        <span class="badge-status badge-pass" th:if="${var.lastStatus == 'passed-clean' or var.lastStatus == 'passed' or var.lastStatus == 'succeeded' or var.lastStatus == null}">
+                                            <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">check_circle</span> PASSED
+                                        </span>
+                                        <span class="badge-status badge-fixed" th:if="${var.lastStatus == 'succeeded-fixed' or var.lastStatus == 'fixed'}">
+                                            <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> SUCCEEDED-FIXED
+                                        </span>
+                                        <span class="badge-status badge-known-fail" th:if="${var.lastStatus == 'failed-known' or var.lastStatus == 'known'}">
+                                            <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> KNOWN FAIL
+                                        </span>
+                                        <span class="badge-status badge-unknown-fail" th:if="${var.lastStatus == 'failed-unknown' or var.lastStatus == 'unknown' or var.lastStatus == 'failed' or var.lastStatus == 'error'}">
+                                            <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">cancel</span> FAIL
+                                        </span>
+                                        <span class="badge-status badge-ignored" th:if="${var.lastStatus == 'ignored' or var.lastStatus == 'skipped'}">
+                                            <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">skip_next</span> SKIPPED
+                                        </span>
+                                        <span class="badge-status badge-flaky" th:if="${var.flaky}" th:title="${var.flakyReason != null ? var.flakyReason : 'Flaky test: frequent unknown failures in previous runs'}">
+                                            <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">shuffle</span> FLAKY
+                                        </span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </th:block>
+
+    <div th:if="${(w.testClasses == null || w.testClasses.isEmpty()) and (!w.hasRealAreas() || w.testAreas == null || w.testAreas.isEmpty())}" class="text-center py-4 text-muted" style="padding: 1.5rem; font-size: 0.875rem;">
+        No test base variations found for this widget configuration.
+    </div>
+</div>
+
+<!-- 9. TEST RUNS LIST PRESENTATION BODY -->
+<div th:fragment="testRunsBody(w)" th:if="${w != null}" class="widget-card-body widget-runs-body p-0 d-flex flex-column w-100" th:id="'widgetRunsBody-' + ${w.id}">
+    <div class="table-responsive" style="max-height: 520px; overflow-y: auto;">
+        <table class="aura-table">
+            <thead>
+                <tr>
+                    <th>Run ID</th>
+                    <th>Tags</th>
+                    <th>Total</th>
+                    <th class="col-status-breakdown">Status Breakdown</th>
+                    <th class="col-pass-rate">Pass Rate</th>
+                    <th>Timestamp</th>
+                    <th class="col-action">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr th:each="run, iterStat : ${w.runs}" class="clickable-row run-history-row"
+                    th:attr="hx-get='/run-report?runId=' + ${run.id}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true"
+                    th:data-run-id="${run.id}"
+                    th:data-env="${run.environment}"
+                    th:data-locales="${run.localesCsv}"
+                    th:data-browsers="${run.browsersCsv}"
+                    th:data-areas="${w.runAreasMap != null ? w.runAreasMap.get(run.id) : (runAreasMap != null ? runAreasMap.get(run.id) : '')}"
+                    th:data-batch="${run.batchName ?: 'Default'}"
+                    th:data-tags="${run.tagsJson}"
+                    th:data-pass="${run.passedCount}"
+                    th:data-fixed="${run.succeededFixedCount}"
+                    th:data-known="${run.failedKnownCount}"
+                    th:data-unknown="${run.failedUnknownCount}"
+                    th:data-ignored="${run.ignoredCount}"
+                    th:data-pass-healed="${run.passedHealedCountSafe}"
+                    th:data-fixed-healed="${run.fixedHealedCountSafe}"
+                    th:data-known-healed="${run.knownHealedCountSafe}"
+                    th:data-unknown-healed="${run.unknownHealedCountSafe}"
+                    th:data-pass-ai="${run.passedAiCountSafe}"
+                    th:data-fixed-ai="${run.fixedAiCountSafe}"
+                    th:data-known-ai="${run.knownAiCountSafe}"
+                    th:data-unknown-ai="${run.unknownAiCountSafe}"
+                    th:data-rate="${(run.passRate != null ? #numbers.formatDecimal(run.passRate, 1, 0) : '0') + '% Pass'}"
+                    th:data-total="${run.totalTests != null ? run.totalTests : 0}"
+                    th:data-time="${run.timestampLabel}">
+                    <td><a class="text-mono run-id-link" style="text-decoration: none; font-weight: 700; color: var(--text-main);" th:href="'/run-report?runId=' + ${run.id}" th:attr="hx-get='/run-report?runId=' + ${run.id}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" onclick="event.stopPropagation();" th:title="'Open report for run #' + ${run.id}" th:text="'#' + ${run.id}">#RUN_ID</a></td>
+                    <td>
+                        <div class="table-cell-chips cell-tags" th:if="${run.tags != null and !run.tags.isEmpty()}">
+                            <th:block th:each="t : ${run.tags}">
+                                <a th:if="${t.tagKey != null and (t.tagKey.equalsIgnoreCase('suite') or t.tagKey.equalsIgnoreCase('batch'))}" 
+                                   class="tag-chip tag-batch" 
+                                   th:href="@{/batch-history(batchName=${t.tagValue})}"
+                                   th:attr="hx-get=@{/batch-history(batchName=${t.tagValue})}" 
+                                   hx-target="#mainViewContainer" 
+                                   hx-swap="innerHTML" 
+                                   hx-push-url="true" 
+                                   onclick="event.stopPropagation();" 
+                                   style="cursor: pointer; text-decoration: none;" 
+                                   th:title="'Open history for batch ' + ${t.tagValue}">
+                                    <span class="text-muted">Suite:</span> <span th:text="${t.tagValue}">Default</span>
+                                </a>
+                                <span th:unless="${t.tagKey != null and (t.tagKey.equalsIgnoreCase('suite') or t.tagKey.equalsIgnoreCase('batch'))}" 
+                                      class="tag-chip"
+                                      th:title="${t.tagKey} + ': ' + ${t.tagValue}">
+                                    <span class="text-muted" th:text="${t.tagKey} + ':'">Tag:</span> <span th:text="${t.tagValue}">Val</span>
+                                </span>
+                            </th:block>
+                        </div>
+                        <div class="table-cell-chips cell-tags" th:if="${run.tags == null or run.tags.isEmpty()}">
+                            <a class="tag-chip tag-batch" 
+                               th:href="@{/batch-history(batchName=${run.batchName ?: 'Default'})}"
+                               th:attr="hx-get=@{/batch-history(batchName=${run.batchName ?: 'Default'})}" 
+                               hx-target="#mainViewContainer" 
+                               hx-swap="innerHTML" 
+                               hx-push-url="true" 
+                               onclick="event.stopPropagation();" 
+                               style="cursor: pointer; text-decoration: none;" 
+                               th:title="'Open history for batch ' + ${run.batchName ?: 'Default'}">
+                                <span class="text-muted">Suite:</span> <span th:text="${run.batchName ?: 'Default'}">Default</span>
+                            </a>
+                        </div>
+                    </td>
+                    <td class="text-mono" th:text="${run.totalTests}">0</td>
+                    <td class="col-status-breakdown">
+                        <div class="status-stacked-bar">
+                            <div th:if="${run.passedCleanCount > 0}" class="status-bar-seg seg-pass" th:style="'width:' + ${#numbers.formatDecimal(run.passedCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.passedCleanTooltip}" th:text="${run.passedCleanLabel}">3</div>
+                            <div th:if="${run.passedHealedCountSafe > 0}" class="status-bar-seg seg-pass-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(run.passedHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.passedHealedTooltip}" th:text="${run.passedHealedLabel}">0</div>
+                            <div th:if="${run.passedAiCountSafe > 0}" class="status-bar-seg seg-pass seg-ai-print" th:style="'width:' + ${#numbers.formatDecimal(run.passedAiPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.passedAiTooltip}" th:text="${run.passedAiLabel}">0</div>
+                            <div th:if="${run.fixedCleanCount > 0}" class="status-bar-seg seg-fixed" th:style="'width:' + ${#numbers.formatDecimal(run.fixedCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.fixedCleanTooltip}" th:text="${run.fixedCleanLabel}">2</div>
+                            <div th:if="${run.fixedHealedCountSafe > 0}" class="status-bar-seg seg-fixed-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(run.fixedHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.fixedHealedTooltip}" th:text="${run.fixedHealedLabel}">0</div>
+                            <div th:if="${run.fixedAiCountSafe > 0}" class="status-bar-seg seg-fixed seg-ai-print" th:style="'width:' + ${#numbers.formatDecimal(run.fixedAiPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.fixedAiTooltip}" th:text="${run.fixedAiLabel}">0</div>
+                            <div th:if="${run.knownCleanCount > 0}" class="status-bar-seg seg-known" th:style="'width:' + ${#numbers.formatDecimal(run.knownCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.knownCleanTooltip}" th:text="${run.knownCleanLabel}">1</div>
+                            <div th:if="${run.knownHealedCountSafe > 0}" class="status-bar-seg seg-known-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(run.knownHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.knownHealedTooltip}" th:text="${run.knownHealedLabel}">0</div>
+                            <div th:if="${run.knownAiCountSafe > 0}" class="status-bar-seg seg-known seg-ai-print" th:style="'width:' + ${#numbers.formatDecimal(run.knownAiPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.knownAiTooltip}" th:text="${run.knownAiLabel}">0</div>
+                            <div th:if="${run.unknownCleanCount > 0}" class="status-bar-seg seg-unknown" th:style="'width:' + ${#numbers.formatDecimal(run.unknownCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.unknownCleanTooltip}" th:text="${run.unknownCleanLabel}">1</div>
+                            <div th:if="${run.unknownHealedCountSafe > 0}" class="status-bar-seg seg-unknown-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(run.unknownHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.unknownHealedTooltip}" th:text="${run.unknownHealedLabel}">0</div>
+                            <div th:if="${run.unknownAiCountSafe > 0}" class="status-bar-seg seg-unknown seg-ai-print" th:style="'width:' + ${#numbers.formatDecimal(run.unknownAiPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.unknownAiTooltip}" th:text="${run.unknownAiLabel}">0</div>
+                            <div th:if="${run.runningCountSafe > 0}" class="status-bar-seg seg-running" th:style="'width:' + ${#numbers.formatDecimal(run.runningPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.runningTooltip}" th:text="${run.runningLabel}">0</div>
+                            <div th:if="${run.ignoredCount > 0}" class="status-bar-seg seg-ignored" th:style="'width:' + ${#numbers.formatDecimal(run.ignoredPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.ignoredTooltip}" th:text="${run.ignoredLabel}">1</div>
+                        </div>
+                    </td>
+                    <td class="col-pass-rate">
+                        <span th:if="${run.status == 'IN_PROGRESS'}" class="badge-status badge-running"><span class="material-symbols-outlined spin" style="font-size: 0.85rem; vertical-align: middle;">sync</span> RUNNING</span>
+                        <span th:unless="${run.status == 'IN_PROGRESS'}" class="badge-status badge-pass" th:text="${(run.passRate != null ? #numbers.formatDecimal(run.passRate, 1, 0) : '0') + '% Pass'}">37.5% Pass</span>
+                    </td>
+                    <td class="text-muted js-format-timestamp" th:data-timestamp-ms="${run.startTimeMs}" th:text="${run.timestampLabel}">Recently</td>
+                    <td class="col-action">
+                        <div class="table-cell-actions">
+                            <a class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.25rem;" th:href="'/run-report?runId=' + ${run.id}" th:attr="hx-get='/run-report?runId=' + ${run.id}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" onclick="event.stopPropagation();" th:title="'Inspect run #' + ${run.id}">
+                                <span class="material-symbols-outlined" style="font-size: 0.875rem;">visibility</span> Inspect
+                            </a>
+                            <button class="btn-danger-subtle" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" th:title="'Remove run #' + ${run.id} + ' from history'" th:attr="onclick='deleteRunFromHistory(\'' + ${run.id} + '\', event)'">
+                                <span class="material-symbols-outlined" style="font-size: 0.875rem;">delete</span>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                <tr th:if="${w.runs == null or #lists.isEmpty(w.runs)}">
+                    <td colspan="7" class="text-center py-4 text-muted">
+                        No test runs found matching active criteria.
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+</body>
+</html>

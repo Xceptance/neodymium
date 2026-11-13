@@ -21,8 +21,10 @@ package org.neodymium.ai.model;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.neodymium.util.TagUtils;
 
 /**
  * Immutable root container representing a parsed playbook with its logical steps
@@ -64,6 +66,11 @@ public final class Playbook
     private final String description;
 
     /**
+     * Optional root-level playbook tags.
+     */
+    private final Map<String, List<String>> tags;
+
+    /**
      * Constructs an immutable Playbook with defensive copies of steps and datasets.
      *
      * @param steps the list of logical playbook steps
@@ -71,7 +78,7 @@ public final class Playbook
      */
     public Playbook(final List<PlaybookStep> steps, final List<Map<String, SessionData.DataEntry>> dataSets)
     {
-        this(Collections.emptyList(), steps, Collections.emptyList(), dataSets, Collections.emptyMap(), null);
+        this(Collections.emptyList(), steps, Collections.emptyList(), dataSets, Collections.emptyMap(), null, Collections.emptyMap());
     }
 
     /**
@@ -83,7 +90,7 @@ public final class Playbook
      */
     public Playbook(final List<PlaybookStep> steps, final List<Map<String, SessionData.DataEntry>> dataSets, final Map<String, String> promptAddons)
     {
-        this(Collections.emptyList(), steps, Collections.emptyList(), dataSets, promptAddons, null);
+        this(Collections.emptyList(), steps, Collections.emptyList(), dataSets, promptAddons, null, Collections.emptyMap());
     }
 
     /**
@@ -96,7 +103,7 @@ public final class Playbook
      */
     public Playbook(final List<PlaybookStep> steps, final List<Map<String, SessionData.DataEntry>> dataSets, final Map<String, String> promptAddons, final String description)
     {
-        this(Collections.emptyList(), steps, Collections.emptyList(), dataSets, promptAddons, description);
+        this(Collections.emptyList(), steps, Collections.emptyList(), dataSets, promptAddons, description, Collections.emptyMap());
     }
 
     /**
@@ -118,6 +125,55 @@ public final class Playbook
         final Map<String, String> promptAddons,
         final String description)
     {
+        this(beforeSteps, steps, afterSteps, dataSets, promptAddons, description, Collections.emptyMap());
+    }
+
+    /**
+     * Constructs an immutable Playbook with defensive copies of before steps, core steps, after steps, datasets,
+     * custom prompt add-ons, scenario description, and area name/tag.
+     *
+     * @param beforeSteps the list of setup/before playbook steps
+     * @param steps the list of core playbook steps
+     * @param afterSteps the list of teardown/after playbook steps
+     * @param dataSets the list of dataset parameters maps
+     * @param promptAddons the map of custom prompt add-ons by type
+     * @param description optional scenario description
+     * @param areaName optional area name or tag (e.g. {@code "@Checkout"})
+     */
+    public Playbook(
+        final List<PlaybookStep> beforeSteps,
+        final List<PlaybookStep> steps,
+        final List<PlaybookStep> afterSteps,
+        final List<Map<String, SessionData.DataEntry>> dataSets,
+        final Map<String, String> promptAddons,
+        final String description,
+        final String areaName)
+    {
+        this(beforeSteps, steps, afterSteps, dataSets, promptAddons, description,
+            areaName != null && !areaName.isBlank() ? Map.of("area", List.of(areaName.trim())) : Collections.emptyMap());
+    }
+
+    /**
+     * Constructs an immutable Playbook with defensive copies of before steps, core steps, after steps, datasets,
+     * custom prompt add-ons, scenario description, and root-level tags.
+     *
+     * @param beforeSteps the list of setup/before playbook steps
+     * @param steps the list of core playbook steps
+     * @param afterSteps the list of teardown/after playbook steps
+     * @param dataSets the list of dataset parameters maps
+     * @param promptAddons the map of custom prompt add-ons by type
+     * @param description optional scenario description
+     * @param tags optional root-level playbook tags
+     */
+    public Playbook(
+        final List<PlaybookStep> beforeSteps,
+        final List<PlaybookStep> steps,
+        final List<PlaybookStep> afterSteps,
+        final List<Map<String, SessionData.DataEntry>> dataSets,
+        final Map<String, String> promptAddons,
+        final String description,
+        final Map<String, List<String>> tags)
+    {
         this.beforeSteps = beforeSteps != null ? Collections.unmodifiableList(new ArrayList<>(beforeSteps)) : Collections.emptyList();
         this.steps = steps != null ? Collections.unmodifiableList(new ArrayList<>(steps)) : Collections.emptyList();
         this.afterSteps = afterSteps != null ? Collections.unmodifiableList(new ArrayList<>(afterSteps)) : Collections.emptyList();
@@ -137,6 +193,27 @@ public final class Playbook
         this.dataSets = Collections.unmodifiableList(datasetsCopy);
         this.promptAddons = promptAddons != null ? Collections.unmodifiableMap(new HashMap<>(promptAddons)) : Collections.emptyMap();
         this.description = description != null && !description.isBlank() ? description.trim() : null;
+        this.tags = tags != null ? Collections.unmodifiableMap(new LinkedHashMap<>(tags)) : Collections.emptyMap();
+    }
+
+    /**
+     * Returns the optional test area name/tag (e.g. {@code "@Checkout"}).
+     *
+     * @return the area name/tag or null
+     */
+    public String getAreaName()
+    {
+        return TagUtils.findTagValue(this.tags, "area");
+    }
+
+    /**
+     * Returns the unmodifiable map of root-level playbook tags.
+     *
+     * @return the map of tag names to value lists, never null
+     */
+    public Map<String, List<String>> getTags()
+    {
+        return this.tags;
     }
 
     /**
@@ -233,6 +310,7 @@ public final class Playbook
         private final List<PlaybookStep> afterSteps = new ArrayList<>();
         private final List<Map<String, SessionData.DataEntry>> dataSets = new ArrayList<>();
         private final Map<String, String> promptAddons = new HashMap<>();
+        private final Map<String, List<String>> tags = new LinkedHashMap<>();
 
         private Builder()
         {
@@ -486,13 +564,60 @@ public final class Playbook
         }
 
         /**
+         * Sets root-level playbook tags.
+         *
+         * @param tags the map of tag names to value lists
+         * @return this builder instance
+         */
+        public Builder tags(final Map<String, List<String>> tags)
+        {
+            if (tags != null)
+            {
+                this.tags.putAll(tags);
+            }
+            return this;
+        }
+
+        /**
+         * Adds a single root-level playbook tag.
+         *
+         * @param key the tag key
+         * @param value the tag value
+         * @return this builder instance
+         */
+        public Builder tag(final String key, final String value)
+        {
+            if (key != null && !key.isBlank() && value != null)
+            {
+                this.tags.computeIfAbsent(key.trim(), k -> new ArrayList<>()).add(value.trim());
+            }
+            return this;
+        }
+
+        /**
+         * Adds a multi-value root-level playbook tag.
+         *
+         * @param key the tag key
+         * @param values the tag values
+         * @return this builder instance
+         */
+        public Builder tag(final String key, final List<String> values)
+        {
+            if (key != null && !key.isBlank() && values != null)
+            {
+                this.tags.computeIfAbsent(key.trim(), k -> new ArrayList<>()).addAll(values);
+            }
+            return this;
+        }
+
+        /**
          * Builds and returns the immutable {@link Playbook} instance.
          *
          * @return a new Playbook
          */
         public Playbook build()
         {
-            return new Playbook(this.beforeSteps, this.steps, this.afterSteps, this.dataSets, this.promptAddons, this.description);
+            return new Playbook(this.beforeSteps, this.steps, this.afterSteps, this.dataSets, this.promptAddons, this.description, this.tags);
         }
     }
 }

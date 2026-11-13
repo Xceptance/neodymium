@@ -22,6 +22,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 /**
@@ -97,5 +99,48 @@ public class TestRunEntityTest
         entity.setPassedAiCount(5); // 5% < 7% threshold
 
         assertEquals("", entity.getPassedAiLabel(), "Label should be empty string when under 7%");
+    }
+
+    @Test
+    public void testTagsJsonMultiValueArraySerialization()
+    {
+        final TestRunEntity entity = new TestRunEntity();
+        entity.setBatchName("stg-emea");
+
+        final TestRunTagEntity tag1 = new TestRunTagEntity();
+        tag1.setTagKey("locale");
+        tag1.setTagValue("UK");
+
+        final TestRunTagEntity tag2 = new TestRunTagEntity();
+        tag2.setTagKey("locale");
+        tag2.setTagValue("US");
+
+        final TestRunTagEntity tag3 = new TestRunTagEntity();
+        tag3.setTagKey("locale");
+        tag3.setTagValue("DE");
+
+        final TestRunTagEntity tag4 = new TestRunTagEntity();
+        tag4.setTagKey("Release");
+        tag4.setTagValue("2026.10");
+
+        entity.setTags(List.of(tag1, tag2, tag3, tag4));
+
+        final String json = entity.getTagsJson();
+        assertEquals("{\"batch\":\"stg-emea\",\"locale\":[\"UK\",\"US\",\"DE\"],\"release\":\"2026.10\"}", json);
+    }
+
+    @Test
+    public void testPlaybookCount()
+    {
+        final TestRunEntity entity = new TestRunEntity();
+        assertEquals(0, entity.getPlaybookCountSafe());
+        assertEquals(0, entity.getPlaybookCount());
+
+        entity.setPlaybookCount(12);
+        assertEquals(12, entity.getPlaybookCountSafe());
+        assertEquals(12, entity.getPlaybookCount());
+
+        entity.setPlaybookCount(null);
+        assertEquals(0, entity.getPlaybookCountSafe());
     }
 }

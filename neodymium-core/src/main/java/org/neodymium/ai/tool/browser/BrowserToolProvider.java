@@ -34,6 +34,7 @@ import org.neodymium.ai.executor.selenide.LocatorResolver;
 import org.neodymium.ai.executor.selenide.PageAnalyzer;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 import org.neodymium.ai.executor.selenide.frame.FrameContextManager;
+import org.neodymium.ai.executor.selenide.plugins.AssertAction;
 import org.neodymium.ai.executor.selenide.plugins.ClickAction;
 import org.neodymium.ai.executor.selenide.plugins.FillFormAction;
 import org.neodymium.ai.executor.selenide.plugins.FillFormAction.FormFieldEntry;
@@ -2351,7 +2352,7 @@ public final class BrowserToolProvider
 
     public static boolean matchesCandidate(final String candidate, final String expectedText, final boolean regex, final boolean exact)
     {
-        if (candidate == null || candidate.isBlank())
+        if (candidate == null)
         {
             return false;
         }
@@ -2359,10 +2360,19 @@ public final class BrowserToolProvider
         {
             return false;
         }
+        if (expectedText.isEmpty())
+        {
+            return candidate.isBlank();
+        }
 
         if (regex)
         {
             final String cleanPattern = cleanRegexPattern(expectedText);
+            if (cleanPattern.isEmpty())
+            {
+                return candidate.isBlank();
+            }
+
             Pattern pattern;
             try
             {
@@ -2374,6 +2384,11 @@ public final class BrowserToolProvider
             }
             return pattern.matcher(candidate).find()
                     || pattern.matcher(candidate.replaceAll("\\s+", " ")).find();
+        }
+
+        if (candidate.isBlank())
+        {
+            return expectedText.isBlank();
         }
 
         final String unescaped = unescapeLiteralText(expectedText);
@@ -2388,7 +2403,7 @@ public final class BrowserToolProvider
         }
         else
         {
-            if (candidate.toLowerCase(Locale.ROOT).contains(unescaped.toLowerCase(Locale.ROOT)))
+            if (unescaped.isEmpty() ? candidate.isBlank() : candidate.toLowerCase(Locale.ROOT).contains(unescaped.toLowerCase(Locale.ROOT)))
             {
                 return true;
             }
@@ -2417,6 +2432,10 @@ public final class BrowserToolProvider
         // Tier 3: Whitespace-collapsed fallback (normalizes multiple whitespace and literal escapes to single space)
         final String collapsedExpected = unescaped.replace("\\n", " ").replace("\\r", " ").replace("\\t", " ").replaceAll("\\s+", " ").trim();
         final String collapsedCandidate = candidate.replaceAll("\\s+", " ").trim();
+        if (collapsedExpected.isEmpty())
+        {
+            return collapsedCandidate.isEmpty();
+        }
         if (exact)
         {
             return collapsedCandidate.equalsIgnoreCase(collapsedExpected);
@@ -2452,18 +2471,49 @@ public final class BrowserToolProvider
             return false;
         }
 
+        if (expectedText == null || expectedText.isEmpty())
+        {
+            try
+            {
+                final SelenideElement se = el instanceof SelenideElement s ? s : Selenide.$(el);
+                return se.is(Condition.empty);
+            }
+            catch (final Throwable t)
+            {
+                if (isStaleException(t))
+                {
+                    throw (t instanceof StaleElementReferenceException sere ? sere : new StaleElementReferenceException(t.getMessage(), t));
+                }
+                return false;
+            }
+        }
+
         try
         {
-            final String text = el.getText();
-            if (matchesCandidate(text, expectedText, regex, exact))
-            {
-                return true;
-            }
+            final String tag = el.getTagName();
+            final boolean isInputOrTextarea = tag != null && ("input".equalsIgnoreCase(tag) || "textarea".equalsIgnoreCase(tag));
 
-            final String val = el instanceof SelenideElement se ? se.getValue() : el.getAttribute("value");
-            if (matchesCandidate(val, expectedText, regex, exact))
+            if (isInputOrTextarea)
             {
-                return true;
+                final String val = el instanceof SelenideElement se ? se.getValue() : el.getAttribute("value");
+                if (matchesCandidate(val, expectedText, regex, exact))
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                final String text = el.getText();
+                if (matchesCandidate(text, expectedText, regex, exact))
+                {
+                    return true;
+                }
+
+                final String val = el instanceof SelenideElement se ? se.getValue() : el.getAttribute("value");
+                if (matchesCandidate(val, expectedText, regex, exact))
+                {
+                    return true;
+                }
             }
 
             final String placeholder = el.getAttribute("placeholder");
@@ -2490,7 +2540,6 @@ public final class BrowserToolProvider
                 return true;
             }
 
-            final String tag = el.getTagName();
             final boolean isRoot = tag == null || "body".equalsIgnoreCase(tag) || "html".equalsIgnoreCase(tag);
             if (!isRoot)
             {
@@ -2530,6 +2579,10 @@ public final class BrowserToolProvider
             {
                 return true;
             }
+            if (expectedText == null || expectedText.isEmpty())
+            {
+                return false;
+            }
             final String id = el.getAttribute("id");
             if (id != null && !id.isBlank())
             {
@@ -2561,6 +2614,11 @@ public final class BrowserToolProvider
 
     static boolean isTextPresentOnPage(final String expectedText, final boolean regex, final boolean exact)
     {
+        if (expectedText == null || expectedText.isEmpty())
+        {
+            return false;
+        }
+
         try
         {
             if (matchesElementText($("body"), expectedText, regex, exact))
@@ -2721,8 +2779,14 @@ public final class BrowserToolProvider
                         }
                     }
                 }
-                else if (selector == null || selector.isBlank() || "body".equalsIgnoreCase(selector.trim()) || "html".equalsIgnoreCase(selector.trim()))
+                else if (selector == null || selector.isBlank() || isRootElementSelector(selector))
                 {
+                    if (expectedText.isBlank())
+                    {
+                        final ObjectNode err = errorNode("Asserting empty or blank text requires specifying a target 'selector' and cannot be performed against root document containers ('body', 'html') or without a target selector. To verify that a specific field or element is empty, specify its target selector (e.g. selector: '#field' or selector: 'input') or use 'browser_assert_element_state' with state 'empty'.");
+                        return ToolResult.error(call.callId(), err.toString());
+                    }
+
                     if (negated)
                     {
                         boolean present = true;
@@ -2762,56 +2826,86 @@ public final class BrowserToolProvider
                 }
                 else
                 {
-                    boolean matched = negated;
+                    final boolean isEmptyCheck = expectedText.isEmpty() && !regex;
+                    boolean matched = false;
+                    boolean elementExists = false;
+                    boolean keepPolling = true;
                     final long start = System.currentTimeMillis();
                     final long timeout = Configuration.timeout;
 
-                    while ((negated ? matched : !matched) && (System.currentTimeMillis() - start) < timeout)
+                    while (keepPolling && (System.currentTimeMillis() - start) < timeout)
                     {
                         matched = false;
+                        elementExists = false;
                         try
                         {
                             final WebDriver driver = WebDriverRunner.getWebDriver();
                             final By by = safeResolveLocator(selector);
                             final List<WebElement> elements = driver.findElements(by);
-                            if (!elements.isEmpty())
-                            {
-                                for (final WebElement el : elements)
-                                {
-                                    if (matchesElementOrAssociatedLabel(el, expectedText, regex, exact))
-                                    {
-                                        matched = true;
-                                        matchedElement = Selenide.$(el);
-                                        break;
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                final SelenideElement singleEl = resolveLazyElement(selector);
-                                if (singleEl.exists() && matchesElementOrAssociatedLabel(singleEl, expectedText, regex, exact))
-                                {
-                                    matched = true;
-                                    matchedElement = singleEl;
-                                }
-                            }
+                            final SelenideElement singleEl = resolveLazyElement(selector);
+                            elementExists = !elements.isEmpty() || (singleEl != null && singleEl.exists());
 
-                            if (!matched && !negated)
+                            if (elementExists)
                             {
-                                final List<WebElement> currentElements = driver.findElements(by);
-                                final SelenideElement primary = currentElements.isEmpty() ? resolveLazyElement(selector) : Selenide.$(currentElements.get(0));
-                                if (primary.exists())
+                                if (isEmptyCheck)
                                 {
-                                    final SelenideElement container = primary.closest(".form-group, .form-floating, .form-row, .field, .input-group, form, [class*='checkout'], [class*='order'], [class*='summary'], [class*='card'], [class*='table']");
-                                    if (container.exists() && matchesElementText(container, expectedText, regex, exact))
+                                    if (!elements.isEmpty())
                                     {
-                                        matched = true;
-                                        matchedElement = container;
+                                        for (final WebElement el : elements)
+                                        {
+                                            final SelenideElement se = Selenide.$(el);
+                                            if (se.is(Condition.empty))
+                                            {
+                                                matched = true;
+                                                matchedElement = se;
+                                                break;
+                                            }
+                                        }
                                     }
-                                    else if (primary.parent().exists() && matchesElementText(primary.parent(), expectedText, regex, exact))
+                                    else if (singleEl != null && singleEl.exists() && singleEl.is(Condition.empty))
                                     {
                                         matched = true;
-                                        matchedElement = primary.parent();
+                                        matchedElement = singleEl;
+                                    }
+                                }
+                                else
+                                {
+                                    if (!elements.isEmpty())
+                                    {
+                                        for (final WebElement el : elements)
+                                        {
+                                            if (matchesElementOrAssociatedLabel(el, expectedText, regex, exact))
+                                            {
+                                                matched = true;
+                                                matchedElement = Selenide.$(el);
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    else if (singleEl != null && singleEl.exists() && matchesElementOrAssociatedLabel(singleEl, expectedText, regex, exact))
+                                    {
+                                        matched = true;
+                                        matchedElement = singleEl;
+                                    }
+
+                                    if (!matched && !negated)
+                                    {
+                                        final List<WebElement> currentElements = driver.findElements(by);
+                                        final SelenideElement primary = currentElements.isEmpty() ? resolveLazyElement(selector) : Selenide.$(currentElements.get(0));
+                                        if (primary.exists())
+                                        {
+                                            final SelenideElement container = primary.closest(".form-group, .form-floating, .form-row, .field, .input-group, form, [class*='checkout'], [class*='order'], [class*='summary'], [class*='card'], [class*='table']");
+                                            if (container.exists() && matchesElementText(container, expectedText, regex, exact))
+                                            {
+                                                matched = true;
+                                                matchedElement = container;
+                                            }
+                                            else if (primary.parent().exists() && matchesElementText(primary.parent(), expectedText, regex, exact))
+                                            {
+                                                matched = true;
+                                                matchedElement = primary.parent();
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -2820,35 +2914,48 @@ public final class BrowserToolProvider
                         {
                             if (isStaleException(t))
                             {
-                                if (negated)
-                                {
-                                    matched = true;
-                                }
                                 Selenide.sleep(25);
                                 continue;
                             }
                         }
 
-                        if (negated ? matched : !matched)
+                        keepPolling = negated ? (!elementExists || matched) : !matched;
+                        if (keepPolling)
                         {
                             Selenide.sleep(100);
                         }
                     }
 
-                    if (negated ? matched : !matched)
+                    if (negated)
                     {
-                        if (negated)
+                        if (!elementExists)
+                        {
+                            final ObjectNode err = errorNode("Target element not found in DOM for selector '" + selector + "' within " + timeout + "ms. No element exists matching this selector. Use 'query_dom' to inspect the page structure or verify the selector.");
+                            return ToolResult.error(call.callId(), err.toString());
+                        }
+
+                        if (matched)
                         {
                             throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was found on selector \"" + selector + "\" within " + timeout + "ms, but expected not to match.");
                         }
-                        else
+                    }
+                    else if (!matched)
+                    {
+                        final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                        if (driver == null)
                         {
-                            final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
-                            if (driver == null)
-                            {
-                                throw new AssertionError("No active browser window found to assert text on selector \"" + selector + "\"");
-                            }
+                            throw new AssertionError("No active browser window found to assert text on selector \"" + selector + "\"");
+                        }
 
+                        if (!elementExists)
+                        {
+                            final ObjectNode err = errorNode("Target element not found in DOM for selector '" + selector + "' within " + timeout + "ms. No element exists matching this selector. Use 'query_dom' to inspect the page structure or verify the selector.");
+                            return ToolResult.error(call.callId(), err.toString());
+                        }
+
+                        String actualPreview = "";
+                        try
+                        {
                             List<WebElement> elements = Collections.emptyList();
                             try
                             {
@@ -2859,54 +2966,32 @@ public final class BrowserToolProvider
                             {
                             }
 
-                            boolean singleElExists = false;
-                            SelenideElement singleEl = null;
-                            try
+                            final SelenideElement singleEl = resolveLazyElement(selector);
+                            if (!elements.isEmpty())
                             {
-                                singleEl = resolveLazyElement(selector);
-                                singleElExists = singleEl != null && singleEl.exists();
-                            }
-                            catch (final Exception ignored)
-                            {
-                            }
-
-                            final boolean elementFound = !elements.isEmpty() || singleElExists;
-
-                            if (!elementFound)
-                            {
-                                final ObjectNode err = errorNode("Target element not found in DOM for selector '" + selector + "' within " + timeout + "ms. No element exists matching this selector. Use 'query_dom' to inspect the page structure or verify the selector.");
-                                return ToolResult.error(call.callId(), err.toString());
-                            }
-
-                            String actualPreview = "";
-                            try
-                            {
-                                if (!elements.isEmpty())
+                                final String text = elements.get(0).getText();
+                                final String val = (text != null && !text.isBlank()) ? text : elements.get(0).getAttribute("value");
+                                if (val != null)
                                 {
-                                    final String text = elements.get(0).getText();
-                                    final String val = (text != null && !text.isBlank()) ? text : elements.get(0).getAttribute("value");
-                                    if (val != null)
-                                    {
-                                        final String trimmed = val.length() > 120 ? val.substring(0, 120) + "…" : val;
-                                        actualPreview = " (Actual element text: \"" + trimmed + "\")";
-                                    }
-                                }
-                                else if (singleEl != null && singleEl.exists())
-                                {
-                                    final String text = singleEl.getText();
-                                    final String val = (text != null && !text.isBlank()) ? text : singleEl.getValue();
-                                    if (val != null)
-                                    {
-                                        final String trimmed = val.length() > 120 ? val.substring(0, 120) + "…" : val;
-                                        actualPreview = " (Actual element text: \"" + trimmed + "\")";
-                                    }
+                                    final String trimmed = val.length() > 120 ? val.substring(0, 120) + "…" : val;
+                                    actualPreview = " (Actual element text: \"" + trimmed + "\")";
                                 }
                             }
-                            catch (final Exception ignored)
+                            else if (singleEl != null && singleEl.exists())
                             {
+                                final String text = singleEl.getText();
+                                final String val = (text != null && !text.isBlank()) ? text : singleEl.getValue();
+                                if (val != null)
+                                {
+                                    final String trimmed = val.length() > 120 ? val.substring(0, 120) + "…" : val;
+                                    actualPreview = " (Actual element text: \"" + trimmed + "\")";
+                                }
                             }
-                            throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was not found on selector \"" + selector + "\" within " + timeout + "ms." + actualPreview);
                         }
+                        catch (final Exception ignored)
+                        {
+                        }
+                        throw new AssertionError("Expected text/pattern \"" + expectedText + "\" was not found on selector \"" + selector + "\" within " + timeout + "ms." + actualPreview);
                     }
                 }
 
@@ -3209,6 +3294,49 @@ public final class BrowserToolProvider
             }
         }
         return "";
+    }
+
+    /**
+     * Determines whether the given selector targets a root document container (e.g. body or html)
+     * either via CSS tag or standard XPath expressions.
+     *
+     * @param selector selector to inspect
+     * @return true if the selector targets html or body root containers
+     */
+    public static boolean isRootElementSelector(final String selector)
+    {
+        if (selector == null || selector.isBlank())
+        {
+            return false;
+        }
+        String s = selector.trim().toLowerCase(Locale.ROOT);
+        if (s.startsWith("css="))
+        {
+            s = s.substring(4).trim();
+        }
+        else if (s.startsWith("xpath="))
+        {
+            s = s.substring(6).trim();
+        }
+        if (s.startsWith("(") && s.endsWith(")[1]"))
+        {
+            s = s.substring(1, s.length() - 4).trim();
+        }
+        s = s.replaceAll("\\[\\s*1\\s*\\]", "");
+        s = s.replaceAll("\\s*>\\s*", ">");
+        s = s.replaceAll("\\s+", " ");
+        return ":root".equals(s)
+                || "body".equals(s)
+                || "html".equals(s)
+                || "/html".equals(s)
+                || "/html/body".equals(s)
+                || "/html//body".equals(s)
+                || "//body".equals(s)
+                || "//html".equals(s)
+                || "//html/body".equals(s)
+                || "//html//body".equals(s)
+                || "html>body".equals(s)
+                || "html body".equals(s);
     }
 
     private static String resolveUrl(final JsonNode args)
@@ -3744,14 +3872,16 @@ public final class BrowserToolProvider
         props.putObject("selector").put("type", "string").put("description", "CSS or XPath selector targeting the element to assert state on");
         final ArrayNode stateEnum = props.putObject("state")
                 .put("type", "string")
-                .put("description", "Expected state or comma-separated states of the element ('visible', 'hidden', 'enabled', 'disabled', 'editable', 'readonly', 'checked', 'unchecked', 'selected', 'unselected', 'focused', 'unfocused', 'exists', 'absent', or compound e.g. 'visible, enabled')")
+                .put("description", "Expected state or comma-separated states of the element ('visible', 'hidden', 'enabled', 'disabled', 'editable', 'readonly', 'checked', 'unchecked', 'selected', 'unselected', 'focused', 'unfocused', 'exists', 'absent', 'empty', 'not_empty', or compound e.g. 'visible, enabled')")
                 .putArray("enum");
         stateEnum.add("visible");
         stateEnum.add("hidden");
         stateEnum.add("enabled");
         stateEnum.add("disabled");
         stateEnum.add("editable");
+        stateEnum.add("not_editable");
         stateEnum.add("readonly");
+        stateEnum.add("not_readonly");
         stateEnum.add("checked");
         stateEnum.add("unchecked");
         stateEnum.add("selected");
@@ -3761,6 +3891,8 @@ public final class BrowserToolProvider
         stateEnum.add("not_focused");
         stateEnum.add("exists");
         stateEnum.add("absent");
+        stateEnum.add("empty");
+        stateEnum.add("not_empty");
         stateEnum.add("visible, enabled");
         stateEnum.add("visible, disabled");
         stateEnum.add("visible, editable");
@@ -3778,7 +3910,9 @@ public final class BrowserToolProvider
         statesEnum.add("enabled");
         statesEnum.add("disabled");
         statesEnum.add("editable");
+        statesEnum.add("not_editable");
         statesEnum.add("readonly");
+        statesEnum.add("not_readonly");
         statesEnum.add("checked");
         statesEnum.add("unchecked");
         statesEnum.add("selected");
@@ -3788,13 +3922,15 @@ public final class BrowserToolProvider
         statesEnum.add("not_focused");
         statesEnum.add("exists");
         statesEnum.add("absent");
+        statesEnum.add("empty");
+        statesEnum.add("not_empty");
         props.putObject("negated").put("type", "boolean").put("description", "Whether to invert the state assertion (default: false)");
 
         final ArrayNode req = schema.putArray("required");
         req.add("selector");
         req.add("state");
 
-        final ToolDefinition def = new ToolDefinition("assert_element_state", "Asserts that an element satisfies one or more states (e.g. editable, readonly, enabled, disabled, visible, hidden, checked, unchecked, selected, unselected, focused, unfocused, exists, absent, or compound e.g. 'visible, enabled')", schema);
+        final ToolDefinition def = new ToolDefinition("assert_element_state", "Asserts that an element satisfies one or more states (e.g. editable, not_editable, readonly, not_readonly, enabled, disabled, visible, hidden, checked, unchecked, selected, unselected, focused, unfocused, exists, absent, empty, not_empty, or compound e.g. 'visible, enabled')", schema);
         return new AiTool()
         {
             @Override
@@ -3881,6 +4017,12 @@ public final class BrowserToolProvider
                         case "unfocused" -> "focused";
                         case "exists" -> "absent";
                         case "absent" -> "exists";
+                        case "editable" -> "not_editable";
+                        case "not_editable" -> "editable";
+                        case "readonly" -> "not_readonly";
+                        case "not_readonly" -> "readonly";
+                        case "empty" -> "not_empty";
+                        case "not_empty" -> "empty";
                         default -> normalized;
                     } : normalized;
                     resolvedStates.add(targetState);
@@ -3953,7 +4095,9 @@ public final class BrowserToolProvider
                             case "enabled" -> el.shouldBe(Condition.enabled);
                             case "disabled" -> el.shouldBe(Condition.disabled);
                             case "editable" -> el.shouldBe(Condition.editable);
+                            case "not_editable" -> el.shouldNotBe(Condition.editable);
                             case "readonly" -> el.shouldBe(Condition.readonly);
+                            case "not_readonly" -> el.shouldNotBe(Condition.readonly);
                             case "checked" -> el.shouldBe(Condition.checked);
                             case "unchecked" -> el.shouldNotBe(Condition.checked);
                             case "selected" ->
@@ -3978,29 +4122,13 @@ public final class BrowserToolProvider
                                     el.shouldNotBe(Condition.selected);
                                 }
                             }
-                            case "focused" ->
-                            {
-                                final Boolean isFocused = Selenide.executeJavaScript(
-                                        "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
-                                        el);
-                                if (!Boolean.TRUE.equals(isFocused))
-                                {
-                                    el.shouldBe(Condition.focused);
-                                }
-                            }
-                            case "unfocused" ->
-                            {
-                                final Boolean isFocused = Selenide.executeJavaScript(
-                                        "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
-                                        el);
-                                if (Boolean.TRUE.equals(isFocused))
-                                {
-                                    el.shouldNotBe(Condition.focused);
-                                }
-                            }
+                            case "focused" -> el.should(AssertAction.FOCUSED);
+                            case "unfocused" -> el.should(AssertAction.UNFOCUSED);
                             case "exists" -> el.should(Condition.exist);
                             case "absent" -> el.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
-                            default -> throw new AssertionError("Unsupported element state assertion: '" + state + "'. Allowed states: visible, hidden, enabled, disabled, editable, readonly, checked, unchecked, selected, unselected, focused, unfocused, exists, absent.");
+                            case "empty" -> el.shouldBe(Condition.empty);
+                            case "not_empty" -> el.shouldNotBe(Condition.empty);
+                            default -> throw new AssertionError("Unsupported element state assertion: '" + state + "'. Allowed states: visible, hidden, enabled, disabled, editable, not_editable, readonly, not_readonly, checked, unchecked, selected, unselected, focused, unfocused, exists, absent, empty, not_empty.");
                         }
                         evaluatedStates.add(state);
                     }
@@ -4077,6 +4205,8 @@ public final class BrowserToolProvider
         return switch (s)
         {
             case "read-only", "read_only" -> "readonly";
+            case "not_readonly", "non_readonly", "not-readonly", "non-readonly", "not readonly", "non readonly", "not_read_only", "not-read-only" -> "not_readonly";
+            case "not_editable", "non_editable", "not-editable", "non-editable", "not editable", "non editable", "uneditable" -> "not_editable";
             case "not_checked", "un-checked", "unchecked" -> "unchecked";
             case "not_selected", "un-selected", "unselected" -> "unselected";
             case "not_exist", "not_exists", "non-existent", "absent" -> "absent";
@@ -4084,6 +4214,8 @@ public final class BrowserToolProvider
             case "present", "exist", "exists" -> "exists";
             case "invisible", "hidden" -> "hidden";
             case "displayed", "visible" -> "visible";
+            case "blank", "empty" -> "empty";
+            case "not_empty", "non_empty", "not-empty", "non-empty", "not empty", "non empty", "not_blank", "non_blank", "not-blank", "non-blank", "not blank", "non blank" -> "not_empty";
             default -> s;
         };
     }
@@ -4177,7 +4309,7 @@ public final class BrowserToolProvider
                             {
                                 el.shouldNotHave(attributeMatchingPattern(attrName, expectedValue));
                             }
-                            else if (exact)
+                            else if (exact || expectedValue.isEmpty())
                             {
                                 el.shouldNotHave(Condition.attribute(attrName, expectedValue));
                             }
@@ -4192,7 +4324,7 @@ public final class BrowserToolProvider
                             {
                                 el.shouldHave(attributeMatchingPattern(attrName, expectedValue));
                             }
-                            else if (exact)
+                            else if (exact || expectedValue.isEmpty())
                             {
                                 el.shouldHave(Condition.attribute(attrName, expectedValue));
                             }

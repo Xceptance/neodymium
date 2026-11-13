@@ -22,8 +22,8 @@
     <script th:src="@{/dashboard-htmx.js}" src="dashboard-htmx.js"></script>
 
     <!-- Custom Modular CSS -->
-    <link rel="stylesheet" th:href="@{/css/report-manager.css?v=1.1.1}" href="css/report-manager.css?v=1.1.1">
-    <link rel="stylesheet" th:href="@{/dashboard-styles.css?v=1.2.5}" href="dashboard-styles.css?v=1.2.5">
+    <link rel="stylesheet" th:href="@{/css/report-manager.css?v=1.1.15}" href="css/report-manager.css?v=1.1.15">
+    <link rel="stylesheet" th:href="@{/dashboard-styles.css?v=1.2.7}" href="dashboard-styles.css?v=1.2.7">
 </head>
 <body th:classappend="${theme == 'light' ? 'light-mode' : ''}">
 
@@ -38,7 +38,28 @@
         <header th:replace="~{fragments/header :: header}"></header>
 
         <!-- Dynamic View Body Swapped via HTMX or Tabs -->
-        <div class="content-body" id="mainViewContainer" th:switch="${activeTab}">
+        <div class="content-body" id="mainViewContainer" th:switch="${viewFragment != null ? viewFragment : activeTab}">
+            <th:block th:case="'fragments/batch-history :: batchHistory'">
+                <div th:replace="~{fragments/batch-history :: batchHistory}"></div>
+            </th:block>
+            <th:block th:case="'fragments/batch-overview :: batchOverview'">
+                <div th:replace="~{fragments/batch-history :: batchHistory}"></div>
+            </th:block>
+            <th:block th:case="'fragments/run-report :: runReport'">
+                <div th:replace="~{fragments/run-report :: runReport}"></div>
+            </th:block>
+            <th:block th:case="'fragments/test-base :: testBase'">
+                <div th:replace="~{fragments/test-base :: testBase}"></div>
+            </th:block>
+            <th:block th:case="'fragments/aura-test-manager :: auraTestManager'">
+                <div th:replace="~{fragments/aura-test-manager :: auraTestManager}"></div>
+            </th:block>
+            <th:block th:case="'fragments/custom-dashboard-page :: customDashboardPage'">
+                <div th:replace="~{fragments/custom-dashboard-page :: customDashboardPage}"></div>
+            </th:block>
+            <th:block th:case="'CustomDashboardPage'">
+                <div th:replace="~{fragments/custom-dashboard-page :: customDashboardPage}"></div>
+            </th:block>
             <th:block th:case="'BatchHistory'">
                 <div th:replace="~{fragments/batch-history :: batchHistory}"></div>
             </th:block>
@@ -52,7 +73,7 @@
                 <div th:replace="~{fragments/aura-test-manager :: auraTestManager}"></div>
             </th:block>
             <th:block th:case="*">
-                <div th:replace="~{fragments/batch-overview :: batchOverview}"></div>
+                <div th:replace="~{fragments/batch-history :: batchHistory}"></div>
             </th:block>
         </div>
     </main>
@@ -69,13 +90,18 @@
     <div th:replace="~{fragments/modals :: updateFragmentRefsModal}"></div>
     <div th:replace="~{fragments/modals :: runFinishedModal}"></div>
     <div th:replace="~{fragments/modals :: unsavedChangesModal}"></div>
+    <div th:replace="~{fragments/modals :: saveBatchModal}"></div>
+    <div th:replace="~{fragments/modals :: tagModal}"></div>
+    <div th:replace="~{fragments/modals :: createPageModal}"></div>
+    <div th:replace="~{fragments/modals :: convertToGroupModal}"></div>
+    <div th:replace="~{fragments/modals :: copyWidgetsModal}"></div>
 
 
     <!-- Bootstrap 5.3 JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
     <!-- Custom Modular Unobtrusive JavaScript Controller -->
-    <script th:src="@{/js/report-manager.js?v=1.1.2}" src="js/report-manager.js?v=1.1.2"></script>
+    <script th:src="@{/js/report-manager.js?v=1.1.7}" src="js/report-manager.js?v=1.1.7"></script>
     <script th:src="@{/dashboard-core.js}" src="dashboard-core.js"></script>
     <script th:src="@{/dashboard-chat.js}" src="dashboard-chat.js"></script>
     <script th:src="@{/dashboard-editor.js?v=1.2.7}" src="dashboard-editor.js?v=1.2.7"></script>

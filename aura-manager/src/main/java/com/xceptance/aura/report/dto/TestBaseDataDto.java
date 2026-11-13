@@ -18,6 +18,7 @@
  */
 package com.xceptance.aura.report.dto;
 
+import com.xceptance.aura.report.service.AuraReportDataService;
 import java.util.List;
 import java.util.Map;
 
@@ -72,6 +73,21 @@ public final class TestBaseDataDto
     public List<TestBaseAreaDto> getAreas()
     {
         return areas;
+    }
+
+    /**
+     * Returns true if this test base data contains at least one real user-defined area (i.e. not
+     * empty and not falling back to Browsing (default) or General).
+     *
+     * @return true if real area tags are present
+     */
+    public boolean hasRealAreas()
+    {
+        if (areas == null || areas.isEmpty())
+        {
+            return false;
+        }
+        return areas.stream().anyMatch(a -> AuraReportDataService.isRealArea(a.getAreaName()));
     }
 
     public Map<String, List<String>> getBugsMap()

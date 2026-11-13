@@ -22,6 +22,7 @@ import java.util.Collections;
 import java.util.List;
 import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmProvider;
+import org.neodymium.ai.client.LlmRegistry;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.MockLlmProvider;
@@ -42,7 +43,8 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Service executing upfront pre-flight static analysis on playbook scenario steps.
- * Runs in a single batch call during session initialization, providing non-blocking advisory findings.
+ * Runs in a single batch call during session initialization or on-demand from the editor,
+ * providing structured advisory findings and execution status.
  *
  * @author AI-generated: Gemini 3.7 Flash
  * @author Xceptance GmbH 2026
@@ -52,6 +54,27 @@ public final class PlaybookLinter
     private static final Logger LOGGER = LoggerFactory.getLogger(PlaybookLinter.class);
 
     private final AiSession session;
+    private final LlmProvider customProvider;
+    private LlmRegistry standaloneRegistry;
+
+    /**
+     * Constructs a standalone PlaybookLinter using the default LLM registry configuration.
+     */
+    public PlaybookLinter()
+    {
+        this((AiSession) null);
+    }
+
+    /**
+     * Constructs a PlaybookLinter using an explicit LLM provider.
+     *
+     * @param provider the custom LLM provider to use for linting
+     */
+    public PlaybookLinter(final LlmProvider provider)
+    {
+        this.session = null;
+        this.customProvider = provider;
+    }
 
     /**
      * Constructs a PlaybookLinter bound to the active AI session.
@@ -61,6 +84,7 @@ public final class PlaybookLinter
     public PlaybookLinter(final AiSession session)
     {
         this.session = session;
+        this.customProvider = null;
     }
 
     /**
@@ -72,16 +96,29 @@ public final class PlaybookLinter
      */
     public List<PlaybookLinterFinding> lint(final List<PlaybookStep> steps, final String description)
     {
+        return lintWithResult(steps, description).findings();
+    }
+
+    /**
+     * Runs upfront static analysis on the provided scenario steps and returns a structured
+     * {@link PlaybookLinterResult} capturing findings, success status, and error details.
+     *
+     * @param steps the list of playbook steps
+     * @param description optional high-level scenario description
+     * @return a PlaybookLinterResult with findings and execution status
+     */
+    public PlaybookLinterResult lintWithResult(final List<PlaybookStep> steps, final String description)
+    {
         if (steps == null || steps.isEmpty())
         {
-            return Collections.emptyList();
+            return PlaybookLinterResult.success(Collections.emptyList());
         }
 
         final ExecutionMode mode = this.session != null ? this.session.getExecutionMode() : null;
         if (mode != null && !mode.isLive())
         {
             LOGGER.debug("Playbook pre-flight linter is bypassed in replay mode ({}).", mode);
-            return Collections.emptyList();
+            return PlaybookLinterResult.success(Collections.emptyList());
         }
 
         final AiConfiguration config = AiConfiguration.getInstance();
@@ -99,40 +136,71 @@ public final class PlaybookLinter
         if (!enabled)
         {
             LOGGER.debug("Playbook pre-flight linter is disabled (neodymium.ai.linter.enabled=false).");
-            return Collections.emptyList();
+            return PlaybookLinterResult.failure("Playbook pre-flight linter is disabled (neodymium.ai.linter.enabled=false).");
         }
 
         final ExecutionContext context = this.session != null ? this.session.getExecutionContext() : ExecutionContext.getActiveContext();
 
         try
         {
-            final LlmProvider provider = this.session != null && this.session.getLlmRegistry() != null
-                ? this.session.getLlmRegistry().getProvider(LlmCapability.LINTER)
-                : null;
+            LlmProvider provider = this.customProvider;
+            if (provider == null && this.session != null && this.session.getLlmRegistry() != null)
+            {
+                try
+                {
+                    provider = this.session.getLlmRegistry().getProvider(LlmCapability.LINTER);
+                }
+                catch (final IllegalStateException ignored)
+                {
+                    provider = null;
+                }
+            }
+            if (provider == null && this.session == null)
+            {
+                final LlmRegistry registry = getOrCreateStandaloneRegistry(config);
+                try
+                {
+                    provider = registry.getProvider(LlmCapability.LINTER);
+                }
+                catch (final IllegalStateException ignored)
+                {
+                    provider = null;
+                }
+                if (provider == null)
+                {
+                    synchronized (this)
+                    {
+                        this.standaloneRegistry = null;
+                    }
+                }
+            }
 
             if (provider == null)
             {
+                if (this.session == null && this.customProvider == null)
+                {
+                    synchronized (this)
+                    {
+                        this.standaloneRegistry = null;
+                    }
+                }
                 LOGGER.warn("⚠️ No LLM provider registered for capability {}", LlmCapability.LINTER);
-                return Collections.emptyList();
+                return PlaybookLinterResult.failure("No LLM provider registered for capability " + LlmCapability.LINTER
+                        + ". Ensure GEMINI_API_KEY environment variable is set or configured in ai.properties.");
             }
 
-            if (provider instanceof MockLlmProvider
+            if (this.customProvider == null
+                && provider instanceof MockLlmProvider
                 && !"true".equalsIgnoreCase(System.getProperty("neodymium.ai.linter.enabled"))
                 && (this.session == null || this.session.data() == null || !"true".equals(String.valueOf(this.session.data().get("neodymium.ai.linter.enabled")))))
             {
                 LOGGER.debug("Playbook pre-flight linter is automatically bypassed for MockLlmProvider to protect test step response queue.");
-                return Collections.emptyList();
+                return PlaybookLinterResult.success(Collections.emptyList());
             }
 
             final PlaybookLinterPrompt prompt = new PlaybookLinterPrompt(description, steps, context);
             final String sysMsg = prompt.compileSystemMessage(context);
             final String userMsg = prompt.compileUserMessage(context);
-
-            if (LOGGER.isTraceEnabled())
-            {
-                LOGGER.trace("Playbook Linter System Prompt:\n{}", sysMsg);
-                LOGGER.trace("Playbook Linter User Prompt:\n{}", userMsg);
-            }
 
             final double temperature = config.getTemperature("linter");
             final int timeoutSeconds = config.getTimeoutSeconds("linter");
@@ -242,12 +310,36 @@ public final class PlaybookLinter
                 context.getTransientData().put(ExecutionContext.KEY_PLAYBOOK_LINTER_FINDINGS, findings);
             }
 
-            return findings;
+            return PlaybookLinterResult.success(findings);
         }
         catch (final Throwable t)
         {
+            if (this.session == null && this.customProvider == null)
+            {
+                synchronized (this)
+                {
+                    this.standaloneRegistry = null;
+                }
+            }
             LOGGER.warn("⚠️ Pre-flight playbook linter encountered an error and was skipped gracefully: {}", t.getMessage(), t);
-            return Collections.emptyList();
+            return PlaybookLinterResult.failure(t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName());
         }
+    }
+
+    /**
+     * Lazily bootstraps and caches an {@link LlmRegistry} for standalone on-demand executions.
+     *
+     * @param config the AI configuration
+     * @return the standalone LlmRegistry instance
+     */
+    private synchronized LlmRegistry getOrCreateStandaloneRegistry(final AiConfiguration config)
+    {
+        if (this.standaloneRegistry == null)
+        {
+            final LlmRegistry reg = new LlmRegistry();
+            LlmRegistry.bootstrap(reg, config);
+            this.standaloneRegistry = reg;
+        }
+        return this.standaloneRegistry;
     }
 }

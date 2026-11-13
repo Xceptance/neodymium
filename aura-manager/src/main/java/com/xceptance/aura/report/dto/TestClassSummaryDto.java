@@ -164,6 +164,15 @@ public final class TestClassSummaryDto
         return executions;
     }
 
+    public int getFlakyCount()
+    {
+        if (executions != null)
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isFlaky).count();
+        }
+        return 0;
+    }
+
     public int getPassedHealedCount()
     {
         if (executions != null)

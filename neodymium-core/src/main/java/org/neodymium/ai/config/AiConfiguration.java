@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
@@ -1123,6 +1124,31 @@ public final class AiConfiguration
     }
 
     /**
+     * Gets the base storage directory for Aura persistent test runs.
+     * Defaults to the property {@code neodymium.ai.storageRuns.directory}, falling back to
+     * {@code aura.report.storage.runs.base-dir}, and defaulting to {@code storage/runs}.
+     *
+     * @return aura storage runs directory path
+     */
+    public String getAuraStorageRunsDirectory()
+    {
+        return getProperty("neodymium.ai.storageRuns.directory",
+            getProperty("aura.report.storage.runs.base-dir", "storage/runs"));
+    }
+
+    /**
+     * Checks whether falling back to capturing the global {@code target/neodymium-ai.log} file
+     * into per-test {@code execution.log} files is enabled when structured log content is not yet set.
+     * Defaults to {@code false} to avoid per-step disk I/O overhead and cross-test log pollution.
+     *
+     * @return true if global log fallback capture is enabled
+     */
+    public boolean isConsoleExecutionLogsCaptureGlobalLogEnabled()
+    {
+        return getBoolean("neodymium.ai.consoleExecutionLogs.captureGlobalLog", false);
+    }
+
+    /**
      * Gets the active execution mode for the AI pipeline.
      * Defaults to REPLAY_WITH_HEALING.
      *
@@ -1426,5 +1452,51 @@ public final class AiConfiguration
     public boolean isNetworkMonitorEnabled()
     {
         return getBoolean("neodymium.ai.network.monitorEnabled", true);
+    }
+
+    /**
+     * Checks whether the pre-execution navigation provenance guard is enabled for autonomous
+     * {@code navigate} tool calls. When enabled (default: {@code true}), uncommanded URL/domain
+     * navigations not backed by the step instruction, blank browser state, or allowed hosts are blocked.
+     *
+     * @return true if navigation provenance guard is enabled, false otherwise
+     */
+    public boolean isNavigationGuardEnabled()
+    {
+        return getBoolean("neodymium.ai.navigation.guard.enabled", true);
+    }
+
+    /**
+     * Resolves the list of explicitly permitted hostnames or registrable domains for autonomous
+     * {@code navigate} calls (configured via comma-separated {@code neodymium.ai.navigation.allowedHosts}).
+     * Entries are normalized to lowercase with any leading {@code www.} prefix stripped.
+     *
+     * @return unmodifiable list of normalized allowed hostnames/domains
+     */
+    public List<String> getNavigationAllowedHosts()
+    {
+        final String raw = getProperty("neodymium.ai.navigation.allowedHosts", "");
+        if (raw == null || raw.isBlank())
+        {
+            return Collections.emptyList();
+        }
+        final List<String> hosts = new ArrayList<>();
+        for (final String part : raw.split(","))
+        {
+            String normalized = part.trim().toLowerCase(Locale.ROOT);
+            if (normalized.startsWith("www.") && normalized.length() > 4)
+            {
+                normalized = normalized.substring(4);
+            }
+            while (normalized.endsWith("."))
+            {
+                normalized = normalized.substring(0, normalized.length() - 1);
+            }
+            if (!normalized.isEmpty())
+            {
+                hosts.add(normalized);
+            }
+        }
+        return Collections.unmodifiableList(hosts);
     }
 }

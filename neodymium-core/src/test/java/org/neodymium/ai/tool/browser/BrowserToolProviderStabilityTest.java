@@ -729,6 +729,10 @@ public class BrowserToolProviderStabilityTest
         Assertions.assertTrue(states.contains("focused"), "Enum should contain 'focused'");
         Assertions.assertTrue(states.contains("exists"), "Enum should contain 'exists'");
         Assertions.assertTrue(states.contains("absent"), "Enum should contain 'absent'");
+        Assertions.assertTrue(states.contains("empty"), "Enum should contain 'empty'");
+        Assertions.assertTrue(states.contains("not_empty"), "Enum should contain 'not_empty'");
+        Assertions.assertTrue(states.contains("not_editable"), "Enum should contain 'not_editable'");
+        Assertions.assertTrue(states.contains("not_readonly"), "Enum should contain 'not_readonly'");
     }
 
     @Test
@@ -773,6 +777,47 @@ public class BrowserToolProviderStabilityTest
         Assertions.assertEquals("visible", BrowserToolProvider.normalizeElementState("displayed"));
         Assertions.assertEquals("visible", BrowserToolProvider.normalizeElementState("visible"));
         Assertions.assertEquals("editable", BrowserToolProvider.normalizeElementState("editable"));
+        Assertions.assertEquals("empty", BrowserToolProvider.normalizeElementState("empty"));
+        Assertions.assertEquals("empty", BrowserToolProvider.normalizeElementState("blank"));
+        Assertions.assertEquals("empty", BrowserToolProvider.normalizeElementState("[empty]"));
+        Assertions.assertEquals("empty", BrowserToolProvider.normalizeElementState("EMPTY"));
+        Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("not_empty"));
+        Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("non_empty"));
+        Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("not-empty"));
+        Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("non-empty"));
+        Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("NOT_EMPTY"));
+        Assertions.assertEquals("not_editable", BrowserToolProvider.normalizeElementState("not_editable"));
+        Assertions.assertEquals("not_editable", BrowserToolProvider.normalizeElementState("not-editable"));
+        Assertions.assertEquals("not_editable", BrowserToolProvider.normalizeElementState("non-editable"));
+        Assertions.assertEquals("not_readonly", BrowserToolProvider.normalizeElementState("not_readonly"));
+        Assertions.assertEquals("not_readonly", BrowserToolProvider.normalizeElementState("not-readonly"));
+        Assertions.assertEquals("not_readonly", BrowserToolProvider.normalizeElementState("non-readonly"));
+    }
+
+    @Test
+    public void testMatchesCandidateWithEmptyExpectedText()
+    {
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("", "", false, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("   ", "", false, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("   ", "   ", false, true));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("", "   ", false, true));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("   ", "", false, true));
+        Assertions.assertFalse(BrowserToolProvider.matchesCandidate(null, "", false, false));
+        Assertions.assertFalse(BrowserToolProvider.matchesCandidate("Hello World", "", false, false));
+        Assertions.assertFalse(BrowserToolProvider.matchesCandidate("Hello World", "", false, true));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("Hello World", "World", false, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("Hello World", " ", false, false));
+        Assertions.assertFalse(BrowserToolProvider.matchesCandidate("Hello World", "   ", false, false));
+
+        // Regex empty and whitespace matching
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("", "^$", true, false));
+        Assertions.assertFalse(BrowserToolProvider.matchesCandidate("Hello World", "^$", true, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("   ", "^\\s*$", true, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("   ", "^\\s+$", true, false));
+        Assertions.assertFalse(BrowserToolProvider.matchesCandidate("", "^\\s+$", true, false));
+        Assertions.assertFalse(BrowserToolProvider.matchesCandidate("Hello World", "   ", true, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("", "   ", true, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("   ", "   ", true, false));
     }
 
     @Test
@@ -816,18 +861,59 @@ public class BrowserToolProviderStabilityTest
                     }
             );
 
+            final WebElement disabledElement = (WebElement) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{WebElement.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("isDisplayed".equals(name))
+                        {
+                            return true;
+                        }
+                        if ("isEnabled".equals(name))
+                        {
+                            return false;
+                        }
+                        if ("getTagName".equals(name))
+                        {
+                            return "input";
+                        }
+                        if ("getAttribute".equals(name))
+                        {
+                            final String attr = (String) args[0];
+                            if ("disabled".equals(attr))
+                            {
+                                return "true";
+                            }
+                            if ("id".equals(attr))
+                            {
+                                return "disabled-input";
+                            }
+                            return null;
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return Collections.emptyList();
+                        }
+                        return null;
+                    }
+            );
+
             final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
                     BrowserToolProviderStabilityTest.class.getClassLoader(),
                     new Class<?>[]{MockJsDriver.class},
                     (proxy, method, args) -> {
                         final String name = method.getName();
+                        final Object arg0 = (args != null && args.length > 0) ? args[0] : null;
+                        final boolean isTargetingDisabled = arg0 != null && arg0.toString().contains("disabled");
+                        final WebElement target = isTargetingDisabled ? disabledElement : inputElement;
                         if ("findElement".equals(name))
                         {
-                            return inputElement;
+                            return target;
                         }
                         if ("findElements".equals(name))
                         {
-                            return List.of(inputElement);
+                            return List.of(target);
                         }
                         return null;
                     }
@@ -854,6 +940,47 @@ public class BrowserToolProviderStabilityTest
             {
                 tool.execute(new ToolCall("call-editable", "browser_assert_element_state", failArgs), null);
             });
+
+            // 2b. Asserting 'editable' with negated=true on readonly input should SUCCEED (evaluates not_editable)
+            final ObjectNode negatedEditableArgs = MAPPER.createObjectNode();
+            negatedEditableArgs.put("selector", "#readonly-input");
+            negatedEditableArgs.put("state", "editable");
+            negatedEditableArgs.put("negated", true);
+            final ToolResult negatedEditableResult = tool.execute(new ToolCall("call-negated-editable", "browser_assert_element_state", negatedEditableArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, negatedEditableResult.status());
+
+            // 2c. Asserting 'readonly' with negated=true on readonly input must THROW AssertionError (evaluates not_readonly)
+            final ObjectNode negatedReadonlyArgs = MAPPER.createObjectNode();
+            negatedReadonlyArgs.put("selector", "#readonly-input");
+            negatedReadonlyArgs.put("state", "readonly");
+            negatedReadonlyArgs.put("negated", true);
+            Assertions.assertThrows(AssertionError.class, () ->
+            {
+                tool.execute(new ToolCall("call-negated-readonly", "browser_assert_element_state", negatedReadonlyArgs), null);
+            });
+
+            // 2d. Asserting 'editable' with negated=true on disabled input should SUCCEED (disabled is not editable)
+            final ObjectNode disabledNegatedEditableArgs = MAPPER.createObjectNode();
+            disabledNegatedEditableArgs.put("selector", "#disabled-input");
+            disabledNegatedEditableArgs.put("state", "editable");
+            disabledNegatedEditableArgs.put("negated", true);
+            final ToolResult disabledNegatedEditableResult = tool.execute(new ToolCall("call-dis-neg-editable", "browser_assert_element_state", disabledNegatedEditableArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, disabledNegatedEditableResult.status());
+
+            // 2e. Asserting 'readonly' with negated=true on disabled input should SUCCEED (disabled is not readonly)
+            final ObjectNode disabledNegatedReadonlyArgs = MAPPER.createObjectNode();
+            disabledNegatedReadonlyArgs.put("selector", "#disabled-input");
+            disabledNegatedReadonlyArgs.put("state", "readonly");
+            disabledNegatedReadonlyArgs.put("negated", true);
+            final ToolResult disabledNegatedReadonlyResult = tool.execute(new ToolCall("call-dis-neg-readonly", "browser_assert_element_state", disabledNegatedReadonlyArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, disabledNegatedReadonlyResult.status());
+
+            // 2f. Direct assertion of 'not_editable' and 'not_readonly' on disabled input should SUCCEED
+            final ObjectNode disabledDirectArgs = MAPPER.createObjectNode();
+            disabledDirectArgs.put("selector", "#disabled-input");
+            disabledDirectArgs.put("state", "not_editable, not_readonly");
+            final ToolResult disabledDirectResult = tool.execute(new ToolCall("call-dis-direct", "browser_assert_element_state", disabledDirectArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, disabledDirectResult.status());
 
             // 3. Asserting compound state 'visible, enabled' should SUCCEED
             final ObjectNode compoundSuccessArgs = MAPPER.createObjectNode();
@@ -885,6 +1012,204 @@ public class BrowserToolProviderStabilityTest
             {
                 tool.execute(new ToolCall("call-compound-fail", "browser_assert_element_state", compoundFailArgs), null);
             });
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+        }
+    }
+
+    @Test
+    public void testAssertElementStateEmptyAndNotEmptyToolExecution() throws Exception
+    {
+        final long originalTimeout = Configuration.timeout;
+        Configuration.timeout = 200;
+        try
+        {
+            final AtomicReference<String> inputValue = new AtomicReference<>("");
+            final WebElement inputElement = (WebElement) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{WebElement.class},
+                    (proxy, method, args) ->
+                    {
+                        final String name = method.getName();
+                        if ("toString".equals(name))
+                        {
+                            return "MockWebElement[input#target-input]";
+                        }
+                        if ("isDisplayed".equals(name) || "isEnabled".equals(name))
+                        {
+                            return true;
+                        }
+                        if ("getTagName".equals(name))
+                        {
+                            return "input";
+                        }
+                        if ("getText".equals(name))
+                        {
+                            return "";
+                        }
+                        if ("getAttribute".equals(name))
+                        {
+                            final String attr = (String) args[0];
+                            if ("value".equals(attr))
+                            {
+                                return inputValue.get();
+                            }
+                            if ("id".equals(attr))
+                            {
+                                return "target-input";
+                            }
+                            return null;
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return Collections.emptyList();
+                        }
+                        return null;
+                    }
+            );
+
+            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{MockJsDriver.class},
+                    (proxy, method, args) ->
+                    {
+                        final String name = method.getName();
+                        final By by = (args != null && args.length > 0 && args[0] instanceof By b) ? b : null;
+                        if (by != null && by.toString().contains("missing"))
+                        {
+                            if ("findElement".equals(name))
+                            {
+                                throw new NoSuchElementException("Element not found: " + by);
+                            }
+                            if ("findElements".equals(name))
+                            {
+                                return Collections.emptyList();
+                            }
+                        }
+                        if ("findElement".equals(name))
+                        {
+                            return inputElement;
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return List.of(inputElement);
+                        }
+                        return null;
+                    }
+            );
+            WebDriverRunner.setWebDriver(mockDriver);
+
+            final AiTool stateTool = this.registry.getTool("browser_assert_element_state").orElseThrow();
+            final AiTool textTool = this.registry.getTool("browser_assert_text").orElseThrow();
+
+            // 1. Verify schema enum contains 'empty' and 'not_empty'
+            final JsonNode stateDefProps = stateTool.getDefinition().parametersSchema().path("properties");
+            final JsonNode stateEnum = stateDefProps.path("state").path("enum");
+            boolean hasEmptyInEnum = false;
+            boolean hasNotEmptyInEnum = false;
+            if (stateEnum.isArray())
+            {
+                for (final JsonNode n : stateEnum)
+                {
+                    if ("empty".equals(n.asText()))
+                    {
+                        hasEmptyInEnum = true;
+                    }
+                    if ("not_empty".equals(n.asText()))
+                    {
+                        hasNotEmptyInEnum = true;
+                    }
+                }
+            }
+            Assertions.assertTrue(hasEmptyInEnum, "assert_element_state schema state enum must include 'empty'");
+            Assertions.assertTrue(hasNotEmptyInEnum, "assert_element_state schema state enum must include 'not_empty'");
+
+            // 2. Empty input: 'empty' succeeds, 'not_empty' fails
+            final ObjectNode emptyArgs = MAPPER.createObjectNode();
+            emptyArgs.put("selector", "#target-input");
+            emptyArgs.put("state", "empty");
+            final ToolResult emptyRes = stateTool.execute(new ToolCall("call-empty-pass", "browser_assert_element_state", emptyArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, emptyRes.status());
+
+            final ObjectNode notEmptyArgs = MAPPER.createObjectNode();
+            notEmptyArgs.put("selector", "#target-input");
+            notEmptyArgs.put("state", "not_empty");
+            Assertions.assertThrows(AssertionError.class, () ->
+            {
+                stateTool.execute(new ToolCall("call-not-empty-fail", "browser_assert_element_state", notEmptyArgs), null);
+            });
+
+            // 3. Populated input: 'not_empty' succeeds, 'empty' fails
+            inputValue.set("JohnDoe");
+            final ToolResult notEmptyRes = stateTool.execute(new ToolCall("call-not-empty-pass", "browser_assert_element_state", notEmptyArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, notEmptyRes.status());
+
+            Assertions.assertThrows(AssertionError.class, () ->
+            {
+                stateTool.execute(new ToolCall("call-empty-fail", "browser_assert_element_state", emptyArgs), null);
+            });
+
+            // 4. Negated empty assertion: on populated input succeeds, on empty input fails
+            final ObjectNode negatedEmptyArgs = MAPPER.createObjectNode();
+            negatedEmptyArgs.put("selector", "#target-input");
+            negatedEmptyArgs.put("state", "empty");
+            negatedEmptyArgs.put("negated", true);
+            final ToolResult negatedEmptyRes = stateTool.execute(new ToolCall("call-neg-empty-pass", "browser_assert_element_state", negatedEmptyArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, negatedEmptyRes.status());
+
+            inputValue.set("");
+            Assertions.assertThrows(AssertionError.class, () ->
+            {
+                stateTool.execute(new ToolCall("call-neg-empty-fail", "browser_assert_element_state", negatedEmptyArgs), null);
+            });
+
+            // 5. assert_text with expectedText="" on empty input succeeds, on populated input fails
+            final ObjectNode emptyTextArgs = MAPPER.createObjectNode();
+            emptyTextArgs.put("selector", "#target-input");
+            emptyTextArgs.put("expectedText", "");
+            final ToolResult emptyTextRes = textTool.execute(new ToolCall("call-text-empty-pass", "browser_assert_text", emptyTextArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, emptyTextRes.status());
+
+            inputValue.set("JohnDoe");
+            Assertions.assertThrows(AssertionError.class, () ->
+            {
+                textTool.execute(new ToolCall("call-text-empty-fail", "browser_assert_text", emptyTextArgs), null);
+            });
+
+            // 6. matchesElementText on input with value "JohnDoe" returns false for "", and true for ""
+            Assertions.assertFalse(BrowserToolProvider.matchesElementText(inputElement, "", false, false),
+                    "matchesElementText must not return true for empty text on populated input");
+            inputValue.set("");
+            Assertions.assertTrue(BrowserToolProvider.matchesElementText(inputElement, "", false, false),
+                    "matchesElementText must return true for empty text on empty input");
+
+            // 7. assert_text negated on non-existent selector returns ToolResult.error with target not found
+            final ObjectNode missingNegatedArgs = MAPPER.createObjectNode();
+            missingNegatedArgs.put("selector", "#missing-selector");
+            missingNegatedArgs.put("expectedText", "");
+            missingNegatedArgs.put("negated", true);
+            final ToolResult missingNegatedRes = textTool.execute(new ToolCall("call-missing-neg-fail", "browser_assert_text", missingNegatedArgs), null);
+            Assertions.assertEquals(ToolResult.Status.ERROR, missingNegatedRes.status());
+            Assertions.assertTrue(missingNegatedRes.content().contains("Target element not found in DOM"),
+                    "assert_text negated on non-existent selector must report target element not found");
+
+            // 8. assert_attribute with expectedValue="" on populated input fails, on empty input succeeds
+            final AiTool attrTool = this.registry.getTool("browser_assert_attribute").orElseThrow();
+            inputValue.set("JohnDoe");
+            final ObjectNode emptyAttrArgs = MAPPER.createObjectNode();
+            emptyAttrArgs.put("selector", "#target-input");
+            emptyAttrArgs.put("attribute", "value");
+            emptyAttrArgs.put("expectedValue", "");
+            Assertions.assertThrows(AssertionError.class, () ->
+            {
+                attrTool.execute(new ToolCall("call-attr-empty-fail", "browser_assert_attribute", emptyAttrArgs), null);
+            });
+
+            inputValue.set("");
+            final ToolResult emptyAttrPassRes = attrTool.execute(new ToolCall("call-attr-empty-pass", "browser_assert_attribute", emptyAttrArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, emptyAttrPassRes.status());
         }
         finally
         {
@@ -2603,6 +2928,278 @@ public class BrowserToolProviderStabilityTest
             Configuration.timeout = originalTimeout;
             WebDriverRunner.closeWebDriver();
         }
+    }
+
+    @Test
+    void testAssertTextEmptyWithoutSelectorReturnsError() throws Exception
+    {
+        final AiTool tool = this.registry.getTool("browser_assert_text").orElseThrow();
+
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("expectedText", "");
+
+        final ToolResult result = tool.execute(new ToolCall("call-empty-no-sel", "browser_assert_text", args), null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result.status());
+        Assertions.assertTrue(result.content().contains("requires specifying a target 'selector'"));
+    }
+
+    @Test
+    void testNegatedAssertTextWaitsForDelayedElement() throws Exception
+    {
+        final long originalTimeout = Configuration.timeout;
+        Configuration.timeout = 2000;
+        try
+        {
+            final AtomicInteger searchCount = new AtomicInteger(0);
+            final WebElement mockEl = (WebElement) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{WebElement.class},
+                    (proxy, method, args) ->
+                    {
+                        if ("getText".equals(method.getName()))
+                        {
+                            return "Welcome User";
+                        }
+                        if ("getAttribute".equals(method.getName()))
+                        {
+                            return "value".equals(args[0]) ? "" : null;
+                        }
+                        if ("isDisplayed".equals(method.getName()))
+                        {
+                            return true;
+                        }
+                        return null;
+                    }
+            );
+
+            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{MockJsDriver.class},
+                    (proxy, method, args) ->
+                    {
+                        final String name = method.getName();
+                        if ("findElements".equals(name))
+                        {
+                            // Element does not exist initially; appears on 3rd poll attempt with different text
+                            if (searchCount.incrementAndGet() < 3)
+                            {
+                                return Collections.emptyList();
+                            }
+                            return List.of(mockEl);
+                        }
+                        if ("findElement".equals(name))
+                        {
+                            if (searchCount.get() < 3)
+                            {
+                                throw new NoSuchElementException("Not found yet");
+                            }
+                            return mockEl;
+                        }
+                        if ("executeScript".equals(name))
+                        {
+                            return "complete";
+                        }
+                        return null;
+                    }
+            );
+            WebDriverRunner.setWebDriver(mockDriver);
+
+            final AiTool tool = this.registry.getTool("browser_assert_text").orElseThrow();
+
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", "#greeting");
+            args.put("expectedText", "Goodbye");
+            args.put("negated", true);
+
+            final ToolResult result = tool.execute(new ToolCall("call-delayed-negated", "browser_assert_text", args), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+            Assertions.assertTrue(searchCount.get() >= 3, "Expected findElements to be polled until element appeared");
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+            WebDriverRunner.closeWebDriver();
+        }
+    }
+
+    @Test
+    public void testAssertTextEmptyExpectedTextWithoutSelectorRejection() throws Exception
+    {
+        final AiTool tool = this.registry.getTool("browser_assert_text").orElseThrow();
+
+        // Plain empty expected text with no selector
+        final ObjectNode args1 = MAPPER.createObjectNode();
+        args1.put("expectedText", "");
+        final ToolResult result1 = tool.execute(new ToolCall("call-empty-no-sel", "browser_assert_text", args1), null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result1.status());
+        Assertions.assertTrue(result1.content().contains("cannot be performed against root document containers ('body', 'html') or without a target selector"),
+                "Error result must instruct caller to provide selector for empty text assertion");
+
+        // Blank selector with empty expected text
+        final ObjectNode args2 = MAPPER.createObjectNode();
+        args2.put("selector", "   ");
+        args2.put("expectedText", "");
+        final ToolResult result2 = tool.execute(new ToolCall("call-blank-sel", "browser_assert_text", args2), null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result2.status());
+        Assertions.assertTrue(result2.content().contains("cannot be performed against root document containers ('body', 'html') or without a target selector"),
+                "Error result must instruct caller to provide selector for empty text assertion");
+
+        // 'body' selector with empty expected text
+        final ObjectNode args3 = MAPPER.createObjectNode();
+        args3.put("selector", "body");
+        args3.put("expectedText", "");
+        final ToolResult result3 = tool.execute(new ToolCall("call-body-sel", "browser_assert_text", args3), null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result3.status());
+        Assertions.assertTrue(result3.content().contains("cannot be performed against root document containers ('body', 'html') or without a target selector"),
+                "Error result must instruct caller to provide selector for empty text assertion");
+
+        // 'html' selector with empty expected text
+        final ObjectNode args4 = MAPPER.createObjectNode();
+        args4.put("selector", "html");
+        args4.put("expectedText", "");
+        final ToolResult result4 = tool.execute(new ToolCall("call-html-sel", "browser_assert_text", args4), null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result4.status());
+        Assertions.assertTrue(result4.content().contains("cannot be performed against root document containers ('body', 'html') or without a target selector"),
+                "Error result must instruct caller to provide selector for empty text assertion");
+
+        // '//body' XPath selector with empty expected text
+        final ObjectNode args5 = MAPPER.createObjectNode();
+        args5.put("selector", "//body");
+        args5.put("expectedText", "");
+        final ToolResult result5 = tool.execute(new ToolCall("call-xpath-body-sel", "browser_assert_text", args5), null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result5.status());
+        Assertions.assertTrue(result5.content().contains("cannot be performed against root document containers ('body', 'html') or without a target selector"),
+                "Error result must instruct caller to provide selector for XPath root selector");
+
+        // 'html > body' selector with whitespace expected text
+        final ObjectNode args6 = MAPPER.createObjectNode();
+        args6.put("selector", "html > body");
+        args6.put("expectedText", "   ");
+        final ToolResult result6 = tool.execute(new ToolCall("call-nested-root-sel", "browser_assert_text", args6), null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result6.status());
+        Assertions.assertTrue(result6.content().contains("cannot be performed against root document containers ('body', 'html') or without a target selector"),
+                "Error result must instruct caller to provide selector for whitespace text on root selector");
+
+        // 'css=body' selector with empty expected text
+        final ObjectNode args7 = MAPPER.createObjectNode();
+        args7.put("selector", "css=body");
+        args7.put("expectedText", "");
+        final ToolResult result7 = tool.execute(new ToolCall("call-css-body-sel", "browser_assert_text", args7), null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result7.status());
+        Assertions.assertTrue(result7.content().contains("cannot be performed against root document containers ('body', 'html') or without a target selector"),
+                "Error result must instruct caller to provide selector for css=body");
+
+        // ':root' selector with empty expected text
+        final ObjectNode args8 = MAPPER.createObjectNode();
+        args8.put("selector", ":root");
+        args8.put("expectedText", "");
+        final ToolResult result8 = tool.execute(new ToolCall("call-root-pseudo-sel", "browser_assert_text", args8), null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result8.status());
+        Assertions.assertTrue(result8.content().contains("cannot be performed against root document containers ('body', 'html') or without a target selector"),
+                "Error result must instruct caller to provide selector for :root");
+
+        // 'xpath=/html/body[1]' selector with empty expected text
+        final ObjectNode args9 = MAPPER.createObjectNode();
+        args9.put("selector", "xpath=/html/body[1]");
+        args9.put("expectedText", "");
+        final ToolResult result9 = tool.execute(new ToolCall("call-xpath-html-body-sel", "browser_assert_text", args9), null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result9.status());
+        Assertions.assertTrue(result9.content().contains("cannot be performed against root document containers ('body', 'html') or without a target selector"),
+                "Error result must instruct caller to provide selector for xpath=/html/body[1]");
+
+        // '//html/body' standard XPath selector with empty expected text
+        final ObjectNode args10 = MAPPER.createObjectNode();
+        args10.put("selector", "//html/body");
+        args10.put("expectedText", "");
+        final ToolResult result10 = tool.execute(new ToolCall("call-xpath-standard-html-body-sel", "browser_assert_text", args10), null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result10.status());
+        Assertions.assertTrue(result10.content().contains("cannot be performed against root document containers ('body', 'html') or without a target selector"),
+                "Error result must instruct caller to provide selector for //html/body");
+
+        // 'html >body' with unbalanced spacing and empty expected text
+        final ObjectNode args11 = MAPPER.createObjectNode();
+        args11.put("selector", "html >body");
+        args11.put("expectedText", "");
+        final ToolResult result11 = tool.execute(new ToolCall("call-css-unbalanced-body-sel", "browser_assert_text", args11), null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result11.status());
+        Assertions.assertTrue(result11.content().contains("cannot be performed against root document containers ('body', 'html') or without a target selector"),
+                "Error result must instruct caller to provide selector for html >body");
+    }
+
+    @Test
+    public void testIsRootElementSelector()
+    {
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("html"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector(":root"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("/html"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("//html"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("//body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("/html/body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("//html/body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("//html//body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("/html/body[1]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("//html/body[1]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("/html[1]/body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("//html[1]/body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("/html[1]/body[1]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("//html[1]/body[1]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("body[1]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("//body[1]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("//body[ 1 ]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("(//body)[1]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("(//html/body)[1]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("html[1]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("/html[1]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("//html[1]"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("html>body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("html > body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("html >body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("html> body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("html body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("css=body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("xpath=//html/body"));
+        Assertions.assertTrue(BrowserToolProvider.isRootElementSelector("xpath=/html/body[1]"));
+
+        Assertions.assertFalse(BrowserToolProvider.isRootElementSelector(null));
+        Assertions.assertFalse(BrowserToolProvider.isRootElementSelector(""));
+        Assertions.assertFalse(BrowserToolProvider.isRootElementSelector("   "));
+        Assertions.assertFalse(BrowserToolProvider.isRootElementSelector("#main"));
+        Assertions.assertFalse(BrowserToolProvider.isRootElementSelector("div"));
+        Assertions.assertFalse(BrowserToolProvider.isRootElementSelector("input"));
+    }
+
+    @Test
+    public void testMatchesElementTextOnPopulatedInputWithEmptyRegex()
+    {
+        final WebElement populatedInput = (WebElement) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("getTagName".equals(name))
+                    {
+                        return "input";
+                    }
+                    if ("getText".equals(name))
+                    {
+                        // WebDriver WebElement.getText() returns "" on <input> per W3C specification
+                        return "";
+                    }
+                    if ("getAttribute".equals(name) && "value".equals(args[0]))
+                    {
+                        return "john_doe";
+                    }
+                    return null;
+                }
+        );
+
+        // Populated input should NOT match empty regex ^$ or empty string
+        Assertions.assertFalse(BrowserToolProvider.matchesElementText(populatedInput, "^$", true, false));
+        Assertions.assertFalse(BrowserToolProvider.matchesElementText(populatedInput, "", false, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesElementText(populatedInput, "^john_doe$", true, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesElementText(populatedInput, "john", false, false));
     }
 }
 

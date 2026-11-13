@@ -356,7 +356,7 @@ function organizeContainerView(container, itemSelector, mode) {
                 const parts = filePath.split('/');
                 const fileName = parts[parts.length - 1];
 
-                const labelSpan = item.querySelector('.item-main > span[style*="font-weight"]');
+                const labelSpan = item.querySelector('.file-name-label') || item.querySelector('.item-main > span[style*="font-weight"]');
                 if (labelSpan && labelSpan.textContent !== filePath) {
                     labelSpan.textContent = filePath;
                 }
@@ -394,7 +394,7 @@ function organizeContainerView(container, itemSelector, mode) {
         const parts = filePath.split('/');
         const fileName = parts[parts.length - 1];
 
-        const labelSpan = item.querySelector('.item-main > span[style*="font-weight"]');
+        const labelSpan = item.querySelector('.file-name-label') || item.querySelector('.item-main > span[style*="font-weight"]');
         if (labelSpan) {
             labelSpan.textContent = fileName;
         }
@@ -580,9 +580,9 @@ function restoreActiveRunContextUI() {
 
     const sidebarRunIdEl = document.getElementById('sidebarActiveRunId');
     const currentRunIdText = sidebarRunIdEl ? sidebarRunIdEl.textContent.trim() : '';
-    const hasHtmlRunId = currentRunIdText && !currentRunIdText.includes('RUN_ID') && currentRunIdText !== 'Run #';
+    const hasHtmlRunId = currentRunIdText && !currentRunIdText.includes('RUN_ID') && currentRunIdText !== 'Run #' && currentRunIdText !== '#';
 
-    const effectiveRunId = hasHtmlRunId ? currentRunIdText.replace(/^Run\s*#/, '').trim() : savedRunId;
+    const effectiveRunId = hasHtmlRunId ? currentRunIdText.replace(/^(Run\s*)?#?/, '').trim() : (savedRunId ? savedRunId.replace(/^(Run\s*)?#?/, '').trim() : null);
 
     if (effectiveRunId) {
         activeRunStats.runId = effectiveRunId;
@@ -592,7 +592,17 @@ function restoreActiveRunContextUI() {
         sidebarCard.style.display = 'flex';
 
         if (sidebarRunIdEl) {
-            sidebarRunIdEl.textContent = `Run #${effectiveRunId}`;
+            sidebarRunIdEl.textContent = effectiveRunId.startsWith('#') ? effectiveRunId : `#${effectiveRunId}`;
+        }
+
+        const sidebarBatchNameEl = document.getElementById('sidebarActiveBatchName');
+        if (sidebarBatchNameEl) {
+            const rawBatch = (sidebarBatchNameEl.textContent || '').trim();
+            if (!rawBatch || ['default', 'unknown', 'queue', 'suite', 'all', 'n/a'].includes(rawBatch.toLowerCase())) {
+                sidebarBatchNameEl.style.display = 'none';
+            } else {
+                sidebarBatchNameEl.style.display = 'block';
+            }
         }
 
         const sidebarStatusEl = document.getElementById('sidebarActiveStatus') || document.getElementById('sidebarActiveEnv');
@@ -604,6 +614,16 @@ function restoreActiveRunContextUI() {
         if (pulseDot) {
             const isRunningState = (sidebarStatusEl && sidebarStatusEl.textContent === 'running') || savedStatus === 'running';
             pulseDot.style.display = isRunningState ? 'inline-block' : 'none';
+        }
+
+        const savedProgress = localStorage.getItem('aura_active_run_progress');
+        const sidebarProgressEl = document.getElementById('sidebarActiveProgress');
+        const sidebarProgressContainer = document.getElementById('sidebarActiveProgressContainer');
+        if (sidebarProgressEl && savedProgress) {
+            sidebarProgressEl.textContent = savedProgress;
+            if (sidebarProgressContainer) {
+                sidebarProgressContainer.style.display = 'flex';
+            }
         }
     } else {
         sidebarCard.style.display = 'none';
@@ -778,6 +798,10 @@ function init() {
         if (typeof loadFiles === 'function') loadFiles();
         if (typeof startPolling === 'function') startPolling();
         if (typeof initResizers === 'function') initResizers();
+    } else {
+        if (document.getElementById('sidebarContextCard') !== null && typeof startPolling === 'function') {
+            startPolling();
+        }
     }
 
     let savedYamlFileListScrollTop = 0;
@@ -1018,4 +1042,146 @@ window.addEventListener('pageshow', function() {
 initTheme();
 document.addEventListener('DOMContentLoaded', function() {
     init();
+    updateActiveTagFilterUI();
+});
+
+function filterTestsByTag(tagString) {
+    const searchInput = document.getElementById('testSearchInput');
+    if (!searchInput) return;
+
+    const trimmedTag = (tagString || '').trim();
+    if (!trimmedTag) {
+        // "All" clicked -> clear all active filters
+        searchInput.value = '';
+    } else {
+        // Parse current comma-separated tokens from search input
+        const currentTokens = searchInput.value
+            .split(',')
+            .map(t => t.trim())
+            .filter(Boolean);
+
+        const targetLower = trimmedTag.toLowerCase();
+        const existingIndex = currentTokens.findIndex(t => t.toLowerCase() === targetLower);
+
+        if (existingIndex >= 0) {
+            // Tag already selected -> toggle off
+            currentTokens.splice(existingIndex, 1);
+        } else {
+            // Tag not selected -> toggle on (add to active tags)
+            currentTokens.push(trimmedTag);
+        }
+
+        searchInput.value = currentTokens.join(', ');
+    }
+
+    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+    if (window.htmx) {
+        window.htmx.trigger(searchInput, 'search');
+    }
+    updateActiveTagFilterUI();
+}
+window.filterTestsByTag = filterTestsByTag;
+
+function clearTestSearch() {
+    const searchInput = document.getElementById('testSearchInput');
+    if (!searchInput) return;
+    searchInput.value = '';
+    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+    if (window.htmx) {
+        window.htmx.trigger(searchInput, 'search');
+    }
+    updateActiveTagFilterUI();
+}
+window.clearTestSearch = clearTestSearch;
+
+function updateActiveTagFilterUI() {
+    const searchInput = document.getElementById('testSearchInput');
+    const clearBtn = document.getElementById('clearTestSearchBtn');
+    const query = searchInput ? searchInput.value.trim() : '';
+
+    if (clearBtn) {
+        clearBtn.style.display = query ? 'inline-flex' : 'none';
+    }
+
+    const activeTokens = query
+        .split(',')
+        .map(t => t.trim().toLowerCase())
+        .filter(Boolean);
+
+    const hasActiveTokens = activeTokens.length > 0;
+
+    const quickBtns = document.querySelectorAll('.quick-tag-btn');
+    quickBtns.forEach(btn => {
+        const btnTag = (btn.getAttribute('data-tag') || '').trim().toLowerCase();
+        let isActive = false;
+        if (!btnTag) {
+            // "All" button
+            isActive = !hasActiveTokens;
+        } else if (hasActiveTokens) {
+            isActive = activeTokens.some(token => token === btnTag || btnTag.startsWith(token) || token.startsWith(btnTag));
+        }
+
+        if (isActive) {
+            btn.classList.add('active');
+            btn.style.background = 'var(--accent, #3b82f6)';
+            btn.style.color = '#ffffff';
+            btn.style.borderColor = 'var(--accent, #3b82f6)';
+        } else {
+            btn.classList.remove('active');
+            if (btnTag) {
+                btn.style.background = 'rgba(59, 130, 246, 0.1)';
+                btn.style.color = '#3b82f6';
+                btn.style.borderColor = 'rgba(59, 130, 246, 0.35)';
+            } else {
+                btn.style.background = 'var(--bg-card)';
+                btn.style.color = 'var(--text-main)';
+                btn.style.borderColor = 'var(--border)';
+            }
+        }
+    });
+
+    const chips = document.querySelectorAll('.test-tag-chip, .dataset-tag-chip');
+    chips.forEach(chip => {
+        const tag = (chip.getAttribute('data-tag') || '').toLowerCase();
+        const key = (chip.getAttribute('data-key') || '').toLowerCase();
+        const tagVal = (chip.getAttribute('data-value') || '').toLowerCase();
+        const chipCombined = key ? (key + ':' + tagVal) : tag;
+
+        let chipActive = false;
+        if (hasActiveTokens) {
+            chipActive = activeTokens.some(token =>
+                tag === token || key === token || tagVal === token || chipCombined === token
+            );
+        }
+
+        if (chipActive) {
+            chip.classList.add('tag-chip-active');
+            chip.style.background = '#2563eb';
+            chip.style.color = '#ffffff';
+            chip.style.borderColor = '#1d4ed8';
+            chip.style.fontWeight = '600';
+        } else {
+            chip.classList.remove('tag-chip-active');
+            chip.style.fontWeight = 'normal';
+            if (chip.classList.contains('dataset-tag-chip')) {
+                chip.style.background = 'rgba(14, 165, 233, 0.12)';
+                chip.style.color = '#0284c7';
+                chip.style.borderColor = 'rgba(14, 165, 233, 0.3)';
+            } else {
+                chip.style.background = 'rgba(59, 130, 246, 0.12)';
+                chip.style.color = '#3b82f6';
+                chip.style.borderColor = 'rgba(59, 130, 246, 0.3)';
+            }
+        }
+    });
+}
+window.updateActiveTagFilterUI = updateActiveTagFilterUI;
+
+document.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.target && (evt.target.id === 'yamlFileList' || evt.target.closest('#yamlFileList'))) {
+        updateActiveTagFilterUI();
+        if (typeof applyFileViewMode === 'function') {
+            applyFileViewMode();
+        }
+    }
 });

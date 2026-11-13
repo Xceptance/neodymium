@@ -23,13 +23,17 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Map;
 
 /**
  * JPA entity representing a unique Test Base variation / signature.
  *
- * @author AI-generated: Gemini 3.6 Flash (High)
+ * @author AI-generated: Gemini 3.8 Flash (High)
  * @author Xceptance GmbH 2026
  */
 @Entity
@@ -56,6 +60,9 @@ public class TestBaseVariationEntity
     @Column(name = "area_tag", length = 80)
     private String areaTag;
 
+    @Column(name = "sub_area_tag", length = 80)
+    private String subAreaTag;
+
     @Column(name = "location", length = 20)
     private String location;
 
@@ -77,9 +84,29 @@ public class TestBaseVariationEntity
     @Column(name = "execution_mode", length = 40)
     private String executionMode;
 
-    @Lob
-    @Column(name = "history_links", columnDefinition = "CLOB")
-    private String historyLinks;
+    @Column(name = "last_run_id", length = 120)
+    private String lastRunId;
+
+    @Column(name = "last_environment", length = 80)
+    private String lastEnvironment;
+
+    @Column(name = "last_batch", length = 120)
+    private String lastBatch;
+
+    @Column(name = "flaky")
+    private Boolean flaky = false;
+
+    @Column(name = "flaky_failure_count")
+    private Integer flakyFailureCount = 0;
+
+    @Column(name = "flaky_total_runs")
+    private Integer flakyTotalRuns = 0;
+
+    @Transient
+    private String flakyReason;
+
+    @Transient
+    private Map<String, String> uniquenessProperties = new LinkedHashMap<>();
 
     public TestBaseVariationEntity()
     {
@@ -96,9 +123,44 @@ public class TestBaseVariationEntity
         this.testClassName = testClassName;
         this.testMethodName = (testMethodName != null && !testMethodName.isBlank()) ? testMethodName.trim() : null;
         this.dataSetLabel = (dataSetLabel != null && !dataSetLabel.isBlank()) ? dataSetLabel.trim() : "Default";
-        this.areaTag = areaTag;
+        this.areaTag = cleanAreaValue(areaTag);
         this.location = AuraReportDataService.normalizeLocation(location);
         this.browser = AuraReportDataService.normalizeBrowser(browser);
+    }
+
+    private static String cleanAreaValue(final String raw)
+    {
+        if (raw == null || raw.isBlank())
+        {
+            return "Default";
+        }
+        String trimmed = raw.trim();
+        while (trimmed.startsWith("@"))
+        {
+            trimmed = trimmed.substring(1).trim();
+        }
+        if (trimmed.isEmpty()
+            || "Browsing (default)".equalsIgnoreCase(trimmed)
+            || "General".equalsIgnoreCase(trimmed)
+            || "Default".equalsIgnoreCase(trimmed))
+        {
+            return "Default";
+        }
+        return trimmed;
+    }
+
+    private static String cleanSubAreaValue(final String raw)
+    {
+        if (raw == null || raw.isBlank())
+        {
+            return null;
+        }
+        String trimmed = raw.trim();
+        while (trimmed.startsWith("@"))
+        {
+            trimmed = trimmed.substring(1).trim();
+        }
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     public String getId()
@@ -143,12 +205,22 @@ public class TestBaseVariationEntity
 
     public String getAreaTag()
     {
-        return areaTag;
+        return cleanAreaValue(this.areaTag);
     }
 
     public void setAreaTag(final String areaTag)
     {
-        this.areaTag = areaTag;
+        this.areaTag = cleanAreaValue(areaTag);
+    }
+
+    public String getSubAreaTag()
+    {
+        return cleanSubAreaValue(this.subAreaTag);
+    }
+
+    public void setSubAreaTag(final String subAreaTag)
+    {
+        this.subAreaTag = cleanSubAreaValue(subAreaTag);
     }
 
     public String getLocation()
@@ -158,7 +230,7 @@ public class TestBaseVariationEntity
 
     public void setLocation(final String location)
     {
-        this.location = com.xceptance.aura.report.service.AuraReportDataService.normalizeLocation(location);
+        this.location = AuraReportDataService.normalizeLocation(location);
     }
 
     public String getBrowser()
@@ -168,7 +240,7 @@ public class TestBaseVariationEntity
 
     public void setBrowser(final String browser)
     {
-        this.browser = com.xceptance.aura.report.service.AuraReportDataService.normalizeBrowser(browser);
+        this.browser = AuraReportDataService.normalizeBrowser(browser);
     }
 
     public Integer getTotalExecutionsCount()
@@ -201,16 +273,6 @@ public class TestBaseVariationEntity
         this.lastExecutedAt = lastExecutedAt;
     }
 
-    public String getHistoryLinks()
-    {
-        return historyLinks;
-    }
-
-    public void setHistoryLinks(final String historyLinks)
-    {
-        this.historyLinks = historyLinks;
-    }
-
     public Boolean isHealed()
     {
         return healed != null && healed;
@@ -226,6 +288,51 @@ public class TestBaseVariationEntity
         this.healed = healed != null ? healed : false;
     }
 
+    public Boolean isFlaky()
+    {
+        return flaky != null && flaky;
+    }
+
+    public Boolean getFlaky()
+    {
+        return flaky != null ? flaky : false;
+    }
+
+    public void setFlaky(final Boolean flaky)
+    {
+        this.flaky = flaky != null ? flaky : false;
+    }
+
+    public Integer getFlakyFailureCount()
+    {
+        return flakyFailureCount != null ? flakyFailureCount : 0;
+    }
+
+    public void setFlakyFailureCount(final Integer flakyFailureCount)
+    {
+        this.flakyFailureCount = flakyFailureCount != null ? flakyFailureCount : 0;
+    }
+
+    public Integer getFlakyTotalRuns()
+    {
+        return flakyTotalRuns != null ? flakyTotalRuns : 0;
+    }
+
+    public void setFlakyTotalRuns(final Integer flakyTotalRuns)
+    {
+        this.flakyTotalRuns = flakyTotalRuns != null ? flakyTotalRuns : 0;
+    }
+
+    public String getFlakyReason()
+    {
+        return flakyReason;
+    }
+
+    public void setFlakyReason(final String flakyReason)
+    {
+        this.flakyReason = flakyReason;
+    }
+
     public String getExecutionMode()
     {
         return executionMode;
@@ -236,8 +343,38 @@ public class TestBaseVariationEntity
         this.executionMode = executionMode;
     }
 
+    public String getLastRunId()
+    {
+        return lastRunId;
+    }
+
+    public void setLastRunId(final String lastRunId)
+    {
+        this.lastRunId = lastRunId;
+    }
+
+    public String getLastEnvironment()
+    {
+        return lastEnvironment;
+    }
+
+    public void setLastEnvironment(final String lastEnvironment)
+    {
+        this.lastEnvironment = lastEnvironment;
+    }
+
+    public String getLastBatch()
+    {
+        return lastBatch;
+    }
+
+    public void setLastBatch(final String lastBatch)
+    {
+        this.lastBatch = lastBatch;
+    }
+
     /**
-     * Resolves the display execution mode string (AI, HEALED, PLAYBOOK, or JAVA).
+     * Resolves the display execution mode string (AI, HEALED, RECORDING, or JAVA).
      *
      * @return display mode string
      */
@@ -252,9 +389,9 @@ public class TestBaseVariationEntity
         {
             return "HEALED";
         }
-        if ("PLAYBOOK".equalsIgnoreCase(rawMode) || "REPLAY_STRICT".equalsIgnoreCase(rawMode) || "REPLAY_WITH_HEALING".equalsIgnoreCase(rawMode))
+        if ("RECORDING".equalsIgnoreCase(rawMode) || "PLAYBOOK".equalsIgnoreCase(rawMode) || "REPLAY_STRICT".equalsIgnoreCase(rawMode) || "REPLAY_WITH_HEALING".equalsIgnoreCase(rawMode))
         {
-            return "PLAYBOOK";
+            return "RECORDING";
         }
         if ("JAVA".equalsIgnoreCase(rawMode))
         {
@@ -270,8 +407,103 @@ public class TestBaseVariationEntity
         }
         if (testClassName != null && (testClassName.contains("_yaml_") || testClassName.contains("_yml_") || testClassName.endsWith("PlaybookTest")))
         {
-            return "PLAYBOOK";
+            return "RECORDING";
         }
         return "JAVA";
+    }
+
+    public Map<String, String> getIdentityProperties()
+    {
+        return uniquenessProperties != null ? uniquenessProperties : Collections.emptyMap();
+    }
+
+    public void setIdentityProperties(final Map<String, String> identityProperties)
+    {
+        this.uniquenessProperties = identityProperties;
+    }
+
+    public String getIdentityProperty(final String key)
+    {
+        if (uniquenessProperties == null || key == null)
+        {
+            return null;
+        }
+        if (uniquenessProperties.containsKey(key))
+        {
+            return uniquenessProperties.get(key);
+        }
+        for (final Map.Entry<String, String> e : uniquenessProperties.entrySet())
+        {
+            if (key.equalsIgnoreCase(e.getKey()))
+            {
+                return e.getValue();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * @deprecated Use {@link #getIdentityProperties()} instead.
+     */
+    @Deprecated
+    public Map<String, String> getUniquenessProperties()
+    {
+        return getIdentityProperties();
+    }
+
+    /**
+     * @deprecated Use {@link #setIdentityProperties(Map)} instead.
+     */
+    @Deprecated
+    public void setUniquenessProperties(final Map<String, String> uniquenessProperties)
+    {
+        setIdentityProperties(uniquenessProperties);
+    }
+
+    /**
+     * @deprecated Use {@link #getIdentityProperty(String)} instead.
+     */
+    @Deprecated
+    public String getUniquenessProperty(final String key)
+    {
+        return getIdentityProperty(key);
+    }
+
+    public String getTagsJson()
+    {
+        final StringBuilder sb = new StringBuilder("{");
+        boolean first = true;
+        if (lastBatch != null && !lastBatch.isBlank())
+        {
+            first = false;
+            sb.append("\"batch\":\"").append(escapeJson(lastBatch.trim())).append("\"");
+        }
+        if (uniquenessProperties != null)
+        {
+            for (final Map.Entry<String, String> e : uniquenessProperties.entrySet())
+            {
+                if (e.getKey() != null && !e.getKey().isBlank() && e.getValue() != null)
+                {
+                    if (!first)
+                    {
+                        sb.append(",");
+                    }
+                    first = false;
+                    sb.append("\"").append(escapeJson(e.getKey().trim().toLowerCase(Locale.ROOT))).append("\":\"")
+                      .append(escapeJson(e.getValue().trim())).append("\"");
+                }
+            }
+        }
+        sb.append("}");
+        return sb.toString();
+    }
+
+    private static String escapeJson(final String s)
+    {
+        if (s == null)
+        {
+            return "";
+        }
+        return s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }
