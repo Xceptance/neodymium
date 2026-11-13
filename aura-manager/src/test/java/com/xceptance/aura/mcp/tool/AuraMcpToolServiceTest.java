@@ -74,7 +74,6 @@ public class AuraMcpToolServiceTest
         final AuraExecutionService executionService = new AuraExecutionServiceImpl(executionCoordinator, queueService, allowlistValidator, playbookService);
         final AuraDiagnosticService diagnosticService = new AuraDiagnosticServiceImpl(
             reportDataService,
-            queueService,
             executionService,
             errorDistiller,
             payloadReporter
@@ -113,6 +112,7 @@ public class AuraMcpToolServiceTest
     @Test
     public void testRunTestDelegatesToCoordinator()
     {
+        Mockito.when(fileService.getYamlFilesList()).thenReturn(List.of(new YamlFileDto("tests/Login.yaml", List.of())));
         final McpExecutionCoordinator.DispatchResult dispatch = new McpExecutionCoordinator.DispatchResult(
             "run_20260930_100000", "RUNNING", 0, "Started"
         );
@@ -183,6 +183,10 @@ public class AuraMcpToolServiceTest
     @Test
     public void testRunSuite()
     {
+        Mockito.when(fileService.getYamlFilesList()).thenReturn(List.of(
+            new YamlFileDto("tests/Login.yaml", List.of()),
+            new YamlFileDto("tests/Cart.yaml", List.of())
+        ));
         final McpExecutionCoordinator.DispatchResult dispatch = new McpExecutionCoordinator.DispatchResult(
             "run_suite_999", "RUNNING", 0, "Suite started"
         );
@@ -191,6 +195,22 @@ public class AuraMcpToolServiceTest
         final Map<String, Object> res = toolService.runSuite(List.of("tests/Login.yaml", "tests/Cart.yaml"), "Chrome");
         Assertions.assertEquals("run_suite_999", res.get("runId"));
         Assertions.assertEquals("RUNNING", res.get("status"));
+    }
+
+    @Test
+    public void testDeleteTestRejectsBlankPath()
+    {
+        final Map<String, Object> res = toolService.deleteTest("   ", null);
+        Assertions.assertEquals("ERROR", res.get("status"));
+        Assertions.assertTrue(res.get("message").toString().contains("testPath"));
+    }
+
+    @Test
+    public void testCancelRunRejectsBlankRunId()
+    {
+        final Map<String, Object> res = toolService.cancelRun(null, null);
+        Assertions.assertEquals("ERROR", res.get("status"));
+        Assertions.assertTrue(res.get("message").toString().contains("runId"));
     }
 
     @Test

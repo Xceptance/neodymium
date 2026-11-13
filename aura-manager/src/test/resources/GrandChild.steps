@@ -1,7 +1,0 @@
-# Neodymium YAML Test Data File
-
-steps: |
-  Sub step with ${subVar}Sub step with ${subVar}Sub step with ${subVar}
-
-variables:
-  subVar: required

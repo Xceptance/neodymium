@@ -28,7 +28,6 @@ import com.xceptance.aura.mcp.service.SeleniumErrorDistiller;
 import com.xceptance.aura.report.dto.RunReportDto;
 import com.xceptance.aura.report.dto.TestExecutionDto;
 import com.xceptance.aura.report.service.AuraReportDataService;
-import com.xceptance.neodymium.aura.AuraQueueService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -50,20 +49,17 @@ public class AuraDiagnosticServiceImpl implements AuraDiagnosticService
     private static final Logger LOGGER = LoggerFactory.getLogger(AuraDiagnosticServiceImpl.class);
 
     private final AuraReportDataService reportDataService;
-    private final AuraQueueService queueService;
     private final AuraExecutionService executionService;
     private final SeleniumErrorDistiller errorDistiller;
     private final AdaptivePayloadReporter payloadReporter;
 
     public AuraDiagnosticServiceImpl(
         final AuraReportDataService reportDataService,
-        final AuraQueueService queueService,
         final AuraExecutionService executionService,
         final SeleniumErrorDistiller errorDistiller,
         final AdaptivePayloadReporter payloadReporter)
     {
         this.reportDataService = reportDataService;
-        this.queueService = queueService;
         this.executionService = executionService;
         this.errorDistiller = errorDistiller;
         this.payloadReporter = payloadReporter;

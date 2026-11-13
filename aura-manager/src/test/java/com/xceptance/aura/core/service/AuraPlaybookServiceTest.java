@@ -121,6 +121,9 @@ public class AuraPlaybookServiceTest
         // Simple filename case-insensitive
         Assertions.assertEquals("tests/examples/use-google.yaml", playbookService.resolvePlaybookPath("USE-GOOGLE.YAML"));
 
+        // Non-existent path returns null
+        Assertions.assertNull(playbookService.resolvePlaybookPath("tests/does-not-exist.yaml"));
+
         // Unsafe path blocked
         Assertions.assertNull(playbookService.resolvePlaybookPath("../../etc/passwd"));
         Assertions.assertNull(playbookService.resolvePlaybookPath(null));

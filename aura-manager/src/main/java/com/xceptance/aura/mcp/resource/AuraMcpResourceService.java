@@ -28,6 +28,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.mcp.annotation.McpResource;
 import org.springframework.stereotype.Service;
 
+import java.util.Map;
+
 /**
  * Exposes MCP resources for reading test run summaries and raw playbook definitions.
  * Delegates data retrieval to shared Aura core services.
@@ -59,13 +61,12 @@ public class AuraMcpResourceService
     public String getRunSummary(final String runId)
     {
         final RunStatusResponseDto dto = diagnosticService.getRunStatus(runId);
-        if ("NOT_FOUND".equalsIgnoreCase(dto.getStatus()))
-        {
-            return "{\"error\": \"Run not found: " + runId + "\"}";
-        }
-
         try
         {
+            if ("NOT_FOUND".equalsIgnoreCase(dto.getStatus()))
+            {
+                return objectMapper.writeValueAsString(Map.of("error", "Run not found: " + runId));
+            }
             return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(dto);
         }
         catch (final Exception e)

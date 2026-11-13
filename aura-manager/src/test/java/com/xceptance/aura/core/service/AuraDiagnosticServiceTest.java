@@ -27,7 +27,6 @@ import com.xceptance.aura.mcp.service.SeleniumErrorDistiller;
 import com.xceptance.aura.report.dto.RunReportDto;
 import com.xceptance.aura.report.dto.TestExecutionDto;
 import com.xceptance.aura.report.service.AuraReportDataService;
-import com.xceptance.neodymium.aura.AuraQueueService;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,7 +44,6 @@ import java.util.List;
 public class AuraDiagnosticServiceTest
 {
     private AuraReportDataService reportDataService;
-    private AuraQueueService queueService;
     private AuraExecutionService executionService;
     private AuraDiagnosticService diagnosticService;
 
@@ -53,14 +51,12 @@ public class AuraDiagnosticServiceTest
     public void setUp()
     {
         reportDataService = Mockito.mock(AuraReportDataService.class);
-        queueService = Mockito.mock(AuraQueueService.class);
         executionService = Mockito.mock(AuraExecutionService.class);
         final SeleniumErrorDistiller distiller = new SeleniumErrorDistiller();
         final AdaptivePayloadReporter reporter = new AdaptivePayloadReporter();
 
         diagnosticService = new AuraDiagnosticServiceImpl(
             reportDataService,
-            queueService,
             executionService,
             distiller,
             reporter
@@ -83,7 +79,6 @@ public class AuraDiagnosticServiceTest
     {
         Mockito.when(executionService.getCoordinatorRunStatus("run_unknown")).thenReturn(null);
         Mockito.when(reportDataService.getRunReport("run_unknown")).thenReturn(null);
-        Mockito.when(queueService.isRunningQueue()).thenReturn(false);
 
         final RunStatusResponseDto res = diagnosticService.getRunStatus("run_unknown");
         Assertions.assertEquals("NOT_FOUND", res.getStatus());

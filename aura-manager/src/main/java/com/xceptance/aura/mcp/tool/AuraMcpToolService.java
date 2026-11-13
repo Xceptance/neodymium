@@ -236,6 +236,11 @@ public class AuraMcpToolService
         @McpToolParam(description = "Relative path of test playbook to delete") final String testPath,
         @McpToolParam(description = "Confirmation token received from initial delete request") final String confirmationToken)
     {
+        if (testPath == null || testPath.isBlank())
+        {
+            return Map.of("status", "ERROR", "message", "testPath must not be null or blank.");
+        }
+
         if (confirmationToken == null || confirmationToken.isBlank())
         {
             final String token = confirmationManager.issueToken("delete_test", testPath);
@@ -268,6 +273,11 @@ public class AuraMcpToolService
         @McpToolParam(description = "Run identifier to cancel") final String runId,
         @McpToolParam(description = "Confirmation token received from initial cancel request") final String confirmationToken)
     {
+        if (runId == null || runId.isBlank())
+        {
+            return Map.of("status", "ERROR", "message", "runId must not be null or blank.");
+        }
+
         if (confirmationToken == null || confirmationToken.isBlank())
         {
             final String token = confirmationManager.issueToken("cancel_run", runId);

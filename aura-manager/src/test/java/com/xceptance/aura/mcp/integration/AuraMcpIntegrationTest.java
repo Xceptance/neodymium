@@ -18,6 +18,8 @@
  */
 package com.xceptance.aura.mcp.integration;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xceptance.aura.AuraManagerApplication;
 import com.xceptance.aura.core.service.AuraPlaybookService;
 import com.xceptance.aura.mcp.dto.RunStatusResponseDto;
@@ -49,6 +51,7 @@ import java.util.Map;
 public class AuraMcpIntegrationTest
 {
     private static final String INTEGRATION_TEST_YAML = "tests/mcp-integration-test.yaml";
+    private static final String INTEGRATION_TEST_YAML_2 = "tests/mcp-integration-test-2.yaml";
     private static final String LIFECYCLE_TEST_YAML = "tests/mcp-lifecycle-test.yaml";
 
     @LocalServerPort
@@ -70,6 +73,7 @@ public class AuraMcpIntegrationTest
     public void cleanupTestFiles()
     {
         playbookService.deletePlaybook(INTEGRATION_TEST_YAML);
+        playbookService.deletePlaybook(INTEGRATION_TEST_YAML_2);
         playbookService.deletePlaybook(LIFECYCLE_TEST_YAML);
     }
 
@@ -193,7 +197,8 @@ public class AuraMcpIntegrationTest
     @Test
     public void testToolRunTestIndependently()
     {
-        final Map<String, Object> result = toolService.runTest("tests/dummy.yaml", "Chrome", null);
+        toolService.createTest(INTEGRATION_TEST_YAML, "name: Run Test\nsteps: []\n");
+        final Map<String, Object> result = toolService.runTest(INTEGRATION_TEST_YAML, "Chrome", null);
         Assertions.assertNotNull(result);
         final String status = (String) result.get("status");
         Assertions.assertTrue("RUNNING".equals(status) || "ENQUEUED".equals(status), "Status must be RUNNING or ENQUEUED");
@@ -213,7 +218,9 @@ public class AuraMcpIntegrationTest
     @Test
     public void testToolRunSuiteIndependently()
     {
-        final List<String> paths = List.of("tests/dummy1.yaml", "tests/dummy2.yaml");
+        toolService.createTest(INTEGRATION_TEST_YAML, "name: Suite Test 1\nsteps: []\n");
+        toolService.createTest(INTEGRATION_TEST_YAML_2, "name: Suite Test 2\nsteps: []\n");
+        final List<String> paths = List.of(INTEGRATION_TEST_YAML, INTEGRATION_TEST_YAML_2);
         final Map<String, Object> result = toolService.runSuite(paths, "Chrome");
         Assertions.assertNotNull(result);
         final String status = (String) result.get("status");
@@ -315,7 +322,7 @@ public class AuraMcpIntegrationTest
     }
 
     @Test
-    public void testMcpResourceServiceIndependently()
+    public void testMcpResourceServiceIndependently() throws Exception
     {
         Assertions.assertNotNull(resourceService);
 
@@ -328,7 +335,8 @@ public class AuraMcpIntegrationTest
 
         // 2. Run Summary Resource for missing run
         final String summaryJson = resourceService.getRunSummary("missing_run_id");
-        Assertions.assertEquals("{\"error\": \"Run not found: missing_run_id\"}", summaryJson.trim());
+        final JsonNode summaryNode = new ObjectMapper().readTree(summaryJson);
+        Assertions.assertEquals("Run not found: missing_run_id", summaryNode.get("error").asText());
     }
 
     @Test
@@ -431,11 +439,12 @@ public class AuraMcpIntegrationTest
     @Test
     public void testCancelRunPurgesPendingQueue()
     {
-        // Enqueue a run
-        final Map<String, Object> run1 = toolService.runTest("tests/dummy.yaml", "Chrome", null);
-        final String runId1 = (String) run1.get("runId");
+        toolService.createTest(INTEGRATION_TEST_YAML, "name: Cancel Queue Test\nsteps: []\n");
 
-        final Map<String, Object> run2 = toolService.runTest("tests/dummy.yaml", "Chrome", null);
+        // Enqueue a run
+        toolService.runTest(INTEGRATION_TEST_YAML, "Chrome", null);
+
+        final Map<String, Object> run2 = toolService.runTest(INTEGRATION_TEST_YAML, "Chrome", null);
         final String runId2 = (String) run2.get("runId");
 
         // Cancel run2

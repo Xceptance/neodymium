@@ -144,12 +144,12 @@ public class AuraPlaybookServiceImpl implements AuraPlaybookService
         catch (final Exception e)
         {
             LOGGER.warn("Failed to retrieve YAML files for playbook resolution: {}", e.getMessage());
-            return cleanPath;
+            return null;
         }
 
         if (files == null || files.isEmpty())
         {
-            return cleanPath;
+            return null;
         }
 
         // 1. Direct exact path match
@@ -184,8 +184,8 @@ public class AuraPlaybookServiceImpl implements AuraPlaybookService
             }
         }
 
-        // Fall back to cleanPath if no better match found
-        return cleanPath;
+        // No matching playbook found
+        return null;
     }
 
     @Override

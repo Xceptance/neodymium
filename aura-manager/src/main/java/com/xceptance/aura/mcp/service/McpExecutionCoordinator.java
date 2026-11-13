@@ -26,6 +26,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Queue;
@@ -126,7 +127,7 @@ public class McpExecutionCoordinator implements ApplicationListener<WebServerIni
 
         final RunRequest req = new RunRequest();
         req.targetRunId = runId;
-        final java.util.List<DatasetSelection> selections = new java.util.ArrayList<>();
+        final List<DatasetSelection> selections = new ArrayList<>();
         for (final String path : testPaths)
         {
             final DatasetSelection sel = new DatasetSelection();

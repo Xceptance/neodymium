@@ -124,7 +124,6 @@ public class AuraTestSettingsController implements ApplicationListener<WebServer
         // MCP Server Tab Attributes
         final String endpointUrl = resolveFullEndpointUrl();
         final String protocolName = serverProtocol != null ? serverProtocol.toUpperCase() : "SSE";
-        final boolean isSse = "SSE".equalsIgnoreCase(protocolName);
         final int registeredToolsCount = resolveMcpToolsList().size();
 
         model.addAttribute("mcpEnabled", mcpProperties.isEnabled());
