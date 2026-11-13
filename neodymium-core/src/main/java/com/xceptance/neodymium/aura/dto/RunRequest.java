@@ -36,6 +36,7 @@ public final class RunRequest
     public boolean video;
     public String executionMode = "LLM_RECORDING";
     public List<String> globalBrowserProfiles;
+    public String targetRunId;
     public String batchName;
     public String environment;
     public Map<String, List<String>> tags;
@@ -47,25 +48,32 @@ public final class RunRequest
     public RunRequest(final List<DatasetSelection> datasets, final boolean headless, final boolean interactive,
             final boolean allure, final boolean video, final String executionMode)
     {
-        this(datasets, headless, interactive, allure, video, executionMode, null, null, null);
+        this(datasets, headless, interactive, allure, video, executionMode, null, null, null, null);
     }
 
     public RunRequest(final List<DatasetSelection> datasets, final boolean headless, final boolean interactive,
             final boolean allure, final boolean video, final String executionMode, final List<String> globalBrowserProfiles)
     {
-        this(datasets, headless, interactive, allure, video, executionMode, globalBrowserProfiles, null, null);
+        this(datasets, headless, interactive, allure, video, executionMode, globalBrowserProfiles, null, null, null);
     }
 
     public RunRequest(final List<DatasetSelection> datasets, final boolean headless, final boolean interactive,
             final boolean allure, final boolean video, final String executionMode, final List<String> globalBrowserProfiles,
             final String batchName)
     {
-        this(datasets, headless, interactive, allure, video, executionMode, globalBrowserProfiles, batchName, null);
+        this(datasets, headless, interactive, allure, video, executionMode, globalBrowserProfiles, batchName, null, null);
     }
 
     public RunRequest(final List<DatasetSelection> datasets, final boolean headless, final boolean interactive,
             final boolean allure, final boolean video, final String executionMode, final List<String> globalBrowserProfiles,
             final String batchName, final Map<String, List<String>> tags)
+    {
+        this(datasets, headless, interactive, allure, video, executionMode, globalBrowserProfiles, batchName, tags, null);
+    }
+
+    public RunRequest(final List<DatasetSelection> datasets, final boolean headless, final boolean interactive,
+            final boolean allure, final boolean video, final String executionMode, final List<String> globalBrowserProfiles,
+            final String batchName, final Map<String, List<String>> tags, final String targetRunId)
     {
         this.datasets = datasets;
         this.headless = headless;
@@ -76,5 +84,6 @@ public final class RunRequest
         this.globalBrowserProfiles = globalBrowserProfiles;
         this.batchName = batchName;
         this.tags = tags;
+        this.targetRunId = targetRunId;
     }
 }

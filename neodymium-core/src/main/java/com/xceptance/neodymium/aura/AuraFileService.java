@@ -251,6 +251,7 @@ public final class AuraFileService
     private final Set<String> expandedFiles = ConcurrentHashMap.newKeySet();
     private final File customResourcesDir;
     private volatile String activeEditingFile = null;
+    private volatile File cachedResourcesDir = null;
     private final Map<String, CachedFragmentVars> fragmentVarsCache = new ConcurrentHashMap<>();
 
     private static final class CachedFragmentVars
@@ -286,27 +287,78 @@ public final class AuraFileService
         {
             return customResourcesDir.getAbsoluteFile();
         }
-        final File defaultDir = new File("src/test/resources").getAbsoluteFile();
-        if (defaultDir.exists() && defaultDir.isDirectory())
+
+        final String configuredPath = System.getProperty("neodymium.aura.tests.directory");
+        if (configuredPath != null && !configuredPath.isBlank())
         {
-            return defaultDir;
+            final File configuredDir = new File(configuredPath).getAbsoluteFile();
+            if (configuredDir.exists() && configuredDir.isDirectory())
+            {
+                return configuredDir;
+            }
         }
-        final File coreDir = new File("neodymium-core/src/test/resources").getAbsoluteFile();
-        if (coreDir.exists() && coreDir.isDirectory())
+
+        final File cached = cachedResourcesDir;
+        if (cached != null && cached.exists() && cached.isDirectory())
         {
-            return coreDir;
+            return cached;
         }
-        final File managerDir = new File("aura-manager/src/test/resources").getAbsoluteFile();
-        if (managerDir.exists() && managerDir.isDirectory())
+
+        final List<File> candidates = List.of(
+                new File("src/test/resources").getAbsoluteFile(),
+                new File("neodymium-core/src/test/resources").getAbsoluteFile(),
+                new File("aura-manager/src/test/resources").getAbsoluteFile(),
+                new File("neodymium-e2e-tests/src/test/resources").getAbsoluteFile()
+        );
+
+        for (final File candidate : candidates)
         {
-            return managerDir;
+            if (candidate.exists() && candidate.isDirectory() && containsYamlFiles(candidate))
+            {
+                cachedResourcesDir = candidate;
+                return candidate;
+            }
         }
-        final File e2eDir = new File("neodymium-e2e-tests/src/test/resources").getAbsoluteFile();
-        if (e2eDir.exists() && e2eDir.isDirectory())
+
+        for (final File candidate : candidates)
         {
-            return e2eDir;
+            if (candidate.exists() && candidate.isDirectory())
+            {
+                cachedResourcesDir = candidate;
+                return candidate;
+            }
         }
-        return defaultDir;
+
+        cachedResourcesDir = candidates.getFirst();
+        return cachedResourcesDir;
+    }
+
+    private boolean containsYamlFiles(final File dir)
+    {
+        final File[] files = dir.listFiles();
+        if (files == null)
+        {
+            return false;
+        }
+        for (final File file : files)
+        {
+            if (file.isDirectory())
+            {
+                if (containsYamlFiles(file))
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                final String name = file.getName().toLowerCase();
+                if (name.endsWith(".yaml") || name.endsWith(".yml"))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public String getActiveEditingFile()
@@ -1770,7 +1822,7 @@ public final class AuraFileService
                 yamlFile = found.getCanonicalFile();
             }
         }
-        if (!yamlFile.getPath().startsWith(resourcesDir.getPath()))
+        if (!yamlFile.toPath().normalize().startsWith(resourcesDir.toPath().normalize()))
         {
             throw new SecurityException("Access denied: Directory traversal detected");
         }
@@ -1909,7 +1961,7 @@ public final class AuraFileService
 
         final File resourcesDir = getResourcesDirectory().getCanonicalFile();
         final File newFile = new File(resourcesDir, targetPath).getCanonicalFile();
-        if (!newFile.getPath().startsWith(resourcesDir.getPath()))
+        if (!newFile.toPath().normalize().startsWith(resourcesDir.toPath().normalize()))
         {
             throw new SecurityException("Access denied: Directory traversal detected");
         }

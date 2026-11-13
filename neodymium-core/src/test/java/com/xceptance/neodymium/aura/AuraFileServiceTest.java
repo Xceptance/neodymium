@@ -377,10 +377,24 @@ public class AuraFileServiceTest
     }
 
     @Test
+    public void testGetResourcesDirectoryResolvesDirectoryWithYamlFiles()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final File resolvedDir = fileService.getResourcesDirectory();
+
+        Assertions.assertNotNull(resolvedDir);
+        Assertions.assertTrue(resolvedDir.exists());
+        Assertions.assertTrue(resolvedDir.isDirectory());
+
+        final List<YamlFileDto> yamlFiles = fileService.getYamlFilesList();
+        Assertions.assertFalse(yamlFiles.isEmpty(), "Expected to discover YAML playbooks in resolved resources directory");
+    }
+
+    @Test
     public void testFindAndLoadPlaybookDetails()
     {
         final AuraFileService fileService = new AuraFileService();
-        final java.io.File pbFile = fileService.findPlaybookFile("verla/SearchTest.yaml", "normal");
+        final File pbFile = fileService.findPlaybookFile("verla/SearchTest.yaml", "normal");
         Assertions.assertNotNull(pbFile, "Playbook JSON file for verla/SearchTest.yaml [normal] should be found");
         Assertions.assertTrue(fileService.hasPlaybook("verla/SearchTest.yaml", "normal"));
 

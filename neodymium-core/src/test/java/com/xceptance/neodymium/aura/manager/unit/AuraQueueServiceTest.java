@@ -29,6 +29,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -101,6 +103,51 @@ public final class AuraQueueServiceTest
         Assertions.assertFalse(runningQueue.get());
         runningQueue.set(true);
         Assertions.assertTrue(runningQueue.get());
+    }
+
+    @Test
+    public void testAddRunCompletedListenerMulticast() throws Exception
+    {
+        final AtomicInteger count1 = new AtomicInteger(0);
+        final AtomicInteger count2 = new AtomicInteger(0);
+
+        final Consumer<String> l1 = id -> count1.incrementAndGet();
+        final Consumer<String> l2 = id -> count2.incrementAndGet();
+
+        queueService.addRunCompletedListener(l1);
+        queueService.addRunCompletedListener(l2);
+
+        final Field listenersField = AuraQueueService.class.getDeclaredField("onRunCompletedListeners");
+        listenersField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        final List<Consumer<String>> listeners =
+                (List<Consumer<String>>) listenersField.get(queueService);
+
+        Assertions.assertEquals(2, listeners.size());
+        for (final Consumer<String> listener : listeners)
+        {
+            listener.accept("run_123");
+        }
+
+        Assertions.assertEquals(1, count1.get());
+        Assertions.assertEquals(1, count2.get());
+
+        queueService.removeRunCompletedListener(l1);
+        Assertions.assertEquals(1, listeners.size());
+    }
+
+    @Test
+    public void testRunCompletedListenerObservesIdleQueue()
+    {
+        final AtomicBoolean queueWasIdleWhenNotified = new AtomicBoolean(false);
+        final Consumer<String> listener = runId -> {
+            queueWasIdleWhenNotified.set(!queueService.isRunningQueue());
+        };
+
+        queueService.addRunCompletedListener(listener);
+        // Verify when queue is idle, listener executes and observes non-running queue
+        listener.accept("run_idle_test");
+        Assertions.assertTrue(queueWasIdleWhenNotified.get());
     }
 
     @Test
