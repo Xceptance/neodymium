@@ -98,4 +98,55 @@ public class NeodymiumAttachmentTest
         Neodymium.clearAttachments();
         assertTrue(Neodymium.getAttachments().isEmpty());
     }
+
+    @Test
+    public void testDeduplicationOnSameName()
+    {
+        Neodymium.addAttachment("state.json", "{\"v\":1}", "application/json", false);
+        assertEquals(1, Neodymium.getAttachments().size());
+        assertEquals("{\"v\":1}", Neodymium.getAttachments().get(0).getTextContent());
+        assertFalse(Neodymium.getAttachments().get(0).isOpenByDefault());
+
+        // Update same attachment with different content and openByDefault=true
+        Neodymium.addAttachment("state.json", "{\"v\":2}", "application/json", true);
+        assertEquals(1, Neodymium.getAttachments().size(), "Attachments with identical name must replace rather than duplicate");
+        assertEquals("{\"v\":2}", Neodymium.getAttachments().get(0).getTextContent());
+        assertTrue(Neodymium.getAttachments().get(0).isOpenByDefault());
+    }
+
+    @Test
+    public void testClearThreadContextPurgesAttachments()
+    {
+        Neodymium.addAttachment("temp.log", "some-log", "text/plain", false);
+        assertFalse(Neodymium.getAttachments().isEmpty());
+
+        Neodymium.clearThreadContext();
+        assertTrue(Neodymium.getAttachments().isEmpty(), "clearThreadContext must purge all attachments");
+    }
+
+    @Test
+    public void testPathSanitization()
+    {
+        // 1. Relative subpaths use underscore
+        assertEquals("sub_dir_data.json", ExecutionAttachment.sanitizeAttachmentPath("sub/dir/data.json"));
+        assertEquals("before_screen.png", ExecutionAttachment.sanitizeAttachmentPath("before\\screen.png"));
+
+        // 2. Absolute paths reduce to basename
+        assertEquals("secret.pem", ExecutionAttachment.sanitizeAttachmentPath("/home/user/keys/secret.pem"));
+        assertEquals("output.txt", ExecutionAttachment.sanitizeAttachmentPath("C:\\Windows\\Temp\\output.txt"));
+
+        // 3. Traversal dots and illegal characters stripped
+        assertEquals("passwd", ExecutionAttachment.sanitizeAttachmentPath("../../../passwd"));
+        assertEquals("data_v=1.json", ExecutionAttachment.sanitizeAttachmentPath("data?v=1.json"));
+        assertEquals("report_hash.html", ExecutionAttachment.sanitizeAttachmentPath("report#hash.html"));
+
+        // 4. Dotfiles prefixed to avoid hidden files
+        assertEquals("_env", ExecutionAttachment.sanitizeAttachmentPath(".env"));
+
+        // 5. Long stem capped while preserving extension
+        final String longName = "a".repeat(120) + ".json";
+        final String sanitized = ExecutionAttachment.sanitizeAttachmentPath(longName);
+        assertTrue(sanitized.endsWith(".json"), "Extension must be preserved when capping filename");
+        assertTrue(sanitized.length() <= 86, "Stem must be capped to prevent exceeding filesystem limits");
+    }
 }

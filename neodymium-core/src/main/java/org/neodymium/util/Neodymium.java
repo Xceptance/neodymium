@@ -131,7 +131,11 @@ public class Neodymium
      */
     public static void clearThreadContext()
     {
-        CONTEXTS.remove(Thread.currentThread());
+        final Neodymium context = CONTEXTS.remove(Thread.currentThread());
+        if (context != null)
+        {
+            context.attachments.clear();
+        }
         TestStepListener.clearLastUrl();
     }
 
@@ -904,7 +908,9 @@ public class Neodymium
         final Neodymium context = getContext();
         if (context != null && file != null)
         {
-            context.attachments.add(ExecutionAttachment.ofFile(name, file, openByDefault));
+            final ExecutionAttachment att = ExecutionAttachment.ofFile(name, file, openByDefault);
+            context.attachments.removeIf(a -> a.getName().equalsIgnoreCase(att.getName()) || a.getPath().equalsIgnoreCase(att.getPath()));
+            context.attachments.add(att);
         }
     }
 
@@ -936,7 +942,9 @@ public class Neodymium
         final Neodymium context = getContext();
         if (context != null && name != null)
         {
-            context.attachments.add(ExecutionAttachment.ofText(name, textContent, contentType, openByDefault));
+            final ExecutionAttachment att = ExecutionAttachment.ofText(name, textContent, contentType, openByDefault);
+            context.attachments.removeIf(a -> a.getName().equalsIgnoreCase(att.getName()) || a.getPath().equalsIgnoreCase(att.getPath()));
+            context.attachments.add(att);
         }
     }
 

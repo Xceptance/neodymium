@@ -765,6 +765,18 @@ public class AuraReportViewController
             {
                 contentType = "text/plain; charset=utf-8";
             }
+            else if (lowerName.endsWith(".csv"))
+            {
+                contentType = "text/csv; charset=utf-8";
+            }
+            else if (lowerName.endsWith(".pdf"))
+            {
+                contentType = "application/pdf";
+            }
+            else if (lowerName.endsWith(".xml"))
+            {
+                contentType = "application/xml; charset=utf-8";
+            }
 
             final ContentDisposition disposition = ContentDisposition.inline()
                 .filename(filename, StandardCharsets.UTF_8)

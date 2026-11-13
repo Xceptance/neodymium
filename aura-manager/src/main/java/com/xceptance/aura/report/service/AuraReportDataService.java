@@ -1496,14 +1496,15 @@ public class AuraReportDataService
         final Path runDir = localRunJsonStorageService.getRunDir(effectiveRunId);
         final List<TestExecutionDto.ExecutionAttachmentDto> resolvedAttachments = new ArrayList<>();
         final String testClass = dto.getTestClass();
-        final String simpleClass = (testClass != null && testClass.contains(".")) ? testClass.substring(testClass.lastIndexOf('.') + 1) : (testClass != null ? testClass : "");
+        final String simpleClass = dto.getSimpleClassName();
 
         final List<Path> candidateDirs = new ArrayList<>();
         if (Files.exists(runDir))
         {
             if (testClass != null && !testClass.isBlank())
             {
-                candidateDirs.add(runDir.resolve(testClass));
+                final String cleanClass = testClass.contains("#") ? testClass.substring(0, testClass.indexOf('#')).trim() : testClass.trim();
+                candidateDirs.add(runDir.resolve(cleanClass));
             }
             if (!simpleClass.isEmpty() && !simpleClass.equals(testClass))
             {
@@ -1533,6 +1534,7 @@ public class AuraReportDataService
                         }
                         resolvedAttachments.add(att);
                         seenNames.add(att.getName().toLowerCase(Locale.ROOT));
+                        seenNames.add(att.getPath().toLowerCase(Locale.ROOT));
                         break;
                     }
                 }
@@ -1541,19 +1543,22 @@ public class AuraReportDataService
 
         // Auto-discover standard attachments if not already present:
         // 1. Video
-        if (!seenNames.contains("video") && dto.getVideoUrl() != null && !dto.getVideoUrl().isBlank())
+        if (dto.getVideoUrl() != null && !dto.getVideoUrl().isBlank())
         {
             final String videoName = dto.getVideoUrl().contains("/") ? dto.getVideoUrl().substring(dto.getVideoUrl().lastIndexOf('/') + 1) : dto.getVideoUrl();
-            for (final Path cDir : candidateDirs)
+            if (!seenNames.contains(videoName.toLowerCase(Locale.ROOT)))
             {
-                final Path vf = cDir.resolve(videoName);
-                if (Files.isRegularFile(vf) && Files.isReadable(vf))
+                for (final Path cDir : candidateDirs)
                 {
-                    final TestExecutionDto.ExecutionAttachmentDto vAtt = new TestExecutionDto.ExecutionAttachmentDto(
-                        videoName, videoName, "video", videoName.endsWith(".webm") ? "video/webm" : "video/mp4", true, vf.toFile().length());
-                    resolvedAttachments.add(vAtt);
-                    seenNames.add(videoName.toLowerCase(Locale.ROOT));
-                    break;
+                    final Path vf = cDir.resolve(videoName);
+                    if (Files.isRegularFile(vf) && Files.isReadable(vf))
+                    {
+                        final TestExecutionDto.ExecutionAttachmentDto vAtt = new TestExecutionDto.ExecutionAttachmentDto(
+                            videoName, videoName, "video", videoName.endsWith(".webm") ? "video/webm" : "video/mp4", true, vf.toFile().length());
+                        resolvedAttachments.add(vAtt);
+                        seenNames.add(videoName.toLowerCase(Locale.ROOT));
+                        break;
+                    }
                 }
             }
         }

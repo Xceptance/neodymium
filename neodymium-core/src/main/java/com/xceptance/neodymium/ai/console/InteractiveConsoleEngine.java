@@ -429,6 +429,7 @@ public final class InteractiveConsoleEngine {
             final JsonObject parsedState = JsonParser.parseString(this.currentStateJson).getAsJsonObject();
             final String currentStatus = parsedState.has("status") ? parsedState.get("status").getAsString() : "";
 
+            boolean stateChanged = false;
             if (testPassed)
             {
                 final boolean wasFailed = "failed".equalsIgnoreCase(currentStatus)
@@ -439,10 +440,7 @@ public final class InteractiveConsoleEngine {
                 {
                     parsedState.addProperty("status", "passed");
                     parsedState.addProperty("expectedFailure", true);
-                    final String updatedJson = parsedState.toString();
-                    this.currentStateJson = updatedJson;
-                    saveLocalExecutionLog(updatedJson);
-                    broadcastSseEvent("state", stripPlaybookContentForSse(updatedJson));
+                    stateChanged = true;
                 }
             }
             else
@@ -455,18 +453,24 @@ public final class InteractiveConsoleEngine {
                 {
                     parsedState.addProperty("status", "failed");
                     parsedState.addProperty("expectedFailure", false);
-                    if (uncaughtException != null)
-                    {
-                        parsedState.addProperty("failureReason", uncaughtException.getMessage() != null ? uncaughtException.getMessage() : uncaughtException.toString());
-                        final StringWriter sw = new StringWriter();
-                        uncaughtException.printStackTrace(new PrintWriter(sw));
-                        parsedState.addProperty("failureStackTrace", sw.toString());
-                    }
-                    final String updatedJson = parsedState.toString();
-                    this.currentStateJson = updatedJson;
-                    saveLocalExecutionLog(updatedJson);
-                    broadcastSseEvent("state", stripPlaybookContentForSse(updatedJson));
+                    stateChanged = true;
                 }
+                if (uncaughtException != null && (!parsedState.has("failureReason") || parsedState.get("failureReason").isJsonNull()))
+                {
+                    parsedState.addProperty("failureReason", uncaughtException.getMessage() != null ? uncaughtException.getMessage() : uncaughtException.toString());
+                    final StringWriter sw = new StringWriter();
+                    uncaughtException.printStackTrace(new PrintWriter(sw));
+                    parsedState.addProperty("failureStackTrace", sw.toString());
+                    stateChanged = true;
+                }
+            }
+
+            final String updatedJson = stateChanged ? parsedState.toString() : this.currentStateJson;
+            this.currentStateJson = updatedJson;
+            saveLocalExecutionLog(updatedJson);
+            if (stateChanged)
+            {
+                broadcastSseEvent("state", stripPlaybookContentForSse(updatedJson));
             }
         }
         catch (final Exception e)
@@ -585,11 +589,23 @@ public final class InteractiveConsoleEngine {
                 }
                 if (logText != null && !logText.isBlank())
                 {
-                    Files.writeString(new File(structuredDir, "execution.log").toPath(), logText, StandardCharsets.UTF_8);
-                    Files.writeString(new File(reportsStructuredDir, "execution.log").toPath(), logText, StandardCharsets.UTF_8);
+                    final String indexedLogName = "execution-" + index + ".log";
+                    Files.writeString(new File(structuredDir, indexedLogName).toPath(), logText, StandardCharsets.UTF_8);
+                    Files.writeString(new File(reportsStructuredDir, indexedLogName).toPath(), logText, StandardCharsets.UTF_8);
                     if (auraStructuredDir != null)
                     {
-                        Files.writeString(new File(auraStructuredDir, "execution.log").toPath(), logText, StandardCharsets.UTF_8);
+                        Files.writeString(new File(auraStructuredDir, indexedLogName).toPath(), logText, StandardCharsets.UTF_8);
+                    }
+
+                    final File defaultLogFile = new File(structuredDir, "execution.log");
+                    if (!defaultLogFile.exists() || index == 1)
+                    {
+                        Files.writeString(defaultLogFile.toPath(), logText, StandardCharsets.UTF_8);
+                        Files.writeString(new File(reportsStructuredDir, "execution.log").toPath(), logText, StandardCharsets.UTF_8);
+                        if (auraStructuredDir != null)
+                        {
+                            Files.writeString(new File(auraStructuredDir, "execution.log").toPath(), logText, StandardCharsets.UTF_8);
+                        }
                     }
                 }
 
@@ -681,12 +697,15 @@ public final class InteractiveConsoleEngine {
                 }
 
                 // 3. Execution Log attachment
-                final File logFile = new File(structuredDir, "execution.log");
-                if (logFile.exists())
+                final String indexedLogName = "execution-" + index + ".log";
+                final File indexedLogFile = new File(structuredDir, indexedLogName);
+                final File defaultLogFile = new File(structuredDir, "execution.log");
+                if (indexedLogFile.exists() || defaultLogFile.exists())
                 {
+                    final String effectiveLogPath = indexedLogFile.exists() ? indexedLogName : "execution.log";
                     final JsonObject logAtt = new JsonObject();
                     logAtt.addProperty("name", "execution.log");
-                    logAtt.addProperty("path", "execution.log");
+                    logAtt.addProperty("path", effectiveLogPath);
                     logAtt.addProperty("type", "log");
                     logAtt.addProperty("contentType", "text/plain");
                     logAtt.addProperty("openByDefault", false);
@@ -709,20 +728,22 @@ public final class InteractiveConsoleEngine {
                     {
                         if (att.getSourceFile() != null && att.getSourceFile().exists())
                         {
-                            Files.copy(att.getSourceFile().toPath(), new File(structuredDir, att.getPath()).toPath(), StandardCopyOption.REPLACE_EXISTING);
-                            Files.copy(att.getSourceFile().toPath(), new File(reportsStructuredDir, att.getPath()).toPath(), StandardCopyOption.REPLACE_EXISTING);
+                            final File src = att.getSourceFile();
+                            copyIfChanged(src, new File(structuredDir, att.getPath()));
+                            copyIfChanged(src, new File(reportsStructuredDir, att.getPath()));
                             if (auraStructuredDir != null)
                             {
-                                Files.copy(att.getSourceFile().toPath(), new File(auraStructuredDir, att.getPath()).toPath(), StandardCopyOption.REPLACE_EXISTING);
+                                copyIfChanged(src, new File(auraStructuredDir, att.getPath()));
                             }
                         }
                         else if (att.getTextContent() != null)
                         {
-                            Files.writeString(new File(structuredDir, att.getPath()).toPath(), att.getTextContent(), StandardCharsets.UTF_8);
-                            Files.writeString(new File(reportsStructuredDir, att.getPath()).toPath(), att.getTextContent(), StandardCharsets.UTF_8);
+                            final byte[] textBytes = att.getTextContent().getBytes(StandardCharsets.UTF_8);
+                            writeIfChanged(textBytes, att.getTextContent(), new File(structuredDir, att.getPath()));
+                            writeIfChanged(textBytes, att.getTextContent(), new File(reportsStructuredDir, att.getPath()));
                             if (auraStructuredDir != null)
                             {
-                                Files.writeString(new File(auraStructuredDir, att.getPath()).toPath(), att.getTextContent(), StandardCharsets.UTF_8);
+                                writeIfChanged(textBytes, att.getTextContent(), new File(auraStructuredDir, att.getPath()));
                             }
                         }
                     }
@@ -748,6 +769,23 @@ public final class InteractiveConsoleEngine {
             {
                 LOG.warn("[InteractiveConsole] Failed to save local console execution log: {}", e.getMessage());
             }
+        }
+    }
+
+    private static void copyIfChanged(final File src, final File dest) throws IOException
+    {
+        if (!dest.exists() || dest.length() != src.length() || dest.lastModified() < src.lastModified())
+        {
+            Files.copy(src.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    private static void writeIfChanged(final byte[] bytes, final String content, final File dest) throws IOException
+    {
+        if (!dest.exists() || dest.length() != bytes.length
+            || !Files.readString(dest.toPath(), StandardCharsets.UTF_8).equals(content))
+        {
+            Files.write(dest.toPath(), bytes);
         }
     }
 
@@ -1447,7 +1485,7 @@ public final class InteractiveConsoleEngine {
             {
                 synchronized (out) {
                     // Immediately send the current state so the client is up-to-date on connect.
-                    final String initial = "event: state\ndata: " + currentStateJson + "\n\n";
+                    final String initial = "event: state\ndata: " + stripPlaybookContentForSse(currentStateJson) + "\n\n";
                     out.write(initial.getBytes(StandardCharsets.UTF_8));
                     out.flush();
 

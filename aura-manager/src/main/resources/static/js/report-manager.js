@@ -3896,6 +3896,23 @@ function renderStepsForExecution(activeRow) {
         if (rowId) {
             stepListEl.innerHTML = '<div style="padding: 1.5rem; text-align: center; color: var(--text-muted);"><span class="material-symbols-outlined" style="font-size: 1.5rem; vertical-align: middle; animation: spin 1s linear infinite;">sync</span> Loading steps and screenshots...</div>';
 
+            // Pause and hide video player to prevent visual ghosting
+            const sideVideoContainer = document.getElementById('sidePanelVideoContainer');
+            const sideVideoPlayer = document.getElementById('sidePanelVideoPlayer');
+            if (sideVideoPlayer) {
+                sideVideoPlayer.pause();
+                sideVideoPlayer.removeAttribute('src');
+            }
+            if (sideVideoContainer) {
+                sideVideoContainer.style.display = 'none';
+            }
+
+            // Hide attachments section while loading new test data
+            const attContainer = document.getElementById('attachmentSectionContainer');
+            if (attContainer) {
+                attContainer.style.display = 'none';
+            }
+
             const copyBtn = document.getElementById('copyFullTestDiagnosticsBtn');
             if (copyBtn) {
                 copyBtn.disabled = true;
@@ -4963,11 +4980,17 @@ function renderStepsForExecution(activeRow) {
     const videoPlayer = document.getElementById('sidePanelVideoPlayer');
     const videoChip = document.getElementById('sidePanelVideoChip');
 
+    const rawVideoAttr = activeRow.getAttribute('data-video-url') || activeRow.getAttribute('data-video') || '';
     let videoAttachment = null;
     if (activeRow._execDto && activeRow._execDto.attachments) {
-        videoAttachment = activeRow._execDto.attachments.find(a => a.type === 'video' || (a.name && (a.name.endsWith('.mp4') || a.name.endsWith('.webm'))));
+        videoAttachment = activeRow._execDto.attachments.find(a =>
+            a.type === 'video' ||
+            (rawVideoAttr && (a.path === rawVideoAttr || a.name === rawVideoAttr)) ||
+            (a.name && a.name.startsWith('video-')) ||
+            (a.path && a.path.startsWith('video-'))
+        );
     }
-    const videoUrlAttr = videoAttachment ? videoAttachment.path : (activeRow.getAttribute('data-video-url') || activeRow.getAttribute('data-video'));
+    const videoUrlAttr = videoAttachment ? videoAttachment.path : rawVideoAttr;
     const hasVideo = videoUrlAttr && videoUrlAttr.trim().length > 0 && videoUrlAttr !== 'null';
 
     if (hasVideo && videoContainer && videoPlayer) {
@@ -4976,7 +4999,7 @@ function renderStepsForExecution(activeRow) {
         const testClass = resolveSimpleTestClassName(activeRow);
         const src = (videoUrlAttr.startsWith('http') || videoUrlAttr.startsWith('/'))
             ? videoUrlAttr
-            : `/runs/${encodeURIComponent(runId)}/files/${encodeURIComponent(testClass)}/${encodeURIComponent(videoUrlAttr)}`;
+            : `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(videoUrlAttr)}`;
 
         if (videoPlayer.getAttribute('src') !== src) {
             videoPlayer.src = src;
@@ -4998,7 +5021,7 @@ function renderStepsForExecution(activeRow) {
     const playbookBox = document.getElementById('attachmentPlaybookBox');
     let playbookAttachment = null;
     if (activeRow._execDto && activeRow._execDto.attachments) {
-        playbookAttachment = activeRow._execDto.attachments.find(a => a.type === 'yaml' || (a.name && (a.name.endsWith('.yaml') || a.name.endsWith('.yml'))));
+        playbookAttachment = activeRow._execDto.attachments.find(a => a.name === 'playbook.yaml' || a.path === 'playbook.yaml' || (a.path && a.path.startsWith('playbook-')));
     }
     const playbookContent = activeRow.getAttribute('data-playbook-content') || (activeRow._execDto && activeRow._execDto.playbookContent) || '';
     const hasPlaybook = playbookAttachment || (playbookContent && playbookContent.trim().length > 0);
@@ -5007,6 +5030,7 @@ function renderStepsForExecution(activeRow) {
         if (hasPlaybook) {
             playbookBox.style.display = 'flex';
             const playbookFileName = playbookAttachment ? playbookAttachment.name : 'playbook.yaml';
+            const playbookTarget = playbookAttachment ? (playbookAttachment.path || playbookAttachment.name) : 'playbook.yaml';
             const chip = playbookBox.querySelector('#attachmentPlaybookChip') || playbookBox.querySelector('.tag-chip');
             if (chip) chip.textContent = playbookFileName;
             const codePreview = playbookBox.querySelector('#attachmentPlaybookCodePreview');
@@ -5015,7 +5039,7 @@ function renderStepsForExecution(activeRow) {
             }
             const openBtn = playbookBox.querySelector('button[onclick*="openAttachmentWindow"]');
             if (openBtn) {
-                openBtn.setAttribute('onclick', `openAttachmentWindow('yaml', '${playbookFileName}')`);
+                openBtn.setAttribute('onclick', `openAttachmentWindow('yaml', '${escapeHtml(playbookTarget)}')`);
             }
         } else {
             playbookBox.style.display = 'none';
@@ -5026,17 +5050,19 @@ function renderStepsForExecution(activeRow) {
     const logBox = document.getElementById('attachmentLogBox');
     let logAttachment = null;
     if (activeRow._execDto && activeRow._execDto.attachments) {
-        logAttachment = activeRow._execDto.attachments.find(a => a.type === 'log' || (a.name && (a.name.endsWith('.log') || a.name.endsWith('.txt'))));
+        logAttachment = activeRow._execDto.attachments.find(a => a.name === 'execution.log' || a.path === 'execution.log' || (a.path && a.path.startsWith('execution-')));
     }
 
     if (logBox) {
         if (logAttachment) {
             logBox.style.display = 'flex';
+            const logFileName = logAttachment.name || 'execution.log';
+            const logTarget = logAttachment.path || logAttachment.name || 'execution.log';
             const chip = logBox.querySelector('#attachmentLogChip') || logBox.querySelector('.tag-chip');
-            if (chip) chip.textContent = logAttachment.name || 'execution.log';
+            if (chip) chip.textContent = logFileName;
             const openBtn = logBox.querySelector('button[onclick*="openAttachmentWindow"]');
             if (openBtn) {
-                openBtn.setAttribute('onclick', `openAttachmentWindow('log', '${logAttachment.name || 'execution.log'}')`);
+                openBtn.setAttribute('onclick', `openAttachmentWindow('log', '${escapeHtml(logTarget)}')`);
             }
         } else {
             logBox.style.display = 'none';
@@ -5048,23 +5074,41 @@ function renderStepsForExecution(activeRow) {
     if (customContainer) {
         customContainer.innerHTML = '';
         if (activeRow._execDto && activeRow._execDto.attachments) {
-            const standardTypes = new Set(['video', 'yaml', 'log']);
-            const customAtts = activeRow._execDto.attachments.filter(a => !standardTypes.has(a.type) && a.name !== 'playbook.yaml' && a.name !== 'execution.log' && !a.name.endsWith('.mp4'));
+            const customAtts = activeRow._execDto.attachments.filter(a =>
+                a !== logAttachment && a !== playbookAttachment && a !== videoAttachment
+            );
             customAtts.forEach(att => {
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'attachment-preview-box';
                 itemDiv.style.display = 'flex';
+
+                let iconName = 'attach_file';
+                const t = (att.type || '').toLowerCase();
+                if (t === 'image') iconName = 'image';
+                else if (t === 'log') iconName = 'article';
+                else if (t === 'json') iconName = 'data_object';
+                else if (t === 'yaml') iconName = 'code';
+                else if (t === 'video') iconName = 'videocam';
+
+                const sizeStr = att.size ? ` (${(att.size / 1024).toFixed(1)} KB)` : '';
+
                 itemDiv.innerHTML = `
                     <div class="flex-between">
-                        <span style="font-size: 0.8rem; font-weight: 600;"><span class="material-symbols-outlined text-accent">attach_file</span> ${escapeHtml(att.name)}</span>
+                        <span style="font-size: 0.8rem; font-weight: 600;"><span class="material-symbols-outlined text-accent">${iconName}</span> ${escapeHtml(att.name)}</span>
                         <div class="flex-gap-2">
-                            <span class="tag-chip">${escapeHtml(att.name)}</span>
-                            <button type="button" class="btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.72rem;" title="Open attachment in separate browser window" onclick="openAttachmentWindow('${escapeHtml(att.type)}', '${escapeHtml(att.path)}')">
+                            <span class="tag-chip">${escapeHtml(att.name)}${sizeStr}</span>
+                            <button type="button" class="btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.72rem;" title="Open attachment in separate browser window">
                                 <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">open_in_new</span> Open in Separate Window
                             </button>
                         </div>
                     </div>
                 `;
+                const btn = itemDiv.querySelector('button');
+                if (btn) {
+                    btn.addEventListener('click', () => {
+                        openAttachmentWindow(att.type, att.path || att.name);
+                    });
+                }
                 customContainer.appendChild(itemDiv);
             });
         }
@@ -5126,7 +5170,10 @@ function openAttachmentWindow(type, url) {
         const testClass = resolveSimpleTestClassName(activeRow);
         targetUrl = `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(filename)}`;
     }
-    window.open(targetUrl, '_blank', 'width=1000,height=700,resizable=yes,scrollbars=yes');
+    const win = window.open(targetUrl, '_blank', 'width=1000,height=700,resizable=yes,scrollbars=yes');
+    if (!win || win.closed || typeof win.closed === 'undefined') {
+        window.location.href = targetUrl;
+    }
 }
 window.openAttachmentWindow = openAttachmentWindow;
 

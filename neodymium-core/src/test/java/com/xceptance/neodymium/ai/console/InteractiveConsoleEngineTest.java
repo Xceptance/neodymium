@@ -1575,5 +1575,82 @@ public class InteractiveConsoleEngineTest
             "Unexecuted teardown step must be marked 'not_run' when execution aborted");
         assertEquals("Not executed because step #1 failed.", afterNode.path("notRunReason").asText());
     }
+
+    @Test
+    public void testMultiDatasetExecutionLogIndexingIsolated(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-datasets");
+
+        // Push state for Dataset 1
+        engine.setExecutionLogContent("Execution log for Dataset 1");
+        final String stateDs1 = "{\"testName\":\"MyDatasetTest · ds1\",\"testFile\":\"com.xceptance.MyDatasetTest#execute\",\"datasetId\":\"ds1\",\"status\":\"passed\",\"steps\":[]}";
+        engine.pushState(stateDs1);
+
+        // Push state for Dataset 2
+        engine.setExecutionLogContent("Execution log for Dataset 2");
+        final String stateDs2 = "{\"testName\":\"MyDatasetTest · ds2\",\"testFile\":\"com.xceptance.MyDatasetTest#execute\",\"datasetId\":\"ds2\",\"status\":\"passed\",\"steps\":[]}";
+        engine.pushState(stateDs2);
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File testDir = new File(customDir.toFile(), runFolder + "/MyDatasetTest");
+
+        final File log1 = new File(testDir, "execution-1.log");
+        final File log2 = new File(testDir, "execution-2.log");
+        final File defaultLog = new File(testDir, "execution.log");
+
+        assertTrue(log1.exists(), "execution-1.log must exist for dataset 1");
+        assertTrue(log2.exists(), "execution-2.log must exist for dataset 2");
+        assertTrue(defaultLog.exists(), "default execution.log must exist");
+
+        assertEquals("Execution log for Dataset 1", Files.readString(log1.toPath()));
+        assertEquals("Execution log for Dataset 2", Files.readString(log2.toPath()));
+
+        // Verify that console-execution-2.json points to execution-2.log
+        final File json2 = new File(testDir, "console-execution-2.json");
+        assertTrue(json2.exists());
+        final JsonNode root = new ObjectMapper().readTree(json2);
+        assertTrue(root.has("attachments"));
+        final JsonNode attNode = root.get("attachments");
+        boolean foundLog2 = false;
+        for (final JsonNode att : attNode)
+        {
+            if ("execution.log".equals(att.path("name").asText()))
+            {
+                assertEquals("execution-2.log", att.path("path").asText(), "Dataset 2 must reference its own indexed execution-2.log");
+                foundLog2 = true;
+            }
+        }
+        assertTrue(foundLog2, "execution.log attachment must be registered for dataset 2");
+    }
+
+    @Test
+    public void testReconciliationWithoutStatusChangeFlushesUpdatedExecutionLog(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-reconcile-flush");
+        final String stateFailed = "{\"testName\":\"ReconcileTest · ds1\",\"testFile\":\"com.xceptance.ReconcileTest#execute\",\"status\":\"failed\",\"steps\":[]}";
+        engine.setExecutionLogContent("Initial failure log without stacktrace");
+        engine.pushState(stateFailed);
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File testDir = new File(customDir.toFile(), runFolder + "/ReconcileTest");
+        final File logFile = new File(testDir, "execution.log");
+        assertTrue(logFile.exists());
+        assertEquals("Initial failure log without stacktrace", Files.readString(logFile.toPath()));
+
+        // Now update executionLogContent with final stacktrace and reconcile without status change (still failed)
+        engine.setExecutionLogContent("Final failure log with full exception stacktrace");
+        engine.reconcileTestOutcome(false, new RuntimeException("Trailing assertion error"));
+
+        assertEquals("Final failure log with full exception stacktrace", Files.readString(logFile.toPath()),
+            "reconcileTestOutcome must flush updated executionLogContent to disk even when status does not flip");
+    }
 }
 

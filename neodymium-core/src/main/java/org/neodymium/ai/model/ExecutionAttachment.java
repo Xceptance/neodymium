@@ -61,12 +61,78 @@ public final class ExecutionAttachment implements Serializable
         final String textContent)
     {
         this.name = Objects.requireNonNull(name, "Attachment name must not be null");
-        this.path = path != null ? path : name;
+        final String rawPath = (path != null && !path.isBlank()) ? path : name;
+        this.path = sanitizeAttachmentPath(rawPath);
         this.type = type != null ? type : inferTypeFromName(name);
         this.contentType = contentType != null ? contentType : inferContentType(name);
         this.openByDefault = openByDefault;
         this.sourceFile = sourceFile;
         this.textContent = textContent;
+    }
+
+    /**
+     * Sanitizes a raw attachment path or filename to a clean, safe single-segment filename.
+     *
+     * @param raw the raw path or filename
+     * @return sanitized safe filename
+     */
+    public static String sanitizeAttachmentPath(final String raw)
+    {
+        if (raw == null || raw.isBlank())
+        {
+            return "attachment";
+        }
+        String p = raw.trim();
+
+        // 1. If absolute path (Unix / Windows), take only the filename
+        if (p.startsWith("/") || p.startsWith("\\") || p.matches("^[a-zA-Z]:.*"))
+        {
+            final int lastSep = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+            if (lastSep >= 0 && lastSep < p.length() - 1)
+            {
+                p = p.substring(lastSep + 1).trim();
+            }
+        }
+
+        // 2. Strip relative traversal prefixes
+        while (p.startsWith("../") || p.startsWith("..\\"))
+        {
+            p = p.substring(3).trim();
+        }
+
+        // 3. Relative subpaths: replace slashes with underscore
+        p = p.replace('/', '_').replace('\\', '_');
+
+        // 4. Remove path traversal dots, URI query / hash, illegal Windows characters and control characters
+        p = p.replace("..", "").replace('?', '_').replace('#', '_');
+        p = p.replaceAll("[:*?\"<>|]", "_");
+        p = p.replaceAll("[\\p{Cntrl}]", "");
+
+        // Strip leading underscores resulting from traversal separator stripping unless raw was hidden file
+        while (p.startsWith("_") && !raw.trim().startsWith(".") && !raw.trim().startsWith("_"))
+        {
+            p = p.substring(1);
+        }
+
+        // 5. If starting with dot (hidden file in Unix), replace leading dot with underscore
+        while (p.startsWith("."))
+        {
+            p = "_" + p.substring(1);
+        }
+
+        p = p.trim();
+        if (p.isEmpty() || "_".equals(p))
+        {
+            return "attachment";
+        }
+
+        // 5. Cap filename stem while preserving extension
+        final int extIdx = p.lastIndexOf('.');
+        final String ext = (extIdx > 0 && extIdx > p.length() - 12) ? p.substring(extIdx) : "";
+        final String stem = ext.isEmpty() ? p : p.substring(0, extIdx);
+        final String cappedStem = stem.length() > 80 ? stem.substring(0, 80) : stem;
+
+        return cappedStem + ext;
     }
 
     public static ExecutionAttachment ofFile(final String name, final File file, final boolean openByDefault)
