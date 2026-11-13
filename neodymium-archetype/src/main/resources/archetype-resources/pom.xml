@@ -1,0 +1,76 @@
+#set( $d = '$' )
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<groupId>${groupId}</groupId>
+	<artifactId>${artifactId}</artifactId>
+	<version>${version}</version>
+	<packaging>jar</packaging>
+
+	<name>${artifactId}</name>
+	<description>Neodymium test automation suite</description>
+
+	<properties>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<maven.compiler.release>21</maven.compiler.release>
+		<neodymium.version>${neodymiumVersion}</neodymium.version>
+		<aura-manager.version>${auraManagerVersion}</aura-manager.version>
+		<surefire.version>3.5.2</surefire.version>
+	</properties>
+
+	<repositories>
+		<repository>
+			<id>sonatype-snapshots</id>
+			<url>https://oss.sonatype.org/content/repositories/snapshots</url>
+			<releases>
+				<enabled>false</enabled>
+			</releases>
+			<snapshots>
+				<enabled>true</enabled>
+			</snapshots>
+		</repository>
+	</repositories>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>3.13.0</version>
+				<configuration>
+					<release>21</release>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>${d}{surefire.version}</version>
+				<configuration>
+					<forkCount>2</forkCount>
+					<includes>
+						<include>**/*Test.java</include>
+					</includes>
+					<systemPropertyVariables>
+						<selenide.reports>${d}{project.build.directory}/selenide-results</selenide.reports>
+					</systemPropertyVariables>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
+	<dependencies>
+		<dependency>
+			<groupId>com.xceptance</groupId>
+			<artifactId>neodymium-core</artifactId>
+			<version>${d}{neodymium.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.xceptance.aura</groupId>
+			<artifactId>aura-manager</artifactId>
+			<version>${d}{aura-manager.version}</version>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+</project>

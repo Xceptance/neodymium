@@ -1,0 +1,28 @@
+# Intensive homepage validation playbook for the Posters Demo Store
+# Demonstrates element visibility, brand validation, navigation structure,
+# content hierarchy, and visual alignment checks.
+
+before: |
+  Open https://posters.xceptance.io:8443/
+  _include: fragments/cookie_consent.steps
+
+steps: |
+  Verify the page title is 'The Poster Demo Store - The Ultimate Online Shop'
+  Verify the brand logo is displayed in the header
+  Verify the top navigation contains 'World of Nature'
+  Verify the top navigation contains 'Dining'
+  Verify the top navigation contains 'Transportation'
+  Verify the top navigation contains 'Panoramas'
+  Verify the search input field is visible
+  Verify the locale switcher displays 'en-US'
+  Verify the shopping cart icon displays item count '0'
+  Verify the search bar and navigation elements are aligned in the top navigation bar (visual)
+  Verify the hero carousel is visible
+  Verify at least 4 product tiles are displayed on the homepage
+  Verify each product tile displays a product title and price
+  Verify the 'Shop All Products' button is visible
+  Verify the footer contains 'About'
+  Verify the footer contains 'Customer Care'
+  Verify the footer contains 'Information'
+  Verify the footer contains 'Contact Information'
+  Verify the copyright notice is displayed in the footer

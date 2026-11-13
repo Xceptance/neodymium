@@ -1,0 +1,24 @@
+# Negative sign-in playbook for Posters Demo Store
+# Demonstrates negative test validation, error message verification, and
+# visual error styling/color variation checks.
+
+before: |
+  Open https://posters.xceptance.io:8443/
+  _include: fragments/cookie_consent.steps
+
+steps: |
+  Click the user account menu
+  Click 'Sign In'
+  Verify the page heading contains 'Sign-In'
+  Type '${invalidEmail}' into the Email Address input field
+  Type '${invalidPassword}' into the Password input field
+  Click the 'Sign In' button
+  Verify the error alert message contains 'The email address or password is wrong. Please try again.'
+  Verify the error alert banner has a reddish background indicating an error (visual)
+  Verify the text inside the error alert banner is dark red (visual)
+  Verify the email input field is still displayed
+
+data:
+  - testId: "negative_login_invalid_credentials"
+    invalidEmail: "unknown_user@varmail.de"
+    invalidPassword: "IncorrectPassword999!"

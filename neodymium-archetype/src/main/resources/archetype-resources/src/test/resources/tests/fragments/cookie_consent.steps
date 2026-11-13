@@ -1,0 +1,3 @@
+# Reusable fragment for dismissing cookie banners and popups
+If a cookie consent banner is visible, click 'Accept All'
+If a newsletter popup appears, close it using the 'X' button

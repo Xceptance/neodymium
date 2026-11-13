@@ -1,0 +1,11 @@
+target/
+.settings/
+.project
+.classpath
+.idea/
+*.iml
+*.log
+selenide-results/
+storage/
+data/
+config/credentials.properties

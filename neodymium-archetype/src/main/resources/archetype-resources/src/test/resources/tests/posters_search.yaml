@@ -1,0 +1,24 @@
+# Product search test on the Posters Demo Store demonstrating data-driven iterations,
+# reusable step includes, visual grid alignment, and search result validation.
+
+before: |
+  Open https://posters.xceptance.io:8443/
+  _include: fragments/cookie_consent.steps
+
+steps: |
+  Type '${searchTerm}' into the search input field
+  Click the search button
+  Verify the search result header contains '${searchTerm}'
+  Verify at least one product tile is displayed
+  Verify the product tiles are aligned in a 3-column grid (visual)
+  Verify each displayed product tile shows a title and a price
+
+data:
+  - testId: "search_modern_posters"
+    searchTerm: "Modern"
+  - testId: "search_nature_posters"
+    searchTerm: "Nature"
+  - testId: "search_ocean_posters"
+    searchTerm: "Ocean"
+  - testId: "search_bamboo_posters"
+    searchTerm: "Bamboo"
