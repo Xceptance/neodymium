@@ -50,6 +50,7 @@ import org.neodymium.ai.report.TestExecutionReport.ReportActionEntry;
 import org.neodymium.ai.report.TestExecutionReport.ReportLlmCallEntry;
 import org.neodymium.ai.report.TestExecutionReport.ReportMetrics;
 import org.neodymium.ai.report.TestExecutionReport.ReportStepEntry;
+import org.neodymium.util.Neodymium;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -102,6 +103,9 @@ public class InteractiveConsoleEngineTest
             System.clearProperty("neodymium.ai.consoleExecutionLogs");
         }
         System.clearProperty("neodymium.ai.consoleExecutionLogs.directory");
+        System.clearProperty("neodymium.ai.consoleExecutionLogs.captureGlobalLog");
+        System.clearProperty("neodymium.ai.storageRuns.directory");
+        Neodymium.clearAttachments();
         AiConfiguration.resetInstance();
     }
 
@@ -516,6 +520,109 @@ public class InteractiveConsoleEngineTest
         final String updatedJsonContent = Files.readString(customJson.toPath());
         assertTrue(updatedJsonContent.contains("\"videoUrl\":\"video-1.mp4\""), "Custom execution JSON should contain videoUrl attribute");
         assertTrue(updatedJsonContent.contains("\"videoPath\":\"video-1.mp4\""), "Custom execution JSON should contain videoPath attribute");
+    }
+
+    @Test
+    public void testPlaybookYamlWrittenToExecutionDirectory(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-playbook-yaml");
+        final String yamlContent = "steps:\n  - action: open('/shop')\n  - action: click('#cart')";
+        final String stateJson = "{\"testName\":\"PlaybookTestClass · ds1\",\"testFile\":\"com.xceptance.PlaybookTestClass#execute\",\"status\":\"passed\",\"playbookContent\":\"steps:\\n  - action: open('/shop')\\n  - action: click('#cart')\",\"steps\":[]}";
+
+        engine.pushState(stateJson);
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File testClassFolder = new File(customDir.toFile(), runFolder + "/PlaybookTestClass");
+        final File playbookYaml = new File(testClassFolder, "playbook.yaml");
+        final File playbookIndexedYaml = new File(testClassFolder, "playbook-1.yaml");
+
+        assertTrue(playbookYaml.exists(), "playbook.yaml should exist in structured run directory");
+        assertTrue(playbookIndexedYaml.exists(), "playbook-1.yaml should exist in structured run directory");
+        assertEquals(yamlContent, Files.readString(playbookYaml.toPath()));
+        assertEquals(yamlContent, Files.readString(playbookIndexedYaml.toPath()));
+    }
+
+    @Test
+    public void testDualWriteToAuraStorageRunsDirectoryAndCustomAttachments(@TempDir final Path customDir, @TempDir final Path auraStorageDir) throws Exception
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        System.setProperty("neodymium.ai.storageRuns.directory", auraStorageDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final File sampleAttachmentFile = new File(tempResultsDir, "sample-payload.csv");
+        Files.writeString(sampleAttachmentFile.toPath(), "colA,colB\nval1,val2");
+
+        Neodymium.addAttachment("sample-payload.csv", sampleAttachmentFile, false);
+        Neodymium.addAttachment("response.json", "{\"status\":\"success\"}", "application/json", false);
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-dual-write");
+        engine.setExecutionLogContent("Test execution timeline:\n[Step 01] Navigate -> SUCCESS");
+
+        final String stateJson = "{\"testName\":\"DualWriteTestClass · ds1\",\"testFile\":\"com.xceptance.DualWriteTestClass#execute\",\"status\":\"passed\",\"steps\":[]}";
+        engine.pushState(stateJson);
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File localClassDir = new File(customDir.toFile(), runFolder + "/DualWriteTestClass");
+        final File auraClassDir = new File(auraStorageDir.toFile(), runFolder + "/DualWriteTestClass");
+
+        assertTrue(localClassDir.exists(), "Local test class directory must exist");
+        assertTrue(auraClassDir.exists(), "Aura storage test class directory must exist due to dual-write");
+
+        // Verify execution.log in both locations
+        final File localExecutionLog = new File(localClassDir, "execution.log");
+        final File auraExecutionLog = new File(auraClassDir, "execution.log");
+        assertTrue(localExecutionLog.exists(), "Local execution.log must exist");
+        assertTrue(auraExecutionLog.exists(), "Aura execution.log must exist");
+        assertEquals("Test execution timeline:\n[Step 01] Navigate -> SUCCESS", Files.readString(auraExecutionLog.toPath()));
+
+        // Verify custom attachments copied to both locations
+        final File auraCsv = new File(auraClassDir, "sample-payload.csv");
+        final File auraJson = new File(auraClassDir, "response.json");
+        assertTrue(auraCsv.exists(), "sample-payload.csv must exist in auraStorageDir");
+        assertTrue(auraJson.exists(), "response.json must exist in auraStorageDir");
+        assertEquals("colA,colB\nval1,val2", Files.readString(auraCsv.toPath()));
+        assertEquals("{\"status\":\"success\"}", Files.readString(auraJson.toPath()));
+
+        // Verify console-execution-1.json has attachments registered
+        final File auraExecutionJson = new File(auraClassDir, "console-execution-1.json");
+        assertTrue(auraExecutionJson.exists(), "Aura console-execution-1.json must exist");
+        final JsonNode root = new ObjectMapper().readTree(auraExecutionJson);
+        assertTrue(root.has("attachments"), "State JSON must contain attachments array");
+        final JsonNode attachmentsNode = root.get("attachments");
+        assertTrue(attachmentsNode.isArray(), "attachments should be an array");
+
+        boolean hasLogAttachment = false;
+        boolean hasCsvAttachment = false;
+        boolean hasJsonAttachment = false;
+        for (final JsonNode att : attachmentsNode)
+        {
+            final String name = att.path("name").asText();
+            if ("execution.log".equals(name))
+            {
+                hasLogAttachment = true;
+                assertEquals("text/plain", att.path("contentType").asText());
+                assertFalse(att.path("openByDefault").asBoolean());
+            }
+            else if ("sample-payload.csv".equals(name))
+            {
+                hasCsvAttachment = true;
+                assertFalse(att.path("openByDefault").asBoolean());
+            }
+            else if ("response.json".equals(name))
+            {
+                hasJsonAttachment = true;
+                assertEquals("application/json", att.path("contentType").asText());
+                assertFalse(att.path("openByDefault").asBoolean());
+            }
+        }
+        assertTrue(hasLogAttachment, "attachments array must include execution.log");
+        assertTrue(hasCsvAttachment, "attachments array must include sample-payload.csv");
+        assertTrue(hasJsonAttachment, "attachments array must include response.json");
     }
 
     @Test
@@ -1548,6 +1655,165 @@ public class InteractiveConsoleEngineTest
         assertEquals("not_run", afterNode.path("status").asText(),
             "Unexecuted teardown step must be marked 'not_run' when execution aborted");
         assertEquals("Not executed because step #1 failed.", afterNode.path("notRunReason").asText());
+    }
+
+    @Test
+    public void testMultiDatasetExecutionLogIndexingIsolated(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-datasets");
+
+        // Push state for Dataset 1
+        engine.setExecutionLogContent("Execution log for Dataset 1");
+        final String stateDs1 = "{\"testName\":\"MyDatasetTest · ds1\",\"testFile\":\"com.xceptance.MyDatasetTest#execute\",\"datasetId\":\"ds1\",\"status\":\"passed\",\"steps\":[]}";
+        engine.pushState(stateDs1);
+
+        // Push state for Dataset 2
+        engine.setExecutionLogContent("Execution log for Dataset 2");
+        final String stateDs2 = "{\"testName\":\"MyDatasetTest · ds2\",\"testFile\":\"com.xceptance.MyDatasetTest#execute\",\"datasetId\":\"ds2\",\"status\":\"passed\",\"steps\":[]}";
+        engine.pushState(stateDs2);
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File testDir = new File(customDir.toFile(), runFolder + "/MyDatasetTest");
+
+        final File log1 = new File(testDir, "execution-1.log");
+        final File log2 = new File(testDir, "execution-2.log");
+        final File defaultLog = new File(testDir, "execution.log");
+
+        assertTrue(log1.exists(), "execution-1.log must exist for dataset 1");
+        assertTrue(log2.exists(), "execution-2.log must exist for dataset 2");
+        assertTrue(defaultLog.exists(), "default execution.log must exist");
+
+        assertEquals("Execution log for Dataset 1", Files.readString(log1.toPath()));
+        assertEquals("Execution log for Dataset 2", Files.readString(log2.toPath()));
+
+        // Verify that console-execution-2.json points to execution-2.log
+        final File json2 = new File(testDir, "console-execution-2.json");
+        assertTrue(json2.exists());
+        final JsonNode root = new ObjectMapper().readTree(json2);
+        assertTrue(root.has("attachments"));
+        final JsonNode attNode = root.get("attachments");
+        boolean foundLog2 = false;
+        for (final JsonNode att : attNode)
+        {
+            if ("execution.log".equals(att.path("name").asText()))
+            {
+                assertEquals("execution-2.log", att.path("path").asText(), "Dataset 2 must reference its own indexed execution-2.log");
+                foundLog2 = true;
+            }
+        }
+        assertTrue(foundLog2, "execution.log attachment must be registered for dataset 2");
+    }
+
+    @Test
+    public void testReconciliationWithoutStatusChangeFlushesUpdatedExecutionLog(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-reconcile-flush");
+        final String stateFailed = "{\"testName\":\"ReconcileTest · ds1\",\"testFile\":\"com.xceptance.ReconcileTest#execute\",\"status\":\"failed\",\"steps\":[]}";
+        engine.setExecutionLogContent("Initial failure log without stacktrace");
+        engine.pushState(stateFailed);
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File testDir = new File(customDir.toFile(), runFolder + "/ReconcileTest");
+        final File logFile = new File(testDir, "execution.log");
+        assertTrue(logFile.exists());
+        assertEquals("Initial failure log without stacktrace", Files.readString(logFile.toPath()));
+
+        // Now update executionLogContent with final stacktrace and reconcile without status change (still failed)
+        engine.setExecutionLogContent("Final failure log with full exception stacktrace");
+        engine.reconcileTestOutcome(false, new RuntimeException("Trailing assertion error"));
+
+        assertEquals("Final failure log with full exception stacktrace", Files.readString(logFile.toPath()),
+            "reconcileTestOutcome must flush updated executionLogContent to disk even when status does not flip");
+    }
+
+    @Test
+    public void testMultiDatasetPlaybookIndexingIsolated(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-playbooks");
+
+        // Push state for Dataset 1
+        final String stateDs1 = "{\"testName\":\"MyDatasetPlaybookTest · ds1\",\"testFile\":\"com.xceptance.MyDatasetPlaybookTest#execute\",\"datasetId\":\"ds1\",\"status\":\"passed\",\"playbookContent\":\"playbook: version 1\",\"steps\":[]}";
+        engine.pushState(stateDs1);
+
+        // Push state for Dataset 2
+        final String stateDs2 = "{\"testName\":\"MyDatasetPlaybookTest · ds2\",\"testFile\":\"com.xceptance.MyDatasetPlaybookTest#execute\",\"datasetId\":\"ds2\",\"status\":\"passed\",\"playbookContent\":\"playbook: version 2\",\"steps\":[]}";
+        engine.pushState(stateDs2);
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File testDir = new File(customDir.toFile(), runFolder + "/MyDatasetPlaybookTest");
+
+        final File pb1 = new File(testDir, "playbook-1.yaml");
+        final File pb2 = new File(testDir, "playbook-2.yaml");
+        final File defaultPb = new File(testDir, "playbook.yaml");
+
+        assertTrue(pb1.exists(), "playbook-1.yaml must exist for dataset 1");
+        assertTrue(pb2.exists(), "playbook-2.yaml must exist for dataset 2");
+        assertTrue(defaultPb.exists(), "default playbook.yaml must exist");
+
+        assertEquals("playbook: version 1", Files.readString(pb1.toPath()));
+        assertEquals("playbook: version 2", Files.readString(pb2.toPath()));
+
+        // Verify that console-execution-2.json points to playbook-2.yaml
+        final File json2 = new File(testDir, "console-execution-2.json");
+        assertTrue(json2.exists());
+        final JsonNode root = new ObjectMapper().readTree(json2);
+        assertTrue(root.has("attachments"));
+        final JsonNode attNode = root.get("attachments");
+        boolean foundPb2 = false;
+        for (final JsonNode att : attNode)
+        {
+            if ("playbook.yaml".equals(att.path("name").asText()))
+            {
+                assertEquals("playbook-2.yaml", att.path("path").asText(), "Dataset 2 must reference its own indexed playbook-2.yaml");
+                foundPb2 = true;
+            }
+        }
+        assertTrue(foundPb2, "playbook.yaml attachment must be registered for dataset 2");
+    }
+
+    @Test
+    public void testReconcilePreservesCustomAttachmentsAfterThreadContextClearedAndHandlesNullVideoUrl(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        Neodymium.addAttachment("custom-note.txt", "important context", "text/plain", false);
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-reconcile-att");
+        final String stateJson = "{\"testName\":\"ReconcileAttTest · ds1\",\"testFile\":\"com.xceptance.ReconcileAttTest#execute\",\"status\":\"passed\",\"videoUrl\":null,\"steps\":[]}";
+        engine.pushState(stateJson);
+
+        // Simulate thread context cleared before reconciliation runs
+        Neodymium.clearThreadContext();
+        engine.reconcileTestOutcome(false, new RuntimeException("Post-test failure"));
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File json1 = new File(customDir.toFile(), runFolder + "/ReconcileAttTest/console-execution-1.json");
+        assertTrue(json1.exists());
+        final JsonNode root = new ObjectMapper().readTree(json1);
+        final JsonNode attNode = root.get("attachments");
+        boolean foundCustom = false;
+        for (final JsonNode att : attNode)
+        {
+            if ("custom-note.txt".equals(att.path("name").asText()))
+            {
+                foundCustom = true;
+            }
+        }
+        assertTrue(foundCustom, "reconcileTestOutcome must preserve cached custom attachments even after thread context is cleared");
     }
 }
 

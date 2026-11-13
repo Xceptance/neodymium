@@ -55,7 +55,10 @@ public class AiConfigurationTest
         System.clearProperty("neodymium.ai.interactive");
         System.clearProperty("neodymium.managerActive");
         System.clearProperty("neodymium.ai.consoleExecutionLogs.directory");
+        System.clearProperty("neodymium.ai.consoleExecutionLogs.captureGlobalLog");
         System.clearProperty("neodymium.ai.consoleLog.directory");
+        System.clearProperty("neodymium.ai.storageRuns.directory");
+        System.clearProperty("aura.report.storage.runs.base-dir");
         System.clearProperty("neodymium.ai.report.disk.directory");
         System.clearProperty("neodymium.ai.reportDirectory");
         System.clearProperty("neodymium.ai.replay.delayScale");
@@ -219,6 +222,38 @@ public class AiConfigurationTest
         final AiConfiguration customConfig = AiConfiguration.getInstance();
         assertEquals("target/custom-console-logs", customConfig.getConsoleExecutionLogsDirectory(),
             "Console execution logs directory should resolve custom configured folder path.");
+    }
+
+    @Test
+    public void testAuraStorageRunsDirectoryResolution()
+    {
+        AiConfiguration.resetInstance();
+        final AiConfiguration defaultConfig = AiConfiguration.getInstance();
+        assertEquals("storage/runs", defaultConfig.getAuraStorageRunsDirectory(),
+            "Aura storage runs directory should default to storage/runs.");
+
+        System.setProperty("aura.report.storage.runs.base-dir", "custom/aura-runs");
+        AiConfiguration.resetInstance();
+        assertEquals("custom/aura-runs", AiConfiguration.getInstance().getAuraStorageRunsDirectory(),
+            "Aura storage runs directory should resolve aura.report.storage.runs.base-dir override.");
+
+        System.setProperty("neodymium.ai.storageRuns.directory", "custom/neo-runs");
+        AiConfiguration.resetInstance();
+        assertEquals("custom/neo-runs", AiConfiguration.getInstance().getAuraStorageRunsDirectory(),
+            "Aura storage runs directory should resolve neodymium.ai.storageRuns.directory override with higher priority.");
+    }
+
+    @Test
+    public void testConsoleExecutionLogsCaptureGlobalLogDefaultAndOverride()
+    {
+        AiConfiguration.resetInstance();
+        assertFalse(AiConfiguration.getInstance().isConsoleExecutionLogsCaptureGlobalLogEnabled(),
+            "Global log fallback capture should default to false to prevent per-step disk spam.");
+
+        System.setProperty("neodymium.ai.consoleExecutionLogs.captureGlobalLog", "true");
+        AiConfiguration.resetInstance();
+        assertTrue(AiConfiguration.getInstance().isConsoleExecutionLogsCaptureGlobalLogEnabled(),
+            "Global log fallback capture should return true when explicitly enabled.");
     }
 
     @Test

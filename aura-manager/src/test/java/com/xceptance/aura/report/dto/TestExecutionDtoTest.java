@@ -674,5 +674,82 @@ public final class TestExecutionDtoTest
         final TestExecutionDto dto4 = new TestExecutionDto("id4", null, "title", "passed", "engine", "loc", "chrome", null, (List<String>) null);
         Assertions.assertEquals("DefaultClass", dto4.getSimpleClassName());
     }
+
+    @Test
+    public void testPlaybookContentDeserialization() throws Exception
+    {
+        final String json = """
+            {
+                "id": "playbook-exec-1",
+                "testClass": "com.xceptance.test.PlaybookYamlTest",
+                "playbookFile": "scripts/login.yaml",
+                "playbookContent": "steps:\\n  - action: open('/login')\\n  - action: fill('#user', 'admin')"
+            }
+            """;
+        final TestExecutionDto dto = this.objectMapper.readValue(json, TestExecutionDto.class);
+        Assertions.assertNotNull(dto);
+        Assertions.assertEquals("scripts/login.yaml", dto.getPlaybookFile());
+        Assertions.assertEquals("steps:\n  - action: open('/login')\n  - action: fill('#user', 'admin')", dto.getPlaybookContent());
+    }
+
+    @Test
+    public void testDeserializationWithAttachments() throws Exception
+    {
+        final String json = """
+            {
+                "id": "exec-att",
+                "testClass": "com.xceptance.test.AttachmentTest",
+                "title": "Attachment Demo",
+                "status": "passed-clean",
+                "attachments": [
+                    {
+                        "name": "video-1.mp4",
+                        "path": "video-1.mp4",
+                        "type": "video",
+                        "contentType": "video/mp4",
+                        "openByDefault": true,
+                        "size": 1048576
+                    },
+                    {
+                        "name": "playbook.yaml",
+                        "path": "playbook.yaml",
+                        "type": "yaml",
+                        "contentType": "text/yaml",
+                        "openByDefault": false,
+                        "size": 2048
+                    },
+                    {
+                        "name": "execution.log",
+                        "path": "execution.log",
+                        "type": "log",
+                        "contentType": "text/plain",
+                        "openByDefault": false,
+                        "size": 5120
+                    }
+                ]
+            }
+            """;
+
+        final TestExecutionDto dto = this.objectMapper.readValue(json, TestExecutionDto.class);
+
+        Assertions.assertNotNull(dto);
+        Assertions.assertEquals(3, dto.getAttachments().size());
+
+        final TestExecutionDto.ExecutionAttachmentDto videoAtt = dto.getAttachments().get(0);
+        Assertions.assertEquals("video-1.mp4", videoAtt.getName());
+        Assertions.assertEquals("video", videoAtt.getType());
+        Assertions.assertTrue(videoAtt.isOpenByDefault());
+        Assertions.assertEquals(1048576L, videoAtt.getSize());
+
+        final TestExecutionDto.ExecutionAttachmentDto yamlAtt = dto.getAttachments().get(1);
+        Assertions.assertEquals("playbook.yaml", yamlAtt.getName());
+        Assertions.assertEquals("yaml", yamlAtt.getType());
+        Assertions.assertFalse(yamlAtt.isOpenByDefault());
+
+        final TestExecutionDto.ExecutionAttachmentDto logAtt = dto.getAttachments().get(2);
+        Assertions.assertEquals("execution.log", logAtt.getName());
+        Assertions.assertEquals("log", logAtt.getType());
+        Assertions.assertFalse(logAtt.isOpenByDefault());
+    }
 }
 

@@ -1123,6 +1123,31 @@ public final class AiConfiguration
     }
 
     /**
+     * Gets the base storage directory for Aura persistent test runs.
+     * Defaults to the property {@code neodymium.ai.storageRuns.directory}, falling back to
+     * {@code aura.report.storage.runs.base-dir}, and defaulting to {@code storage/runs}.
+     *
+     * @return aura storage runs directory path
+     */
+    public String getAuraStorageRunsDirectory()
+    {
+        return getProperty("neodymium.ai.storageRuns.directory",
+            getProperty("aura.report.storage.runs.base-dir", "storage/runs"));
+    }
+
+    /**
+     * Checks whether falling back to capturing the global {@code target/neodymium-ai.log} file
+     * into per-test {@code execution.log} files is enabled when structured log content is not yet set.
+     * Defaults to {@code false} to avoid per-step disk I/O overhead and cross-test log pollution.
+     *
+     * @return true if global log fallback capture is enabled
+     */
+    public boolean isConsoleExecutionLogsCaptureGlobalLogEnabled()
+    {
+        return getBoolean("neodymium.ai.consoleExecutionLogs.captureGlobalLog", false);
+    }
+
+    /**
      * Gets the active execution mode for the AI pipeline.
      * Defaults to REPLAY_WITH_HEALING.
      *

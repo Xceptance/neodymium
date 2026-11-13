@@ -185,7 +185,7 @@ public final class AuraInteractiveService
                 : InteractiveConsoleEngine.getRunFolder();
 
             final List<File> baseDirs = List.of(
-                new File("storage/runs"),
+                new File(AiConfiguration.getInstance().getAuraStorageRunsDirectory()),
                 new File(AiConfiguration.getInstance().getConsoleExecutionLogsDirectory())
             );
 

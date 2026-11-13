@@ -3768,6 +3768,133 @@ public final class StaticResourceSyntaxTest
     }
 
     @Test
+    public void testFullTestDiagnosticsMarkdownExportAndAttachments() throws Exception
+    {
+        final Path sidePanelHtmlPath = Paths.get("src/main/resources/templates/fragments/side-panel-step-list.html");
+        Assertions.assertTrue(Files.exists(sidePanelHtmlPath), "side-panel-step-list.html must exist");
+        final String sidePanelContent = Files.readString(sidePanelHtmlPath, StandardCharsets.UTF_8);
+        Assertions.assertTrue(sidePanelContent.contains("side-page-header-actions"), "side-panel-step-list.html must define side-page-header-actions");
+        Assertions.assertTrue(sidePanelContent.contains("copyFullTestDiagnosticsBtn"), "side-panel-step-list.html must define copyFullTestDiagnosticsBtn");
+        Assertions.assertTrue(sidePanelContent.contains("attachmentPlaybookBox"), "side-panel-step-list.html must define attachmentPlaybookBox");
+        Assertions.assertTrue(sidePanelContent.contains("attachmentLogBox"), "side-panel-step-list.html must define attachmentLogBox");
+
+        final Path cssPath = Paths.get("src/main/resources/static/css/report-manager.css");
+        final String cssContent = Files.readString(cssPath, StandardCharsets.UTF_8);
+        Assertions.assertTrue(cssContent.contains(".side-page-header-actions"), "CSS must contain .side-page-header-actions");
+        Assertions.assertTrue(cssContent.contains(".side-page-header-content"), "CSS must contain .side-page-header-content");
+
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist: " + jsFilePath.toAbsolutePath());
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const assert = require('assert');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const sandbox = {\n" +
+            "    console: console,\n" +
+            "    assert: assert,\n" +
+            "    window: {},\n" +
+            "    document: {\n" +
+            "        getElementById: () => null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {} }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "const testScript = code + '\\n' + `\n" +
+            "const mockDto = {\n" +
+            "    testName: 'MyCheckoutTest',\n" +
+            "    testClass: 'org.example.MyCheckoutTest',\n" +
+            "    testMethod: 'testCheckout',\n" +
+            "    status: 'failed',\n" +
+            "    runId: 'run_20261112_120000',\n" +
+            "    durationFormatted: '14.5s',\n" +
+            "    browser: 'Chrome',\n" +
+            "    locale: 'en_US',\n" +
+            "    failureReason: 'Element #pay-btn not found',\n" +
+            "    failureStackTrace: 'AssertionError: Element #pay-btn not found\\\\n\\\\tat org.example.MyCheckoutTest.testCheckout(MyCheckoutTest.java:45)',\n" +
+            "    visualRcaExplanation: 'Button was shifted offscreen by 200px.',\n" +
+            "    playbookContent: 'steps:\\\\n  - action: open(\\\"/checkout\\\")\\\\n  - action: click(\\\"#pay-btn\\\")',\\n" +
+            "    localDataBindings: { 'user': 'john_doe', 'cartTotal': '$49.99' },\n" +
+            "    blocks: {\n" +
+            "        steps: [\n" +
+            "            { instruction: 'Open checkout', status: 'passed', durationMs: 1200 },\n" +
+            "            { instruction: 'Click pay button', status: 'failed', durationMs: 5000, error: 'Element #pay-btn not found' }\n" +
+            "        ]\n" +
+            "    }\n" +
+            "};\n" +
+            "const md = generateFullTestDiagnosticsMarkdown(mockDto, null);\n" +
+            "assert(typeof md === 'string', 'Expected markdown string');\n" +
+            "assert(md.includes('# Test Execution Diagnostics: MyCheckoutTest'), 'Should contain test title');\n" +
+            "assert(md.includes('## Test Summary'), 'Should contain summary');\n" +
+            "assert(md.includes('- **Status:** FAILED'), 'Should contain status');\n" +
+            "assert(md.includes('- **Test Class:**'), 'Should contain test class label');\n" +
+            "assert(md.includes('org.example.MyCheckoutTest'), 'Should contain test class name');\n" +
+            "assert(md.includes('john_doe'), 'Should contain data binding value');\n" +
+            "assert(md.includes('## Failure Details'), 'Should contain failure details');\n" +
+            "assert(md.includes('Element #pay-btn not found'), 'Should contain failure reason');\n" +
+            "assert(md.includes('Button was shifted offscreen by 200px.'), 'Should contain visual RCA');\n" +
+            "assert(md.includes('## Initial Test YAML Playbook'), 'Should contain playbook section');\n" +
+            "assert(md.includes('open(\\\"/checkout\\\")'), 'Should contain YAML content');\n" +
+            "assert(md.includes('## Step Execution Summary'), 'Should contain step summary');\n" +
+            "assert(md.includes('1. [PASSED] Open checkout (1.2s)'), 'Should contain step 1');\n" +
+            "assert(md.includes('2. [FAILED] Click pay button (5.0s)'), 'Should contain step 2');\n" +
+            "`;\n" +
+            "vm.runInNewContext(testScript, sandbox);\n";
+
+        runNodeScript(nodeTestScript, "Full test diagnostics markdown export test failed");
+    }
+
+    @Test
+    public void testSidePanelResponsiveHeaderCssAndJsEdgeCases() throws Exception
+    {
+        final Path cssPath = Paths.get("src/main/resources/static/css/report-manager.css");
+        final String cssContent = Files.readString(cssPath, StandardCharsets.UTF_8);
+        Assertions.assertTrue(cssContent.contains(".side-page-header-content { flex: 1 1 auto; min-width: 0; }"),
+            "CSS must set min-width: 0 on .side-page-header-content so long titles wrap instead of overflowing");
+        Assertions.assertTrue(cssContent.contains(".side-page-header-actions") && cssContent.contains("flex-shrink: 0"),
+            "CSS must prevent .side-page-header-actions from shrinking");
+        Assertions.assertTrue(cssContent.contains(".side-page-title") && cssContent.contains("word-break: break-word")
+            && cssContent.contains("overflow-wrap: break-word"),
+            "CSS must wrap long .side-page-title strings");
+
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const assert = require('assert');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const locObj = { href: 'http://localhost:8080/report' };\n" +
+            "const sandbox = {\n" +
+            "    console: console,\n" +
+            "    assert: assert,\n" +
+            "    alert: () => {},\n" +
+            "    location: locObj,\n" +
+            "    window: { location: locObj, open: () => null },\n" +
+            "    document: {\n" +
+            "        getElementById: () => null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {} }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window.window = sandbox.window;\n" +
+            "const testScript = code + '\\n' + `\n" +
+            "const mdMalformed = generateFullTestDiagnosticsMarkdown({ testName: 'MalformedTest', blocks: '{not-valid-json' }, null);\n" +
+            "assert(mdMalformed.includes('# Test Execution Diagnostics: MalformedTest'), 'Malformed dto.blocks must not throw');\n" +
+            "openAttachmentWindow('yaml', '/api/runs/r1/C1/playbook.yaml');\n" +
+            "assert.strictEqual(window.location.href, 'http://localhost:8080/report', 'Blocked popup must not navigate report tab away');\n" +
+            "`;\n" +
+            "vm.runInNewContext(testScript, sandbox);\n";
+
+        runNodeScript(nodeTestScript, "Side panel responsive CSS and JS edge case test failed");
+    }
+
+    @Test
     public void testUnitedContainerAiUsageKpiCrossFilteringSupport() throws Exception
     {
         final Path htmlPath = Paths.get("src/main/resources/templates/fragments/dashboard-widgets.html");
