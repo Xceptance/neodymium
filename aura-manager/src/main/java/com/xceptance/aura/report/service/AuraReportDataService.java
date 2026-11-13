@@ -1520,10 +1520,19 @@ public class AuraReportDataService
         {
             for (final TestExecutionDto.ExecutionAttachmentDto att : rawAttachments)
             {
+                if (att == null)
+                {
+                    continue;
+                }
+                final String effPath = (att.getPath() != null && !att.getPath().isBlank()) ? att.getPath() : att.getName();
+                if (effPath == null || effPath.isBlank())
+                {
+                    continue;
+                }
                 for (final Path cDir : candidateDirs)
                 {
-                    final Path fPath = cDir.resolve(att.getPath());
-                    if (Files.isRegularFile(fPath) && Files.isReadable(fPath))
+                    final Path fPath = cDir.resolve(effPath).normalize();
+                    if (fPath.startsWith(cDir) && Files.isRegularFile(fPath) && Files.isReadable(fPath))
                     {
                         try
                         {
@@ -1533,8 +1542,14 @@ public class AuraReportDataService
                         {
                         }
                         resolvedAttachments.add(att);
-                        seenNames.add(att.getName().toLowerCase(Locale.ROOT));
-                        seenNames.add(att.getPath().toLowerCase(Locale.ROOT));
+                        if (att.getName() != null)
+                        {
+                            seenNames.add(att.getName().toLowerCase(Locale.ROOT));
+                        }
+                        if (att.getPath() != null)
+                        {
+                            seenNames.add(att.getPath().toLowerCase(Locale.ROOT));
+                        }
                         break;
                     }
                 }
@@ -1550,8 +1565,8 @@ public class AuraReportDataService
             {
                 for (final Path cDir : candidateDirs)
                 {
-                    final Path vf = cDir.resolve(videoName);
-                    if (Files.isRegularFile(vf) && Files.isReadable(vf))
+                    final Path vf = cDir.resolve(videoName).normalize();
+                    if (vf.startsWith(cDir) && Files.isRegularFile(vf) && Files.isReadable(vf))
                     {
                         final TestExecutionDto.ExecutionAttachmentDto vAtt = new TestExecutionDto.ExecutionAttachmentDto(
                             videoName, videoName, "video", videoName.endsWith(".webm") ? "video/webm" : "video/mp4", true, vf.toFile().length());
@@ -1568,8 +1583,8 @@ public class AuraReportDataService
         {
             for (final Path cDir : candidateDirs)
             {
-                final Path pf = cDir.resolve("playbook.yaml");
-                if (Files.isRegularFile(pf) && Files.isReadable(pf))
+                final Path pf = cDir.resolve("playbook.yaml").normalize();
+                if (pf.startsWith(cDir) && Files.isRegularFile(pf) && Files.isReadable(pf))
                 {
                     final TestExecutionDto.ExecutionAttachmentDto pAtt = new TestExecutionDto.ExecutionAttachmentDto(
                         "playbook.yaml", "playbook.yaml", "yaml", "text/yaml", false, pf.toFile().length());
@@ -1585,8 +1600,8 @@ public class AuraReportDataService
         {
             for (final Path cDir : candidateDirs)
             {
-                final Path lf = cDir.resolve("execution.log");
-                if (Files.isRegularFile(lf) && Files.isReadable(lf))
+                final Path lf = cDir.resolve("execution.log").normalize();
+                if (lf.startsWith(cDir) && Files.isRegularFile(lf) && Files.isReadable(lf))
                 {
                     final TestExecutionDto.ExecutionAttachmentDto lAtt = new TestExecutionDto.ExecutionAttachmentDto(
                         "execution.log", "execution.log", "log", "text/plain", false, lf.toFile().length());

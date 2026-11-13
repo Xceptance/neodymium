@@ -590,21 +590,21 @@ public final class InteractiveConsoleEngine {
                 if (logText != null && !logText.isBlank())
                 {
                     final String indexedLogName = "execution-" + index + ".log";
-                    Files.writeString(new File(structuredDir, indexedLogName).toPath(), logText, StandardCharsets.UTF_8);
-                    Files.writeString(new File(reportsStructuredDir, indexedLogName).toPath(), logText, StandardCharsets.UTF_8);
+                    writeStringIfChanged(logText, new File(structuredDir, indexedLogName));
+                    writeStringIfChanged(logText, new File(reportsStructuredDir, indexedLogName));
                     if (auraStructuredDir != null)
                     {
-                        Files.writeString(new File(auraStructuredDir, indexedLogName).toPath(), logText, StandardCharsets.UTF_8);
+                        writeStringIfChanged(logText, new File(auraStructuredDir, indexedLogName));
                     }
 
                     final File defaultLogFile = new File(structuredDir, "execution.log");
                     if (!defaultLogFile.exists() || index == 1)
                     {
-                        Files.writeString(defaultLogFile.toPath(), logText, StandardCharsets.UTF_8);
-                        Files.writeString(new File(reportsStructuredDir, "execution.log").toPath(), logText, StandardCharsets.UTF_8);
+                        writeStringIfChanged(logText, defaultLogFile);
+                        writeStringIfChanged(logText, new File(reportsStructuredDir, "execution.log"));
                         if (auraStructuredDir != null)
                         {
-                            Files.writeString(new File(auraStructuredDir, "execution.log").toPath(), logText, StandardCharsets.UTF_8);
+                            writeStringIfChanged(logText, new File(auraStructuredDir, "execution.log"));
                         }
                     }
                 }
@@ -615,29 +615,21 @@ public final class InteractiveConsoleEngine {
                     if (playbookYaml != null && !playbookYaml.isBlank())
                     {
                         final String playbookIndexed = "playbook-" + index + ".yaml";
-                        Files.writeString(new File(structuredDir, playbookIndexed).toPath(), playbookYaml, StandardCharsets.UTF_8);
-                        Files.writeString(new File(reportsStructuredDir, playbookIndexed).toPath(), playbookYaml, StandardCharsets.UTF_8);
+                        writeStringIfChanged(playbookYaml, new File(structuredDir, playbookIndexed));
+                        writeStringIfChanged(playbookYaml, new File(reportsStructuredDir, playbookIndexed));
                         if (auraStructuredDir != null)
                         {
-                            Files.writeString(new File(auraStructuredDir, playbookIndexed).toPath(), playbookYaml, StandardCharsets.UTF_8);
+                            writeStringIfChanged(playbookYaml, new File(auraStructuredDir, playbookIndexed));
                         }
 
                         final File defaultPb = new File(structuredDir, "playbook.yaml");
-                        if (!defaultPb.exists())
+                        if (!defaultPb.exists() || index == 1)
                         {
-                            Files.writeString(defaultPb.toPath(), playbookYaml, StandardCharsets.UTF_8);
-                        }
-                        final File reportsDefaultPb = new File(reportsStructuredDir, "playbook.yaml");
-                        if (!reportsDefaultPb.exists())
-                        {
-                            Files.writeString(reportsDefaultPb.toPath(), playbookYaml, StandardCharsets.UTF_8);
-                        }
-                        if (auraStructuredDir != null)
-                        {
-                            final File auraDefaultPb = new File(auraStructuredDir, "playbook.yaml");
-                            if (!auraDefaultPb.exists())
+                            writeStringIfChanged(playbookYaml, defaultPb);
+                            writeStringIfChanged(playbookYaml, new File(reportsStructuredDir, "playbook.yaml"));
+                            if (auraStructuredDir != null)
                             {
-                                Files.writeString(auraDefaultPb.toPath(), playbookYaml, StandardCharsets.UTF_8);
+                                writeStringIfChanged(playbookYaml, new File(auraStructuredDir, "playbook.yaml"));
                             }
                         }
                     }
@@ -651,10 +643,10 @@ public final class InteractiveConsoleEngine {
                     {
                         try
                         {
-                            Files.copy(srcVideo.toPath(), new File(reportsStructuredDir, videoName).toPath(), StandardCopyOption.REPLACE_EXISTING);
+                            copyIfChanged(srcVideo, new File(reportsStructuredDir, videoName));
                             if (auraStructuredDir != null)
                             {
-                                Files.copy(srcVideo.toPath(), new File(auraStructuredDir, videoName).toPath(), StandardCopyOption.REPLACE_EXISTING);
+                                copyIfChanged(srcVideo, new File(auraStructuredDir, videoName));
                             }
                         }
                         catch (final Exception ignored)
@@ -684,12 +676,15 @@ public final class InteractiveConsoleEngine {
                 }
 
                 // 2. Playbook YAML attachment
-                final File pbFile = new File(structuredDir, "playbook.yaml");
-                if (pbFile.exists())
+                final String indexedPbName = "playbook-" + index + ".yaml";
+                final File indexedPbFile = new File(structuredDir, indexedPbName);
+                final File defaultPbFile = new File(structuredDir, "playbook.yaml");
+                if (indexedPbFile.exists() || defaultPbFile.exists())
                 {
+                    final String effectivePbPath = indexedPbFile.exists() ? indexedPbName : "playbook.yaml";
                     final JsonObject yamlAtt = new JsonObject();
                     yamlAtt.addProperty("name", "playbook.yaml");
-                    yamlAtt.addProperty("path", "playbook.yaml");
+                    yamlAtt.addProperty("path", effectivePbPath);
                     yamlAtt.addProperty("type", "yaml");
                     yamlAtt.addProperty("contentType", "text/yaml");
                     yamlAtt.addProperty("openByDefault", false);
@@ -778,6 +773,12 @@ public final class InteractiveConsoleEngine {
         {
             Files.copy(src.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
         }
+    }
+
+    private static void writeStringIfChanged(final String content, final File dest) throws IOException
+    {
+        final byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
+        writeIfChanged(bytes, content, dest);
     }
 
     private static void writeIfChanged(final byte[] bytes, final String content, final File dest) throws IOException

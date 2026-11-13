@@ -1652,5 +1652,54 @@ public class InteractiveConsoleEngineTest
         assertEquals("Final failure log with full exception stacktrace", Files.readString(logFile.toPath()),
             "reconcileTestOutcome must flush updated executionLogContent to disk even when status does not flip");
     }
+
+    @Test
+    public void testMultiDatasetPlaybookIndexingIsolated(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-playbooks");
+
+        // Push state for Dataset 1
+        final String stateDs1 = "{\"testName\":\"MyDatasetPlaybookTest · ds1\",\"testFile\":\"com.xceptance.MyDatasetPlaybookTest#execute\",\"datasetId\":\"ds1\",\"status\":\"passed\",\"playbookContent\":\"playbook: version 1\",\"steps\":[]}";
+        engine.pushState(stateDs1);
+
+        // Push state for Dataset 2
+        final String stateDs2 = "{\"testName\":\"MyDatasetPlaybookTest · ds2\",\"testFile\":\"com.xceptance.MyDatasetPlaybookTest#execute\",\"datasetId\":\"ds2\",\"status\":\"passed\",\"playbookContent\":\"playbook: version 2\",\"steps\":[]}";
+        engine.pushState(stateDs2);
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File testDir = new File(customDir.toFile(), runFolder + "/MyDatasetPlaybookTest");
+
+        final File pb1 = new File(testDir, "playbook-1.yaml");
+        final File pb2 = new File(testDir, "playbook-2.yaml");
+        final File defaultPb = new File(testDir, "playbook.yaml");
+
+        assertTrue(pb1.exists(), "playbook-1.yaml must exist for dataset 1");
+        assertTrue(pb2.exists(), "playbook-2.yaml must exist for dataset 2");
+        assertTrue(defaultPb.exists(), "default playbook.yaml must exist");
+
+        assertEquals("playbook: version 1", Files.readString(pb1.toPath()));
+        assertEquals("playbook: version 2", Files.readString(pb2.toPath()));
+
+        // Verify that console-execution-2.json points to playbook-2.yaml
+        final File json2 = new File(testDir, "console-execution-2.json");
+        assertTrue(json2.exists());
+        final JsonNode root = new ObjectMapper().readTree(json2);
+        assertTrue(root.has("attachments"));
+        final JsonNode attNode = root.get("attachments");
+        boolean foundPb2 = false;
+        for (final JsonNode att : attNode)
+        {
+            if ("playbook.yaml".equals(att.path("name").asText()))
+            {
+                assertEquals("playbook-2.yaml", att.path("path").asText(), "Dataset 2 must reference its own indexed playbook-2.yaml");
+                foundPb2 = true;
+            }
+        }
+        assertTrue(foundPb2, "playbook.yaml attachment must be registered for dataset 2");
+    }
 }
 
