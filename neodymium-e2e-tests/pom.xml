@@ -19,14 +19,14 @@
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<maven.compiler.source.version>21</maven.compiler.source.version>
 		<maven.compiler.target.version>21</maven.compiler.target.version>
-		<surefire.version>3.5.4</surefire.version>
-		<allure.version>2.32.0</allure.version>
-		<allure.maven.version>2.15.2</allure.maven.version>
+		<surefire.version>3.6.1</surefire.version>
+		<allure.version>2.35.6</allure.version>
+		<allure.maven.version>3.1.0</allure.maven.version>
 		<allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
-		<selenide.version>7.18.2</selenide.version>
+		<selenide.version>7.19.1</selenide.version>
 		<log4j.version>2.25.3</log4j.version>
-		<junit.jupiter.version>6.1.0-M1</junit.jupiter.version>
-		<junit.vintage.version>6.1.0-M1</junit.vintage.version>
+		<junit.jupiter.version>6.1.3</junit.jupiter.version>
+		<junit.vintage.version>6.1.3</junit.vintage.version>
 		<surefire.forkCount>1</surefire.forkCount>
 		<!--
 			JUnit tags excluded from the default run. LiveAPI/LiveLlm tests call a real LLM provider (cost, API key,
@@ -85,7 +85,7 @@
 		</dependency>
 		<dependency>
 			<groupId>io.qameta.allure</groupId>
-			<artifactId>allure-junit5</artifactId>
+			<artifactId>allure-jupiter</artifactId>
 			<version>${allure.version}</version>
 			<scope>test</scope>
 		</dependency>
@@ -96,7 +96,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
-				<version>3.14.1</version>
+				<version>3.16.0</version>
 				<configuration>
 					<release>${maven.compiler.target.version}</release>
 				</configuration>
