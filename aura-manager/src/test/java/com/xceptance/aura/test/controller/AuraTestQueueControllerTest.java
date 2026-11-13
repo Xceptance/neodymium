@@ -18,26 +18,35 @@
  */
 package com.xceptance.aura.test.controller;
 
+import com.xceptance.neodymium.aura.dto.DatasetDto;
+import com.xceptance.neodymium.aura.dto.YamlFileDto;
+import jakarta.servlet.http.HttpServletResponse;
+import com.xceptance.aura.report.entity.TestBatchEntity;
+import com.xceptance.aura.report.repository.TestBatchRepository;
+import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.AuraQueueService;
-import com.xceptance.neodymium.aura.dto.DatasetDto;
 import com.xceptance.neodymium.aura.dto.DatasetSelection;
-import com.xceptance.neodymium.aura.dto.YamlFileDto;
+import com.xceptance.neodymium.aura.dto.RunRequest;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Assertions;
 import org.neodymium.ai.config.ExecutionMode;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.http.ResponseEntity;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.ui.Model;
 import org.thymeleaf.context.Context;
@@ -56,6 +65,8 @@ public final class AuraTestQueueControllerTest
     private AuraQueueService queueService;
     private AuraFileService fileService;
     private AuraInteractiveService interactiveService;
+    private TestBatchRepository batchRepository;
+    private AuraReportDataService reportDataService;
     private AuraTestQueueController controller;
 
     @BeforeAll
@@ -70,7 +81,9 @@ public final class AuraTestQueueControllerTest
         this.interactiveService = new AuraInteractiveService();
         this.fileService = Mockito.mock(AuraFileService.class);
         this.queueService = new AuraQueueService(null, this.interactiveService);
-        this.controller = new AuraTestQueueController(this.queueService, this.fileService, this.interactiveService);
+        this.batchRepository = Mockito.mock(TestBatchRepository.class);
+        this.reportDataService = Mockito.mock(AuraReportDataService.class);
+        this.controller = new AuraTestQueueController(this.queueService, this.fileService, this.interactiveService, this.batchRepository, this.reportDataService);
     }
 
     @Test
@@ -356,6 +369,230 @@ public final class AuraTestQueueControllerTest
         Assertions.assertNotNull(html);
         Assertions.assertTrue(html.contains("Click button"));
         Assertions.assertTrue(html.contains("#myBtn"));
+    }
+
+    @Test
+    public final void testSaveQueueAsBatchEmptyQueue()
+    {
+        final ResponseEntity<Map<String, Object>> response = controller.saveQueueAsBatch("SmokeBatch", "Staging", "desc");
+        Assertions.assertEquals(400, response.getStatusCode().value());
+        Assertions.assertEquals("error", response.getBody().get("status"));
+        Assertions.assertTrue(response.getBody().get("message").toString().contains("empty queue"));
+    }
+
+    @Test
+    public final void testSaveQueueAsBatchBlankName()
+    {
+        controller.getRunQueue().add(new DatasetSelection("test.yaml", "d1"));
+        final ResponseEntity<Map<String, Object>> response = controller.saveQueueAsBatch("   ", "Staging", "desc");
+        Assertions.assertEquals(400, response.getStatusCode().value());
+        Assertions.assertEquals("error", response.getBody().get("status"));
+        Assertions.assertTrue(response.getBody().get("message").toString().contains("Batch name is required"));
+    }
+
+    @Test
+    public final void testSaveQueueAsBatchSuccess()
+    {
+        controller.getRunQueue().add(new DatasetSelection("test.yaml", "d1"));
+        Mockito.when(batchRepository.findById("SmokeBatch")).thenReturn(Optional.empty());
+
+        final ResponseEntity<Map<String, Object>> response = controller.saveQueueAsBatch("SmokeBatch", "Staging", "Smoke test suite");
+
+        Assertions.assertEquals(200, response.getStatusCode().value());
+        Assertions.assertEquals("success", response.getBody().get("status"));
+        Assertions.assertEquals("SmokeBatch", response.getBody().get("batchName"));
+        Mockito.verify(batchRepository).save(Mockito.any(TestBatchEntity.class));
+        Assertions.assertFalse(Files.exists(Paths.get("storage/batches")), "storage/batches should not be created on disk");
+        Assertions.assertFalse(Files.exists(Paths.get("aura-manager/storage/batches")), "aura-manager/storage/batches should not be created on disk");
+    }
+
+    @Test
+    public final void testRunBatchNotFound()
+    {
+        Mockito.when(batchRepository.findById("NonExistent")).thenReturn(Optional.empty());
+        final ResponseEntity<Map<String, Object>> response = controller.runBatch("NonExistent");
+        Assertions.assertEquals(404, response.getStatusCode().value());
+        Assertions.assertEquals("error", response.getBody().get("status"));
+    }
+
+    @Test
+    public final void testRunBatchSuccess()
+    {
+        final TestBatchEntity entity = new TestBatchEntity("SmokeBatch", "Staging", "Smoke description", "Default", "Chrome", null,
+                "[{\"file\":\"test.yaml\",\"id\":\"d1\",\"browserProfiles\":[\"chrome\"]}]");
+        Mockito.when(batchRepository.findById("SmokeBatch")).thenReturn(Optional.of(entity));
+
+        final ResponseEntity<Map<String, Object>> response = controller.runBatch("SmokeBatch");
+        Assertions.assertEquals(200, response.getStatusCode().value());
+        Assertions.assertEquals("success", response.getBody().get("status"));
+        Assertions.assertEquals("SmokeBatch", response.getBody().get("batchName"));
+    }
+
+    @Test
+    public final void testGetStatusStreamIncludesBatchName()
+    {
+        final AuraQueueService mockQueueService = Mockito.mock(AuraQueueService.class);
+        Mockito.when(mockQueueService.getCurrentRunId()).thenReturn("run_123456");
+        Mockito.when(mockQueueService.getCurrentBatchName()).thenReturn("Wikipedia");
+        Mockito.when(mockQueueService.isRunningQueue()).thenReturn(true);
+
+        final AuraTestQueueController testController = new AuraTestQueueController(
+            mockQueueService, this.fileService, this.interactiveService, this.batchRepository, this.reportDataService
+        );
+
+        final ResponseEntity<Map<String, Object>> response = testController.getStatusStream(null, 0, 0);
+
+        Assertions.assertEquals(200, response.getStatusCode().value());
+        final Map<String, Object> body = response.getBody();
+        Assertions.assertNotNull(body);
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> statusObj = (Map<String, Object>) body.get("status");
+        Assertions.assertNotNull(statusObj);
+        Assertions.assertEquals("Wikipedia", statusObj.get("batchName"));
+        Assertions.assertEquals("run_123456", statusObj.get("runId"));
+    }
+
+    @Test
+    public final void testQueueRunTagsAddRemoveClear()
+    {
+        final Model model = new ConcurrentModel();
+
+        // 1. Add single tag
+        final HttpServletRequest addReq1 = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(addReq1.getParameter("key")).thenReturn("Environment");
+        Mockito.when(addReq1.getParameter("value")).thenReturn("Staging");
+        Mockito.when(addReq1.getParameterNames()).thenReturn(Collections.enumeration(List.of("key", "value")));
+        controller.addQueueTag("Environment", "Staging", addReq1, model);
+
+        Assertions.assertTrue(controller.getRunTags().containsKey("Environment"));
+        Assertions.assertEquals(List.of("Staging"), controller.getRunTags().get("Environment"));
+
+        // 2. Append value to existing tag key
+        final HttpServletRequest addReq2 = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(addReq2.getParameter("key")).thenReturn("Environment");
+        Mockito.when(addReq2.getParameter("value")).thenReturn("Production");
+        Mockito.when(addReq2.getParameterNames()).thenReturn(Collections.enumeration(List.of("key", "value")));
+        controller.addQueueTag("Environment", "Production", addReq2, model);
+
+        Assertions.assertEquals(List.of("Staging", "Production"), controller.getRunTags().get("Environment"));
+
+        // 3. Add comma-separated values
+        final HttpServletRequest addReq3 = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(addReq3.getParameter("key")).thenReturn("Release");
+        Mockito.when(addReq3.getParameter("value")).thenReturn("2026.10, smoke");
+        Mockito.when(addReq3.getParameterNames()).thenReturn(Collections.enumeration(List.of("key", "value")));
+        controller.addQueueTag("Release", "2026.10, smoke", addReq3, model);
+
+        Assertions.assertEquals(List.of("2026.10", "smoke"), controller.getRunTags().get("Release"));
+
+        // 4. Remove a specific value
+        final HttpServletRequest remReq1 = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(remReq1.getParameter("key")).thenReturn("Environment");
+        Mockito.when(remReq1.getParameter("value")).thenReturn("Staging");
+        Mockito.when(remReq1.getParameterNames()).thenReturn(Collections.enumeration(List.of("key", "value")));
+        controller.removeQueueTag("Environment", "Staging", remReq1, model);
+
+        Assertions.assertEquals(List.of("Production"), controller.getRunTags().get("Environment"));
+
+        // 5. Remove an entire tag key when value is blank/null
+        final HttpServletRequest remReq2 = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(remReq2.getParameter("key")).thenReturn("Release");
+        Mockito.when(remReq2.getParameterNames()).thenReturn(Collections.enumeration(List.of("key")));
+        controller.removeQueueTag("Release", null, remReq2, model);
+
+        Assertions.assertFalse(controller.getRunTags().containsKey("Release"));
+
+        // 6. Clear all tags
+        controller.clearQueueTags(model);
+        Assertions.assertTrue(controller.getRunTags().isEmpty());
+    }
+
+    @Test
+    public final void testStartExecutionPropagatesRunTagsToQueueService()
+    {
+        final AuraQueueService mockQueueService = Mockito.mock(AuraQueueService.class);
+        final AuraTestQueueController testController = new AuraTestQueueController(
+            mockQueueService, this.fileService, this.interactiveService, this.batchRepository, this.reportDataService
+        );
+
+        // Add a tag to queue
+        final HttpServletRequest addReq = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(addReq.getParameter("key")).thenReturn("Area");
+        Mockito.when(addReq.getParameter("value")).thenReturn("Checkout");
+        Mockito.when(addReq.getParameterNames()).thenReturn(Collections.enumeration(List.of("key", "value")));
+        testController.addQueueTag("Area", "Checkout", addReq, new ConcurrentModel());
+
+        // Put a dataset in queue
+        testController.getRunQueue().add(new DatasetSelection("test.yaml", "d1"));
+
+        final HttpServletRequest runReq = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(runReq.getParameterNames()).thenReturn(Collections.emptyEnumeration());
+
+        testController.startExecution(runReq, new ConcurrentModel());
+
+        final ArgumentCaptor<RunRequest> captor = ArgumentCaptor.forClass(RunRequest.class);
+        Mockito.verify(mockQueueService).executeQueue(captor.capture(), Mockito.anyInt());
+
+        final RunRequest passedReq = captor.getValue();
+        Assertions.assertNotNull(passedReq);
+        Assertions.assertNotNull(passedReq.tags);
+        Assertions.assertTrue(passedReq.tags.containsKey("Area"));
+        Assertions.assertEquals(List.of("Checkout"), passedReq.tags.get("Area"));
+    }
+
+    @Test
+    public final void testQueueAndSelectionTemplatesDoNotContainSaveQueueAsBatchButtons()
+    {
+        final SpringTemplateEngine engine = new SpringTemplateEngine();
+        final ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setPrefix("templates/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCharacterEncoding("UTF-8");
+        engine.setTemplateResolver(resolver);
+
+        final Context context = new Context();
+        context.setVariable("executionMode", "AUTO");
+        context.setVariable("headless", true);
+        context.setVariable("video", false);
+        context.setVariable("interactive", false);
+        context.setVariable("queue", List.of(new DatasetSelection("test.yaml", "d1")));
+        context.setVariable("totalRuns", 1);
+        context.setVariable("running", false);
+        context.setVariable("activeEditingFile", null);
+        context.setVariable("runTags", Map.of("Environment", List.of("Staging")));
+
+        // Check queue fragment configPanel
+        final String queueHtml = engine.process("fragments/queue", Collections.singleton("configPanel"), context);
+        Assertions.assertNotNull(queueHtml);
+        Assertions.assertFalse(queueHtml.contains("saveQueueAsBatchBtn"),
+                "queue config panel must not contain saveQueueAsBatchBtn");
+        Assertions.assertTrue(queueHtml.contains("addRunTagConfigBtn"),
+                "queue config panel must contain addRunTagConfigBtn");
+        Assertions.assertTrue(queueHtml.contains("Environment: Staging"),
+                "queue config panel must render tag chips");
+
+        // Check queue fragment queueListContainerContent
+        final String queueListHtml = engine.process("fragments/queue", Collections.singleton("queueListContainerContent"), context);
+        Assertions.assertNotNull(queueListHtml);
+        Assertions.assertFalse(queueListHtml.contains("saveQueueAsBatchBtn"),
+                "queue list container must not contain saveQueueAsBatchBtn");
+        Assertions.assertFalse(queueListHtml.contains("addQueueTagBtn"),
+                "queue list container must not contain redundant addQueueTagBtn");
+        Assertions.assertFalse(queueListHtml.contains("configPanel"),
+                "queueListContainerContent must not contain configPanel to prevent UI duplication in the middle column");
+        Assertions.assertFalse(queueListHtml.contains("browserProfilesScrollContainer"),
+                "queueListContainerContent must not contain browser profiles container");
+    }
+
+    @Test
+    public final void testGetConfigPanelReturnsConfigPanelFragment()
+    {
+        final Model model = new ConcurrentModel();
+        final String viewName = controller.getConfigPanel(model);
+        Assertions.assertEquals("fragments/queue :: configPanel", viewName);
+        Assertions.assertNotNull(model.getAttribute("globalBrowserProfiles"));
+        Assertions.assertNotNull(model.getAttribute("runTags"));
     }
 
     @Test

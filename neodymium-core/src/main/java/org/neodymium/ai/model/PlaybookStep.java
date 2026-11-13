@@ -48,6 +48,8 @@ public final class PlaybookStep
     /**
      * The natural language instruction describing what needs to be executed in this step.
      */
+    @JsonProperty("instruction")
+    @JsonAlias({"promptLine", "step", "prompt"})
     private String instruction;
 
     /**

@@ -23,8 +23,19 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * JPA entity representing a single Test Execution Run instance.
@@ -39,6 +50,8 @@ import java.util.List;
 })
 public class TestRunEntity
 {
+    private static final Pattern RUN_ID_TIMESTAMP_PATTERN = Pattern.compile("(\\d{8}[_-]\\d{6})");
+
     @Id
     @Column(name = "id", nullable = false, length = 80)
     private String id;
@@ -60,6 +73,12 @@ public class TestRunEntity
 
     @Column(name = "browsers_csv", length = 500)
     private String browsersCsv;
+
+    @Column(name = "areas_csv", length = 1000)
+    private String areasCsv;
+
+    @Transient
+    private List<TestRunTagEntity> tags = new ArrayList<>();
 
     @Column(name = "timestamp_label", length = 255)
     private String timestampLabel;
@@ -88,6 +107,9 @@ public class TestRunEntity
     @Column(name = "ignored_count")
     private Integer ignoredCount = 0;
 
+    @Column(name = "running_count")
+    private Integer runningCount = 0;
+
     @Column(name = "passed_healed_count")
     private Integer passedHealedCount = 0;
 
@@ -111,6 +133,12 @@ public class TestRunEntity
 
     @Column(name = "failed_unknown_ai_count")
     private Integer failedUnknownAiCount = 0;
+
+    @Column(name = "playbook_count")
+    private Integer playbookCount = 0;
+
+    @Column(name = "flaky_count")
+    private Integer flakyCount = 0;
 
     @Column(name = "pass_rate")
     private Double passRate = 0.0;
@@ -229,31 +257,41 @@ public class TestRunEntity
         this.browsersCsv = browsersCsv;
     }
 
+    public String getAreasCsv()
+    {
+        return areasCsv;
+    }
+
+    public void setAreasCsv(final String areasCsv)
+    {
+        this.areasCsv = areasCsv;
+    }
+
     public String getTimestampLabel()
     {
         if (startTimeMs != null && startTimeMs > 0L)
         {
-            final java.time.LocalDateTime ldt = java.time.LocalDateTime.ofInstant(
-                java.time.Instant.ofEpochMilli(startTimeMs),
-                java.time.ZoneId.systemDefault()
+            final LocalDateTime ldt = LocalDateTime.ofInstant(
+                Instant.ofEpochMilli(startTimeMs),
+                ZoneId.systemDefault()
             );
-            return ldt.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            return ldt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
         }
         if (timestampLabel != null && !timestampLabel.trim().isEmpty() && !"Recently".equalsIgnoreCase(timestampLabel.trim()))
         {
             final String trimmed = timestampLabel.trim();
             try
             {
-                final java.time.Instant instant = java.time.Instant.parse(trimmed);
-                final java.time.LocalDateTime ldt = java.time.LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault());
-                return ldt.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                final Instant instant = Instant.parse(trimmed);
+                final LocalDateTime ldt = LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
+                return ldt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
             }
             catch (final Exception e1)
             {
                 try
                 {
-                    final java.time.LocalDateTime ldt = java.time.LocalDateTime.parse(trimmed.replace(" ", "T"));
-                    return ldt.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                    final LocalDateTime ldt = LocalDateTime.parse(trimmed.replace(" ", "T"));
+                    return ldt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
                 }
                 catch (final Exception e2)
                 {
@@ -272,6 +310,61 @@ public class TestRunEntity
     public Long getStartTimeMs()
     {
         return startTimeMs;
+    }
+
+    public Long getEffectiveStartTimeMs()
+    {
+        if (startTimeMs != null && startTimeMs > 0L)
+        {
+            return startTimeMs;
+        }
+        if (timestampLabel != null && !timestampLabel.isBlank() && !"Recently".equalsIgnoreCase(timestampLabel.trim()))
+        {
+            final String trimmed = timestampLabel.trim();
+            try
+            {
+                return Instant.parse(trimmed).toEpochMilli();
+            }
+            catch (final Exception ignored)
+            {
+            }
+            try
+            {
+                final LocalDateTime ldt = LocalDateTime.parse(trimmed.replace(" ", "T"));
+                return ldt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+            }
+            catch (final Exception ignored)
+            {
+            }
+            for (final String pattern : List.of("yyyy-MM-dd HH:mm:ss", "yyyy/MM/dd HH:mm:ss", "yyyyMMdd_HHmmss"))
+            {
+                try
+                {
+                    final LocalDateTime ldt = LocalDateTime.parse(trimmed, DateTimeFormatter.ofPattern(pattern));
+                    return ldt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
+        }
+        if (id != null && !id.isBlank())
+        {
+            final Matcher m = RUN_ID_TIMESTAMP_PATTERN.matcher(id);
+            if (m.find())
+            {
+                final String tsStr = m.group(1).replace('-', '_');
+                try
+                {
+                    final LocalDateTime ldt = LocalDateTime.parse(tsStr, DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+                    return ldt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
+        }
+        return 0L;
     }
 
     public void setStartTimeMs(final Long startTimeMs)
@@ -297,6 +390,11 @@ public class TestRunEntity
     public void setTotalTests(final Integer totalTests)
     {
         this.totalTests = totalTests;
+    }
+
+    public int getTotalTestsSafe()
+    {
+        return totalTests != null ? totalTests : 0;
     }
 
     public Integer getPassedCount()
@@ -349,14 +447,56 @@ public class TestRunEntity
         this.ignoredCount = ignoredCount;
     }
 
+    public Integer getRunningCount()
+    {
+        return runningCount;
+    }
+
+    public void setRunningCount(final Integer runningCount)
+    {
+        this.runningCount = runningCount;
+    }
+
+    public int getRunningCountSafe()
+    {
+        return runningCount != null ? runningCount : 0;
+    }
+
+    public double getRunningPct()
+    {
+        final int total = getTotalTestsSafe();
+        return total > 0 ? (getRunningCountSafe() * 100.0 / total) : 0.0;
+    }
+
+    public String getRunningLabel()
+    {
+        final int count = getRunningCountSafe();
+        return getRunningPct() >= 7.0 ? String.valueOf(count) : "";
+    }
+
+    public Integer getFlakyCount()
+    {
+        return flakyCount != null ? flakyCount : 0;
+    }
+
+    public void setFlakyCount(final Integer flakyCount)
+    {
+        this.flakyCount = flakyCount != null ? flakyCount : 0;
+    }
+
     public Double getPassRate()
     {
         return passRate;
     }
 
+    public String getPassRateFormatted()
+    {
+        return String.format(Locale.US, "%.0f%% Pass", passRate != null ? passRate : 0.0);
+    }
+
     public void setPassRate(final Double passRate)
     {
-        this.passRate = passRate;
+        this.passRate = passRate != null ? (double) Math.round(passRate) : 0.0;
     }
 
     public Boolean getIsDeleted()
@@ -453,7 +593,7 @@ public class TestRunEntity
     {
         final int denominator = (totalTests != null && totalTests > 0) ? totalTests : 1;
         final int numPassed = (passedCount != null ? passedCount : 0) + (succeededFixedCount != null ? succeededFixedCount : 0);
-        this.passRate = Math.round((numPassed * 100.0 / denominator) * 10.0) / 10.0;
+        this.passRate = (double) Math.round(numPassed * 100.0 / denominator);
     }
 
     public double getPassedPct()
@@ -612,6 +752,12 @@ public class TestRunEntity
     {
         final int count = (ignoredCount != null) ? ignoredCount : 0;
         return "Ignored: " + count + " (" + Math.round(getIgnoredPct()) + "%)";
+    }
+
+    public String getRunningTooltip()
+    {
+        final int count = getRunningCountSafe();
+        return "Running: " + count + " (" + Math.round(getRunningPct()) + "%)";
     }
 
     public Integer getPassedHealedCount()
@@ -810,6 +956,21 @@ public class TestRunEntity
         this.failedUnknownAiCount = failedUnknownAiCount;
     }
 
+    public Integer getPlaybookCount()
+    {
+        return playbookCount;
+    }
+
+    public void setPlaybookCount(final Integer playbookCount)
+    {
+        this.playbookCount = playbookCount;
+    }
+
+    public int getPlaybookCountSafe()
+    {
+        return playbookCount != null ? playbookCount : 0;
+    }
+
     public int getPassedAiCountSafe()
     {
         return passedAiCount != null ? passedAiCount : 0;
@@ -992,5 +1153,89 @@ public class TestRunEntity
     {
         final int count = getUnknownAiCountSafe();
         return "Failed Unknown (AI-Driven): " + count + " (" + Math.round(getUnknownAiPct()) + "%)";
+    }
+
+    public List<TestRunTagEntity> getTags()
+    {
+        return tags != null ? tags : Collections.emptyList();
+    }
+
+    public void setTags(final List<TestRunTagEntity> tags)
+    {
+        this.tags = tags != null ? new ArrayList<>(tags) : new ArrayList<>();
+    }
+
+    public boolean hasTags()
+    {
+        return tags != null && !tags.isEmpty();
+    }
+
+    public String getTagsJson()
+    {
+        final StringBuilder sb = new StringBuilder("{");
+        boolean first = true;
+        if (batchName != null && !batchName.isBlank())
+        {
+            first = false;
+            sb.append("\"batch\":\"").append(escapeJson(batchName.trim())).append("\"");
+        }
+        if (tags != null)
+        {
+            final Map<String, List<String>> grouped = new LinkedHashMap<>();
+            for (final TestRunTagEntity t : tags)
+            {
+                if (t.getTagKey() != null && !t.getTagKey().isBlank() && t.getTagValue() != null)
+                {
+                    final String key = t.getTagKey().trim().toLowerCase(Locale.ROOT);
+                    final String val = t.getTagValue().trim();
+                    if (!val.isBlank())
+                    {
+                        final List<String> list = grouped.computeIfAbsent(key, k -> new ArrayList<>());
+                        if (!list.contains(val))
+                        {
+                            list.add(val);
+                        }
+                    }
+                }
+            }
+            for (final Map.Entry<String, List<String>> entry : grouped.entrySet())
+            {
+                if (!first)
+                {
+                    sb.append(",");
+                }
+                first = false;
+                sb.append("\"").append(escapeJson(entry.getKey())).append("\":");
+                final List<String> values = entry.getValue();
+                if (values.size() == 1)
+                {
+                    sb.append("\"").append(escapeJson(values.get(0))).append("\"");
+                }
+                else
+                {
+                    sb.append("[");
+                    for (int i = 0; i < values.size(); i++)
+                    {
+                        if (i > 0)
+                        {
+                            sb.append(",");
+                        }
+                        sb.append("\"").append(escapeJson(values.get(i))).append("\"");
+                    }
+                    sb.append("]");
+                }
+            }
+        }
+        sb.append("}");
+        return sb.toString();
+    }
+
+    private static String escapeJson(final String s)
+    {
+        if (s == null)
+        {
+            return "";
+        }
+        return s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }

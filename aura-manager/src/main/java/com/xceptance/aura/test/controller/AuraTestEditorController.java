@@ -128,13 +128,17 @@ public class AuraTestEditorController
             model.addAttribute("varKeys", sections.get("varKeys"));
             final Object scopesObj = sections.get("fragmentVarScopes");
             model.addAttribute("fragmentVarScopes", scopesObj != null ? scopesObj : Map.of());
+            final Object rootTagsObj = sections.get("rootTags");
+            model.addAttribute("rootTags", rootTagsObj != null ? rootTagsObj : Map.of());
+            final Object dsTagsObj = sections.get("datasetTagsList");
+            model.addAttribute("datasetTagsList", dsTagsObj != null ? dsTagsObj : List.of());
+            model.addAttribute("areaTag", sections.get("areaTag"));
             model.addAttribute("propertiesYaml", sections.get("propertiesYaml") != null ? sections.get("propertiesYaml") : "");
             model.addAttribute("propertiesList", sections.get("propertiesList") != null ? sections.get("propertiesList") : List.of());
             model.addAttribute("metaYaml", sections.get("metaYaml") != null ? sections.get("metaYaml") : "");
             model.addAttribute("description", sections.get("description") != null ? sections.get("description") : "");
             model.addAttribute("promptAddonYaml", sections.get("promptAddonYaml") != null ? sections.get("promptAddonYaml") : "");
             model.addAttribute("rootVariables", sections.get("rootVariables") != null ? sections.get("rootVariables") : Map.of());
-            model.addAttribute("yamlFiles", fileService.getYamlFilesList());
         }
         else
         {
@@ -153,13 +157,15 @@ public class AuraTestEditorController
             model.addAttribute("dataMatrix", List.of());
             model.addAttribute("varKeys", List.of());
             model.addAttribute("fragmentVarScopes", Map.of());
+            model.addAttribute("rootTags", Map.of());
+            model.addAttribute("datasetTagsList", List.of());
+            model.addAttribute("areaTag", null);
             model.addAttribute("propertiesYaml", "");
             model.addAttribute("propertiesList", List.of());
             model.addAttribute("metaYaml", "");
             model.addAttribute("description", "");
             model.addAttribute("promptAddonYaml", "");
             model.addAttribute("rootVariables", Map.of());
-            model.addAttribute("yamlFiles", fileService.getYamlFilesList());
         }
         return "fragments/editor :: editorPanelContent";
     }

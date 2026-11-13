@@ -752,7 +752,33 @@ async function pollStatus() {
 
                     const sidebarRunIdEl = document.getElementById('sidebarActiveRunId');
                     if (sidebarRunIdEl) {
-                        sidebarRunIdEl.textContent = `Run #${currentRunId}`;
+                        sidebarRunIdEl.textContent = currentRunId.startsWith('#') ? currentRunId : `#${currentRunId}`;
+                    }
+
+                    const sidebarBatchNameEl = document.getElementById('sidebarActiveBatchName');
+                    const isRealBatchName = statusData.batchName && !['default', 'unknown', 'queue', 'suite', 'all', 'n/a'].includes(statusData.batchName.toLowerCase().trim());
+                    if (sidebarBatchNameEl) {
+                        if (isRealBatchName) {
+                            sidebarBatchNameEl.textContent = statusData.batchName.trim();
+                            sidebarBatchNameEl.style.display = 'block';
+                        } else {
+                            sidebarBatchNameEl.textContent = '';
+                            sidebarBatchNameEl.style.display = 'none';
+                        }
+                    }
+
+                    if (isRealBatchName) {
+                        try {
+                            localStorage.setItem('aura_active_batch_name', statusData.batchName.trim());
+                        } catch (e) {
+                            // ignore storage failure
+                        }
+                    } else {
+                        try {
+                            localStorage.removeItem('aura_active_batch_name');
+                        } catch (e) {
+                            // ignore storage failure
+                        }
                     }
 
                     const sidebarStatusEl = document.getElementById('sidebarActiveStatus') || document.getElementById('sidebarActiveEnv');
@@ -763,6 +789,31 @@ async function pollStatus() {
                     const pulseDot = document.getElementById('sidebarContextPulseDot');
                     if (pulseDot) {
                         pulseDot.style.display = statusData.running ? 'inline-block' : 'none';
+                    }
+
+                    const sidebarProgressEl = document.getElementById('sidebarActiveProgress');
+                    const sidebarProgressContainer = document.getElementById('sidebarActiveProgressContainer');
+                    if (sidebarProgressEl) {
+                        if (statusData.progressText) {
+                            sidebarProgressEl.textContent = statusData.progressText;
+                            if (sidebarProgressContainer) {
+                                sidebarProgressContainer.style.display = 'flex';
+                            }
+                            try {
+                                localStorage.setItem('aura_active_run_progress', statusData.progressText);
+                            } catch (e) {
+                                // ignore storage failure
+                            }
+                        } else {
+                            if (sidebarProgressContainer) {
+                                sidebarProgressContainer.style.display = 'none';
+                            }
+                            try {
+                                localStorage.removeItem('aura_active_run_progress');
+                            } catch (e) {
+                                // ignore storage failure
+                            }
+                        }
                     }
                 }
 
@@ -820,8 +871,9 @@ async function pollStatus() {
                         if (runSpinner) runSpinner.style.display = 'inline-block';
                         const sidebarBadge = document.getElementById('sidebarRunBadge');
                         if (sidebarBadge) {
+                            const testsCount = statusData.tests ? statusData.tests.length : (statusData.scheduledCount || statusData.total || 0);
                             sidebarBadge.style.display = 'flex';
-                            sidebarBadge.innerHTML = `<span class="material-symbols-outlined spinner">progress_activity</span> ${statusData.passed + statusData.failed + (statusData.skipped || 0) + 1}/${statusData.tests.length}`;
+                            sidebarBadge.innerHTML = `<span class="material-symbols-outlined spinner">progress_activity</span> ${statusData.passed + statusData.failed + (statusData.skipped || 0) + 1}/${testsCount}`;
                         }
                     } else {
                         if (runSpinner) runSpinner.style.display = 'none';
@@ -845,7 +897,7 @@ async function pollStatus() {
 
                         if (wasRunning) {
                             if (typeof updateCenterLayout === 'function') updateCenterLayout();
-                            const isDashboardView = window.location.pathname === '/' ||
+                            const isDashboardView = window.location.pathname.includes('/playbooks') ||
                                                     window.location.pathname.includes('/dashboard') ||
                                                     window.location.pathname.includes('/manager') ||
                                                     window.location.pathname.includes('/aura-test-manager') ||
@@ -1241,6 +1293,295 @@ function acceptPlaybookHealing(btnOrFile, datasetId, stepIndex, actionIndex) {
 window.openPlaybookInspector = openPlaybookInspector;
 window.closePlaybookInspector = closePlaybookInspector;
 window.acceptPlaybookHealing = acceptPlaybookHealing;
+
+// ============================================================================
+// Queue Run Tags: Add, Remove, Modal
+// ============================================================================
+
+function openRunTagModal() {
+    const modal = document.getElementById('tagModal');
+    if (!modal) return;
+    const title = document.getElementById('tagModalTitle');
+    const typeInput = document.getElementById('tagModalTargetType');
+    const colInput = document.getElementById('tagModalTargetCol');
+    const keyInput = document.getElementById('tagModalKeyInput');
+    const valInput = document.getElementById('tagModalValueInput');
+    const errBox = document.getElementById('tagModalError');
+
+    if (title) title.textContent = 'Add Tag to Queue Run';
+    if (typeInput) typeInput.value = 'queue';
+    if (colInput) colInput.value = '-1';
+    if (keyInput) keyInput.value = '';
+    if (valInput) valInput.value = '';
+    if (errBox) {
+        errBox.style.display = 'none';
+        errBox.textContent = '';
+    }
+    modal.style.display = 'flex';
+    if (keyInput) setTimeout(() => keyInput.focus(), 50);
+}
+window.openRunTagModal = openRunTagModal;
+
+async function submitQueueRunTag(key, values) {
+    if (!key || !values || values.length === 0) return;
+    try {
+        if (window.htmx && typeof window.htmx.ajax === 'function') {
+            await window.htmx.ajax('POST', '/api/queue/tags/add', {
+                target: '#queueListContainer',
+                swap: 'innerHTML',
+                values: { key: key, value: values.join(',') }
+            });
+            await window.htmx.ajax('GET', '/api/config/panel', {
+                target: '#configPanel',
+                swap: 'outerHTML'
+            });
+            return;
+        }
+        const params = new URLSearchParams();
+        params.append('key', key);
+        params.append('value', values.join(','));
+        const response = await fetch('/api/queue/tags/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params.toString()
+        });
+        if (response.ok) {
+            const html = await response.text();
+            const target = document.getElementById('queueListContainer');
+            if (target && window.htmx) {
+                window.htmx.swap(target, html, { swapStyle: 'innerHTML' });
+            }
+        }
+        const cfgResp = await fetch('/api/config/panel');
+        if (cfgResp.ok) {
+            const cfgHtml = await cfgResp.text();
+            const cfgTarget = document.getElementById('configPanel');
+            if (cfgTarget && window.htmx) {
+                window.htmx.swap(cfgTarget, cfgHtml, { swapStyle: 'outerHTML' });
+            }
+        }
+    } catch (e) {
+        console.error('Failed to add tag to queue run:', e);
+    }
+}
+window.submitQueueRunTag = submitQueueRunTag;
+
+async function removeQueueRunTag(key, value) {
+    if (!key) return;
+    try {
+        if (window.htmx && typeof window.htmx.ajax === 'function') {
+            const vals = { key: key };
+            if (value) vals.value = value;
+            await window.htmx.ajax('POST', '/api/queue/tags/remove', {
+                target: '#queueListContainer',
+                swap: 'innerHTML',
+                values: vals
+            });
+            await window.htmx.ajax('GET', '/api/config/panel', {
+                target: '#configPanel',
+                swap: 'outerHTML'
+            });
+            return;
+        }
+        const params = new URLSearchParams();
+        params.append('key', key);
+        if (value) params.append('value', value);
+        const response = await fetch('/api/queue/tags/remove', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params.toString()
+        });
+        if (response.ok) {
+            const html = await response.text();
+            const target = document.getElementById('queueListContainer');
+            if (target && window.htmx) {
+                window.htmx.swap(target, html, { swapStyle: 'innerHTML' });
+            }
+        }
+        const cfgResp = await fetch('/api/config/panel');
+        if (cfgResp.ok) {
+            const cfgHtml = await cfgResp.text();
+            const cfgTarget = document.getElementById('configPanel');
+            if (cfgTarget && window.htmx) {
+                window.htmx.swap(cfgTarget, cfgHtml, { swapStyle: 'outerHTML' });
+            }
+        }
+    } catch (e) {
+        console.error('Failed to remove tag from queue run:', e);
+    }
+}
+window.removeQueueRunTag = removeQueueRunTag;
+
+// ============================================================================
+// Batch Operations: Save Queue as Batch & Run Batch
+// ============================================================================
+
+function openSaveBatchModal() {
+    const queueItems = document.querySelectorAll('#queueListContainer .queue-item');
+    if (!queueItems || queueItems.length === 0) {
+        if (typeof showToast === 'function') {
+            showToast('Cannot save batch: The run queue is currently empty.', 'warning');
+        } else {
+            alert('Cannot save batch: The run queue is currently empty.');
+        }
+        return;
+    }
+
+    const modal = document.getElementById('saveBatchModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        const err = document.getElementById('saveBatchError');
+        if (err) {
+            err.style.display = 'none';
+            err.textContent = '';
+        }
+        const input = document.getElementById('saveBatchNameInput');
+        if (input) {
+            input.value = '';
+            input.focus();
+        }
+    }
+}
+
+function closeSaveBatchModal() {
+    const modal = document.getElementById('saveBatchModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+async function submitSaveBatch() {
+    const nameInput = document.getElementById('saveBatchNameInput');
+    const envInput = document.getElementById('saveBatchEnvInput');
+    const descInput = document.getElementById('saveBatchDescInput');
+    const errBox = document.getElementById('saveBatchError');
+    const submitBtn = document.getElementById('submitSaveBatchBtn');
+
+    const batchName = nameInput ? nameInput.value.trim() : '';
+    const environment = envInput ? envInput.value.trim() : 'Staging';
+    const description = descInput ? descInput.value.trim() : '';
+
+    if (!batchName) {
+        if (errBox) {
+            errBox.textContent = 'Please enter a batch name.';
+            errBox.style.display = 'block';
+        }
+        return;
+    }
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Saving...';
+    }
+
+    try {
+        const response = await fetch('/api/batch/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ batchName, environment, description })
+        });
+        const data = await response.json();
+
+        if (!response.ok || data.status === 'error') {
+            if (errBox) {
+                errBox.textContent = data.message || 'Failed to save batch.';
+                errBox.style.display = 'block';
+            }
+        } else {
+            closeSaveBatchModal();
+            if (typeof showToast === 'function') {
+                showToast(`Batch "${batchName}" saved successfully!`, 'success');
+            }
+        }
+    } catch (e) {
+        if (errBox) {
+            errBox.textContent = 'Network or server error: ' + e.message;
+            errBox.style.display = 'block';
+        }
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Save Batch';
+        }
+    }
+}
+
+async function runBatch(batchName) {
+    if (!batchName) return;
+
+    if (window.isRunning) {
+        if (typeof showToast === 'function') {
+            showToast('Another test execution is currently running.', 'warning');
+        } else {
+            alert('Another test execution is currently running.');
+        }
+        return;
+    }
+
+    const btns = document.querySelectorAll(`[data-batch-name="${batchName}"]`);
+    btns.forEach(b => {
+        b.disabled = true;
+        b.style.opacity = '0.7';
+    });
+
+    if (typeof showToast === 'function') {
+        showToast(`Starting batch "${batchName}"...`, 'info');
+    }
+
+    try {
+        if (typeof prepareClientForExecution === 'function') {
+            prepareClientForExecution();
+        }
+
+        const response = await fetch(`/api/batch/run?batchName=${encodeURIComponent(batchName)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+        if (!response.ok || data.status === 'error' || data.error) {
+            const msg = data.error || data.message || 'Failed to start batch execution.';
+            if (typeof showToast === 'function') {
+                showToast(msg, 'error');
+            } else {
+                alert(msg);
+            }
+            window.isRunning = false;
+            if (window.activeRunStats) window.activeRunStats.running = false;
+            window.consoleOpened = false;
+            if (typeof updateCenterLayout === 'function') updateCenterLayout();
+        } else {
+            if (typeof showToast === 'function') {
+                showToast(`Batch "${batchName}" execution started!`, 'success');
+            }
+            const pulse = document.getElementById('sidebarContextPulseDot');
+            if (pulse) pulse.style.display = 'inline-block';
+            const card = document.getElementById('sidebarContextCard');
+            if (card) card.style.display = 'flex';
+        }
+    } catch (e) {
+        if (typeof showToast === 'function') {
+            showToast('Failed to trigger batch run: ' + e.message, 'error');
+        } else {
+            alert('Failed to trigger batch run: ' + e.message);
+        }
+        window.isRunning = false;
+        if (window.activeRunStats) window.activeRunStats.running = false;
+        window.consoleOpened = false;
+        if (typeof updateCenterLayout === 'function') updateCenterLayout();
+    } finally {
+        btns.forEach(b => {
+            b.disabled = false;
+            b.style.opacity = '1';
+        });
+    }
+}
+
+window.openSaveBatchModal = openSaveBatchModal;
+window.closeSaveBatchModal = closeSaveBatchModal;
+window.submitSaveBatch = submitSaveBatch;
+window.runBatch = runBatch;
+
 
 
 

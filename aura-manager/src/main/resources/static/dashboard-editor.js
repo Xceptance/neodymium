@@ -2,6 +2,17 @@
 // Neodymium Aura Dashboard - Test & Dataset Editor & Queue Control
 // ============================================================================
 
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+window.escapeHtml = escapeHtml;
+
 function isDatasetSelected(file, id) {
     if (!file || id == null) return false;
     const strFile = String(file);
@@ -620,6 +631,9 @@ function onTestSearchInput(query) {
     setFilterCookie(trimmed);
     updateClearTestSearchBtn(trimmed);
     applyInstantTestFilter(trimmed);
+    if (typeof updateActiveTagFilterUI === 'function') {
+        updateActiveTagFilterUI();
+    }
 }
 window.onTestSearchInput = onTestSearchInput;
 
@@ -1037,13 +1051,31 @@ function openYamlEditor(filename, force = false) {
     if (typeof updateUndoRedoUI === 'function') updateUndoRedoUI();
     if (typeof checkEditorDirtyStatus === 'function') checkEditorDirtyStatus();
 
-    // Immediately clear stale DOM step rows from previous file to prevent DOM compilation race condition
+    // Immediately update file title in editor header if present
+    const fileSpan = document.getElementById('editorFileName');
+    if (fileSpan) {
+        fileSpan.textContent = filename;
+        fileSpan.setAttribute('data-file', filename);
+    }
+
+    // Immediately display loading indicator in steps container while fetching file content
     const stepsList = document.getElementById('stepsList');
-    if (stepsList) stepsList.innerHTML = '';
+    if (stepsList) {
+        stepsList.innerHTML = `
+            <div class="editor-loading-placeholder" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 16px; color: var(--text-secondary); gap: 12px;">
+                <span class="material-symbols-outlined spinner" style="font-size: 28px; color: var(--accent);">progress_activity</span>
+                <span style="font-size: 13px; font-weight: 500;">Loading ${escapeHtml(filename)}...</span>
+            </div>
+        `;
+    }
     const beforeList = document.getElementById('beforeStepsList');
     if (beforeList) beforeList.innerHTML = '';
     const afterList = document.getElementById('afterStepsList');
     if (afterList) afterList.innerHTML = '';
+    const rawYamlTextarea = document.getElementById('rawYamlTextarea');
+    if (rawYamlTextarea) {
+        rawYamlTextarea.value = `# Loading ${filename}...`;
+    }
 
     return new Promise((resolve) => {
         let resolved = false;
@@ -1416,6 +1448,219 @@ async function submitUpdateFragmentRefs() {
 }
 window.submitUpdateFragmentRefs = submitUpdateFragmentRefs;
 
+function escapeEditorHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function openAddRootTagModal() {
+    const modal = document.getElementById('tagModal');
+    if (!modal) return;
+    const title = document.getElementById('tagModalTitle');
+    const typeInput = document.getElementById('tagModalTargetType');
+    const colInput = document.getElementById('tagModalTargetCol');
+    const keyInput = document.getElementById('tagModalKeyInput');
+    const valInput = document.getElementById('tagModalValueInput');
+    const errBox = document.getElementById('tagModalError');
+
+    if (title) title.textContent = 'Add Playbook Tag';
+    if (typeInput) typeInput.value = 'root';
+    if (colInput) colInput.value = '-1';
+    if (keyInput) keyInput.value = '';
+    if (valInput) valInput.value = '';
+    if (errBox) {
+        errBox.style.display = 'none';
+        errBox.textContent = '';
+    }
+    modal.style.display = 'flex';
+    if (keyInput) setTimeout(() => keyInput.focus(), 50);
+}
+window.openAddRootTagModal = openAddRootTagModal;
+
+function openAddDatasetTagModal(colIndex) {
+    const modal = document.getElementById('tagModal');
+    if (!modal) return;
+    const title = document.getElementById('tagModalTitle');
+    const typeInput = document.getElementById('tagModalTargetType');
+    const colInput = document.getElementById('tagModalTargetCol');
+    const keyInput = document.getElementById('tagModalKeyInput');
+    const valInput = document.getElementById('tagModalValueInput');
+    const errBox = document.getElementById('tagModalError');
+
+    if (title) title.textContent = `Add Dataset Tag (Iteration ${colIndex + 1})`;
+    if (typeInput) typeInput.value = 'dataset';
+    if (colInput) colInput.value = String(colIndex);
+    if (keyInput) keyInput.value = '';
+    if (valInput) valInput.value = '';
+    if (errBox) {
+        errBox.style.display = 'none';
+        errBox.textContent = '';
+    }
+    modal.style.display = 'flex';
+    if (keyInput) setTimeout(() => keyInput.focus(), 50);
+}
+window.openAddDatasetTagModal = openAddDatasetTagModal;
+
+function closeTagModal() {
+    const modal = document.getElementById('tagModal');
+    if (modal) modal.style.display = 'none';
+}
+window.closeTagModal = closeTagModal;
+
+function submitTagModal() {
+    const typeInput = document.getElementById('tagModalTargetType');
+    const colInput = document.getElementById('tagModalTargetCol');
+    const keyInput = document.getElementById('tagModalKeyInput');
+    const valInput = document.getElementById('tagModalValueInput');
+    const errBox = document.getElementById('tagModalError');
+
+    const key = keyInput ? keyInput.value.trim() : '';
+    const valRaw = valInput ? valInput.value.trim() : '';
+    const targetType = typeInput ? typeInput.value : 'root';
+    const colIndex = colInput ? parseInt(colInput.value, 10) : -1;
+
+    if (!key) {
+        if (errBox) {
+            errBox.textContent = 'Please enter a tag key/name.';
+            errBox.style.display = 'block';
+        }
+        return;
+    }
+    if (!/^[a-zA-Z0-9_.-]+$/.test(key)) {
+        if (errBox) {
+            errBox.textContent = 'Tag key must contain letters, numbers, hyphens, underscores, or dots.';
+            errBox.style.display = 'block';
+        }
+        return;
+    }
+    if (!valRaw) {
+        if (errBox) {
+            errBox.textContent = 'Please enter a tag value.';
+            errBox.style.display = 'block';
+        }
+        return;
+    }
+
+    const values = valRaw.split(',').map(s => s.trim()).filter(s => s.length > 0);
+    if (values.length === 0) {
+        if (errBox) {
+            errBox.textContent = 'Please enter at least one non-empty value.';
+            errBox.style.display = 'block';
+        }
+        return;
+    }
+
+    if (targetType === 'queue' || targetType === 'run') {
+        if (typeof window.submitQueueRunTag === 'function') {
+            window.submitQueueRunTag(key, values);
+        }
+        closeTagModal();
+        return;
+    }
+
+    if (targetType === 'root') {
+        const container = document.getElementById('editorTagsContainer');
+        const addBtn = document.getElementById('btnAddRootTag');
+        if (container) {
+            values.forEach(val => {
+                const chip = document.createElement('span');
+                chip.className = 'root-tag-chip';
+                chip.setAttribute('data-key', key);
+                chip.setAttribute('data-value', val);
+                chip.innerHTML = `
+                    <span class="material-symbols-outlined" style="font-size: 12px;">label</span>
+                    <span class="root-tag-text">${escapeEditorHtml(key + ': ' + val)}</span>
+                    <button type="button" class="btn-remove-root-tag" onclick="removeRootTagFromBtn(this)" title="Remove tag">
+                        <span class="material-symbols-outlined" style="font-size: 12px;">close</span>
+                    </button>
+                `;
+                if (addBtn) {
+                    container.insertBefore(chip, addBtn);
+                } else {
+                    container.appendChild(chip);
+                }
+            });
+        }
+    } else {
+        const cell = document.querySelector(`#matrixTagsRow td[data-col="${colIndex}"] .dataset-tags-wrapper`);
+        if (cell) {
+            const addBtn = cell.querySelector('.btn-add-dataset-tag');
+            values.forEach(val => {
+                const chip = document.createElement('span');
+                chip.className = 'dataset-tag-chip';
+                chip.setAttribute('data-key', key);
+                chip.setAttribute('data-value', val);
+                chip.innerHTML = `
+                    <span>${escapeEditorHtml(key + ': ' + val)}</span>
+                    <button type="button" class="btn-remove-ds-tag" onclick="removeDatasetTagFromBtn(this)" title="Remove tag">
+                        <span class="material-symbols-outlined" style="font-size: 11px;">close</span>
+                    </button>
+                `;
+                if (addBtn) {
+                    cell.insertBefore(chip, addBtn);
+                } else {
+                    cell.appendChild(chip);
+                }
+            });
+        }
+    }
+
+    closeTagModal();
+    compilePlaybookToYaml();
+    if (typeof debouncedPushSnapshot === 'function') {
+        debouncedPushSnapshot();
+    }
+    if (typeof checkEditorDirtyStatus === 'function') {
+        checkEditorDirtyStatus();
+    }
+}
+window.submitTagModal = submitTagModal;
+
+function removeRootTagFromBtn(btn) {
+    if (!btn) return;
+    const chip = btn.closest('.root-tag-chip');
+    if (chip) {
+        chip.remove();
+        compilePlaybookToYaml();
+        if (typeof debouncedPushSnapshot === 'function') {
+            debouncedPushSnapshot();
+        }
+        if (typeof checkEditorDirtyStatus === 'function') {
+            checkEditorDirtyStatus();
+        }
+    }
+}
+window.removeRootTagFromBtn = removeRootTagFromBtn;
+
+function removeDatasetTagFromBtn(btn) {
+    if (!btn) return;
+    const chip = btn.closest('.dataset-tag-chip');
+    if (chip) {
+        chip.remove();
+        compilePlaybookToYaml();
+        if (typeof debouncedPushSnapshot === 'function') {
+            debouncedPushSnapshot();
+        }
+        if (typeof checkEditorDirtyStatus === 'function') {
+            checkEditorDirtyStatus();
+        }
+    }
+}
+window.removeDatasetTagFromBtn = removeDatasetTagFromBtn;
+
+// Compatibility stubs
+function updateAreaTagUI() {}
+window.updateAreaTagUI = updateAreaTagUI;
+function openAssignAreaModal() { openAddRootTagModal(); }
+window.openAssignAreaModal = openAssignAreaModal;
+function closeAssignAreaModal() { closeTagModal(); }
+window.closeAssignAreaModal = closeAssignAreaModal;
+function submitAssignArea() { submitTagModal(); }
+window.submitAssignArea = submitAssignArea;
+function removeAreaTag(event) { if (event) { event.stopPropagation(); event.preventDefault(); } }
+window.removeAreaTag = removeAreaTag;
+
+
 
 function closeEditor(force = false) {
     if (!force && typeof isEditorDirty === 'function' && isEditorDirty()) {
@@ -1444,6 +1689,8 @@ function closeEditor(force = false) {
     }
     activeEditingFile = null;
     window.activeEditingFile = null;
+    window.currentAreaTag = null;
+    updateAreaTagUI(null);
     if (typeof clearAllVariablePrompts === 'function') clearAllVariablePrompts();
     if (typeof initialEditorContent !== 'undefined') initialEditorContent = '';
     if (typeof undoStack !== 'undefined') undoStack = [];
@@ -1715,6 +1962,28 @@ function setEditorMode(mode) {
             btnRaw.style.fontWeight = 'normal';
             btnRaw.style.opacity = '0.8';
         }
+        if (rawTextarea) {
+            const val = rawTextarea.value || '';
+            const areaMatch = val.match(/(?:^|\r?\n)\s*#?\s*@([a-zA-Z0-9_-]+)/);
+            if (areaMatch) {
+                const tagIndex = areaMatch.index;
+                const stepsIdx = val.indexOf('steps:');
+                const beforeIdx = val.indexOf('before:');
+                const dataIdx = val.indexOf('data:');
+                let firstSectionIdx = Infinity;
+                if (stepsIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, stepsIdx);
+                if (beforeIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, beforeIdx);
+                if (dataIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, dataIdx);
+
+                if (tagIndex < firstSectionIdx) {
+                    updateAreaTagUI('@' + areaMatch[1]);
+                } else {
+                    updateAreaTagUI(null);
+                }
+            } else {
+                updateAreaTagUI(null);
+            }
+        }
         updateUndoRedoUI();
         if (reviewBtn && (!editorPanel || editorPanel.getAttribute('data-has-error') !== 'true')) {
             reviewBtn.disabled = false;
@@ -1732,6 +2001,26 @@ function handleRawYamlInput(textarea) {
     const hiddenInput = document.getElementById('editorContent');
     if (hiddenInput) {
         hiddenInput.value = textarea.value;
+    }
+    const val = textarea.value || '';
+    const areaMatch = val.match(/(?:^|\r?\n)\s*#?\s*@([a-zA-Z0-9_-]+)/);
+    if (areaMatch) {
+        const tagIndex = areaMatch.index;
+        const stepsIdx = val.indexOf('steps:');
+        const beforeIdx = val.indexOf('before:');
+        const dataIdx = val.indexOf('data:');
+        let firstSectionIdx = Infinity;
+        if (stepsIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, stepsIdx);
+        if (beforeIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, beforeIdx);
+        if (dataIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, dataIdx);
+
+        if (tagIndex < firstSectionIdx) {
+            updateAreaTagUI('@' + areaMatch[1]);
+        } else {
+            updateAreaTagUI(null);
+        }
+    } else {
+        updateAreaTagUI(null);
     }
     checkEditorDirtyStatus();
     checkNewVariablePrompts();
@@ -1764,13 +2053,14 @@ function getStepRawText(content) {
     const rawAttr = content.getAttribute('data-raw');
     const hasPills = content.querySelector('.var-pill, .unified-include-pill, .missing-include-pill, .invalid-include-pill, .hint-badge, .substep-folded-badge, .step-inline-comment, .material-symbols-outlined');
     
-    // If no pills or icon tokens are present, rawAttr or innerText is clean plain text
+    const isFocused = (document.activeElement === content || content.contains(document.activeElement));
+    
+    // If no pills or icon tokens are present, return the live typed text
     if (!hasPills) {
-        return (rawAttr !== null && rawAttr !== undefined && rawAttr.length > 0) ? rawAttr : (content.innerText || '');
+        return (isFocused || content.innerText) ? (content.innerText || '') : ((rawAttr !== null && rawAttr !== undefined) ? rawAttr : '');
     }
     
     // If not focused, data-raw is the authoritative source of truth
-    const isFocused = (document.activeElement === content || content.contains(document.activeElement));
     if (!isFocused && rawAttr !== null && rawAttr !== undefined && rawAttr.trim().length > 0) {
         return rawAttr;
     }
@@ -1899,6 +2189,29 @@ function initVisualPlaybookEditor() {
     const editorPanel = document.getElementById('editorPanel');
     if (!editorPanel) return;
 
+    // Initialize area tag from data-area or raw textarea
+    const rawTextarea = document.getElementById('rawYamlTextarea');
+    let initialTag = editorPanel.getAttribute('data-area') || '';
+    if (!initialTag && rawTextarea && rawTextarea.value) {
+        const val = rawTextarea.value || '';
+        const areaMatch = val.match(/(?:^|\r?\n)\s*#?\s*@([a-zA-Z0-9_-]+)/);
+        if (areaMatch) {
+            const tagIndex = areaMatch.index;
+            const stepsIdx = val.indexOf('steps:');
+            const beforeIdx = val.indexOf('before:');
+            const dataIdx = val.indexOf('data:');
+            let firstSectionIdx = Infinity;
+            if (stepsIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, stepsIdx);
+            if (beforeIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, beforeIdx);
+            if (dataIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, dataIdx);
+
+            if (tagIndex < firstSectionIdx) {
+                initialTag = '@' + areaMatch[1];
+            }
+        }
+    }
+    updateAreaTagUI(initialTag);
+
     const hasError = editorPanel.getAttribute('data-has-error') === 'true';
     const initialMode = editorPanel.getAttribute('data-mode') || (hasError ? 'raw' : 'visual');
 
@@ -1966,7 +2279,6 @@ function initVisualPlaybookEditor() {
 
     // Record initial baseline content and initialize undo/redo snapshot stack
     const currentYaml = compilePlaybookToYaml(false);
-    const rawTextarea = document.getElementById('rawYamlTextarea');
     if (rawTextarea && (typeof currentEditorMode === 'undefined' || currentEditorMode !== 'raw')) {
         rawTextarea.value = currentYaml;
     }
@@ -2156,13 +2468,54 @@ function toggleFragmentVarScope(varName, scope) {
 }
 window.toggleFragmentVarScope = toggleFragmentVarScope;
 
-function compilePlaybookToYaml(syncToRaw = true) {
-    let yaml = "# Neodymium YAML Test Data File\n\n";
+function formatYamlTagValue(val) {
+    if (typeof val !== 'string') return `"${val}"`;
+    if (/^[a-zA-Z0-9_\-\.]+$/.test(val)) {
+        return val;
+    }
+    return JSON.stringify(val);
+}
 
-    // _properties block (Only for test playbooks, above steps)
+function compilePlaybookToYaml(syncToRaw = true) {
     const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
         || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
-    
+
+    let yaml = "";
+
+    if (!isFragmentFile) {
+        const rootChips = document.querySelectorAll('#editorTagsContainer .root-tag-chip');
+        if (rootChips.length > 0) {
+            const rootTagsMap = {};
+            rootChips.forEach(chip => {
+                const k = chip.getAttribute('data-key');
+                const v = chip.getAttribute('data-value');
+                if (k && v) {
+                    if (!rootTagsMap[k]) rootTagsMap[k] = [];
+                    rootTagsMap[k].push(v);
+                }
+            });
+            const rootKeys = Object.keys(rootTagsMap);
+            if (rootKeys.length > 0) {
+                yaml += "tags:\n";
+                rootKeys.forEach(k => {
+                    const vals = rootTagsMap[k];
+                    if (vals.length === 1) {
+                        yaml += `  ${k}: ${formatYamlTagValue(vals[0])}\n`;
+                    } else {
+                        yaml += `  ${k}:\n`;
+                        vals.forEach(v => {
+                            yaml += `    - ${formatYamlTagValue(v)}\n`;
+                        });
+                    }
+                });
+                yaml += "\n";
+            }
+        }
+    }
+
+    yaml += "# Neodymium YAML Test Data File\n\n";
+
+    // _properties block (Only for test playbooks, above steps)
     if (!isFragmentFile) {
         const propertiesPanel = document.getElementById('playbookPropertiesPanel');
         if (propertiesPanel && propertiesPanel.style.display !== 'none') {
@@ -2261,7 +2614,39 @@ function compilePlaybookToYaml(syncToRaw = true) {
                 yaml += "data:\n";
                 for (let col = 0; col < iterCount; col++) {
                     yaml += "  -\n";
-                    const rows = matrixTable.querySelectorAll('tbody tr');
+                    // Dataset tags
+                    const tagCell = matrixTable.querySelector(`#matrixTagsRow td[data-col="${col}"]`);
+                    if (tagCell) {
+                        const dsChips = tagCell.querySelectorAll('.dataset-tag-chip');
+                        if (dsChips.length > 0) {
+                            const dsTagsMap = {};
+                            dsChips.forEach(chip => {
+                                const k = chip.getAttribute('data-key');
+                                const v = chip.getAttribute('data-value');
+                                if (k && v) {
+                                    if (!dsTagsMap[k]) dsTagsMap[k] = [];
+                                    dsTagsMap[k].push(v);
+                                }
+                            });
+                            const dsKeys = Object.keys(dsTagsMap);
+                            if (dsKeys.length > 0) {
+                                yaml += "    tags:\n";
+                                dsKeys.forEach(k => {
+                                    const vals = dsTagsMap[k];
+                                    if (vals.length === 1) {
+                                        yaml += `      ${k}: ${formatYamlTagValue(vals[0])}\n`;
+                                    } else {
+                                        yaml += `      ${k}:\n`;
+                                        vals.forEach(v => {
+                                            yaml += `        - ${formatYamlTagValue(v)}\n`;
+                                        });
+                                    }
+                                });
+                            }
+                        }
+                    }
+
+                    const rows = matrixTable.querySelectorAll('tbody tr:not(#matrixTagsRow)');
                     rows.forEach(row => {
                         const keyInput = row.querySelector('.var-key-input');
                         const key = keyInput ? keyInput.value.trim() : '';
@@ -3308,7 +3693,7 @@ function toggleSubsteps(toggleBar) {
 window.toggleSubsteps = toggleSubsteps;
 
 function handleSubstepTitleClick(event, el) {
-    if (event) {
+    if (event && document.activeElement === el) {
         event.stopPropagation();
     }
 }
@@ -3607,8 +3992,65 @@ function formatStepToTokens(lineNumOrElement) {
     } else {
         content.innerHTML = safeText;
     }
+
+    // Auto-load include tree card for top-level include steps if not yet attached
+    const includeMatch = rawText.match(/(?:_include|include):\s*["']?([a-zA-Z0-9_\/\.\-]+)["']?/);
+    if (includeMatch && row && !row.closest('.include-tree-card')) {
+        const cleanIncludePath = includeMatch[1].replace(/^['"]|['"]$/g, '');
+        if (!cleanIncludePath.toLowerCase().endsWith('.yaml') && !cleanIncludePath.toLowerCase().endsWith('.yml')) {
+            ensureIncludeTreeCardLoaded(lineNum, cleanIncludePath, row);
+        }
+    }
 }
 window.formatStepToTokens = formatStepToTokens;
+
+function ensureIncludeTreeCardLoaded(cardId, cleanFilePath, targetRow) {
+    if (!cleanFilePath) return;
+    let tree = (targetRow && targetRow.nextElementSibling && targetRow.nextElementSibling.classList && targetRow.nextElementSibling.classList.contains('include-tree-card'))
+        ? targetRow.nextElementSibling
+        : (document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`));
+
+    if (tree && tree.getAttribute('data-include-file') === cleanFilePath) {
+        tree.style.display = 'flex';
+        return;
+    }
+
+    if (tree && tree.getAttribute('data-include-file') !== cleanFilePath) {
+        tree.remove();
+        tree = null;
+    }
+
+    if (!tree) {
+        window.pendingIncludeRequests = window.pendingIncludeRequests || {};
+        if (window.pendingIncludeRequests[cardId]) return;
+        window.pendingIncludeRequests[cardId] = true;
+
+        fetch(`/api/editor/include-tree?file=${encodeURIComponent(cleanFilePath)}&cardId=${encodeURIComponent(cardId)}`)
+            .then(res => res.text())
+            .then(html => {
+                delete window.pendingIncludeRequests[cardId];
+                const liveTarget = document.querySelector(`.step-row[data-line="${cardId}"]`) || targetRow;
+                if (liveTarget && liveTarget.parentElement) {
+                    const existing = (liveTarget.nextElementSibling && liveTarget.nextElementSibling.classList && liveTarget.nextElementSibling.classList.contains('include-tree-card'))
+                        ? liveTarget.nextElementSibling
+                        : (document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`));
+                    if (!existing) {
+                        liveTarget.insertAdjacentHTML('afterend', html);
+                        const newlyInsertedTree = document.getElementById(`includeTreeCard_${cardId}`) || liveTarget.nextElementSibling;
+                        if (newlyInsertedTree) {
+                            formatIncludeTreeCardTokens(newlyInsertedTree);
+                        }
+                        updateAllLineNumbers();
+                    }
+                }
+            })
+            .catch(err => {
+                delete window.pendingIncludeRequests[cardId];
+                if (console && console.error) console.error("Failed to fetch include tree card", err);
+            });
+    }
+}
+window.ensureIncludeTreeCardLoaded = ensureIncludeTreeCardLoaded;
 
 window.pendingIncludeRequests = window.pendingIncludeRequests || {};
 
@@ -4157,9 +4599,7 @@ function enableIncludeEdit(cardId) {
 
     formatIncludeTreeCardTokens(treeCard);
 
-    if (steps.length > 0) {
-        handleNestedFocus(steps[0], null, 0);
-    } else {
+    if (steps.length === 0) {
         addNestedStep(cardId);
     }
 }
@@ -4777,15 +5217,23 @@ function addMatrixRowInlineEmpty() {
     const tbody = document.querySelector('#transposedGrid tbody');
     if (!tbody) return;
     const colCount = document.querySelectorAll('#transposedGrid thead th').length - 2;
-    const newIndex = tbody.rows.length + 1;
-    const newVarName = `newVariable_${newIndex}`;
+
+    const existingVarInputs = tbody.querySelectorAll('.var-key-input');
+    let maxIndex = 0;
+    existingVarInputs.forEach(inp => {
+        const m = (inp.value || '').match(/newVariable_(\d+)/);
+        if (m) {
+            maxIndex = Math.max(maxIndex, parseInt(m[1], 10));
+        }
+    });
+    const newVarName = `newVariable_${maxIndex + 1}`;
     
     const tr = document.createElement('tr');
     let html = `
         <td>
             <div class="var-key-cell">
                 <input type="text" class="var-key-input" value="${newVarName}">
-                <button class="btn-insert-var-chip" onclick="insertVariableFromInput(this.previousElementSibling.value)">+ Insert</button>
+                <button class="btn-insert-var-chip" data-key="${newVarName}" onclick="insertVariableFromInput(this.getAttribute('data-key') || this.previousElementSibling.value)">+ Insert</button>
                 <button type="button" class="btn-remove-var" title="Remove Variable" onclick="removeMatrixRow(this)">
                     <span class="material-symbols-outlined" style="font-size: 14px;">close</span>
                 </button>
@@ -4797,7 +5245,13 @@ function addMatrixRowInlineEmpty() {
     }
     html += `<td></td>`;
     tr.innerHTML = html;
-    tbody.appendChild(tr);
+
+    const matrixTagsRow = tbody.querySelector('#matrixTagsRow');
+    if (matrixTagsRow) {
+        matrixTagsRow.after(tr);
+    } else {
+        tbody.prepend(tr);
+    }
     compilePlaybookToYaml();
 }
 window.addMatrixRowInlineEmpty = addMatrixRowInlineEmpty;
@@ -4822,12 +5276,28 @@ function addMatrixColumnInline() {
     headerRow.insertBefore(th, headerRow.cells[headerRow.cells.length - 1]);
 
     const tbodyRows = document.querySelectorAll('#transposedGrid tbody tr');
-    tbodyRows.forEach((tr, rowIdx) => {
+    tbodyRows.forEach((tr) => {
         const td = document.createElement('td');
-        if (rowIdx === 0) {
-            td.innerHTML = `<input type="text" class="cell-val" value="custom_${colCount}" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();">`;
+        if (tr.id === 'matrixTagsRow') {
+            td.className = 'dataset-tags-cell';
+            const newColIdx = colCount - 1;
+            td.setAttribute('data-col', String(newColIdx));
+            td.innerHTML = `
+                <div class="dataset-tags-wrapper" style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-height: 26px;">
+                    <button type="button" class="btn-add-dataset-tag" onclick="openAddDatasetTagModal(${newColIdx})" title="Add tag to dataset" style="background: transparent; border: 1px dashed var(--border); border-radius: 10px; color: var(--text-secondary); cursor: pointer; padding: 1px 6px; font-size: 10.5px; display: inline-flex; align-items: center; gap: 2px;">
+                        <span class="material-symbols-outlined" style="font-size: 12px;">add</span>
+                        <span>Tag</span>
+                    </button>
+                </div>
+            `;
         } else {
-            td.innerHTML = '<input type="text" class="cell-val" value="" placeholder="empty" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();">';
+            const varRows = document.querySelectorAll('#transposedGrid tbody tr:not(#matrixTagsRow)');
+            const isFirstVarRow = (tr === varRows[0]);
+            if (isFirstVarRow) {
+                td.innerHTML = `<input type="text" class="cell-val" value="custom_${colCount}" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();">`;
+            } else {
+                td.innerHTML = '<input type="text" class="cell-val" value="" placeholder="empty" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();">';
+            }
         }
         tr.insertBefore(td, tr.cells[tr.cells.length - 1]);
     });
@@ -4920,6 +5390,16 @@ function removeMatrixColumn(btn) {
             tbodyRows.forEach(tr => {
                 if (tr.cells.length > colIndex) {
                     tr.deleteCell(colIndex);
+                }
+            });
+
+            // Re-index dataset tags cells
+            const tagCells = document.querySelectorAll('#matrixTagsRow td.dataset-tags-cell');
+            tagCells.forEach((cell, idx) => {
+                cell.setAttribute('data-col', String(idx));
+                const addBtn = cell.querySelector('.btn-add-dataset-tag');
+                if (addBtn) {
+                    addBtn.setAttribute('onclick', `openAddDatasetTagModal(${idx})`);
                 }
             });
 

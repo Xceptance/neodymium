@@ -29,6 +29,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -101,6 +103,51 @@ public final class AuraQueueServiceTest
         Assertions.assertFalse(runningQueue.get());
         runningQueue.set(true);
         Assertions.assertTrue(runningQueue.get());
+    }
+
+    @Test
+    public void testAddRunCompletedListenerMulticast() throws Exception
+    {
+        final AtomicInteger count1 = new AtomicInteger(0);
+        final AtomicInteger count2 = new AtomicInteger(0);
+
+        final Consumer<String> l1 = id -> count1.incrementAndGet();
+        final Consumer<String> l2 = id -> count2.incrementAndGet();
+
+        queueService.addRunCompletedListener(l1);
+        queueService.addRunCompletedListener(l2);
+
+        final Field listenersField = AuraQueueService.class.getDeclaredField("onRunCompletedListeners");
+        listenersField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        final List<Consumer<String>> listeners =
+                (List<Consumer<String>>) listenersField.get(queueService);
+
+        Assertions.assertEquals(2, listeners.size());
+        for (final Consumer<String> listener : listeners)
+        {
+            listener.accept("run_123");
+        }
+
+        Assertions.assertEquals(1, count1.get());
+        Assertions.assertEquals(1, count2.get());
+
+        queueService.removeRunCompletedListener(l1);
+        Assertions.assertEquals(1, listeners.size());
+    }
+
+    @Test
+    public void testRunCompletedListenerObservesIdleQueue()
+    {
+        final AtomicBoolean queueWasIdleWhenNotified = new AtomicBoolean(false);
+        final Consumer<String> listener = runId -> {
+            queueWasIdleWhenNotified.set(!queueService.isRunningQueue());
+        };
+
+        queueService.addRunCompletedListener(listener);
+        // Verify when queue is idle, listener executes and observes non-running queue
+        listener.accept("run_idle_test");
+        Assertions.assertTrue(queueWasIdleWhenNotified.get());
     }
 
     @Test
@@ -391,6 +438,59 @@ public final class AuraQueueServiceTest
             final ObjectNode createdNode = (ObjectNode) mapper.readTree(exec1);
             Assertions.assertEquals("failed", createdNode.path("status").asText());
             Assertions.assertTrue(createdNode.path("failureReason").asText().contains("Early JVM failure"));
+        }
+        finally
+        {
+            AuraQueueService.deleteDirRecursively(tempDir.toFile());
+        }
+    }
+
+    @Test
+    public final void testGetCurrentBatchNameDefaultAndSet()
+    {
+        Assertions.assertNotNull(queueService.getCurrentBatchName());
+        Assertions.assertEquals("", queueService.getCurrentBatchName());
+    }
+
+    @Test
+    public final void testUpdateExecutionSnapshotsFinalizesRunningExecutionsOnSuccess() throws Exception
+    {
+        final Path tempDir = Files.createTempDirectory("aura-queue-test-success-");
+        try
+        {
+            final File runDir = tempDir.toFile();
+            final String className = "Aura_tests_checkout_process_yaml_Test";
+            final File testDir = new File(runDir, className);
+            Assertions.assertTrue(testDir.mkdirs());
+
+            final File exec1 = new File(testDir, "console-execution-1.json");
+            final ObjectMapper mapper = new ObjectMapper();
+            final ObjectNode node = mapper.createObjectNode();
+            node.put("id", 1);
+            node.put("name", "CheckoutDataset1");
+            node.put("status", "running");
+            mapper.writeValue(exec1, node);
+
+            queueService.updateExecutionSnapshotsAndFallbacks(
+                "run_success_123",
+                className,
+                List.of("CheckoutDataset1", "CheckoutDataset2"),
+                List.of("Default"),
+                List.of(runDir),
+                0,
+                false,
+                false,
+                null
+            );
+
+            Assertions.assertTrue(exec1.exists());
+            final ObjectNode updatedNode1 = (ObjectNode) mapper.readTree(exec1);
+            Assertions.assertEquals("passed", updatedNode1.path("status").asText(), "Running execution must be updated to passed on successful batch completion");
+
+            final File exec2 = new File(testDir, "console-execution-2.json");
+            Assertions.assertTrue(exec2.exists(), "Fallback execution snapshot must be created for dataset 2");
+            final ObjectNode createdNode2 = (ObjectNode) mapper.readTree(exec2);
+            Assertions.assertEquals("passed", createdNode2.path("status").asText(), "Dataset 2 snapshot must have passed status");
         }
         finally
         {

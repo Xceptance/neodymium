@@ -28,6 +28,7 @@ import com.xceptance.neodymium.aura.AuraQueueService;
 import com.xceptance.neodymium.aura.AuraReportingService;
 import com.xceptance.neodymium.aura.AuraSettingsService;
 import com.xceptance.neodymium.aura.QueueRunProgressListener;
+import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -95,11 +96,17 @@ public class AuraServiceConfiguration
             @Override
             public void onRunStarted(final String runId, final String batchName, final String environment)
             {
+                onRunStarted(runId, batchName, environment, null);
+            }
+
+            @Override
+            public void onRunStarted(final String runId, final String batchName, final String environment, final Map<String, List<String>> tags)
+            {
                 if (applicationContext != null && applicationContext.isActive())
                 {
                     try
                     {
-                        reportDataService.startRun(runId, batchName, environment, "queue");
+                        reportDataService.startRun(runId, batchName, environment, "queue", tags);
                     }
                     catch (final Exception e)
                     {

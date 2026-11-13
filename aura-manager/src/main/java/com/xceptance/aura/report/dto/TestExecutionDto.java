@@ -24,14 +24,21 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonRawValue;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xceptance.aura.report.service.AuraReportDataService;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.neodymium.util.TagUtils;
 
 /**
  * Data transfer object representing a single test variation execution.
@@ -43,6 +50,118 @@ import java.util.Map;
 public final class TestExecutionDto
 {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    /**
+     * Custom deserializer that safely extracts bug ticket IDs whether the incoming JSON property
+     * is an array of strings, an array of structured bug objects (e.g. Jira issue objects with "id"),
+     * a single string, or a single bug object.
+     *
+     * @author AI-generated: Gemini 3.8 Flash
+     * @author Xceptance GmbH 2026
+     */
+    public static class FlexibleBugListDeserializer extends JsonDeserializer<List<String>>
+    {
+        @Override
+        public List<String> deserialize(final JsonParser parser, final DeserializationContext context) throws IOException
+        {
+            final List<String> result = new ArrayList<>();
+            final JsonNode node = parser.getCodec().readTree(parser);
+            if (node == null || node.isNull())
+            {
+                return result;
+            }
+            if (node.isArray())
+            {
+                for (final JsonNode item : node)
+                {
+                    final String ticket = extractTicket(item);
+                    if (!ticket.isBlank() && !result.contains(ticket))
+                    {
+                        result.add(ticket);
+                    }
+                }
+            }
+            else
+            {
+                final String ticket = extractTicket(node);
+                if (!ticket.isBlank() && !result.contains(ticket))
+                {
+                    result.add(ticket);
+                }
+            }
+            return result;
+        }
+
+        public static String extractTicket(final JsonNode node)
+        {
+            if (node == null || node.isNull() || node.isMissingNode())
+            {
+                return "";
+            }
+            if (node.isTextual())
+            {
+                return node.asText().trim();
+            }
+            if (node.isObject())
+            {
+                final String[] candidateFields = {"ticket", "bugTicket", "id", "key", "ticketId", "name"};
+                for (final String field : candidateFields)
+                {
+                    if (node.hasNonNull(field) && !node.path(field).asText().isBlank())
+                    {
+                        return node.path(field).asText().trim();
+                    }
+                }
+            }
+            return node.asText().trim();
+        }
+    }
+
+    /**
+     * Nested DTO capturing detailed bug information including ticket ID, severity, and tag criteria.
+     */
+    public static class BugDetailDto
+    {
+        private final String ticket;
+        private final String severity;
+        private final String tagCriteria;
+
+        public BugDetailDto()
+        {
+            this("", "MAJOR", "");
+        }
+
+        @JsonCreator
+        public BugDetailDto(
+            @JsonProperty("ticket") @JsonAlias({"bugTicket", "id", "ticketId", "key"}) final String ticket,
+            @JsonProperty("severity") final String severity,
+            @JsonProperty("tagCriteria") final String tagCriteria)
+        {
+            this.ticket = ticket != null ? ticket.trim() : "";
+            this.severity = (severity != null && !severity.trim().isEmpty()) ? severity.trim().toUpperCase(Locale.ROOT) : "MAJOR";
+            this.tagCriteria = tagCriteria != null ? tagCriteria.trim() : "";
+        }
+
+        public String getTicket()
+        {
+            return ticket;
+        }
+
+        public String getBugTicket()
+        {
+            return ticket;
+        }
+
+        public String getSeverity()
+        {
+            return severity != null ? severity : "MAJOR";
+        }
+
+        public String getTagCriteria()
+        {
+            return tagCriteria;
+        }
+    }
 
     private String id;
     private final String runId;
@@ -57,9 +176,13 @@ public final class TestExecutionDto
     private final String location;
     private final String browser;
     private final String failure;
+    @JsonDeserialize(using = FlexibleBugListDeserializer.class)
     private final List<String> bugs;
+    private final List<BugDetailDto> bugDetails = new ArrayList<>();
+    private final List<BugDetailDto> inactiveBugDetails = new ArrayList<>();
     private final String comment;
     private final String areaName;
+    private final String subArea;
     private final List<String> junitTags;
     private final Map<String, String> dataBindings;
     private final Map<String, String> localDataBindings;
@@ -88,6 +211,13 @@ public final class TestExecutionDto
     private final String videoUrl;
     private final JsonNode linterFindings;
     private final JsonNode postFlightFindings;
+    private final Map<String, List<String>> tags;
+    private String environment;
+    private String batchName;
+    private Boolean flaky = false;
+    private Integer flakyFailureCount = 0;
+    private Integer flakyTotalRuns = 0;
+    private String flakyReason;
     private final Long inputTokensCount;
     private final Long outputTokensCount;
     private final Long cachedTokensCount;
@@ -97,7 +227,7 @@ public final class TestExecutionDto
 
     public TestExecutionDto()
     {
-        this("", "", "", "", "", "", "", "", "passed-clean", "Java", "UNKNOWN", null, "Unknown", "NONE", new ArrayList<>(), null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, null, null, null, null, null, new ArrayList<>());
+        this("", "", "", "", "", "", "", "", "running", "Java", "UNKNOWN", null, "Unknown", "NONE", new ArrayList<>(), null, "Default", null, new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, Collections.emptyMap(), null, false, 0, 0, null, null, null, null, null, null, new ArrayList<>());
     }
 
     public TestExecutionDto(
@@ -153,10 +283,62 @@ public final class TestExecutionDto
         final Long cachedTokensCount,
         final JsonNode llmCalls)
     {
-        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, failureReason, failureStackTrace, visualRcaExplanation, llmResponsibility, metrics, videoUrl, healed, linterFindings, postFlightFindings, inputTokensCount, outputTokensCount, cachedTokensCount, llmCalls, null, new ArrayList<>());
+        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, null, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, failureReason, failureStackTrace, visualRcaExplanation, llmResponsibility, metrics, videoUrl, healed, linterFindings, postFlightFindings, Collections.emptyMap(), null, false, 0, 0, null, inputTokensCount, outputTokensCount, cachedTokensCount, llmCalls, null, new ArrayList<>());
     }
 
-    @JsonCreator
+    public TestExecutionDto(
+        final String id,
+        final String runId,
+        final String testClass,
+        final String testMethod,
+        final String title,
+        final String testName,
+        final String playbookFile,
+        final String testFile,
+        final String status,
+        final String engine,
+        final String location,
+        final String locale,
+        final String browser,
+        final String failure,
+        final List<String> bugs,
+        final String comment,
+        final String areaName,
+        final List<String> junitTags,
+        final Map<String, String> dataBindings,
+        final Map<String, String> localDataBindings,
+        final JsonNode blocks,
+        final JsonNode steps,
+        final String testId,
+        final String datasetId,
+        final String executionMode,
+        final String mode,
+        final String startTime,
+        final String dateFormatted,
+        final String timeFormatted,
+        final Long timestampMs,
+        final Integer totalStepsCount,
+        final Integer failedStepsCount,
+        final Long durationMs,
+        final String durationFormatted,
+        final Integer llmCallsCount,
+        final Long llmTotalTokens,
+        final Double llmCost,
+        final String failureSnippet,
+        final String failureReason,
+        final String failureStackTrace,
+        final String visualRcaExplanation,
+        final JsonNode llmResponsibility,
+        final JsonNode metrics,
+        final String videoUrl,
+        final Boolean healed,
+        final JsonNode linterFindings,
+        final JsonNode postFlightFindings,
+        final Map<String, ?> tags)
+    {
+        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, null, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, failureReason, failureStackTrace, visualRcaExplanation, llmResponsibility, metrics, videoUrl, healed, linterFindings, postFlightFindings, tags, null, false, 0, 0, null, null, null, null, null, null, new ArrayList<>());
+    }
+
     public TestExecutionDto(
         @JsonProperty("id") final String id,
         @JsonProperty("runId") final String runId,
@@ -172,9 +354,9 @@ public final class TestExecutionDto
         @JsonProperty("locale") final String locale,
         @JsonProperty("browser") final String browser,
         @JsonProperty("failure") final String failure,
-        @JsonProperty("bugs") final List<String> bugs,
+        @JsonProperty("bugs") @JsonDeserialize(using = FlexibleBugListDeserializer.class) final List<String> bugs,
         @JsonProperty("comment") final String comment,
-        @JsonProperty("areaName") final String areaName,
+        @JsonProperty("areaName") @JsonAlias({"area", "areaTag"}) final String areaName,
         @JsonProperty("junitTags") final List<String> junitTags,
         @JsonProperty("dataBindings") final Map<String, String> dataBindings,
         @JsonProperty("localDataBindings") final Map<String, String> localDataBindings,
@@ -205,6 +387,68 @@ public final class TestExecutionDto
         @JsonProperty("healed") final Boolean healed,
         @JsonProperty("linterFindings") final JsonNode linterFindings,
         @JsonProperty("postFlightFindings") final JsonNode postFlightFindings,
+        @JsonProperty("tags") final Map<String, ?> tags,
+        @JsonProperty("bugDetails") final List<BugDetailDto> bugDetails)
+    {
+        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, null, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, failureReason, failureStackTrace, visualRcaExplanation, llmResponsibility, metrics, videoUrl, healed, linterFindings, postFlightFindings, tags, bugDetails, false, 0, 0, null, null, null, null, null, null, new ArrayList<>());
+    }
+
+    @JsonCreator
+    public TestExecutionDto(
+        @JsonProperty("id") final String id,
+        @JsonProperty("runId") final String runId,
+        @JsonProperty("testClass") final String testClass,
+        @JsonProperty("testMethod") final String testMethod,
+        @JsonProperty("title") final String title,
+        @JsonProperty("testName") final String testName,
+        @JsonProperty("playbookFile") final String playbookFile,
+        @JsonProperty("testFile") final String testFile,
+        @JsonProperty("status") final String status,
+        @JsonProperty("engine") final String engine,
+        @JsonProperty("location") final String location,
+        @JsonProperty("locale") final String locale,
+        @JsonProperty("browser") final String browser,
+        @JsonProperty("failure") final String failure,
+        @JsonProperty("bugs") @JsonDeserialize(using = FlexibleBugListDeserializer.class) final List<String> bugs,
+        @JsonProperty("comment") final String comment,
+        @JsonProperty("areaName") @JsonAlias({"area", "areaTag"}) final String areaName,
+        @JsonProperty("subArea") @JsonAlias({"sub_area", "subAreaName"}) final String subArea,
+        @JsonProperty("junitTags") final List<String> junitTags,
+        @JsonProperty("dataBindings") final Map<String, String> dataBindings,
+        @JsonProperty("localDataBindings") final Map<String, String> localDataBindings,
+        @JsonProperty("blocks") final JsonNode blocks,
+        @JsonProperty("steps") final JsonNode steps,
+        @JsonProperty("testId") final String testId,
+        @JsonProperty("datasetId") final String datasetId,
+        @JsonProperty("executionMode") final String executionMode,
+        @JsonProperty("mode") final String mode,
+        @JsonProperty("startTime") final String startTime,
+        @JsonProperty("dateFormatted") final String dateFormatted,
+        @JsonProperty("timeFormatted") final String timeFormatted,
+        @JsonProperty("timestampMs") final Long timestampMs,
+        @JsonProperty("totalStepsCount") final Integer totalStepsCount,
+        @JsonProperty("failedStepsCount") final Integer failedStepsCount,
+        @JsonProperty("durationMs") final Long durationMs,
+        @JsonProperty("durationFormatted") final String durationFormatted,
+        @JsonProperty("llmCallsCount") final Integer llmCallsCount,
+        @JsonProperty("llmTotalTokens") final Long llmTotalTokens,
+        @JsonProperty("llmCost") final Double llmCost,
+        @JsonProperty("failureSnippet") final String failureSnippet,
+        @JsonProperty("failureReason") @JsonAlias({"error", "errorMessage", "failure"}) final String failureReason,
+        @JsonProperty("failureStackTrace") @JsonAlias({"failureStacktrace", "stackTrace", "stacktrace", "trace"}) final String failureStackTrace,
+        @JsonProperty("visualRcaExplanation") final String visualRcaExplanation,
+        @JsonProperty("llmResponsibility") final JsonNode llmResponsibility,
+        @JsonProperty("metrics") final JsonNode metrics,
+        @JsonProperty("videoUrl") @JsonAlias({"videoPath", "video"}) final String videoUrl,
+        @JsonProperty("healed") final Boolean healed,
+        @JsonProperty("linterFindings") final JsonNode linterFindings,
+        @JsonProperty("postFlightFindings") final JsonNode postFlightFindings,
+        @JsonProperty("tags") final Map<String, ?> tags,
+        @JsonProperty("bugDetails") final List<BugDetailDto> bugDetails,
+        @JsonProperty("flaky") final Boolean flaky,
+        @JsonProperty("flakyFailureCount") final Integer flakyFailureCount,
+        @JsonProperty("flakyTotalRuns") final Integer flakyTotalRuns,
+        @JsonProperty("flakyReason") final String flakyReason,
         @JsonProperty("inputTokensCount") final Long inputTokensCount,
         @JsonProperty("outputTokensCount") final Long outputTokensCount,
         @JsonProperty("cachedTokensCount") final Long cachedTokensCount,
@@ -317,29 +561,49 @@ public final class TestExecutionDto
         this.testMethod = effectiveTestMethod;
 
         this.testName = (testName != null && !testName.isEmpty()) ? testName : (this.testClass + " " + (this.testMethod.isEmpty() ? this.title : (this.testMethod + " [" + this.title + "]"))).trim();
-        this.status = status != null ? status : "passed-clean";
+        this.status = (status != null && !status.isBlank()) ? status : "running";
         this.engine = engine != null ? engine : "Java";
 
         final String effectiveLocation;
-        if (locale != null && !locale.trim().isEmpty())
+        if (locale != null && !locale.trim().isEmpty() && !"unknown".equalsIgnoreCase(locale.trim()))
         {
             effectiveLocation = locale.trim();
         }
-        else if (location != null && !location.trim().isEmpty())
+        else if (location != null && !location.trim().isEmpty() && !"unknown".equalsIgnoreCase(location.trim()))
         {
             effectiveLocation = location.trim();
         }
         else
         {
-            effectiveLocation = "UNKNOWN";
+            effectiveLocation = "Default";
         }
         this.location = effectiveLocation;
 
         this.browser = AuraReportDataService.normalizeBrowser(browser);
         this.failure = failure != null ? failure : "NONE";
         this.bugs = bugs != null ? new ArrayList<>(bugs) : new ArrayList<>();
+        if (bugDetails != null && !bugDetails.isEmpty())
+        {
+            this.bugDetails.addAll(bugDetails);
+            for (final BugDetailDto d : bugDetails)
+            {
+                if (d.getTicket() != null && !d.getTicket().isBlank() && !this.bugs.contains(d.getTicket()))
+                {
+                    this.bugs.add(d.getTicket());
+                }
+            }
+        }
+        else if (bugs != null)
+        {
+            for (final String b : bugs)
+            {
+                if (b != null && !b.isBlank())
+                {
+                    this.bugDetails.add(new BugDetailDto(b, "MAJOR", ""));
+                }
+            }
+        }
         this.comment = comment;
-        this.areaName = (areaName != null && !areaName.trim().isEmpty() && !"General".equalsIgnoreCase(areaName.trim())) ? areaName.trim() : "Browsing (default)";
         this.dataBindings = dataBindings != null ? new HashMap<>(dataBindings) : new HashMap<>();
         this.localDataBindings = localDataBindings != null ? new HashMap<>(localDataBindings) : new HashMap<>();
         this.blocks = blocks;
@@ -376,6 +640,103 @@ public final class TestExecutionDto
         this.llmCalls = llmCalls;
         this.playbookContent = playbookContent;
         this.attachments = attachments != null ? new ArrayList<>(attachments) : new ArrayList<>();
+        this.tags = tags != null ? TagUtils.parseTags(tags) : Collections.emptyMap();
+
+        String resolvedAreaName = (areaName != null && AuraReportDataService.isRealArea(areaName)) ? areaName.trim() : null;
+        if (resolvedAreaName == null && !this.tags.isEmpty())
+        {
+            for (final Map.Entry<String, List<String>> entry : this.tags.entrySet())
+            {
+                if ("area".equalsIgnoreCase(entry.getKey()) && entry.getValue() != null && !entry.getValue().isEmpty())
+                {
+                    final String primary = entry.getValue().get(0);
+                    if (primary != null && !primary.isBlank())
+                    {
+                        resolvedAreaName = primary.trim();
+                        break;
+                    }
+                }
+            }
+        }
+        if (resolvedAreaName == null && this.localDataBindings != null && this.localDataBindings.containsKey("areaName"))
+        {
+            final String a = this.localDataBindings.get("areaName");
+            if (a != null && !a.isBlank())
+            {
+                resolvedAreaName = a.trim();
+            }
+        }
+        if (resolvedAreaName == null && this.localDataBindings != null && this.localDataBindings.containsKey("Area"))
+        {
+            final String a = this.localDataBindings.get("Area");
+            if (a != null && !a.isBlank())
+            {
+                resolvedAreaName = a.trim();
+            }
+        }
+        if (resolvedAreaName != null && !resolvedAreaName.isEmpty())
+        {
+            while (resolvedAreaName.startsWith("@"))
+            {
+                resolvedAreaName = resolvedAreaName.substring(1).trim();
+            }
+            if ("Browsing (default)".equalsIgnoreCase(resolvedAreaName)
+                || "Default".equalsIgnoreCase(resolvedAreaName)
+                || "General".equalsIgnoreCase(resolvedAreaName)
+                || resolvedAreaName.isEmpty())
+            {
+                this.areaName = "Default";
+            }
+            else
+            {
+                this.areaName = resolvedAreaName;
+            }
+        }
+        else
+        {
+            this.areaName = "Default";
+        }
+
+        String resolvedSubArea = (subArea != null && !subArea.isBlank()) ? subArea.trim() : null;
+        if (resolvedSubArea == null && !this.tags.isEmpty())
+        {
+            for (final Map.Entry<String, List<String>> entry : this.tags.entrySet())
+            {
+                if ("area".equalsIgnoreCase(entry.getKey()) && entry.getValue() != null && entry.getValue().size() > 1)
+                {
+                    final String sec = entry.getValue().get(1);
+                    if (sec != null && !sec.isBlank())
+                    {
+                        resolvedSubArea = sec.trim();
+                        break;
+                    }
+                }
+            }
+        }
+        if (resolvedSubArea == null && this.localDataBindings != null && this.localDataBindings.containsKey("subArea"))
+        {
+            final String s = this.localDataBindings.get("subArea");
+            if (s != null && !s.isBlank())
+            {
+                resolvedSubArea = s.trim();
+            }
+        }
+        if (resolvedSubArea != null && !resolvedSubArea.isEmpty())
+        {
+            while (resolvedSubArea.startsWith("@"))
+            {
+                resolvedSubArea = resolvedSubArea.substring(1).trim();
+            }
+            this.subArea = resolvedSubArea.isEmpty() ? null : resolvedSubArea;
+        }
+        else
+        {
+            this.subArea = null;
+        }
+        this.flaky = Boolean.TRUE.equals(flaky);
+        this.flakyFailureCount = flakyFailureCount != null ? flakyFailureCount : 0;
+        this.flakyTotalRuns = flakyTotalRuns != null ? flakyTotalRuns : 0;
+        this.flakyReason = flakyReason != null ? flakyReason : "";
     }
 
     public TestExecutionDto(
@@ -417,7 +778,7 @@ public final class TestExecutionDto
         final Double llmCost,
         final String failureSnippet)
     {
-        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, "", "", "", null, null, "", false, null, null, null, null, null, null, null, new ArrayList<>());
+        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, null, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, "", "", "", null, null, "", false, null, null, Collections.emptyMap(), null, false, 0, 0, null, null, null, null, null, null, new ArrayList<>());
     }
 
     public TestExecutionDto(
@@ -462,7 +823,7 @@ public final class TestExecutionDto
         final String failureStackTrace,
         final String visualRcaExplanation)
     {
-        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, failureReason, failureStackTrace, visualRcaExplanation, null, null, "", false, null, null, null, null, null, null, null, new ArrayList<>());
+        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, null, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, failureReason, failureStackTrace, visualRcaExplanation, null, null, "", false, null, null, Collections.emptyMap(), null, false, 0, 0, null, null, null, null, null, null, new ArrayList<>());
     }
 
     public TestExecutionDto(
@@ -488,7 +849,7 @@ public final class TestExecutionDto
         final JsonNode blocks,
         final JsonNode steps)
     {
-        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, null, null, null, null, null, new ArrayList<>());
+        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, null, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, Collections.emptyMap(), null, false, 0, 0, null, null, null, null, null, null, new ArrayList<>());
     }
 
     public TestExecutionDto(
@@ -513,7 +874,7 @@ public final class TestExecutionDto
         final JsonNode blocks,
         final JsonNode steps)
     {
-        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, null, null, null, null, null, new ArrayList<>());
+        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, null, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, Collections.emptyMap(), null, false, 0, 0, null, null, null, null, null, null, new ArrayList<>());
     }
 
     public TestExecutionDto(
@@ -527,12 +888,97 @@ public final class TestExecutionDto
         final String failure,
         final List<String> bugs)
     {
-        this(id, "", testClass, null, title, testClass + " " + title, "", "", status, engine, location, null, browser, failure, bugs, null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, null, null, null, null, null, new ArrayList<>());
+        this(id, "", testClass, null, title, testClass + " " + title, "", "", status, engine, location, null, browser, failure, bugs, null, "Default", null, new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, Collections.emptyMap(), null, false, 0, 0, null, null, null, null, null, null, new ArrayList<>());
+    }
+
+    public TestExecutionDto(
+        final String id,
+        final String runId,
+        final String testClass,
+        final String testMethod,
+        final String title,
+        final String status,
+        final String location,
+        final String browser,
+        final Map<String, ?> tags)
+    {
+        this(id, runId, testClass, testMethod, title, testClass + " " + title, "", "", status, "Java", location != null ? location : "US", null, browser, null, new ArrayList<>(), null, null, null, new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, tags, null, false, 0, 0, null, null, null, null, null, null, new ArrayList<>());
+    }
+
+    public TestExecutionDto(
+        final String id,
+        final String runId,
+        final String testClass,
+        final String testMethod,
+        final String title,
+        final String status,
+        final String browser,
+        final Map<String, ?> tags)
+    {
+        this(id, runId, testClass, testMethod, title, status, "US", browser, tags);
+    }
+
+    public TestExecutionDto(
+        final String id,
+        final String runId,
+        final String testClass,
+        final String testMethod,
+        final String title,
+        final String status,
+        final String location,
+        final String browser,
+        final double llmCost,
+        final long llmTotalTokens,
+        final Map<String, ?> tags)
+    {
+        this(id, runId, testClass, testMethod, title, testClass + " " + title, "", "", status, "Java", location != null ? location : "US", location, browser, null, new ArrayList<>(), null, null, null, new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, llmTotalTokens, llmCost, null, "", "", "", null, null, "", false, null, null, tags, null, false, 0, 0, null, null, null, null, null, null, new ArrayList<>());
+    }
+
+    @JsonProperty("tags")
+    public Map<String, List<String>> getTags()
+    {
+        return this.tags;
+    }
+
+    public String getTagsSummary()
+    {
+        if (tags == null || tags.isEmpty())
+        {
+            return "";
+        }
+        final List<String> parts = new ArrayList<>();
+        for (final Map.Entry<String, List<String>> entry : tags.entrySet())
+        {
+            final String key = entry.getKey();
+            final List<String> values = entry.getValue();
+            if (values == null || values.isEmpty())
+            {
+                parts.add(key);
+            }
+            else
+            {
+                for (final String val : values)
+                {
+                    parts.add(key + ": " + val);
+                }
+            }
+        }
+        return String.join(", ", parts);
     }
 
     public String getId()
     {
         return id;
+    }
+
+    /**
+     * Alias for {@link #getId()} to support templates referencing {@code rowId}.
+     *
+     * @return execution ID
+     */
+    public String getRowId()
+    {
+        return getId();
     }
 
     public void setId(final String id)
@@ -548,6 +994,16 @@ public final class TestExecutionDto
     public String getTestClass()
     {
         return testClass;
+    }
+
+    /**
+     * Alias for {@link #getTestClass()} to support templates referencing {@code className}.
+     *
+     * @return test class name
+     */
+    public String getClassName()
+    {
+        return getTestClass();
     }
 
     /**
@@ -569,6 +1025,16 @@ public final class TestExecutionDto
     public String getTestMethod()
     {
         return testMethod != null ? testMethod : "";
+    }
+
+    /**
+     * Alias for {@link #getTestMethod()} to support templates referencing {@code methodName}.
+     *
+     * @return test method name
+     */
+    public String getMethodName()
+    {
+        return getTestMethod();
     }
 
     public String getTitle()
@@ -598,12 +1064,22 @@ public final class TestExecutionDto
 
     public String getStatus()
     {
-        return status;
+        return (status != null && !status.isBlank()) ? status : "running";
+    }
+
+    public boolean isFinished()
+    {
+        if (status == null || status.isBlank())
+        {
+            return false;
+        }
+        final String st = status.toLowerCase(Locale.ROOT);
+        return !"running".equals(st) && !"in_progress".equals(st) && !"executing".equals(st) && !"pending".equals(st);
     }
 
     public void setStatus(final String status)
     {
-        this.status = status;
+        this.status = (status != null && !status.isBlank()) ? status : "running";
     }
 
     /**
@@ -680,6 +1156,7 @@ public final class TestExecutionDto
         return bugs;
     }
 
+    @JsonDeserialize(using = FlexibleBugListDeserializer.class)
     public void setBugs(final List<String> bugs)
     {
         this.bugs.clear();
@@ -687,6 +1164,94 @@ public final class TestExecutionDto
         {
             this.bugs.addAll(bugs);
         }
+        final Map<String, BugDetailDto> existingByTicket = new HashMap<>();
+        for (final BugDetailDto d : this.bugDetails)
+        {
+            existingByTicket.put(d.getTicket().replaceAll("^#+", "").toLowerCase(Locale.ROOT), d);
+        }
+        this.bugDetails.clear();
+        if (bugs != null)
+        {
+            for (final String b : bugs)
+            {
+                if (b != null && !b.isBlank())
+                {
+                    final String norm = b.replaceAll("^#+", "").toLowerCase(Locale.ROOT);
+                    if (existingByTicket.containsKey(norm))
+                    {
+                        this.bugDetails.add(existingByTicket.get(norm));
+                    }
+                    else
+                    {
+                        this.bugDetails.add(new BugDetailDto(b, "MAJOR", ""));
+                    }
+                }
+            }
+        }
+    }
+
+    @JsonProperty("bugDetails")
+    public List<BugDetailDto> getBugDetails()
+    {
+        return bugDetails;
+    }
+
+    public void setBugDetails(final List<BugDetailDto> details)
+    {
+        this.bugDetails.clear();
+        this.bugs.clear();
+        if (details != null)
+        {
+            this.bugDetails.addAll(details);
+            for (final BugDetailDto d : details)
+            {
+                if (d.getTicket() != null && !d.getTicket().isBlank() && !this.bugs.contains(d.getTicket()))
+                {
+                    this.bugs.add(d.getTicket());
+                }
+            }
+        }
+    }
+
+    @JsonProperty("inactiveBugDetails")
+    public List<BugDetailDto> getInactiveBugDetails()
+    {
+        return inactiveBugDetails;
+    }
+
+    public void setInactiveBugDetails(final List<BugDetailDto> details)
+    {
+        this.inactiveBugDetails.clear();
+        if (details != null)
+        {
+            this.inactiveBugDetails.addAll(details);
+        }
+    }
+
+    public String getBugSeverity()
+    {
+        if (this.bugDetails != null && !this.bugDetails.isEmpty())
+        {
+            return this.bugDetails.get(0).getSeverity();
+        }
+        return "MAJOR";
+    }
+
+    public String getBugSeverity(final String ticket)
+    {
+        if (ticket == null || ticket.isBlank())
+        {
+            return "MAJOR";
+        }
+        final String clean = ticket.trim().replaceAll("^#+", "");
+        for (final BugDetailDto d : this.bugDetails)
+        {
+            if (clean.equalsIgnoreCase(d.getTicket().replaceAll("^#+", "")))
+            {
+                return d.getSeverity();
+            }
+        }
+        return "MAJOR";
     }
 
     public String getComment()
@@ -696,7 +1261,16 @@ public final class TestExecutionDto
 
     public String getAreaName()
     {
-        return (areaName != null && !areaName.trim().isEmpty() && !"General".equalsIgnoreCase(areaName.trim())) ? areaName.trim() : "Browsing (default)";
+        return (areaName != null && !areaName.trim().isEmpty()
+            && !"General".equalsIgnoreCase(areaName.trim())
+            && !"Browsing (default)".equalsIgnoreCase(areaName.trim())
+            && !"@Browsing (default)".equalsIgnoreCase(areaName.trim())) ? areaName.trim() : "Default";
+    }
+
+    @JsonProperty("subArea")
+    public String getSubArea()
+    {
+        return subArea;
     }
 
     public List<String> getJunitTags()
@@ -827,11 +1401,11 @@ public final class TestExecutionDto
      * Resolves the user-facing display mode for the All Tests tab mode column.
      * <p>
      * - If REPLAY_WITH_HEALING (or AUTO) and healing was performed: HEALED
-     * - If REPLAY_WITH_HEALING (or AUTO or REPLAY_STRICT) and no healing was performed: PLAYBOOK
+     * - If REPLAY_WITH_HEALING (or AUTO or REPLAY_STRICT) and no healing was performed: RECORDING
      * - If LLM_RECORDING (or LLM_ONLY or FORCE_RECORDING): AI
      * - If no mode was configured or test is standard non-AI: JAVA
      *
-     * @return display mode string (PLAYBOOK, HEALED, AI, or JAVA)
+     * @return display mode string (RECORDING, HEALED, AI, or JAVA)
      */
     @JsonProperty("displayMode")
     public String getDisplayMode()
@@ -844,11 +1418,11 @@ public final class TestExecutionDto
         final String upper = rawMode.toUpperCase();
         if ("REPLAY_WITH_HEALING".equals(upper) || "AUTO".equals(upper))
         {
-            return isHealed() ? "HEALED" : "PLAYBOOK";
+            return isHealed() ? "HEALED" : "RECORDING";
         }
-        if ("REPLAY_STRICT".equals(upper) || "PLAYBOOK".equals(upper))
+        if ("REPLAY_STRICT".equals(upper) || "PLAYBOOK".equals(upper) || "RECORDING".equals(upper))
         {
-            return "PLAYBOOK";
+            return "RECORDING";
         }
         if ("LLM_RECORDING".equals(upper) || "LLM_ONLY".equals(upper) || "FORCE_RECORDING".equals(upper) || "AI".equals(upper))
         {
@@ -915,6 +1489,16 @@ public final class TestExecutionDto
             return durationFormatted;
         }
         return String.format("%,d ms", durationMs);
+    }
+
+    /**
+     * Alias for {@link #getDurationFormatted()} to support templates referencing {@code duration}.
+     *
+     * @return formatted duration string
+     */
+    public String getDuration()
+    {
+        return getDurationFormatted();
     }
 
     public int getLlmCallsCount()
@@ -1015,6 +1599,55 @@ public final class TestExecutionDto
     public void setHealed(final Boolean healed)
     {
         this.healed = healed;
+    }
+
+    @JsonProperty("flaky")
+    public Boolean getFlaky()
+    {
+        return flaky != null ? flaky : false;
+    }
+
+    public boolean isFlaky()
+    {
+        return flaky != null && flaky;
+    }
+
+    public void setFlaky(final Boolean flaky)
+    {
+        this.flaky = flaky != null ? flaky : false;
+    }
+
+    @JsonProperty("flakyFailureCount")
+    public Integer getFlakyFailureCount()
+    {
+        return flakyFailureCount != null ? flakyFailureCount : 0;
+    }
+
+    public void setFlakyFailureCount(final Integer flakyFailureCount)
+    {
+        this.flakyFailureCount = flakyFailureCount != null ? flakyFailureCount : 0;
+    }
+
+    @JsonProperty("flakyTotalRuns")
+    public Integer getFlakyTotalRuns()
+    {
+        return flakyTotalRuns != null ? flakyTotalRuns : 0;
+    }
+
+    public void setFlakyTotalRuns(final Integer flakyTotalRuns)
+    {
+        this.flakyTotalRuns = flakyTotalRuns != null ? flakyTotalRuns : 0;
+    }
+
+    @JsonProperty("flakyReason")
+    public String getFlakyReason()
+    {
+        return flakyReason != null ? flakyReason : "";
+    }
+
+    public void setFlakyReason(final String flakyReason)
+    {
+        this.flakyReason = flakyReason;
     }
 
     @JsonProperty("healed")
@@ -1439,5 +2072,25 @@ public final class TestExecutionDto
         {
             this.size = size;
         }
+    }
+
+    public String getEnvironment()
+    {
+        return environment != null ? environment : "";
+    }
+
+    public void setEnvironment(final String environment)
+    {
+        this.environment = environment;
+    }
+
+    public String getBatchName()
+    {
+        return batchName != null ? batchName : "";
+    }
+
+    public void setBatchName(final String batchName)
+    {
+        this.batchName = batchName;
     }
 }

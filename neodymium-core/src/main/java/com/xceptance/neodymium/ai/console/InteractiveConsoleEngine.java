@@ -18,6 +18,7 @@
  */
 package com.xceptance.neodymium.ai.console;
 
+import org.neodymium.ai.util.AtomicFileUtils;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -30,8 +31,10 @@ import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
@@ -114,7 +117,7 @@ public final class InteractiveConsoleEngine {
         {
             return (sysRunId.startsWith("run_") || sysRunId.startsWith("run-")) ? sysRunId : "run_" + sysRunId;
         }
-        return "run_" + new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date());
+        return "run_" + new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
     }
 
     public static String getRunFolder()
@@ -785,13 +788,13 @@ public final class InteractiveConsoleEngine {
                 parsedState.add("attachments", attachmentsArray);
                 contentToSave = parsedState.toString();
 
-                Files.writeString(executionJson.toPath(), contentToSave, StandardCharsets.UTF_8);
-                Files.writeString(structuredJson.toPath(), contentToSave, StandardCharsets.UTF_8);
-                Files.writeString(reportsStructuredJson.toPath(), contentToSave, StandardCharsets.UTF_8);
+                AtomicFileUtils.writeStringAtomic(executionJson, contentToSave);
+                AtomicFileUtils.writeStringAtomic(structuredJson, contentToSave);
+                AtomicFileUtils.writeStringAtomic(reportsStructuredJson, contentToSave);
                 if (auraStructuredDir != null)
                 {
                     final File auraStructuredJson = new File(auraStructuredDir, "console-execution-" + index + ".json");
-                    Files.writeString(auraStructuredJson.toPath(), contentToSave, StandardCharsets.UTF_8);
+                    AtomicFileUtils.writeStringAtomic(auraStructuredJson, contentToSave);
                 }
             }
             catch (final Exception e)
@@ -951,7 +954,7 @@ public final class InteractiveConsoleEngine {
                             parsedState.addProperty("videoPath", videoName);
                             final String updatedJson = parsedState.toString();
 
-                            Files.writeString(jsonFileToUpdate.toPath(), updatedJson, StandardCharsets.UTF_8);
+                            AtomicFileUtils.writeStringAtomic(jsonFileToUpdate, updatedJson);
                         }
                         catch (final Exception ignored)
                         {
