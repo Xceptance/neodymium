@@ -9,7 +9,7 @@
             <div class="aura-sparkle-badge" style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; background: linear-gradient(135deg, var(--accent-purple), var(--accent)); color: white;">
                 <span class="material-symbols-outlined" style="font-size: 15px;">auto_awesome</span>
             </div>
-            <span style="font-weight: 600; font-size: 13.5px;">Aura Assistant</span>
+            <span style="font-weight: 600; font-size: 13.5px;">AI Assistant</span>
         </div>
         <div class="neo-u-24" style="display: flex; gap: 4px; align-items: center;">
             <select class="neo-u-25" id="chatSessionSelect" name="sessionId"
@@ -67,7 +67,7 @@
           class="chat-input-form" style="padding: 8px 12px 12px 12px; background: var(--bg-card); border-top: 1px solid var(--border);">
         <input type="hidden" name="sessionId" id="hiddenSessionId" th:value="${currentSessionId}"/>
         <div class="chat-input-wrapper" style="display: flex; gap: 6px; align-items: center; background: var(--bg-main); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px;">
-            <input class="chat-input" id="chatInput" name="prompt" placeholder="Ask Aura or type a command..." type="text" autocomplete="off" style="flex: 1; border: none; background: transparent; color: var(--text-primary); font-size: 12.5px; outline: none; padding: 4px;"/>
+            <input class="chat-input" id="chatInput" name="prompt" placeholder="Ask Neodymium AI or type a command..." type="text" autocomplete="off" style="flex: 1; border: none; background: transparent; color: var(--text-primary); font-size: 12.5px; outline: none; padding: 4px;"/>
             <button type="submit" class="chat-send-btn" title="Send Message" style="background: var(--accent); color: white; border: none; border-radius: 6px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
                 <span class="material-symbols-outlined" style="font-size: 15px;">send</span>
             </button>
@@ -78,7 +78,7 @@
 <th:block th:fragment="chatMessagesContent">
     <div th:if="${#lists.isEmpty(chatMessages)}" class="chat-welcome-card">
         <div class="chat-welcome-icon"><span class="material-symbols-outlined">smart_toy</span></div>
-        <div class="chat-welcome-title">Hello, I'm Aura. How can I help?</div>
+        <div class="chat-welcome-title">Hello, I'm Neodymium AI. How can I help?</div>
         <div class="chat-welcome-desc">I can select test cases, configure multi-browser profiles, and help you create or repair tests.</div>
         <div class="chat-prompts">
             <button type="button" class="prompt-chip" onclick="setChatPrompt('Select all test cases using the search')"><span class="material-symbols-outlined">checklist</span> Select all "search" tests</button>
@@ -92,7 +92,7 @@
             <div class="avatar" th:classappend="${msg.role == 'user' ? 'user-avatar' : 'ai-avatar'}">
                 <span class="material-symbols-outlined" th:text="${msg.role == 'user' ? 'person' : 'smart_toy'}"></span>
             </div>
-            <span class="sender" th:text="${msg.role == 'user' ? 'You' : 'Aura Assistant'}">Sender</span>
+            <span class="sender" th:text="${msg.role == 'user' ? 'You' : 'AI Assistant'}">Sender</span>
         </div>
         <div th:if="${msg.thinking != null and msg.thinking != ''}" class="thinking-block">
             <details>

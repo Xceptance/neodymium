@@ -395,7 +395,13 @@
 			</properties>
 		</profile>
 
-		<!-- 8. Skip Aura Glance sandbox tests in core (run in test-server and e2e-tests) -->
+		<!-- 8. Skip AI Glance sandbox tests in core (run in test-server and e2e-tests) -->
+		<profile>
+			<id>ai-sandbox</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
 		<profile>
 			<id>aura-sandbox</id>
 			<properties>
@@ -403,7 +409,13 @@
 			</properties>
 		</profile>
 
-		<!-- 9. Skip Aura Manager profile in core -->
+		<!-- 9. Skip AI Manager profile in core -->
+		<profile>
+			<id>ai-manager</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
 		<profile>
 			<id>aura-manager</id>
 			<properties>

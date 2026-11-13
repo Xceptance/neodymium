@@ -680,8 +680,8 @@ public final class StaticResourceSyntaxTest
             "sidebar.html must render brand label 'Neodymium'"
         );
         Assertions.assertTrue(
-            sidebarContent.contains("class=\"logo-title\">Aura Manager</span>"),
-            "sidebar.html must render title label 'Aura Manager'"
+            sidebarContent.contains("class=\"logo-title\">AI Manager</span>"),
+            "sidebar.html must render title label 'AI Manager'"
         );
 
         final String[] expectedIcons = {"play_circle"};

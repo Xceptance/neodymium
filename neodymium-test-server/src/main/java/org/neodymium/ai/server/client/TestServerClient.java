@@ -105,19 +105,34 @@ public final class TestServerClient
         sendPost("/api/test/sessions/" + encode(sessionId) + "/orders/reset");
     }
 
+    public void setAiGlanceDelay(final int delayMs)
+    {
+        sendPost("/api/test/sessions/" + encode(sessionId) + "/aiglance/delay?delayMs=" + delayMs);
+    }
+
     public void setAuraGlanceDelay(final int delayMs)
     {
-        sendPost("/api/test/sessions/" + encode(sessionId) + "/auraglance/delay?delayMs=" + delayMs);
+        setAiGlanceDelay(delayMs);
+    }
+
+    public void setAiGlanceFailure(final boolean enabled)
+    {
+        sendPost("/api/test/sessions/" + encode(sessionId) + "/aiglance/failure?enabled=" + enabled);
     }
 
     public void setAuraGlanceFailure(final boolean enabled)
     {
-        sendPost("/api/test/sessions/" + encode(sessionId) + "/auraglance/failure?enabled=" + enabled);
+        setAiGlanceFailure(enabled);
+    }
+
+    public void resetAiGlance()
+    {
+        sendPost("/api/test/sessions/" + encode(sessionId) + "/aiglance/reset");
     }
 
     public void resetAuraGlance()
     {
-        sendPost("/api/test/sessions/" + encode(sessionId) + "/auraglance/reset");
+        resetAiGlance();
     }
 
     public void destroy()
