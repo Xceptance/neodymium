@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
@@ -1426,5 +1427,51 @@ public final class AiConfiguration
     public boolean isNetworkMonitorEnabled()
     {
         return getBoolean("neodymium.ai.network.monitorEnabled", true);
+    }
+
+    /**
+     * Checks whether the pre-execution navigation provenance guard is enabled for autonomous
+     * {@code navigate} tool calls. When enabled (default: {@code true}), uncommanded URL/domain
+     * navigations not backed by the step instruction, blank browser state, or allowed hosts are blocked.
+     *
+     * @return true if navigation provenance guard is enabled, false otherwise
+     */
+    public boolean isNavigationGuardEnabled()
+    {
+        return getBoolean("neodymium.ai.navigation.guard.enabled", true);
+    }
+
+    /**
+     * Resolves the list of explicitly permitted hostnames or registrable domains for autonomous
+     * {@code navigate} calls (configured via comma-separated {@code neodymium.ai.navigation.allowedHosts}).
+     * Entries are normalized to lowercase with any leading {@code www.} prefix stripped.
+     *
+     * @return unmodifiable list of normalized allowed hostnames/domains
+     */
+    public List<String> getNavigationAllowedHosts()
+    {
+        final String raw = getProperty("neodymium.ai.navigation.allowedHosts", "");
+        if (raw == null || raw.isBlank())
+        {
+            return Collections.emptyList();
+        }
+        final List<String> hosts = new ArrayList<>();
+        for (final String part : raw.split(","))
+        {
+            String normalized = part.trim().toLowerCase(Locale.ROOT);
+            if (normalized.startsWith("www.") && normalized.length() > 4)
+            {
+                normalized = normalized.substring(4);
+            }
+            while (normalized.endsWith("."))
+            {
+                normalized = normalized.substring(0, normalized.length() - 1);
+            }
+            if (!normalized.isEmpty())
+            {
+                hosts.add(normalized);
+            }
+        }
+        return Collections.unmodifiableList(hosts);
     }
 }

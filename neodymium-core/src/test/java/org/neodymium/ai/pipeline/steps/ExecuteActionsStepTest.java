@@ -1992,6 +1992,59 @@ public final class ExecuteActionsStepTest
         final PipelineStep nextStep = context.popStep();
         assertTrue(nextStep instanceof AgentToolLoopStep, "Context top step must be AgentToolLoopStep for online visual healing");
     }
+
+    @Test
+    public void testReplayFailedStepWithIntermediateToolCallsThrowsConclusiveFailureAfterReplayingCalls() throws Exception
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        final ToolRegistry toolRegistry = new ToolRegistry();
+        final AtomicBoolean scrollExecuted = new AtomicBoolean(false);
+        toolRegistry.register(new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return new ToolDefinition("scroll", "scrolls page", JsonNodeFactory.instance.objectNode());
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                scrollExecuted.set(true);
+                return ToolResult.success(call.callId(), "scrolled");
+            }
+        });
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put("KEY_TOOL_REGISTRY", toolRegistry);
+
+        final PlaybookStep failedBugStep = new PlaybookStep("Click missing checkout button (bug: BTN-404)");
+        failedBugStep.setRecordedStatus(PlaybookStepStatus.FAILED);
+        failedBugStep.setRecordedFailureReason("Step failed via fail_step: Checkout button missing after scroll");
+        final ObjectNode scrollArgs = JsonNodeFactory.instance.objectNode();
+        scrollArgs.put("direction", "down");
+        failedBugStep.setToolCalls(List.of(new ToolCall("s-1", "scroll", scrollArgs)));
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(failedBugStep, session, context);
+        pipelineStep.execute(context);
+
+        final ConclusiveFailureException ex = assertThrows(ConclusiveFailureException.class, () ->
+        {
+            while (context.hasSteps())
+            {
+                context.popStep().execute(context);
+            }
+        });
+
+        assertTrue(scrollExecuted.get(), "Intermediate recorded tool call before fail_step must execute during replay");
+        assertTrue(ex.getMessage().contains("Checkout button missing after scroll"));
+    }
 }
 
 
