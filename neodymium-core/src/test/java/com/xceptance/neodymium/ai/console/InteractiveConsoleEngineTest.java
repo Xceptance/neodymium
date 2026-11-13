@@ -101,6 +101,7 @@ public class InteractiveConsoleEngineTest
             System.clearProperty("neodymium.ai.consoleExecutionLogs");
         }
         System.clearProperty("neodymium.ai.consoleExecutionLogs.directory");
+        System.clearProperty("neodymium.ai.consoleExecutionLogs.captureGlobalLog");
         System.clearProperty("neodymium.ai.storageRuns.directory");
         Neodymium.clearAttachments();
         AiConfiguration.resetInstance();
@@ -1700,6 +1701,39 @@ public class InteractiveConsoleEngineTest
             }
         }
         assertTrue(foundPb2, "playbook.yaml attachment must be registered for dataset 2");
+    }
+
+    @Test
+    public void testReconcilePreservesCustomAttachmentsAfterThreadContextClearedAndHandlesNullVideoUrl(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        Neodymium.addAttachment("custom-note.txt", "important context", "text/plain", false);
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-reconcile-att");
+        final String stateJson = "{\"testName\":\"ReconcileAttTest · ds1\",\"testFile\":\"com.xceptance.ReconcileAttTest#execute\",\"status\":\"passed\",\"videoUrl\":null,\"steps\":[]}";
+        engine.pushState(stateJson);
+
+        // Simulate thread context cleared before reconciliation runs
+        Neodymium.clearThreadContext();
+        engine.reconcileTestOutcome(false, new RuntimeException("Post-test failure"));
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File json1 = new File(customDir.toFile(), runFolder + "/ReconcileAttTest/console-execution-1.json");
+        assertTrue(json1.exists());
+        final JsonNode root = new ObjectMapper().readTree(json1);
+        final JsonNode attNode = root.get("attachments");
+        boolean foundCustom = false;
+        for (final JsonNode att : attNode)
+        {
+            if ("custom-note.txt".equals(att.path("name").asText()))
+            {
+                foundCustom = true;
+            }
+        }
+        assertTrue(foundCustom, "reconcileTestOutcome must preserve cached custom attachments even after thread context is cleared");
     }
 }
 

@@ -55,6 +55,7 @@ public class AiConfigurationTest
         System.clearProperty("neodymium.ai.interactive");
         System.clearProperty("neodymium.managerActive");
         System.clearProperty("neodymium.ai.consoleExecutionLogs.directory");
+        System.clearProperty("neodymium.ai.consoleExecutionLogs.captureGlobalLog");
         System.clearProperty("neodymium.ai.consoleLog.directory");
         System.clearProperty("neodymium.ai.storageRuns.directory");
         System.clearProperty("aura.report.storage.runs.base-dir");
@@ -240,6 +241,19 @@ public class AiConfigurationTest
         AiConfiguration.resetInstance();
         assertEquals("custom/neo-runs", AiConfiguration.getInstance().getAuraStorageRunsDirectory(),
             "Aura storage runs directory should resolve neodymium.ai.storageRuns.directory override with higher priority.");
+    }
+
+    @Test
+    public void testConsoleExecutionLogsCaptureGlobalLogDefaultAndOverride()
+    {
+        AiConfiguration.resetInstance();
+        assertFalse(AiConfiguration.getInstance().isConsoleExecutionLogsCaptureGlobalLogEnabled(),
+            "Global log fallback capture should default to false to prevent per-step disk spam.");
+
+        System.setProperty("neodymium.ai.consoleExecutionLogs.captureGlobalLog", "true");
+        AiConfiguration.resetInstance();
+        assertTrue(AiConfiguration.getInstance().isConsoleExecutionLogsCaptureGlobalLogEnabled(),
+            "Global log fallback capture should return true when explicitly enabled.");
     }
 
     @Test

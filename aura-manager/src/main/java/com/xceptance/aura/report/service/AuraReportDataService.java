@@ -1458,24 +1458,63 @@ public class AuraReportDataService
         {
             try
             {
-                final Path runDir = localRunJsonStorageService.getRunDir(effectiveRunId);
+                final Path runDir = localRunJsonStorageService.getRunDir(effectiveRunId).toAbsolutePath().normalize();
                 if (Files.exists(runDir))
                 {
-                    final String testClass = objNode.path("testClass").asText("");
-                    final String simpleClass = testClass.contains(".") ? testClass.substring(testClass.lastIndexOf('.') + 1) : testClass;
-                    Path pbPath = runDir.resolve(testClass).resolve("playbook.yaml");
-                    if (!Files.exists(pbPath) && !simpleClass.isEmpty())
+                    final String rawTestClass = objNode.path("testClass").asText("");
+                    final String cleanClass = rawTestClass.contains("#")
+                        ? rawTestClass.substring(0, rawTestClass.indexOf('#')).trim()
+                        : rawTestClass.trim();
+                    final String simpleClass = cleanClass.contains(".")
+                        ? cleanClass.substring(cleanClass.lastIndexOf('.') + 1)
+                        : cleanClass;
+
+                    String pbFileName = "playbook.yaml";
+                    if (objNode.has("attachments") && objNode.get("attachments").isArray())
                     {
-                        pbPath = runDir.resolve(simpleClass).resolve("playbook.yaml");
+                        for (final JsonNode attNode : objNode.get("attachments"))
+                        {
+                            final String attName = attNode.path("name").asText("");
+                            final String attPath = attNode.path("path").asText("");
+                            if ("playbook.yaml".equals(attName) || attPath.startsWith("playbook"))
+                            {
+                                if (!attPath.isBlank() && !attPath.contains("..") && !attPath.contains("/") && !attPath.contains("\\"))
+                                {
+                                    pbFileName = attPath;
+                                    break;
+                                }
+                            }
+                        }
                     }
-                    if (!Files.exists(pbPath))
+
+                    final List<Path> pbCandidateDirs = new ArrayList<>();
+                    if (!cleanClass.isBlank())
                     {
-                        pbPath = runDir.resolve("playbook.yaml");
+                        final Path classDir = runDir.resolve(cleanClass).normalize();
+                        if (classDir.startsWith(runDir))
+                        {
+                            pbCandidateDirs.add(classDir);
+                        }
                     }
-                    if (Files.isRegularFile(pbPath) && Files.isReadable(pbPath))
+                    if (!simpleClass.isBlank() && !simpleClass.equals(cleanClass))
                     {
-                        final String yaml = Files.readString(pbPath, StandardCharsets.UTF_8);
-                        objNode.put("playbookContent", yaml);
+                        final Path simpleDir = runDir.resolve(simpleClass).normalize();
+                        if (simpleDir.startsWith(runDir))
+                        {
+                            pbCandidateDirs.add(simpleDir);
+                        }
+                    }
+                    pbCandidateDirs.add(runDir);
+
+                    for (final Path cDir : pbCandidateDirs)
+                    {
+                        final Path pbPath = cDir.resolve(pbFileName).normalize();
+                        if (pbPath.startsWith(cDir) && Files.isRegularFile(pbPath) && Files.isReadable(pbPath))
+                        {
+                            final String yaml = Files.readString(pbPath, StandardCharsets.UTF_8);
+                            objNode.put("playbookContent", yaml);
+                            break;
+                        }
                     }
                 }
             }

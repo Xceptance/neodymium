@@ -1136,6 +1136,18 @@ public final class AiConfiguration
     }
 
     /**
+     * Checks whether falling back to capturing the global {@code target/neodymium-ai.log} file
+     * into per-test {@code execution.log} files is enabled when structured log content is not yet set.
+     * Defaults to {@code false} to avoid per-step disk I/O overhead and cross-test log pollution.
+     *
+     * @return true if global log fallback capture is enabled
+     */
+    public boolean isConsoleExecutionLogsCaptureGlobalLogEnabled()
+    {
+        return getBoolean("neodymium.ai.consoleExecutionLogs.captureGlobalLog", false);
+    }
+
+    /**
      * Gets the active execution mode for the AI pipeline.
      * Defaults to REPLAY_WITH_HEALING.
      *

@@ -237,8 +237,28 @@ public final class InteractiveConsoleEngine {
 
     private volatile String executionLogContent;
 
+    private final Map<String, String> executionLogByKey = new ConcurrentHashMap<>();
+
+    private final Map<String, List<ExecutionAttachment>> cachedCustomAttachments = new ConcurrentHashMap<>();
+
     public void setExecutionLogContent(final String executionLogContent)
     {
+        this.executionLogContent = executionLogContent;
+    }
+
+    public void setExecutionLogContent(final String executionKey, final String executionLogContent)
+    {
+        if (executionKey != null && !executionKey.isBlank())
+        {
+            if (executionLogContent != null)
+            {
+                this.executionLogByKey.put(executionKey, executionLogContent);
+            }
+            else
+            {
+                this.executionLogByKey.remove(executionKey);
+            }
+        }
         this.executionLogContent = executionLogContent;
     }
 
@@ -560,7 +580,7 @@ public final class InteractiveConsoleEngine {
                 }
                 final File reportsStructuredJson = new File(reportsStructuredDir, "console-execution-" + index + ".json");
 
-                // 4. Structured copy in Aura storage directory (if directory exists or is configured)
+                // 4. Structured copy in Aura storage directory (always synced by default unless disabled via empty property)
                 final String auraStorageRunsDirPath = AiConfiguration.getInstance().getAuraStorageRunsDirectory();
                 final File auraBaseDir = new File(auraStorageRunsDirPath);
                 final File auraStructuredDir = (auraBaseDir.exists() || !auraStorageRunsDirPath.isBlank())
@@ -571,9 +591,12 @@ public final class InteractiveConsoleEngine {
                     auraStructuredDir.mkdirs();
                 }
 
-                // Write execution.log if content or source log is available
-                String logText = this.executionLogContent;
-                if (logText == null || logText.isBlank())
+                // Write execution.log if structured content is available, or global log fallback is enabled
+                String logText = (executionKey != null && this.executionLogByKey.containsKey(executionKey))
+                    ? this.executionLogByKey.get(executionKey)
+                    : this.executionLogContent;
+                if ((logText == null || logText.isBlank())
+                    && AiConfiguration.getInstance().isConsoleExecutionLogsCaptureGlobalLogEnabled())
                 {
                     final File aiLogFile = new File("target/neodymium-ai.log");
                     if (aiLogFile.exists() && aiLogFile.isFile())
@@ -635,7 +658,7 @@ public final class InteractiveConsoleEngine {
                     }
                 }
 
-                if (parsedState.has("videoUrl"))
+                if (parsedState.has("videoUrl") && !parsedState.get("videoUrl").isJsonNull())
                 {
                     final String videoName = parsedState.get("videoUrl").getAsString();
                     final File srcVideo = new File(structuredDir, videoName);
@@ -707,8 +730,19 @@ public final class InteractiveConsoleEngine {
                     attachmentsArray.add(logAtt);
                 }
 
-                // 4. Custom developer attachments from Neodymium.getAttachments()
-                final List<ExecutionAttachment> customAttachments = Neodymium.getAttachments();
+                // 4. Custom developer attachments from Neodymium.getAttachments() (cached per execution index for reconciliation)
+                final String execCacheKey = testClassFolder + "#" + index;
+                final List<ExecutionAttachment> threadAttachments = Neodymium.getAttachments();
+                final List<ExecutionAttachment> customAttachments;
+                if (!threadAttachments.isEmpty())
+                {
+                    this.cachedCustomAttachments.put(execCacheKey, threadAttachments);
+                    customAttachments = threadAttachments;
+                }
+                else
+                {
+                    customAttachments = this.cachedCustomAttachments.getOrDefault(execCacheKey, Collections.emptyList());
+                }
                 for (final ExecutionAttachment att : customAttachments)
                 {
                     final JsonObject attObj = new JsonObject();

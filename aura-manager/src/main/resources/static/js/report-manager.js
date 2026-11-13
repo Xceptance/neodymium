@@ -3653,7 +3653,7 @@ function copyTurnConversation(stepId, cIdx, btn) {
 function copyAttachmentPlaybook(btn) {
     const activeRow = (typeof currentActiveRowId !== 'undefined' && currentActiveRowId)
         ? (document.getElementById(currentActiveRowId) || document.querySelector(`[data-row-id="${currentActiveRowId}"]`))
-        : document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row');
+        : document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row:hover');
 
     const yaml = (activeRow && activeRow.getAttribute('data-playbook-content'))
         || (activeRow && activeRow._execDto && activeRow._execDto.playbookContent)
@@ -3665,9 +3665,9 @@ function copyAttachmentPlaybook(btn) {
 }
 
 function generateFullTestDiagnosticsMarkdown(execDto, activeRow) {
-    const row = activeRow || (typeof currentActiveRowId !== 'undefined' && currentActiveRowId
+    const row = activeRow || ((typeof currentActiveRowId !== 'undefined' && currentActiveRowId)
         ? (document.getElementById(currentActiveRowId) || document.querySelector(`[data-row-id="${currentActiveRowId}"]`))
-        : document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row'));
+        : document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row:hover'));
 
     const dto = execDto || (row && row._execDto) || (typeof window._currentActiveExecDto !== 'undefined' ? window._currentActiveExecDto : null) || {};
 
@@ -3777,8 +3777,12 @@ function generateFullTestDiagnosticsMarkdown(execDto, activeRow) {
         } catch (e) {}
     }
     if (stepsList.length === 0 && dto.blocks) {
-        const b = typeof dto.blocks === 'string' ? JSON.parse(dto.blocks) : dto.blocks;
-        stepsList = [...(b.before || []), ...(b.steps || []), ...(b.after || [])];
+        try {
+            const b = typeof dto.blocks === 'string' ? JSON.parse(dto.blocks) : dto.blocks;
+            if (b && typeof b === 'object') {
+                stepsList = [...(b.before || []), ...(b.steps || []), ...(b.after || [])];
+            }
+        } catch (e) {}
     }
 
     if (stepsList.length > 0) {
@@ -3854,7 +3858,7 @@ function copyFullTestDiagnostics(btn) {
 
     const activeRow = (typeof currentActiveRowId !== 'undefined' && currentActiveRowId)
         ? (document.getElementById(currentActiveRowId) || document.querySelector(`[data-row-id="${currentActiveRowId}"]`))
-        : document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row');
+        : document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row:hover');
 
     const md = generateFullTestDiagnosticsMarkdown(activeRow ? activeRow._execDto : null, activeRow);
     if (!md) return;
@@ -3866,6 +3870,7 @@ function renderStepsForExecution(activeRow) {
     if (!stepListEl) return;
 
     if (!activeRow) {
+        window._currentActiveExecDto = null;
         stepListEl.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem;">Select a test execution row to view steps.</div>';
         const linterContainer = document.getElementById('sidePageLinterFindingsContainer');
         if (linterContainer) {
@@ -3883,6 +3888,7 @@ function renderStepsForExecution(activeRow) {
     const blocksAttr = activeRow.getAttribute('data-blocks');
     const stepsAttr = activeRow.getAttribute('data-steps');
     const stepsFetched = activeRow.hasAttribute('data-steps-fetched');
+    window._currentActiveExecDto = activeRow._execDto || null;
 
     if (!stepsFetched && (!blocksAttr || blocksAttr === 'null' || blocksAttr === '{}') && (!stepsAttr || stepsAttr === 'null' || stepsAttr === '{}')) {
         const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '#RUN_ID');
@@ -5037,9 +5043,10 @@ function renderStepsForExecution(activeRow) {
             if (codePreview) {
                 codePreview.textContent = playbookContent || '[ Playbook YAML available ]';
             }
-            const openBtn = playbookBox.querySelector('button[onclick*="openAttachmentWindow"]');
+            const openBtn = playbookBox.querySelector('button[title*="separate browser window"], button[onclick*="openAttachmentWindow"]');
             if (openBtn) {
-                openBtn.setAttribute('onclick', `openAttachmentWindow('yaml', '${escapeHtml(playbookTarget)}')`);
+                openBtn.removeAttribute('onclick');
+                openBtn.onclick = () => openAttachmentWindow('yaml', playbookTarget);
             }
         } else {
             playbookBox.style.display = 'none';
@@ -5060,9 +5067,10 @@ function renderStepsForExecution(activeRow) {
             const logTarget = logAttachment.path || logAttachment.name || 'execution.log';
             const chip = logBox.querySelector('#attachmentLogChip') || logBox.querySelector('.tag-chip');
             if (chip) chip.textContent = logFileName;
-            const openBtn = logBox.querySelector('button[onclick*="openAttachmentWindow"]');
+            const openBtn = logBox.querySelector('button[title*="separate browser window"], button[onclick*="openAttachmentWindow"]');
             if (openBtn) {
-                openBtn.setAttribute('onclick', `openAttachmentWindow('log', '${escapeHtml(logTarget)}')`);
+                openBtn.removeAttribute('onclick');
+                openBtn.onclick = () => openAttachmentWindow('log', logTarget);
             }
         } else {
             logBox.style.display = 'none';
@@ -5146,7 +5154,7 @@ function resolveSimpleTestClassName(element) {
 function openAttachmentWindow(type, url) {
     const activeRow = (typeof currentActiveRowId !== 'undefined' && currentActiveRowId)
         ? (document.getElementById(currentActiveRowId) || document.querySelector(`[data-row-id="${currentActiveRowId}"]`))
-        : document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row');
+        : document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row:hover');
 
     let filename = (url && typeof url === 'string' && url.trim().length > 0) ? url.trim() : '';
     if (!filename && type === 'video' && activeRow) {
@@ -5172,7 +5180,11 @@ function openAttachmentWindow(type, url) {
     }
     const win = window.open(targetUrl, '_blank', 'width=1000,height=700,resizable=yes,scrollbars=yes');
     if (!win || win.closed || typeof win.closed === 'undefined') {
-        window.location.href = targetUrl;
+        if (typeof showActionNotification === 'function') {
+            showActionNotification('Popup blocked by browser. Please allow popups for this site to open attachments.', 'warning');
+        } else {
+            alert('Popup blocked by browser. Please allow popups for this site to open attachments in a separate window.');
+        }
     }
 }
 window.openAttachmentWindow = openAttachmentWindow;

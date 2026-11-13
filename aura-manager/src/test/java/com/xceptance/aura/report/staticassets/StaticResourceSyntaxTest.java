@@ -1462,5 +1462,51 @@ public final class StaticResourceSyntaxTest
 
         runNodeScript(nodeTestScript, "Full test diagnostics markdown export test failed");
     }
+
+    @Test
+    public void testSidePanelResponsiveHeaderCssAndJsEdgeCases() throws Exception
+    {
+        final Path cssPath = Paths.get("src/main/resources/static/css/report-manager.css");
+        final String cssContent = Files.readString(cssPath, StandardCharsets.UTF_8);
+        Assertions.assertTrue(cssContent.contains(".side-page-header-content { flex: 1 1 auto; min-width: 0; }"),
+            "CSS must set min-width: 0 on .side-page-header-content so long titles wrap instead of overflowing");
+        Assertions.assertTrue(cssContent.contains(".side-page-header-actions") && cssContent.contains("flex-shrink: 0"),
+            "CSS must prevent .side-page-header-actions from shrinking");
+        Assertions.assertTrue(cssContent.contains(".side-page-title") && cssContent.contains("word-break: break-word")
+            && cssContent.contains("overflow-wrap: break-word"),
+            "CSS must wrap long .side-page-title strings");
+
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const assert = require('assert');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const locObj = { href: 'http://localhost:8080/report' };\n" +
+            "const sandbox = {\n" +
+            "    console: console,\n" +
+            "    assert: assert,\n" +
+            "    alert: () => {},\n" +
+            "    location: locObj,\n" +
+            "    window: { location: locObj, open: () => null },\n" +
+            "    document: {\n" +
+            "        getElementById: () => null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {} }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window.window = sandbox.window;\n" +
+            "const testScript = code + '\\n' + `\n" +
+            "const mdMalformed = generateFullTestDiagnosticsMarkdown({ testName: 'MalformedTest', blocks: '{not-valid-json' }, null);\n" +
+            "assert(mdMalformed.includes('# Test Execution Diagnostics: MalformedTest'), 'Malformed dto.blocks must not throw');\n" +
+            "openAttachmentWindow('yaml', '/api/runs/r1/C1/playbook.yaml');\n" +
+            "assert.strictEqual(window.location.href, 'http://localhost:8080/report', 'Blocked popup must not navigate report tab away');\n" +
+            "`;\n" +
+            "vm.runInNewContext(testScript, sandbox);\n";
+
+        runNodeScript(nodeTestScript, "Side panel responsive CSS and JS edge case test failed");
+    }
 }
 

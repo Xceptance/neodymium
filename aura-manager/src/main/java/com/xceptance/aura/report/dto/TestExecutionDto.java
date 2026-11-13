@@ -100,6 +100,62 @@ public final class TestExecutionDto
         this("", "", "", "", "", "", "", "", "passed-clean", "Java", "UNKNOWN", null, "Unknown", "NONE", new ArrayList<>(), null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, null, null, null, null, null, new ArrayList<>());
     }
 
+    public TestExecutionDto(
+        final String id,
+        final String runId,
+        final String testClass,
+        final String testMethod,
+        final String title,
+        final String testName,
+        final String playbookFile,
+        final String testFile,
+        final String status,
+        final String engine,
+        final String location,
+        final String locale,
+        final String browser,
+        final String failure,
+        final List<String> bugs,
+        final String comment,
+        final String areaName,
+        final List<String> junitTags,
+        final Map<String, String> dataBindings,
+        final Map<String, String> localDataBindings,
+        final JsonNode blocks,
+        final JsonNode steps,
+        final String testId,
+        final String datasetId,
+        final String executionMode,
+        final String mode,
+        final String startTime,
+        final String dateFormatted,
+        final String timeFormatted,
+        final Long timestampMs,
+        final Integer totalStepsCount,
+        final Integer failedStepsCount,
+        final Long durationMs,
+        final String durationFormatted,
+        final Integer llmCallsCount,
+        final Long llmTotalTokens,
+        final Double llmCost,
+        final String failureSnippet,
+        final String failureReason,
+        final String failureStackTrace,
+        final String visualRcaExplanation,
+        final JsonNode llmResponsibility,
+        final JsonNode metrics,
+        final String videoUrl,
+        final Boolean healed,
+        final JsonNode linterFindings,
+        final JsonNode postFlightFindings,
+        final Long inputTokensCount,
+        final Long outputTokensCount,
+        final Long cachedTokensCount,
+        final JsonNode llmCalls)
+    {
+        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, failureReason, failureStackTrace, visualRcaExplanation, llmResponsibility, metrics, videoUrl, healed, linterFindings, postFlightFindings, inputTokensCount, outputTokensCount, cachedTokensCount, llmCalls, null, new ArrayList<>());
+    }
+
     @JsonCreator
     public TestExecutionDto(
         @JsonProperty("id") final String id,
