@@ -181,6 +181,11 @@ public final class InteractiveStateBuilder
             {
                 state.addProperty("playbookRecordingFile", playbookRecordingFile);
             }
+            final String playbookContent = (String) context.getTransientData().get("playbookContent");
+            if (playbookContent != null && !playbookContent.isEmpty())
+            {
+                state.addProperty("playbookContent", playbookContent);
+            }
             if (testClass != null)
             {
                 state.addProperty("testClass", testClass);

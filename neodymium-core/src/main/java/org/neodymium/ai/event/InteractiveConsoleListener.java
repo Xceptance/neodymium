@@ -50,6 +50,7 @@ import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.PlaybookPipelineStep;
 import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.report.DiskReportFormat;
+import org.neodymium.ai.report.ExecutionLogGenerator;
 import org.neodymium.ai.report.PreliminaryReportListener;
 import org.neodymium.ai.report.TestExecutionReport;
 import org.neodymium.ai.session.AiSession;
@@ -142,6 +143,11 @@ public final class InteractiveConsoleListener implements ExecutionListener
         if (this.reportListener != null)
         {
             this.reportListener.reconcileTestOutcome(testPassed, uncaughtException);
+            if (this.consoleEngine != null && this.reportListener.getReport() != null)
+            {
+                final ExecutionLogGenerator logGen = new ExecutionLogGenerator();
+                this.consoleEngine.setExecutionLogContent(logGen.generate(this.reportListener.getReport()));
+            }
         }
         if (this.consoleEngine != null)
         {
@@ -282,6 +288,11 @@ public final class InteractiveConsoleListener implements ExecutionListener
         else if (event instanceof SessionFinishedEvent sessionFinished)
         {
             final TestExecutionReport rep = getReport();
+            if (this.consoleEngine != null && rep != null)
+            {
+                final ExecutionLogGenerator logGen = new ExecutionLogGenerator();
+                this.consoleEngine.setExecutionLogContent(logGen.generate(rep));
+            }
             final boolean hasHealed = (rep != null && rep.getMetrics() != null && rep.getMetrics().getHealedSteps() > 0)
                 || (this.session != null && this.session.getExecutionContext() != null
                     && Boolean.TRUE.equals(this.session.getExecutionContext().getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP)));

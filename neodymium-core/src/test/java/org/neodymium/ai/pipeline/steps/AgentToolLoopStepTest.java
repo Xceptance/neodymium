@@ -45,6 +45,7 @@ import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.event.ExecutionListener;
 import org.neodymium.ai.event.InteractiveConsoleListener;
 import org.neodymium.ai.event.structural.ActionExecutedEvent;
+import org.neodymium.ai.event.structural.StateCapturedEvent;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.executor.TargetExecutor;
@@ -5443,6 +5444,334 @@ public class AgentToolLoopStepTest
         Assertions.assertEquals("Filters applied and item count verified", playbookStep.getReasoning());
         Assertions.assertTrue(playbookStep.getReasonings().contains("Opening filter drawer"));
         Assertions.assertTrue(playbookStep.getReasonings().contains("Filters applied and item count verified"));
+    }
+
+    @Test
+    public void testFailStepAutoEscalatesOnceBelowRichThenThrowsConclusiveFailure()
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        executor.enqueueState(new BrowserSutState("<div>Initial LEAN DOM</div>", Collections.emptyList(), "lean-hash"));
+        executor.enqueueState(new BrowserSutState("<div>Rich DOM content</div>", Collections.emptyList(), "rich-hash"));
+        this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.LEAN);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click on first available product");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final List<String> seenPrompts = new ArrayList<>();
+        final AgentLoopLlmCaller caller = (req, ctx) ->
+        {
+            final int t = turn.incrementAndGet();
+            final ChatMessage lastMsg = req.messages().get(req.messages().size() - 1);
+            seenPrompts.add(lastMsg.content());
+            final ObjectNode failArgs = MAPPER.createObjectNode();
+            failArgs.put("reason", t == 1 ? "Product grid not visible in LEAN DOM" : "CAPTCHA challenge blocking page");
+            return new LlmResponse("Failing step", new TokenUsage(10, 10, 20), "mock",
+                    List.of(new ToolCall("f-" + t, "fail_step", failArgs)), "Blocked by CAPTCHA");
+        };
+
+        // Default registry includes fail_step out of the box
+        final AgentToolLoopStep step = new AgentToolLoopStep(null, (call, tc) -> InterceptionVerdict.allow("ok"), caller, 30);
+
+        final ConclusiveFailureException ex = Assertions.assertThrows(
+                ConclusiveFailureException.class,
+                () -> step.execute(this.context));
+
+        Assertions.assertEquals(2, turn.get(), "fail_step below RICH with 0 prior tools must auto-escalate once before failing");
+        Assertions.assertEquals(ContextLevel.RICH, this.context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
+        Assertions.assertTrue(seenPrompts.get(1).contains("Rich DOM content"), "Turn 2 must receive escalated RICH DOM");
+        Assertions.assertTrue(ex.getMessage().contains("CAPTCHA challenge blocking page"));
+    }
+
+    @Test
+    public void testFailStepAtRichBreaksImmediatelySanitizesSecretsAndCapturesVisualState()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("apiSecret", "TOP_SECRET_KEY_777", true);
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        executor.enqueueState(new BrowserSutState("<div>404 Not Found</div>", Collections.emptyList(), "rich-text-hash"));
+        executor.enqueueState(new BrowserSutState(
+                "404 page",
+                List.of(new SutAttachment("image/png", "failure.png", "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")),
+                "vis-hash"));
+
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final AtomicBoolean visualCaptured = new AtomicBoolean(false);
+        eventBus.registerListener(event ->
+        {
+            if (event instanceof final StateCapturedEvent sce
+                    && sce.getState() != null
+                    && sce.getState().getAttachments() != null
+                    && !sce.getState().getAttachments().isEmpty())
+            {
+                visualCaptured.set(true);
+            }
+        });
+
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), eventBus, executor);
+        final ExecutionContext richContext = session.getExecutionContext();
+        final PlaybookStep pbStep = new PlaybookStep("Click checkout");
+        richContext.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        richContext.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        richContext.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, pbStep);
+        richContext.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.RICH);
+        richContext.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click checkout");
+
+        final AtomicInteger turns = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) ->
+        {
+            turns.incrementAndGet();
+            final ObjectNode failArgs = MAPPER.createObjectNode();
+            failArgs.put("reason", "404 Not Found with token TOP_SECRET_KEY_777");
+            return new LlmResponse("404 detected", new TokenUsage(10, 10, 20), "mock",
+                    List.of(new ToolCall("f-1", "fail_step", failArgs)), "404 page");
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(null, (call, tc) -> InterceptionVerdict.allow("ok"), caller, 30);
+
+        final ConclusiveFailureException ex = Assertions.assertThrows(
+                ConclusiveFailureException.class,
+                () -> step.execute(richContext));
+
+        Assertions.assertEquals(1, turns.get(), "fail_step at RICH must fail immediately on Turn 1");
+        Assertions.assertFalse(ex.getMessage().contains("TOP_SECRET_KEY_777"), "Sensitive values must be masked in failure message");
+        Assertions.assertTrue(visualCaptured.get(), "Failure screenshot event must be captured when none was present on turn");
+        Assertions.assertTrue(pbStep.getToolCalls() == null || pbStep.getToolCalls().isEmpty(),
+                "fail_step must not be persisted into recorded companion toolCalls");
+        Assertions.assertTrue(pbStep.getActions() == null || pbStep.getActions().isEmpty(),
+                "fail_step must not be persisted into recorded companion actions");
+    }
+
+    @Test
+    public void testFailStepSingleShotJsonFallbackTokenGraceAndCoProposalSafety()
+    {
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.RICH);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click buy now");
+
+        // 1. JSON text fallback {"tool":"fail_step",...} within 20% token grace (110 tokens vs maxTokens=100) must throw ConclusiveFailureException, never auto-pass or TokenBudgetExceededException
+        final AgentLoopLlmCaller singleShotJsonCaller = (req, ctx) ->
+                new LlmResponse("{\"action\":\"fail_step\",\"reason\":\"500 Internal Server Error\"}", new TokenUsage(90, 20, 110), "mock");
+
+        final AgentToolLoopStep graceStep = new AgentToolLoopStep(
+                null, (call, tc) -> InterceptionVerdict.allow("ok"), singleShotJsonCaller, 30, 15, 100);
+
+        final ConclusiveFailureException ex1 = Assertions.assertThrows(
+                ConclusiveFailureException.class,
+                () -> graceStep.execute(this.context));
+        Assertions.assertTrue(ex1.getMessage().contains("500 Internal Server Error"));
+
+        // 2. Co-proposal [fail_step, complete_step] must fail rather than completing
+        final AgentLoopLlmCaller coProposedCaller = (req, ctx) ->
+        {
+            final ObjectNode failArgs = MAPPER.createObjectNode();
+            failArgs.put("reason", "Element blocked by active bot challenge");
+            return new LlmResponse("Blocked", new TokenUsage(10, 10, 20), "mock",
+                    List.of(
+                            new ToolCall("f-1", "fail_step", failArgs),
+                            new ToolCall("c-1", "complete_step", MAPPER.createObjectNode())),
+                    "Blocked");
+        };
+        final AgentToolLoopStep coStep = new AgentToolLoopStep(
+                null, (call, tc) -> InterceptionVerdict.allow("ok"), coProposedCaller, 30);
+
+        Assertions.assertThrows(ConclusiveFailureException.class, () -> coStep.execute(this.context));
+    }
+
+    @Test
+    public void testMultiTurnInterceptorRetryThenRejectThrowsAssertionError()
+    {
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click on first available product");
+        final AtomicInteger turns = new AtomicInteger(0);
+
+        final AgentLoopLlmCaller caller = (req, ctx) ->
+        {
+            final int t = turns.incrementAndGet();
+            final ObjectNode navArgs = MAPPER.createObjectNode();
+            navArgs.put("url", "https://www.ifolor.ch");
+            return new LlmResponse("Navigating away", new TokenUsage(10, 10, 20), "mock",
+                    List.of(new ToolCall("n-" + t, "navigate", navArgs)), "Trying Swiss site");
+        };
+
+        final ToolInterceptor twoStrikeInterceptor = (call, tc) -> turns.get() == 1
+                ? InterceptionVerdict.retryWithFeedback(
+                        call.callId(),
+                        "Unauthorized external navigation",
+                        "First unauthorized external navigation warning")
+                : InterceptionVerdict.reject(call.callId(), "Unauthorized external navigation");
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(null, twoStrikeInterceptor, caller, 30);
+
+        final AssertionError ex = Assertions.assertThrows(
+                AssertionError.class,
+                () -> step.execute(this.context));
+        Assertions.assertEquals(2, turns.get(), "First strike must feed warning back to LLM; second strike must reject");
+        Assertions.assertTrue(ex.getMessage().contains("Unauthorized external navigation"));
+    }
+
+    @Test
+    public void testSystemPromptAndFallbackIncludeFailStepAndQaExecutorGuidance()
+    {
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click login");
+        final List<List<ChatMessage>> seenConversations = new ArrayList<>();
+        final AtomicInteger turn = new AtomicInteger(0);
+
+        final AgentLoopLlmCaller caller = (req, ctx) ->
+        {
+            seenConversations.add(new ArrayList<>(req.messages()));
+            if (turn.incrementAndGet() == 1)
+            {
+                return new LlmResponse("Plain text without tool call", new TokenUsage(10, 10, 20), "mock");
+            }
+            return new LlmResponse("Still no tool call", new TokenUsage(10, 10, 20), "mock");
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(null, (call, tc) -> InterceptionVerdict.allow("ok"), caller, 30);
+        Assertions.assertThrows(InvalidAgentResponseException.class, () -> step.execute(this.context));
+
+        final String systemPrompt = seenConversations.get(0).get(0).content();
+        Assertions.assertTrue(systemPrompt.contains("fail_step"), "System prompt must reference fail_step");
+        final String fallbackWarning = seenConversations.get(1).get(seenConversations.get(1).size() - 1).content();
+        Assertions.assertTrue(fallbackWarning.contains("fail_step"), "Malformed-response fallback prompt must offer fail_step");
+    }
+
+    @Test
+    public void testPureVisualCheckOmitsFailStepWhileInteractiveVisualStepRetainsIt()
+    {
+        final AgentToolLoopStep step = new AgentToolLoopStep(null, (call, tc) -> InterceptionVerdict.allow("ok"), (req, ctx) -> null, 30);
+
+        // Pure visual verification step: Stage 1 only prepares viewport via [scroll, complete_step]
+        final ExecutionContext pureVisualCtx = new ExecutionContext(new SessionData());
+        pureVisualCtx.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify hero banner layout matches brand style");
+        final List<String> pureVisualTools = step.filterTools(true, pureVisualCtx).stream()
+                .map(ToolDefinition::name)
+                .toList();
+        Assertions.assertFalse(pureVisualTools.contains("fail_step"),
+                "Pure (visual) verification step must omit fail_step so Stage 2 VerifyOperationStep always runs");
+        Assertions.assertTrue(pureVisualTools.contains("complete_step"));
+
+        // Interactive visual step: hasInteractive == true -> retains fail_step
+        final ExecutionContext interactiveVisualCtx = new ExecutionContext(new SessionData());
+        interactiveVisualCtx.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click #openModal and visually verify dialog");
+        interactiveVisualCtx.getTransientData().put(ExecutionContext.KEY_INTERNAL_MILESTONES,
+                List.of("Click #openModal", "Visually verify dialog"));
+        final List<String> interactiveVisualTools = step.filterTools(true, interactiveVisualCtx).stream()
+                .map(ToolDefinition::name)
+                .toList();
+        Assertions.assertTrue(interactiveVisualTools.contains("fail_step"),
+                "Interactive (visual) step must retain fail_step in case the interactive action is blocked");
+    }
+
+    @Test
+    public void testFailStepEscalationOnBlankWhiteScreenAttachesEmptyDomMarker()
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        executor.enqueueState(new BrowserSutState("", Collections.emptyList(), "empty-lean"));
+        executor.enqueueState(new BrowserSutState("", Collections.emptyList(), "empty-rich"));
+        this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.LEAN);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click checkout");
+
+        final List<ChatMessage> turn2Messages = new ArrayList<>();
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) ->
+        {
+            final int t = turn.incrementAndGet();
+            if (t == 2)
+            {
+                turn2Messages.addAll(req.messages());
+            }
+            final ObjectNode failArgs = MAPPER.createObjectNode();
+            failArgs.put("reason", "Blank HTTP 500 white screen");
+            return new LlmResponse("Blank page", new TokenUsage(10, 10, 20), "mock",
+                    List.of(new ToolCall("f-" + t, "fail_step", failArgs)), "Blank page");
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(null, (call, tc) -> InterceptionVerdict.allow("ok"), caller, 30);
+
+        Assertions.assertThrows(ConclusiveFailureException.class, () -> step.execute(this.context));
+        Assertions.assertEquals(2, turn.get());
+        final ChatMessage lastMsgOnTurn2 = turn2Messages.get(turn2Messages.size() - 1);
+        Assertions.assertEquals(Role.USER, lastMsgOnTurn2.role(),
+                "Turn 2 after blank-page RICH escalation must end with a USER state message");
+        Assertions.assertTrue(lastMsgOnTurn2.content().contains("[DOM empty or omitted]"),
+                "Blank-page escalation must explicitly attach [DOM empty or omitted]");
+    }
+
+    @Test
+    public void testSingleShotBlockedActionPreservesPriorExecutedCallsAndSurfacesGuardRecommendation() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final AtomicInteger clickExecutions = new AtomicInteger(0);
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("click", "Clicks element", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                clickExecutions.incrementAndGet();
+                return ToolResult.success(call.callId(), "{\"status\":\"SUCCESS\"}");
+            }
+        });
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("navigate", "Navigates URL", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                throw new AssertionError("Blocked navigate must not execute");
+            }
+        });
+
+        final PlaybookStep pbStep = new PlaybookStep("Click #menu and open cart");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, pbStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click #menu and open cart");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final List<String> seenFeedback = new ArrayList<>();
+        final AgentLoopLlmCaller caller = (req, ctx) ->
+        {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                // Multi-action single-shot JSON {"actions":[...]}: click succeeds, then navigate is blocked by guard
+                return new LlmResponse(
+                        "{\"actions\":[{\"action\":\"click\",\"selector\":\"#menu\"},{\"action\":\"navigate\",\"url\":\"https://evil.example.com\"}]}",
+                        new TokenUsage(15, 15, 30),
+                        "mock");
+            }
+            seenFeedback.add(req.messages().get(req.messages().size() - 1).content());
+            return new LlmResponse("Clicking cart link instead and completing", new TokenUsage(10, 10, 20), "mock",
+                    List.of(
+                            new ToolCall("c-2", "click", MAPPER.createObjectNode().put("selector", "#cart-link")),
+                            new ToolCall("done", "complete_step", MAPPER.createObjectNode().put("summary", "Opened cart via UI"))));
+        };
+
+        final ToolInterceptor navGuard = (call, tc) -> "navigate".equals(call.toolName())
+                ? InterceptionVerdict.retryWithFeedback(call.callId(), "Blocked URL", "Use exact URL or on-page UI elements")
+                : InterceptionVerdict.allow("ok");
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, navGuard, caller, 5);
+        step.execute(this.context);
+
+        Assertions.assertEquals(2, clickExecutions.get(), "Both the initial #menu click and the Turn 2 #cart-link click executed");
+        Assertions.assertEquals(2, pbStep.getToolCalls().size(),
+                "Previously executed single-shot #menu click must NOT be wiped when subsequent navigate falls back to interactive mode");
+        Assertions.assertTrue(seenFeedback.get(0).contains("Use exact URL or on-page UI elements"),
+                "Single-shot fallback prompt must include the guard's recommendation payload");
     }
 }
 

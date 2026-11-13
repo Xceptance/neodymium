@@ -1861,6 +1861,8 @@ mvn test -Dtest=AddToCartJudgeAndVerificationsTest -Dneodymium.ai.apiKey="your-g
 * `neodymium.ai.judge.enabled` - (Boolean) LLM Quality Judge second-opinion evaluation. (Default: `false`)
 * `neodymium.ai.judge.mode` - Mode of Quality Judge (`ON_AMBIGUITY`, `ALWAYS`, `ON_FAIL`). (Default: `ON_AMBIGUITY`)
 * `neodymium.ai.judge.recommendMarker` - (Boolean) Whether Quality Judge and selector evaluation recommend invoking visual element markers (`mark_elements`) when proposed locators are fragile with no resilient DOM alternatives. (Default: `true`)
+* `neodymium.ai.navigation.guard.enabled` - (Boolean) Pre-execution provenance guard (`NavigationProvenanceInterceptor`) validating autonomous `navigate` tool calls against blank-page state, step instruction host/path provenance, and configured allowed hosts. (Default: `true`)
+* `neodymium.ai.navigation.allowedHosts` - (String, CSV) Comma-separated list of hostnames or registrable domains explicitly permitted for autonomous `navigate` calls without appearing in the step instruction. (Default: `""`)
 * `neodymium.ai.network.monitorEnabled` - (Boolean) Protocol-level network traffic and console log monitoring for introspection tools and passive diagnostic enrichment. (Default: `true`)
 * `neodymium.ai.network.ignorePattern` - (String, Regex) Regular expression matching URLs of benign background requests (e.g. analytics, telemetry, tracking pixels) to exclude from captured network failure buffers. (Default: `""`)
 

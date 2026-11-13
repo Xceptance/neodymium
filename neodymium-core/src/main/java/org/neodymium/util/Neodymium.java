@@ -1,5 +1,6 @@
 package org.neodymium.util;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -21,6 +22,7 @@ import com.codeborne.selenide.AssertionMode;
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
 import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.model.ExecutionAttachment;
 import org.neodymium.common.TestStepListener;
 import org.neodymium.common.browser.WebDriverStateContainer;
 import org.neodymium.common.testdata.TestData;
@@ -70,6 +72,9 @@ public class Neodymium
 
     // our data for anywhere access
     private final org.neodymium.common.testdata.TestData data = new org.neodymium.common.testdata.TestData();
+
+    // attachments for execution reporting
+    private final List<ExecutionAttachment> attachments = Collections.synchronizedList(new ArrayList<>());
 
     public final static String TEMPORARY_CONFIG_FILE_PROPERTY_NAME = "neodymium.temporaryConfigFile";
 
@@ -126,7 +131,11 @@ public class Neodymium
      */
     public static void clearThreadContext()
     {
-        CONTEXTS.remove(Thread.currentThread());
+        final Neodymium context = CONTEXTS.remove(Thread.currentThread());
+        if (context != null)
+        {
+            context.attachments.clear();
+        }
         TestStepListener.clearLastUrl();
     }
 
@@ -887,4 +896,90 @@ public class Neodymium
         getContext().configuration = ConfigFactory.create(NeodymiumConfiguration.class, System.getProperties(), System.getenv());
     }
 
+    /**
+     * Adds an attachment referencing an existing file to the current test execution context.
+     *
+     * @param name display name for the attachment
+     * @param file source file on disk
+     * @param openByDefault true if the attachment should be displayed open/expanded by default in reports
+     */
+    public static void addAttachment(final String name, final File file, final boolean openByDefault)
+    {
+        final Neodymium context = getContext();
+        if (context != null && file != null)
+        {
+            final ExecutionAttachment att = ExecutionAttachment.ofFile(name, file, openByDefault);
+            context.attachments.removeIf(a -> a.getName().equalsIgnoreCase(att.getName()) || a.getPath().equalsIgnoreCase(att.getPath()));
+            context.attachments.add(att);
+        }
+    }
+
+    /**
+     * Adds an attachment referencing an existing file to the current test execution context (collapsed by default).
+     *
+     * @param name display name for the attachment
+     * @param file source file on disk
+     */
+    public static void addAttachment(final String name, final File file)
+    {
+        addAttachment(name, file, false);
+    }
+
+    /**
+     * Adds an in-memory text attachment to the current test execution context.
+     *
+     * @param name display name for the attachment
+     * @param textContent string contents of the attachment
+     * @param contentType MIME content type (e.g. text/plain, text/yaml, application/json)
+     * @param openByDefault true if the attachment should be displayed open/expanded by default in reports
+     */
+    public static void addAttachment(
+        final String name,
+        final String textContent,
+        final String contentType,
+        final boolean openByDefault)
+    {
+        final Neodymium context = getContext();
+        if (context != null && name != null)
+        {
+            final ExecutionAttachment att = ExecutionAttachment.ofText(name, textContent, contentType, openByDefault);
+            context.attachments.removeIf(a -> a.getName().equalsIgnoreCase(att.getName()) || a.getPath().equalsIgnoreCase(att.getPath()));
+            context.attachments.add(att);
+        }
+    }
+
+    /**
+     * Adds an in-memory text attachment to the current test execution context (collapsed by default).
+     *
+     * @param name display name for the attachment
+     * @param textContent string contents of the attachment
+     * @param contentType MIME content type
+     */
+    public static void addAttachment(final String name, final String textContent, final String contentType)
+    {
+        addAttachment(name, textContent, contentType, false);
+    }
+
+    /**
+     * Returns an unmodifiable snapshot of attachments registered for the current test context.
+     *
+     * @return list of execution attachments
+     */
+    public static List<ExecutionAttachment> getAttachments()
+    {
+        final Neodymium context = getContext();
+        return context != null ? Collections.unmodifiableList(new ArrayList<>(context.attachments)) : Collections.emptyList();
+    }
+
+    /**
+     * Clears all attachments registered in the current test context.
+     */
+    public static void clearAttachments()
+    {
+        final Neodymium context = getContext();
+        if (context != null)
+        {
+            context.attachments.clear();
+        }
+    }
 }

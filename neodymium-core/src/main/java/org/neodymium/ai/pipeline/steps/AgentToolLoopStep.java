@@ -81,7 +81,9 @@ import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.tool.ToolResult;
 import org.neodymium.ai.tool.browser.BrowserToolProvider;
 import org.neodymium.ai.tool.browser.VisualBadgeInjector;
+import org.neodymium.ai.tool.guard.CompositeToolInterceptor;
 import org.neodymium.ai.tool.guard.InterceptionVerdict;
+import org.neodymium.ai.tool.guard.NavigationProvenanceInterceptor;
 import org.neodymium.ai.tool.guard.QualityJudgeToolInterceptor;
 import org.neodymium.ai.tool.guard.ToolInterceptor;
 import org.neodymium.ai.util.DomQuiescenceWatcher;
@@ -141,11 +143,18 @@ public final class AgentToolLoopStep implements PipelineStep
     private final int maxTokens;
 
     /**
-     * Constructs a default AgentToolLoopStep with browser tools and standard Quality Judge guard.
+     * Constructs a default AgentToolLoopStep with browser tools and standard navigation/locator guards.
      */
     public AgentToolLoopStep()
     {
-        this(createDefaultRegistry(), new QualityJudgeToolInterceptor(), createDefaultLlmCaller(), resolveDefaultTimeout(), resolveDefaultMaxTurns(), resolveDefaultMaxTokens());
+        this(createDefaultRegistry(), createDefaultInterceptor(), createDefaultLlmCaller(), resolveDefaultTimeout(), resolveDefaultMaxTurns(), resolveDefaultMaxTokens());
+    }
+
+    private static ToolInterceptor createDefaultInterceptor()
+    {
+        return new CompositeToolInterceptor(
+                new NavigationProvenanceInterceptor(),
+                new QualityJudgeToolInterceptor());
     }
 
     /**
@@ -184,7 +193,7 @@ public final class AgentToolLoopStep implements PipelineStep
             final int maxTokens)
     {
         this.toolRegistry = registry != null ? registry : createDefaultRegistry();
-        this.interceptor = interceptor != null ? interceptor : new QualityJudgeToolInterceptor();
+        this.interceptor = interceptor != null ? interceptor : createDefaultInterceptor();
         this.llmCaller = llmCaller != null ? llmCaller : createDefaultLlmCaller();
         this.timeoutSeconds = timeoutSeconds > 0 ? timeoutSeconds : resolveDefaultTimeout();
         this.maxTurns = maxTurns > 0 ? maxTurns : resolveDefaultMaxTurns();
@@ -377,33 +386,31 @@ public final class AgentToolLoopStep implements PipelineStep
         List<SutAttachment> attachments = Collections.emptyList();
 
         final ContextLevel configuredDefault = AiConfiguration.getInstance().getContextLevel();
-        ContextLevel activeContextLevel = configuredDefault;
+        final Object levelObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
+        final ContextLevel baseLevel = levelObj instanceof ContextLevel cl
+                ? cl
+                : configuredDefault;
+        ContextLevel activeContextLevel = ContextLevel.clean(baseLevel);
+
+        // Explicit step context level tag takes strict precedence
+        if (step != null && step.getContextLevel() != null && !step.getContextLevel().isBlank())
+        {
+            activeContextLevel = ContextLevel.fromString(step.getContextLevel(), activeContextLevel);
+        }
+        else if (rawInstruction != null)
+        {
+            final Matcher ctxMatcher = PlaybookStep.CONTEXT_LEVEL_PATTERN.matcher(rawInstruction);
+            if (ctxMatcher.find())
+            {
+                activeContextLevel = ContextLevel.fromString(ctxMatcher.group(1), activeContextLevel);
+            }
+        }
 
         // Interactive Turn 1: Supply pierced DOM Light or configured context level
         if (executor != null)
         {
             try
             {
-                final Object levelObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
-                final ContextLevel baseLevel = levelObj instanceof ContextLevel cl
-                        ? cl
-                        : configuredDefault;
-                activeContextLevel = ContextLevel.clean(baseLevel);
-
-                // Explicit step context level tag takes strict precedence
-                if (step != null && step.getContextLevel() != null && !step.getContextLevel().isBlank())
-                {
-                    activeContextLevel = ContextLevel.fromString(step.getContextLevel(), activeContextLevel);
-                }
-                else if (rawInstruction != null)
-                {
-                    final Matcher ctxMatcher = PlaybookStep.CONTEXT_LEVEL_PATTERN.matcher(rawInstruction);
-                    if (ctxMatcher.find())
-                    {
-                        activeContextLevel = ContextLevel.fromString(ctxMatcher.group(1), activeContextLevel);
-                    }
-                }
-
                 // Visual or marker tag check (only applied when step did not explicitly override context level)
                 if ((isVisual || isMarker) && (step == null || step.getContextLevel() == null || step.getContextLevel().isBlank() || ContextLevel.LEAN.name().equalsIgnoreCase(step.getContextLevel())))
                 {
@@ -478,9 +485,9 @@ public final class AgentToolLoopStep implements PipelineStep
         final List<ToolDefinition> availableTools = filterTools(isVisual, context);
 
         final StringBuilder systemPrompt = new StringBuilder();
-        systemPrompt.append("You are an autonomous web testing agent. Execute the test instruction using available tools.\n\n");
+        systemPrompt.append("You are a deterministic QA test automation executor, not an exploratory browsing assistant. Execute only what the test instruction specifies using available tools.\n\n");
         systemPrompt.append("### OPERATING RULES:\n");
-        systemPrompt.append("1. SCOPE: Execute only the explicit action or assertion described in the instruction or milestones. Do not anticipate subsequent workflow steps.\n");
+        systemPrompt.append("1. SCOPE & FAIL-FAST DISCIPLINE: Execute only the explicit action or assertion described in the instruction or milestones. Do not anticipate subsequent steps, invent off-script 'navigate' URLs, or click unrelated menus/links when a target is missing. If the page displays an error (e.g. 404/500) or active CAPTCHA/bot challenge: execute normally if the instructed target or check is present on that page; otherwise, if the target is missing or blocked (ignoring passive footer badges), invoke 'fail_step' with a clear QA reason.\n");
         systemPrompt.append("2. GROUNDING & EXECUTION: Selectors are evaluated via Selenide (standard CSS, XPath, or text matching). Selenide auto-scrolls elements into view during actions; use 'scroll' only to trigger lazy-loaded content or to reposition elements for visual verification. To inspect DOM, use 'query_dom'. Prior DOM snapshots are pruned after Turn 1 to minimize token context; if you need DOM details or element selectors in subsequent turns, invoke 'query_dom' (for specific element subtrees) or 'request_context' (for a fresh DOM snapshot). When querying DOM with 'query_dom', specify distinctive multi-word phrases or specific selectors from the instruction (rather than generic single words) to locate the exact target element directly. If target elements lack distinctive text, IDs, or stable classes (e.g. icon-only buttons, SVG/canvas controls, or CSS-in-JS obfuscated soup), invoke 'mark_elements' to overlay visual markers and target by marker index (e.g. click(target: \"marker:3\")). Never propose the exact same failing tool call without changing selector or state.\n");
         systemPrompt.append("3. ACTION STEPS: For action instructions (such as clicking buttons or links, filling fields, selecting dropdowns, checking checkboxes/radios, or navigating), once all actions and field values explicitly requested by the instruction are executed, the step goal is completely satisfied. When interacting with form controls, use 'fill' for text inputs, 'select' for dropdown menus, and 'check' for checkboxes and radio buttons (which is idempotent and sets the target state) rather than 'click'. Propose [action, complete_step] in the same turn if only a single action was requested, or call 'complete_step' once all requested actions have succeeded. DO NOT execute uncommanded assertions, probe unrelated elements, or verify downstream side-effects that belong to subsequent steps. If an action fails (e.g., target element is disabled, missing, or non-interactable), DO NOT substitute uncommanded assertions (such as 'assert_element_state') and DO NOT call 'complete_step'; report the failure. Cohesive multi-field operations: When an instruction commands setting multiple form fields or values (e.g. entering card number, expiry date, and CVV), you may propose the sequential [fill/type, ..., complete_step] calls in the same turn to execute all requested fields cohesively. Do not batch actions across navigation or state-changing page transitions.\n");
         systemPrompt.append("4. VERIFICATION STEPS: For verification or check instructions (such as asserting text, checking counts, validating attributes/values, or confirming expected state like visible, editable, readonly, checked, disabled), you MUST invoke an assertion tool ('assert_text', 'assert_element_state', 'assert_attribute', 'assert_count', 'assert_url', 'assert_title') before calling 'complete_step'. Propose [assertion, complete_step] in the same turn once the verification condition is satisfied. Directly assert the commanded property or content rather than splitting verification into separate intermediate visibility checks. To assert multiple states on the same element (e.g. 'displayed and enabled'), combine them into a single 'assert_element_state' call using compound states (e.g. state: 'visible, enabled' or states: ['visible', 'enabled']) rather than executing multiple separate tool calls. If 'query_dom' returns 0 matches for an expected verification element or text, DO NOT repeatedly re-execute previous action milestones (such as re-submitting forms). Immediately invoke the commanded assertion tool on the expected target/text so that any verification failure or expected defect is definitively asserted and recorded. When validating that an option, setting, country, language, or currency is selected, first check if the active trigger or header element reflects this (via text, title, or attributes like aria-label); assert on it directly without opening menus. If you perform temporary interactions (such as expanding dropdowns, opening modals/dialogs, or switching tabs) to reveal hidden content to verify, you MUST restore the initial page state before completing the step: close the opened modal/dialog/overlay (e.g. clicking the close button or pressing Escape) or collapse the dropdown so that ephemeral dialogs and backdrops do not leak into and block subsequent steps. Never invoke 'complete_step' while a temporary verification modal or overlay remains open on screen. Cohesive multi-assertion operations: When an instruction commands verifying multiple elements or conditions, you may propose all commanded [assert_*, ..., complete_step] calls in the same turn to execute all verifications cohesively.\n");
@@ -505,6 +512,7 @@ public final class AgentToolLoopStep implements PipelineStep
         JsonNode lastArguments = null;
         int consecutiveIdenticalCalls = 0;
         boolean lastProposedToolWasCompleteStep = false;
+        boolean hasAutoEscalatedOnFailStep = false;
         boolean hasActionToolFailed = false;
         String lastFailedActionTarget = null;
         String lastActionFailureMessage = null;
@@ -643,7 +651,10 @@ public final class AgentToolLoopStep implements PipelineStep
                 if (parsed != null && parsed.calls() != null && !parsed.calls().isEmpty())
                 {
                     proposedCalls = parsed.calls();
-                    isSingleShotAction = parsed.isSingleShotAction();
+                    final String firstParsedTool = proposedCalls.get(0).toolName();
+                    isSingleShotAction = parsed.isSingleShotAction()
+                            && !"complete_step".equals(firstParsedTool)
+                            && !"fail_step".equals(firstParsedTool);
                 }
             }
 
@@ -653,8 +664,9 @@ public final class AgentToolLoopStep implements PipelineStep
                 final boolean proposesCompletion = isSingleShotAction
                         || (proposedCalls != null && !proposedCalls.isEmpty() && (
                                 "complete_step".equals(proposedCalls.get(0).toolName())
+                                || "fail_step".equals(proposedCalls.get(0).toolName())
                                 || "include".equals(proposedCalls.get(0).toolName())
-                                || (proposedCalls.size() == 2 && "complete_step".equals(proposedCalls.get(1).toolName()))
+                                || (proposedCalls.size() == 2 && ("complete_step".equals(proposedCalls.get(1).toolName()) || "fail_step".equals(proposedCalls.get(1).toolName())))
                                 || (isCohesiveBatch(proposedCalls) && "complete_step".equals(proposedCalls.get(proposedCalls.size() - 1).toolName()))
                         ));
                 final long graceLimit = (long) (this.maxTokens * 1.20);
@@ -704,7 +716,7 @@ public final class AgentToolLoopStep implements PipelineStep
                 {
                     invalidResponseCount++;
                     conversation.add(ChatMessage.assistant(response != null && response.content() != null ? response.content() : ""));
-                    conversation.add(ChatMessage.user("Your response did not contain a valid tool call. If the step's goal is complete, invoke tool 'complete_step'. Otherwise, invoke the next browser tool."));
+                    conversation.add(ChatMessage.user("Your response did not contain a valid tool call. If the step's goal is complete, invoke 'complete_step'. If the target is missing or blocked on screen, invoke 'fail_step'. Otherwise, invoke the next browser tool."));
                     continue;
                 }
                 else
@@ -726,7 +738,7 @@ public final class AgentToolLoopStep implements PipelineStep
                 final SessionData sessionData = context.getSessionData();
                 for (final ToolCall call : proposedCalls)
                 {
-                    if (!"complete_step".equals(call.toolName()) && !"screenshot".equals(call.toolName()) && !"browser_take_screenshot".equals(call.toolName()) && !isDiscoveryTool(call.toolName()))
+                    if (!"complete_step".equals(call.toolName()) && !"fail_step".equals(call.toolName()) && !"screenshot".equals(call.toolName()) && !"browser_take_screenshot".equals(call.toolName()) && !isDiscoveryTool(call.toolName()))
                     {
                         final ToolCall sanitizedCall = sanitizeToolCall(call, sessionData, sanitizer);
                         sanitizedCalls.add(sanitizedCall);
@@ -746,7 +758,13 @@ public final class AgentToolLoopStep implements PipelineStep
                     {
                         step.addReasoning(sanitizedThought);
                     }
-                    step.setReasoning(sanitizedThought);
+                    if (!proposedActions.isEmpty()
+                            || (response != null && response.hasThinking())
+                            || step.getReasoning() == null
+                            || step.getReasoning().isBlank())
+                    {
+                        step.setReasoning(sanitizedThought);
+                    }
                 }
             }
 
@@ -886,6 +904,8 @@ public final class AgentToolLoopStep implements PipelineStep
                     context.getTransientData().put("KEY_CURRENT_STEP_NO_REPLAY", true);
 
                     lastProposedToolWasCompleteStep = false;
+                    hasAutoEscalatedOnFailStep = false;
+                    toolContext.setVariable(NavigationProvenanceInterceptor.KEY_BLOCKED_NAV_ATTEMPTS, 0);
                     hasActionToolFailed = false;
                     lastFailedActionTarget = null;
                     lastActionFailureMessage = null;
@@ -943,16 +963,21 @@ public final class AgentToolLoopStep implements PipelineStep
                     final ToolCall effectiveCall = verdict.getEffectiveCall(singleShotCall);
                     if (!verdict.isAllowed())
                     {
+                        final ToolResult rejResult = verdict.rejectionResult();
+                        final String feedback = (rejResult != null && rejResult.content() != null && !rejResult.content().isBlank())
+                                ? rejResult.content()
+                                : verdict.reason();
                         if (verdict.decision() == InterceptionVerdict.Decision.RETRY_WITH_FEEDBACK)
                         {
-                            LOGGER.info("⚖️ Quality Judge requested retry with feedback for single-shot action '{}'; falling back to interactive agent loop", singleShotCall.toolName());
+                            LOGGER.info("⚖️ Guard requested retry with feedback for single-shot action '{}'; falling back to interactive agent loop",
+                                    singleShotCall.toolName());
                             conversation.add(ChatMessage.assistant(response != null && response.content() != null ? response.content() : ""));
-                            conversation.add(ChatMessage.user("Action rejected by Quality Judge: " + verdict.reason() + ". Please retry using interactive tools."));
+                            conversation.add(ChatMessage.user("Tool call '" + singleShotCall.toolName() + "' blocked by guard: " + feedback
+                                    + "\nRetry the remaining unexecuted part of the step using the available tools."));
                             isSingleShotAction = false;
-                            executedCalls.clear();
                             break;
                         }
-                        throw new ConclusiveFailureException("Tool call rejected by guard: " + verdict.reason());
+                        throw new AssertionError("Policy violation: " + feedback);
                     }
                     final Optional<AiTool> toolOpt = this.toolRegistry.getTool(effectiveCall.toolName());
                     if (toolOpt.isPresent())
@@ -1126,9 +1151,16 @@ public final class AgentToolLoopStep implements PipelineStep
             }
             else
             {
-                final ToolCall proposedCall = proposedCalls.get(0);
+                final ToolCall firstProposed = proposedCalls.get(0);
+                final ToolCall proposedCall = ("complete_step".equals(firstProposed.toolName())
+                        && proposedCalls.size() > 1
+                        && "fail_step".equals(proposedCalls.get(1).toolName()))
+                        ? proposedCalls.get(1)
+                        : firstProposed;
                 callsToExecute.add(proposedCall);
-                coProposedComplete = (proposedCalls.size() > 1 && "complete_step".equals(proposedCalls.get(1).toolName()))
+                coProposedComplete = (!"fail_step".equals(proposedCall.toolName())
+                        && proposedCalls.size() > 1
+                        && "complete_step".equals(proposedCalls.get(1).toolName()))
                         ? proposedCalls.get(1)
                         : null;
                 if (proposedCalls.size() > 1 && coProposedComplete == null)
@@ -1243,6 +1275,89 @@ public final class AgentToolLoopStep implements PipelineStep
                     break turnLoop;
                 }
 
+                // If fail_step called -> Stop Criterion: Clean QA Failure (with 1-time RICH auto-escalation below RICH)
+                if ("fail_step".equals(currentCall.toolName()))
+                {
+                    lastProposedToolWasCompleteStep = false;
+                    final boolean belowRichDom = activeContextLevel != ContextLevel.RICH
+                            && activeContextLevel != ContextLevel.VISUAL_RICH;
+                    if (!hasAutoEscalatedOnFailStep
+                            && executor != null
+                            && !isVisualAssertion
+                            && belowRichDom
+                            && executedCalls.isEmpty()
+                            && !hasActionToolFailed
+                            && !hasUnresolvedAssertion)
+                    {
+                        hasAutoEscalatedOnFailStep = true;
+                        activeContextLevel = activeContextLevel.includesScreenshot()
+                                ? ContextLevel.VISUAL_RICH
+                                : ContextLevel.RICH;
+                        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+                        final String escalateJson = "{\"status\":\"ESCALATED\",\"contextLevel\":\""
+                                + activeContextLevel.name()
+                                + "\",\"message\":\"Escalated DOM context to "
+                                + activeContextLevel.name()
+                                + " because partial DOM filtering may omit non-semantic elements. Inspect the full DOM attached next; if the target is still missing or blocked, invoke fail_step again.\"}";
+                        lastEffectiveCall = currentCall;
+                        lastResult = new ToolResult(
+                                currentCall.callId(),
+                                ToolResult.Status.SUCCESS,
+                                escalateJson,
+                                Map.of("requestedContextLevel", activeContextLevel.name()),
+                                Collections.emptyMap());
+                        conversation.add(ChatMessage.tool(currentCall.callId(), currentCall.toolName(), escalateJson));
+                        logToolResult(currentCall.toolName(), escalateJson);
+                        LOGGER.info("🔍 fail_step proposed below RICH with 0 prior tools; auto-escalating context to {} for verification turn",
+                                activeContextLevel);
+                        break;
+                    }
+
+                    final String rawReason = extractFailStepReason(currentCall.arguments(), thought);
+                    final SessionData sessionData = context.getSessionData();
+                    final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+                    final String sanitizedReason = sessionData != null
+                            ? sanitizer.sanitizeText(rawReason, sessionData)
+                            : rawReason;
+
+                    if (step != null)
+                    {
+                        step.setReasoning(sanitizedReason);
+                        if (!step.getReasonings().contains(sanitizedReason))
+                        {
+                            step.addReasoning(sanitizedReason);
+                        }
+                    }
+                    finalizeStepExecution(context, executedCalls, sanitizedReason);
+
+                    // Ensure a failure screenshot is captured when failing on a text-only DOM turn (including optional/bug steps)
+                    if (!activeContextLevel.includesScreenshot() && executor != null)
+                    {
+                        try
+                        {
+                            final SutState failureVisualState = executor.captureState(ContextLevel.VISUAL, false);
+                            if (failureVisualState != null)
+                            {
+                                context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, failureVisualState);
+                                final AiSession failSession = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+                                if (failSession != null
+                                        && failSession.getEventBus() != null
+                                        && failureVisualState.getAttachments() != null
+                                        && !failureVisualState.getAttachments().isEmpty())
+                                {
+                                    failSession.getEventBus().dispatch(new StateCapturedEvent(failureVisualState));
+                                }
+                            }
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+
+                    LOGGER.error("🛑 Step failed via fail_step: {}", sanitizedReason);
+                    throw new ConclusiveFailureException("Step failed: " + sanitizedReason);
+                }
+
                 lastProposedToolWasCompleteStep = false;
 
                 // Pre-invocation Guard (Quality Judge & Journey Fidelity)
@@ -1258,7 +1373,7 @@ public final class AgentToolLoopStep implements PipelineStep
                         result = verdict.rejectionResult() != null
                                 ? verdict.rejectionResult()
                                 : ToolResult.error(currentCall.callId(), verdict.reason());
-                        LOGGER.warn("⚠️ Quality Judge advised retry with feedback for tool {}: {}",
+                        LOGGER.warn("⚠️ Guard advised retry with feedback for tool {}: {}",
                                 currentCall.toolName(), result.content());
                     }
                     else
@@ -1564,7 +1679,7 @@ public final class AgentToolLoopStep implements PipelineStep
                     {
                         previousElementSignatures.clear();
                     }
-                    if (!"complete_step".equals(effectiveCall.toolName()) && !"screenshot".equals(effectiveCall.toolName()) && !"browser_take_screenshot".equals(effectiveCall.toolName()) && !isDiscoveryTool(effectiveCall.toolName()))
+                    if (!"complete_step".equals(effectiveCall.toolName()) && !"fail_step".equals(effectiveCall.toolName()) && !"screenshot".equals(effectiveCall.toolName()) && !"browser_take_screenshot".equals(effectiveCall.toolName()) && !isDiscoveryTool(effectiveCall.toolName()))
                     {
                         Action mappedAction = mapToolCallToAction(callToRecord);
                         if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
@@ -1920,7 +2035,7 @@ public final class AgentToolLoopStep implements PipelineStep
                         pendingVisualAttachments = null;
 
                         final String textContent = freshState.getTextContent();
-                        if ((textContent != null && !textContent.isBlank()) || !freshAttachments.isEmpty())
+                        if (requestedContextEscalation || (textContent != null && !textContent.isBlank()) || !freshAttachments.isEmpty())
                         {
                             final StringBuilder turnPrompt = new StringBuilder();
                             if (textContent != null && !textContent.isBlank())
@@ -2177,7 +2292,7 @@ public final class AgentToolLoopStep implements PipelineStep
             final List<ToolCall> sanitizedCalls = new ArrayList<>();
             for (final ToolCall call : executedCalls)
             {
-                if (!"complete_step".equals(call.toolName()) && !"screenshot".equals(call.toolName()) && !"browser_take_screenshot".equals(call.toolName()) && !isDiscoveryTool(call.toolName()))
+                if (!"complete_step".equals(call.toolName()) && !"fail_step".equals(call.toolName()) && !"screenshot".equals(call.toolName()) && !"browser_take_screenshot".equals(call.toolName()) && !isDiscoveryTool(call.toolName()))
                 {
                     sanitizedCalls.add(sanitizeToolCall(call, sessionData, sanitizer));
                 }
@@ -2189,7 +2304,7 @@ public final class AgentToolLoopStep implements PipelineStep
             int actIdx = 0;
             for (final ToolCall call : executedCalls)
             {
-                if (!"complete_step".equals(call.toolName()) && !"screenshot".equals(call.toolName()) && !"browser_take_screenshot".equals(call.toolName()) && !isDiscoveryTool(call.toolName()))
+                if (!"complete_step".equals(call.toolName()) && !"fail_step".equals(call.toolName()) && !"screenshot".equals(call.toolName()) && !"browser_take_screenshot".equals(call.toolName()) && !isDiscoveryTool(call.toolName()))
                 {
                     Action mapped = mapToolCallToAction(call);
                     final Action existing = (existingActions != null && actIdx < existingActions.size()) ? existingActions.get(actIdx) : null;
@@ -2861,8 +2976,10 @@ public final class AgentToolLoopStep implements PipelineStep
                 continue;
             }
 
-            // Pure visual assertions omit DOM querying/text matching tools and DOM context escalation
-            if (isVisualAssertion && !hasInteractive && (isDomMatchingTool(name) || "request_context".equals(clean)))
+            // Pure visual assertions omit DOM querying/text matching tools, DOM context escalation, and fail_step
+            // so Stage 1 stays strictly viewport-prep and Stage 2 (VerifyOperationStep) always runs visual diagnostics
+            if (isVisualAssertion && !hasInteractive
+                    && (isDomMatchingTool(name) || "request_context".equals(clean) || "fail_step".equals(clean)))
             {
                 continue;
             }
@@ -3606,7 +3723,7 @@ public final class AgentToolLoopStep implements PipelineStep
         }
         final String name = stripNamespacePrefix(rawName.trim()).toLowerCase(Locale.ROOT);
         final String clean = name.startsWith("browser_") ? name.substring("browser_".length()) : name;
-        return "complete_step".equals(clean) || "click".equals(clean)
+        return "complete_step".equals(clean) || "fail_step".equals(clean) || "click".equals(clean)
                 || "fill".equals(clean) || "fill_form".equals(clean) || "type".equals(clean)
                 || "upload".equals(clean) || "upload_file".equals(clean)
                 || "handle_alert".equals(clean) || "alert".equals(clean)
@@ -3681,6 +3798,7 @@ public final class AgentToolLoopStep implements PipelineStep
             case "store" -> "store";
             case "get_network_failures", "network_failures" -> "browser_get_network_failures";
             case "get_console_errors", "console_errors" -> "browser_get_console_errors";
+            case "fail_step", "fail" -> "fail_step";
             case "none" -> "complete_step";
             default -> clean;
         };
@@ -3844,7 +3962,55 @@ public final class AgentToolLoopStep implements PipelineStep
             }
         });
 
+        // Register built-in fail_step tool
+        final ObjectNode failSchema = MAPPER.createObjectNode();
+        failSchema.put("type", "object");
+        failSchema.putObject("properties")
+                .putObject("reason")
+                .put("type", "string")
+                .put("description", "Clear QA explanation of why the step target is missing, unreachable, or blocked");
+        failSchema.putArray("required").add("reason");
+        reg.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition(
+                    "fail_step",
+                    "Signals that the step cannot be completed because the target element is missing, unreachable, or blocked by an error/challenge screen",
+                    failSchema
+            );
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                return ToolResult.error(call.callId(), call.arguments().path("reason").asText("Step failed"));
+            }
+        });
+
         return reg;
+    }
+
+    private static String extractFailStepReason(final JsonNode args, final String thought)
+    {
+        if (args != null)
+        {
+            for (final String key : List.of("reason", "message", "summary", "error", "value"))
+            {
+                if (args.hasNonNull(key) && !args.path(key).asText().isBlank())
+                {
+                    return args.path(key).asText().trim();
+                }
+            }
+        }
+        if (thought != null && !thought.isBlank())
+        {
+            return thought.trim();
+        }
+        return "Target element or expected page state is missing or blocked";
     }
 
     @SuppressWarnings("resource")

@@ -5443,6 +5443,16 @@ public class AuraReportViewController
             }
         }
 
+        if (runId != null && !runId.contains("..") && !runId.contains("/") && !runId.contains("\\")
+            && filename != null && !filename.contains("..") && !filename.contains("/") && !filename.contains("\\"))
+        {
+            final Path runLevelCandidate = baseStoragePath.resolve(Paths.get(runId, filename)).normalize();
+            if (runLevelCandidate.startsWith(baseStoragePath) && Files.isRegularFile(runLevelCandidate) && Files.isReadable(runLevelCandidate))
+            {
+                return servePath(runLevelCandidate, filename, rangeHeader);
+            }
+        }
+
         return ResponseEntity.notFound().build();
     }
 
@@ -5519,6 +5529,26 @@ public class AuraReportViewController
             else if (lowerName.endsWith(".json"))
             {
                 contentType = "application/json";
+            }
+            else if (lowerName.endsWith(".yaml") || lowerName.endsWith(".yml"))
+            {
+                contentType = "text/yaml; charset=utf-8";
+            }
+            else if (lowerName.endsWith(".log") || lowerName.endsWith(".txt"))
+            {
+                contentType = "text/plain; charset=utf-8";
+            }
+            else if (lowerName.endsWith(".csv"))
+            {
+                contentType = "text/csv; charset=utf-8";
+            }
+            else if (lowerName.endsWith(".pdf"))
+            {
+                contentType = "application/pdf";
+            }
+            else if (lowerName.endsWith(".xml"))
+            {
+                contentType = "application/xml; charset=utf-8";
             }
 
             final ContentDisposition disposition = ContentDisposition.inline()

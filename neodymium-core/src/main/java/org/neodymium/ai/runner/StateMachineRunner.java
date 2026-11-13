@@ -349,6 +349,7 @@ public final class StateMachineRunner
                         }
 
                         context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+                        context.getTransientData().remove(ExecutionContext.KEY_IS_HEALED_STEP);
 
                         final String bugComment = playbookStep.getBugDetails();
                         final String bugStr = bugComment != null ? " (" + bugComment + ")" : "";
@@ -411,6 +412,7 @@ public final class StateMachineRunner
                         }
 
                         context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+                        context.getTransientData().remove(ExecutionContext.KEY_IS_HEALED_STEP);
 
                         // Add failure to warnings/reporting list
                         @SuppressWarnings("unchecked")

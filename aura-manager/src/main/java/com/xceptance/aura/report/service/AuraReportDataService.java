@@ -5108,6 +5108,74 @@ public class AuraReportDataService
                 blk.set("llmCalls", node.get("llmCalls"));
             }
         }
+        if (node instanceof ObjectNode objNode && (!objNode.has("playbookContent") || objNode.path("playbookContent").asText().isBlank()))
+        {
+            try
+            {
+                final Path runDir = localRunJsonStorageService.getRunDir(effectiveRunId).toAbsolutePath().normalize();
+                if (Files.exists(runDir))
+                {
+                    final String rawTestClass = objNode.path("testClass").asText("");
+                    final String cleanClass = rawTestClass.contains("#")
+                        ? rawTestClass.substring(0, rawTestClass.indexOf('#')).trim()
+                        : rawTestClass.trim();
+                    final String simpleClass = cleanClass.contains(".")
+                        ? cleanClass.substring(cleanClass.lastIndexOf('.') + 1)
+                        : cleanClass;
+
+                    String pbFileName = "playbook.yaml";
+                    if (objNode.has("attachments") && objNode.get("attachments").isArray())
+                    {
+                        for (final JsonNode attNode : objNode.get("attachments"))
+                        {
+                            final String attName = attNode.path("name").asText("");
+                            final String attPath = attNode.path("path").asText("");
+                            if ("playbook.yaml".equals(attName) || attPath.startsWith("playbook"))
+                            {
+                                if (!attPath.isBlank() && !attPath.contains("..") && !attPath.contains("/") && !attPath.contains("\\"))
+                                {
+                                    pbFileName = attPath;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    final List<Path> pbCandidateDirs = new ArrayList<>();
+                    if (!cleanClass.isBlank())
+                    {
+                        final Path classDir = runDir.resolve(cleanClass).normalize();
+                        if (classDir.startsWith(runDir))
+                        {
+                            pbCandidateDirs.add(classDir);
+                        }
+                    }
+                    if (!simpleClass.isBlank() && !simpleClass.equals(cleanClass))
+                    {
+                        final Path simpleDir = runDir.resolve(simpleClass).normalize();
+                        if (simpleDir.startsWith(runDir))
+                        {
+                            pbCandidateDirs.add(simpleDir);
+                        }
+                    }
+                    pbCandidateDirs.add(runDir);
+
+                    for (final Path cDir : pbCandidateDirs)
+                    {
+                        final Path pbPath = cDir.resolve(pbFileName).normalize();
+                        if (pbPath.startsWith(cDir) && Files.isRegularFile(pbPath) && Files.isReadable(pbPath))
+                        {
+                            final String yaml = Files.readString(pbPath, StandardCharsets.UTF_8);
+                            objNode.put("playbookContent", yaml);
+                            break;
+                        }
+                    }
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
         final TestExecutionDto dto = objectMapper.treeToValue(node, TestExecutionDto.class);
         if (dto.getId() == null || dto.getId().isBlank()
                 || "bad".equalsIgnoreCase(dto.getId())
@@ -5116,6 +5184,129 @@ public class AuraReportDataService
         {
             dto.setId(executionId);
         }
+
+        // Verify and populate attachments based on disk existence
+        final Path runDir = localRunJsonStorageService.getRunDir(effectiveRunId);
+        final List<TestExecutionDto.ExecutionAttachmentDto> resolvedAttachments = new ArrayList<>();
+        final String testClass = dto.getTestClass();
+        final String simpleClass = dto.getSimpleClassName();
+
+        final List<Path> candidateDirs = new ArrayList<>();
+        if (Files.exists(runDir))
+        {
+            if (testClass != null && !testClass.isBlank())
+            {
+                final String cleanClass = testClass.contains("#") ? testClass.substring(0, testClass.indexOf('#')).trim() : testClass.trim();
+                candidateDirs.add(runDir.resolve(cleanClass));
+            }
+            if (!simpleClass.isEmpty() && !simpleClass.equals(testClass))
+            {
+                candidateDirs.add(runDir.resolve(simpleClass));
+            }
+            candidateDirs.add(runDir);
+        }
+
+        final List<TestExecutionDto.ExecutionAttachmentDto> rawAttachments = dto.getAttachments();
+        final Set<String> seenNames = new HashSet<>();
+
+        if (rawAttachments != null)
+        {
+            for (final TestExecutionDto.ExecutionAttachmentDto att : rawAttachments)
+            {
+                if (att == null)
+                {
+                    continue;
+                }
+                final String effPath = (att.getPath() != null && !att.getPath().isBlank()) ? att.getPath() : att.getName();
+                if (effPath == null || effPath.isBlank())
+                {
+                    continue;
+                }
+                for (final Path cDir : candidateDirs)
+                {
+                    final Path fPath = cDir.resolve(effPath).normalize();
+                    if (fPath.startsWith(cDir) && Files.isRegularFile(fPath) && Files.isReadable(fPath))
+                    {
+                        try
+                        {
+                            att.setSize(Files.size(fPath));
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                        resolvedAttachments.add(att);
+                        if (att.getName() != null)
+                        {
+                            seenNames.add(att.getName().toLowerCase(Locale.ROOT));
+                        }
+                        if (att.getPath() != null)
+                        {
+                            seenNames.add(att.getPath().toLowerCase(Locale.ROOT));
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Auto-discover standard attachments if not already present:
+        // 1. Video
+        if (dto.getVideoUrl() != null && !dto.getVideoUrl().isBlank())
+        {
+            final String videoName = dto.getVideoUrl().contains("/") ? dto.getVideoUrl().substring(dto.getVideoUrl().lastIndexOf('/') + 1) : dto.getVideoUrl();
+            if (!seenNames.contains(videoName.toLowerCase(Locale.ROOT)))
+            {
+                for (final Path cDir : candidateDirs)
+                {
+                    final Path vf = cDir.resolve(videoName).normalize();
+                    if (vf.startsWith(cDir) && Files.isRegularFile(vf) && Files.isReadable(vf))
+                    {
+                        final TestExecutionDto.ExecutionAttachmentDto vAtt = new TestExecutionDto.ExecutionAttachmentDto(
+                            videoName, videoName, "video", videoName.endsWith(".webm") ? "video/webm" : "video/mp4", true, vf.toFile().length());
+                        resolvedAttachments.add(vAtt);
+                        seenNames.add(videoName.toLowerCase(Locale.ROOT));
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 2. Playbook YAML
+        if (!seenNames.contains("playbook.yaml"))
+        {
+            for (final Path cDir : candidateDirs)
+            {
+                final Path pf = cDir.resolve("playbook.yaml").normalize();
+                if (pf.startsWith(cDir) && Files.isRegularFile(pf) && Files.isReadable(pf))
+                {
+                    final TestExecutionDto.ExecutionAttachmentDto pAtt = new TestExecutionDto.ExecutionAttachmentDto(
+                        "playbook.yaml", "playbook.yaml", "yaml", "text/yaml", false, pf.toFile().length());
+                    resolvedAttachments.add(pAtt);
+                    seenNames.add("playbook.yaml");
+                    break;
+                }
+            }
+        }
+
+        // 3. Execution Log
+        if (!seenNames.contains("execution.log"))
+        {
+            for (final Path cDir : candidateDirs)
+            {
+                final Path lf = cDir.resolve("execution.log").normalize();
+                if (lf.startsWith(cDir) && Files.isRegularFile(lf) && Files.isReadable(lf))
+                {
+                    final TestExecutionDto.ExecutionAttachmentDto lAtt = new TestExecutionDto.ExecutionAttachmentDto(
+                        "execution.log", "execution.log", "log", "text/plain", false, lf.toFile().length());
+                    resolvedAttachments.add(lAtt);
+                    seenNames.add("execution.log");
+                    break;
+                }
+            }
+        }
+
+        dto.setAttachments(resolvedAttachments);
+
         resolveBugsForExecution(effectiveRunId, dto);
         return dto;
     }
@@ -7178,7 +7369,7 @@ public class AuraReportDataService
         }
         if (loc.length() == 2)
         {
-            return loc.toUpperCase(java.util.Locale.ROOT);
+            return loc.toUpperCase(Locale.ROOT);
         }
         return loc;
     }

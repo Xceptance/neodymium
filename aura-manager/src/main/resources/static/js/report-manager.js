@@ -5658,11 +5658,227 @@ function copyTurnConversation(stepId, cIdx, btn) {
     copyTextToClipboardWithFeedback(md, btn, 'Copied Turn!');
 }
 
+function copyAttachmentPlaybook(btn) {
+    const activeRow = (typeof currentActiveRowId !== 'undefined' && currentActiveRowId)
+        ? (document.getElementById(currentActiveRowId) || document.querySelector(`[data-row-id="${currentActiveRowId}"]`))
+        : document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row:hover');
+
+    const yaml = (activeRow && activeRow.getAttribute('data-playbook-content'))
+        || (activeRow && activeRow._execDto && activeRow._execDto.playbookContent)
+        || (window._currentActiveExecDto && window._currentActiveExecDto.playbookContent)
+        || '';
+
+    if (!yaml) return;
+    copyTextToClipboardWithFeedback(yaml, btn, 'Copied YAML!');
+}
+
+function generateFullTestDiagnosticsMarkdown(execDto, activeRow) {
+    const row = activeRow || ((typeof currentActiveRowId !== 'undefined' && currentActiveRowId)
+        ? (document.getElementById(currentActiveRowId) || document.querySelector(`[data-row-id="${currentActiveRowId}"]`))
+        : document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row:hover'));
+
+    const dto = execDto || (row && row._execDto) || (typeof window._currentActiveExecDto !== 'undefined' ? window._currentActiveExecDto : null) || {};
+
+    const testName = dto.testName || (row ? (row.getAttribute('data-test-name') || row.getAttribute('data-test-class')) : '') || document.getElementById('sidePageTestName')?.innerText || 'Test Execution';
+    const testClass = dto.testClass || (row ? row.getAttribute('data-test-class') : '') || '';
+    const testMethod = dto.testMethod || (row ? (row.getAttribute('data-test-method') || resolveTestMethod(row, null)) : '') || '';
+    const status = dto.status || (row ? row.getAttribute('data-status') : '') || 'UNKNOWN';
+    const runId = dto.runId || (row ? (row.getAttribute('data-run-id') || resolveActiveRunId(null, row)) : '') || (typeof activeRunId !== 'undefined' ? activeRunId : '');
+    const duration = dto.durationFormatted || (row ? row.getAttribute('data-duration-formatted') : '') || (dto.durationMs ? `${(dto.durationMs / 1000).toFixed(1)}s` : '');
+    const startTime = dto.startTime || (row ? row.getAttribute('data-start-time') : '') || '';
+    const browser = dto.browser || (row ? row.getAttribute('data-browser') : '') || 'Chrome';
+    const locale = dto.locale || (row ? (row.getAttribute('data-locale') || row.getAttribute('data-location')) : '') || 'Default';
+    const execMode = dto.executionMode || dto.mode || (row ? row.getAttribute('data-execution-mode') : '') || 'N/A';
+
+    const lines = [];
+    lines.push(`# Test Execution Diagnostics: ${testName}`);
+    lines.push('');
+    lines.push('## Test Summary');
+    lines.push(`- **Status:** ${status.toUpperCase()}`);
+    if (testClass) lines.push(`- **Test Class:** \`${testClass}\``);
+    if (testMethod) lines.push(`- **Test Method:** \`${testMethod}()\``);
+    if (runId) lines.push(`- **Run ID:** \`${runId}\``);
+    if (duration) lines.push(`- **Duration:** ${duration}`);
+    if (startTime) lines.push(`- **Start Time:** ${startTime}`);
+    lines.push(`- **Browser:** ${browser}`);
+    lines.push(`- **Locale:** ${locale}`);
+    lines.push(`- **Execution Mode:** ${execMode}`);
+    if (dto.llmCallsCount || (row && row.getAttribute('data-llm-calls'))) {
+        lines.push(`- **LLM Calls:** ${dto.llmCallsCount || row.getAttribute('data-llm-calls')}`);
+    }
+    if (dto.llmTotalTokens || (row && row.getAttribute('data-total-tokens'))) {
+        lines.push(`- **Total Tokens:** ${dto.llmTotalTokens || row.getAttribute('data-total-tokens')}`);
+    }
+
+    // Dataset / Data Bindings
+    let bindings = dto.localDataBindings || dto.dataBindings;
+    if (!bindings && row) {
+        const rawBindings = row.getAttribute('data-local-bindings') || row.getAttribute('data-bindings');
+        if (rawBindings) {
+            try { bindings = JSON.parse(rawBindings); } catch (e) {}
+        }
+    }
+    if (bindings && typeof bindings === 'object' && Object.keys(bindings).length > 0) {
+        lines.push('');
+        lines.push('### Dataset Parameters');
+        for (const [k, v] of Object.entries(bindings)) {
+            lines.push(`- \`${k}\`: ${v}`);
+        }
+    }
+
+    // Failure Details
+    const failureReason = dto.failureReason || dto.failure || (row ? (row.getAttribute('data-failure-reason') || row.getAttribute('data-failure')) : '') || '';
+    const failureTrace = dto.failureStackTrace || (row ? row.getAttribute('data-failure-stack-trace') : '') || '';
+    const visualRca = dto.visualRcaExplanation || (row ? row.getAttribute('data-visual-rca-explanation') : '') || '';
+
+    if (failureReason || failureTrace || visualRca || status.toLowerCase().includes('fail')) {
+        lines.push('');
+        lines.push('## Failure Details');
+        if (failureReason) {
+            lines.push('### Failure Reason');
+            lines.push('```');
+            lines.push(failureReason.trim());
+            lines.push('```');
+        }
+        if (visualRca) {
+            lines.push('### Visual RCA Explanation');
+            lines.push(visualRca.trim());
+        }
+        if (failureTrace) {
+            lines.push('### Stack Trace');
+            lines.push('```');
+            lines.push(failureTrace.trim());
+            lines.push('```');
+        }
+    }
+
+    // Initial Playbook / Test YAML
+    const playbookContent = dto.playbookContent || (row ? row.getAttribute('data-playbook-content') : '') || '';
+    if (playbookContent && playbookContent.trim().length > 0) {
+        lines.push('');
+        lines.push('## Initial Test YAML Playbook');
+        lines.push('```yaml');
+        lines.push(playbookContent.trim());
+        lines.push('```');
+    }
+
+    // Step Execution Summary
+    let stepsList = [];
+    const blocksAttr = row ? row.getAttribute('data-blocks') : null;
+    const stepsAttr = row ? row.getAttribute('data-steps') : null;
+    if (blocksAttr && blocksAttr !== '{}' && blocksAttr !== 'null') {
+        try {
+            const blocks = JSON.parse(blocksAttr);
+            const before = blocks.before || [];
+            const steps = blocks.steps || [];
+            const after = blocks.after || [];
+            stepsList = [...before, ...steps, ...after];
+        } catch (e) {}
+    }
+    if (stepsList.length === 0 && stepsAttr && stepsAttr !== '{}' && stepsAttr !== 'null') {
+        try {
+            const stepsObj = JSON.parse(stepsAttr);
+            if (stepsObj && stepsObj.tries) {
+                const try1 = stepsObj.tries['1'] || Object.values(stepsObj.tries)[0];
+                if (Array.isArray(try1)) stepsList = try1;
+            }
+        } catch (e) {}
+    }
+    if (stepsList.length === 0 && dto.blocks) {
+        try {
+            const b = typeof dto.blocks === 'string' ? JSON.parse(dto.blocks) : dto.blocks;
+            if (b && typeof b === 'object') {
+                stepsList = [...(b.before || []), ...(b.steps || []), ...(b.after || [])];
+            }
+        } catch (e) {}
+    }
+
+    if (stepsList.length > 0) {
+        lines.push('');
+        lines.push('## Step Execution Summary');
+        stepsList.forEach((st, idx) => {
+            const stepNum = idx + 1;
+            const title = st.instruction || st.action || st.title || st.label || `Step ${stepNum}`;
+            const stepStatus = (st.status || (st.healed ? 'HEALED' : (st.error ? 'FAILED' : 'PASSED'))).toUpperCase();
+            const dur = st.durationMs ? ` (${(st.durationMs / 1000).toFixed(1)}s)` : '';
+            lines.push(`${stepNum}. [${stepStatus}] ${title}${dur}`);
+            if (st.error) {
+                lines.push(`   - Error: ${st.error}`);
+            }
+            if (st.action && st.action !== title) {
+                lines.push(`   - Action: ${st.action}`);
+            }
+        });
+    }
+
+    // Failing Step Diagnostics & LLM Forensics
+    const failedSteps = stepsList.filter(s => {
+        const sStatus = String(s.status || '').toLowerCase();
+        return sStatus.includes('fail') || sStatus.includes('error') || s.error;
+    });
+
+    if (failedSteps.length > 0 && window._neodymiumStepLlmData) {
+        lines.push('');
+        lines.push('## Failing Step Forensics & LLM Conversations');
+        for (const fStep of failedSteps) {
+            const stepTitle = fStep.instruction || fStep.action || fStep.title || fStep.label || '';
+            let matchedStepId = null;
+            for (const [sId, sData] of Object.entries(window._neodymiumStepLlmData)) {
+                if (sData.title === stepTitle || (fStep.id && sId.includes(fStep.id))) {
+                    matchedStepId = sId;
+                    break;
+                }
+            }
+            if (matchedStepId) {
+                const stepMd = generateStepConversationMarkdown(matchedStepId);
+                if (stepMd) {
+                    lines.push('');
+                    lines.push(stepMd);
+                }
+            } else if (fStep.error) {
+                lines.push(`### Failed: ${stepTitle}`);
+                lines.push(`- **Error:** ${fStep.error}`);
+            }
+        }
+    }
+
+    // Test Attachments
+    if (dto.attachments && Array.isArray(dto.attachments) && dto.attachments.length > 0) {
+        lines.push('');
+        lines.push('## Test Attachments');
+        dto.attachments.forEach(att => {
+            const sizeStr = att.size ? ` (${(att.size / 1024).toFixed(1)} KB)` : '';
+            lines.push(`- **${att.name || att.path}** [${att.type || 'file'}]${sizeStr}`);
+        });
+    }
+
+    return lines.join('\n');
+}
+
+function copyFullTestDiagnostics(btn) {
+    if (btn && btn.disabled) return;
+    if (typeof isLiveStepFetchInFlight !== 'undefined' && isLiveStepFetchInFlight) {
+        if (typeof showActionNotification === 'function') {
+            showActionNotification('Diagnostics data is loading, please wait...', 'warning');
+        }
+        return;
+    }
+
+    const activeRow = (typeof currentActiveRowId !== 'undefined' && currentActiveRowId)
+        ? (document.getElementById(currentActiveRowId) || document.querySelector(`[data-row-id="${currentActiveRowId}"]`))
+        : document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row:hover');
+
+    const md = generateFullTestDiagnosticsMarkdown(activeRow ? activeRow._execDto : null, activeRow);
+    if (!md) return;
+    copyTextToClipboardWithFeedback(md, btn, 'Copied Diagnostics!');
+}
+
 function renderStepsForExecution(activeRow) {
     const stepListEl = document.getElementById('sidePageStepList');
     if (!stepListEl) return;
 
     if (!activeRow) {
+        window._currentActiveExecDto = null;
         stepListEl.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem;">Select a test execution row to view steps.</div>';
         const linterContainer = document.getElementById('sidePageLinterFindingsContainer');
         if (linterContainer) {
@@ -5680,6 +5896,7 @@ function renderStepsForExecution(activeRow) {
     const blocksAttr = activeRow.getAttribute('data-blocks');
     const stepsAttr = activeRow.getAttribute('data-steps');
     const stepsFetched = activeRow.hasAttribute('data-steps-fetched');
+    window._currentActiveExecDto = activeRow._execDto || null;
 
     if (!stepsFetched && (!blocksAttr || blocksAttr === 'null' || blocksAttr === '{}') && (!stepsAttr || stepsAttr === 'null' || stepsAttr === '{}')) {
         const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '#RUN_ID');
@@ -5692,6 +5909,34 @@ function renderStepsForExecution(activeRow) {
 
         if (rowId) {
             stepListEl.innerHTML = '<div style="padding: 1.5rem; text-align: center; color: var(--text-muted);"><span class="material-symbols-outlined" style="font-size: 1.5rem; vertical-align: middle; animation: spin 1s linear infinite;">sync</span> Loading steps and screenshots...</div>';
+
+            // Pause and hide video player to prevent visual ghosting
+            const sideVideoContainer = document.getElementById('sidePanelVideoContainer');
+            const sideVideoPlayer = document.getElementById('sidePanelVideoPlayer');
+            if (sideVideoPlayer) {
+                sideVideoPlayer.pause();
+                sideVideoPlayer.removeAttribute('src');
+            }
+            if (sideVideoContainer) {
+                sideVideoContainer.style.display = 'none';
+            }
+
+            // Hide attachments section while loading new test data
+            const attContainer = document.getElementById('attachmentSectionContainer');
+            if (attContainer) {
+                attContainer.style.display = 'none';
+            }
+
+            const copyBtn = document.getElementById('copyFullTestDiagnosticsBtn');
+            if (copyBtn) {
+                copyBtn.disabled = true;
+                copyBtn.setAttribute('title', 'Loading diagnostics...');
+                const icon = copyBtn.querySelector('.material-symbols-outlined');
+                if (icon) {
+                    icon.textContent = 'sync';
+                    icon.style.animation = 'spin 1s linear infinite';
+                }
+            }
 
             const fetchId = ++activeStepFetchId;
             isLiveStepFetchInFlight = true;
@@ -5708,6 +5953,9 @@ function renderStepsForExecution(activeRow) {
                     if (fetchId !== activeStepFetchId || currentActiveRowId !== rowId) return;
                     activeRow.setAttribute('data-steps-fetched', 'true');
                     if (execDto) {
+                        activeRow._execDto = execDto;
+                        window._currentActiveExecDto = execDto;
+                        if (execDto.playbookContent) activeRow.setAttribute('data-playbook-content', execDto.playbookContent);
                         const newBlocks = extractBlocksJson(execDto);
                         const newSteps = extractStepsJson(execDto);
                         if (newBlocks) activeRow.setAttribute('data-blocks', newBlocks);
@@ -5787,6 +6035,16 @@ function renderStepsForExecution(activeRow) {
                     }
                     if (fetchId === activeStepFetchId) {
                         isLiveStepFetchInFlight = false;
+                        const copyBtn = document.getElementById('copyFullTestDiagnosticsBtn');
+                        if (copyBtn) {
+                            copyBtn.disabled = false;
+                            copyBtn.setAttribute('title', 'Copy full test diagnostics (markdown format)');
+                            const icon = copyBtn.querySelector('.material-symbols-outlined');
+                            if (icon) {
+                                icon.textContent = 'content_copy';
+                                icon.style.animation = '';
+                            }
+                        }
                     }
                 });
             return;
@@ -6731,49 +6989,155 @@ function renderStepsForExecution(activeRow) {
 
     stepListEl.innerHTML = html;
 
-    const videoUrlAttr = activeRow.getAttribute('data-video-url') || activeRow.getAttribute('data-video');
-    const attachmentContainer = document.getElementById('attachmentSectionContainer');
-    const videoPreviewBox = document.getElementById('attachmentVideoBox') || (attachmentContainer ? attachmentContainer.querySelector('.attachment-video-mock')?.closest('.attachment-preview-box') : null);
+    // Video handling: directly visible above steps list
+    const videoContainer = document.getElementById('sidePanelVideoContainer');
+    const videoPlayer = document.getElementById('sidePanelVideoPlayer');
+    const videoChip = document.getElementById('sidePanelVideoChip');
 
+    const rawVideoAttr = activeRow.getAttribute('data-video-url') || activeRow.getAttribute('data-video') || '';
+    let videoAttachment = null;
+    if (activeRow._execDto && activeRow._execDto.attachments) {
+        videoAttachment = activeRow._execDto.attachments.find(a =>
+            a.type === 'video' ||
+            (rawVideoAttr && (a.path === rawVideoAttr || a.name === rawVideoAttr)) ||
+            (a.name && a.name.startsWith('video-')) ||
+            (a.path && a.path.startsWith('video-'))
+        );
+    }
+    const videoUrlAttr = videoAttachment ? videoAttachment.path : rawVideoAttr;
     const hasVideo = videoUrlAttr && videoUrlAttr.trim().length > 0 && videoUrlAttr !== 'null';
 
-    if (hasVideo && attachmentContainer) {
-        if (videoPreviewBox) {
-            videoPreviewBox.style.display = 'flex';
-        }
+    if (hasVideo && videoContainer && videoPlayer) {
+        videoContainer.style.display = 'block';
         const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '');
         const testClass = resolveSimpleTestClassName(activeRow);
         const src = (videoUrlAttr.startsWith('http') || videoUrlAttr.startsWith('/'))
             ? videoUrlAttr
             : `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(videoUrlAttr)}`;
 
-        const videoBox = videoPreviewBox ? videoPreviewBox.querySelector('.attachment-video-mock') : attachmentContainer.querySelector('.attachment-video-mock');
-        if (videoBox) {
-            videoBox.style.height = 'auto';
-            videoBox.style.padding = '0.5rem';
-            videoBox.innerHTML = `<video controls style="width:100%; max-height:280px; border-radius:6px; background:#000;" src="${src}"></video>`;
+        if (videoPlayer.getAttribute('src') !== src) {
+            videoPlayer.src = src;
+            videoPlayer.preload = 'metadata';
+            videoPlayer.autoplay = false;
         }
-        const tagChip = videoPreviewBox ? videoPreviewBox.querySelector('.tag-chip') : null;
-        if (tagChip) {
-            tagChip.textContent = videoUrlAttr;
+        if (videoChip) {
+            videoChip.textContent = videoUrlAttr;
         }
-        const openBtn = videoPreviewBox ? videoPreviewBox.querySelector('button[onclick*="openAttachmentWindow"]') : null;
-        if (openBtn) {
-            openBtn.setAttribute('onclick', `openAttachmentWindow('video', '${src}')`);
-        }
-    } else {
-        if (videoPreviewBox) {
-            videoPreviewBox.style.display = 'none';
+    } else if (videoContainer) {
+        videoContainer.style.display = 'none';
+        if (videoPlayer) {
+            videoPlayer.pause();
+            videoPlayer.removeAttribute('src');
         }
     }
 
+    // Playbook YAML attachment handling
+    const playbookBox = document.getElementById('attachmentPlaybookBox');
+    let playbookAttachment = null;
+    if (activeRow._execDto && activeRow._execDto.attachments) {
+        playbookAttachment = activeRow._execDto.attachments.find(a => a.name === 'playbook.yaml' || a.path === 'playbook.yaml' || (a.path && a.path.startsWith('playbook-')));
+    }
+    const playbookContent = activeRow.getAttribute('data-playbook-content') || (activeRow._execDto && activeRow._execDto.playbookContent) || '';
+    const hasPlaybook = playbookAttachment || (playbookContent && playbookContent.trim().length > 0);
+
+    if (playbookBox) {
+        if (hasPlaybook) {
+            playbookBox.style.display = 'flex';
+            const playbookFileName = playbookAttachment ? playbookAttachment.name : 'playbook.yaml';
+            const playbookTarget = playbookAttachment ? (playbookAttachment.path || playbookAttachment.name) : 'playbook.yaml';
+            const chip = playbookBox.querySelector('#attachmentPlaybookChip') || playbookBox.querySelector('.tag-chip');
+            if (chip) chip.textContent = playbookFileName;
+            const codePreview = playbookBox.querySelector('#attachmentPlaybookCodePreview');
+            if (codePreview) {
+                codePreview.textContent = playbookContent || '[ Playbook YAML available ]';
+            }
+            const openBtn = playbookBox.querySelector('button[title*="separate browser window"], button[onclick*="openAttachmentWindow"]');
+            if (openBtn) {
+                openBtn.removeAttribute('onclick');
+                openBtn.onclick = () => openAttachmentWindow('yaml', playbookTarget);
+            }
+        } else {
+            playbookBox.style.display = 'none';
+        }
+    }
+
+    // Execution Log attachment handling
+    const logBox = document.getElementById('attachmentLogBox');
+    let logAttachment = null;
+    if (activeRow._execDto && activeRow._execDto.attachments) {
+        logAttachment = activeRow._execDto.attachments.find(a => a.name === 'execution.log' || a.path === 'execution.log' || (a.path && a.path.startsWith('execution-')));
+    }
+
+    if (logBox) {
+        if (logAttachment) {
+            logBox.style.display = 'flex';
+            const logFileName = logAttachment.name || 'execution.log';
+            const logTarget = logAttachment.path || logAttachment.name || 'execution.log';
+            const chip = logBox.querySelector('#attachmentLogChip') || logBox.querySelector('.tag-chip');
+            if (chip) chip.textContent = logFileName;
+            const openBtn = logBox.querySelector('button[title*="separate browser window"], button[onclick*="openAttachmentWindow"]');
+            if (openBtn) {
+                openBtn.removeAttribute('onclick');
+                openBtn.onclick = () => openAttachmentWindow('log', logTarget);
+            }
+        } else {
+            logBox.style.display = 'none';
+        }
+    }
+
+    // Custom attachments handling
+    const customContainer = document.getElementById('attachmentCustomItemsContainer');
+    if (customContainer) {
+        customContainer.innerHTML = '';
+        if (activeRow._execDto && activeRow._execDto.attachments) {
+            const customAtts = activeRow._execDto.attachments.filter(a =>
+                a !== logAttachment && a !== playbookAttachment && a !== videoAttachment
+            );
+            customAtts.forEach(att => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'attachment-preview-box';
+                itemDiv.style.display = 'flex';
+
+                let iconName = 'attach_file';
+                const t = (att.type || '').toLowerCase();
+                if (t === 'image') iconName = 'image';
+                else if (t === 'log') iconName = 'article';
+                else if (t === 'json') iconName = 'data_object';
+                else if (t === 'yaml') iconName = 'code';
+                else if (t === 'video') iconName = 'videocam';
+
+                const sizeStr = att.size ? ` (${(att.size / 1024).toFixed(1)} KB)` : '';
+
+                itemDiv.innerHTML = `
+                    <div class="flex-between">
+                        <span style="font-size: 0.8rem; font-weight: 600;"><span class="material-symbols-outlined text-accent">${iconName}</span> ${escapeHtml(att.name)}</span>
+                        <div class="flex-gap-2">
+                            <span class="tag-chip">${escapeHtml(att.name)}${sizeStr}</span>
+                            <button type="button" class="btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.72rem;" title="Open attachment in separate browser window">
+                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">open_in_new</span> Open in Separate Window
+                            </button>
+                        </div>
+                    </div>
+                `;
+                const btn = itemDiv.querySelector('button');
+                if (btn) {
+                    btn.addEventListener('click', () => {
+                        openAttachmentWindow(att.type, att.path || att.name);
+                    });
+                }
+                customContainer.appendChild(itemDiv);
+            });
+        }
+    }
+
+    const attachmentContainer = document.getElementById('attachmentSectionContainer');
     if (attachmentContainer) {
         const visibleAttachments = attachmentContainer.querySelectorAll('.attachment-preview-box:not([style*="display: none"])');
         if (visibleAttachments.length === 0) {
             attachmentContainer.style.display = 'none';
         } else {
             attachmentContainer.style.display = 'block';
-            const fileCountChip = attachmentContainer.querySelector('.step-section-header .tag-chip');
+            const fileCountChip = document.getElementById('attachmentCountChip') || attachmentContainer.querySelector('.step-section-header .tag-chip');
             if (fileCountChip) {
                 fileCountChip.textContent = `${visibleAttachments.length} FILE${visibleAttachments.length > 1 ? 'S' : ''}`;
             }
@@ -6798,7 +7162,7 @@ function resolveSimpleTestClassName(element) {
 function openAttachmentWindow(type, url) {
     const activeRow = (typeof currentActiveRowId !== 'undefined' && currentActiveRowId)
         ? (document.getElementById(currentActiveRowId) || document.querySelector(`[data-row-id="${currentActiveRowId}"]`))
-        : document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row');
+        : document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row:hover');
 
     let filename = (url && typeof url === 'string' && url.trim().length > 0) ? url.trim() : '';
     if (!filename && type === 'video' && activeRow) {
@@ -6822,7 +7186,14 @@ function openAttachmentWindow(type, url) {
         const testClass = resolveSimpleTestClassName(activeRow);
         targetUrl = `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(filename)}`;
     }
-    window.open(targetUrl, '_blank', 'width=1000,height=700,resizable=yes,scrollbars=yes');
+    const win = window.open(targetUrl, '_blank', 'width=1000,height=700,resizable=yes,scrollbars=yes');
+    if (!win || win.closed || typeof win.closed === 'undefined') {
+        if (typeof showActionNotification === 'function') {
+            showActionNotification('Popup blocked by browser. Please allow popups for this site to open attachments.', 'warning');
+        } else {
+            alert('Popup blocked by browser. Please allow popups for this site to open attachments in a separate window.');
+        }
+    }
 }
 window.openAttachmentWindow = openAttachmentWindow;
 
@@ -7155,6 +7526,9 @@ window.toggleDomSnapshot = toggleDomSnapshot;
 window.toggleSystemPrompt = toggleSystemPrompt;
 window.copyStepConversation = copyStepConversation;
 window.copyTurnConversation = copyTurnConversation;
+window.copyFullTestDiagnostics = copyFullTestDiagnostics;
+window.generateFullTestDiagnosticsMarkdown = generateFullTestDiagnosticsMarkdown;
+window.copyAttachmentPlaybook = copyAttachmentPlaybook;
 window.generateStepConversationMarkdown = generateStepConversationMarkdown;
 window.parseLlmPromptContent = parseLlmPromptContent;
 window.parseToolCallResponse = parseToolCallResponse;
