@@ -561,4 +561,40 @@ public final class YamlFileReaderIncludesTest
         });
         assertEquals("Circular inclusion detected: A.yaml -> B.steps -> C.steps -> B.steps", ex.getMessage());
     }
+
+    @Test
+    @DisplayName("Verify included steps containing square bracket selectors without quotes parse cleanly (Issue #465)")
+    public final void testIncludedStepsWithSquareBracketSelectors() throws IOException
+    {
+        final String checkoutSteps = """
+            - Enter credit card (hint selector: [data-cse='encryptedCardNumber' iframe]) ${creditCardNumber}.
+            - [data-cse='encryptedCardNumber'] Click element
+            - Click button (hint: [id='submit'])
+            - Click submit""";
+        final File checkoutStepsFile = new File(this.fragmentFolder, "checkout.steps");
+        Files.writeString(checkoutStepsFile.toPath(), checkoutSteps, StandardCharsets.UTF_8);
+
+        final String mainPlaybook = """
+            _meta:
+              _author: TestAuthor
+            steps:
+              - Open checkout page
+              - _include: fragments/checkout.steps
+              - Verify order confirmation
+            data:
+              - _testId: TC_BRACKETS
+                creditCardNumber: "1234567890123456" """;
+        Files.writeString(this.mainPlaybookFile.toPath(), mainPlaybook, StandardCharsets.UTF_8);
+
+        final List<Map<String, String>> dataSets = YamlFileReader.readFile(this.mainPlaybookFile);
+        assertEquals(1, dataSets.size());
+        final Map<String, String> row = dataSets.get(0);
+
+        final String steps = row.get("steps");
+        assertNotNull(steps);
+        assertTrue(steps.contains("Enter credit card (hint selector: [data-cse='encryptedCardNumber' iframe]) 1234567890123456."));
+        assertTrue(steps.contains("[data-cse='encryptedCardNumber'] Click element"));
+        assertTrue(steps.contains("Click button (hint: [id='submit'])"));
+        assertTrue(steps.contains("Click submit"));
+    }
 }

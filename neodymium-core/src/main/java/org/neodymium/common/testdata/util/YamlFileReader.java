@@ -44,6 +44,7 @@ import org.yaml.snakeyaml.Yaml;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.xceptance.neodymium.aura.AuraFileService;
 import org.neodymium.util.Neodymium;
 import org.neodymium.util.TagUtils;
 
@@ -1180,41 +1181,25 @@ public class YamlFileReader
     private static Object loadYaml(final String content)
     {
         final Yaml yaml = new Yaml();
-        return yaml.load(preprocessYamlString(content));
+        try
+        {
+            return yaml.load(preprocessYamlString(content));
+        }
+        catch (final Exception e)
+        {
+            if (e.getMessage() != null && (e.getMessage().contains("while parsing a block mapping") || e.getMessage().contains("while parsing a block collection")))
+            {
+                throw new RuntimeException("Error parsing YAML: in YAML, square brackets '[...]' and colons (':') indicate flow sequences or mappings. "
+                    + "If your step contains CSS attribute selectors or colons, wrap the step instruction in quotes. "
+                    + "Original error: " + e.getMessage(), e);
+            }
+            throw e;
+        }
     }
 
     private static String preprocessYamlString(final String yamlStr)
     {
-        final String[] lines = yamlStr.split("\\r?\\n", -1);
-        final Pattern listPattern = Pattern.compile("^(\\s*-\\s+)(If\\s+.*_include:.*)$");
-        final StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < lines.length; i++)
-        {
-            final String line = lines[i];
-            final Matcher m = listPattern.matcher(line);
-            if (m.find())
-            {
-                final String value = m.group(2);
-                if (!value.startsWith("\"") && !value.startsWith("'"))
-                {
-                    final String escaped = value.replace("\"", "\\\"");
-                    sb.append(m.group(1)).append("\"").append(escaped).append("\"");
-                }
-                else
-                {
-                    sb.append(line);
-                }
-            }
-            else
-            {
-                sb.append(line);
-            }
-            if (i < lines.length - 1)
-            {
-                sb.append("\n");
-            }
-        }
-        return sb.toString();
+        return AuraFileService.preprocessYamlSteps(yamlStr);
     }
 
     public static List<Step> loadInclude(final String path)

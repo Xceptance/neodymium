@@ -166,3 +166,44 @@ Unexpected error executing step: Click add to cart
 ```
 
 This stack trace lets you instantly pinpoint the origin of any failed assertion or selector inside nested folders of reusable steps.
+
+---
+
+## 8. Syntax & Quoting Rules in Steps (Attribute Selectors & Special Characters)
+
+When authoring step files (`.steps`) or YAML playbooks (`.yml`), steps often contain CSS attribute selectors, hints, or punctuation that have special syntactic meaning in YAML:
+
+* **Square brackets (`[...]`)**: In YAML, `[` and `]` denote flow sequences (inline arrays).
+* **Colons followed by spaces (`: `)**: In YAML, `: ` denotes key-value mapping separators.
+* **Curly braces (`{...}`)**: In YAML, `{` and `}` denote flow mappings (inline objects).
+
+### Automatic Preprocessing
+Neodymium's playbook and steps parsers (`AuraFileService`, `YamlFileReader`, and `YamlPlaybookParser`) automatically preprocess unquoted list items containing square brackets or colons by encapsulating them in escaped double quotes before feeding them into SnakeYAML.
+
+For example, the following unquoted step list:
+```yaml
+steps:
+  - Enter credit card (hint selector: [data-cse='encryptedCardNumber']) ${creditCardNumber}.
+  - [data-cse='encryptedCardNumber'] Click element.
+```
+is automatically normalized during parsing to:
+```yaml
+steps:
+  - "Enter credit card (hint selector: [data-cse='encryptedCardNumber']) ${creditCardNumber}."
+  - "[data-cse='encryptedCardNumber'] Click element."
+```
+
+### Best Practices & Explicit Quoting
+While Neodymium automatically handles these patterns, explicitly wrapping steps containing attribute selectors or colons in quotes is recommended to avoid any ambiguity across external linters or strict YAML validators:
+
+```yaml
+steps:
+  - "Enter credit card (hint selector: [data-cse='encryptedCardNumber']) ${creditCardNumber}."
+  - "Click [data-cse='encryptedCardNumber']."
+```
+
+In plain `.steps` files (without `- ` bullet prefixes), lines are treated as raw text lines:
+```text
+Enter credit card (hint selector: [data-cse='encryptedCardNumber']) ${creditCardNumber}.
+Click [data-cse='encryptedCardNumber'].
+```

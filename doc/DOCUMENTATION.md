@@ -246,6 +246,17 @@ Instead of executing LLM calls dynamically on every run, the framework uses **St
       - "Type \"${username}\" into the email input field"
     ```
 
+    > [!IMPORTANT]
+    > **Quoting Steps with Special YAML Characters (`[...]`, `:`, `{...}`):**
+    > In YAML, square brackets (`[...]`) indicate flow sequences (inline arrays) and colons (`:`) indicate key-value mappings.
+    > When writing step instructions that contain CSS attribute selectors (e.g. `[data-cse='...']`, `[data-testid='submit']`) or colon-separated hints (e.g. `(hint selector: [...])`), wrap the entire step in double quotes:
+    > ```yaml
+    > steps:
+    >   - "Enter credit card (hint selector: [data-cse='encryptedCardNumber' iframe]) ${creditCardNumber}."
+    >   - "[data-testid='submit-btn'] Click button"
+    > ```
+    > While Neodymium includes automated preprocessor safeguards for unquoted bracketed step lines, explicit double-quoting remains the standard, robust YAML authoring practice.
+
   - **Folded Scalar Format (`- >-`) for Single-Turn Batch Assertions**:
     Standard YAML folded block scalar with strip chomping (`>-`). It folds consecutive lines of text into a single space-separated string, stripping any trailing newline:
     ```yaml
