@@ -812,6 +812,7 @@ public final class AuraQueueService
                     int prevReportedFailed = 0;
                     int prevReportedSkipped = 0;
 
+                    final List<String> fileSubprocessLogs = new ArrayList<>();
                     try (final BufferedReader reader = new BufferedReader(
                             new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8)))
                     {
@@ -819,6 +820,7 @@ public final class AuraQueueService
                         while ((line = reader.readLine()) != null)
                         {
                             broadcastLog(line);
+                            fileSubprocessLogs.add(line);
                             LOGGER.info("[Aura Subprocess] {}", stripAnsi(line));
 
                             final String cleanLine = stripAnsi(line);
@@ -982,7 +984,7 @@ public final class AuraQueueService
                     activeProcess.set(null);
 
                     final boolean isFailedRun = exitCode != 0 || fileFailures.get() > 0 || fileErrors.get() > 0;
-                    final String extractedError = isFailedRun ? extractSubprocessErrorMessage(currentRunLogs) : null;
+                    final String extractedError = isFailedRun ? extractSubprocessErrorMessage(fileSubprocessLogs) : null;
                     updateExecutionSnapshotsAndFallbacks(
                             runId,
                             className,
@@ -1624,6 +1626,8 @@ public final class AuraQueueService
                 }
                 final String line = stripAnsi(rawLine).trim();
                 final String upperLine = line.toUpperCase();
+
+                // 1. Ignore warnings, JVM option noise, and logging framework headers
                 if (upperLine.contains("WARN")
                         || upperLine.contains("WARNING")
                         || line.contains("Picked up _JAVA_OPTIONS")
@@ -1631,14 +1635,57 @@ public final class AuraQueueService
                 {
                     continue;
                 }
+
+                // 2. Ignore Maven / Surefire infrastructure boilerplate and diagnostics
+                if (line.contains("Failed to execute goal")
+                        || line.contains("surefire-reports")
+                        || line.contains("dump files")
+                        || line.contains("-> [Help")
+                        || line.contains("[Help 1]")
+                        || line.contains("To see the full stack trace")
+                        || line.contains("Re-run Maven using")
+                        || line.contains("For more information about the errors")
+                        || line.contains("cwiki.apache.org")
+                        || line.contains("<<< FAILURE!")
+                        || line.contains("<<< ERROR!")
+                        || line.matches(".*Tests run:\\s*\\d+.*")
+                        || line.equalsIgnoreCase("[ERROR] Errors:")
+                        || line.equalsIgnoreCase("[ERROR] Failures:")
+                        || line.equalsIgnoreCase("Errors:")
+                        || line.equalsIgnoreCase("Failures:")
+                        || line.contains("Spawning Maven Subprocess"))
+                {
+                    continue;
+                }
+
+                // 3. Match legitimate error lines, exception declarations, and root causes
                 if (line.contains("Failed to parse playbook")
                         || line.contains("Caused by:")
                         || line.contains("Exception:")
                         || line.contains("Error:")
                         || line.contains("Throwable:")
-                        || (line.startsWith("[ERROR]") && !line.contains("Spawning Maven Subprocess")))
+                        || line.contains("AssertionFailedError")
+                        || line.contains("ComparisonFailure")
+                        || line.startsWith("[ERROR]"))
                 {
-                    matchingLines.add(line);
+                    String cleaned = line;
+                    if (cleaned.startsWith("[Aura Subprocess] "))
+                    {
+                        cleaned = cleaned.substring("[Aura Subprocess] ".length()).trim();
+                    }
+                    if (cleaned.startsWith("[ERROR] "))
+                    {
+                        cleaned = cleaned.substring("[ERROR] ".length()).trim();
+                    }
+                    else if (cleaned.startsWith("[ERROR]"))
+                    {
+                        cleaned = cleaned.substring("[ERROR]".length()).trim();
+                    }
+
+                    if (!cleaned.isEmpty())
+                    {
+                        matchingLines.add(cleaned);
+                    }
                 }
             }
         }
@@ -1648,24 +1695,42 @@ public final class AuraQueueService
             return null;
         }
 
-        final StringBuilder sb = new StringBuilder();
-        for (final String match : matchingLines)
+        // 4. Deduplicate and filter redundant summary lines
+        final List<String> distinctLines = new ArrayList<>();
+        for (final String line : matchingLines)
         {
-            String cleaned = match;
-            if (cleaned.startsWith("[Aura Subprocess] "))
+            if (distinctLines.contains(line))
             {
-                cleaned = cleaned.substring("[Aura Subprocess] ".length()).trim();
-            }
-            if (cleaned.startsWith("[ERROR] "))
-            {
-                cleaned = cleaned.substring("[ERROR] ".length()).trim();
+                continue;
             }
 
+            // If it's a Surefire summary marker like "TestClass.method()[1] » IllegalState ...",
+            // skip it if the actual exception was already captured
+            if (line.contains(" » "))
+            {
+                final String[] parts = line.split(" » ", 2);
+                final String afterArrow = (parts.length > 1) ? parts[1].trim() : line;
+                final int firstSpace = afterArrow.indexOf(' ');
+                final String actualMessage = (firstSpace > 0) ? afterArrow.substring(firstSpace + 1).trim() : afterArrow;
+                final boolean alreadyCovered = distinctLines.stream().anyMatch(existing ->
+                        (!actualMessage.isEmpty() && existing.contains(actualMessage)) || existing.contains(afterArrow));
+                if (alreadyCovered)
+                {
+                    continue;
+                }
+            }
+
+            distinctLines.add(line);
+        }
+
+        final StringBuilder sb = new StringBuilder();
+        for (final String match : distinctLines)
+        {
             if (!sb.isEmpty())
             {
-                sb.append(" ");
+                sb.append("\n");
             }
-            sb.append(cleaned);
+            sb.append(match);
         }
 
         final String result = sb.toString().trim();

@@ -182,6 +182,57 @@ public final class AuraQueueServiceTest
     }
 
     @Test
+    public void testExtractSubprocessErrorMessageFiltersMavenSurefireBoilerplateAndDeduplicates()
+    {
+        final List<String> logs = List.of(
+            "Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 5.790 s <<< FAILURE! -- in com.xceptance.neodymium.aura.sandbox.Aura_tests_posters_homepage_yaml_Test",
+            "com.xceptance.neodymium.aura.sandbox.Aura_tests_posters_homepage_yaml_Test.executeYamlTest()[1] -- Time elapsed: 5.128 s <<< ERROR!",
+            "java.lang.IllegalStateException: Failed to instantiate LLM provider class 'org.neodymium.ai.client.GeminiLlmProvider' for provider 'gemini' (role 'global'): Gemini API key is missing. Please configure neodymium.ai.gemini.apiKey or set GEMINI_API_KEY.",
+            "Caused by: java.lang.IllegalArgumentException: Gemini API key is missing. Please configure neodymium.ai.gemini.apiKey or set GEMINI_API_KEY.",
+            "[ERROR] Errors:",
+            "[ERROR]   Aura_tests_posters_homepage_yaml_Test.executeYamlTest()[1] » IllegalState Failed to instantiate LLM provider class 'org.neodymium.ai.client.GeminiLlmProvider' for provider 'gemini' (role 'global'): Gemini API key is missing. Please configure neodymium.ai.gemini.apiKey or set GEMINI_API_KEY.",
+            "[ERROR] Tests run: 1, Failures: 0, Errors: 1, Skipped: 0",
+            "[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.5.2:test (default-test) on project archy_test:",
+            "[ERROR] See /home/weigel/Documents/projects/automation/archy_test/target/surefire-reports for the individual test results.",
+            "[ERROR] See dump files (if any exist) [date].dump, [date]-jvmRun].dump and [date].dumpstream. -> [Help 1]",
+            "[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.",
+            "[ERROR] Re-run Maven using the -X switch to enable full debug logging.",
+            "[ERROR] For more information about the errors and possible solutions, please read the following articles:",
+            "[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException"
+        );
+
+        final String extracted = AuraQueueService.extractSubprocessErrorMessage(logs);
+
+        Assertions.assertNotNull(extracted);
+        Assertions.assertTrue(extracted.contains("Failed to instantiate LLM provider class 'org.neodymium.ai.client.GeminiLlmProvider'"));
+        Assertions.assertTrue(extracted.contains("Caused by: java.lang.IllegalArgumentException: Gemini API key is missing."));
+        Assertions.assertFalse(extracted.contains("Failed to execute goal"), "Should exclude Maven execution goal failure");
+        Assertions.assertFalse(extracted.contains("surefire-reports"), "Should exclude surefire report directory advice");
+        Assertions.assertFalse(extracted.contains("To see the full stack trace"), "Should exclude Maven debug CLI tips");
+        Assertions.assertFalse(extracted.contains("http://cwiki.apache.org"), "Should exclude Apache wiki links");
+        Assertions.assertFalse(extracted.contains("<<< FAILURE!"), "Should exclude surefire test lifecycle header");
+        Assertions.assertFalse(extracted.contains("<<< ERROR!"), "Should exclude surefire test lifecycle header");
+        Assertions.assertFalse(extracted.contains("Tests run: 1"), "Should exclude surefire summary counts");
+        Assertions.assertFalse(extracted.contains("» IllegalState"), "Should omit redundant Surefire summary marker when full exception was already captured");
+    }
+
+    @Test
+    public void testExtractSubprocessErrorMessagePreservesDirectSummaryWhenNoPriorExceptionLogged()
+    {
+        final List<String> logs = List.of(
+            "[ERROR] Errors:",
+            "[ERROR]   Aura_test.executeYamlTest()[1] » AssertionFailedError expected: <true> but was: <false>",
+            "[ERROR] Tests run: 1, Failures: 1, Errors: 0, Skipped: 0"
+        );
+
+        final String extracted = AuraQueueService.extractSubprocessErrorMessage(logs);
+
+        Assertions.assertNotNull(extracted);
+        Assertions.assertTrue(extracted.contains("AssertionFailedError expected: <true> but was: <false>"));
+        Assertions.assertFalse(extracted.contains("Tests run:"));
+    }
+
+    @Test
     public void testUpdateExecutionSnapshotsAndFallbacksDoesNotCreatePhantomSecondFileWhenFirstExecutionExists() throws Exception
     {
         final Path tempDir = Files.createTempDirectory("aura-queue-test-");

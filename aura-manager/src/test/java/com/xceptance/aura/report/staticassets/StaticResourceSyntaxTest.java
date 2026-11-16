@@ -647,6 +647,75 @@ public final class StaticResourceSyntaxTest
         runNodeScript(nodeTestScript, "AI log filtering test failed");
     }
 
+    /**
+     * Automated regression safety net verifying that dashboard-runner.js invokes startPolling()
+     * when prepareClientForExecution() is executed, preventing client disconnection and the
+     * "Connecting to run stream..." freeze.
+     *
+     * @throws Exception
+     *             if Node execution or verification fails
+     * @author AI-generated: Gemini 3.8 Flash
+     * @author Xceptance GmbH 2026
+     */
+    @Test
+    public void testPrepareClientForExecutionInitiatesPolling() throws Exception
+    {
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final Path runnerPath = Paths.get("src/main/resources/static/dashboard-runner.js");
+        Assertions.assertTrue(Files.exists(runnerPath), "dashboard-runner.js must exist: " + runnerPath.toAbsolutePath());
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const runnerCode = fs.readFileSync('" + runnerPath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "let pollingStarted = false;\n" +
+            "const makeMockElement = () => ({\n" +
+            "    innerHTML: '',\n" +
+            "    style: {},\n" +
+            "    classList: { add: () => {}, remove: () => {}, contains: () => false },\n" +
+            "    querySelectorAll: () => [],\n" +
+            "    insertAdjacentHTML: () => {}\n" +
+            "});\n" +
+            "const sandbox = {\n" +
+            "    console,\n" +
+            "    window: { addEventListener: () => {} },\n" +
+            "    document: {\n" +
+            "        getElementById: () => makeMockElement(),\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {}\n" +
+            "    },\n" +
+            "    localStorage: { getItem: () => null, setItem: () => {} },\n" +
+            "    setTimeout: () => {},\n" +
+            "    clearTimeout: () => {},\n" +
+            "    clientId: 'test-client-id',\n" +
+            "    disconnected: false,\n" +
+            "    fetch: () => { pollingStarted = true; return Promise.resolve({ ok: true, json: async () => ({}) }); },\n" +
+            "    activeRunStats: { running: false, tests: [] },\n" +
+            "    liveCompletedFiles: new Set(),\n" +
+            "    clearReportPromptTimer: () => {},\n" +
+            "    hideRunFinishedPrompt: () => {}\n" +
+            "};\n" +
+            "sandbox.window.document = sandbox.document;\n" +
+            "sandbox.window.localStorage = sandbox.localStorage;\n" +
+            "sandbox.window.activeRunStats = sandbox.activeRunStats;\n" +
+            "sandbox.window.liveCompletedFiles = sandbox.liveCompletedFiles;\n" +
+            "sandbox.window.clientId = sandbox.clientId;\n" +
+            "sandbox.window.disconnected = sandbox.disconnected;\n" +
+            "sandbox.window.fetch = sandbox.fetch;\n" +
+            "vm.runInNewContext(runnerCode, sandbox);\n" +
+            "sandbox.window.prepareClientForExecution();\n" +
+            "if (!pollingStarted) {\n" +
+            "    throw new Error('prepareClientForExecution must initiate polling to establish the live run stream');\n" +
+            "}\n";
+
+        runNodeScript(nodeTestScript, "prepareClientForExecution polling initiation test failed");
+    }
+
     @Test
     public void testCollapsedSidebarPreservesMaterialIcons() throws Exception
     {

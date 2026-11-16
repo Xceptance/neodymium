@@ -253,6 +253,11 @@ function prepareClientForExecution() {
     if (terminalConsole) terminalConsole.innerHTML = 'Connecting to run stream...\n';
     hasShownStartMessage = false;
     lastLineWasAi = false;
+    if (typeof startPolling === 'function') {
+        startPolling();
+    } else if (typeof pollStatus === 'function') {
+        pollStatus();
+    }
 }
 window.prepareClientForExecution = prepareClientForExecution;
 
