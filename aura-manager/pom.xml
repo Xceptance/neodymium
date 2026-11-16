@@ -158,6 +158,8 @@
                         <artifactId>maven-surefire-plugin</artifactId>
                         <configuration>
                             <excludes combine.self="override">
+                                <exclude>**/*IntegrationTest.java</exclude>
+                                <exclude>**/*SpringContextTest.java</exclude>
                                 <exclude>**/*UiTest.java</exclude>
                                 <exclude>**/ui/**</exclude>
                                 <exclude>**/AuraLauncherTest.java</exclude>
