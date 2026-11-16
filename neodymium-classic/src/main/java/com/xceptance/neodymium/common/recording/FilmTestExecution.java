@@ -159,9 +159,13 @@ public class FilmTestExecution
      *     should the desired {@link TakeScreenshotsThread} create a gif
      * @return constructed {@link TakeScreenshotsThread}
      */
-    private static TakeScreenshotsThread createThread(String testName, boolean isGif)
+    private static TakeScreenshotsThread createThread(final String testName, final boolean isGif)
     {
-        Map<String, TakeScreenshotsThread> threads = isGif ? GIF_THREADS : VIDEO_THREADS;
+        if (testName == null)
+        {
+            return null;
+        }
+        final Map<String, TakeScreenshotsThread> threads = isGif ? GIF_THREADS : VIDEO_THREADS;
         return threads.computeIfAbsent(testName, key -> {
             return createTakeScreenshotsThread(testName, isGif);
         });
@@ -174,10 +178,14 @@ public class FilmTestExecution
      *     should the desired {@link TakeScreenshotsThread} create a gif
      * @return {@link TakeScreenshotsThread} for the current thread
      */
-    private static TakeScreenshotsThread popThread(String testName, boolean isGif)
+    private static TakeScreenshotsThread popThread(final String testName, final boolean isGif)
     {
-        Map<String, TakeScreenshotsThread> threads = isGif ? GIF_THREADS : VIDEO_THREADS;
-        TakeScreenshotsThread thread = threads.get(testName);
+        if (testName == null)
+        {
+            return null;
+        }
+        final Map<String, TakeScreenshotsThread> threads = isGif ? GIF_THREADS : VIDEO_THREADS;
+        final TakeScreenshotsThread thread = threads.get(testName);
         threads.remove(testName);
         return thread;
     }
