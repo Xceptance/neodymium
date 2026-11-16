@@ -51,6 +51,7 @@ import org.neodymium.ai.executor.probe.LocatorProbeResult;
 import org.neodymium.ai.executor.selenide.frame.FrameContextManager;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.tool.ToolCallVariableResolver;
 import org.neodymium.ai.tool.browser.BrowserToolProvider;
 import org.neodymium.util.Neodymium;
 import org.slf4j.Logger;
@@ -520,11 +521,18 @@ public final class SelenideTargetExecutor implements TargetExecutor
 
     private String interpolateString(final String text)
     {
-        if (text == null || !text.contains("${"))
+        if (text == null || !text.contains("$"))
         {
             return text;
         }
-        String result = text;
+        final String normalized = (this.context != null && this.context.getSessionData() != null)
+                ? ToolCallVariableResolver.normalizeUnbracketedVariables(text, this.context.getSessionData())
+                : text;
+        if (!normalized.contains("${"))
+        {
+            return normalized;
+        }
+        String result = normalized;
         int start;
         while ((start = result.indexOf("${")) != -1)
         {

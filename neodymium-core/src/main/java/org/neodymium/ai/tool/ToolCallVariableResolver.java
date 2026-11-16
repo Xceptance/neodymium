@@ -25,6 +25,8 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.model.UnresolvableVariableException;
 import org.slf4j.Logger;
@@ -41,12 +43,187 @@ public final class ToolCallVariableResolver
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(ToolCallVariableResolver.class);
 
+    private static final Pattern UNBRACKETED_VAR_PATTERN = Pattern.compile("(?<![\\w\\$])\\$([a-zA-Z_](?:[a-zA-Z0-9_.]*[a-zA-Z0-9_])?)");
+
     private ToolCallVariableResolver()
     {
     }
 
     /**
-     * Resolves all variable references (e.g. {@code ${variableName}}) in the given tool call's arguments
+     * Normalizes unbracketed variable placeholders (e.g. {@code $password}) in the string into canonical
+     * bracketed placeholders (e.g. {@code ${password}}) when the variable name matches an active entry
+     * in the given {@link SessionData}.
+     *
+     * @param text the original string
+     * @param sessionData the active session data
+     * @return the string with unbracketed known variables normalized to {@code ${varName}}
+     */
+    public static String normalizeUnbracketedVariables(final String text, final SessionData sessionData)
+    {
+        if (text == null || sessionData == null || !text.contains("$"))
+        {
+            return text;
+        }
+
+        final Matcher matcher = UNBRACKETED_VAR_PATTERN.matcher(text);
+        if (!matcher.find())
+        {
+            return text;
+        }
+
+        final StringBuilder sb = new StringBuilder();
+        int lastEnd = 0;
+        matcher.reset();
+        while (matcher.find())
+        {
+            final String candidate = matcher.group(1);
+            String matchedKey = candidate;
+            String trailingSuffix = "";
+
+            while (!matchedKey.isEmpty() && sessionData.getEntry(matchedKey) == null)
+            {
+                final int lastDot = matchedKey.lastIndexOf('.');
+                if (lastDot > 0)
+                {
+                    trailingSuffix = matchedKey.substring(lastDot) + trailingSuffix;
+                    matchedKey = matchedKey.substring(0, lastDot);
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            if (!matchedKey.isEmpty() && sessionData.getEntry(matchedKey) != null)
+            {
+                sb.append(text, lastEnd, matcher.start());
+                sb.append("${").append(matchedKey).append("}").append(trailingSuffix);
+                lastEnd = matcher.end();
+            }
+        }
+
+        if (lastEnd == 0)
+        {
+            return text;
+        }
+
+        sb.append(text.substring(lastEnd));
+        return sb.toString();
+    }
+
+    /**
+     * Normalizes all unbracketed variable references in the tool call's arguments into canonical
+     * {@code ${varName}} syntax against the supplied {@link SessionData}.
+     *
+     * @param call the raw tool call
+     * @param sessionData the session data holding active runtime variables
+     * @return a new ToolCall with normalized argument placeholders, or the original call if no changes occurred
+     */
+    public static ToolCall normalizePlaceholders(final ToolCall call, final SessionData sessionData)
+    {
+        if (call == null || sessionData == null || call.arguments() == null || !call.arguments().isObject())
+        {
+            return call;
+        }
+
+        final String argsString = call.arguments().toString();
+        if (!argsString.contains("$"))
+        {
+            return call;
+        }
+
+        final ObjectNode args = call.arguments().deepCopy();
+        final boolean isStoreTool = call.toolName() != null
+                && ("store".equalsIgnoreCase(call.toolName().trim()) || "browser_store".equalsIgnoreCase(call.toolName().trim()));
+        final boolean changed = normalizeObjectNode(args, sessionData, isStoreTool);
+        return changed ? new ToolCall(call.callId(), call.toolName(), args) : call;
+    }
+
+    private static boolean normalizeObjectNode(
+            final ObjectNode objectNode,
+            final SessionData sessionData,
+            final boolean isStoreTool)
+    {
+        boolean changed = false;
+        final List<String> fieldNames = new ArrayList<>();
+        final Iterator<String> it = objectNode.fieldNames();
+        while (it.hasNext())
+        {
+            fieldNames.add(it.next());
+        }
+
+        for (final String key : fieldNames)
+        {
+            if (isStoreTool && ("variableName".equals(key) || "variable".equals(key) || "name".equals(key) || "key".equals(key)))
+            {
+                continue;
+            }
+
+            final JsonNode child = objectNode.get(key);
+            if (child.isTextual())
+            {
+                final String original = child.asText();
+                final String normalized = normalizeUnbracketedVariables(original, sessionData);
+                if (!normalized.equals(original))
+                {
+                    objectNode.put(key, normalized);
+                    changed = true;
+                }
+            }
+            else if (child.isObject())
+            {
+                if (normalizeObjectNode((ObjectNode) child, sessionData, false))
+                {
+                    changed = true;
+                }
+            }
+            else if (child.isArray())
+            {
+                if (normalizeArrayNode((ArrayNode) child, sessionData))
+                {
+                    changed = true;
+                }
+            }
+        }
+        return changed;
+    }
+
+    private static boolean normalizeArrayNode(final ArrayNode arrayNode, final SessionData sessionData)
+    {
+        boolean changed = false;
+        for (int i = 0; i < arrayNode.size(); i++)
+        {
+            final JsonNode element = arrayNode.get(i);
+            if (element.isTextual())
+            {
+                final String original = element.asText();
+                final String normalized = normalizeUnbracketedVariables(original, sessionData);
+                if (!normalized.equals(original))
+                {
+                    arrayNode.set(i, arrayNode.textNode(normalized));
+                    changed = true;
+                }
+            }
+            else if (element.isObject())
+            {
+                if (normalizeObjectNode((ObjectNode) element, sessionData, false))
+                {
+                    changed = true;
+                }
+            }
+            else if (element.isArray())
+            {
+                if (normalizeArrayNode((ArrayNode) element, sessionData))
+                {
+                    changed = true;
+                }
+            }
+        }
+        return changed;
+    }
+
+    /**
+     * Resolves all variable references (e.g. {@code ${variableName}} and {@code $variableName}) in the given tool call's arguments
      * against the supplied {@link SessionData}.
      *
      * @param call the raw or masked tool call
@@ -61,7 +238,7 @@ public final class ToolCallVariableResolver
         }
 
         final String argsString = call.arguments().toString();
-        if (!argsString.contains("${"))
+        if (!argsString.contains("$"))
         {
             return call;
         }
@@ -127,35 +304,36 @@ public final class ToolCallVariableResolver
             if (child.isTextual())
             {
                 final String original = child.asText();
-                if (!original.contains("${"))
+                final String normalized = normalizeUnbracketedVariables(original, sessionData);
+                if (!normalized.contains("${"))
                 {
                     continue;
                 }
 
                 final String resolved;
-                if (isStoreTool && storeTargetVar != null && "value".equals(key) && original.contains("${" + storeTargetVar + "}"))
+                if (isStoreTool && storeTargetVar != null && "value".equals(key) && normalized.contains("${" + storeTargetVar + "}"))
                 {
                     if (sessionData.get(storeTargetVar) == null)
                     {
-                        final Set<String> allKeys = sessionData.extractVariableNames(original);
+                        final Set<String> allKeys = sessionData.extractVariableNames(normalized);
                         for (final String varKey : allKeys)
                         {
                             if (!varKey.equals(storeTargetVar) && sessionData.get(varKey) == null)
                             {
-                                throw new UnresolvableVariableException(varKey, original);
+                                throw new UnresolvableVariableException(varKey, normalized);
                             }
                         }
-                        LOGGER.warn("Resolving available sibling variables while preserving unresolvable self-referential placeholder in store tool value '{}'", original);
-                        resolved = sessionData.resolveAvailableVariables(original);
+                        LOGGER.warn("Resolving available sibling variables while preserving unresolvable self-referential placeholder in store tool value '{}'", normalized);
+                        resolved = sessionData.resolveAvailableVariables(normalized);
                     }
                     else
                     {
-                        resolved = sessionData.resolveVariables(original);
+                        resolved = sessionData.resolveVariables(normalized);
                     }
                 }
                 else
                 {
-                    resolved = sessionData.resolveVariables(original);
+                    resolved = sessionData.resolveVariables(normalized);
                 }
 
                 if (!resolved.equals(original))
@@ -191,12 +369,13 @@ public final class ToolCallVariableResolver
             if (element.isTextual())
             {
                 final String original = element.asText();
-                if (!original.contains("${"))
+                final String normalized = normalizeUnbracketedVariables(original, sessionData);
+                if (!normalized.contains("${"))
                 {
                     continue;
                 }
 
-                final String resolved = sessionData.resolveVariables(original);
+                final String resolved = sessionData.resolveVariables(normalized);
                 if (!resolved.equals(original))
                 {
                     arrayNode.set(i, arrayNode.textNode(resolved));

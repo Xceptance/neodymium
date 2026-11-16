@@ -187,4 +187,113 @@ public class ToolCallVariableResolverTest
         );
         Assertions.assertEquals("missingVar", ex.getVariableName());
     }
+
+    @Test
+    public void testResolveVariablesNormalizesAndResolvesUnbracketedVariables()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("password", "SecretP@ss123!", true);
+        sessionData.putDynamic("user.email", "neo@test.de", false);
+
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("selector", "#password");
+        args.put("text", "$password");
+        args.put("email", "$user.email");
+
+        final ToolCall call = new ToolCall("callUnbracketed", "fill", args);
+        final ToolCall resolved = ToolCallVariableResolver.resolveVariables(call, sessionData);
+
+        Assertions.assertNotSame(call, resolved);
+        Assertions.assertEquals("SecretP@ss123!", resolved.arguments().path("text").asText());
+        Assertions.assertEquals("neo@test.de", resolved.arguments().path("email").asText());
+        Assertions.assertEquals("#password", resolved.arguments().path("selector").asText());
+    }
+
+    @Test
+    public void testResolveVariablesPreservesMonetaryAndCurrencyAmounts()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("password", "SecretP@ss123!", true);
+
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("price", "$100");
+        args.put("decimal", "$19.99");
+        args.put("code", "$25OFF");
+
+        final ToolCall call = new ToolCall("callCurrency", "fill", args);
+        final ToolCall resolved = ToolCallVariableResolver.resolveVariables(call, sessionData);
+
+        Assertions.assertEquals("$100", resolved.arguments().path("price").asText());
+        Assertions.assertEquals("$19.99", resolved.arguments().path("decimal").asText());
+        Assertions.assertEquals("$25OFF", resolved.arguments().path("code").asText());
+    }
+
+    @Test
+    public void testResolveVariablesPreservesUnknownDollarIdentifiers()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("password", "SecretP@ss123!", true);
+
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("text", "$unknownVar");
+        args.put("selector", "$('#btn')");
+
+        final ToolCall call = new ToolCall("callUnknown", "click", args);
+        final ToolCall resolved = ToolCallVariableResolver.resolveVariables(call, sessionData);
+
+        Assertions.assertEquals("$unknownVar", resolved.arguments().path("text").asText());
+        Assertions.assertEquals("$('#btn')", resolved.arguments().path("selector").asText());
+    }
+
+    @Test
+    public void testResolveVariablesResolvesUnbracketedWithTrailingPunctuation()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("password", "SecretP@ss123!", true);
+
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("text", "Your password is $password.");
+
+        final ToolCall call = new ToolCall("callPunctuation", "fill", args);
+        final ToolCall resolved = ToolCallVariableResolver.resolveVariables(call, sessionData);
+
+        Assertions.assertEquals("Your password is SecretP@ss123!.", resolved.arguments().path("text").asText());
+    }
+
+    @Test
+    public void testNormalizePlaceholdersNormalizesUnbracketedVariables()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("password", "SecretP@ss123!", true);
+        sessionData.putDynamic("email", "neo@test.de", false);
+
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("text", "$password");
+        args.put("login", "User: $email");
+
+        final ToolCall call = new ToolCall("callNorm", "fill", args);
+        final ToolCall normalized = ToolCallVariableResolver.normalizePlaceholders(call, sessionData);
+
+        Assertions.assertNotSame(call, normalized);
+        Assertions.assertEquals("${password}", normalized.arguments().path("text").asText());
+        Assertions.assertEquals("User: ${email}", normalized.arguments().path("login").asText());
+    }
+
+    @Test
+    public void testNormalizePlaceholdersHandlesPrefixCollisionCleanly()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("user", "john", false);
+        sessionData.putDynamic("user.name", "john_doe", false);
+
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("full", "$user.name");
+        args.put("partial", "$user.other");
+
+        final ToolCall call = new ToolCall("callCollision", "fill", args);
+        final ToolCall normalized = ToolCallVariableResolver.normalizePlaceholders(call, sessionData);
+
+        Assertions.assertEquals("${user.name}", normalized.arguments().path("full").asText());
+        Assertions.assertEquals("${user}.other", normalized.arguments().path("partial").asText());
+    }
 }
