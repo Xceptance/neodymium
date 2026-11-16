@@ -296,4 +296,49 @@ public class ToolCallVariableResolverTest
         Assertions.assertEquals("${user.name}", normalized.arguments().path("full").asText());
         Assertions.assertEquals("${user}.other", normalized.arguments().path("partial").asText());
     }
+
+    @Test
+    public void testResolveVariablesNormalizesAndResolvesInFillFormStructure()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("user.email", "test@varmail.de", false);
+        sessionData.putDynamic("password", "Secret123!", true);
+
+        final ObjectNode args = MAPPER.createObjectNode();
+        final ArrayNode fields = args.putArray("fields");
+        final ObjectNode f1 = fields.addObject();
+        f1.put("selector", "#email");
+        f1.put("value", "$user.email");
+        final ObjectNode f2 = fields.addObject();
+        f2.put("selector", "#password");
+        f2.put("value", "$password");
+
+        final ToolCall call = new ToolCall("callForm", "fill_form", args);
+        final ToolCall resolved = ToolCallVariableResolver.resolveVariables(call, sessionData);
+
+        Assertions.assertEquals("test@varmail.de", resolved.arguments().path("fields").get(0).path("value").asText());
+        Assertions.assertEquals("Secret123!", resolved.arguments().path("fields").get(1).path("value").asText());
+
+        final ToolCall normalized = ToolCallVariableResolver.normalizePlaceholders(call, sessionData);
+        Assertions.assertEquals("${user.email}", normalized.arguments().path("fields").get(0).path("value").asText());
+        Assertions.assertEquals("${password}", normalized.arguments().path("fields").get(1).path("value").asText());
+    }
+
+    @Test
+    public void testNormalizeAndResolvePreservesJavaScriptVariablesInScriptTool()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("btn", "button#submit", false);
+        sessionData.putDynamic("token", "secretToken", true);
+
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("script", "var $btn = document.querySelector('button'); return $btn.textContent + ' ' + '${token}';");
+
+        final ToolCall call = new ToolCall("callJs", "execute_script", args);
+        final ToolCall normalized = ToolCallVariableResolver.normalizePlaceholders(call, sessionData);
+        Assertions.assertEquals("var $btn = document.querySelector('button'); return $btn.textContent + ' ' + '${token}';", normalized.arguments().path("script").asText());
+
+        final ToolCall resolved = ToolCallVariableResolver.resolveVariables(call, sessionData);
+        Assertions.assertEquals("var $btn = document.querySelector('button'); return $btn.textContent + ' ' + 'secretToken';", resolved.arguments().path("script").asText());
+    }
 }

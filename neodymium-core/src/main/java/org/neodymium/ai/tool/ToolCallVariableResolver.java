@@ -135,14 +135,17 @@ public final class ToolCallVariableResolver
         final ObjectNode args = call.arguments().deepCopy();
         final boolean isStoreTool = call.toolName() != null
                 && ("store".equalsIgnoreCase(call.toolName().trim()) || "browser_store".equalsIgnoreCase(call.toolName().trim()));
-        final boolean changed = normalizeObjectNode(args, sessionData, isStoreTool);
+        final boolean isScriptTool = call.toolName() != null
+                && ("execute_script".equalsIgnoreCase(call.toolName().trim()) || "browser_execute_script".equalsIgnoreCase(call.toolName().trim()));
+        final boolean changed = normalizeObjectNode(args, sessionData, isStoreTool, isScriptTool);
         return changed ? new ToolCall(call.callId(), call.toolName(), args) : call;
     }
 
     private static boolean normalizeObjectNode(
             final ObjectNode objectNode,
             final SessionData sessionData,
-            final boolean isStoreTool)
+            final boolean isStoreTool,
+            final boolean isScriptTool)
     {
         boolean changed = false;
         final List<String> fieldNames = new ArrayList<>();
@@ -155,6 +158,11 @@ public final class ToolCallVariableResolver
         for (final String key : fieldNames)
         {
             if (isStoreTool && ("variableName".equals(key) || "variable".equals(key) || "name".equals(key) || "key".equals(key)))
+            {
+                continue;
+            }
+
+            if (isScriptTool && "script".equals(key))
             {
                 continue;
             }
@@ -172,14 +180,14 @@ public final class ToolCallVariableResolver
             }
             else if (child.isObject())
             {
-                if (normalizeObjectNode((ObjectNode) child, sessionData, false))
+                if (normalizeObjectNode((ObjectNode) child, sessionData, false, isScriptTool))
                 {
                     changed = true;
                 }
             }
             else if (child.isArray())
             {
-                if (normalizeArrayNode((ArrayNode) child, sessionData))
+                if (normalizeArrayNode((ArrayNode) child, sessionData, isScriptTool))
                 {
                     changed = true;
                 }
@@ -188,7 +196,10 @@ public final class ToolCallVariableResolver
         return changed;
     }
 
-    private static boolean normalizeArrayNode(final ArrayNode arrayNode, final SessionData sessionData)
+    private static boolean normalizeArrayNode(
+            final ArrayNode arrayNode,
+            final SessionData sessionData,
+            final boolean isScriptTool)
     {
         boolean changed = false;
         for (int i = 0; i < arrayNode.size(); i++)
@@ -206,14 +217,14 @@ public final class ToolCallVariableResolver
             }
             else if (element.isObject())
             {
-                if (normalizeObjectNode((ObjectNode) element, sessionData, false))
+                if (normalizeObjectNode((ObjectNode) element, sessionData, false, isScriptTool))
                 {
                     changed = true;
                 }
             }
             else if (element.isArray())
             {
-                if (normalizeArrayNode((ArrayNode) element, sessionData))
+                if (normalizeArrayNode((ArrayNode) element, sessionData, isScriptTool))
                 {
                     changed = true;
                 }
@@ -246,6 +257,8 @@ public final class ToolCallVariableResolver
         final ObjectNode args = call.arguments().deepCopy();
         final boolean isStoreTool = call.toolName() != null
                 && ("store".equalsIgnoreCase(call.toolName().trim()) || "browser_store".equalsIgnoreCase(call.toolName().trim()));
+        final boolean isScriptTool = call.toolName() != null
+                && ("execute_script".equalsIgnoreCase(call.toolName().trim()) || "browser_execute_script".equalsIgnoreCase(call.toolName().trim()));
         final String storeTargetVar;
         if (isStoreTool)
         {
@@ -275,7 +288,7 @@ public final class ToolCallVariableResolver
             storeTargetVar = null;
         }
 
-        final boolean changed = resolveObjectNode(args, sessionData, isStoreTool, storeTargetVar);
+        final boolean changed = resolveObjectNode(args, sessionData, isStoreTool, isScriptTool, storeTargetVar);
         return changed ? new ToolCall(call.callId(), call.toolName(), args) : call;
     }
 
@@ -283,6 +296,7 @@ public final class ToolCallVariableResolver
             final ObjectNode objectNode,
             final SessionData sessionData,
             final boolean isStoreTool,
+            final boolean isScriptTool,
             final String storeTargetVar)
     {
         boolean changed = false;
@@ -304,6 +318,21 @@ public final class ToolCallVariableResolver
             if (child.isTextual())
             {
                 final String original = child.asText();
+                if (isScriptTool && "script".equals(key))
+                {
+                    if (!original.contains("${"))
+                    {
+                        continue;
+                    }
+                    final String resolved = sessionData.resolveVariables(original);
+                    if (!resolved.equals(original))
+                    {
+                        objectNode.put(key, resolved);
+                        changed = true;
+                    }
+                    continue;
+                }
+
                 final String normalized = normalizeUnbracketedVariables(original, sessionData);
                 if (!normalized.contains("${"))
                 {
@@ -344,14 +373,14 @@ public final class ToolCallVariableResolver
             }
             else if (child.isObject())
             {
-                if (resolveObjectNode((ObjectNode) child, sessionData, false, null))
+                if (resolveObjectNode((ObjectNode) child, sessionData, false, isScriptTool, null))
                 {
                     changed = true;
                 }
             }
             else if (child.isArray())
             {
-                if (resolveArrayNode((ArrayNode) child, sessionData))
+                if (resolveArrayNode((ArrayNode) child, sessionData, isScriptTool))
                 {
                     changed = true;
                 }
@@ -360,7 +389,10 @@ public final class ToolCallVariableResolver
         return changed;
     }
 
-    private static boolean resolveArrayNode(final ArrayNode arrayNode, final SessionData sessionData)
+    private static boolean resolveArrayNode(
+            final ArrayNode arrayNode,
+            final SessionData sessionData,
+            final boolean isScriptTool)
     {
         boolean changed = false;
         for (int i = 0; i < arrayNode.size(); i++)
@@ -384,14 +416,14 @@ public final class ToolCallVariableResolver
             }
             else if (element.isObject())
             {
-                if (resolveObjectNode((ObjectNode) element, sessionData, false, null))
+                if (resolveObjectNode((ObjectNode) element, sessionData, false, isScriptTool, null))
                 {
                     changed = true;
                 }
             }
             else if (element.isArray())
             {
-                if (resolveArrayNode((ArrayNode) element, sessionData))
+                if (resolveArrayNode((ArrayNode) element, sessionData, isScriptTool))
                 {
                     changed = true;
                 }
