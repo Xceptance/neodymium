@@ -884,6 +884,14 @@ function updateCenterLayout() {
     const container = document.getElementById('auraTestManagerWorkspace') || document.getElementById('dashboardView');
     if (!container) return;
 
+    if (container.dataset && container.dataset.running === 'true' && !window._serverRunningInitialized) {
+        window._serverRunningInitialized = true;
+        isRunning = true;
+        window.isRunning = true;
+        consoleCollapsed = false;
+        window.consoleCollapsed = false;
+    }
+
     const hasEdit = (activeEditingFile !== null);
 
     const runCurrentBtn = document.getElementById('runCurrentTestBtn');
@@ -915,10 +923,7 @@ function updateCenterLayout() {
     consolePanel.style.display = 'flex';
     consolePanel.style.flexGrow = '0';
 
-    // If execution is running, automatically expand
-    const effectiveCollapsed = isRunning ? false : consoleCollapsed;
-
-    if (effectiveCollapsed) {
+    if (consoleCollapsed) {
         consolePanel.classList.add('console-collapsed');
         consolePanel.style.height = '38px';
         if (consoleResizer) consoleResizer.style.display = 'none';
