@@ -97,7 +97,7 @@ public final class AuraQueueService
     private final AtomicReference<RunRequest> lastRunRequest = new AtomicReference<>(null);
 
     private final Set<File> createdTempFiles = Collections.synchronizedSet(new HashSet<>());
-    private final Set<File> ingestedExecutionFiles = Collections.synchronizedSet(new HashSet<>());
+    private final Set<String> ingestedExecutionKeys = Collections.synchronizedSet(new HashSet<>());
 
     private final AuraInteractiveService interactiveService;
     private QueueRunProgressListener queueRunProgressListener;
@@ -248,9 +248,20 @@ public final class AuraQueueService
             engine.abort();
             final String activeRunId = currentRunId.get() != null ? currentRunId.get() : engine.getRunId();
             final String activeFileStr = activeFile.get() != null ? activeFile.get() : "";
+            final String runnerClass;
+            if (!activeFileStr.isBlank())
+            {
+                final String safeName = activeFileStr.replaceAll("[^a-zA-Z0-9]", "_");
+                runnerClass = "Aura_" + safeName + "_Test";
+            }
+            else
+            {
+                runnerClass = "DefaultTestClass";
+            }
             final String cancelStateJson = String.format(
-                "{\"runId\":\"%s\",\"status\":\"skipped\",\"runnerStatus\":\"cancelled\",\"currentStepIndex\":0,\"testName\":\"%s\",\"message\":\"Test execution cancelled by user.\"}",
+                "{\"runId\":\"%s\",\"status\":\"skipped\",\"runnerStatus\":\"cancelled\",\"currentStepIndex\":0,\"testClass\":\"%s\",\"testName\":\"%s\",\"message\":\"Test execution cancelled by user.\"}",
                 activeRunId != null ? activeRunId : "",
+                runnerClass,
                 activeFileStr
             );
             engine.pushState(cancelStateJson);
@@ -412,7 +423,7 @@ public final class AuraQueueService
                 currentRunLogs.clear();
                 currentRunEvents.clear();
                 completedFiles.clear();
-                ingestedExecutionFiles.clear();
+                ingestedExecutionKeys.clear();
                 interactiveService.resetExecutionIndexes();
 
                 runStartTimeMs.set(System.currentTimeMillis());
@@ -1360,13 +1371,14 @@ public final class AuraQueueService
                 {
                     payload.put("status", "passed");
                 }
-                synchronized (ingestedExecutionFiles)
+                final String canonicalKey = className + "/" + execFile.getName();
+                synchronized (ingestedExecutionKeys)
                 {
-                    if (ingestedExecutionFiles.contains(execFile.getAbsoluteFile()))
+                    if (ingestedExecutionKeys.contains(canonicalKey))
                     {
                         continue;
                     }
-                    ingestedExecutionFiles.add(execFile.getAbsoluteFile());
+                    ingestedExecutionKeys.add(canonicalKey);
 
                     final int newlyIngested = (batchIngestedRuns != null) ? batchIngestedRuns.incrementAndGet() : 1;
                     final int surefireReported = (batchReportedSurefireRuns != null) ? batchReportedSurefireRuns.get() : 0;

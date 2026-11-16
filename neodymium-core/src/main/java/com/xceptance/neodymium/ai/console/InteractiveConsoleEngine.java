@@ -129,40 +129,28 @@ public final class InteractiveConsoleEngine {
     {
         if (json != null)
         {
+            if (json.has("testClass") && !json.get("testClass").isJsonNull())
+            {
+                final String tc = json.get("testClass").getAsString();
+                if (tc != null && !tc.isBlank() && !"yaml".equalsIgnoreCase(tc.trim()))
+                {
+                    return resolveSafeClassFolder(tc);
+                }
+            }
             if (json.has("testFile") && !json.get("testFile").isJsonNull())
             {
-                String tf = json.get("testFile").getAsString();
+                final String tf = json.get("testFile").getAsString();
                 if (tf != null && !tf.isBlank())
                 {
-                    if (tf.contains("#"))
-                    {
-                        tf = tf.substring(0, tf.indexOf('#'));
-                    }
-                    if (tf.contains("."))
-                    {
-                        tf = tf.substring(tf.lastIndexOf('.') + 1);
-                    }
-                    return tf;
+                    return resolveSafeClassFolder(tf);
                 }
             }
             if (json.has("testName") && !json.get("testName").isJsonNull())
             {
-                String tn = json.get("testName").getAsString();
+                final String tn = json.get("testName").getAsString();
                 if (tn != null && !tn.isBlank() && !"Live Test Run".equals(tn))
                 {
-                    if (tn.contains(" · "))
-                    {
-                        tn = tn.substring(0, tn.indexOf(" · "));
-                    }
-                    else if (tn.contains(" "))
-                    {
-                        tn = tn.substring(0, tn.indexOf(' '));
-                    }
-                    if (tn.contains("."))
-                    {
-                        tn = tn.substring(tn.lastIndexOf('.') + 1);
-                    }
-                    return tn;
+                    return resolveSafeClassFolder(tn);
                 }
             }
         }
@@ -173,28 +161,42 @@ public final class InteractiveConsoleEngine {
     {
         if (rawTestName != null && !rawTestName.isBlank())
         {
-            String tn = rawTestName;
-            if (tn.contains("#"))
-            {
-                tn = tn.substring(0, tn.indexOf('#'));
-            }
-            if (tn.contains(" · "))
-            {
-                tn = tn.substring(0, tn.indexOf(" · "));
-            }
-            else if (tn.contains(" "))
-            {
-                tn = tn.substring(0, tn.indexOf(' '));
-            }
-            if (tn.contains("."))
-            {
-                tn = tn.substring(tn.lastIndexOf('.') + 1);
-            }
-            final String safeFolder = tn.replaceAll("[^a-zA-Z0-9._-]", "_");
-            if (!safeFolder.isBlank())
-            {
-                return safeFolder;
-            }
+            return resolveSafeClassFolder(rawTestName);
+        }
+        return "DefaultTestClass";
+    }
+
+    private static String resolveSafeClassFolder(final String input)
+    {
+        String tn = input.trim();
+        if (tn.contains("#"))
+        {
+            tn = tn.substring(0, tn.indexOf('#'));
+        }
+        if (tn.contains(" · "))
+        {
+            tn = tn.substring(0, tn.indexOf(" · "));
+        }
+        else if (tn.contains(" "))
+        {
+            tn = tn.substring(0, tn.indexOf(' '));
+        }
+
+        final String lower = tn.toLowerCase();
+        if (lower.endsWith(".yaml") || lower.endsWith(".yml") || lower.endsWith(".steps"))
+        {
+            final String safeName = tn.replaceAll("[^a-zA-Z0-9]", "_");
+            return "Aura_" + safeName + "_Test";
+        }
+
+        if (tn.contains("."))
+        {
+            tn = tn.substring(tn.lastIndexOf('.') + 1);
+        }
+        final String safeFolder = tn.replaceAll("[^a-zA-Z0-9._-]", "_");
+        if (!safeFolder.isBlank())
+        {
+            return safeFolder;
         }
         return "DefaultTestClass";
     }

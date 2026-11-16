@@ -27,7 +27,9 @@ import java.io.File;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -554,6 +556,80 @@ public final class AuraQueueServiceTest
         finally
         {
             AuraQueueService.deleteDirRecursively(tempDir.toFile());
+        }
+    }
+
+    @Test
+    public void testIngestBatchExecutionFilesDeduplicatesAcrossMultipleStorageRoots() throws Exception
+    {
+        final java.nio.file.Path tempDir1 = Files.createTempDirectory("aura_queue_test_storage1_");
+        final java.nio.file.Path tempDir2 = Files.createTempDirectory("aura_queue_test_storage2_");
+        try
+        {
+            final String className = "Aura_tests_checkout_process_yaml_Test";
+            final File testDir1 = new File(tempDir1.toFile(), className);
+            final File testDir2 = new File(tempDir2.toFile(), className);
+            Assertions.assertTrue(testDir1.mkdirs());
+            Assertions.assertTrue(testDir2.mkdirs());
+
+            final ObjectMapper mapper = new ObjectMapper();
+            final ObjectNode node = mapper.createObjectNode();
+            node.put("id", "dataset_1");
+            node.put("status", "passed");
+
+            // Write identical execution files in both storage directories
+            final File exec1 = new File(testDir1, "console-execution-1.json");
+            final File exec2 = new File(testDir2, "console-execution-1.json");
+            mapper.writeValue(exec1, node);
+            mapper.writeValue(exec2, node);
+
+            final java.lang.reflect.Method ingestMethod = AuraQueueService.class.getDeclaredMethod(
+                "ingestBatchExecutionFiles",
+                com.xceptance.neodymium.aura.QueueRunProgressListener.class,
+                String.class,
+                String.class,
+                List.class,
+                boolean.class,
+                AtomicInteger.class,
+                AtomicInteger.class
+            );
+            ingestMethod.setAccessible(true);
+
+            final AtomicInteger batchIngestedRuns = new AtomicInteger(0);
+            final AtomicInteger batchReportedSurefireRuns = new AtomicInteger(0);
+            final List<File> storageRoots = List.of(tempDir1.toFile(), tempDir2.toFile());
+
+            final List<Map<String, Object>> completedPayloads = new ArrayList<>();
+            final com.xceptance.neodymium.aura.QueueRunProgressListener listener = new com.xceptance.neodymium.aura.QueueRunProgressListener()
+            {
+                @Override
+                public void onRunStarted(final String rId, final String bName, final String env)
+                {
+                }
+
+                @Override
+                public void onTestExecutionCompleted(final String rId, final Map<String, Object> executionData)
+                {
+                    completedPayloads.add(executionData);
+                }
+
+                @Override
+                public void onRunFinished(final String rId)
+                {
+                }
+            };
+
+            ingestMethod.invoke(queueService, listener, "run_123", className, storageRoots, true, batchIngestedRuns, batchReportedSurefireRuns);
+
+            Assertions.assertEquals(1, batchIngestedRuns.get(), "Batch ingested runs should be exactly 1 despite existing in 2 storage roots");
+            Assertions.assertEquals(1, queueService.getGlobalTestsRun(), "Global tests run counter should be incremented exactly once");
+            Assertions.assertEquals(1, queueService.getGlobalPassed(), "Global passed counter should be incremented exactly once");
+            Assertions.assertEquals(1, completedPayloads.size(), "Listener should receive completed execution exactly once");
+        }
+        finally
+        {
+            AuraQueueService.deleteDirRecursively(tempDir1.toFile());
+            AuraQueueService.deleteDirRecursively(tempDir2.toFile());
         }
     }
 }
