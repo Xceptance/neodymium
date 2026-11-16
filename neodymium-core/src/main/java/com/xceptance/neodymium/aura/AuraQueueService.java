@@ -280,34 +280,7 @@ public final class AuraQueueService
     {
         LOGGER.info("[Aura Server] Setting manuallyStopped=true.");
         manuallyStopped.set(true);
-        final InteractiveConsoleEngine engine = interactiveService.getCurrentConsoleEngine();
-        if (engine != null)
-        {
-            engine.abort();
-        }
-        final Process p = activeProcess.getAndSet(null);
-        if (p != null && p.isAlive())
-        {
-            p.destroy();
-            try
-            {
-                if (!p.waitFor(3, TimeUnit.SECONDS))
-                {
-                    LOGGER.warn("[Aura Server] Subprocess did not stop on destroy, forcing termination...");
-                    p.destroyForcibly();
-                }
-            }
-            catch (final InterruptedException e)
-            {
-                Thread.currentThread().interrupt();
-            }
-            LOGGER.info("[Aura Server] Subprocess terminated.");
-            broadcastLog("[INFO] Active Maven process terminated by user.");
-        }
-        else
-        {
-            LOGGER.info("[Aura Server] No active subprocess found to stop.");
-        }
+        stopCurrentTest();
         synchronized (createdTempFiles)
         {
             for (final File f : createdTempFiles)
@@ -516,6 +489,11 @@ public final class AuraQueueService
 
                 for (int i = 0; i < batches.size(); i++)
                 {
+                    if (manuallyStopped.get())
+                    {
+                        break;
+                    }
+
                     final ExecutionBatch batch = batches.get(i);
                     final String file = batch.file;
                     final List<String> ids = batch.datasetIds;
@@ -526,6 +504,22 @@ public final class AuraQueueService
                     if ("true".equalsIgnoreCase(System.getProperty("neodymium.aura.test", "false")))
                     {
                         LOGGER.info("[Aura Server] Test mode active (neodymium.aura.test=true). Simulating queue execution for {} with profiles {}", file, targetProfiles);
+                        final long delayMs = Long.getLong("neodymium.aura.test.simulation.delayMs", 0L);
+                        if (delayMs > 0)
+                        {
+                            try
+                            {
+                                Thread.sleep(delayMs);
+                            }
+                            catch (final InterruptedException e)
+                            {
+                                Thread.currentThread().interrupt();
+                            }
+                        }
+                        if (manuallyStopped.get())
+                        {
+                            break;
+                        }
                         broadcastLog("[INFO] Test mode active: simulating Maven subprocess for " + file + " [Profiles: " + targetProfiles + "]");
                         final int simRuns = Math.max(1, ids.size()) * Math.max(1, targetProfiles.size());
                         broadcastLog("[INFO] Tests run: " + simRuns + ", Failures: 0, Errors: 0, Skipped: 0");

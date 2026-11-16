@@ -907,4 +907,55 @@ public final class AuraTestQueueControllerTest
         Assertions.assertEquals("admin-user", queue.get(0).id);
         Assertions.assertEquals("tests/smoke/LoginTest.yaml", queue.get(0).file);
     }
+
+    @Test
+    public final void testStopExecutionHaltsQueueAndReturnsRunControls()
+    {
+        final Model model = new ConcurrentModel();
+        final String view = this.controller.stopExecution(model);
+
+        Assertions.assertEquals("fragments/queue :: runControls", view);
+        Assertions.assertTrue(this.queueService.isManuallyStopped(),
+                "AuraQueueService must be flagged as manually stopped after controller stopExecution is invoked");
+        Assertions.assertEquals(Boolean.FALSE, model.getAttribute("running"),
+                "Model 'running' attribute must be false");
+    }
+
+    @Test
+    public final void testQueueTemplateRendersStopExecutionButtonAttributes()
+    {
+        final SpringTemplateEngine engine = new SpringTemplateEngine();
+        final ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setPrefix("templates/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCharacterEncoding("UTF-8");
+        engine.setTemplateResolver(resolver);
+
+        // Case 1: Running state -> stop button should have d-flex, onclick="stopQueue()", and hx-post="/api/stop"
+        final Context contextRunning = new Context();
+        contextRunning.setVariable("running", true);
+        contextRunning.setVariable("queue", List.of());
+        contextRunning.setVariable("totalRuns", 0);
+        contextRunning.setVariable("activeEditingFile", null);
+
+        final String htmlRunning = engine.process("fragments/queue", Collections.singleton("runControlsContent"), contextRunning);
+        Assertions.assertNotNull(htmlRunning);
+        Assertions.assertTrue(htmlRunning.contains("id=\"stopQueueBtn\""), "Fragment must contain stopQueueBtn");
+        Assertions.assertTrue(htmlRunning.contains("onclick=\"stopQueue()\""), "stopQueueBtn must contain onclick=\"stopQueue()\"");
+        Assertions.assertTrue(htmlRunning.contains("hx-post=\"/api/stop\""), "stopQueueBtn must contain hx-post=\"/api/stop\"");
+        Assertions.assertTrue(htmlRunning.contains("Stop Execution"), "stopQueueBtn must have 'Stop Execution' label");
+        Assertions.assertTrue(htmlRunning.contains("d-flex"), "stopQueueBtn must be visible (d-flex) when running");
+
+        // Case 2: Idle state -> stop button should have d-none
+        final Context contextIdle = new Context();
+        contextIdle.setVariable("running", false);
+        contextIdle.setVariable("queue", List.of());
+        contextIdle.setVariable("totalRuns", 0);
+        contextIdle.setVariable("activeEditingFile", null);
+
+        final String htmlIdle = engine.process("fragments/queue", Collections.singleton("runControlsContent"), contextIdle);
+        Assertions.assertNotNull(htmlIdle);
+        Assertions.assertTrue(htmlIdle.contains("d-none"), "stopQueueBtn must be hidden (d-none) when not running");
+    }
 }
