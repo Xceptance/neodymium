@@ -5234,6 +5234,9 @@ public class AuraReportDataService
                         catch (final Exception ignored)
                         {
                         }
+                        att.setRelativePath(resolveWorkspaceRelativePath(fPath));
+                        att.setFileUri(fPath.toAbsolutePath().normalize().toUri().toString());
+                        att.setContent(readAttachmentContentIfSmall(fPath, att.getType()));
                         resolvedAttachments.add(att);
                         if (att.getName() != null)
                         {
@@ -5262,7 +5265,15 @@ public class AuraReportDataService
                     if (vf.startsWith(cDir) && Files.isRegularFile(vf) && Files.isReadable(vf))
                     {
                         final TestExecutionDto.ExecutionAttachmentDto vAtt = new TestExecutionDto.ExecutionAttachmentDto(
-                            videoName, videoName, "video", videoName.endsWith(".webm") ? "video/webm" : "video/mp4", true, vf.toFile().length());
+                            videoName,
+                            videoName,
+                            "video",
+                            videoName.endsWith(".webm") ? "video/webm" : "video/mp4",
+                            true,
+                            vf.toFile().length(),
+                            resolveWorkspaceRelativePath(vf),
+                            vf.toAbsolutePath().normalize().toUri().toString(),
+                            null);
                         resolvedAttachments.add(vAtt);
                         seenNames.add(videoName.toLowerCase(Locale.ROOT));
                         break;
@@ -5280,7 +5291,15 @@ public class AuraReportDataService
                 if (pf.startsWith(cDir) && Files.isRegularFile(pf) && Files.isReadable(pf))
                 {
                     final TestExecutionDto.ExecutionAttachmentDto pAtt = new TestExecutionDto.ExecutionAttachmentDto(
-                        "playbook.yaml", "playbook.yaml", "yaml", "text/yaml", false, pf.toFile().length());
+                        "playbook.yaml",
+                        "playbook.yaml",
+                        "yaml",
+                        "text/yaml",
+                        false,
+                        pf.toFile().length(),
+                        resolveWorkspaceRelativePath(pf),
+                        pf.toAbsolutePath().normalize().toUri().toString(),
+                        readAttachmentContentIfSmall(pf, "yaml"));
                     resolvedAttachments.add(pAtt);
                     seenNames.add("playbook.yaml");
                     break;
@@ -5297,7 +5316,15 @@ public class AuraReportDataService
                 if (lf.startsWith(cDir) && Files.isRegularFile(lf) && Files.isReadable(lf))
                 {
                     final TestExecutionDto.ExecutionAttachmentDto lAtt = new TestExecutionDto.ExecutionAttachmentDto(
-                        "execution.log", "execution.log", "log", "text/plain", false, lf.toFile().length());
+                        "execution.log",
+                        "execution.log",
+                        "log",
+                        "text/plain",
+                        false,
+                        lf.toFile().length(),
+                        resolveWorkspaceRelativePath(lf),
+                        lf.toAbsolutePath().normalize().toUri().toString(),
+                        readAttachmentContentIfSmall(lf, "log"));
                     resolvedAttachments.add(lAtt);
                     seenNames.add("execution.log");
                     break;
@@ -5309,6 +5336,55 @@ public class AuraReportDataService
 
         resolveBugsForExecution(effectiveRunId, dto);
         return dto;
+    }
+
+    private static boolean isTextAttachment(final Path path, final String type)
+    {
+        if ("log".equalsIgnoreCase(type) || "yaml".equalsIgnoreCase(type) || "json".equalsIgnoreCase(type) || "text".equalsIgnoreCase(type))
+        {
+            return true;
+        }
+        if (path == null || path.getFileName() == null)
+        {
+            return false;
+        }
+        final String fn = path.getFileName().toString().toLowerCase(Locale.ROOT);
+        return fn.endsWith(".log") || fn.endsWith(".yaml") || fn.endsWith(".yml") || fn.endsWith(".json")
+            || fn.endsWith(".txt") || fn.endsWith(".csv") || fn.endsWith(".tsv") || fn.endsWith(".xml") || fn.endsWith(".md");
+    }
+
+    private static String resolveWorkspaceRelativePath(final Path path)
+    {
+        if (path == null)
+        {
+            return "";
+        }
+        final Path userDir = Path.of("").toAbsolutePath().normalize();
+        final Path absPath = path.toAbsolutePath().normalize();
+        if (absPath.startsWith(userDir))
+        {
+            return userDir.relativize(absPath).toString().replace('\\', '/');
+        }
+        return absPath.toString().replace('\\', '/');
+    }
+
+    private static String readAttachmentContentIfSmall(final Path path, final String type)
+    {
+        if (path == null || !Files.isRegularFile(path) || !isTextAttachment(path, type))
+        {
+            return null;
+        }
+        try
+        {
+            if (Files.size(path) <= 50_000L)
+            {
+                return Files.readString(path, StandardCharsets.UTF_8);
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+        return null;
     }
 
     /**

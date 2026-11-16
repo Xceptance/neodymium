@@ -1987,10 +1987,13 @@ public final class TestExecutionDto
     {
         private String name;
         private String path;
+        private String relativePath;
+        private String fileUri;
         private String type;
         private String contentType;
         private boolean openByDefault;
         private Long size;
+        private String content;
 
         public ExecutionAttachmentDto()
         {
@@ -2003,7 +2006,10 @@ public final class TestExecutionDto
             @JsonProperty("type") final String type,
             @JsonProperty("contentType") final String contentType,
             @JsonProperty("openByDefault") final Boolean openByDefault,
-            @JsonProperty("size") final Long size)
+            @JsonProperty("size") final Long size,
+            @JsonProperty("relativePath") final String relativePath,
+            @JsonProperty("fileUri") final String fileUri,
+            @JsonProperty("content") final String content)
         {
             this.name = name != null ? name : "";
             this.path = path != null ? path : this.name;
@@ -2011,6 +2017,20 @@ public final class TestExecutionDto
             this.contentType = contentType != null ? contentType : "application/octet-stream";
             this.openByDefault = Boolean.TRUE.equals(openByDefault);
             this.size = size;
+            this.relativePath = (relativePath != null && !relativePath.isBlank()) ? relativePath : this.path;
+            this.fileUri = fileUri;
+            this.content = content;
+        }
+
+        public ExecutionAttachmentDto(
+            final String name,
+            final String path,
+            final String type,
+            final String contentType,
+            final Boolean openByDefault,
+            final Long size)
+        {
+            this(name, path, type, contentType, openByDefault, size, path, null, null);
         }
 
         public String getName()
@@ -2031,6 +2051,26 @@ public final class TestExecutionDto
         public void setPath(final String path)
         {
             this.path = path;
+        }
+
+        public String getRelativePath()
+        {
+            return this.relativePath != null ? this.relativePath : this.path;
+        }
+
+        public void setRelativePath(final String relativePath)
+        {
+            this.relativePath = relativePath;
+        }
+
+        public String getFileUri()
+        {
+            return this.fileUri;
+        }
+
+        public void setFileUri(final String fileUri)
+        {
+            this.fileUri = fileUri;
         }
 
         public String getType()
@@ -2071,6 +2111,16 @@ public final class TestExecutionDto
         public void setSize(final Long size)
         {
             this.size = size;
+        }
+
+        public String getContent()
+        {
+            return this.content;
+        }
+
+        public void setContent(final String content)
+        {
+            this.content = content;
         }
     }
 

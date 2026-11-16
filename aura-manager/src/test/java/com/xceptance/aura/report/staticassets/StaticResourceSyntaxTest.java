@@ -4712,6 +4712,98 @@ public final class StaticResourceSyntaxTest
         Assertions.assertEquals(0, exitCode, "Known test variations widget row click regression test failed:\n" + out);
         Assertions.assertTrue(out.toString().contains("SUCCESS"), "Output must contain SUCCESS: " + out);
     }
+
+    @Test
+    public void testGenerateFullTestDiagnosticsMarkdownWithInlinedAttachmentsAndLocalArtifacts() throws Exception
+    {
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist: " + jsFilePath.toAbsolutePath());
+        final String jsContent = Files.readString(jsFilePath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(jsContent.contains("## Test Attachments & Local Artifacts"),
+            "report-manager.js must include section '## Test Attachments & Local Artifacts'");
+        Assertions.assertTrue(jsContent.contains("Workspace Path:"),
+            "report-manager.js must render workspace-relative paths for attachments");
+        Assertions.assertTrue(jsContent.contains("Local File URI:"),
+            "report-manager.js must render clickable local file URIs for attachments");
+        Assertions.assertTrue(jsContent.contains("### Inlined Attachment Contents"),
+            "report-manager.js must include section '### Inlined Attachment Contents' for text attachments");
+        Assertions.assertTrue(jsContent.contains("Aura MCP Quick Tip:"),
+            "report-manager.js must include Aura MCP Quick Tip guidance for AI agents");
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const assert = require('assert');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const sandbox = {\n" +
+            "    console: console,\n" +
+            "    assert: assert,\n" +
+            "    window: {},\n" +
+            "    document: {\n" +
+            "        getElementById: () => null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {} }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "vm.createContext(sandbox);\n" +
+            "vm.runInContext(code, sandbox);\n" +
+            "assert(typeof sandbox.generateFullTestDiagnosticsMarkdown === 'function', 'generateFullTestDiagnosticsMarkdown must be defined');\n" +
+            "const testDto = {\n" +
+            "    id: 'run-42-exec-1',\n" +
+            "    testName: 'SampleTest',\n" +
+            "    testClass: 'com.example.SampleTest',\n" +
+            "    testMethod: 'sampleMethod',\n" +
+            "    runId: 'run-42',\n" +
+            "    status: 'failed',\n" +
+            "    failureReason: 'Element not found',\n" +
+            "    playbookContent: 'steps: []',\n" +
+            "    attachments: [\n" +
+            "        {\n" +
+            "            name: 'video.mp4',\n" +
+            "            path: 'video.mp4',\n" +
+            "            type: 'video',\n" +
+            "            size: 2048000,\n" +
+            "            relativePath: 'storage/runs/run-42/video.mp4',\n" +
+            "            fileUri: 'file:///workspace/storage/runs/run-42/video.mp4'\n" +
+            "        },\n" +
+            "        {\n" +
+            "            name: 'execution.log',\n" +
+            "            path: 'execution.log',\n" +
+            "            type: 'log',\n" +
+            "            size: 1024,\n" +
+            "            relativePath: 'storage/runs/run-42/execution.log',\n" +
+            "            fileUri: 'file:///workspace/storage/runs/run-42/execution.log',\n" +
+            "            content: '[INFO] Test started\\n[ERROR] Step failed'\n" +
+            "        },\n" +
+            "        {\n" +
+            "            name: 'playbook.yaml',\n" +
+            "            path: 'playbook.yaml',\n" +
+            "            type: 'yaml',\n" +
+            "            size: 512,\n" +
+            "            relativePath: 'storage/runs/run-42/playbook.yaml',\n" +
+            "            fileUri: 'file:///workspace/storage/runs/run-42/playbook.yaml',\n" +
+            "            content: 'steps: []'\n" +
+            "        }\n" +
+            "    ]\n" +
+            "};\n" +
+            "const md = sandbox.generateFullTestDiagnosticsMarkdown(testDto, null);\n" +
+            "assert(md.includes('## Test Attachments & Local Artifacts'), 'Markdown must contain attachments header');\n" +
+            "assert(md.includes('- Workspace Path: `storage/runs/run-42/video.mp4`'), 'Must contain video workspace path');\n" +
+            "assert(md.includes('- Local File URI: [video.mp4](file:///workspace/storage/runs/run-42/video.mp4)'), 'Must contain video file URI link');\n" +
+            "assert(md.includes('### Inlined Attachment Contents'), 'Must contain inlined attachments header');\n" +
+            "assert(md.includes('<summary>Attached Content: execution.log'), 'Must contain execution.log summary details');\n" +
+            "assert(md.includes('[ERROR] Step failed'), 'Must contain execution log content');\n" +
+            "assert(!md.includes('<summary>Attached Content: playbook.yaml'), 'Must not duplicate playbook.yaml in details when already in playbook header');\n" +
+            "assert(md.includes('> **Aura MCP Quick Tip:**'), 'Must contain Aura MCP Quick Tip');\n" +
+            "assert(md.includes('get_execution_failure(executionId=\"run-42-exec-1\")'), 'Must contain execution ID in MCP tip');\n" +
+            "console.log('DIAGNOSTICS_MD_SUCCESS');\n";
+
+        runNodeScript(nodeTestScript, "Diagnostics markdown test failed");
+    }
 }
 
 
