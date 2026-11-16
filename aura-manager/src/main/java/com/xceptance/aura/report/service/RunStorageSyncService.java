@@ -446,8 +446,7 @@ public class RunStorageSyncService
             int calcPlaybook = 0;
 
             long sumDurationMs = 0L;
-            final boolean isRunActive = runRepository.findById(runId).map(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus())).orElse(false)
-                || localRunJsonStorageService.isRunCurrentlyActiveOnDisk(runId);
+            final boolean isRunActive = localRunJsonStorageService.isRunCurrentlyActiveOnDisk(runId);
 
             if (!execList.isEmpty())
             {

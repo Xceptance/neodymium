@@ -55,6 +55,7 @@ import org.neodymium.util.Neodymium;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine.ActionResult;
 
 /**
@@ -1814,6 +1815,37 @@ public class InteractiveConsoleEngineTest
             }
         }
         assertTrue(foundCustom, "reconcileTestOutcome must preserve cached custom attachments even after thread context is cleared");
+    }
+
+    @Test
+    public void testReconcileTestOutcomeTransitionsRunningStatus()
+    {
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("run-reconcile-running");
+        final String runningJson = "{\"testName\":\"RunningTest · ds1\",\"testFile\":\"com.xceptance.RunningTest#execute\",\"status\":\"running\",\"steps\":[]}";
+
+        // When test succeeded in JUnit, status should transition to passed
+        engine.pushState(runningJson);
+        engine.reconcileTestOutcome(true, null);
+        final JsonObject passedState = JsonParser.parseString(engine.getCurrentStateJson()).getAsJsonObject();
+        assertEquals("passed", passedState.get("status").getAsString(), "Running status must transition to passed when testPassed is true");
+
+        // When test failed in JUnit, status should transition to failed
+        engine.pushState(runningJson);
+        engine.reconcileTestOutcome(false, new RuntimeException("Assertion failure"));
+        final JsonObject failedState = JsonParser.parseString(engine.getCurrentStateJson()).getAsJsonObject();
+        assertEquals("failed", failedState.get("status").getAsString(), "Running status must transition to failed when testPassed is false");
+
+        // When test has blank or empty status, it should transition to passed/failed as well
+        final String blankJson = "{\"testName\":\"BlankStatusTest · ds1\",\"testFile\":\"com.xceptance.BlankStatusTest#execute\",\"status\":\"\",\"steps\":[]}";
+        engine.pushState(blankJson);
+        engine.reconcileTestOutcome(true, null);
+        final JsonObject passedBlankState = JsonParser.parseString(engine.getCurrentStateJson()).getAsJsonObject();
+        assertEquals("passed", passedBlankState.get("status").getAsString(), "Blank status must transition to passed when testPassed is true");
+
+        engine.pushState(blankJson);
+        engine.reconcileTestOutcome(false, new RuntimeException("Blank status failure"));
+        final JsonObject failedBlankState = JsonParser.parseString(engine.getCurrentStateJson()).getAsJsonObject();
+        assertEquals("failed", failedBlankState.get("status").getAsString(), "Blank status must transition to failed when testPassed is false");
     }
 }
 

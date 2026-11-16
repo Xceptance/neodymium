@@ -461,10 +461,20 @@ public final class InteractiveConsoleEngine {
                     || "error".equalsIgnoreCase(currentStatus)
                     || "failed-unknown".equalsIgnoreCase(currentStatus)
                     || "failed-known".equalsIgnoreCase(currentStatus);
+                final boolean wasRunning = "running".equalsIgnoreCase(currentStatus)
+                    || "in_progress".equalsIgnoreCase(currentStatus)
+                    || "executing".equalsIgnoreCase(currentStatus)
+                    || "pending".equalsIgnoreCase(currentStatus)
+                    || currentStatus.isBlank();
                 if (wasFailed)
                 {
                     parsedState.addProperty("status", "passed");
                     parsedState.addProperty("expectedFailure", true);
+                    stateChanged = true;
+                }
+                else if (wasRunning)
+                {
+                    parsedState.addProperty("status", "passed");
                     stateChanged = true;
                 }
             }
@@ -474,7 +484,12 @@ public final class InteractiveConsoleEngine {
                     || "passed-clean".equalsIgnoreCase(currentStatus)
                     || "succeeded".equalsIgnoreCase(currentStatus)
                     || "succeeded-fixed".equalsIgnoreCase(currentStatus);
-                if (wasPassed)
+                final boolean wasRunning = "running".equalsIgnoreCase(currentStatus)
+                    || "in_progress".equalsIgnoreCase(currentStatus)
+                    || "executing".equalsIgnoreCase(currentStatus)
+                    || "pending".equalsIgnoreCase(currentStatus)
+                    || currentStatus.isBlank();
+                if (wasPassed || wasRunning)
                 {
                     parsedState.addProperty("status", "failed");
                     parsedState.addProperty("expectedFailure", false);

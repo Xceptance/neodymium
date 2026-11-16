@@ -22,6 +22,7 @@ import com.xceptance.neodymium.aura.dto.DatasetDto;
 import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import jakarta.servlet.http.HttpServletResponse;
 import com.xceptance.aura.report.entity.TestBatchEntity;
+import com.xceptance.aura.report.entity.TestRunEntity;
 import com.xceptance.aura.report.repository.TestBatchRepository;
 import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.neodymium.aura.AuraFileService;
@@ -957,5 +958,59 @@ public final class AuraTestQueueControllerTest
         final String htmlIdle = engine.process("fragments/queue", Collections.singleton("runControlsContent"), contextIdle);
         Assertions.assertNotNull(htmlIdle);
         Assertions.assertTrue(htmlIdle.contains("d-none"), "stopQueueBtn must be hidden (d-none) when not running");
+    }
+
+    @Test
+    public final void testManuallyStoppedSuppressesRunningInStatusStream()
+    {
+        final AuraQueueService queueSpy = Mockito.spy(this.queueService);
+        Mockito.doReturn("run-stop-test").when(queueSpy).getCurrentRunId();
+        final AuraTestQueueController testController = new AuraTestQueueController(
+            queueSpy, this.fileService, this.interactiveService, this.batchRepository, this.reportDataService
+        );
+
+        final TestRunEntity runEntity = new TestRunEntity(
+            "run-stop-test", "SmokeBatch", "IN_PROGRESS", "queue", "dev", "en_US", "chrome", "15:00", System.currentTimeMillis()
+        );
+        Mockito.when(reportDataService.getAllRuns()).thenReturn(List.of(runEntity));
+        Mockito.when(reportDataService.isRunCurrentlyActiveOnDisk("run-stop-test")).thenReturn(true);
+
+        // Case 1: Not manually stopped -> reports running = true
+        queueSpy.setManuallyStopped(false);
+        final ResponseEntity<Map<String, Object>> res1 = testController.getStatusStream("client-1", 0, 0);
+        final Map<?, ?> statusMap1 = (Map<?, ?>) res1.getBody().get("status");
+        Assertions.assertEquals(Boolean.TRUE, statusMap1.get("running"), "Status stream must report running=true when active on disk and not stopped");
+
+        // Case 2: Manually stopped for this run -> reports running = false
+        queueSpy.setManuallyStopped(true);
+        final ResponseEntity<Map<String, Object>> res2 = testController.getStatusStream("client-1", 0, 0);
+        final Map<?, ?> statusMap2 = (Map<?, ?>) res2.getBody().get("status");
+        Assertions.assertEquals(Boolean.FALSE, statusMap2.get("running"), "Status stream must report running=false when manually stopped for this run");
+
+        // Case 3: A different run started on disk is NOT suppressed by an old stopped run
+        final TestRunEntity diffRunEntity = new TestRunEntity(
+            "run-new-cli", "CliBatch", "IN_PROGRESS", "cli", "dev", "en_US", "chrome", "15:05", System.currentTimeMillis()
+        );
+        Mockito.when(reportDataService.getAllRuns()).thenReturn(List.of(diffRunEntity));
+        Mockito.when(reportDataService.isRunCurrentlyActiveOnDisk("run-new-cli")).thenReturn(true);
+        final ResponseEntity<Map<String, Object>> res3 = testController.getStatusStream("client-1", 0, 0);
+        final Map<?, ?> statusMap3 = (Map<?, ?>) res3.getBody().get("status");
+        Assertions.assertEquals(Boolean.TRUE, statusMap3.get("running"), "A new standalone CLI run must NOT be suppressed by an old stopped queue run");
+    }
+
+    @Test
+    public final void testStopExecutionCancelsActiveRun()
+    {
+        final AuraQueueService queueSpy = Mockito.spy(this.queueService);
+        Mockito.doReturn("run-abort-123").when(queueSpy).getCurrentRunId();
+        final AuraTestQueueController testController = new AuraTestQueueController(
+            queueSpy, this.fileService, this.interactiveService, this.batchRepository, this.reportDataService
+        );
+
+        final Model model = new ConcurrentModel();
+        testController.stopExecution(model);
+
+        Assertions.assertTrue(queueSpy.isManuallyStopped(), "queueService must be set to manuallyStopped");
+        Mockito.verify(reportDataService).cancelRun("run-abort-123");
     }
 }
