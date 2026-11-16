@@ -560,6 +560,27 @@ public final class AuraManagerEditorUiTest
     }
 
     @Test
+    public final void testCleanFileCloseDoesNotShowUnsavedPrompt()
+    {
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
+
+        // Create new test file to open editor panel
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("Clean Close Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+        $("#editorFileName").shouldHave(Condition.text("Clean Close Test.yaml"));
+
+        // Close editor directly via the UI Close button without modifying anything
+        $("#closeEditorBtn").shouldBe(Condition.visible).click();
+
+        // Verify the unsaved changes modal is NOT shown and editor closes cleanly
+        $("#unsavedChangesModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldNotBe(Condition.visible);
+    }
+
+    @Test
     public final void testOpenAndEditTestNamedTestYaml()
     {
         Selenide.open("http://localhost:" + this.port + "/playbooks");
