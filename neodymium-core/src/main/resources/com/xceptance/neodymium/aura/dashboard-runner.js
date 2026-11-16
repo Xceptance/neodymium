@@ -431,6 +431,20 @@ function allowsAiContinuation(line) {
 }
 window.allowsAiContinuation = allowsAiContinuation;
 
+function formatLogLineForDisplay(line) {
+    if (!line) return line;
+    // Strip standard Java/Log4j/Logback/Surefire logging boilerplate prefixes:
+    // e.g. "15:20:49.742 [main] INFO org.neodymium.ai.pipeline.steps.AgentToolLoopStep -- 🚀 Starting..."
+    // or   "15:20:49.742 [main] INFO org.neodymium.ai.pipeline.steps.AgentToolLoopStep - 🚀 Starting..."
+    // or   "15:20:49 [main] INFO org.neodymium.ai.pipeline.steps.AgentToolLoopStep: 🚀 Starting..."
+    const match = line.match(/^(\d{2}:\d{2}:\d{2})(?:\.\d+)?(?:\s+\[.*?\])?\s+(?:TRACE|DEBUG|INFO|WARN|ERROR|FATAL)(?:\s+[\w\.\$]+)?(?:\s+--?|\s*:)\s+(.*)$/);
+    if (match) {
+        return match[1] + ' ' + match[2];
+    }
+    return line;
+}
+window.formatLogLineForDisplay = formatLogLineForDisplay;
+
 function isAiLogLine(line, previousWasAi) {
     if (!line) return false;
     const trimmed = line.trim();
@@ -448,8 +462,9 @@ function isAiLogLine(line, previousWasAi) {
         return false;
     }
 
-    // Strip leading timestamp / log level for pattern testing
-    const cleanContent = trimmed.replace(/^(?:\d{2}:\d{2}:\d{2}\s+)?(?:\[?[A-Z]{3,5}\]?\s*[-:]?\s*)?/, '');
+    // Strip leading timestamp / log level / logger header for pattern testing
+    const formatted = formatLogLineForDisplay(trimmed);
+    const cleanContent = formatted.replace(/^(?:\d{2}:\d{2}:\d{2}\s+)?(?:\[?[A-Z]{3,5}\]?\s*[-:]?\s*)?/, '');
 
     // Check suppressed patterns (JSON properties, punctuation, HTTP wire headers)
     if (AI_SUPPRESS_PATTERNS.some(p => p.test(cleanContent) || p.test(trimmed))) {
@@ -542,7 +557,8 @@ function appendLog(line) {
 
     const matchesErrorFilter = !logFilterErrorsOnly || isErrorOrWarn;
     const displayStyle = (matchesErrorFilter && matchesAiFilter) ? 'block' : 'none';
-    const escapedLine = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const displayLine = formatLogLineForDisplay(line);
+    const escapedLine = displayLine.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const cssClass = isErrorOrWarn ? 'log-error' : 'log-info';
 
     terminalConsole.insertAdjacentHTML('beforeend', `<div class="log-line ${cssClass}" style="display: ${displayStyle}; margin: 0; padding: 0;">${escapedLine}</div>`);
