@@ -3989,7 +3989,9 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
     const singleRunControls = document.getElementById('sidePageSingleRunControls');
     const testBaseControls = document.getElementById('sidePageTestBaseVariationControls');
 
+    const copyBtn = document.getElementById('copyFullTestDiagnosticsBtn');
     if (isTestBaseRow && testBaseControls) {
+        if (copyBtn) copyBtn.style.display = 'none';
         if (singleRunControls) singleRunControls.style.display = 'none';
         testBaseControls.style.display = 'flex';
 
@@ -4009,6 +4011,7 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
 
         loadTestBaseVariationHistory(testClass, testMethod, dataSetVal, loc, browser);
     } else {
+        if (copyBtn) copyBtn.style.display = '';
         if (testBaseControls) testBaseControls.style.display = 'none';
         if (singleRunControls) singleRunControls.style.display = 'flex';
 
@@ -5855,6 +5858,27 @@ function generateFullTestDiagnosticsMarkdown(execDto, activeRow) {
     return lines.join('\n');
 }
 
+function setCopyDiagnosticsBtnLoading(isLoading) {
+    const copyBtn = document.getElementById('copyFullTestDiagnosticsBtn');
+    if (!copyBtn) return;
+    const icon = copyBtn.querySelector('.material-symbols-outlined');
+    if (isLoading) {
+        copyBtn.disabled = true;
+        copyBtn.setAttribute('title', 'Loading diagnostics...');
+        if (icon) {
+            icon.textContent = 'sync';
+            icon.style.animation = 'spin 1s linear infinite';
+        }
+    } else {
+        copyBtn.disabled = false;
+        copyBtn.setAttribute('title', 'Copy full test diagnostics (markdown format)');
+        if (icon) {
+            icon.textContent = 'content_copy';
+            icon.style.animation = '';
+        }
+    }
+}
+
 function copyFullTestDiagnostics(btn) {
     if (btn && btn.disabled) return;
     if (typeof isLiveStepFetchInFlight !== 'undefined' && isLiveStepFetchInFlight) {
@@ -5879,6 +5903,7 @@ function renderStepsForExecution(activeRow) {
 
     if (!activeRow) {
         window._currentActiveExecDto = null;
+        setCopyDiagnosticsBtnLoading(false);
         stepListEl.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem;">Select a test execution row to view steps.</div>';
         const linterContainer = document.getElementById('sidePageLinterFindingsContainer');
         if (linterContainer) {
@@ -5927,16 +5952,7 @@ function renderStepsForExecution(activeRow) {
                 attContainer.style.display = 'none';
             }
 
-            const copyBtn = document.getElementById('copyFullTestDiagnosticsBtn');
-            if (copyBtn) {
-                copyBtn.disabled = true;
-                copyBtn.setAttribute('title', 'Loading diagnostics...');
-                const icon = copyBtn.querySelector('.material-symbols-outlined');
-                if (icon) {
-                    icon.textContent = 'sync';
-                    icon.style.animation = 'spin 1s linear infinite';
-                }
-            }
+            setCopyDiagnosticsBtnLoading(true);
 
             const fetchId = ++activeStepFetchId;
             isLiveStepFetchInFlight = true;
@@ -6033,23 +6049,16 @@ function renderStepsForExecution(activeRow) {
                     if (activeStepAbortController === controller) {
                         activeStepAbortController = null;
                     }
-                    if (fetchId === activeStepFetchId) {
+                    if (fetchId === activeStepFetchId || currentActiveRowId === rowId) {
                         isLiveStepFetchInFlight = false;
-                        const copyBtn = document.getElementById('copyFullTestDiagnosticsBtn');
-                        if (copyBtn) {
-                            copyBtn.disabled = false;
-                            copyBtn.setAttribute('title', 'Copy full test diagnostics (markdown format)');
-                            const icon = copyBtn.querySelector('.material-symbols-outlined');
-                            if (icon) {
-                                icon.textContent = 'content_copy';
-                                icon.style.animation = '';
-                            }
-                        }
+                        setCopyDiagnosticsBtnLoading(false);
                     }
                 });
             return;
         }
     }
+
+    setCopyDiagnosticsBtnLoading(false);
 
     const localBindingsAttr = activeRow.getAttribute('data-local-bindings');
     const playbookFile = activeRow.getAttribute('data-playbook-file') || '';
@@ -7499,6 +7508,7 @@ function toggleStepActionInspector(stepCardEl) {
 
 function closeTestSidePagePanel() {
     stopLiveStepRefreshTimer();
+    setCopyDiagnosticsBtnLoading(false);
     const panel = document.getElementById('testSidePagePanel');
     const resizer = document.getElementById('allurePanelResizer') || document.getElementById('panelResizer');
     const varDrawer = document.getElementById('variationHistoryDrawer');
@@ -7527,6 +7537,7 @@ window.toggleSystemPrompt = toggleSystemPrompt;
 window.copyStepConversation = copyStepConversation;
 window.copyTurnConversation = copyTurnConversation;
 window.copyFullTestDiagnostics = copyFullTestDiagnostics;
+window.setCopyDiagnosticsBtnLoading = setCopyDiagnosticsBtnLoading;
 window.generateFullTestDiagnosticsMarkdown = generateFullTestDiagnosticsMarkdown;
 window.copyAttachmentPlaybook = copyAttachmentPlaybook;
 window.generateStepConversationMarkdown = generateStepConversationMarkdown;

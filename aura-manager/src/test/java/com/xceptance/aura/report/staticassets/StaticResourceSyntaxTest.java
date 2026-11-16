@@ -3964,6 +3964,79 @@ public final class StaticResourceSyntaxTest
     }
 
     @Test
+    public void testCopyDiagnosticsButtonLoadingLifecycle() throws Exception
+    {
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist: " + jsFilePath.toAbsolutePath());
+        final String jsContent = Files.readString(jsFilePath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(jsContent.contains("function setCopyDiagnosticsBtnLoading(isLoading)"),
+            "report-manager.js must define setCopyDiagnosticsBtnLoading helper");
+        Assertions.assertTrue(jsContent.contains("window.setCopyDiagnosticsBtnLoading = setCopyDiagnosticsBtnLoading;"),
+            "report-manager.js must export setCopyDiagnosticsBtnLoading on window");
+        Assertions.assertTrue(jsContent.contains("fetchId === activeStepFetchId || currentActiveRowId === rowId"),
+            "finally block must restore button when currentActiveRowId matches rowId even if timer incremented activeStepFetchId");
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const assert = require('assert');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const sandbox = {\n" +
+            "    console: console,\n" +
+            "    assert: assert,\n" +
+            "    window: {},\n" +
+            "    document: {\n" +
+            "        getElementById: () => null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {} }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "const testScript = code + '\\n' + `\n" +
+            "let buttonDisabled = false;\n" +
+            "let buttonTitle = '';\n" +
+            "let iconText = 'content_copy';\n" +
+            "let iconAnimation = '';\n" +
+            "const mockIcon = {\n" +
+            "    get textContent() { return iconText; },\n" +
+            "    set textContent(v) { iconText = v; },\n" +
+            "    style: {\n" +
+            "        get animation() { return iconAnimation; },\n" +
+            "        set animation(v) { iconAnimation = v; }\n" +
+            "    }\n" +
+            "};\n" +
+            "const mockBtn = {\n" +
+            "    get disabled() { return buttonDisabled; },\n" +
+            "    set disabled(v) { buttonDisabled = v; },\n" +
+            "    setAttribute: (name, val) => { if (name === 'title') buttonTitle = val; },\n" +
+            "    getAttribute: (name) => { if (name === 'title') return buttonTitle; return null; },\n" +
+            "    querySelector: (sel) => sel.includes('material-symbols-outlined') ? mockIcon : null,\n" +
+            "    style: {}\n" +
+            "};\n" +
+            "document.getElementById = (id) => id === 'copyFullTestDiagnosticsBtn' ? mockBtn : null;\n" +
+            "assert(typeof setCopyDiagnosticsBtnLoading === 'function', 'setCopyDiagnosticsBtnLoading must be a function');\n" +
+            "// Test loading state\n" +
+            "setCopyDiagnosticsBtnLoading(true);\n" +
+            "assert.strictEqual(buttonDisabled, true, 'Button must be disabled when loading');\n" +
+            "assert.strictEqual(buttonTitle, 'Loading diagnostics...', 'Title must indicate loading');\n" +
+            "assert.strictEqual(iconText, 'sync', 'Icon must switch to sync');\n" +
+            "assert(iconAnimation.includes('spin'), 'Icon must animate with spin');\n" +
+            "// Test reset to idle state\n" +
+            "setCopyDiagnosticsBtnLoading(false);\n" +
+            "assert.strictEqual(buttonDisabled, false, 'Button must be enabled when idle');\n" +
+            "assert.strictEqual(buttonTitle, 'Copy full test diagnostics (markdown format)', 'Title must indicate copy action');\n" +
+            "assert.strictEqual(iconText, 'content_copy', 'Icon must switch to content_copy');\n" +
+            "assert.strictEqual(iconAnimation, '', 'Icon animation must be cleared');\n" +
+            "`;\n" +
+            "vm.runInNewContext(testScript, sandbox);\n";
+
+        runNodeScript(nodeTestScript, "Copy diagnostics button lifecycle test failed");
+    }
+
+    @Test
     public void testUnitedContainerAiUsageKpiCrossFilteringSupport() throws Exception
     {
         final Path htmlPath = Paths.get("src/main/resources/templates/fragments/dashboard-widgets.html");
