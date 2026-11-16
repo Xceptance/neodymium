@@ -289,6 +289,10 @@ window.rerunSingleTest = rerunSingleTest;
 
 var lastLineWasAi = false;
 window.lastLineWasAi = lastLineWasAi;
+var logFilterAiOnly = true;
+window.logFilterAiOnly = logFilterAiOnly;
+var logFilterErrorsOnly = false;
+window.logFilterErrorsOnly = logFilterErrorsOnly;
 
 const AI_LOG_EMOJIS_REGEX = /[🤖🧠💭🔧📥🎯🚀🎬🏁🏆👣🔮⚙✨🔍▶✅❌🛑⚠️⚖🔄📊🐞🐛🚨📸💾📜📂⏱🎟⚡💬📌💡🧬🚫•]/u;
 
@@ -431,6 +435,20 @@ function allowsAiContinuation(line) {
 }
 window.allowsAiContinuation = allowsAiContinuation;
 
+function formatLogLineForDisplay(line) {
+    if (!line) return line;
+    // Strip standard Java/Log4j/Logback/Surefire logging boilerplate prefixes:
+    // e.g. "15:20:49.742 [main] INFO org.neodymium.ai.pipeline.steps.AgentToolLoopStep -- 🚀 Starting..."
+    // or   "2026-11-16 15:20:49.742 [main] INFO org.neodymium.ai.pipeline.steps.AgentToolLoopStep - 🚀 Starting..."
+    // or   "15:20:49 [main] INFO dev.langchain4j.http-client: 🚀 Starting..."
+    const match = line.match(/^(?:\d{4}-\d{2}-\d{2}[T ])?(\d{2}:\d{2}:\d{2})(?:\.\d+)?(?:\s+\[.*?\])?\s+(?:TRACE|DEBUG|INFO|WARN|ERROR|FATAL)(?:\s+[\w\.\$-]+)?(?:\s+--?|\s*:)\s+(.*)$/i);
+    if (match) {
+        return match[1] + ' ' + match[2];
+    }
+    return line;
+}
+window.formatLogLineForDisplay = formatLogLineForDisplay;
+
 function isAiLogLine(line, previousWasAi) {
     if (!line) return false;
     const trimmed = line.trim();
@@ -448,8 +466,9 @@ function isAiLogLine(line, previousWasAi) {
         return false;
     }
 
-    // Strip leading timestamp / log level for pattern testing
-    const cleanContent = trimmed.replace(/^(?:\d{2}:\d{2}:\d{2}\s+)?(?:\[?[A-Z]{3,5}\]?\s*[-:]?\s*)?/, '');
+    // Strip leading timestamp / log level / logger header for pattern testing
+    const formatted = formatLogLineForDisplay(trimmed);
+    const cleanContent = formatted.replace(/^(?:\d{2}:\d{2}:\d{2}\s+)?(?:\[?[A-Z]{3,5}\]?\s*[-:]?\s*)?/, '');
 
     // Check suppressed patterns (JSON properties, punctuation, HTTP wire headers)
     if (AI_SUPPRESS_PATTERNS.some(p => p.test(cleanContent) || p.test(trimmed))) {
@@ -501,7 +520,7 @@ function refreshLogFiltering() {
     let prevAi = false;
     logLines.forEach(line => {
         const text = line.innerText || line.textContent;
-        const isErrorOrWarn = text.includes('[ERROR]') || text.includes('[WARN]') || text.includes('[FATAL]') || text.includes('❌') || text.includes('🛑');
+        const isErrorOrWarn = line.classList.contains('log-error') || text.includes('[ERROR]') || text.includes('[WARN]') || text.includes('[FATAL]') || text.includes('❌') || text.includes('🛑');
 
         const matchesErrorFilter = !logFilterErrorsOnly || isErrorOrWarn;
         const matchesAiFilter = !logFilterAiOnly || isAiLogLine(text, prevAi);
@@ -542,7 +561,8 @@ function appendLog(line) {
 
     const matchesErrorFilter = !logFilterErrorsOnly || isErrorOrWarn;
     const displayStyle = (matchesErrorFilter && matchesAiFilter) ? 'block' : 'none';
-    const escapedLine = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const displayLine = formatLogLineForDisplay(line);
+    const escapedLine = displayLine.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const cssClass = isErrorOrWarn ? 'log-error' : 'log-info';
 
     terminalConsole.insertAdjacentHTML('beforeend', `<div class="log-line ${cssClass}" style="display: ${displayStyle}; margin: 0; padding: 0;">${escapedLine}</div>`);
