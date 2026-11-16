@@ -23,6 +23,7 @@ import com.xceptance.neodymium.junit4.testclasses.repeat.methodlevel.MethodRepea
 import com.xceptance.neodymium.junit4.testclasses.repeat.methodlevel.MethodRepeatOnFailureTest;
 import com.xceptance.neodymium.junit4.testclasses.repeat.methodlevel.MethodRepeatOnFailureTestdataCombinationTest;
 import com.xceptance.neodymium.junit4.testclasses.repeat.mix.OverwriteRetryTest;
+import com.xceptance.neodymium.junit4.testclasses.repeat.mix.RetryParent;
 
 public class RepeatOnFailureAnnotationTest extends NeodymiumTest
 {
@@ -147,6 +148,8 @@ public class RepeatOnFailureAnnotationTest extends NeodymiumTest
     @Test
     public void testOverwriteRetryTest()
     {
+        OverwriteRetryTest.reset();
+        RetryParent.reset();
         Result result = run(OverwriteRetryTest.class);
         checkFail(result, 6, 0, 2, new HashMap<String, String>()
         {
