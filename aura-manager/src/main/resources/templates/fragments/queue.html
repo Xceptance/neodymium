@@ -287,6 +287,7 @@
             id="stopQueueBtn" 
             hx-post="/api/stop" 
             hx-swap="none"
+            onclick="stopQueue()"
             th:classappend="${running ? 'd-flex' : 'd-none'}">
         <span class="material-symbols-outlined">stop</span> Stop Execution
     </button>

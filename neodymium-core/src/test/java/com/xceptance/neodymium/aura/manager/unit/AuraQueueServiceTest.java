@@ -69,6 +69,14 @@ public final class AuraQueueServiceTest
     }
 
     @Test
+    public void testStopCurrentTestWhenNoActiveProcess()
+    {
+        Assertions.assertDoesNotThrow(() -> {
+            queueService.stopCurrentTest();
+        });
+    }
+
+    @Test
     public void testSetManuallyStopped()
     {
         queueService.setManuallyStopped(true);
