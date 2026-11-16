@@ -791,14 +791,6 @@ async function pollStatus() {
 }
 window.pollStatus = pollStatus;
 
-window.addEventListener('beforeunload', (event) => {
-    if (isRunning) {
-        event.preventDefault();
-        event.returnValue = 'A test queue is currently running. If you close this tab, the server will shut down and the test execution will be terminated.';
-        return event.returnValue;
-    }
-});
-
 function sendDisconnect() {
     if (!disconnected) {
         disconnected = true;

@@ -4804,6 +4804,16 @@ public final class StaticResourceSyntaxTest
 
         runNodeScript(nodeTestScript, "Diagnostics markdown test failed");
     }
+
+    @Test
+    public void testDashboardRunnerDoesNotRegisterBeforeunload() throws IOException
+    {
+        final Path runnerJsPath = Paths.get("src/main/resources/static/dashboard-runner.js");
+        Assertions.assertTrue(Files.exists(runnerJsPath), "dashboard-runner.js must exist: " + runnerJsPath.toAbsolutePath());
+        final String content = Files.readString(runnerJsPath, StandardCharsets.UTF_8);
+        Assertions.assertFalse(content.contains("beforeunload"),
+            "dashboard-runner.js must not register a beforeunload event listener as it causes misleading unsaved changes prompts in browsers");
+    }
 }
 
 
