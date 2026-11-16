@@ -65,6 +65,7 @@ public class ElementHighlightUtilsTest
     {
         Neodymium.configuration().setProperty("neodymium.debugUtils.highlight", "true");
         Neodymium.configuration().setProperty("neodymium.debugUtils.highlight.duration", "1000");
+        Neodymium.configuration().setProperty("neodymium.debugUtils.highlight.headless.withoutVideo", "true");
 
         Selenide.open("https://blog.xceptance.com/");
         $(".site-title").shouldBe(visible);

@@ -20,7 +20,7 @@ public class NeodymiumWebDriverListener implements WebDriverListener
         Neodymium.setLastUsedLocator(by);
         try
         {
-            if (Neodymium.configuration().debuggingHighlightSelectedElements())
+            if (Neodymium.shouldHighlightElements(driver))
             {
                 DebugUtils.injectHighlightingJs();
                 DebugUtils.highlightAllElements(by, driver);
@@ -38,7 +38,7 @@ public class NeodymiumWebDriverListener implements WebDriverListener
         Neodymium.setLastUsedLocator(by);
         try
         {
-            if (Neodymium.configuration().debuggingHighlightSelectedElements())
+            if (Neodymium.shouldHighlightElements(driver))
             {
                 DebugUtils.injectHighlightingJs();
                 DebugUtils.highlightAllElements(by, driver);
@@ -56,7 +56,7 @@ public class NeodymiumWebDriverListener implements WebDriverListener
         Neodymium.setLastUsedLocator(element, locator);
         try
         {
-            if (Neodymium.configuration().debuggingHighlightSelectedElements() && Neodymium.hasDriver())
+            if (Neodymium.shouldHighlightElements(Neodymium.hasDriver() ? Neodymium.getDriver() : null) && Neodymium.hasDriver())
             {
                 DebugUtils.injectHighlightingJs();
                 SelenideAddons.$safe(() -> DebugUtils.highlightAllElements(element.findElements(locator), Neodymium.getDriver()));
@@ -74,7 +74,7 @@ public class NeodymiumWebDriverListener implements WebDriverListener
         Neodymium.setLastUsedLocator(element, locator);
         try
         {
-            if (Neodymium.configuration().debuggingHighlightSelectedElements() && Neodymium.hasDriver())
+            if (Neodymium.shouldHighlightElements(Neodymium.hasDriver() ? Neodymium.getDriver() : null) && Neodymium.hasDriver())
             {
                 DebugUtils.injectHighlightingJs();
                 SelenideAddons.$safe(() -> DebugUtils.highlightAllElements(element.findElements(locator), Neodymium.getDriver()));

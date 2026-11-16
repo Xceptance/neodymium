@@ -34,6 +34,10 @@ public interface NeodymiumConfiguration extends Mutable, Accessible
     @DefaultValue("3")
     public int debuggingHighlightBlinkCount();
 
+    @Key("neodymium.debugUtils.highlight.headless.withoutVideo")
+    @DefaultValue("false")
+    public boolean debuggingHighlightHeadlessWithoutVideo();
+
     // standard timeout for selenide interaction
     @Key("neodymium.selenide.timeout")
     @DefaultValue("3000")
