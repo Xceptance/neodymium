@@ -28,4 +28,6 @@
   - `ToolCallVariableResolverTest#testResolveVariablesResolvesUnbracketedWithTrailingPunctuation` verifying `"Your password is $password."` resolves to `"Your password is SecretP@ss123!."`.
   - `ToolCallVariableResolverTest#testNormalizePlaceholdersNormalizesUnbracketedVariables` verifying normalization to `${varName}` in recorded structures.
   - `ToolCallVariableResolverTest#testNormalizePlaceholdersHandlesPrefixCollisionCleanly` verifying prefix collision resolution (`$user.name` vs `$user.other`).
+  - `ToolCallVariableResolverTest#testResolveVariablesNormalizesAndResolvesInFillFormStructure` verifying nested composite tool calls (e.g. `fill_form`).
+  - `ToolCallVariableResolverTest#testNormalizeAndResolvePreservesJavaScriptVariablesInScriptTool` verifying that JavaScript identifiers in `execute_script` (e.g. `var $btn = ...`) are protected from unbracketed variable collision.
   - `AgentToolLoopStepTest#testSensitiveVariableUnbracketedPlaceholderNormalizedAndResolvedInToolExecutionWhilePreservingCanonicalPlaceholderInRecording` verifying end-to-end unbracketed resolution in agent tool execution, canonical bracketed recording, and conversation sanitization.
