@@ -662,6 +662,21 @@ public final class StaticResourceSyntaxTest
             "if (formattedColon !== '15:20:49 🚀 Starting...') {\n" +
             "    throw new Error('Unexpected formatted line: ' + formattedColon);\n" +
             "}\n" +
+            "const rawLineWithDate = '2026-11-16 15:20:49.742 [main] INFO org.neodymium.ai.pipeline.steps.AgentToolLoopStep -- 🚀 Starting...';\n" +
+            "const formattedDate = formatLogLineForDisplay(rawLineWithDate);\n" +
+            "if (formattedDate !== '15:20:49 🚀 Starting...') {\n" +
+            "    throw new Error('Unexpected formatted line with date: ' + formattedDate);\n" +
+            "}\n" +
+            "const rawLineWithHyphenatedLogger = '15:20:49.123 [main] INFO dev.langchain4j.http-client -- 🚀 Starting...';\n" +
+            "const formattedHyphen = formatLogLineForDisplay(rawLineWithHyphenatedLogger);\n" +
+            "if (formattedHyphen !== '15:20:49 🚀 Starting...') {\n" +
+            "    throw new Error('Unexpected formatted line with hyphenated logger: ' + formattedHyphen);\n" +
+            "}\n" +
+            "const rawLineCaseInsensitive = '15:20:49.123 [main] info org.neodymium.ai.pipeline.steps.AgentToolLoopStep -- 🚀 Starting...';\n" +
+            "const formattedCase = formatLogLineForDisplay(rawLineCaseInsensitive);\n" +
+            "if (formattedCase !== '15:20:49 🚀 Starting...') {\n" +
+            "    throw new Error('Unexpected formatted line with lowercase level: ' + formattedCase);\n" +
+            "}\n" +
             "const alreadyCleanLine = '13:30:01 🤖 Agent Turn #1 (max: 25) | Step: \"Search for jeans\"';\n" +
             "if (formatLogLineForDisplay(alreadyCleanLine) !== alreadyCleanLine) {\n" +
             "    throw new Error('Already clean line should remain unchanged');\n" +
@@ -669,6 +684,23 @@ public final class StaticResourceSyntaxTest
             "const indentedContinuation = '   • expectedTitle: \"The Poster Demo Store\"';\n" +
             "if (formatLogLineForDisplay(indentedContinuation) !== indentedContinuation) {\n" +
             "    throw new Error('Indented continuation line should remain unchanged');\n" +
+            "}\n" +
+            "// Verify refreshLogFiltering preserves .log-error elements even when [ERROR] text was stripped\n" +
+            "const mockErrorLine = {\n" +
+            "    classList: { contains: (cls) => cls === 'log-error' },\n" +
+            "    textContent: '15:20:49 Retrying connection failure',\n" +
+            "    style: {}\n" +
+            "};\n" +
+            "sandbox.document.getElementById = (id) => {\n" +
+            "    if (id === 'terminalConsole') {\n" +
+            "        return { querySelectorAll: () => [mockErrorLine] };\n" +
+            "    }\n" +
+            "    return null;\n" +
+            "};\n" +
+            "sandbox.window.toggleAiOnly(false);\n" +
+            "sandbox.window.toggleErrorsOnly(true);\n" +
+            "if (mockErrorLine.style.display !== 'block') {\n" +
+            "    throw new Error('Expected .log-error element to remain visible in Errors Only mode');\n" +
             "}\n";
 
         runNodeScript(nodeTestScript, "AI log filtering test failed");
