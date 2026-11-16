@@ -678,6 +678,90 @@ function fallbackCopyText(text, callback) {
     document.body.removeChild(textArea);
 }
 
+let serverFailureCount = 0;
+let isServerOffline = false;
+
+function setServerOffline(offline, message) {
+    isServerOffline = offline;
+    const banner = document.getElementById('serverOfflineBanner');
+    const msgEl = document.getElementById('serverOfflineMessage');
+    if (banner) {
+        if (offline) {
+            banner.style.display = 'flex';
+            document.body.classList.add('server-offline-active');
+            if (msgEl && message) {
+                msgEl.innerText = message;
+            }
+        } else {
+            banner.style.display = 'none';
+            document.body.classList.remove('server-offline-active');
+        }
+    }
+    const apiKeyBanner = document.getElementById('apiKeyBanner');
+    const apiKeyBannerText = document.getElementById('apiKeyBannerText');
+    if (apiKeyBanner && apiKeyBannerText) {
+        if (offline) {
+            apiKeyBanner.style.display = 'block';
+            apiKeyBannerText.innerHTML = message || "Server is offline or unreachable.";
+        } else if (apiKeyBannerText.innerHTML.includes('offline')) {
+            apiKeyBanner.style.display = 'none';
+        }
+    }
+}
+window.setServerOffline = setServerOffline;
+
+async function checkServerConnectivity(manual = false) {
+    const msgEl = document.getElementById('serverOfflineMessage');
+    if (manual && msgEl) {
+        msgEl.innerText = "Attempting to reconnect to Neodymium AI Manager...";
+    }
+    try {
+        const activeClientId = (typeof clientId !== 'undefined') ? clientId : (window.clientId || 'default');
+        const res = await fetch('/api/status?clientId=' + encodeURIComponent(activeClientId), { method: 'GET', cache: 'no-store' });
+        if (res.ok) {
+            serverFailureCount = 0;
+            if (isServerOffline) {
+                setServerOffline(false);
+                if (typeof startPolling === 'function') {
+                    startPolling();
+                } else if (typeof pollStatus === 'function') {
+                    pollStatus();
+                }
+            }
+            return true;
+        } else {
+            serverFailureCount++;
+            if (serverFailureCount >= 2 || manual) {
+                setServerOffline(true, "Neodymium AI Manager server returned HTTP " + res.status + ". Reconnecting...");
+            }
+            return false;
+        }
+    } catch (e) {
+        serverFailureCount++;
+        if (serverFailureCount >= 2 || manual) {
+            setServerOffline(true, "Neodymium AI Manager server is offline or unreachable. Reconnecting...");
+        }
+        return false;
+    }
+}
+window.checkServerConnectivity = checkServerConnectivity;
+
+document.addEventListener('htmx:sendError', () => {
+    serverFailureCount++;
+    if (serverFailureCount >= 2) {
+        setServerOffline(true, "Neodymium AI Manager server is offline or unreachable. Reconnecting...");
+    }
+});
+
+document.addEventListener('htmx:responseError', (evt) => {
+    if (evt.detail && evt.detail.xhr && evt.detail.xhr.status === 0) {
+        serverFailureCount++;
+        if (serverFailureCount >= 2) {
+            setServerOffline(true, "Neodymium AI Manager server is offline or unreachable. Reconnecting...");
+        }
+    }
+});
+
 function startPolling() {
     if (pollingIntervalId) {
         clearTimeout(pollingIntervalId);
@@ -921,26 +1005,22 @@ async function pollStatus() {
                     console.error('Error updating UI state from status:', err);
                 }
             }
-            const apiKeyBanner = document.getElementById('apiKeyBanner');
-            if (apiKeyBanner && apiKeyBanner.style.display === 'block' && document.getElementById('apiKeyBannerText').innerHTML.includes('offline')) {
-                apiKeyBanner.style.display = 'none';
+            if (serverFailureCount > 0 || isServerOffline) {
+                serverFailureCount = 0;
+                setServerOffline(false);
             }
         } else {
             console.error("Polling response error:", response.status);
-            const apiKeyBanner = document.getElementById('apiKeyBanner');
-            const apiKeyBannerText = document.getElementById('apiKeyBannerText');
-            if (apiKeyBanner && apiKeyBannerText) {
-                apiKeyBanner.style.display = 'block';
-                apiKeyBannerText.innerHTML = "Server is offline or unreachable.";
+            serverFailureCount++;
+            if (serverFailureCount >= 2) {
+                setServerOffline(true, "Neodymium AI Manager server returned HTTP " + response.status + ". Reconnecting...");
             }
         }
     } catch (err) {
         console.error("Polling fetch error:", err);
-        const apiKeyBanner = document.getElementById('apiKeyBanner');
-        const apiKeyBannerText = document.getElementById('apiKeyBannerText');
-        if (apiKeyBanner && apiKeyBannerText) {
-            apiKeyBanner.style.display = 'block';
-            apiKeyBannerText.innerHTML = "Server is offline or unreachable.";
+        serverFailureCount++;
+        if (serverFailureCount >= 2) {
+            setServerOffline(true, "Neodymium AI Manager server is offline or unreachable. Reconnecting...");
         }
     } finally {
         if (thisSession !== currentPollSession) return;

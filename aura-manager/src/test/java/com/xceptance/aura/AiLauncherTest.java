@@ -47,6 +47,8 @@ public final class AiLauncherTest
             server = null;
         }
         System.clearProperty(AiLauncher.SPLASH_ACTIVE_PROPERTY);
+        System.clearProperty(AiLauncher.OPEN_BROWSER_PROPERTY);
+        System.clearProperty(AiLauncher.LEGACY_OPEN_BROWSER_PROPERTY);
     }
 
     @Test
@@ -87,5 +89,39 @@ public final class AiLauncherTest
     {
         final boolean isDevToolsRestartThread = "restartedMain".equals("restartedMain");
         Assertions.assertTrue(isDevToolsRestartThread, "Restart thread name must match DevTools convention");
+    }
+
+    @Test
+    public void testIsBrowserOpenEnabledDefaultIsTrue()
+    {
+        System.clearProperty(AiLauncher.OPEN_BROWSER_PROPERTY);
+        System.clearProperty(AiLauncher.LEGACY_OPEN_BROWSER_PROPERTY);
+        Assertions.assertTrue(AiLauncher.isBrowserOpenEnabled(), "Browser open should default to true");
+    }
+
+    @Test
+    public void testIsBrowserOpenEnabledHonorsSystemProperty()
+    {
+        System.setProperty(AiLauncher.OPEN_BROWSER_PROPERTY, "false");
+        Assertions.assertFalse(AiLauncher.isBrowserOpenEnabled(), "Browser open should be disabled when property is false");
+
+        System.setProperty(AiLauncher.OPEN_BROWSER_PROPERTY, "true");
+        Assertions.assertTrue(AiLauncher.isBrowserOpenEnabled(), "Browser open should be enabled when property is true");
+    }
+
+    @Test
+    public void testIsBrowserOpenEnabledHonorsLegacyProperty()
+    {
+        System.clearProperty(AiLauncher.OPEN_BROWSER_PROPERTY);
+        System.setProperty(AiLauncher.LEGACY_OPEN_BROWSER_PROPERTY, "false");
+        Assertions.assertFalse(AiLauncher.isBrowserOpenEnabled(), "Legacy browser property should be honored when modern property is unset");
+    }
+
+    @Test
+    public void testOpenBrowserDoesNotThrowWhenDisabled()
+    {
+        System.setProperty(AiLauncher.OPEN_BROWSER_PROPERTY, "false");
+        Assertions.assertDoesNotThrow(() -> AiLauncher.openBrowser("http://localhost:8080"),
+            "openBrowser must return safely without error when disabled");
     }
 }
