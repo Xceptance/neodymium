@@ -232,12 +232,19 @@
         #consolePanel {
             display: flex;
             transition: height 0.2s ease-in-out;
+            min-height: 38px;
         }
 
         #consolePanel.console-collapsed {
             height: 38px !important;
             min-height: 38px !important;
+            max-height: 38px !important;
             overflow: hidden !important;
+            flex-shrink: 0 !important;
+        }
+
+        #consolePanel.console-collapsed .console-expanded-controls {
+            display: none !important;
         }
 
         #consolePanel.console-collapsed #terminalConsole {
@@ -245,8 +252,25 @@
         }
 
         #consolePanel.console-collapsed .terminal-panel {
-            padding-bottom: 4px;
+            padding: 0 12px !important;
+            justify-content: center;
             overflow: hidden !important;
+            cursor: pointer;
+            transition: background 0.15s ease-in-out;
+        }
+
+        #consolePanel.console-collapsed:hover .terminal-panel {
+            background: #252526;
+        }
+
+        #consolePanel.console-collapsed .neo-u-20 {
+            margin-bottom: 0 !important;
+            align-items: center;
+            width: 100%;
+        }
+
+        #consolePanel.console-collapsed:hover .neo-u-20 {
+            opacity: 1;
         }
 
         .col-minimized {
@@ -6876,6 +6900,84 @@ g.pie-slice-group.widget-interactive-filter.is-filter-active circle.pie-slice-ba
 .btn-clear-all-container-filters:hover {
     color: var(--text-main);
 }
+
+/* Global Server Offline Banner */
+.server-offline-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100000;
+    background: linear-gradient(135deg, #b71c1c 0%, #c62828 100%);
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+    padding: 10px 20px;
+    font-size: 13.5px;
+    font-weight: 500;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    animation: slideDownBanner 0.25s ease-out;
+}
+
+@keyframes slideDownBanner {
+    from {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.server-offline-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.server-offline-banner .offline-icon {
+    font-size: 20px;
+    color: #ffcdd2;
+}
+
+.server-offline-banner .offline-text {
+    letter-spacing: 0.2px;
+}
+
+.server-offline-banner .offline-retry-btn {
+    padding: 2px 12px;
+    font-size: 12px;
+    margin-left: 6px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border-color: rgba(255, 255, 255, 0.7);
+    color: #ffffff;
+    transition: all 0.2s ease;
+}
+
+.server-offline-banner .offline-retry-btn:hover {
+    background-color: rgba(255, 255, 255, 0.25);
+    border-color: #ffffff;
+    color: #ffffff;
+}
+
+.server-offline-banner .offline-retry-icon {
+    font-size: 14px;
+}
+
+body.server-offline-active {
+    padding-top: 42px;
+}
+
+body.light-mode .server-offline-banner {
+    background: linear-gradient(135deg, #c62828 0%, #d32f2f 100%);
+}
+
 
 
 

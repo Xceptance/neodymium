@@ -2045,6 +2045,139 @@ public final class ExecuteActionsStepTest
         assertTrue(scrollExecuted.get(), "Intermediate recorded tool call before fail_step must execute during replay");
         assertTrue(ex.getMessage().contains("Checkout button missing after scroll"));
     }
+
+    @Test
+    public void testReplayPassingNonVisualStepDoesNotCaptureVisualStateByDefault() throws Exception
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        final ToolRegistry toolRegistry = new ToolRegistry();
+        final AtomicBoolean toolExecuted = new AtomicBoolean(false);
+        toolRegistry.register(new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return new ToolDefinition("click", "clicks element", JsonNodeFactory.instance.objectNode());
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                toolExecuted.set(true);
+                return ToolResult.success(call.callId(), "clicked");
+            }
+        });
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_WITH_HEALING);
+        context.getTransientData().put("KEY_TOOL_REGISTRY", toolRegistry);
+
+        final PlaybookStep step = new PlaybookStep("Click navigation link");
+        step.setToolCalls(List.of(new ToolCall("c-1", "click", JsonNodeFactory.instance.objectNode())));
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, session, context);
+        pipelineStep.execute(context);
+
+        while (context.hasSteps())
+        {
+            context.popStep().execute(context);
+        }
+
+        assertTrue(toolExecuted.get(), "Recorded tool call should have executed");
+        assertNull(context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE),
+            "Passing routine non-visual step during REPLAY_WITH_HEALING must not capture visual state by default");
+    }
+
+    @Test
+    public void testReplayPassingVisualStepCapturesVisualState() throws Exception
+    {
+        final BufferedImage img1 = new BufferedImage(10, 10, BufferedImage.TYPE_INT_RGB);
+        final BufferedImage img2 = new BufferedImage(10, 10, BufferedImage.TYPE_INT_RGB);
+        img2.setRGB(0, 0, Color.WHITE.getRGB());
+
+        final ByteArrayOutputStream baos1 = new ByteArrayOutputStream();
+        ImageIO.write(img1, "png", baos1);
+        final String base64Png1 = Base64.getEncoder().encodeToString(baos1.toByteArray());
+
+        final ByteArrayOutputStream baos2 = new ByteArrayOutputStream();
+        ImageIO.write(img2, "png", baos2);
+        final String base64Png2 = Base64.getEncoder().encodeToString(baos2.toByteArray());
+
+        final String baselineHash = ScreenshotHasher.computeSsimMatrix(base64Png1);
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockSutState state = new MockSutState(
+            "<html></html>",
+            List.of(new SutAttachment("image/png", "screenshot.png", base64Png2)),
+            "content_hash");
+        executor.enqueueState(state);
+
+        final SessionData sessionData = new SessionData();
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry llmRegistry = new LlmRegistry();
+        llmRegistry.setDefaultProvider(mockProvider);
+
+        final AtomicReference<SutState> capturedStateRef = new AtomicReference<>();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        eventBus.registerListener(event ->
+        {
+            if (event instanceof final org.neodymium.ai.event.structural.StateCapturedEvent sce)
+            {
+                capturedStateRef.set(sce.getState());
+            }
+        });
+
+        final AiSession session = AiSession.mock(
+            ExecutionMode.REPLAY_WITH_HEALING,
+            sessionData,
+            llmRegistry,
+            eventBus,
+            executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        final ToolRegistry toolRegistry = new ToolRegistry();
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_WITH_HEALING);
+        context.getTransientData().put("KEY_TOOL_REGISTRY", toolRegistry);
+
+        final PlaybookStep actionStep = new PlaybookStep("Click and check logo (visual: min-score=0.99)");
+        actionStep.setToolCalls(List.of(new ToolCall("t-1", "custom_action", JsonNodeFactory.instance.objectNode())));
+        toolRegistry.register(new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return new ToolDefinition("custom_action", "custom action", JsonNodeFactory.instance.objectNode());
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "done");
+            }
+        });
+
+        final PipelineStep actionPipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(actionStep, session, context);
+        actionPipelineStep.execute(context);
+
+        while (context.hasSteps())
+        {
+            final PipelineStep top = context.popStep();
+            if (!(top instanceof AgentToolLoopStep))
+            {
+                top.execute(context);
+            }
+        }
+
+        assertNotNull(capturedStateRef.get(),
+            "Visual step must capture post-action visual state and dispatch StateCapturedEvent even during replay");
+    }
 }
 
 

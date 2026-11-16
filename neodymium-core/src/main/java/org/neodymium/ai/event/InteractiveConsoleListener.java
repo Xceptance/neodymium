@@ -85,6 +85,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
     private final AiSession session;
     private final boolean interactive;
     private final PreliminaryReportListener reportListener;
+    private final boolean isOwnReportListener;
     private volatile boolean autoRun;
 
     /**
@@ -104,12 +105,35 @@ public final class InteractiveConsoleListener implements ExecutionListener
         this.session = session;
         this.interactive = interactive;
         this.autoRun = false;
-        final AiConfiguration config = AiConfiguration.getInstance();
-        this.reportListener = new PreliminaryReportListener(
-            Paths.get(config.getDiskReportDirectory()),
-            DiskReportFormat.parseFormats(config.getDiskReportFormat()),
-            config.isDiskReportEnabled()
-        );
+
+        PreliminaryReportListener existingListener = null;
+        if (session != null && session.getEventBus() != null)
+        {
+            for (final ExecutionListener listener : session.getEventBus().getListeners())
+            {
+                if (listener instanceof PreliminaryReportListener prl)
+                {
+                    existingListener = prl;
+                    break;
+                }
+            }
+        }
+
+        if (existingListener != null)
+        {
+            this.reportListener = existingListener;
+            this.isOwnReportListener = false;
+        }
+        else
+        {
+            final AiConfiguration config = AiConfiguration.getInstance();
+            this.reportListener = new PreliminaryReportListener(
+                Paths.get(config.getDiskReportDirectory()),
+                DiskReportFormat.parseFormats(config.getDiskReportFormat()),
+                config.isDiskReportEnabled()
+            );
+            this.isOwnReportListener = true;
+        }
     }
 
     /**
@@ -142,7 +166,10 @@ public final class InteractiveConsoleListener implements ExecutionListener
     {
         if (this.reportListener != null)
         {
-            this.reportListener.reconcileTestOutcome(testPassed, uncaughtException);
+            if (this.isOwnReportListener)
+            {
+                this.reportListener.reconcileTestOutcome(testPassed, uncaughtException);
+            }
             if (this.consoleEngine != null && this.reportListener.getReport() != null)
             {
                 final ExecutionLogGenerator logGen = new ExecutionLogGenerator();
@@ -197,7 +224,10 @@ public final class InteractiveConsoleListener implements ExecutionListener
 
         if (this.reportListener != null)
         {
-            this.reportListener.onEvent(event);
+            if (this.isOwnReportListener)
+            {
+                this.reportListener.onEvent(event);
+            }
             if (context != null)
             {
                 context.getTransientData().put("testExecutionReport", this.reportListener.getReport());
@@ -334,11 +364,6 @@ public final class InteractiveConsoleListener implements ExecutionListener
                     this.session, context, this.consoleEngine.getRunId(), 0, overallStatus, null, getReport());
 
                 this.consoleEngine.pushState(stateJson);
-            }
-
-            if (AiConfiguration.getInstance().isDiskReportEnabled() && this.reportListener != null)
-            {
-                this.reportListener.flushReport();
             }
         }
         else if (event instanceof DiagnosticErrorEvent errorEvent)

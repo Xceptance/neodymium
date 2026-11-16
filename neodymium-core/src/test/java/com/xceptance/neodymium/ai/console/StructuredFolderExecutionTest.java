@@ -60,4 +60,35 @@ public class StructuredFolderExecutionTest
         final String folder = InteractiveConsoleEngine.extractTestClassFolder(json);
         assertTrue("WikipediaSearchTest".equals(folder), "Extracted test class folder should be WikipediaSearchTest, got: " + folder);
     }
+
+    @Test
+    public void testExtractTestClassFolderFromYamlTestPath()
+    {
+        final JsonObject json = new JsonObject();
+        json.addProperty("testName", "tests/posters_negative_login.yaml");
+
+        final String folder = InteractiveConsoleEngine.extractTestClassFolder(json);
+        assertTrue("Aura_tests_posters_negative_login_yaml_Test".equals(folder),
+                "Extracted test class folder should be canonical runner class, got: " + folder);
+    }
+
+    @Test
+    public void testExtractTestClassFolderFromRawYamlString()
+    {
+        final String folder = InteractiveConsoleEngine.extractTestClassFolder("tests/posters_homepage.yaml");
+        assertTrue("Aura_tests_posters_homepage_yaml_Test".equals(folder),
+                "Extracted test class folder should be canonical runner class, got: " + folder);
+    }
+
+    @Test
+    public void testExtractTestClassFolderFromTestClassAttribute()
+    {
+        final JsonObject json = new JsonObject();
+        json.addProperty("testClass", "Aura_tests_posters_search_yaml_Test");
+        json.addProperty("testName", "tests/posters_search.yaml");
+
+        final String folder = InteractiveConsoleEngine.extractTestClassFolder(json);
+        assertTrue("Aura_tests_posters_search_yaml_Test".equals(folder),
+                "Extracted test class folder should prefer explicit testClass, got: " + folder);
+    }
 }

@@ -72,6 +72,7 @@ public class AiConfigurationTest
         System.clearProperty("neodymium.ai.execution.thinkingLevel");
         System.clearProperty("neodymium.ai.linter.reasoningEffort");
         System.clearProperty("neodymium.ai.linter.thinkingLevel");
+        System.clearProperty("neodymium.ai.replay.captureScreenshots");
     }
 
     @Test
@@ -391,6 +392,44 @@ public class AiConfigurationTest
                      "Returned map must be unmodifiable.");
 
         System.clearProperty("neodymium.ai.testCustomProp");
+    }
+
+    @Test
+    public void testIsReplayScreenshotCaptureEnabledDefaultsAndOverrides()
+    {
+        final AiConfiguration config = AiConfiguration.getInstance();
+
+        // 1. Defaults: replay modes must default to false to prevent multi-megabyte routine screenshot overhead
+        assertFalse(config.isReplayScreenshotCaptureEnabled(ExecutionMode.REPLAY_STRICT),
+            "REPLAY_STRICT should default to false");
+        assertFalse(config.isReplayScreenshotCaptureEnabled(ExecutionMode.REPLAY_WITH_HEALING),
+            "REPLAY_WITH_HEALING should default to false");
+
+        // 2. Non-replay modes (live / recording) default to true
+        assertTrue(config.isReplayScreenshotCaptureEnabled(ExecutionMode.LLM_ONLY),
+            "Live LLM_ONLY mode should default to true");
+        assertTrue(config.isReplayScreenshotCaptureEnabled(ExecutionMode.FORCE_RECORDING),
+            "FORCE_RECORDING mode should default to true");
+
+        // 3. Explicit property override: true
+        System.setProperty("neodymium.ai.replay.captureScreenshots", "true");
+        AiConfiguration.resetInstance();
+        final AiConfiguration configOverrideTrue = AiConfiguration.getInstance();
+        assertTrue(configOverrideTrue.isReplayScreenshotCaptureEnabled(ExecutionMode.REPLAY_STRICT),
+            "Property override true should enable screenshot capture in REPLAY_STRICT");
+        assertTrue(configOverrideTrue.isReplayScreenshotCaptureEnabled(ExecutionMode.REPLAY_WITH_HEALING),
+            "Property override true should enable screenshot capture in REPLAY_WITH_HEALING");
+
+        // 4. Explicit property override: false
+        System.setProperty("neodymium.ai.replay.captureScreenshots", "false");
+        AiConfiguration.resetInstance();
+        final AiConfiguration configOverrideFalse = AiConfiguration.getInstance();
+        assertFalse(configOverrideFalse.isReplayScreenshotCaptureEnabled(ExecutionMode.REPLAY_STRICT),
+            "Property override false should disable screenshot capture in REPLAY_STRICT");
+        assertFalse(configOverrideFalse.isReplayScreenshotCaptureEnabled(ExecutionMode.REPLAY_WITH_HEALING),
+            "Property override false should disable screenshot capture in REPLAY_WITH_HEALING");
+        assertFalse(configOverrideFalse.isReplayScreenshotCaptureEnabled(ExecutionMode.LLM_ONLY),
+            "Property override false should disable screenshot capture even in LLM_ONLY");
     }
 }
 

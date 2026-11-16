@@ -307,7 +307,7 @@ public final class AgentToolLoopStep implements PipelineStep
                     {
                         userPrompt.append("- ").append(key).append(": \"").append(escapeSessionVariableValue(guardedData.get(key))).append("\"\n");
                     }
-                    userPrompt.append("\n");
+                    userPrompt.append("When referencing session variables in tool calls, use ${variableName} syntax (e.g. ${").append(eligibleKeys.get(0)).append("}).\n\n");
                 }
             }
         }
@@ -960,7 +960,8 @@ public final class AgentToolLoopStep implements PipelineStep
                 {
                     logToolCall(singleShotCall);
                     final InterceptionVerdict verdict = this.interceptor.intercept(singleShotCall, toolContext);
-                    final ToolCall effectiveCall = verdict.getEffectiveCall(singleShotCall);
+                    final ToolCall rawEffectiveCall = verdict.getEffectiveCall(singleShotCall);
+                    final ToolCall effectiveCall = ToolCallVariableResolver.normalizePlaceholders(rawEffectiveCall, context.getSessionData());
                     if (!verdict.isAllowed())
                     {
                         final ToolResult rejResult = verdict.rejectionResult();
@@ -1362,7 +1363,8 @@ public final class AgentToolLoopStep implements PipelineStep
 
                 // Pre-invocation Guard (Quality Judge & Journey Fidelity)
                 final InterceptionVerdict verdict = this.interceptor.intercept(currentCall, toolContext);
-                final ToolCall effectiveCall = verdict.getEffectiveCall(currentCall);
+                final ToolCall rawEffectiveCall = verdict.getEffectiveCall(currentCall);
+                final ToolCall effectiveCall = ToolCallVariableResolver.normalizePlaceholders(rawEffectiveCall, context.getSessionData());
                 lastEffectiveCall = effectiveCall;
 
                 final ToolResult result;

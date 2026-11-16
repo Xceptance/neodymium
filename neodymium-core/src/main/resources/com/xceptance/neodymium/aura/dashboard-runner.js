@@ -231,7 +231,11 @@ function prepareClientForExecution() {
     if (terminalConsole) terminalConsole.innerHTML = 'Connecting to run stream...\n';
     hasShownStartMessage = false;
     lastLineWasAi = false;
-    pollStatus();
+    if (typeof startPolling === 'function') {
+        startPolling();
+    } else if (typeof pollStatus === 'function') {
+        pollStatus();
+    }
 }
 window.prepareClientForExecution = prepareClientForExecution;
 
@@ -786,14 +790,6 @@ async function pollStatus() {
     }
 }
 window.pollStatus = pollStatus;
-
-window.addEventListener('beforeunload', (event) => {
-    if (isRunning) {
-        event.preventDefault();
-        event.returnValue = 'A test queue is currently running. If you close this tab, the server will shut down and the test execution will be terminated.';
-        return event.returnValue;
-    }
-});
 
 function sendDisconnect() {
     if (!disconnected) {

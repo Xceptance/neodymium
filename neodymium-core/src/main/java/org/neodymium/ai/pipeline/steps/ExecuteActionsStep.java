@@ -947,6 +947,7 @@ public final class ExecuteActionsStep
                         final boolean isVisualRequired = (step != null && step.isVisualOrLayoutStep())
                                 || AiConfiguration.getInstance().isSemanticVerificationEnabled()
                                 || !isReplay
+                                || Boolean.TRUE.equals(c.getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP))
                                 || AiConfiguration.getInstance().isReplayScreenshotCaptureEnabled(mode);
 
                         if (isVisualRequired)

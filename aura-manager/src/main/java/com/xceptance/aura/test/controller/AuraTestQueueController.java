@@ -1678,7 +1678,7 @@ public class AuraTestQueueController
     public String stopExecution(final Model model)
     {
         LOGGER.info("[Aura Server] User requested to stop active execution subprocess");
-        queueService.stopCurrentTest();
+        queueService.stopProcess();
         return renderExecutionStatePanels(model);
     }
 

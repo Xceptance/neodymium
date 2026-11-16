@@ -42,7 +42,7 @@ function clearChatInput() {
         const thinkingBubble = document.createElement('div');
         thinkingBubble.className = 'chat-message ai message-ai thinking-bubble';
         thinkingBubble.innerHTML = `
-            <div class="chat-message-header"><div class="avatar ai-avatar"><span class="material-symbols-outlined">smart_toy</span></div><span class="sender">Aura Assistant</span></div>
+            <div class="chat-message-header"><div class="avatar ai-avatar"><span class="material-symbols-outlined">smart_toy</span></div><span class="sender">AI Assistant</span></div>
             <div class="typing-indicator"><span></span><span></span><span></span></div>
         `;
         chatMessages.appendChild(thinkingBubble);

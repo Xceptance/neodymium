@@ -3989,7 +3989,9 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
     const singleRunControls = document.getElementById('sidePageSingleRunControls');
     const testBaseControls = document.getElementById('sidePageTestBaseVariationControls');
 
+    const copyBtn = document.getElementById('copyFullTestDiagnosticsBtn');
     if (isTestBaseRow && testBaseControls) {
+        if (copyBtn) copyBtn.style.display = 'none';
         if (singleRunControls) singleRunControls.style.display = 'none';
         testBaseControls.style.display = 'flex';
 
@@ -4009,6 +4011,7 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
 
         loadTestBaseVariationHistory(testClass, testMethod, dataSetVal, loc, browser);
     } else {
+        if (copyBtn) copyBtn.style.display = '';
         if (testBaseControls) testBaseControls.style.display = 'none';
         if (singleRunControls) singleRunControls.style.display = 'flex';
 
@@ -5757,9 +5760,10 @@ function generateFullTestDiagnosticsMarkdown(execDto, activeRow) {
     if (playbookContent && playbookContent.trim().length > 0) {
         lines.push('');
         lines.push('## Initial Test YAML Playbook');
-        lines.push('```yaml');
+        const pbFence = playbookContent.includes('````') ? '`````' : (playbookContent.includes('```') ? '````' : '```');
+        lines.push(pbFence + 'yaml');
         lines.push(playbookContent.trim());
-        lines.push('```');
+        lines.push(pbFence);
     }
 
     // Step Execution Summary
@@ -5842,17 +5846,91 @@ function generateFullTestDiagnosticsMarkdown(execDto, activeRow) {
         }
     }
 
-    // Test Attachments
+    // Test Attachments & Local Artifacts
     if (dto.attachments && Array.isArray(dto.attachments) && dto.attachments.length > 0) {
         lines.push('');
-        lines.push('## Test Attachments');
+        lines.push('## Test Attachments & Local Artifacts');
         dto.attachments.forEach(att => {
             const sizeStr = att.size ? ` (${(att.size / 1024).toFixed(1)} KB)` : '';
-            lines.push(`- **${att.name || att.path}** [${att.type || 'file'}]${sizeStr}`);
+            const name = att.name || att.path || 'file';
+            const type = att.type || 'file';
+            lines.push(`- **${name}** [${type}]${sizeStr}`);
+            if (att.relativePath) {
+                lines.push(`  - Workspace Path: \`${att.relativePath}\``);
+            }
+            if (att.fileUri) {
+                lines.push(`  - Local File URI: [${name}](${att.fileUri})`);
+            }
         });
+
+        // Inlined small text logs & artifacts
+        const inlinedAttachments = dto.attachments.filter(att => {
+            if (!att.content || typeof att.content !== 'string' || att.content.trim().length === 0) {
+                return false;
+            }
+            // Skip duplicating playbook if it is already displayed above in ## Initial Test YAML Playbook
+            if ((att.name === 'playbook.yaml' || att.path === 'playbook.yaml') && playbookContent && playbookContent.trim().length > 0) {
+                return false;
+            }
+            return true;
+        });
+
+        if (inlinedAttachments.length > 0) {
+            lines.push('');
+            lines.push('### Inlined Attachment Contents');
+            inlinedAttachments.forEach(att => {
+                const name = att.name || att.path || 'Attachment';
+                const sizeStr = att.size ? ` (${(att.size / 1024).toFixed(1)} KB)` : '';
+                const lang = (att.type === 'json' || name.endsWith('.json')) ? 'json'
+                    : (att.type === 'yaml' || name.endsWith('.yaml') || name.endsWith('.yml')) ? 'yaml'
+                    : (att.type === 'xml' || name.endsWith('.xml')) ? 'xml'
+                    : 'text';
+                const fence = att.content.includes('````') ? '`````' : (att.content.includes('```') ? '````' : '```');
+                lines.push('');
+                lines.push('<details>');
+                lines.push(`<summary>Attached Content: ${escapeHtml(name)}${sizeStr}</summary>`);
+                lines.push('');
+                lines.push(fence + lang);
+                lines.push(att.content.trim());
+                lines.push(fence);
+                lines.push('</details>');
+            });
+        }
+    }
+
+    // Aura MCP Guidance for AI Agents
+    lines.push('');
+    lines.push('---');
+    lines.push('> [!TIP]');
+    const executionId = dto.id || (row ? (row.getAttribute('data-execution-id') || row.getAttribute('id')) : '') || '';
+    if (executionId) {
+        lines.push(`> **Aura MCP Quick Tip:** If you have access to Aura MCP tools, inspect detailed failure context via \`get_execution_failure(executionId="${executionId}")\` or read artifacts with \`get_test_content(path="...")\`.`);
+    } else {
+        lines.push('> **Aura MCP Quick Tip:** If you have access to Aura MCP tools, inspect detailed failure context via `get_execution_failure(executionId="...")` or read artifacts with `get_test_content(path="...")`.');
     }
 
     return lines.join('\n');
+}
+
+function setCopyDiagnosticsBtnLoading(isLoading) {
+    const copyBtn = document.getElementById('copyFullTestDiagnosticsBtn');
+    if (!copyBtn) return;
+    const icon = copyBtn.querySelector('.material-symbols-outlined');
+    if (isLoading) {
+        copyBtn.disabled = true;
+        copyBtn.setAttribute('title', 'Loading diagnostics...');
+        if (icon) {
+            icon.textContent = 'sync';
+            icon.style.animation = 'spin 1s linear infinite';
+        }
+    } else {
+        copyBtn.disabled = false;
+        copyBtn.setAttribute('title', 'Copy full test diagnostics (markdown format)');
+        if (icon) {
+            icon.textContent = 'content_copy';
+            icon.style.animation = '';
+        }
+    }
 }
 
 function copyFullTestDiagnostics(btn) {
@@ -5879,6 +5957,7 @@ function renderStepsForExecution(activeRow) {
 
     if (!activeRow) {
         window._currentActiveExecDto = null;
+        setCopyDiagnosticsBtnLoading(false);
         stepListEl.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem;">Select a test execution row to view steps.</div>';
         const linterContainer = document.getElementById('sidePageLinterFindingsContainer');
         if (linterContainer) {
@@ -5927,16 +6006,7 @@ function renderStepsForExecution(activeRow) {
                 attContainer.style.display = 'none';
             }
 
-            const copyBtn = document.getElementById('copyFullTestDiagnosticsBtn');
-            if (copyBtn) {
-                copyBtn.disabled = true;
-                copyBtn.setAttribute('title', 'Loading diagnostics...');
-                const icon = copyBtn.querySelector('.material-symbols-outlined');
-                if (icon) {
-                    icon.textContent = 'sync';
-                    icon.style.animation = 'spin 1s linear infinite';
-                }
-            }
+            setCopyDiagnosticsBtnLoading(true);
 
             const fetchId = ++activeStepFetchId;
             isLiveStepFetchInFlight = true;
@@ -6033,23 +6103,16 @@ function renderStepsForExecution(activeRow) {
                     if (activeStepAbortController === controller) {
                         activeStepAbortController = null;
                     }
-                    if (fetchId === activeStepFetchId) {
+                    if (fetchId === activeStepFetchId || currentActiveRowId === rowId) {
                         isLiveStepFetchInFlight = false;
-                        const copyBtn = document.getElementById('copyFullTestDiagnosticsBtn');
-                        if (copyBtn) {
-                            copyBtn.disabled = false;
-                            copyBtn.setAttribute('title', 'Copy full test diagnostics (markdown format)');
-                            const icon = copyBtn.querySelector('.material-symbols-outlined');
-                            if (icon) {
-                                icon.textContent = 'content_copy';
-                                icon.style.animation = '';
-                            }
-                        }
+                        setCopyDiagnosticsBtnLoading(false);
                     }
                 });
             return;
         }
     }
+
+    setCopyDiagnosticsBtnLoading(false);
 
     const localBindingsAttr = activeRow.getAttribute('data-local-bindings');
     const playbookFile = activeRow.getAttribute('data-playbook-file') || '';
@@ -7499,6 +7562,7 @@ function toggleStepActionInspector(stepCardEl) {
 
 function closeTestSidePagePanel() {
     stopLiveStepRefreshTimer();
+    setCopyDiagnosticsBtnLoading(false);
     const panel = document.getElementById('testSidePagePanel');
     const resizer = document.getElementById('allurePanelResizer') || document.getElementById('panelResizer');
     const varDrawer = document.getElementById('variationHistoryDrawer');
@@ -7527,6 +7591,7 @@ window.toggleSystemPrompt = toggleSystemPrompt;
 window.copyStepConversation = copyStepConversation;
 window.copyTurnConversation = copyTurnConversation;
 window.copyFullTestDiagnostics = copyFullTestDiagnostics;
+window.setCopyDiagnosticsBtnLoading = setCopyDiagnosticsBtnLoading;
 window.generateFullTestDiagnosticsMarkdown = generateFullTestDiagnosticsMarkdown;
 window.copyAttachmentPlaybook = copyAttachmentPlaybook;
 window.generateStepConversationMarkdown = generateStepConversationMarkdown;

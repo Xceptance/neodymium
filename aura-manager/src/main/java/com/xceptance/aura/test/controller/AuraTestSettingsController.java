@@ -49,7 +49,6 @@ import org.springframework.ui.Model;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
@@ -230,7 +229,7 @@ public class AuraTestSettingsController implements ApplicationListener<WebServer
     }
 
     @PostMapping("/save")
-    public String saveSettings(@RequestBody(required = false) final MultiValueMap<String, String> formData,
+    public String saveSettings(@RequestParam(required = false) final MultiValueMap<String, String> formData,
                                final Model model)
     {
         try
@@ -260,9 +259,10 @@ public class AuraTestSettingsController implements ApplicationListener<WebServer
                 for (final Map.Entry<String, List<String>> entry : formData.entrySet())
                 {
                     final String paramName = entry.getKey();
-                    if (paramName.startsWith("prop__"))
+                    final String delimiter = paramName.startsWith("prop--") ? "--" : (paramName.startsWith("prop__") ? "__" : null);
+                    if (delimiter != null)
                     {
-                        final String[] parts = paramName.split("__", 3);
+                        final String[] parts = paramName.split(delimiter, 3);
                         if (parts.length == 3)
                         {
                             final String fileName = parts[1];

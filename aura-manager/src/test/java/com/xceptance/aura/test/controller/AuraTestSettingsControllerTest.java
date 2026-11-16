@@ -35,6 +35,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.ui.Model;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 
 /**
  * Unit tests for AuraTestSettingsController MCP status, session details, and self-test diagnostics.
@@ -149,5 +151,53 @@ public class AuraTestSettingsControllerTest
         final Map<String, Object> body = response.getBody();
         Assertions.assertNotNull(body);
         Assertions.assertEquals(true, body.get("enabled"));
+    }
+
+    @Test
+    public void testSaveSettingsPersistsPropertyFileAndDevNeoOverrides() throws Exception
+    {
+        final MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
+        formData.add("activeTab", "general");
+        formData.add("prop__ai.properties__neodymium.ai.apiKey", "secret-key-123");
+        formData.add("devNeoKey", "neodymium.ai.timeoutSeconds");
+        formData.add("devNeoValue", "60");
+
+        final Model model = new ConcurrentModel();
+        final String view = controller.saveSettings(formData, model);
+
+        Assertions.assertEquals("fragments/settings-modal :: settingsModal", view);
+        Assertions.assertEquals("Settings saved successfully!", model.getAttribute("saveMessage"));
+        Assertions.assertEquals("general", model.getAttribute("activeTab"));
+
+        Mockito.verify(settingsService).savePropertyFile("ai.properties", Map.of("neodymium.ai.apiKey", "secret-key-123"));
+        Mockito.verify(settingsService).saveDevNeoProperties(List.of(Map.entry("neodymium.ai.timeoutSeconds", "60")));
+    }
+
+    @Test
+    public void testSaveSettingsHandlesNullOrEmptyFormDataGracefully() throws Exception
+    {
+        final Model model = new ConcurrentModel();
+        final String view = controller.saveSettings(null, model);
+
+        Assertions.assertEquals("fragments/settings-modal :: settingsModal", view);
+        Assertions.assertEquals("Settings saved successfully!", model.getAttribute("saveMessage"));
+    }
+
+    @Test
+    public void testSaveSettingsSupportsHyphenDelimiter() throws Exception
+    {
+        final MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
+        formData.add("activeTab", "general");
+        formData.add("prop--ai.properties--neodymium.ai.apiKey", "secret-key-456");
+        formData.add("prop--browser.properties--browserprofile.global.headless", "true");
+
+        final Model model = new ConcurrentModel();
+        final String view = controller.saveSettings(formData, model);
+
+        Assertions.assertEquals("fragments/settings-modal :: settingsModal", view);
+        Assertions.assertEquals("Settings saved successfully!", model.getAttribute("saveMessage"));
+
+        Mockito.verify(settingsService).savePropertyFile("ai.properties", Map.of("neodymium.ai.apiKey", "secret-key-456"));
+        Mockito.verify(settingsService).savePropertyFile("browser.properties", Map.of("browserprofile.global.headless", "true"));
     }
 }

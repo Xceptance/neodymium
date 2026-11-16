@@ -647,6 +647,75 @@ public final class StaticResourceSyntaxTest
         runNodeScript(nodeTestScript, "AI log filtering test failed");
     }
 
+    /**
+     * Automated regression safety net verifying that dashboard-runner.js invokes startPolling()
+     * when prepareClientForExecution() is executed, preventing client disconnection and the
+     * "Connecting to run stream..." freeze.
+     *
+     * @throws Exception
+     *             if Node execution or verification fails
+     * @author AI-generated: Gemini 3.8 Flash
+     * @author Xceptance GmbH 2026
+     */
+    @Test
+    public void testPrepareClientForExecutionInitiatesPolling() throws Exception
+    {
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final Path runnerPath = Paths.get("src/main/resources/static/dashboard-runner.js");
+        Assertions.assertTrue(Files.exists(runnerPath), "dashboard-runner.js must exist: " + runnerPath.toAbsolutePath());
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const runnerCode = fs.readFileSync('" + runnerPath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "let pollingStarted = false;\n" +
+            "const makeMockElement = () => ({\n" +
+            "    innerHTML: '',\n" +
+            "    style: {},\n" +
+            "    classList: { add: () => {}, remove: () => {}, contains: () => false },\n" +
+            "    querySelectorAll: () => [],\n" +
+            "    insertAdjacentHTML: () => {}\n" +
+            "});\n" +
+            "const sandbox = {\n" +
+            "    console,\n" +
+            "    window: { addEventListener: () => {} },\n" +
+            "    document: {\n" +
+            "        getElementById: () => makeMockElement(),\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {}\n" +
+            "    },\n" +
+            "    localStorage: { getItem: () => null, setItem: () => {} },\n" +
+            "    setTimeout: () => {},\n" +
+            "    clearTimeout: () => {},\n" +
+            "    clientId: 'test-client-id',\n" +
+            "    disconnected: false,\n" +
+            "    fetch: () => { pollingStarted = true; return Promise.resolve({ ok: true, json: async () => ({}) }); },\n" +
+            "    activeRunStats: { running: false, tests: [] },\n" +
+            "    liveCompletedFiles: new Set(),\n" +
+            "    clearReportPromptTimer: () => {},\n" +
+            "    hideRunFinishedPrompt: () => {}\n" +
+            "};\n" +
+            "sandbox.window.document = sandbox.document;\n" +
+            "sandbox.window.localStorage = sandbox.localStorage;\n" +
+            "sandbox.window.activeRunStats = sandbox.activeRunStats;\n" +
+            "sandbox.window.liveCompletedFiles = sandbox.liveCompletedFiles;\n" +
+            "sandbox.window.clientId = sandbox.clientId;\n" +
+            "sandbox.window.disconnected = sandbox.disconnected;\n" +
+            "sandbox.window.fetch = sandbox.fetch;\n" +
+            "vm.runInNewContext(runnerCode, sandbox);\n" +
+            "sandbox.window.prepareClientForExecution();\n" +
+            "if (!pollingStarted) {\n" +
+            "    throw new Error('prepareClientForExecution must initiate polling to establish the live run stream');\n" +
+            "}\n";
+
+        runNodeScript(nodeTestScript, "prepareClientForExecution polling initiation test failed");
+    }
+
     @Test
     public void testCollapsedSidebarPreservesMaterialIcons() throws Exception
     {
@@ -680,8 +749,8 @@ public final class StaticResourceSyntaxTest
             "sidebar.html must render brand label 'Neodymium'"
         );
         Assertions.assertTrue(
-            sidebarContent.contains("class=\"logo-title\">Aura Manager</span>"),
-            "sidebar.html must render title label 'Aura Manager'"
+            sidebarContent.contains("class=\"logo-title\">AI Manager</span>"),
+            "sidebar.html must render title label 'AI Manager'"
         );
 
         final String[] expectedIcons = {"play_circle"};
@@ -3895,6 +3964,79 @@ public final class StaticResourceSyntaxTest
     }
 
     @Test
+    public void testCopyDiagnosticsButtonLoadingLifecycle() throws Exception
+    {
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist: " + jsFilePath.toAbsolutePath());
+        final String jsContent = Files.readString(jsFilePath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(jsContent.contains("function setCopyDiagnosticsBtnLoading(isLoading)"),
+            "report-manager.js must define setCopyDiagnosticsBtnLoading helper");
+        Assertions.assertTrue(jsContent.contains("window.setCopyDiagnosticsBtnLoading = setCopyDiagnosticsBtnLoading;"),
+            "report-manager.js must export setCopyDiagnosticsBtnLoading on window");
+        Assertions.assertTrue(jsContent.contains("fetchId === activeStepFetchId || currentActiveRowId === rowId"),
+            "finally block must restore button when currentActiveRowId matches rowId even if timer incremented activeStepFetchId");
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const assert = require('assert');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const sandbox = {\n" +
+            "    console: console,\n" +
+            "    assert: assert,\n" +
+            "    window: {},\n" +
+            "    document: {\n" +
+            "        getElementById: () => null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {} }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "const testScript = code + '\\n' + `\n" +
+            "let buttonDisabled = false;\n" +
+            "let buttonTitle = '';\n" +
+            "let iconText = 'content_copy';\n" +
+            "let iconAnimation = '';\n" +
+            "const mockIcon = {\n" +
+            "    get textContent() { return iconText; },\n" +
+            "    set textContent(v) { iconText = v; },\n" +
+            "    style: {\n" +
+            "        get animation() { return iconAnimation; },\n" +
+            "        set animation(v) { iconAnimation = v; }\n" +
+            "    }\n" +
+            "};\n" +
+            "const mockBtn = {\n" +
+            "    get disabled() { return buttonDisabled; },\n" +
+            "    set disabled(v) { buttonDisabled = v; },\n" +
+            "    setAttribute: (name, val) => { if (name === 'title') buttonTitle = val; },\n" +
+            "    getAttribute: (name) => { if (name === 'title') return buttonTitle; return null; },\n" +
+            "    querySelector: (sel) => sel.includes('material-symbols-outlined') ? mockIcon : null,\n" +
+            "    style: {}\n" +
+            "};\n" +
+            "document.getElementById = (id) => id === 'copyFullTestDiagnosticsBtn' ? mockBtn : null;\n" +
+            "assert(typeof setCopyDiagnosticsBtnLoading === 'function', 'setCopyDiagnosticsBtnLoading must be a function');\n" +
+            "// Test loading state\n" +
+            "setCopyDiagnosticsBtnLoading(true);\n" +
+            "assert.strictEqual(buttonDisabled, true, 'Button must be disabled when loading');\n" +
+            "assert.strictEqual(buttonTitle, 'Loading diagnostics...', 'Title must indicate loading');\n" +
+            "assert.strictEqual(iconText, 'sync', 'Icon must switch to sync');\n" +
+            "assert(iconAnimation.includes('spin'), 'Icon must animate with spin');\n" +
+            "// Test reset to idle state\n" +
+            "setCopyDiagnosticsBtnLoading(false);\n" +
+            "assert.strictEqual(buttonDisabled, false, 'Button must be enabled when idle');\n" +
+            "assert.strictEqual(buttonTitle, 'Copy full test diagnostics (markdown format)', 'Title must indicate copy action');\n" +
+            "assert.strictEqual(iconText, 'content_copy', 'Icon must switch to content_copy');\n" +
+            "assert.strictEqual(iconAnimation, '', 'Icon animation must be cleared');\n" +
+            "`;\n" +
+            "vm.runInNewContext(testScript, sandbox);\n";
+
+        runNodeScript(nodeTestScript, "Copy diagnostics button lifecycle test failed");
+    }
+
+    @Test
     public void testUnitedContainerAiUsageKpiCrossFilteringSupport() throws Exception
     {
         final Path htmlPath = Paths.get("src/main/resources/templates/fragments/dashboard-widgets.html");
@@ -4569,6 +4711,108 @@ public final class StaticResourceSyntaxTest
         final int exitCode = p.waitFor();
         Assertions.assertEquals(0, exitCode, "Known test variations widget row click regression test failed:\n" + out);
         Assertions.assertTrue(out.toString().contains("SUCCESS"), "Output must contain SUCCESS: " + out);
+    }
+
+    @Test
+    public void testGenerateFullTestDiagnosticsMarkdownWithInlinedAttachmentsAndLocalArtifacts() throws Exception
+    {
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist: " + jsFilePath.toAbsolutePath());
+        final String jsContent = Files.readString(jsFilePath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(jsContent.contains("## Test Attachments & Local Artifacts"),
+            "report-manager.js must include section '## Test Attachments & Local Artifacts'");
+        Assertions.assertTrue(jsContent.contains("Workspace Path:"),
+            "report-manager.js must render workspace-relative paths for attachments");
+        Assertions.assertTrue(jsContent.contains("Local File URI:"),
+            "report-manager.js must render clickable local file URIs for attachments");
+        Assertions.assertTrue(jsContent.contains("### Inlined Attachment Contents"),
+            "report-manager.js must include section '### Inlined Attachment Contents' for text attachments");
+        Assertions.assertTrue(jsContent.contains("Aura MCP Quick Tip:"),
+            "report-manager.js must include Aura MCP Quick Tip guidance for AI agents");
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const assert = require('assert');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const sandbox = {\n" +
+            "    console: console,\n" +
+            "    assert: assert,\n" +
+            "    window: {},\n" +
+            "    document: {\n" +
+            "        getElementById: () => null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {} }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "vm.createContext(sandbox);\n" +
+            "vm.runInContext(code, sandbox);\n" +
+            "assert(typeof sandbox.generateFullTestDiagnosticsMarkdown === 'function', 'generateFullTestDiagnosticsMarkdown must be defined');\n" +
+            "const testDto = {\n" +
+            "    id: 'run-42-exec-1',\n" +
+            "    testName: 'SampleTest',\n" +
+            "    testClass: 'com.example.SampleTest',\n" +
+            "    testMethod: 'sampleMethod',\n" +
+            "    runId: 'run-42',\n" +
+            "    status: 'failed',\n" +
+            "    failureReason: 'Element not found',\n" +
+            "    playbookContent: 'steps: []',\n" +
+            "    attachments: [\n" +
+            "        {\n" +
+            "            name: 'video.mp4',\n" +
+            "            path: 'video.mp4',\n" +
+            "            type: 'video',\n" +
+            "            size: 2048000,\n" +
+            "            relativePath: 'storage/runs/run-42/video.mp4',\n" +
+            "            fileUri: 'file:///workspace/storage/runs/run-42/video.mp4'\n" +
+            "        },\n" +
+            "        {\n" +
+            "            name: 'execution.log',\n" +
+            "            path: 'execution.log',\n" +
+            "            type: 'log',\n" +
+            "            size: 1024,\n" +
+            "            relativePath: 'storage/runs/run-42/execution.log',\n" +
+            "            fileUri: 'file:///workspace/storage/runs/run-42/execution.log',\n" +
+            "            content: '[INFO] Test started\\n[ERROR] Step failed'\n" +
+            "        },\n" +
+            "        {\n" +
+            "            name: 'playbook.yaml',\n" +
+            "            path: 'playbook.yaml',\n" +
+            "            type: 'yaml',\n" +
+            "            size: 512,\n" +
+            "            relativePath: 'storage/runs/run-42/playbook.yaml',\n" +
+            "            fileUri: 'file:///workspace/storage/runs/run-42/playbook.yaml',\n" +
+            "            content: 'steps: []'\n" +
+            "        }\n" +
+            "    ]\n" +
+            "};\n" +
+            "const md = sandbox.generateFullTestDiagnosticsMarkdown(testDto, null);\n" +
+            "assert(md.includes('## Test Attachments & Local Artifacts'), 'Markdown must contain attachments header');\n" +
+            "assert(md.includes('- Workspace Path: `storage/runs/run-42/video.mp4`'), 'Must contain video workspace path');\n" +
+            "assert(md.includes('- Local File URI: [video.mp4](file:///workspace/storage/runs/run-42/video.mp4)'), 'Must contain video file URI link');\n" +
+            "assert(md.includes('### Inlined Attachment Contents'), 'Must contain inlined attachments header');\n" +
+            "assert(md.includes('<summary>Attached Content: execution.log'), 'Must contain execution.log summary details');\n" +
+            "assert(md.includes('[ERROR] Step failed'), 'Must contain execution log content');\n" +
+            "assert(!md.includes('<summary>Attached Content: playbook.yaml'), 'Must not duplicate playbook.yaml in details when already in playbook header');\n" +
+            "assert(md.includes('> **Aura MCP Quick Tip:**'), 'Must contain Aura MCP Quick Tip');\n" +
+            "assert(md.includes('get_execution_failure(executionId=\"run-42-exec-1\")'), 'Must contain execution ID in MCP tip');\n" +
+            "console.log('DIAGNOSTICS_MD_SUCCESS');\n";
+
+        runNodeScript(nodeTestScript, "Diagnostics markdown test failed");
+    }
+
+    @Test
+    public void testDashboardRunnerDoesNotRegisterBeforeunload() throws IOException
+    {
+        final Path runnerJsPath = Paths.get("src/main/resources/static/dashboard-runner.js");
+        Assertions.assertTrue(Files.exists(runnerJsPath), "dashboard-runner.js must exist: " + runnerJsPath.toAbsolutePath());
+        final String content = Files.readString(runnerJsPath, StandardCharsets.UTF_8);
+        Assertions.assertFalse(content.contains("beforeunload"),
+            "dashboard-runner.js must not register a beforeunload event listener as it causes misleading unsaved changes prompts in browsers");
     }
 }
 

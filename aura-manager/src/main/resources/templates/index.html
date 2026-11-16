@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Permissions-Policy" content="unload=*">
-    <title th:text="${title ?: 'Neodymium Aura Manager'}">Neodymium Aura Manager</title>
+    <title th:text="${pageTitle ?: (title ?: 'Neodymium AI Manager')}">Neodymium AI Manager</title>
 
     <!-- Google Fonts: Outfit, Inter & JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -26,6 +26,17 @@
     <link rel="stylesheet" th:href="@{/dashboard-styles.css?v=1.2.7}" href="dashboard-styles.css?v=1.2.7">
 </head>
 <body th:classappend="${theme == 'light' ? 'light-mode' : ''}">
+
+    <!-- Global Server Offline / Disconnected Warning Banner -->
+    <div id="serverOfflineBanner" class="server-offline-banner" style="display: none;">
+        <div class="server-offline-banner-content">
+            <span class="material-symbols-outlined offline-icon">cloud_off</span>
+            <span id="serverOfflineMessage" class="offline-text">Neodymium AI Manager server is offline or unreachable. Reconnecting...</span>
+            <button type="button" class="btn btn-sm btn-outline-light offline-retry-btn" onclick="checkServerConnectivity(true)">
+                <span class="material-symbols-outlined offline-retry-icon">refresh</span> Retry Now
+            </button>
+        </div>
+    </div>
 
     <div class="toast-container" id="toastContainer"></div>
 

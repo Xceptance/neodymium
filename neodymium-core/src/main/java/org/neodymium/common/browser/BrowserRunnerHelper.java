@@ -358,6 +358,7 @@ public class BrowserRunnerHelper
 
         final MutableCapabilities capabilities = config.getCapabilities();
         final WebDriverStateContainer wDSC = new WebDriverStateContainer();
+        wDSC.setBrowserConfiguration(config);
         SelenideProxyServer selenideProxyServer = null;
 
         try

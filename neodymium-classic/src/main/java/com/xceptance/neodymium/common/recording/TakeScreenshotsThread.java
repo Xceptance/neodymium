@@ -36,7 +36,7 @@ public class TakeScreenshotsThread extends Thread
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(TakeScreenshotsThread.class);
 
-    private WebDriver driver;
+    private volatile WebDriver driver;
 
     private String fileName;
 
@@ -63,6 +63,16 @@ public class TakeScreenshotsThread extends Thread
             directory.mkdir();
         }
         this.driver = driver;
+    }
+
+    /**
+     * Gets the {@link WebDriver} instance currently being filmed.
+     *
+     * @return the driver instance
+     */
+    public WebDriver getDriver()
+    {
+        return driver;
     }
 
     /**

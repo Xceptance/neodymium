@@ -668,7 +668,8 @@ public final class AiConfiguration
 
     /**
      * Checks if screenshot capture is enabled during replay for the given execution mode.
-     * In {@link ExecutionMode#REPLAY_STRICT}, defaults to false to avoid routine screenshot overhead,
+     * In replay modes (e.g. {@link ExecutionMode#REPLAY_STRICT} and {@link ExecutionMode#REPLAY_WITH_HEALING}),
+     * defaults to false to avoid routine passing screenshot and report bloat overhead,
      * but can be overridden globally via {@code neodymium.ai.replay.captureScreenshots}.
      *
      * @param mode the current execution mode
@@ -676,7 +677,7 @@ public final class AiConfiguration
      */
     public boolean isReplayScreenshotCaptureEnabled(final ExecutionMode mode)
     {
-        final boolean defaultCapture = mode != ExecutionMode.REPLAY_STRICT;
+        final boolean defaultCapture = mode != null && !mode.isReplay();
         return getBoolean("neodymium.ai.replay.captureScreenshots", defaultCapture);
     }
     /**
