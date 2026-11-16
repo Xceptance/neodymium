@@ -209,9 +209,7 @@ function stopQueue() {
     window.userAborted = true;
     fetch('/api/stop', { method: 'POST' }).catch(e => console.error('Failed to stop queue', e));
     isRunning = false;
-    consoleCollapsed = true;
     window.isRunning = false;
-    window.consoleCollapsed = true;
     if (typeof closeInteractiveConsoleView === 'function') {
         closeInteractiveConsoleView();
     }
@@ -947,6 +945,12 @@ async function pollStatus() {
                     updateRunButtons();
                     const runSpinner = document.getElementById('runSpinner');
                     if (isRunning) {
+                        if (!wasRunning) {
+                            // Test execution newly detected or just started -> automatically open console
+                            consoleCollapsed = false;
+                            window.consoleCollapsed = false;
+                            if (typeof updateCenterLayout === 'function') updateCenterLayout();
+                        }
                         lastKnownRunning = true;
                         window.lastKnownRunning = true;
                         if (activeRunStats.activeFile !== statusData.activeFile || activeRunStats.activeTestId !== statusData.activeTestId) {

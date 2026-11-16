@@ -232,12 +232,19 @@
         #consolePanel {
             display: flex;
             transition: height 0.2s ease-in-out;
+            min-height: 38px;
         }
 
         #consolePanel.console-collapsed {
             height: 38px !important;
             min-height: 38px !important;
+            max-height: 38px !important;
             overflow: hidden !important;
+            flex-shrink: 0 !important;
+        }
+
+        #consolePanel.console-collapsed .console-expanded-controls {
+            display: none !important;
         }
 
         #consolePanel.console-collapsed #terminalConsole {
@@ -245,8 +252,25 @@
         }
 
         #consolePanel.console-collapsed .terminal-panel {
-            padding-bottom: 4px;
+            padding: 0 12px !important;
+            justify-content: center;
             overflow: hidden !important;
+            cursor: pointer;
+            transition: background 0.15s ease-in-out;
+        }
+
+        #consolePanel.console-collapsed:hover .terminal-panel {
+            background: #252526;
+        }
+
+        #consolePanel.console-collapsed .neo-u-20 {
+            margin-bottom: 0 !important;
+            align-items: center;
+            width: 100%;
+        }
+
+        #consolePanel.console-collapsed:hover .neo-u-20 {
+            opacity: 1;
         }
 
         .col-minimized {
