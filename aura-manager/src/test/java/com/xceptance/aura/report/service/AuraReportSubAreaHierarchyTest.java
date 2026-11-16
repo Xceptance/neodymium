@@ -94,7 +94,7 @@ public class AuraReportSubAreaHierarchyTest
         assertEquals(2, areaSummaries.size());
 
         final AreaSummaryDto searchArea = areaSummaries.stream()
-            .filter(a -> "@Search".equals(a.getAreaName()))
+            .filter(a -> "Search".equals(a.getAreaName()))
             .findFirst()
             .orElseThrow();
 
@@ -102,7 +102,7 @@ public class AuraReportSubAreaHierarchyTest
         assertEquals(2, searchArea.getSubAreas().size());
 
         final SubAreaSummaryDto browsingSub = searchArea.getSubAreas().stream()
-            .filter(s -> "@Browsing".equals(s.getSubAreaName()))
+            .filter(s -> "Browsing".equals(s.getSubAreaName()))
             .findFirst()
             .orElseThrow();
         assertEquals(1, browsingSub.getTotalCount());
@@ -110,7 +110,7 @@ public class AuraReportSubAreaHierarchyTest
         assertEquals(0, browsingSub.getFixedCount());
 
         final SubAreaSummaryDto filteringSub = searchArea.getSubAreas().stream()
-            .filter(s -> "@Filtering".equals(s.getSubAreaName()))
+            .filter(s -> "Filtering".equals(s.getSubAreaName()))
             .findFirst()
             .orElseThrow();
         assertEquals(1, filteringSub.getTotalCount());
@@ -122,7 +122,7 @@ public class AuraReportSubAreaHierarchyTest
         assertEquals("com.xceptance.SearchTest", searchArea.getTestClasses().get(0).getClassName());
 
         final AreaSummaryDto accountArea = areaSummaries.stream()
-            .filter(a -> "@Account".equals(a.getAreaName()))
+            .filter(a -> "Account".equals(a.getAreaName()))
             .findFirst()
             .orElseThrow();
         assertFalse(accountArea.hasSubAreas(), "Area without sub-areas must report hasSubAreas() == false");
@@ -186,7 +186,7 @@ public class AuraReportSubAreaHierarchyTest
         assertEquals(2, batchAreas.size());
 
         final TestBaseAreaDto searchArea = batchAreas.stream()
-            .filter(a -> "@Search".equals(a.getAreaName()))
+            .filter(a -> "Search".equals(a.getAreaName()))
             .findFirst()
             .orElseThrow();
 
@@ -194,21 +194,21 @@ public class AuraReportSubAreaHierarchyTest
         assertEquals(2, searchArea.getSubAreas().size());
 
         final TestBaseSubAreaDto browsingSub = searchArea.getSubAreas().stream()
-            .filter(s -> "@Browsing".equals(s.getSubAreaName()))
+            .filter(s -> "Browsing".equals(s.getSubAreaName()))
             .findFirst()
             .orElseThrow();
         assertEquals(1, browsingSub.getClassCount());
         assertEquals(1, browsingSub.getTotalVariationsCount());
 
         final TestBaseSubAreaDto filteringSub = searchArea.getSubAreas().stream()
-            .filter(s -> "@Filtering".equals(s.getSubAreaName()))
+            .filter(s -> "Filtering".equals(s.getSubAreaName()))
             .findFirst()
             .orElseThrow();
         assertEquals(1, filteringSub.getClassCount());
         assertEquals(1, filteringSub.getTotalVariationsCount());
 
         final TestBaseAreaDto accountArea = batchAreas.stream()
-            .filter(a -> "@Account".equals(a.getAreaName()))
+            .filter(a -> "Account".equals(a.getAreaName()))
             .findFirst()
             .orElseThrow();
         assertFalse(accountArea.hasSubAreas());

@@ -28,7 +28,7 @@ public class UseSoftAssertions
         Assertions.assertEquals(Configuration.assertionMode, AssertionMode.SOFT);
         $("#notFound1").should(exist);
         $("#notFound2").should(exist);
-        $("#masthead .search-toggle").click();
+        $("header").click();
         $("#notFound3").should(exist);
         Assertions.assertThrows(ElementNotFound.class, () -> {
             $("#notFound4").click();

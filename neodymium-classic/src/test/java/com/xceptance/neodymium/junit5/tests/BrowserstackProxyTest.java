@@ -2,10 +2,14 @@ package com.xceptance.neodymium.junit5.tests;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.util.HashMap;
 import java.util.Map;
 
 import org.aeonbits.owner.ConfigFactory;
+import org.apache.commons.lang3.StringUtils;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -21,6 +25,38 @@ public class BrowserstackProxyTest extends AbstractNeodymiumTest
     @BeforeAll
     public static void beforeClass() throws IOException
     {
+        Assumptions.assumeTrue(StringUtils.isNotBlank(CONFIGURATION.browserstackUsername())
+                               && StringUtils.isNotBlank(CONFIGURATION.browserstackAccessKey()),
+                               "Browserstack credentials not configured");
+
+        Assumptions.assumeTrue(StringUtils.isNotBlank(CONFIGURATION.proxyHost())
+                               && StringUtils.isNotBlank(CONFIGURATION.proxyPort()),
+                               "Browserstack proxy host and port not configured");
+
+        final int proxyPort;
+        try
+        {
+            proxyPort = Integer.parseInt(CONFIGURATION.proxyPort());
+        }
+        catch (final NumberFormatException e)
+        {
+            Assumptions.abort("Configured proxy port is not a valid integer: " + CONFIGURATION.proxyPort());
+            return;
+        }
+
+        boolean proxyAvailable = false;
+        try (final Socket socket = new Socket())
+        {
+            socket.connect(new InetSocketAddress(CONFIGURATION.proxyHost(), proxyPort), 1000);
+            proxyAvailable = true;
+        }
+        catch (final IOException e)
+        {
+            proxyAvailable = false;
+        }
+        Assumptions.assumeTrue(proxyAvailable,
+                               "Configured Browserstack proxy " + CONFIGURATION.proxyHost() + ":" + proxyPort + " is not reachable");
+
         Map<String, String> properties1 = new HashMap<>();
         properties1.put("browserprofile.testEnvironment.browserstack.url", "https://hub-cloud.browserstack.com/wd/hub");
         properties1.put("browserprofile.testEnvironment.browserstack.username", CONFIGURATION.browserstackUsername());

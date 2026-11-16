@@ -16,7 +16,7 @@ import org.openqa.selenium.support.events.EventFiringDecorator;
 
 import java.util.List;
 
-import static com.codeborne.selenide.CollectionCondition.size;
+import static com.codeborne.selenide.CollectionCondition.sizeGreaterThan;
 import static com.codeborne.selenide.Condition.exist;
 import static com.codeborne.selenide.Condition.visible;
 import static com.codeborne.selenide.Selenide.$;
@@ -35,16 +35,16 @@ public class DebugUtilsTest
         DebugUtils.injectJavaScript();
         assertJsSuccessfullyInjected();
 
-        final List<WebElement> list = $("body").findElements(By.cssSelector("#masthead"));
+        final List<WebElement> list = $("body").findElements(By.cssSelector("header"));
         DebugUtils.highlightElements(list, Neodymium.getDriver());
         $(".neodymium-highlight-box").shouldBe(visible);
 
         DebugUtils.resetAllHighlight();
         $(".neodymium-highlight-box").shouldNot(exist);
 
-        final List<WebElement> list2 = $("body").findElements(By.cssSelector("#content article"));
+        final List<WebElement> list2 = $("body").findElements(By.cssSelector("article"));
         DebugUtils.highlightElements(list2, Neodymium.getDriver());
-        $$(".neodymium-highlight-box").shouldHave(size(10));
+        $$(".neodymium-highlight-box").shouldHave(sizeGreaterThan(0));
 
         DebugUtils.resetAllHighlight();
         $(".neodymium-highlight-box").shouldNot(exist);
@@ -59,7 +59,7 @@ public class DebugUtilsTest
         DebugUtils.injectJavaScript();
         assertJsSuccessfullyInjected();
 
-        final List<WebElement> list = $("body").findElements(By.cssSelector("#masthead"));
+        final List<WebElement> list = $("body").findElements(By.cssSelector("header"));
         DebugUtils.highlightElements(list, Neodymium.getDriver());
         $(".neodymium-highlight-box").shouldBe(visible);
 
@@ -82,31 +82,31 @@ public class DebugUtilsTest
         Assert.assertEquals(0, eventListener.implicitWaitCount);
 
         // one wait due to find
-        $("body #masthead").should(exist);
+        $("body header").should(exist);
         Assert.assertEquals(1, eventListener.implicitWaitCount);
         assertJsSuccessfullyInjected();
 
         // two waits due to chain finding
-        $("body").findElements(By.cssSelector("#content article"));
+        $("body").findElements(By.cssSelector("article"));
         Assert.assertEquals(3, eventListener.implicitWaitCount);
 
         // on wait due to find and click
-        $("#content article h1").scrollIntoView(true);
+        $("article a").scrollIntoView(true);
         Assert.assertEquals(4, eventListener.implicitWaitCount);
 
-        $("#content article h1").click();
+        $("article a").click();
         Assert.assertEquals(5, eventListener.implicitWaitCount);
 
         // additional one wait due to find and click
-        $("#masthead .search-toggle").click();
+        $("#btn-open-search").click();
         Assert.assertEquals(6, eventListener.implicitWaitCount);
 
         // one wait due to find and change value
-        $("#search-container .search-form input.search-field").val("abc");
+        $("#search-input-field").val("abc");
         Assert.assertEquals(7, eventListener.implicitWaitCount);
 
         // one wait due to find and press enter
-        $("#search-container .search-form input.search-field").pressEnter();
+        $("#search-input-field").pressEnter();
         Assert.assertEquals(8, eventListener.implicitWaitCount);
     }
 

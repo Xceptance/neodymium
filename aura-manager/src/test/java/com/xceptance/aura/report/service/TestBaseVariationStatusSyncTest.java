@@ -204,7 +204,7 @@ public class TestBaseVariationStatusSyncTest
         Assertions.assertEquals(2, areas.size());
 
         final Optional<TestBaseAreaDto> checkoutAreaOpt = areas.stream()
-            .filter(a -> "@Checkout".equalsIgnoreCase(a.getAreaName()))
+            .filter(a -> "Checkout".equalsIgnoreCase(a.getAreaName()))
             .findFirst();
         Assertions.assertTrue(checkoutAreaOpt.isPresent());
 

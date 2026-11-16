@@ -649,7 +649,7 @@ public final class CustomDashboardViewControllerIntegrationTest
     {
         final String runId = "run-pattern-test-" + System.currentTimeMillis();
         final String batchName = "PatternBatch";
-        final String browser = "Chrome";
+        final String browser = "ChromePattern_" + System.nanoTime();
         final long startTime = System.currentTimeMillis();
 
         final TestRunEntity runEntity = new TestRunEntity(
@@ -657,6 +657,8 @@ public final class CustomDashboardViewControllerIntegrationTest
         );
         runEntity.setTotalTests(2);
         runEntity.setPassedCount(2);
+        runEntity.setPassedHealedCount(1);
+        runEntity.setPassedAiCount(1);
         runEntity.setBrowsersCsv(browser);
         runEntity.setLocalesCsv("US");
         runEntity.setEnvironment("Staging");

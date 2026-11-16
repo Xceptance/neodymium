@@ -185,14 +185,18 @@ public class AuraInteractiveControllerTest
         });
         requestThread.start();
 
-        Thread.sleep(150);
+        final long deadline = System.currentTimeMillis() + 5000;
+        while (!"pause-async-2".equals(engine.getCurrentPauseId()) && System.currentTimeMillis() < deadline)
+        {
+            Thread.sleep(20);
+        }
 
         final JsonObject userAction = new JsonObject();
         userAction.addProperty("action", "RESUME");
         userAction.addProperty("pauseId", "pause-async-2");
         engine.submitAction(userAction);
 
-        assertTrue(latch.await(3, TimeUnit.SECONDS), "Timed out waiting for waitForAction to return");
+        assertTrue(latch.await(5, TimeUnit.SECONDS), "Timed out waiting for waitForAction to return");
         assertNotNull(asyncResponse.get());
         assertTrue(asyncResponse.get().contains("RESUME"));
     }
