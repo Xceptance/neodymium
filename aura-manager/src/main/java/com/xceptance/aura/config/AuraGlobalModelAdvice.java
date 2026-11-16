@@ -228,6 +228,7 @@ public class AuraGlobalModelAdvice
         if (model != null)
         {
             final boolean isQueueRunning = queueService != null && queueService.isRunningQueue();
+            final String stoppedRunId = queueService != null ? queueService.getCurrentRunId() : null;
             String activeRunId = isQueueRunning ? queueService.getCurrentRunId() : null;
             boolean running = isQueueRunning;
             String currentBatch = isQueueRunning ? queueService.getCurrentBatchName() : null;
@@ -262,17 +263,25 @@ public class AuraGlobalModelAdvice
                     .findFirst()
                     .orElse(null);
             }
-            if (activeEntity == null)
+            if (activeEntity == null && dataService != null)
             {
                 activeEntity = allRuns.stream()
-                    .filter(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus()))
+                    .filter(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus()) && dataService.isRunCurrentlyActiveOnDisk(r.getId()))
                     .findFirst()
                     .orElse(null);
             }
             if (activeEntity == null && dataService != null)
             {
                 activeEntity = allRuns.stream()
-                    .filter(r -> dataService.isRunCurrentlyActiveOnDisk(r.getId()))
+                    .limit(5)
+                    .filter(r -> !"CANCELLED".equalsIgnoreCase(r.getStatus()) && dataService.isRunCurrentlyActiveOnDisk(r.getId()))
+                    .findFirst()
+                    .orElse(null);
+            }
+            if (activeEntity == null && isQueueRunning)
+            {
+                activeEntity = allRuns.stream()
+                    .filter(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus()))
                     .findFirst()
                     .orElse(null);
             }
@@ -284,8 +293,11 @@ public class AuraGlobalModelAdvice
                 {
                     activeRunId = activeEntity.getId();
                 }
-                running = isQueueRunning || "IN_PROGRESS".equalsIgnoreCase(activeEntity.getStatus())
-                    || (dataService != null && dataService.isRunCurrentlyActiveOnDisk(activeEntity.getId()));
+                final boolean isCurrentRunStopped = queueService != null && queueService.isManuallyStopped()
+                    && (stoppedRunId != null && !stoppedRunId.isBlank() && stoppedRunId.equals(activeEntity.getId()));
+                running = !isCurrentRunStopped && (isQueueRunning
+                    || (!"CANCELLED".equalsIgnoreCase(activeEntity.getStatus())
+                        && dataService != null && dataService.isRunCurrentlyActiveOnDisk(activeEntity.getId())));
                 if (currentBatch == null || !AuraReportDataService.isRealBatch(currentBatch))
                 {
                     currentBatch = AuraReportDataService.resolveEffectiveBatchName(activeEntity.getBatchName(), activeEntity.getTags());

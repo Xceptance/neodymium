@@ -4180,9 +4180,7 @@ public class AuraReportDataService
 
         final Optional<TestRunEntity> runOpt = runRepository.findById(effectiveRunId);
         final boolean isActiveOnDisk = localRunJsonStorageService.isRunCurrentlyActiveOnDisk(effectiveRunId);
-        final boolean isInProgress = (runOpt.isPresent() && "IN_PROGRESS".equalsIgnoreCase(runOpt.get().getStatus()))
-                || liveRunBuffer.containsKey(effectiveRunId)
-                || isActiveOnDisk;
+        final boolean isInProgress = liveRunBuffer.containsKey(effectiveRunId) || isActiveOnDisk;
 
         if (!isInProgress && runReportCache.containsKey(effectiveRunId))
         {
@@ -4410,6 +4408,47 @@ public class AuraReportDataService
             final RunReportDto report = buildRunReportDto(runEntity, executions);
             if (!isInProgress)
             {
+                if (runOpt.isPresent() && "IN_PROGRESS".equalsIgnoreCase(runOpt.get().getStatus()))
+                {
+                    final TestRunEntity finishedRun = runOpt.get();
+                    finishedRun.setStatus("COMPLETED");
+                    finishedRun.setTotalTests(report.getTotalCount());
+                    finishedRun.setPassedCount(report.getPassCount());
+                    finishedRun.setSucceededFixedCount(report.getFixedCount());
+                    finishedRun.setFailedKnownCount(report.getKnownCount());
+                    finishedRun.setFailedUnknownCount(report.getUnknownCount());
+                    finishedRun.setIgnoredCount(report.getIgnoredCount());
+                    finishedRun.setRunningCount(0);
+                    finishedRun.setPassedHealedCount(report.getPassHealedCount());
+                    finishedRun.setSucceededFixedHealedCount(report.getFixedHealedCount());
+                    finishedRun.setFailedKnownHealedCount(report.getKnownHealedCount());
+                    finishedRun.setFailedUnknownHealedCount(report.getUnknownHealedCount());
+                    if (report.getExecutions() != null && !report.getExecutions().isEmpty())
+                    {
+                        final String bCsv = report.getExecutions().stream()
+                            .map(TestExecutionDto::getBrowser)
+                            .filter(b -> b != null && !b.isBlank() && !"Unknown".equalsIgnoreCase(b))
+                            .distinct()
+                            .sorted()
+                            .collect(Collectors.joining(", "));
+                        if (!bCsv.isBlank())
+                        {
+                            finishedRun.setBrowsersCsv(bCsv);
+                        }
+                        final String lCsv = report.getExecutions().stream()
+                            .map(TestExecutionDto::getLocation)
+                            .filter(l -> l != null && !l.isBlank() && !"Unknown".equalsIgnoreCase(l))
+                            .distinct()
+                            .sorted()
+                            .collect(Collectors.joining(", "));
+                        if (!lCsv.isBlank())
+                        {
+                            finishedRun.setLocalesCsv(lCsv);
+                        }
+                    }
+                    finishedRun.recalculatePassRate();
+                    runRepository.save(finishedRun);
+                }
                 runReportCache.put(effectiveRunId, report);
             }
             else

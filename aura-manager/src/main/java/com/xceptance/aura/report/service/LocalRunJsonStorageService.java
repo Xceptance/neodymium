@@ -698,7 +698,12 @@ public class LocalRunJsonStorageService
                                 final JsonNode existingNode = objectMapper.readTree(f);
                                 if (!existingNode.equals(objNode))
                                 {
+                                    final long origLastMod = f.lastModified();
                                     objectMapper.writerWithDefaultPrettyPrinter().writeValue(f, objNode);
+                                    if (origLastMod > 0L)
+                                    {
+                                        f.setLastModified(origLastMod);
+                                    }
                                 }
                             }
                             catch (final Exception ignored)
