@@ -16,6 +16,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.Assert.assertTrue;
 
@@ -31,9 +32,9 @@ public class FilmTestExecution
 
     private static final Map<Thread, GifRecordingConfigurations> CONTEXTS_GIF = Collections.synchronizedMap(new WeakHashMap<>());
 
-    private static final Map<String, TakeScreenshotsThread> GIF_THREADS = Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<String, TakeScreenshotsThread> GIF_THREADS = new ConcurrentHashMap<>();
 
-    private static final Map<String, TakeScreenshotsThread> VIDEO_THREADS = Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<String, TakeScreenshotsThread> VIDEO_THREADS = new ConcurrentHashMap<>();
 
     public final static String TEMPORARY_CONFIG_FILE_PROPERTY_NAME = "recording.temporaryConfigFile";
 
