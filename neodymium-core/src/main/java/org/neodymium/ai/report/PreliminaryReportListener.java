@@ -98,6 +98,7 @@ public final class PreliminaryReportListener implements ExecutionListener
     private TestExecutionReport.ReportStepEntry currentParentStep;
     private final AtomicBoolean reportFlushed = new AtomicBoolean(false);
     private String lastBaseFileName;
+    private int flushCount = 0;
 
     /**
      * Constructs a PreliminaryReportListener reading defaults from {@link AiConfiguration}.
@@ -167,6 +168,16 @@ public final class PreliminaryReportListener implements ExecutionListener
     public String getLastBaseFileName()
     {
         return this.lastBaseFileName;
+    }
+
+    /**
+     * Returns the total count of times generated reports were flushed to disk.
+     *
+     * @return the flush count
+     */
+    public int getFlushCount()
+    {
+        return this.flushCount;
     }
 
     @Override
@@ -2353,6 +2364,8 @@ public final class PreliminaryReportListener implements ExecutionListener
             return;
         }
 
+        boolean stateChanged = false;
+
         if (testPassed)
         {
             final boolean wasFailed = "FAILED".equalsIgnoreCase(this.report.getStatus())
@@ -2378,24 +2391,38 @@ public final class PreliminaryReportListener implements ExecutionListener
                         }
                     }
                 }
+                stateChanged = true;
             }
         }
         else
         {
-            this.report.setSuccess(false);
-            this.report.setStatus("FAILED");
-            this.report.setExpectedFailure(false);
+            final boolean wasPassed = this.report.isSuccess() && "PASSED".equalsIgnoreCase(this.report.getStatus());
+            if (wasPassed)
+            {
+                this.report.setSuccess(false);
+                this.report.setStatus("FAILED");
+                this.report.setExpectedFailure(false);
+                stateChanged = true;
+            }
             if (uncaughtException != null)
             {
-                this.report.setFailureReason(uncaughtException.getMessage() != null ? uncaughtException.getMessage() : uncaughtException.toString());
-                final StringWriter sw = new StringWriter();
-                uncaughtException.printStackTrace(new PrintWriter(sw));
-                this.report.setFailureStackTrace(sw.toString());
+                final String reason = uncaughtException.getMessage() != null ? uncaughtException.getMessage() : uncaughtException.toString();
+                if (!reason.equals(this.report.getFailureReason()))
+                {
+                    this.report.setFailureReason(reason);
+                    final StringWriter sw = new StringWriter();
+                    uncaughtException.printStackTrace(new PrintWriter(sw));
+                    this.report.setFailureStackTrace(sw.toString());
+                    stateChanged = true;
+                }
             }
         }
 
-        recalculateMetrics();
-        flushReport();
+        if (stateChanged || !this.reportFlushed.get())
+        {
+            recalculateMetrics();
+            flushReport();
+        }
     }
 
     /**
@@ -2404,6 +2431,7 @@ public final class PreliminaryReportListener implements ExecutionListener
     public synchronized void flushReport()
     {
         this.reportFlushed.set(true);
+        this.flushCount++;
 
         try
         {

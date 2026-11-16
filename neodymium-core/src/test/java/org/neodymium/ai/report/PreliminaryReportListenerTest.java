@@ -3038,6 +3038,59 @@ public class PreliminaryReportListenerTest
     }
 
     @Test
+    @DisplayName("Verify reconcileTestOutcome(true, null) does not re-flush disk report when report is already PASSED")
+    public void testReconcileTestOutcome_doesNotReflushWhenPassedReportRemainsPassed(@TempDir final Path tempDir) throws Exception
+    {
+        final PreliminaryReportListener listener = new PreliminaryReportListener(tempDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final ExecutionContext ctx = new ExecutionContext(new SessionData());
+        ExecutionContext.setActiveContext(ctx);
+
+        final PlaybookStep passingStep = new PlaybookStep("Assert homepage banner is visible");
+        bus.dispatch(new StepStartedEvent(passingStep, 0));
+        bus.dispatch(new StepFinishedEvent(passingStep, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new SessionFinishedEvent(100L, true, List.of()));
+
+        assertEquals(1, listener.getFlushCount(), "Report must be flushed exactly once upon session finish");
+        final String initialBaseName = listener.getLastBaseFileName();
+        assertNotNull(initialBaseName);
+        assertTrue(Files.exists(tempDir.resolve(initialBaseName + ".json")));
+
+        // Calling reconcileTestOutcome with testPassed = true on already passed session
+        listener.reconcileTestOutcome(true, null);
+
+        assertEquals(1, listener.getFlushCount(), "Reconciling matching passed outcome must not trigger redundant flush");
+    }
+
+    @Test
+    @DisplayName("Verify reconcileTestOutcome flushes when status changes from failed to passed (expected failure)")
+    public void testReconcileTestOutcome_flushesWhenStatusChangesToExpectedFailure(@TempDir final Path tempDir) throws Exception
+    {
+        final PreliminaryReportListener listener = new PreliminaryReportListener(tempDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final ExecutionContext ctx = new ExecutionContext(new SessionData());
+        ExecutionContext.setActiveContext(ctx);
+
+        final PlaybookStep failingStep = new PlaybookStep("Assert element is present");
+        bus.dispatch(new StepStartedEvent(failingStep, 0));
+        bus.dispatch(new StepFinishedEvent(failingStep, PlaybookStepStatus.FAILED));
+        bus.dispatch(new SessionFinishedEvent(100L, false, List.of()));
+
+        assertEquals(1, listener.getFlushCount(), "Report flushed once upon session failure");
+
+        // Status flips from FAILED to PASSED with expected failure
+        listener.reconcileTestOutcome(true, null);
+
+        assertEquals(2, listener.getFlushCount(), "Report must flush a second time when status flips to expected failure");
+        assertTrue(listener.getReport().isExpectedFailure());
+        assertEquals("PASSED", listener.getReport().getStatus());
+    }
+
+    @Test
     @DisplayName("Verify resolveUnfinishedSteps distinguishes unreached downstream steps as NOT RUN from intentionally SKIPPED steps")
     public void testResolveUnfinishedStepsDistinguishesNotRunFromSkipped(@TempDir final Path tempDir)
     {
