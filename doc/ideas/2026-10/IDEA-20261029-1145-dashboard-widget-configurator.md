@@ -1,8 +1,8 @@
 # [IDEA-20261029-1145] Aura Dashboard Dynamic Widget Configurator & Multi-Scale Trend Engine
 
-- **Status:** `In Progress`
+- **Status:** `Implemented`
 - **Proposed:** 2026-10-29 11:45
-- **Resolved:** Pending
+- **Resolved:** 2026-11-13 11:24 (Merged in [GitHub PR #530](https://github.com/Xceptance/neodymium/pull/530))
 - **Component:** `aura-manager`
 - **Category:** `Tooling & DX`
 - **Author:** AI-generated: Gemini 3.8 Flash (High) / Xceptance GmbH 2026
