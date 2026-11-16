@@ -5760,9 +5760,10 @@ function generateFullTestDiagnosticsMarkdown(execDto, activeRow) {
     if (playbookContent && playbookContent.trim().length > 0) {
         lines.push('');
         lines.push('## Initial Test YAML Playbook');
-        lines.push('```yaml');
+        const pbFence = playbookContent.includes('````') ? '`````' : (playbookContent.includes('```') ? '````' : '```');
+        lines.push(pbFence + 'yaml');
         lines.push(playbookContent.trim());
-        lines.push('```');
+        lines.push(pbFence);
     }
 
     // Step Execution Summary
@@ -5845,14 +5846,67 @@ function generateFullTestDiagnosticsMarkdown(execDto, activeRow) {
         }
     }
 
-    // Test Attachments
+    // Test Attachments & Local Artifacts
     if (dto.attachments && Array.isArray(dto.attachments) && dto.attachments.length > 0) {
         lines.push('');
-        lines.push('## Test Attachments');
+        lines.push('## Test Attachments & Local Artifacts');
         dto.attachments.forEach(att => {
             const sizeStr = att.size ? ` (${(att.size / 1024).toFixed(1)} KB)` : '';
-            lines.push(`- **${att.name || att.path}** [${att.type || 'file'}]${sizeStr}`);
+            const name = att.name || att.path || 'file';
+            const type = att.type || 'file';
+            lines.push(`- **${name}** [${type}]${sizeStr}`);
+            if (att.relativePath) {
+                lines.push(`  - Workspace Path: \`${att.relativePath}\``);
+            }
+            if (att.fileUri) {
+                lines.push(`  - Local File URI: [${name}](${att.fileUri})`);
+            }
         });
+
+        // Inlined small text logs & artifacts
+        const inlinedAttachments = dto.attachments.filter(att => {
+            if (!att.content || typeof att.content !== 'string' || att.content.trim().length === 0) {
+                return false;
+            }
+            // Skip duplicating playbook if it is already displayed above in ## Initial Test YAML Playbook
+            if ((att.name === 'playbook.yaml' || att.path === 'playbook.yaml') && playbookContent && playbookContent.trim().length > 0) {
+                return false;
+            }
+            return true;
+        });
+
+        if (inlinedAttachments.length > 0) {
+            lines.push('');
+            lines.push('### Inlined Attachment Contents');
+            inlinedAttachments.forEach(att => {
+                const name = att.name || att.path || 'Attachment';
+                const sizeStr = att.size ? ` (${(att.size / 1024).toFixed(1)} KB)` : '';
+                const lang = (att.type === 'json' || name.endsWith('.json')) ? 'json'
+                    : (att.type === 'yaml' || name.endsWith('.yaml') || name.endsWith('.yml')) ? 'yaml'
+                    : (att.type === 'xml' || name.endsWith('.xml')) ? 'xml'
+                    : 'text';
+                const fence = att.content.includes('````') ? '`````' : (att.content.includes('```') ? '````' : '```');
+                lines.push('');
+                lines.push('<details>');
+                lines.push(`<summary>Attached Content: ${escapeHtml(name)}${sizeStr}</summary>`);
+                lines.push('');
+                lines.push(fence + lang);
+                lines.push(att.content.trim());
+                lines.push(fence);
+                lines.push('</details>');
+            });
+        }
+    }
+
+    // Aura MCP Guidance for AI Agents
+    lines.push('');
+    lines.push('---');
+    lines.push('> [!TIP]');
+    const executionId = dto.id || (row ? (row.getAttribute('data-execution-id') || row.getAttribute('id')) : '') || '';
+    if (executionId) {
+        lines.push(`> **Aura MCP Quick Tip:** If you have access to Aura MCP tools, inspect detailed failure context via \`get_execution_failure(executionId="${executionId}")\` or read artifacts with \`get_test_content(path="...")\`.`);
+    } else {
+        lines.push('> **Aura MCP Quick Tip:** If you have access to Aura MCP tools, inspect detailed failure context via `get_execution_failure(executionId="...")` or read artifacts with `get_test_content(path="...")`.');
     }
 
     return lines.join('\n');
