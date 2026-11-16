@@ -374,7 +374,13 @@
 			</properties>
 		</profile>
 
-		<!-- 8. Aura Glance visual sandbox tests (skip in neodymium-classic) -->
+		<!-- 8. AI Glance visual sandbox tests (skip in neodymium-classic) -->
+		<profile>
+			<id>ai-sandbox</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
 		<profile>
 			<id>aura-sandbox</id>
 			<properties>
@@ -382,7 +388,13 @@
 			</properties>
 		</profile>
 
-		<!-- 9. Aura Manager hub tests (skip in neodymium-classic) -->
+		<!-- 9. AI Manager hub tests (skip in neodymium-classic) -->
+		<profile>
+			<id>ai-manager</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
 		<profile>
 			<id>aura-manager</id>
 			<properties>

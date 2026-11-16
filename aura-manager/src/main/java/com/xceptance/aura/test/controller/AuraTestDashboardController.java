@@ -101,7 +101,7 @@ public class AuraTestDashboardController
             stepsFiles = fileService.getStepsFilesList();
         }
 
-        model.addAttribute("pageTitle", "Neodymium Aura Manager Dashboard");
+        model.addAttribute("pageTitle", "Neodymium AI Manager Dashboard");
         model.addAttribute("activeTab", "AuraTestManager");
         model.addAttribute("activeView", "workspace");
         model.addAttribute("viewFragment", "fragments/aura-test-manager :: auraTestManager");

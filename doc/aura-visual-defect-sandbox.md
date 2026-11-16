@@ -1,6 +1,6 @@
-# Neodymium Aura AI: Aura AI Test Sandbox & Multi-Port Testing Environment
+# Neodymium AI: AI Test Sandbox & Multi-Port Testing Environment
 
-This document provides extensive architectural details, layout mappings, and usage instructions for the self-contained local testing sandbox ("Aura AI Test Sandbox") engineered specifically for **Neodymium Aura AI** (including the Observational Visual Auditor **Aura Glance**). 
+This document provides extensive architectural details, layout mappings, and usage instructions for the self-contained local testing sandbox ("AI Test Sandbox") engineered specifically for **Neodymium AI** (including the Observational Visual Auditor **AI Glance**). 
 
 ---
 
@@ -13,7 +13,7 @@ Headless mock page setups or static JVM unit tests cannot adequately validate vi
 4. **Dynamic Data Parameterization**: Checking that dynamic variables (`${userFullName}`) inside test instructions are correctly resolved in SUT prompts.
 5. **Double-Stage Replays**: Confirming that subsequent test runs matching baseline approved screens (dHash) bypass external LLM network latency entirely, executing offline in `< 10ms`.
 
-The **Aura Test Suite Hub** fulfills these constraints 100% locally with zero external hosted server dependencies.
+The **AI Test Suite Hub** fulfills these constraints 100% locally with zero external hosted server dependencies.
 
 ---
 

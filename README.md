@@ -3,7 +3,7 @@
 
 # Neodymium
 
-Neodymium solves modern web test automation challenges by combining JUnit, WebDriver, Selenide, BDD/Cucumber, and comprehensive reporting with **Neodymium Aura AI** — an intelligent automation engine that turns natural language playbooks into robust, millisecond-fast offline test runs.
+Neodymium solves modern web test automation challenges by combining JUnit, WebDriver, Selenide, BDD/Cucumber, and comprehensive reporting with **Neodymium AI** — an intelligent automation engine that turns natural language playbooks into robust, millisecond-fast offline test runs.
 
 ---
 
@@ -11,12 +11,12 @@ Neodymium solves modern web test automation challenges by combining JUnit, WebDr
 
 Neodymium offers two complementary ways to build test suites:
 
-1. **Neodymium Aura (AI-Powered Automation)**: Author tests in natural language playbooks. The AI records resilient actions and visual baselines once; subsequent runs replay in milliseconds with zero LLM API costs and auto-heal on UI drift.
+1. **Neodymium AI (AI-Powered Automation)**: Author tests in natural language playbooks. The AI records resilient actions and visual baselines once; subsequent runs replay in milliseconds with zero LLM API costs and auto-heal on UI drift.
 2. **Neodymium Classic (Code-First Automation)**: Build structured, programmatic tests in Java using JUnit 5, Selenide, Page Objects, Cucumber BDD, and multi-browser execution matrices.
 
 ---
 
-## ⚡ Neodymium Aura: AI-Powered Automation
+## ⚡ Neodymium AI: AI-Powered Automation
 
 > **Record Once with AI. Replay at Native Browser Speed. Self-Heal on UI Drift.**
 
@@ -40,9 +40,9 @@ flowchart TD
     end
 ```
 
-### Why Neodymium Aura?
+### Why Neodymium AI?
 
-| Feature | Traditional Automation (Selenium/Playwright) | Pure AI Agents (Autonomous LLM Per Step) | **Neodymium Aura (Hybrid Execution)** |
+| Feature | Traditional Automation (Selenium/Playwright) | Pure AI Agents (Autonomous LLM Per Step) | **Neodymium AI (Hybrid Execution)** |
 | :--- | :--- | :--- | :--- |
 | **Authoring Speed** | ⚠️ Slow (handcrafting complex selectors) | ⚡ Instant (plain natural language) | ⚡ **Instant (plain natural language playbooks)** |
 | **Replay Speed** | ⚡ Milliseconds (native browser events) | ❌ 3–15 seconds per step (slow LLM latency) | ⚡ **Milliseconds (native Selenide execution)** |
@@ -50,7 +50,7 @@ flowchart TD
 | **Determinism & Flakiness** | ❌ High flakiness on dynamic DOM changes | ❌ Non-deterministic LLM hallucinations | 🟢 **Deterministic replay with visual SSIM gating** |
 | **Maintenance** | 🔴 Expensive manual selector fixes | ⚠️ Re-executes prompts blindly | 🟢 **Autonomous self-healing on UI drift** |
 
-### 3-Minute Quickstart (Aura AI)
+### 3-Minute Quickstart (Neodymium AI)
 
 #### 1. Set Your AI Provider & API Key
 Inject your API key via environment variable or JVM argument (never commit keys to source code):
@@ -166,10 +166,10 @@ public class ClassicTest
 ## 🏗️ Building Neodymium
 
 Neodymium is organized as a standard Maven multi-module monorepo:
-* **`neodymium-core`**: The core automation framework (Classic + Aura AI engine).
+* **`neodymium-core`**: The core automation framework (Classic + Neodymium AI engine).
 * **`neodymium-test-server`**: Embedded HTTP/HTTPS test server and web fixtures (`ai-test-pages`, SSL keystore).
 * **`neodymium-e2e-tests`**: End-to-end integration test suite, SUT scenarios, and VÉRLA storefront tests.
-* **`aura-manager`**: The unified Spring Boot Neodymium Aura Manager (Execution Hub, Visual Playbook Editor, and Reporting Dashboard).
+* **`aura-manager`**: The unified Spring Boot Neodymium AI Manager (Execution Hub, Visual Playbook Editor, and Reporting Dashboard).
 
 ### Prerequisites
 * **Java**: JDK 21 or higher
@@ -200,8 +200,8 @@ Neodymium organizes test suites into dedicated Maven profiles for fast, targeted
 | **VÉRLA Storefront** | `mvn test -Pverla-tests` | VÉRLA storefront UI and mock AI integration flows |
 | **AI Mock** | `mvn test -Pai-mock-tests` | AI pipeline and integration tests using golden mock responses (0 tokens) |
 | **AI Live** | `mvn test -Pai-live-tests` | Real LLM verification tests requiring API keys (`LiveAPI`, `LiveLlm`) |
-| **Aura Sandbox** | `mvn test -Paura-sandbox` | Aura Glance visual defect & dHash baseline sandbox tests |
-| **Aura Manager** | `mvn test -Paura-manager` | Aura Manager Spring Boot hub test suite |
+| **AI Sandbox** | `mvn test -Pai-sandbox` | AI Glance visual defect & dHash baseline sandbox tests |
+| **AI Manager** | `mvn test -Pai-manager` | Neodymium AI Manager Spring Boot hub test suite |
 | **Smoke** | `mvn test -Psmoke` | Fast sanity verification suite (< 60s) |
 
 For complete documentation on profile configurations, scoping, and examples, refer to [doc/TEST_PROFILES.md](doc/TEST_PROFILES.md).
@@ -235,11 +235,11 @@ Thanks to Maven's reactor, you can target individual modules using `-pl` (projec
   ```bash
   mvn test -pl neodymium-core -Dtest=TestDataTest
   ```
-* **Compile Aura Manager (resolves core in-memory):**
+* **Compile AI Manager (resolves core in-memory):**
   ```bash
   mvn compile -pl aura-manager -am
   ```
-* **Launch Aura Manager locally (`http://localhost:8080`):**
+* **Launch AI Manager locally (`http://localhost:8080`):**
   ```bash
   mvn spring-boot:run -pl aura-manager -am
   ```
@@ -249,8 +249,8 @@ Thanks to Maven's reactor, you can target individual modules using `-pl` (projec
   ```
 
 #### 5. Convenience Scripts
-* Run Aura Manager: `./run-aura.sh` (or `run-aura.bat` on Windows).
-  * Automatically detects whether running inside the Neodymium aggregator repo (`mvn spring-boot:run -pl aura-manager`) or in an external project with `aura-manager` imported as a dependency (`exec:java -Dexec.mainClass="com.xceptance.aura.AuraManagerApplication"`).
+* Run AI Manager: `./run-ai.sh` (or `run-ai.bat` on Windows, legacy `./run-aura.sh` also supported).
+  * Automatically detects whether running inside the Neodymium aggregator repo (`mvn spring-boot:run -pl aura-manager`) or in an external project with AI manager imported as a dependency (`exec:java -Dexec.mainClass="com.xceptance.aura.AiLauncher"`).
 * Run a single test with a data file: `./run-neo-test.sh <path_to_yaml>`
 
 ---
@@ -272,8 +272,8 @@ Neodymium is licensed under a dual-structure depending on which module is utiliz
 ### 1. Neodymium Classic (Core Framework)
 Licensed under the permissive **[MIT License](LICENSE#section-a-mit-license-neodymium-classic)**. Free for use, modification, distribution, and commercial hosting without restriction.
 
-### 2. Neodymium Aura AI (AI Integration Module)
-- **Community Edition:** Free for development, testing, and internal applications under the **[GNU Affero General Public License (AGPLv3)](LICENSE#section-b-gnu-affero-general-public-license-neodymium-aura-ai)**.
+### 2. Neodymium AI (AI Integration Module)
+- **Community Edition:** Free for development, testing, and internal applications under the **[GNU Affero General Public License (AGPLv3)](LICENSE#section-b-gnu-affero-general-public-license-neodymium-ai)**.
 - **Commercial Edition:** For hosted SaaS offerings, commercial bundling, or proprietary integration without AGPLv3 copyleft terms, a Commercial License is required.
 - **Commercial Support & Inquiries:** Contact **[support@xceptance.com](mailto:support@xceptance.com)**.
 

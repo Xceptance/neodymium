@@ -83,7 +83,7 @@ public final class AuraChatService
         final LlmProvider client = LlmProviderFactory.createProvider("chat", new AiConfiguration());
 
         // Stage 1: Intent Classifier
-        final String stage1SystemPrompt = "You are an AI router for a test automation manager called Neodymium Aura.\n"
+        final String stage1SystemPrompt = "You are an AI router for a test automation manager called Neodymium AI.\n"
                 + "Your job is to classify the user's intent into one of the following categories:\n"
                 + "- \"browser\": The user wants to configure, select, switch, or change browser profiles (e.g., \"Run on Chrome and Firefox\", \"Select mobile profiles\", \"Use Safari\", \"Configure desktop browsers\", \"Select all browsers\", \"Clear browsers\").\n"
                 + "- \"select\": The user wants to select, run, filter, check, or execute one or more test cases.\n"
@@ -149,7 +149,7 @@ public final class AuraChatService
             }
             profilesJson.append("]");
 
-            final String browserSystemPrompt = "You are the Neodymium Aura Browser Configuration Assistant.\n"
+            final String browserSystemPrompt = "You are the Neodymium AI Browser Configuration Assistant.\n"
                     + "Your goal is to select matching browser profile IDs based on the user's configuration request.\n"
                     + "Here are the available browser profiles configured in the project:\n"
                     + profilesJson.toString() + "\n\n"
@@ -220,7 +220,7 @@ public final class AuraChatService
                 }
             }
 
-            final String editorSystemPrompt = "You are the Neodymium Aura Test Editor Assistant.\n"
+            final String editorSystemPrompt = "You are the Neodymium AI Test Editor Assistant.\n"
                     + "Your goal is to edit or create a YAML test case file based on the user's request.\n"
                     + "You MUST generate the steps using the available action plugins. Here are the instructions for the registered actions:\n"
                     + actionInstructions.toString() + "\n"
@@ -321,7 +321,7 @@ public final class AuraChatService
 
             final List<ChatMessage> conversation = new ArrayList<>();
 
-            final String selectionSystemPrompt = "You are the Neodymium Aura Test Selector Assistant.\n"
+            final String selectionSystemPrompt = "You are the Neodymium AI Test Selector Assistant.\n"
                     + "Your goal is to identify and select the list of datasets (specifying both their YAML file name and dataset ID/index) that match the user's request.\n"
                     + "You have access to the test cases in three escalation levels:\n"
                     + "- Level 1: Just the relative file paths and dataset IDs of all available datasets.\n"
@@ -371,7 +371,7 @@ public final class AuraChatService
                 final String responseText;
                 try
                 {
-                    final LlmResponse resp = client.chat(new LlmRequest("You are the Neodymium Aura Test Selector Assistant.", req.prompt, null, null, 0.2, 30));
+                    final LlmResponse resp = client.chat(new LlmRequest("You are the Neodymium AI Test Selector Assistant.", req.prompt, null, null, 0.2, 30));
                     responseText = resp != null ? resp.content() : "";
                 }
                 catch (final Exception e)
@@ -465,7 +465,7 @@ public final class AuraChatService
         {
             // General talk / neither
             thinkingLog.append("[AI General Chat] Running Stage 2 (Neither)...\n");
-            final String fallbackSystemPrompt = "You are the Neodymium Aura AI Assistant.\n"
+            final String fallbackSystemPrompt = "You are the Neodymium AI Assistant.\n"
                     + "Respond nicely to the user's general message, greeting, or question.\n"
                     + "You can also inform them about your capabilities to select/run tests or create/edit test cases.\n\n"
                     + "You MUST respond in JSON format matching this schema:\n"

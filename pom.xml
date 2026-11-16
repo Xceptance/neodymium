@@ -96,12 +96,18 @@
 			<id>ai-live-tests</id>
 		</profile>
 
-		<!-- 8. Aura Glance visual defect & baseline sandbox tests -->
+		<!-- 8. AI Glance visual defect & baseline sandbox tests (legacy alias: aura-sandbox) -->
+		<profile>
+			<id>ai-sandbox</id>
+		</profile>
 		<profile>
 			<id>aura-sandbox</id>
 		</profile>
 
-		<!-- 9. Aura Manager Spring Boot hub test suite -->
+		<!-- 9. AI Manager Spring Boot hub test suite (legacy alias: aura-manager) -->
+		<profile>
+			<id>ai-manager</id>
+		</profile>
 		<profile>
 			<id>aura-manager</id>
 		</profile>

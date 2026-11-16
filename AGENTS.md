@@ -62,8 +62,8 @@
 ## Testing & Specifications
 - **Maintenance:** Tests MUST be created/updated for any logic or UI changes (reinforces TDD).
 
-## Aura AI Test Sandbox
-- **Aura Glance Sandbox:** To test any Neodymium Aura AI features (such as visual audits, dHash baselines, parameterizations, multi-port, offline replays, or dynamic visual defects), utilize our self-contained **Aura Test Suite Hub** under `neodymium-test-server/src/main/resources/ai-test-pages/AuraGlanceTest/`.
+## Neodymium AI Test Sandbox
+- **AI Glance Sandbox:** To test any Neodymium AI features (such as visual audits, dHash baselines, parameterizations, multi-port, offline replays, or dynamic visual defects), utilize our self-contained **AI Test Suite Hub** under `neodymium-test-server/src/main/resources/ai-test-pages/AuraGlanceTest/`.
 - **Manual Test Server Execution:** For standalone browser testing, VÉRLA storefront inspection, or live debugging, launch the Javalin server indefinitely via:
   ```bash
   mvn exec:java -pl neodymium-test-server
@@ -74,3 +74,4 @@
 - **Server Ports:** Served dynamically on random free ports (HTTP + HTTPS self-signed cert `keystore.p12`) via `JavalinTestServer.java` in `neodymium-test-server` (no external running app required!).
 - **How to Use:** Write tests in `neodymium-e2e-tests/src/test/java/org/neodymium/ai/integration/sandbox/` (e.g. `*SandboxMockTest.java`, `*SandboxLiveTest.java`) extending `BaseAiTest`.
 - **Extensive Documentation:** For detailed guidelines, directory layouts, and step replays instructions, refer to [doc/aura-visual-defect-sandbox.md](doc/aura-visual-defect-sandbox.md).
+
