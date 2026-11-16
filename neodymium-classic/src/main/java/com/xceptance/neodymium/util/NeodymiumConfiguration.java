@@ -26,6 +26,10 @@ public interface NeodymiumConfiguration extends Mutable
     @DefaultValue("100")
     public long debuggingHighlightDuration();
 
+    @Key("neodymium.debugUtils.highlight.headless.withoutVideo")
+    @DefaultValue("false")
+    public boolean debuggingHighlightHeadlessWithoutVideo();
+
     // standard timeout for selenide interaction
     @Key("neodymium.selenide.timeout")
     @DefaultValue("3000")

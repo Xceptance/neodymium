@@ -1,5 +1,6 @@
 package com.xceptance.neodymium.common.recording;
 
+import com.xceptance.neodymium.common.browser.WebDriverStateContainer;
 import com.xceptance.neodymium.common.recording.config.GifRecordingConfigurations;
 import com.xceptance.neodymium.common.recording.config.RecordingConfigurations;
 import com.xceptance.neodymium.common.recording.config.VideoRecordingConfigurations;
@@ -7,6 +8,7 @@ import com.xceptance.neodymium.common.recording.writers.GifSequenceWriter;
 import com.xceptance.neodymium.common.recording.writers.VideoWriter;
 import com.xceptance.neodymium.util.Neodymium;
 import org.aeonbits.owner.ConfigFactory;
+import org.openqa.selenium.WebDriver;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -218,6 +220,88 @@ public class FilmTestExecution
         ArrayList<String> recordingNames = new ArrayList<>();
         recordingNames.addAll(VIDEO_THREADS.keySet());
         return recordingNames;
+    }
+
+    /**
+     * Checks whether a video or gif recording is currently running.
+     *
+     * @return true if an active recording thread is running, false otherwise
+     */
+    public static boolean isRecording()
+    {
+        return isVideoRecording() || isGifRecording();
+    }
+
+    /**
+     * Checks whether an active recording is running for the specified {@link WebDriver} instance.
+     *
+     * @param driver
+     *            the WebDriver instance to check
+     * @return true if a recording thread is actively filming this driver, false otherwise
+     */
+    public static boolean isRecording(final WebDriver driver)
+    {
+        if (driver != null)
+        {
+            return isRecordingForDriver(VIDEO_THREADS, driver) || isRecordingForDriver(GIF_THREADS, driver);
+        }
+        return isRecording();
+    }
+
+    /**
+     * Checks whether a video recording is currently running.
+     *
+     * @return true if an active video recording thread is running, false otherwise
+     */
+    public static boolean isVideoRecording()
+    {
+        return hasActiveThread(VIDEO_THREADS);
+    }
+
+    /**
+     * Checks whether a gif recording is currently running.
+     *
+     * @return true if an active gif recording thread is running, false otherwise
+     */
+    public static boolean isGifRecording()
+    {
+        return hasActiveThread(GIF_THREADS);
+    }
+
+    private static boolean hasActiveThread(final Map<String, TakeScreenshotsThread> threads)
+    {
+        for (final TakeScreenshotsThread thread : threads.values())
+        {
+            if (thread != null && thread.isAlive())
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isRecordingForDriver(final Map<String, TakeScreenshotsThread> threads, final WebDriver driver)
+    {
+        final WebDriverStateContainer container = Neodymium.getWebDriverStateContainer();
+        for (final TakeScreenshotsThread thread : threads.values())
+        {
+            if (thread != null && thread.isAlive())
+            {
+                final WebDriver threadDriver = thread.getDriver();
+                if (threadDriver != null)
+                {
+                    if (threadDriver == driver)
+                    {
+                        return true;
+                    }
+                    if (container != null && container.matches(threadDriver) && container.matches(driver))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     /**

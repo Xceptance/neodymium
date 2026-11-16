@@ -97,6 +97,9 @@ neodymium.debugUtils.highlight = false
 
 # How often should the highlight flash/blink
 # neodymium.debugUtils.highlight.blink.count = 3
+
+# Should elements be highlighted if running in headless mode without active video recording
+# neodymium.debugUtils.highlight.headless.withoutVideo = false
 #
 # How to display test execution in Eclipse JUnit view. tree - a hierarchical representation, flat - a flat list of tests
 # neodymium.junit.viewmode = tree

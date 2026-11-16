@@ -6,6 +6,7 @@ import com.codeborne.selenide.WebDriverRunner;
 import org.neodymium.common.browser.Browser;
 import org.neodymium.junit4.NeodymiumRunner;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.openqa.selenium.By;
@@ -25,6 +26,12 @@ import static com.codeborne.selenide.Selenide.$$;
 @RunWith(NeodymiumRunner.class)
 @Browser("Chrome_1500x1000_headless")
 public class DebugUtilsTest {
+    @Before
+    public void setUp()
+    {
+        Neodymium.configuration().setProperty("neodymium.debugUtils.highlight.headless.withoutVideo", "true");
+    }
+
     @Test
     public void testHighlighting() throws Exception {
         Neodymium.configuration().setProperty("neodymium.debugUtils.highlight", "true");

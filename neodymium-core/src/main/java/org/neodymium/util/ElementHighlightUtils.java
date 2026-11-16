@@ -105,7 +105,7 @@ public class ElementHighlightUtils
      */
     public static void injectHighlightingJs()
     {
-        if (Neodymium.configuration().debuggingHighlightSelectedElements())
+        if (Neodymium.shouldHighlightElements())
         {
             injectJavaScript(Selenide::executeJavaScript);
         }
@@ -118,7 +118,7 @@ public class ElementHighlightUtils
      */
     public static void injectHighlightingJs(final JavaScriptExecutor jsExecutor)
     {
-        if (Neodymium.configuration().debuggingHighlightSelectedElements())
+        if (Neodymium.shouldHighlightElements())
         {
             injectJavaScript(jsExecutor);
         }
@@ -154,7 +154,7 @@ public class ElementHighlightUtils
      */
     private static void highlightAllElements(final Supplier<List<WebElement>> getElements, final WebDriver driver)
     {
-        if (Neodymium.configuration().debuggingHighlightSelectedElements())
+        if (Neodymium.shouldHighlightElements(driver))
         {
             final List<WebElement> elements = getElements.get();
             if (elements == null || elements.isEmpty())
@@ -228,7 +228,7 @@ public class ElementHighlightUtils
      */
     public static void resetHighlights()
     {
-        if (Neodymium.configuration().debuggingHighlightSelectedElements())
+        if (Neodymium.shouldHighlightElements())
         {
             resetAllHighlight(Selenide::executeJavaScript);
         }
@@ -241,7 +241,7 @@ public class ElementHighlightUtils
      */
     public static void resetHighlights(final JavaScriptExecutor jsExecutor)
     {
-        if (Neodymium.configuration().debuggingHighlightSelectedElements())
+        if (Neodymium.shouldHighlightElements())
         {
             resetAllHighlight(jsExecutor);
         }

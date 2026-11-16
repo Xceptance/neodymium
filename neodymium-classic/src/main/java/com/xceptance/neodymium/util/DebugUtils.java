@@ -34,7 +34,7 @@ public class DebugUtils
 
     public static void injectHighlightingJs()
     {
-        if (Neodymium.configuration().debuggingHighlightSelectedElements())
+        if (Neodymium.shouldHighlightElements())
         {
             injectJavaScript();
         }
@@ -52,7 +52,7 @@ public class DebugUtils
 
     private static void highlightAllElements(Supplier<List<WebElement>> getElements, WebDriver driver)
     {
-        if (Neodymium.configuration().debuggingHighlightSelectedElements())
+        if (Neodymium.shouldHighlightElements(driver))
         {
             highlightElements(getElements.get(), driver);
             if (Neodymium.configuration().debuggingHighlightDuration() > 0)
@@ -65,7 +65,7 @@ public class DebugUtils
 
     public static void resetHighlights()
     {
-        if (Neodymium.configuration().debuggingHighlightSelectedElements())
+        if (Neodymium.shouldHighlightElements())
         {
             resetAllHighlight();
         }

@@ -84,7 +84,7 @@ public class NeodymiumWebDriverListener implements WebDriverListener
 
         try
         {
-            if (Neodymium.configuration().debuggingHighlightSelectedElements() && !isHighlightOrOutlineSelector(by))
+            if (Neodymium.shouldHighlightElements(driver) && !isHighlightOrOutlineSelector(by))
             {
                 IS_HIGHLIGHTING.set(true);
                 try

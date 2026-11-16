@@ -179,6 +179,7 @@ public final class BrowserRunnerHelper
 
         final MutableCapabilities capabilities = config.getCapabilities();
         final WebDriverStateContainer wDSC = new WebDriverStateContainer();
+        wDSC.setBrowserConfiguration(config);
 
         // set up proxy
         SelenideProxyServer selenideProxyServer = null;
