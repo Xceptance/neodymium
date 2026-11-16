@@ -470,7 +470,7 @@ public final class SelenideTargetExecutor implements TargetExecutor
         }
     }
 
-    private Action resolveVariables(final Action action)
+    Action resolveVariables(final Action action)
     {
         if (action == null)
         {
@@ -480,9 +480,11 @@ public final class SelenideTargetExecutor implements TargetExecutor
         final String origValue = action.getValue();
         final String origFrame = action.getFrame();
 
-        String resolvedTarget = interpolateString(origTarget);
-        final String resolvedValue = interpolateString(origValue);
-        final String resolvedFrame = interpolateString(origFrame);
+        final boolean isScript = action.getType() != null
+                && ("EXECUTE_SCRIPT".equalsIgnoreCase(action.getType().trim()) || "SCRIPT".equalsIgnoreCase(action.getType().trim()));
+        String resolvedTarget = interpolateString(origTarget, !isScript);
+        final String resolvedValue = interpolateString(origValue, true);
+        final String resolvedFrame = interpolateString(origFrame, true);
 
         if (resolvedTarget != null && resolvedTarget.matches("https?://(localhost|127\\.0\\.0\\.1):\\d+.*"))
         {
@@ -521,11 +523,16 @@ public final class SelenideTargetExecutor implements TargetExecutor
 
     private String interpolateString(final String text)
     {
+        return interpolateString(text, true);
+    }
+
+    private String interpolateString(final String text, final boolean allowUnbracketed)
+    {
         if (text == null || !text.contains("$"))
         {
             return text;
         }
-        final String normalized = (this.context != null && this.context.getSessionData() != null)
+        final String normalized = (allowUnbracketed && this.context != null && this.context.getSessionData() != null)
                 ? ToolCallVariableResolver.normalizeUnbracketedVariables(text, this.context.getSessionData())
                 : text;
         if (!normalized.contains("${"))

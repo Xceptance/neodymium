@@ -19,7 +19,7 @@
      - Updated `resolveVariables(call, sessionData)` fast-path to check for `$` rather than `${`, and normalizes unbracketed variables before resolving.
   2. In `AgentToolLoopStep.java`, normalized proposed tool calls via `ToolCallVariableResolver.normalizePlaceholders` in both single-shot and interactive loops so recorded actions retain canonical `${varName}` placeholders while execution receives resolved secrets.
   3. In `AgentToolLoopStep.java`, hardened the prompt under `### Active Session Variables:` with: `When referencing session variables in tool calls, use ${variableName} syntax (e.g. ${variableName}).`
-  4. In `SelenideTargetExecutor.java`, updated `interpolateString` to normalize unbracketed variables via `ToolCallVariableResolver.normalizeUnbracketedVariables`.
+  4. In `SelenideTargetExecutor.java`, updated `interpolateString` to normalize unbracketed variables via `ToolCallVariableResolver.normalizeUnbracketedVariables`, while safeguarding `EXECUTE_SCRIPT` and `SCRIPT` action targets from unbracketed variable collision.
   5. In `SessionData.java`, guarded `resolveNestedPath` against keys ending with a dot.
 - **Safety Net Added:**
   - `ToolCallVariableResolverTest#testResolveVariablesNormalizesAndResolvesUnbracketedVariables` asserting unbracketed `$password` and `$user.email` resolve cleanly.
@@ -30,4 +30,6 @@
   - `ToolCallVariableResolverTest#testNormalizePlaceholdersHandlesPrefixCollisionCleanly` verifying prefix collision resolution (`$user.name` vs `$user.other`).
   - `ToolCallVariableResolverTest#testResolveVariablesNormalizesAndResolvesInFillFormStructure` verifying nested composite tool calls (e.g. `fill_form`).
   - `ToolCallVariableResolverTest#testNormalizeAndResolvePreservesJavaScriptVariablesInScriptTool` verifying that JavaScript identifiers in `execute_script` (e.g. `var $btn = ...`) are protected from unbracketed variable collision.
+  - `SelenideTargetExecutorTest#testResolveVariablesResolvesUnbracketedInStandardAction` verifying unbracketed variable normalization and resolution during action playback.
+  - `SelenideTargetExecutorTest#testResolveVariablesPreservesJavaScriptVariablesInScriptAction` verifying that JavaScript identifiers in `EXECUTE_SCRIPT` actions are preserved during playback.
   - `AgentToolLoopStepTest#testSensitiveVariableUnbracketedPlaceholderNormalizedAndResolvedInToolExecutionWhilePreservingCanonicalPlaceholderInRecording` verifying end-to-end unbracketed resolution in agent tool execution, canonical bracketed recording, and conversation sanitization.
