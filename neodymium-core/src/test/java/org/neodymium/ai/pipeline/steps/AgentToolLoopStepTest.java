@@ -4833,6 +4833,109 @@ public class AgentToolLoopStepTest
         }
     }
 
+    /**
+     * Verifies that when an LLM emits shell-style unbracketed variable syntax (e.g. {@code $blog.password}),
+     * the tool execution receives the actual secret, and the recorded action normalizes to canonical {@code ${blog.password}}.
+     * Demonstrates GitLab issue #135.
+     */
+    @Test
+    public void testSensitiveVariableUnbracketedPlaceholderNormalizedAndResolvedInToolExecutionWhilePreservingCanonicalPlaceholderInRecording() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+
+        final AtomicReference<String> executedText = new AtomicReference<>();
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("fill", "Fills input field", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                executedText.set(call.arguments().path("text").asText());
+                return ToolResult.success(call.callId(), "{\"status\": \"SUCCESS\", \"value\": \"" + call.arguments().path("text").asText() + "\"}");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Goal reached");
+            }
+        });
+
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("blog.password", "demoSecret123", true);
+        this.context = new ExecutionContext(sessionData);
+
+        final PlaybookStep step = new PlaybookStep("Type '${blog.password}' into the search field");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Type '${blog.password}' into the search field");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final List<ChatMessage> capturedConversation = new ArrayList<>();
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            capturedConversation.clear();
+            if (req.messages() != null)
+            {
+                capturedConversation.addAll(req.messages());
+            }
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse(
+                    "{\"thought\":\"typing password\",\"tool_call\":{\"name\":\"fill\",\"arguments\":{\"selector\":\"#search\",\"text\":\"$blog.password\"}}}",
+                    new TokenUsage(10, 10, 20),
+                    "mock"
+                );
+            }
+            return new LlmResponse(
+                "{\"thought\":\"finished\",\"tool_call\":{\"name\":\"complete_step\",\"arguments\":{\"summary\":\"Filled secret and completed\"}}}",
+                new TokenUsage(10, 10, 20),
+                "mock"
+            );
+        };
+
+        final AgentToolLoopStep loopStep = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        loopStep.execute(this.context);
+
+        // 1. Tool execution must receive the actual resolved secret value (not literal "$blog.password")
+        Assertions.assertEquals("demoSecret123", executedText.get());
+
+        // 2. Playbook recording must retain the normalized canonical placeholder "${blog.password}"
+        final List<?> executedCalls = (List<?>) this.context.getTransientData().get(AgentToolLoopStep.KEY_EXECUTED_TOOL_CALLS);
+        Assertions.assertNotNull(executedCalls);
+        Assertions.assertEquals(1, executedCalls.size());
+        final ToolCall recordedCall = (ToolCall) executedCalls.get(0);
+        Assertions.assertEquals("${blog.password}", recordedCall.arguments().path("text").asText());
+
+        // 3. Multi-turn conversation messages must not leak the raw secret back to the LLM
+        for (final ChatMessage msg : capturedConversation)
+        {
+            if (msg.content() != null)
+            {
+                Assertions.assertFalse(msg.content().contains("demoSecret123"),
+                    "Conversation history leaked raw secret to LLM: " + msg.content());
+            }
+        }
+    }
+
     @Test
     public void testSensitiveVariableMaskedOverWireAndUnmaskedInResponseThroughMockLlmProvider() throws Exception
     {
