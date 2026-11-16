@@ -1,6 +1,4 @@
-# Customer registration and account lifecycle playbook on Posters Demo Store
-# Demonstrates dynamic random email generation, form submission, visual feedback validation,
-# and complete teardown via account deletion in the 'after:' block.
+# Neodymium YAML Test Data File
 
 before: |
   Open https://posters.xceptance.io:8443/
@@ -9,7 +7,7 @@ before: |
 steps: |
   Click the user account menu
   Click 'Create Account'
-  Verify the page heading is 'Register for an Account'
+  Verify the page heading is 'Create an Account'
   Type '${firstName}' into the First Name input field
   Type '${lastName}' into the Last Name input field
   Type a unique random email ending with '@varmail.de' into the Email input field and store it as 'registeredEmail'
@@ -32,7 +30,8 @@ after: |
   Verify the success alert message background is green (visual)
 
 data:
-  - testId: "register_new_customer"
+  -
+    testId: "register_new_customer"
     firstName: "Neo"
     lastName: "Tester"
     password: "Password123!"

@@ -1,6 +1,4 @@
-# Intensive homepage validation playbook for the Posters Demo Store
-# Demonstrates element visibility, brand validation, navigation structure,
-# content hierarchy, and visual alignment checks.
+# Neodymium YAML Test Data File
 
 before: |
   Open https://posters.xceptance.io:8443/
@@ -26,3 +24,7 @@ steps: |
   Verify the footer contains 'Information'
   Verify the footer contains 'Contact Information'
   Verify the copyright notice is displayed in the footer
+
+data:
+  -
+    testId: "Default"

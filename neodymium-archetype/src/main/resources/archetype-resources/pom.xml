@@ -16,7 +16,7 @@
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<maven.compiler.release>21</maven.compiler.release>
 		<neodymium.version>${neodymiumVersion}</neodymium.version>
-		<aura-manager.version>${auraManagerVersion}</aura-manager.version>
+		<aura-manager.version>1.0.0-SNAPSHOT</aura-manager.version>
 		<surefire.version>3.5.2</surefire.version>
 	</properties>
 

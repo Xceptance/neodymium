@@ -1,5 +1,4 @@
-# Product search test on the Posters Demo Store demonstrating data-driven iterations,
-# reusable step includes, visual grid alignment, and search result validation.
+# Neodymium YAML Test Data File
 
 before: |
   Open https://posters.xceptance.io:8443/
@@ -14,11 +13,15 @@ steps: |
   Verify each displayed product tile shows a title and a price
 
 data:
-  - testId: "search_modern_posters"
+  -
+    testId: "search_modern_posters"
     searchTerm: "Modern"
-  - testId: "search_nature_posters"
+  -
+    testId: "search_nature_posters"
     searchTerm: "Nature"
-  - testId: "search_ocean_posters"
-    searchTerm: "Ocean"
-  - testId: "search_bamboo_posters"
-    searchTerm: "Bamboo"
+  -
+    testId: "search_bear_posters"
+    searchTerm: "Bear"
+  -
+    testId: "search_truck_posters"
+    searchTerm: "truck"

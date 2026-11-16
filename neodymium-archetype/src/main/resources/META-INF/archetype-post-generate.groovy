@@ -9,3 +9,17 @@ if (runScript.exists()) {
         System.err.println("[WARN] Could not set executable permission on " + runScript.getAbsolutePath())
     }
 }
+
+File gitignore = new File(projectDir, "__gitignore__")
+if (!gitignore.exists()) {
+    gitignore = new File(request.getOutputDirectory(), "__gitignore__")
+}
+if (gitignore.exists()) {
+    File targetGitignore = new File(gitignore.getParentFile(), ".gitignore")
+    if (!targetGitignore.exists()) {
+        boolean renamed = gitignore.renameTo(targetGitignore)
+        if (!renamed) {
+            System.err.println("[WARN] Could not rename __gitignore__ to .gitignore in " + gitignore.getParent())
+        }
+    }
+}

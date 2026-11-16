@@ -1,6 +1,4 @@
-# Negative sign-in playbook for Posters Demo Store
-# Demonstrates negative test validation, error message verification, and
-# visual error styling/color variation checks.
+# Neodymium YAML Test Data File
 
 before: |
   Open https://posters.xceptance.io:8443/
@@ -19,6 +17,15 @@ steps: |
   Verify the email input field is still displayed
 
 data:
-  - testId: "negative_login_invalid_credentials"
-    invalidEmail: "unknown_user@varmail.de"
+  -
+    testId: "invalid_password"
+    invalidEmail: "peter.peterson@varmail.de"
+    invalidPassword: "IncorrectPassword999!"
+  -
+    testId: "invalid_mail"
+    invalidEmail: "peter.peterson@varmail.net"
+    invalidPassword: "topsecret"
+  -
+    testId: "invalid_account"
+    invalidEmail: "peter.peterson@varmail.net"
     invalidPassword: "IncorrectPassword999!"
