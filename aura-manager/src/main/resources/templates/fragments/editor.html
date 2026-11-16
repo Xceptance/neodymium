@@ -97,9 +97,9 @@
             </button>
             <button class="btn-editor" id="renameTestBtn" onclick="openRenameModal()"><span class="material-symbols-outlined">drive_file_rename_outline</span> Rename / Move</button>
             <button class="btn-editor delete" id="deleteTestBtn" onclick="deleteYamlFile()"><span class="material-symbols-outlined">delete</span> Delete</button>
-            <button class="btn-editor" 
-                    hx-post="/api/editor/close" 
-                    hx-swap="none" 
+            <button type="button"
+                    class="btn-editor" 
+                    id="closeEditorBtn"
                     onclick="closeEditor()">
                 <span class="material-symbols-outlined">close</span> Close
             </button>

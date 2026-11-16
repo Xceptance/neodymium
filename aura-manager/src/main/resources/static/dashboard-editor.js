@@ -1724,6 +1724,11 @@ document.addEventListener('click', function(e) {
     const link = e.target.closest('a[href], [hx-get], [hx-post]');
     if (!link) return;
 
+    const isCloseAction = link.id === 'closeEditorBtn' 
+        || link.getAttribute('onclick') === 'closeEditor()' 
+        || (link.closest('#editorPanel') && link.classList.contains('btn-editor') && link.textContent && link.textContent.trim().includes('Close'));
+    if (isCloseAction) return;
+
     if (e.target.closest('.modal-overlay, .modal-card')) return;
 
     const href = link.getAttribute('href');
@@ -1888,11 +1893,9 @@ function setEditorMode(mode) {
     if (mode === 'raw') {
         if (visualContainer && rawPanel) {
             if (visualContainer.style.display !== 'none') {
-                if (typeof isEditorDirty === 'function' && isEditorDirty()) {
-                    const compiled = compilePlaybookToYaml(true);
-                    if (rawTextarea) {
-                        rawTextarea.value = compiled;
-                    }
+                const compiled = compilePlaybookToYaml(true);
+                if (rawTextarea) {
+                    rawTextarea.value = compiled;
                 }
             }
             visualContainer.style.display = 'none';
@@ -2282,7 +2285,9 @@ function initVisualPlaybookEditor() {
     if (rawTextarea && (typeof currentEditorMode === 'undefined' || currentEditorMode !== 'raw')) {
         rawTextarea.value = currentYaml;
     }
-    if (!initialEditorContent || undoStack.length === 0) {
+    const isNewFileInitialization = (window.lastInitializedEditorFile !== activeEditingFile);
+    if (isNewFileInitialization || !initialEditorContent || undoStack.length === 0) {
+        window.lastInitializedEditorFile = activeEditingFile;
         initialEditorContent = currentYaml;
         if (typeof pushEditorSnapshot === 'function') {
             pushEditorSnapshot(true);
@@ -5626,6 +5631,11 @@ let redoStack = [];
 let initialEditorContent = '';
 let undoDebounceTimer = null;
 
+function normalizeYamlForDirtyComparison(yamlStr) {
+    if (yamlStr == null) return '';
+    return yamlStr.replace(/\r\n/g, '\n').trim();
+}
+
 function isEditorDirty() {
     if (!activeEditingFile) return false;
     const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw') 
@@ -5633,12 +5643,12 @@ function isEditorDirty() {
     if (isRaw) {
         const rawTextarea = document.getElementById('rawYamlTextarea');
         if (rawTextarea && initialEditorContent != null) {
-            return rawTextarea.value !== initialEditorContent;
+            return normalizeYamlForDirtyComparison(rawTextarea.value) !== normalizeYamlForDirtyComparison(initialEditorContent);
         }
         return false;
     }
     const currentYaml = compilePlaybookToYaml();
-    if (initialEditorContent && currentYaml !== initialEditorContent) {
+    if (initialEditorContent && normalizeYamlForDirtyComparison(currentYaml) !== normalizeYamlForDirtyComparison(initialEditorContent)) {
         return true;
     }
     const unsavedIncludes = document.querySelectorAll('.include-tree-card.has-unsaved-changes');
