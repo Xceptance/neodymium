@@ -1052,6 +1052,7 @@ function openYamlEditor(filename, force = false) {
     initialEditorContent = '';
     undoStack = [];
     redoStack = [];
+    window.lastInitializedEditorFile = null;
     if (typeof clearAllVariablePrompts === 'function') clearAllVariablePrompts();
     if (typeof updateUndoRedoUI === 'function') updateUndoRedoUI();
     if (typeof checkEditorDirtyStatus === 'function') checkEditorDirtyStatus();
@@ -1884,6 +1885,7 @@ window.lastCaretOffset = lastCaretOffset;
 window.currentEditorMode = currentEditorMode;
 
 function setEditorMode(mode) {
+    const prevMode = currentEditorMode;
     const editorPanel = document.getElementById('editorPanel');
     const visualContainer = document.getElementById('visualEditorContainer');
     const visualMain = document.getElementById('visualEditorMain');
@@ -1923,6 +1925,9 @@ function setEditorMode(mode) {
             btnRaw.style.color = '#fff';
             btnRaw.style.fontWeight = '600';
             btnRaw.style.opacity = '1';
+        }
+        if (prevMode !== 'raw' && typeof pushEditorSnapshot === 'function' && !isRestoringSnapshot) {
+            pushEditorSnapshot(false);
         }
         updateUndoRedoUI();
         if (reviewBtn && (!editorPanel || editorPanel.getAttribute('data-has-error') !== 'true')) {
@@ -1969,6 +1974,9 @@ function setEditorMode(mode) {
             btnRaw.style.color = 'var(--text-secondary)';
             btnRaw.style.fontWeight = 'normal';
             btnRaw.style.opacity = '0.8';
+        }
+        if (prevMode !== 'visual' && typeof pushEditorSnapshot === 'function' && !isRestoringSnapshot) {
+            pushEditorSnapshot(false);
         }
         if (rawTextarea) {
             const val = rawTextarea.value || '';
@@ -2100,6 +2108,7 @@ function getStepRawText(content) {
 window.getStepRawText = getStepRawText;
 
 function checkAndUpdateCommentRow(stepContentOrRow) {
+    if (typeof isRestoringSnapshot !== 'undefined' && isRestoringSnapshot) return;
     if (!stepContentOrRow) return;
     const row = stepContentOrRow.classList && stepContentOrRow.classList.contains('step-row') 
         ? stepContentOrRow 
@@ -3115,6 +3124,9 @@ let isClickingIncludeArrow = false;
 window.isClickingIncludeArrow = false;
 
 function handleStepFocus(lineNumOrElement) {
+    if (typeof isRestoringSnapshot !== 'undefined' && isRestoringSnapshot) {
+        return;
+    }
     if (window.isClickingIncludeArrow) {
         return;
     }
@@ -3166,6 +3178,9 @@ function handleStepFocus(lineNumOrElement) {
 window.handleStepFocus = handleStepFocus;
 
 function handleStepBlur(lineNumOrElement) {
+    if (typeof isRestoringSnapshot !== 'undefined' && isRestoringSnapshot) {
+        return;
+    }
     let row = null;
     let lineNum = null;
     if (typeof lineNumOrElement === 'object' && lineNumOrElement && lineNumOrElement.nodeType) {
@@ -6128,45 +6143,69 @@ function restoreEditorSnapshot(snap) {
                 addAfterBtn.style.display = (isFragmentFile || snap.hasAfter) ? 'none' : 'block';
             }
 
-            const rebuildBlock = (containerId, stepArray) => {
+            const restoreBlock = (containerId, stepArray) => {
                 const container = document.getElementById(containerId);
                 if (!container) return;
-                container.innerHTML = '';
-                (stepArray || []).forEach((stepItem, idx) => {
-                    const lineNum = idx + 1;
-                    const stepText = (typeof stepItem === 'object' && stepItem !== null) ? (stepItem.text || '') : (stepItem || '');
-                    const isSubstep = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isSubstep) : false;
-                    const isManualSubstep = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isManualSubstep) : false;
-                    const isComment = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isComment) : false;
+                const items = stepArray || [];
+                const existingRows = Array.from(container.querySelectorAll(':scope > .step-row'));
 
-                    const row = document.createElement('div');
-                    row.className = 'step-row' + (isSubstep ? ' step-row-substep' : '') + (isComment ? ' step-row-comment' : '');
-                    if (isManualSubstep) {
-                        row.setAttribute('data-manual-substep', 'true');
-                    }
-                    row.setAttribute('data-line', lineNum);
-                    row.innerHTML = `
-                        <span class="step-number">${lineNum}</span>
-                        <div class="step-content" contenteditable="true" spellcheck="false"
-                             data-raw="${stepText.replace(/"/g, '&quot;')}"
-                             onkeydown="handleKeyDown(event, ${lineNum})"
-                             onfocus="handleStepFocus(${lineNum})"
-                             onblur="handleStepBlur(${lineNum})"
-                             oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);"></div>
-                        <div class="step-actions">
-                            <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${lineNum}, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
-                            <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${lineNum}, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
-                            <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${lineNum})"><span class="material-symbols-outlined">delete</span></button>
-                        </div>
-                    `;
-                    container.appendChild(row);
-                    formatStepToTokens(lineNum);
-                });
+                if (existingRows.length === items.length) {
+                    existingRows.forEach((row, idx) => {
+                        const stepItem = items[idx];
+                        const stepText = (typeof stepItem === 'object' && stepItem !== null) ? (stepItem.text || '') : (stepItem || '');
+                        const isSubstep = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isSubstep) : false;
+                        const isManualSubstep = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isManualSubstep) : false;
+                        const isComment = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isComment) : false;
+
+                        row.classList.toggle('step-row-substep', isSubstep);
+                        row.classList.toggle('step-row-comment', isComment);
+                        if (isManualSubstep) {
+                            row.setAttribute('data-manual-substep', 'true');
+                        } else {
+                            row.removeAttribute('data-manual-substep');
+                        }
+                        const content = row.querySelector('.step-content');
+                        if (content) {
+                            content.setAttribute('data-raw', stepText);
+                            content.innerText = stepText;
+                        }
+                    });
+                } else {
+                    container.innerHTML = '';
+                    items.forEach((stepItem) => {
+                        const stepText = (typeof stepItem === 'object' && stepItem !== null) ? (stepItem.text || '') : (stepItem || '');
+                        const isSubstep = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isSubstep) : false;
+                        const isManualSubstep = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isManualSubstep) : false;
+                        const isComment = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isComment) : false;
+
+                        const row = document.createElement('div');
+                        row.className = 'step-row' + (isSubstep ? ' step-row-substep' : '') + (isComment ? ' step-row-comment' : '');
+                        if (isManualSubstep) {
+                            row.setAttribute('data-manual-substep', 'true');
+                        }
+                        const safeText = (typeof escapeHtml === 'function') ? escapeHtml(stepText) : stepText.replace(/"/g, '&quot;');
+                        row.innerHTML = `
+                            <span class="step-number">1</span>
+                            <div class="step-content" contenteditable="true" spellcheck="false"
+                                 data-raw="${safeText}"
+                                 onkeydown="handleKeyDown(event, this)"
+                                 onfocus="handleStepFocus(this)"
+                                 onblur="handleStepBlur(this)"
+                                 oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);">${safeText}</div>
+                            <div class="step-actions">
+                                <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(this, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                                <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(this, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                                <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(this)"><span class="material-symbols-outlined">delete</span></button>
+                            </div>
+                        `;
+                        container.appendChild(row);
+                    });
+                }
             };
 
-            rebuildBlock('beforeStepsList', snap.beforeSteps);
-            rebuildBlock('stepsList', snap.steps);
-            rebuildBlock('afterStepsList', snap.afterSteps);
+            restoreBlock('beforeStepsList', snap.beforeSteps);
+            restoreBlock('stepsList', snap.steps);
+            restoreBlock('afterStepsList', snap.afterSteps);
 
             const matrixHeaderRow = document.getElementById('matrixHeaderRow');
             if (matrixHeaderRow && snap.matrixHeaders) {
@@ -6215,8 +6254,14 @@ function restoreEditorSnapshot(snap) {
             }
 
             reindexSteps();
+            refreshAllSubstepToggleBars();
             updateFragmentVariablesList();
             compilePlaybookToYaml();
+
+            const allRows = document.querySelectorAll('#beforeStepsList .step-row, #stepsList .step-row, #afterStepsList .step-row');
+            allRows.forEach(row => {
+                formatStepToTokens(row);
+            });
 
             if (snap.activeLine) {
                 const row = document.querySelector(`.step-row[data-line="${snap.activeLine}"]`);

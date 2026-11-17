@@ -120,7 +120,7 @@ public final class AuraManagerEditorUiTest
             "CleanStepsSaveTest.yaml", "PlaybookPropertiesTest.yaml", "PlaybookAddPropsTest.yaml",
             "MarkerChipTest.yaml", "MetaPreservationTest.yaml",
             "AllControlTagsTest.yaml", "AllActionChipsTest.yaml", "InsertSubstepRowTest.yaml", "EditorSubstepMockRunTest.yaml",
-            "UndoRedoFullTest.yaml"
+            "UndoRedoFullTest.yaml", "UndoRedoIntegrityTest.yaml"
         };
 
         for (final String dirPath : dirPaths)
@@ -2788,6 +2788,121 @@ public final class AuraManagerEditorUiTest
 
         redoBtn.shouldBe(Condition.enabled).click();
         rawYamlTextarea.shouldHave(Condition.value("(continue-on-error)"));
+    }
+
+    @Test
+    public final void testYamlEditorUndoRedoPreservesUnrelatedSectionsAndSteps() throws IOException
+    {
+        final String playbookFile = "UndoRedoIntegrityTest.yaml";
+        final String initialPlaybook = "name: Undo Redo Integrity Test\n"
+                                     + "before:\n"
+                                     + "  - Open \"https://example.com/login\"\n"
+                                     + "  - Enter \"admin\" into \"#username\"\n"
+                                     + "steps:\n"
+                                     + "  - Navigate to \"https://example.com/dashboard\"\n"
+                                     + "  - Click \"#profile-button\"\n"
+                                     + "  - Assert text \"Dashboard\" is visible\n"
+                                     + "after:\n"
+                                     + "  - Click \"#logout-button\"\n";
+        this.fileService.saveYamlFileContent(playbookFile, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/playbooks?file=" + playbookFile);
+
+        final SelenideElement editorPanel = $("#editorPanel").shouldBe(Condition.visible);
+        Assertions.assertEquals("visual", editorPanel.getAttribute("data-mode"));
+
+        final ElementsCollection beforeRows = $$("#beforeStepsList .step-row");
+        beforeRows.shouldHave(CollectionCondition.size(2));
+        beforeRows.get(0).find(".step-content").shouldHave(Condition.attribute("data-raw", "Open \"https://example.com/login\""));
+        beforeRows.get(1).find(".step-content").shouldHave(Condition.attribute("data-raw", "Enter \"admin\" into \"#username\""));
+
+        final ElementsCollection mainRows = $$("#stepsList .step-row");
+        mainRows.shouldHave(CollectionCondition.size(3));
+        mainRows.get(0).find(".step-content").shouldHave(Condition.attribute("data-raw", "Navigate to \"https://example.com/dashboard\""));
+        mainRows.get(1).find(".step-content").shouldHave(Condition.attribute("data-raw", "Click \"#profile-button\""));
+        mainRows.get(2).find(".step-content").shouldHave(Condition.attribute("data-raw", "Assert text \"Dashboard\" is visible"));
+
+        final ElementsCollection afterRows = $$("#afterStepsList .step-row");
+        afterRows.shouldHave(CollectionCondition.size(1));
+        afterRows.get(0).find(".step-content").shouldHave(Condition.attribute("data-raw", "Click \"#logout-button\""));
+
+        final SelenideElement undoBtn = $("#undoBtn").shouldBe(Condition.disabled);
+        final SelenideElement redoBtn = $("#redoBtn").shouldBe(Condition.disabled);
+
+        // Scenario A: Type "a" into the first step of before:
+        final SelenideElement beforeStep0 = beforeRows.get(0).find(".step-content");
+        beforeStep0.click();
+        beforeStep0.sendKeys("a");
+        undoBtn.shouldBe(Condition.enabled);
+
+        // Click Undo
+        undoBtn.click();
+
+        // Verify that before step 1 is strictly reverted to baseline without wiping or truncating
+        beforeRows.get(0).find(".step-content").shouldHave(Condition.attribute("data-raw", "Open \"https://example.com/login\""));
+        // Verify before step 2 remains untouched and intact
+        beforeRows.get(1).find(".step-content").shouldHave(Condition.attribute("data-raw", "Enter \"admin\" into \"#username\""));
+        // Verify main steps are completely untouched
+        mainRows.get(0).find(".step-content").shouldHave(Condition.attribute("data-raw", "Navigate to \"https://example.com/dashboard\""));
+        mainRows.get(1).find(".step-content").shouldHave(Condition.attribute("data-raw", "Click \"#profile-button\""));
+        mainRows.get(2).find(".step-content").shouldHave(Condition.attribute("data-raw", "Assert text \"Dashboard\" is visible"));
+        // Verify after step remains untouched
+        afterRows.get(0).find(".step-content").shouldHave(Condition.attribute("data-raw", "Click \"#logout-button\""));
+
+        redoBtn.shouldBe(Condition.enabled);
+        undoBtn.shouldBe(Condition.disabled);
+
+        // Click Redo and verify "a" is restored
+        redoBtn.click();
+        beforeRows.get(0).find(".step-content").shouldHave(Condition.attribute("data-raw", "Open \"https://example.com/login\"a"));
+        undoBtn.shouldBe(Condition.enabled);
+
+        // Undo again to return to clean baseline
+        undoBtn.click();
+        beforeRows.get(0).find(".step-content").shouldHave(Condition.attribute("data-raw", "Open \"https://example.com/login\""));
+
+        // Scenario B: Sequential editing across multiple steps (undoing second action then first action)
+        final SelenideElement mainStep0 = mainRows.get(0).find(".step-content");
+        mainStep0.click();
+        mainStep0.sendKeys("a");
+        undoBtn.shouldBe(Condition.enabled);
+
+        // Wait for debounce before second action to ensure separate snapshot
+        Selenide.sleep(400);
+
+        final SelenideElement mainStep1 = mainRows.get(1).find(".step-content");
+        mainStep1.click();
+        mainStep1.sendKeys("b");
+
+        // First Undo: only step 2 change should be reverted
+        undoBtn.shouldBe(Condition.enabled).click();
+        mainRows.get(1).find(".step-content").shouldHave(Condition.attribute("data-raw", "Click \"#profile-button\""));
+        mainRows.get(0).find(".step-content").shouldHave(Condition.attribute("data-raw", "Navigate to \"https://example.com/dashboard\"a"));
+
+        // Second Undo: step 1 change should be reverted
+        undoBtn.shouldBe(Condition.enabled).click();
+        mainRows.get(0).find(".step-content").shouldHave(Condition.attribute("data-raw", "Navigate to \"https://example.com/dashboard\""));
+
+        // Scenario C: Raw mode undo/redo preserves raw mode and does not flip to visual
+        $("#btnModeRaw").shouldBe(Condition.visible).click();
+        $("#rawEditorPanel").shouldBe(Condition.visible);
+        Assertions.assertEquals("raw", editorPanel.getAttribute("data-mode"));
+
+        final SelenideElement rawYamlTextarea = $("#rawYamlTextarea");
+        rawYamlTextarea.sendKeys("\n# Raw integrity comment");
+        undoBtn.shouldBe(Condition.enabled);
+
+        // Undo in raw mode: must stay in raw mode and revert raw text
+        undoBtn.click();
+        $("#rawEditorPanel").shouldBe(Condition.visible);
+        Assertions.assertEquals("raw", editorPanel.getAttribute("data-mode"));
+        rawYamlTextarea.shouldNotHave(Condition.value("# Raw integrity comment"));
+
+        // Redo in raw mode: must stay in raw mode and restore raw text
+        redoBtn.shouldBe(Condition.enabled).click();
+        $("#rawEditorPanel").shouldBe(Condition.visible);
+        Assertions.assertEquals("raw", editorPanel.getAttribute("data-mode"));
+        rawYamlTextarea.shouldHave(Condition.value("# Raw integrity comment"));
     }
 }
 
