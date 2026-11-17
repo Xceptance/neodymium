@@ -145,7 +145,6 @@ public class AiLauncher
             else if (osName.contains("mac"))
             {
                 new ProcessBuilder("open", url)
-                    .redirectInput(ProcessBuilder.Redirect.DISCARD)
                     .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                     .redirectError(ProcessBuilder.Redirect.DISCARD)
                     .start();
@@ -159,7 +158,6 @@ public class AiLauncher
                 else
                 {
                     new ProcessBuilder("rundll32", "url.dll,FileProtocolHandler", url)
-                        .redirectInput(ProcessBuilder.Redirect.DISCARD)
                         .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                         .redirectError(ProcessBuilder.Redirect.DISCARD)
                         .start();
@@ -172,7 +170,6 @@ public class AiLauncher
             else
             {
                 new ProcessBuilder("xdg-open", url)
-                    .redirectInput(ProcessBuilder.Redirect.DISCARD)
                     .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                     .redirectError(ProcessBuilder.Redirect.DISCARD)
                     .start();
@@ -196,13 +193,12 @@ public class AiLauncher
         try
         {
             new ProcessBuilder("setsid", "xdg-open", url)
-                .redirectInput(ProcessBuilder.Redirect.DISCARD)
                 .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                 .redirectError(ProcessBuilder.Redirect.DISCARD)
                 .start();
             return;
         }
-        catch (final IOException ignored)
+        catch (final Exception ignored)
         {
             // Fall back to gio open or standard xdg-open if setsid is unavailable
         }
@@ -210,13 +206,12 @@ public class AiLauncher
         try
         {
             new ProcessBuilder("gio", "open", url)
-                .redirectInput(ProcessBuilder.Redirect.DISCARD)
                 .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                 .redirectError(ProcessBuilder.Redirect.DISCARD)
                 .start();
             return;
         }
-        catch (final IOException ignored)
+        catch (final Exception ignored)
         {
             // Fall through to Desktop browse / plain xdg-open
         }
@@ -235,7 +230,6 @@ public class AiLauncher
         }
 
         new ProcessBuilder("xdg-open", url)
-            .redirectInput(ProcessBuilder.Redirect.DISCARD)
             .redirectOutput(ProcessBuilder.Redirect.DISCARD)
             .redirectError(ProcessBuilder.Redirect.DISCARD)
             .start();

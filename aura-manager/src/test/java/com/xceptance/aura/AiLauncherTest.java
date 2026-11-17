@@ -23,6 +23,7 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -123,5 +124,24 @@ public final class AiLauncherTest
         System.setProperty(AiLauncher.OPEN_BROWSER_PROPERTY, "false");
         Assertions.assertDoesNotThrow(() -> AiLauncher.openBrowser("http://localhost:8080"),
             "openBrowser must return safely without error when disabled");
+    }
+
+    @Test
+    public void testOpenBrowserDoesNotThrowWhenEnabled()
+    {
+        System.setProperty(AiLauncher.OPEN_BROWSER_PROPERTY, "true");
+        Assertions.assertDoesNotThrow(() -> AiLauncher.openBrowser("http://localhost:8080"),
+            "openBrowser must execute safely without throwing exceptions when enabled");
+    }
+
+    @Test
+    public void testOpenLinuxBrowserDetachedDoesNotThrowIllegalArgumentException()
+    {
+        final String osName = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        if (osName.contains("linux") || osName.contains("nix") || osName.contains("nux") || osName.contains("aix"))
+        {
+            Assertions.assertDoesNotThrow(() -> AiLauncher.openLinuxBrowserDetached("http://localhost:8080"),
+                "openLinuxBrowserDetached must not throw IllegalArgumentException for input redirection");
+        }
     }
 }
