@@ -1899,14 +1899,14 @@ function setEditorMode(mode) {
     const aiReviewBtn = document.getElementById('aiReviewBtn');
 
     if (mode === 'raw') {
-        if (rawPanel) {
-            if (visualMain && visualMain.style.display !== 'none') {
+        if (rawPanel && visualContainer) {
+            if (visualContainer.style.display !== 'none') {
                 const compiled = compilePlaybookToYaml(true);
                 if (rawTextarea) {
                     rawTextarea.value = compiled;
                 }
             }
-            if (visualMain) visualMain.style.display = 'none';
+            visualContainer.style.display = 'none';
             rawPanel.style.display = 'flex';
         }
         currentEditorMode = 'raw';
@@ -1959,9 +1959,9 @@ function setEditorMode(mode) {
         if (editorPanel) {
             editorPanel.setAttribute('data-mode', 'visual');
         }
-        if (rawPanel && visualMain) {
+        if (rawPanel && visualContainer) {
             rawPanel.style.display = 'none';
-            visualMain.style.display = 'flex';
+            visualContainer.style.display = 'flex';
         }
         if (btnVisual) {
             btnVisual.style.background = 'var(--accent)';
@@ -6049,6 +6049,7 @@ function restoreEditorSnapshot(snap) {
     if (!snap) return;
     isRestoringSnapshot = true;
     try {
+        const visualContainer = document.getElementById('visualEditorContainer');
         const visualMain = document.getElementById('visualEditorMain');
         const rawPanel = document.getElementById('rawEditorPanel');
         const editorPanel = document.getElementById('editorPanel');
@@ -6056,8 +6057,8 @@ function restoreEditorSnapshot(snap) {
         const btnRaw = document.getElementById('btnModeRaw');
 
         if (snap.mode === 'raw') {
-            if (rawPanel) {
-                if (visualMain) visualMain.style.display = 'none';
+            if (rawPanel && visualContainer) {
+                visualContainer.style.display = 'none';
                 rawPanel.style.display = 'flex';
             }
             currentEditorMode = 'raw';
@@ -6090,9 +6091,9 @@ function restoreEditorSnapshot(snap) {
                 }
             }
         } else {
-            if (rawPanel && visualMain) {
+            if (rawPanel && visualContainer) {
                 rawPanel.style.display = 'none';
-                visualMain.style.display = 'flex';
+                visualContainer.style.display = 'flex';
             }
             currentEditorMode = 'visual';
             window.currentEditorMode = 'visual';

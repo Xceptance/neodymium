@@ -118,6 +118,24 @@
         </div>
     </div>
 
+    <!-- Raw YAML Code Editor Panel -->
+    <div class="editor-raw-panel" id="rawEditorPanel" th:style="${'raw'.equals(editorMode) ? 'display: flex;' : 'display: none;'}">
+        <div class="editor-code-panel" style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+            <div class="panel-header" style="flex-shrink: 0;">
+                <div class="panel-title">
+                    <span class="material-symbols-outlined" style="font-size: 18px; color: var(--accent);">edit_document</span>
+                    Direct YAML Source
+                </div>
+                <div style="font-size: 11px; color: var(--text-secondary);">
+                    UTF-8 &bull; Spaces only (no tabs)
+                </div>
+            </div>
+            <textarea id="rawYamlTextarea" spellcheck="false" class="raw-yaml-textarea"
+                      oninput="handleRawYamlInput(this)"
+                      th:text="${fileContent}"></textarea>
+        </div>
+    </div>
+
     <!-- Hidden input holding compiled YAML payload for HTMX form submission -->
     <input type="hidden" id="editorContent" name="content" th:value="${editorContent != null ? editorContent : ''}" />
     <input type="hidden" id="editorPropertiesKey" th:value="${propertiesKey != null ? propertiesKey : '_properties'}" />
@@ -126,29 +144,11 @@
     <input type="hidden" id="editorDescription" th:value="${description != null ? description : ''}" />
     <input type="hidden" id="editorPromptAddonYaml" th:value="${promptAddonYaml != null ? promptAddonYaml : ''}" />
 
-    <!-- Main Editor Layout Container -->
-    <div id="visualEditorContainer" class="visual-editor-container" style="display: flex;">
-
-        <!-- Raw YAML Code Editor Panel -->
-        <div class="editor-raw-panel" id="rawEditorPanel" th:style="${'raw'.equals(editorMode) ? 'display: flex;' : 'display: none;'}">
-            <div class="editor-code-panel" style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
-                <div class="panel-header" style="flex-shrink: 0;">
-                    <div class="panel-title">
-                        <span class="material-symbols-outlined" style="font-size: 18px; color: var(--accent);">edit_document</span>
-                        Direct YAML Source
-                    </div>
-                    <div style="font-size: 11px; color: var(--text-secondary);">
-                        UTF-8 &bull; Spaces only (no tabs)
-                    </div>
-                </div>
-                <textarea id="rawYamlTextarea" spellcheck="false" class="raw-yaml-textarea"
-                          oninput="handleRawYamlInput(this)"
-                          th:text="${fileContent}"></textarea>
-            </div>
-        </div>
+    <!-- Main Visual Editor Layout Container -->
+    <div id="visualEditorContainer" class="visual-editor-container" th:style="${'raw'.equals(editorMode) ? 'display: none;' : 'display: flex;'}">
         
         <!-- Central Visual Editor Area -->
-        <main class="editor-main-area" id="visualEditorMain" th:style="${'raw'.equals(editorMode) ? 'display: none;' : 'display: flex;'}">
+        <main class="editor-main-area" id="visualEditorMain">
 
             <!-- Subtle Add Properties Button Container (Only for test playbooks, not fragments) -->
             <div id="addPropertiesBtnContainer" th:style="${(isFragment != null and isFragment) or ((propertiesList != null and !#lists.isEmpty(propertiesList)) or (propertiesYaml != null and !#strings.isEmpty(propertiesYaml))) ? 'display: none;' : 'display: block;'}">

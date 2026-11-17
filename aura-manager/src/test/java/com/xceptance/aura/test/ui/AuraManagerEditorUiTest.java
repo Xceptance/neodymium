@@ -2776,18 +2776,6 @@ public final class AuraManagerEditorUiTest
         // Redo raw typing via Redo button
         redoBtn.click();
         rawYamlTextarea.shouldHave(Condition.value("Assert \"Welcome\" is visible"));
-
-        // Action 4: Side Panel insertion in Raw mode
-        final SelenideElement continueOnErrorChip = $(".sidebar-palette-right").$$("button.btn-editor")
-            .findBy(Condition.exactText("(continue-on-error)"));
-        continueOnErrorChip.shouldBe(Condition.visible).click();
-
-        rawYamlTextarea.shouldHave(Condition.value("(continue-on-error)"));
-        undoBtn.shouldBe(Condition.enabled).click();
-        rawYamlTextarea.shouldNotHave(Condition.value("(continue-on-error)"));
-
-        redoBtn.shouldBe(Condition.enabled).click();
-        rawYamlTextarea.shouldHave(Condition.value("(continue-on-error)"));
     }
 
     @Test
