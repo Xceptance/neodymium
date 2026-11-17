@@ -74,6 +74,9 @@ public final class AuraGlobalModelAdviceTest
         Assertions.assertEquals("", model.getAttribute("activeBatchName"));
         Assertions.assertEquals("", model.getAttribute("activeRunStatus"));
         Assertions.assertEquals("", model.getAttribute("activeRunReportUrl"));
+        Assertions.assertEquals(0, model.getAttribute("activeRunPassedCount"));
+        Assertions.assertEquals(0, model.getAttribute("activeRunFailedCount"));
+        Assertions.assertEquals(0, model.getAttribute("activeRunRunningCount"));
         Assertions.assertEquals(Boolean.FALSE, model.getAttribute("running"));
     }
 
@@ -129,6 +132,8 @@ public final class AuraGlobalModelAdviceTest
         runningRun.setStatus("IN_PROGRESS");
         runningRun.setTotalTests(10);
         runningRun.setRunningCount(2);
+        runningRun.setPassedCount(6);
+        runningRun.setFailedUnknownCount(2);
 
         Mockito.when(mockRunRepo.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of(runningRun));
 
@@ -144,6 +149,9 @@ public final class AuraGlobalModelAdviceTest
         Assertions.assertEquals(Boolean.TRUE, model.getAttribute("running"));
         Assertions.assertEquals(8, model.getAttribute("activeRunExecutedCount"));
         Assertions.assertEquals(10, model.getAttribute("activeRunScheduledCount"));
+        Assertions.assertEquals(6, model.getAttribute("activeRunPassedCount"));
+        Assertions.assertEquals(2, model.getAttribute("activeRunFailedCount"));
+        Assertions.assertEquals(2, model.getAttribute("activeRunRunningCount"));
         Assertions.assertEquals("8 of 10 tests (2 running)", model.getAttribute("activeRunProgress"));
     }
 
@@ -161,6 +169,8 @@ public final class AuraGlobalModelAdviceTest
         completedRun.setStatus("COMPLETED");
         completedRun.setTotalTests(5);
         completedRun.setRunningCount(0);
+        completedRun.setPassedCount(4);
+        completedRun.setFailedKnownCount(1);
 
         Mockito.when(mockRunRepo.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of(completedRun));
 
@@ -175,6 +185,9 @@ public final class AuraGlobalModelAdviceTest
         Assertions.assertEquals(Boolean.FALSE, model.getAttribute("running"));
         Assertions.assertEquals(5, model.getAttribute("activeRunExecutedCount"));
         Assertions.assertEquals(5, model.getAttribute("activeRunScheduledCount"));
+        Assertions.assertEquals(4, model.getAttribute("activeRunPassedCount"));
+        Assertions.assertEquals(1, model.getAttribute("activeRunFailedCount"));
+        Assertions.assertEquals(0, model.getAttribute("activeRunRunningCount"));
         Assertions.assertEquals("5 tests completed", model.getAttribute("activeRunProgress"));
     }
 

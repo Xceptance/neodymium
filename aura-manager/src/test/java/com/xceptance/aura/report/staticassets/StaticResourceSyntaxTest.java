@@ -4873,6 +4873,48 @@ public final class StaticResourceSyntaxTest
         Assertions.assertFalse(content.contains("beforeunload"),
             "dashboard-runner.js must not register a beforeunload event listener as it causes misleading unsaved changes prompts in browsers");
     }
+
+    @Test
+    public void testSidebarRunnerSegmentedProgressAndOutcomeChips() throws IOException
+    {
+        final Path sidebarPath = Paths.get("src/main/resources/templates/fragments/sidebar.html");
+        Assertions.assertTrue(Files.exists(sidebarPath), "sidebar.html must exist: " + sidebarPath.toAbsolutePath());
+        final String sidebarContent = Files.readString(sidebarPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(sidebarContent.contains("sidebar-runner-progress-box"),
+            "sidebar.html must wrap progress inside .sidebar-runner-progress-box");
+        Assertions.assertTrue(sidebarContent.contains("sidebar-progress-track"),
+            "sidebar.html must contain .sidebar-progress-track");
+        Assertions.assertTrue(sidebarContent.contains("sidebarProgressSegPassed"),
+            "sidebar.html must contain #sidebarProgressSegPassed");
+        Assertions.assertTrue(sidebarContent.contains("sidebarProgressSegFailed"),
+            "sidebar.html must contain #sidebarProgressSegFailed");
+        Assertions.assertTrue(sidebarContent.contains("sidebarProgressSegRunning"),
+            "sidebar.html must contain #sidebarProgressSegRunning");
+        Assertions.assertTrue(sidebarContent.contains("sidebar-progress-metrics"),
+            "sidebar.html must contain .sidebar-progress-metrics");
+        Assertions.assertTrue(sidebarContent.contains("sidebarOutcomeChips"),
+            "sidebar.html must contain #sidebarOutcomeChips");
+        Assertions.assertTrue(sidebarContent.contains("sidebarCollapsedFailIndicator"),
+            "sidebar.html must contain #sidebarCollapsedFailIndicator");
+
+        final Path cssPath = Paths.get("src/main/resources/static/css/report-manager.css");
+        Assertions.assertTrue(Files.exists(cssPath));
+        final String cssContent = Files.readString(cssPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(cssContent.contains(".sidebar-progress-track"),
+            "report-manager.css must define .sidebar-progress-track");
+        Assertions.assertTrue(cssContent.contains(".sidebar-progress-seg.seg-failed"),
+            "report-manager.css must define .sidebar-progress-seg.seg-failed");
+        Assertions.assertTrue(cssContent.contains("min-width: 4px"),
+            "report-manager.css must enforce min-width: 4px for failed segment to prevent sub-pixel rounding invisibility");
+
+        final Path jsPath = Paths.get("src/main/resources/static/dashboard-core.js");
+        Assertions.assertTrue(Files.exists(jsPath));
+        final String jsContent = Files.readString(jsPath, StandardCharsets.UTF_8);
+        Assertions.assertTrue(jsContent.contains("updateSidebarRunnerProgress"),
+            "dashboard-core.js must define updateSidebarRunnerProgress");
+    }
 }
 
 

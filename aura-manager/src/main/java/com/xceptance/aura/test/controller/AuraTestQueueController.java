@@ -1798,6 +1798,7 @@ public class AuraTestQueueController
 
         Integer executedCount = totalTestsRun;
         String progressText = "";
+        int activeRunningCount = 0;
 
         if (activeEntity != null)
         {
@@ -1820,6 +1821,7 @@ public class AuraTestQueueController
             }
 
             final int runningCount = activeEntity.getRunningCountSafe();
+            activeRunningCount = runningCount;
             final int total = activeEntity.getTotalTestsSafe();
             final int entityExecuted = Math.max(0, total - runningCount);
             final int entityPassed = activeEntity.getPassedCleanCount() + activeEntity.getFixedCleanCount() + activeEntity.getPassedHealedCountSafe() + activeEntity.getFixedHealedCountSafe();
@@ -1941,6 +1943,7 @@ public class AuraTestQueueController
         {
             statusObj.put("scheduledCount", scheduledCount);
         }
+        statusObj.put("runningCount", running ? activeRunningCount : 0);
         statusObj.put("activeFile", queueService.getActiveFile());
 
         String activeTestId = "";

@@ -636,6 +636,136 @@ aside.collapsed .context-symbolic-icon { display: flex; align-items: center; jus
 .pulse-dot { width: 8px; height: 8px; background-color: var(--status-pass); border-radius: 50%; box-shadow: 0 0 8px var(--status-pass); animation: pulse 2s infinite; }
 @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
 
+/* Sidebar Runner Progress & Micro-Bar */
+.sidebar-runner-progress-box {
+    margin-top: 0.35rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    width: 100%;
+}
+
+.sidebar-progress-track {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--bg-hover, rgba(148, 163, 184, 0.2));
+    overflow: hidden;
+    position: relative;
+}
+
+.sidebar-progress-track.is-indeterminate::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    background: linear-gradient(90deg, transparent, var(--status-fixed, #2563eb), transparent);
+    animation: indeterminate-shimmer 1.5s infinite linear;
+}
+
+@keyframes indeterminate-shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.sidebar-progress-seg {
+    height: 100%;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-progress-seg.seg-passed {
+    background-color: var(--status-pass, #059669);
+    flex-shrink: 1;
+}
+
+.sidebar-progress-seg.seg-failed {
+    background-color: var(--status-unknown-fail, #dc2626);
+    flex-shrink: 0;
+    min-width: 4px;
+}
+
+.sidebar-progress-seg.seg-running {
+    background-color: var(--status-fixed, #2563eb);
+    flex-shrink: 0;
+    min-width: 3px;
+    animation: pulse-seg-running 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-seg-running {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 1; }
+}
+
+.sidebar-progress-metrics {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    gap: 0.4rem;
+}
+
+.sidebar-progress-counter {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.sidebar-outcome-chips {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.sidebar-chip-passed, .sidebar-chip-failed {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+}
+
+.sidebar-chip-passed {
+    color: var(--status-pass, #059669);
+}
+
+.sidebar-chip-failed {
+    color: var(--status-unknown-fail, #dc2626);
+}
+
+.sidebar-chip-passed .chip-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background-color: currentColor;
+}
+
+.sidebar-chip-failed .chip-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background-color: currentColor;
+}
+
+.collapsed-fail-indicator {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--status-unknown-fail, #dc2626);
+    box-shadow: 0 0 4px var(--status-unknown-fail, #dc2626);
+}
+
 /* Main Container */
 main { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-base); position: relative; }
 
