@@ -1886,6 +1886,7 @@ window.currentEditorMode = currentEditorMode;
 function setEditorMode(mode) {
     const editorPanel = document.getElementById('editorPanel');
     const visualContainer = document.getElementById('visualEditorContainer');
+    const visualMain = document.getElementById('visualEditorMain');
     const rawPanel = document.getElementById('rawEditorPanel');
     const rawTextarea = document.getElementById('rawYamlTextarea');
     const btnVisual = document.getElementById('btnModeVisual');
@@ -1896,14 +1897,14 @@ function setEditorMode(mode) {
     const aiReviewBtn = document.getElementById('aiReviewBtn');
 
     if (mode === 'raw') {
-        if (visualContainer && rawPanel) {
-            if (visualContainer.style.display !== 'none') {
+        if (rawPanel) {
+            if (visualMain && visualMain.style.display !== 'none') {
                 const compiled = compilePlaybookToYaml(true);
                 if (rawTextarea) {
                     rawTextarea.value = compiled;
                 }
             }
-            visualContainer.style.display = 'none';
+            if (visualMain) visualMain.style.display = 'none';
             rawPanel.style.display = 'flex';
         }
         currentEditorMode = 'raw';
@@ -1923,8 +1924,7 @@ function setEditorMode(mode) {
             btnRaw.style.fontWeight = '600';
             btnRaw.style.opacity = '1';
         }
-        if (undoBtn) undoBtn.disabled = true;
-        if (redoBtn) redoBtn.disabled = true;
+        updateUndoRedoUI();
         if (reviewBtn && (!editorPanel || editorPanel.getAttribute('data-has-error') !== 'true')) {
             reviewBtn.disabled = false;
         }
@@ -1954,9 +1954,9 @@ function setEditorMode(mode) {
         if (editorPanel) {
             editorPanel.setAttribute('data-mode', 'visual');
         }
-        if (visualContainer && rawPanel) {
+        if (rawPanel && visualMain) {
             rawPanel.style.display = 'none';
-            visualContainer.style.display = 'flex';
+            visualMain.style.display = 'flex';
         }
         if (btnVisual) {
             btnVisual.style.background = 'var(--accent)';
@@ -2032,6 +2032,9 @@ function handleRawYamlInput(textarea) {
     }
     checkEditorDirtyStatus();
     checkNewVariablePrompts();
+    debouncedPushSnapshot();
+    const undoBtn = document.getElementById('undoBtn');
+    if (undoBtn) undoBtn.disabled = false;
 }
 window.handleRawYamlInput = handleRawYamlInput;
 
@@ -2059,18 +2062,18 @@ window.findInlineCommentIndex = findInlineCommentIndex;
 function getStepRawText(content) {
     if (!content) return '';
     const rawAttr = content.getAttribute('data-raw');
-    const hasPills = content.querySelector('.var-pill, .unified-include-pill, .missing-include-pill, .invalid-include-pill, .hint-badge, .substep-folded-badge, .step-inline-comment, .material-symbols-outlined');
-    
     const isFocused = (document.activeElement === content || content.contains(document.activeElement));
+    
+    // When not actively focused, data-raw is the authoritative source of truth
+    if (!isFocused && rawAttr !== null && rawAttr !== undefined && rawAttr.trim().length > 0) {
+        return rawAttr;
+    }
+
+    const hasPills = content.querySelector('.var-pill, .unified-include-pill, .missing-include-pill, .invalid-include-pill, .hint-badge, .substep-folded-badge, .step-inline-comment, .material-symbols-outlined');
     
     // If no pills or icon tokens are present, return the live typed text
     if (!hasPills) {
-        return (isFocused || content.innerText) ? (content.innerText || '') : ((rawAttr !== null && rawAttr !== undefined) ? rawAttr : '');
-    }
-    
-    // If not focused, data-raw is the authoritative source of truth
-    if (!isFocused && rawAttr !== null && rawAttr !== undefined && rawAttr.trim().length > 0) {
-        return rawAttr;
+        return (isFocused ? (content.innerText || '') : (rawAttr || content.innerText || ''));
     }
     
     // When focused or if data-raw is missing, reconstruct cleanly from DOM without icon ligatures
@@ -2235,6 +2238,11 @@ function initVisualPlaybookEditor() {
                 hiddenInput.value = rawTextarea.value;
             }
         }
+        window.lastInitializedEditorFile = activeEditingFile;
+        if (undoStack.length === 0 && typeof pushEditorSnapshot === 'function') {
+            pushEditorSnapshot(true);
+        }
+        updateUndoRedoUI();
         checkEditorDirtyStatus();
         return;
     }
@@ -2277,10 +2285,16 @@ function initVisualPlaybookEditor() {
                 }
                 updateFragmentVariablesList();
                 compilePlaybookToYaml(true);
+                checkEditorDirtyStatus();
                 debouncedPushSnapshot();
+                const undoBtn = document.getElementById('undoBtn');
+                if (undoBtn) undoBtn.disabled = false;
             } else if (evt.target.classList.contains('var-key-input') || evt.target.classList.contains('cell-val')) {
                 compilePlaybookToYaml(true);
+                checkEditorDirtyStatus();
                 debouncedPushSnapshot();
+                const undoBtn = document.getElementById('undoBtn');
+                if (undoBtn) undoBtn.disabled = false;
             }
         });
     }
@@ -2297,6 +2311,8 @@ function initVisualPlaybookEditor() {
         if (typeof pushEditorSnapshot === 'function') {
             pushEditorSnapshot(true);
         }
+    } else {
+        updateUndoRedoUI();
     }
 }
 window.initVisualPlaybookEditor = initVisualPlaybookEditor;
@@ -2841,7 +2857,10 @@ function addPropertyRow(key = '', value = '') {
     inputKey.setAttribute('list', 'propertyKeySuggestions');
     inputKey.oninput = () => {
         compilePlaybookToYaml(true);
+        checkEditorDirtyStatus();
         debouncedPushSnapshot();
+        const undoBtn = document.getElementById('undoBtn');
+        if (undoBtn) undoBtn.disabled = false;
     };
     tdKey.appendChild(inputKey);
 
@@ -2853,7 +2872,10 @@ function addPropertyRow(key = '', value = '') {
     inputVal.placeholder = 'Value';
     inputVal.oninput = () => {
         compilePlaybookToYaml(true);
+        checkEditorDirtyStatus();
         debouncedPushSnapshot();
+        const undoBtn = document.getElementById('undoBtn');
+        if (undoBtn) undoBtn.disabled = false;
     };
     tdVal.appendChild(inputVal);
 
@@ -2872,8 +2894,10 @@ function addPropertyRow(key = '', value = '') {
     tr.appendChild(tdAction);
     tbody.appendChild(tr);
 
-    compilePlaybookToYaml(true);
-    debouncedPushSnapshot();
+    if (!isRestoringSnapshot) {
+        compilePlaybookToYaml(true);
+        debouncedPushSnapshot();
+    }
     if (!key) {
         inputKey.focus();
     }
@@ -5089,6 +5113,29 @@ window.insertVariableFromInput = insertVariableFromInput;
 
 
 function insertSnippetWithCaret(templateText, caretOffset = -1) {
+    const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw')
+        || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
+
+    if (isRaw) {
+        const rawTextarea = document.getElementById('rawYamlTextarea');
+        if (rawTextarea) {
+            const start = rawTextarea.selectionStart != null ? rawTextarea.selectionStart : rawTextarea.value.length;
+            const end = rawTextarea.selectionEnd != null ? rawTextarea.selectionEnd : rawTextarea.value.length;
+            const val = rawTextarea.value;
+            rawTextarea.value = val.substring(0, start) + templateText + val.substring(end);
+            const targetPos = (caretOffset >= 0) ? (start + caretOffset) : (start + templateText.length);
+            rawTextarea.setSelectionRange(targetPos, targetPos);
+            rawTextarea.focus();
+            const hiddenInput = document.getElementById('editorContent');
+            if (hiddenInput) {
+                hiddenInput.value = rawTextarea.value;
+            }
+            checkEditorDirtyStatus();
+            if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+        }
+        return;
+    }
+
     const activeEl = document.activeElement;
     const nestedStep = (activeEl && activeEl.closest('.nested-editable-step')) ? activeEl.closest('.nested-editable-step') : activeNestedStep;
 
@@ -5104,6 +5151,9 @@ function insertSnippetWithCaret(templateText, caretOffset = -1) {
             const cardId = card.getAttribute('data-card-id') || card.id.replace('includeTreeCard_', '').replace('includeTreeCard', '');
             markIncludeUnsaved(cardId);
         }
+        compilePlaybookToYaml();
+        checkEditorDirtyStatus();
+        if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
         return;
     }
 
@@ -5145,6 +5195,8 @@ function insertSnippetWithCaret(templateText, caretOffset = -1) {
     formatStepToTokens(activeLineNum || activeRow.getAttribute('data-line'));
     content.focus();
     setCaretOffset(content, lastCaretOffset);
+    compilePlaybookToYaml();
+    checkEditorDirtyStatus();
     if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
     if (typeof compilePlaybookToYaml === 'function') compilePlaybookToYaml();
     if (typeof checkEditorDirtyStatus === 'function') checkEditorDirtyStatus();
@@ -5236,6 +5288,30 @@ function insertSubstepRow(initialText = '') {
 window.insertSubstepRow = insertSubstepRow;
 
 function insertIncludePill(filePath) {
+    const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw')
+        || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
+
+    if (isRaw) {
+        const rawTextarea = document.getElementById('rawYamlTextarea');
+        if (rawTextarea) {
+            const start = rawTextarea.selectionStart != null ? rawTextarea.selectionStart : rawTextarea.value.length;
+            const end = rawTextarea.selectionEnd != null ? rawTextarea.selectionEnd : rawTextarea.value.length;
+            const val = rawTextarea.value;
+            const textToInsert = `_include: ${filePath}`;
+            rawTextarea.value = val.substring(0, start) + textToInsert + val.substring(end);
+            const targetPos = start + textToInsert.length;
+            rawTextarea.setSelectionRange(targetPos, targetPos);
+            rawTextarea.focus();
+            const hiddenInput = document.getElementById('editorContent');
+            if (hiddenInput) {
+                hiddenInput.value = rawTextarea.value;
+            }
+            checkEditorDirtyStatus();
+            if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+        }
+        return;
+    }
+
     const activeEl = document.activeElement;
     const nestedStep = (activeEl && activeEl.closest('.nested-editable-step')) ? activeEl.closest('.nested-editable-step') : activeNestedStep;
 
@@ -5257,6 +5333,9 @@ function insertIncludePill(filePath) {
             const cardId = treeCard.getAttribute('data-card-id') || treeCard.id.replace('includeTreeCard_', '').replace('includeTreeCard', '');
             markIncludeUnsaved(cardId);
         }
+        compilePlaybookToYaml();
+        checkEditorDirtyStatus();
+        if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
         return;
     }
 
@@ -5758,6 +5837,7 @@ let undoStack = [];
 let redoStack = [];
 let initialEditorContent = '';
 let undoDebounceTimer = null;
+let isRestoringSnapshot = false;
 
 function normalizeYamlForDirtyComparison(yamlStr) {
     if (yamlStr == null) return '';
@@ -5801,7 +5881,33 @@ function updateUndoRedoUI() {
 }
 window.updateUndoRedoUI = updateUndoRedoUI;
 
+function isSnapshotContentEqual(snapA, snapB) {
+    if (!snapA || !snapB) return false;
+    if (snapA.mode !== snapB.mode) return false;
+    if (snapA.mode === 'raw') {
+        return (snapA.rawYaml || '') === (snapB.rawYaml || '');
+    }
+    return snapA.hasProperties === snapB.hasProperties &&
+           snapA.hasBefore === snapB.hasBefore &&
+           snapA.hasAfter === snapB.hasAfter &&
+           JSON.stringify(snapA.propertyRows || []) === JSON.stringify(snapB.propertyRows || []) &&
+           JSON.stringify(snapA.beforeSteps || []) === JSON.stringify(snapB.beforeSteps || []) &&
+           JSON.stringify(snapA.steps || []) === JSON.stringify(snapB.steps || []) &&
+           JSON.stringify(snapA.afterSteps || []) === JSON.stringify(snapB.afterSteps || []) &&
+           JSON.stringify(snapA.matrixData || []) === JSON.stringify(snapB.matrixData || []) &&
+           JSON.stringify(snapA.matrixHeaders || []) === JSON.stringify(snapB.matrixHeaders || []);
+}
+window.isSnapshotContentEqual = isSnapshotContentEqual;
+
 function getEditorSnapshot() {
+    const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw') 
+        || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
+
+    const rawTextarea = document.getElementById('rawYamlTextarea');
+    const rawYaml = rawTextarea ? rawTextarea.value : '';
+    const rawSelectionStart = rawTextarea ? rawTextarea.selectionStart : 0;
+    const rawSelectionEnd = rawTextarea ? rawTextarea.selectionEnd : 0;
+
     const captureBlock = (containerId) => {
         const container = document.getElementById(containerId);
         if (!container) return [];
@@ -5832,6 +5938,9 @@ function getEditorSnapshot() {
                 activeCaret = getCaretOffset(activeEl);
             }
         }
+    } else if (window.activeLineNum) {
+        activeLine = String(window.activeLineNum);
+        activeCaret = window.lastCaretOffset || 0;
     }
 
     const propertiesPanel = document.getElementById('playbookPropertiesPanel');
@@ -5871,6 +5980,10 @@ function getEditorSnapshot() {
     }
 
     return {
+        mode: isRaw ? 'raw' : 'visual',
+        rawYaml,
+        rawSelectionStart,
+        rawSelectionEnd,
         hasProperties,
         propertyRows,
         hasBefore,
@@ -5887,10 +6000,11 @@ function getEditorSnapshot() {
 window.getEditorSnapshot = getEditorSnapshot;
 
 function pushEditorSnapshot(isInitial = false) {
+    if (isRestoringSnapshot) return;
     const currentSnap = getEditorSnapshot();
     if (!isInitial && undoStack.length > 0) {
         const lastSnap = undoStack[undoStack.length - 1];
-        if (JSON.stringify(lastSnap) === JSON.stringify(currentSnap)) {
+        if (isSnapshotContentEqual(lastSnap, currentSnap)) {
             return;
         }
     }
@@ -5908,6 +6022,7 @@ function pushEditorSnapshot(isInitial = false) {
 window.pushEditorSnapshot = pushEditorSnapshot;
 
 function debouncedPushSnapshot() {
+    if (isRestoringSnapshot) return;
     clearTimeout(undoDebounceTimer);
     undoDebounceTimer = setTimeout(() => {
         pushEditorSnapshot(false);
@@ -5917,156 +6032,224 @@ window.debouncedPushSnapshot = debouncedPushSnapshot;
 
 function restoreEditorSnapshot(snap) {
     if (!snap) return;
+    isRestoringSnapshot = true;
+    try {
+        const visualMain = document.getElementById('visualEditorMain');
+        const rawPanel = document.getElementById('rawEditorPanel');
+        const editorPanel = document.getElementById('editorPanel');
+        const btnVisual = document.getElementById('btnModeVisual');
+        const btnRaw = document.getElementById('btnModeRaw');
 
-    const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
-        || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
-
-    const propertiesPanel = document.getElementById('playbookPropertiesPanel');
-    const addPropertiesBtn = document.getElementById('addPropertiesBtnContainer');
-    const tbody = document.getElementById('propertiesTableBody');
-    if (propertiesPanel && addPropertiesBtn) {
-        propertiesPanel.style.display = (snap.hasProperties && !isFragmentFile) ? 'flex' : 'none';
-        addPropertiesBtn.style.display = (isFragmentFile || snap.hasProperties) ? 'none' : 'block';
-        if (tbody && Array.isArray(snap.propertyRows)) {
-            tbody.innerHTML = '';
-            snap.propertyRows.forEach(p => {
-                addPropertyRow(p.key, p.value);
-            });
-        }
-    }
-
-    const beforePanel = document.getElementById('beforeCodePanel');
-    const addBeforeBtn = document.getElementById('addBeforeBtnContainer');
-    if (beforePanel && addBeforeBtn) {
-        beforePanel.style.display = snap.hasBefore ? 'flex' : 'none';
-        addBeforeBtn.style.display = (isFragmentFile || snap.hasBefore) ? 'none' : 'block';
-    }
-
-    const afterPanel = document.getElementById('afterCodePanel');
-    const addAfterBtn = document.getElementById('addAfterBtnContainer');
-    if (afterPanel && addAfterBtn) {
-        afterPanel.style.display = snap.hasAfter ? 'flex' : 'none';
-        addAfterBtn.style.display = (isFragmentFile || snap.hasAfter) ? 'none' : 'block';
-    }
-
-    const rebuildBlock = (containerId, stepArray) => {
-        const container = document.getElementById(containerId);
-        if (!container) return;
-        container.innerHTML = '';
-        (stepArray || []).forEach((stepItem, idx) => {
-            const lineNum = idx + 1;
-            const stepText = (typeof stepItem === 'object' && stepItem !== null) ? (stepItem.text || '') : (stepItem || '');
-            const isSubstep = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isSubstep) : false;
-            const isManualSubstep = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isManualSubstep) : false;
-            const isComment = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isComment) : false;
-
-            const row = document.createElement('div');
-            row.className = 'step-row' + (isSubstep ? ' step-row-substep' : '') + (isComment ? ' step-row-comment' : '');
-            if (isManualSubstep) {
-                row.setAttribute('data-manual-substep', 'true');
+        if (snap.mode === 'raw') {
+            if (rawPanel) {
+                if (visualMain) visualMain.style.display = 'none';
+                rawPanel.style.display = 'flex';
             }
-            row.setAttribute('data-line', lineNum);
-            row.innerHTML = `
-                <span class="step-number">${lineNum}</span>
-                <div class="step-content" contenteditable="true" spellcheck="false"
-                     data-raw="${stepText.replace(/"/g, '&quot;')}"
-                     onkeydown="handleKeyDown(event, ${lineNum})"
-                     onfocus="handleStepFocus(${lineNum})"
-                     onblur="handleStepBlur(${lineNum})"
-                     oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);"></div>
-                <div class="step-actions">
-                    <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${lineNum}, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
-                    <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${lineNum}, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
-                    <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${lineNum})"><span class="material-symbols-outlined">delete</span></button>
-                </div>
-            `;
-            container.appendChild(row);
-            formatStepToTokens(lineNum);
-        });
-    };
+            currentEditorMode = 'raw';
+            window.currentEditorMode = 'raw';
+            if (editorPanel) {
+                editorPanel.setAttribute('data-mode', 'raw');
+            }
+            if (btnVisual) {
+                btnVisual.style.background = 'transparent';
+                btnVisual.style.color = 'var(--text-secondary)';
+                btnVisual.style.fontWeight = 'normal';
+                btnVisual.style.opacity = btnVisual.disabled ? '0.5' : '0.8';
+            }
+            if (btnRaw) {
+                btnRaw.style.background = 'var(--accent)';
+                btnRaw.style.color = '#fff';
+                btnRaw.style.fontWeight = '600';
+                btnRaw.style.opacity = '1';
+            }
+            const rawTextarea = document.getElementById('rawYamlTextarea');
+            if (rawTextarea) {
+                rawTextarea.value = snap.rawYaml || '';
+                const hiddenInput = document.getElementById('editorContent');
+                if (hiddenInput) {
+                    hiddenInput.value = snap.rawYaml || '';
+                }
+                if (typeof snap.rawSelectionStart === 'number' && typeof snap.rawSelectionEnd === 'number') {
+                    rawTextarea.setSelectionRange(snap.rawSelectionStart, snap.rawSelectionEnd);
+                    rawTextarea.focus();
+                }
+            }
+        } else {
+            if (rawPanel && visualMain) {
+                rawPanel.style.display = 'none';
+                visualMain.style.display = 'flex';
+            }
+            currentEditorMode = 'visual';
+            window.currentEditorMode = 'visual';
+            if (editorPanel) {
+                editorPanel.setAttribute('data-mode', 'visual');
+            }
+            if (btnVisual) {
+                btnVisual.style.background = 'var(--accent)';
+                btnVisual.style.color = '#fff';
+                btnVisual.style.fontWeight = '600';
+                btnVisual.style.opacity = '1';
+            }
+            if (btnRaw) {
+                btnRaw.style.background = 'transparent';
+                btnRaw.style.color = 'var(--text-secondary)';
+                btnRaw.style.fontWeight = 'normal';
+                btnRaw.style.opacity = '0.8';
+            }
 
-    rebuildBlock('beforeStepsList', snap.beforeSteps);
-    rebuildBlock('stepsList', snap.steps);
-    rebuildBlock('afterStepsList', snap.afterSteps);
+            const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
+                || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
 
-    const matrixHeaderRow = document.getElementById('matrixHeaderRow');
-    if (matrixHeaderRow && snap.matrixHeaders) {
-        while (matrixHeaderRow.cells.length > 2) {
-            matrixHeaderRow.deleteCell(1);
-        }
-        snap.matrixHeaders.forEach((headerTitle, idx) => {
-            const th = document.createElement('th');
-            th.id = `iterHeader_${idx + 1}`;
-            th.className = 'iter-col-header';
-            th.innerHTML = `
-                <div class="iter-header-content">
-                    <span>${headerTitle}</span>
-                    <button type="button" class="btn-remove-iteration" title="Remove Data Set" onclick="removeMatrixColumn(this)">
-                        <span class="material-symbols-outlined">close</span>
-                    </button>
-                </div>
-            `;
-            matrixHeaderRow.insertBefore(th, matrixHeaderRow.cells[matrixHeaderRow.cells.length - 1]);
-        });
-    }
+            const propertiesPanel = document.getElementById('playbookPropertiesPanel');
+            const addPropertiesBtn = document.getElementById('addPropertiesBtnContainer');
+            const tbody = document.getElementById('propertiesTableBody');
+            if (propertiesPanel && addPropertiesBtn) {
+                propertiesPanel.style.display = (snap.hasProperties && !isFragmentFile) ? 'flex' : 'none';
+                addPropertiesBtn.style.display = (isFragmentFile || snap.hasProperties) ? 'none' : 'block';
+                if (tbody && Array.isArray(snap.propertyRows)) {
+                    tbody.innerHTML = '';
+                    snap.propertyRows.forEach(p => {
+                        addPropertyRow(p.key, p.value);
+                    });
+                }
+            }
 
-    const matrixTbody = document.querySelector('#transposedGrid tbody');
-    if (matrixTbody && snap.matrixData) {
-        matrixTbody.innerHTML = '';
-        snap.matrixData.forEach(row => {
-            const tr = document.createElement('tr');
-            let html = `
-                <td>
-                    <div class="var-key-cell">
-                        <input type="text" class="var-key-input" value="${row.key}" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();">
-                        <button class="btn-insert-var-chip" onclick="insertVariableFromInput(this.previousElementSibling.value)">+ Insert</button>
-                        <button type="button" class="btn-remove-var" title="Remove Variable" onclick="removeMatrixRow(this)">
-                            <span class="material-symbols-outlined" style="font-size: 14px;">close</span>
-                        </button>
-                    </div>
-                </td>
-            `;
-            (row.vals || []).forEach(val => {
-                html += `<td><input type="text" class="cell-val" value="${val}" placeholder="empty" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();"></td>`;
-            });
-            html += `<td></td>`;
-            tr.innerHTML = html;
-            matrixTbody.appendChild(tr);
-        });
-    }
+            const beforePanel = document.getElementById('beforeCodePanel');
+            const addBeforeBtn = document.getElementById('addBeforeBtnContainer');
+            if (beforePanel && addBeforeBtn) {
+                beforePanel.style.display = snap.hasBefore ? 'flex' : 'none';
+                addBeforeBtn.style.display = (isFragmentFile || snap.hasBefore) ? 'none' : 'block';
+            }
 
-    reindexSteps();
-    updateFragmentVariablesList();
-    compilePlaybookToYaml();
-    checkEditorDirtyStatus();
-    updateUndoRedoUI();
+            const afterPanel = document.getElementById('afterCodePanel');
+            const addAfterBtn = document.getElementById('addAfterBtnContainer');
+            if (afterPanel && addAfterBtn) {
+                afterPanel.style.display = snap.hasAfter ? 'flex' : 'none';
+                addAfterBtn.style.display = (isFragmentFile || snap.hasAfter) ? 'none' : 'block';
+            }
 
-    if (snap.activeLine) {
-        const row = document.querySelector(`.step-row[data-line="${snap.activeLine}"]`);
-        if (row) {
-            const content = row.querySelector('.step-content');
-            if (content) {
-                content.focus();
-                if (typeof setCaretOffset === 'function' && typeof snap.activeCaret === 'number') {
-                    setCaretOffset(content, snap.activeCaret);
+            const rebuildBlock = (containerId, stepArray) => {
+                const container = document.getElementById(containerId);
+                if (!container) return;
+                container.innerHTML = '';
+                (stepArray || []).forEach((stepItem, idx) => {
+                    const lineNum = idx + 1;
+                    const stepText = (typeof stepItem === 'object' && stepItem !== null) ? (stepItem.text || '') : (stepItem || '');
+                    const isSubstep = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isSubstep) : false;
+                    const isManualSubstep = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isManualSubstep) : false;
+                    const isComment = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isComment) : false;
+
+                    const row = document.createElement('div');
+                    row.className = 'step-row' + (isSubstep ? ' step-row-substep' : '') + (isComment ? ' step-row-comment' : '');
+                    if (isManualSubstep) {
+                        row.setAttribute('data-manual-substep', 'true');
+                    }
+                    row.setAttribute('data-line', lineNum);
+                    row.innerHTML = `
+                        <span class="step-number">${lineNum}</span>
+                        <div class="step-content" contenteditable="true" spellcheck="false"
+                             data-raw="${stepText.replace(/"/g, '&quot;')}"
+                             onkeydown="handleKeyDown(event, ${lineNum})"
+                             onfocus="handleStepFocus(${lineNum})"
+                             onblur="handleStepBlur(${lineNum})"
+                             oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);"></div>
+                        <div class="step-actions">
+                            <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${lineNum}, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                            <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${lineNum}, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                            <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${lineNum})"><span class="material-symbols-outlined">delete</span></button>
+                        </div>
+                    `;
+                    container.appendChild(row);
+                    formatStepToTokens(lineNum);
+                });
+            };
+
+            rebuildBlock('beforeStepsList', snap.beforeSteps);
+            rebuildBlock('stepsList', snap.steps);
+            rebuildBlock('afterStepsList', snap.afterSteps);
+
+            const matrixHeaderRow = document.getElementById('matrixHeaderRow');
+            if (matrixHeaderRow && snap.matrixHeaders) {
+                while (matrixHeaderRow.cells.length > 2) {
+                    matrixHeaderRow.deleteCell(1);
+                }
+                snap.matrixHeaders.forEach((headerTitle, idx) => {
+                    const th = document.createElement('th');
+                    th.id = `iterHeader_${idx + 1}`;
+                    th.className = 'iter-col-header';
+                    th.innerHTML = `
+                        <div class="iter-header-content">
+                            <span>${headerTitle}</span>
+                            <button type="button" class="btn-remove-iteration" title="Remove Data Set" onclick="removeMatrixColumn(this)">
+                                <span class="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+                    `;
+                    matrixHeaderRow.insertBefore(th, matrixHeaderRow.cells[matrixHeaderRow.cells.length - 1]);
+                });
+            }
+
+            const matrixTbody = document.querySelector('#transposedGrid tbody');
+            if (matrixTbody && snap.matrixData) {
+                matrixTbody.innerHTML = '';
+                snap.matrixData.forEach(row => {
+                    const tr = document.createElement('tr');
+                    let html = `
+                        <td>
+                            <div class="var-key-cell">
+                                <input type="text" class="var-key-input" value="${row.key}" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();">
+                                <button class="btn-insert-var-chip" onclick="insertVariableFromInput(this.previousElementSibling.value)">+ Insert</button>
+                                <button type="button" class="btn-remove-var" title="Remove Variable" onclick="removeMatrixRow(this)">
+                                    <span class="material-symbols-outlined" style="font-size: 14px;">close</span>
+                                </button>
+                            </div>
+                        </td>
+                    `;
+                    (row.vals || []).forEach(val => {
+                        html += `<td><input type="text" class="cell-val" value="${val}" placeholder="empty" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();"></td>`;
+                    });
+                    html += `<td></td>`;
+                    tr.innerHTML = html;
+                    matrixTbody.appendChild(tr);
+                });
+            }
+
+            reindexSteps();
+            updateFragmentVariablesList();
+            compilePlaybookToYaml();
+
+            if (snap.activeLine) {
+                const row = document.querySelector(`.step-row[data-line="${snap.activeLine}"]`);
+                if (row) {
+                    const content = row.querySelector('.step-content');
+                    if (content) {
+                        content.focus();
+                        if (typeof setCaretOffset === 'function' && typeof snap.activeCaret === 'number') {
+                            setCaretOffset(content, snap.activeCaret);
+                        }
+                    }
                 }
             }
         }
+    } finally {
+        isRestoringSnapshot = false;
+        checkEditorDirtyStatus();
+        updateUndoRedoUI();
     }
 }
 window.restoreEditorSnapshot = restoreEditorSnapshot;
 
 function editorUndo() {
-    clearTimeout(undoDebounceTimer);
-    undoDebounceTimer = null;
-
-    const currentSnap = getEditorSnapshot();
-    const lastSnap = undoStack.length > 0 ? undoStack[undoStack.length - 1] : null;
-
-    if (lastSnap && JSON.stringify(lastSnap) !== JSON.stringify(currentSnap)) {
-        redoStack.push(currentSnap);
-        restoreEditorSnapshot(lastSnap);
-        return;
+    if (undoDebounceTimer) {
+        clearTimeout(undoDebounceTimer);
+        undoDebounceTimer = null;
+        const currentSnap = getEditorSnapshot();
+        const topSnap = undoStack.length > 0 ? undoStack[undoStack.length - 1] : null;
+        if (!isSnapshotContentEqual(topSnap, currentSnap)) {
+            undoStack.push(currentSnap);
+            redoStack = [];
+            if (undoStack.length > 50) undoStack.shift();
+        }
     }
 
     if (undoStack.length <= 1) return;
@@ -6078,8 +6261,10 @@ function editorUndo() {
 window.editorUndo = editorUndo;
 
 function editorRedo() {
-    clearTimeout(undoDebounceTimer);
-    undoDebounceTimer = null;
+    if (undoDebounceTimer) {
+        clearTimeout(undoDebounceTimer);
+        undoDebounceTimer = null;
+    }
     if (redoStack.length === 0) return;
     const nextSnap = redoStack.pop();
     undoStack.push(nextSnap);
@@ -6130,9 +6315,6 @@ document.addEventListener('keydown', function(evt) {
 
     // Undo: Ctrl+Z / Cmd+Z (without Shift)
     if (modKey && evt.key.toLowerCase() === 'z' && !evt.shiftKey) {
-        if (evt.target && (evt.target.id === 'rawYamlTextarea' || (evt.target.closest && evt.target.closest('#rawEditorPanel')))) {
-            return;
-        }
         evt.preventDefault();
         editorUndo();
         return;
@@ -6140,9 +6322,6 @@ document.addEventListener('keydown', function(evt) {
 
     // Redo: Ctrl+Y / Cmd+Y or Cmd+Shift+Z
     if ((modKey && evt.key.toLowerCase() === 'y') || (modKey && evt.shiftKey && evt.key.toLowerCase() === 'z')) {
-        if (evt.target && (evt.target.id === 'rawYamlTextarea' || (evt.target.closest && evt.target.closest('#rawEditorPanel')))) {
-            return;
-        }
         evt.preventDefault();
         editorRedo();
         return;

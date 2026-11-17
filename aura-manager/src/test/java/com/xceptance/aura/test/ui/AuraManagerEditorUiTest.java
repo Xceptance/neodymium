@@ -119,7 +119,8 @@ public final class AuraManagerEditorUiTest
             "New Line Include Cursor Test.yaml", "ParentInclude.steps", "VariablePersistenceTest.yaml", "AuthFragment.steps", "SubstepNameTest.yaml",
             "CleanStepsSaveTest.yaml", "PlaybookPropertiesTest.yaml", "PlaybookAddPropsTest.yaml",
             "MarkerChipTest.yaml", "MetaPreservationTest.yaml",
-            "AllControlTagsTest.yaml", "AllActionChipsTest.yaml", "InsertSubstepRowTest.yaml", "EditorSubstepMockRunTest.yaml"
+            "AllControlTagsTest.yaml", "AllActionChipsTest.yaml", "InsertSubstepRowTest.yaml", "EditorSubstepMockRunTest.yaml",
+            "UndoRedoFullTest.yaml"
         };
 
         for (final String dirPath : dirPaths)
@@ -2693,6 +2694,100 @@ public final class AuraManagerEditorUiTest
         Assertions.assertTrue(Files.exists(htmlPath), "HTML report should be generated for mocked run");
         final String htmlContent = Files.readString(htmlPath, StandardCharsets.UTF_8);
         Assertions.assertTrue(htmlContent.contains("Click navigation menu"), "Report must contain substep instruction");
+    }
+
+    @Test
+    public final void testYamlEditorUndoRedoFullWorkflow()
+    {
+        final String testFile = "UndoRedoFullTest.yaml";
+        open("http://localhost:" + this.port + "/playbooks");
+
+        // Create new test file
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue(testFile);
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        final SelenideElement undoBtn = $("#undoBtn");
+        final SelenideElement redoBtn = $("#redoBtn");
+
+        // Initial state: both undo and redo should be disabled
+        undoBtn.shouldBe(Condition.disabled);
+        redoBtn.shouldBe(Condition.disabled);
+
+        // Action 1: Type in visual editor
+        final SelenideElement firstStep = $$("#stepsList .step-row").first().find(".step-content");
+        firstStep.click();
+        firstStep.sendKeys("Open https://example.com/undo-workflow");
+
+        // Undo button should become enabled
+        undoBtn.shouldBe(Condition.enabled);
+        redoBtn.shouldBe(Condition.disabled);
+
+        // Click Undo button
+        undoBtn.click();
+
+        // Verify typing is undone
+        firstStep.shouldHave(Condition.exactText(""));
+        undoBtn.shouldBe(Condition.disabled);
+        redoBtn.shouldBe(Condition.enabled);
+
+        // Click Redo button
+        redoBtn.click();
+
+        // Verify typing is restored
+        firstStep.shouldHave(Condition.exactText("Open https://example.com/undo-workflow"));
+        undoBtn.shouldBe(Condition.enabled);
+        redoBtn.shouldBe(Condition.disabled);
+
+        // Action 2: Click Side Panel Palette item (e.g. control tag '(optional)')
+        final SelenideElement optionalChip = $(".sidebar-palette-right").$$("button.btn-editor")
+            .findBy(Condition.exactText("(optional)"));
+        optionalChip.shouldBe(Condition.visible).click();
+
+        // Verify '(optional)' was appended to first step
+        firstStep.shouldHave(Condition.text("(optional)"));
+        undoBtn.shouldBe(Condition.enabled);
+
+        // Click Undo button
+        undoBtn.click();
+        firstStep.shouldNotHave(Condition.text("(optional)"));
+        redoBtn.shouldBe(Condition.enabled);
+
+        // Click Redo button
+        redoBtn.click();
+        firstStep.shouldHave(Condition.text("(optional)"));
+
+        // Action 3: Switch to Raw YAML mode
+        $("#btnModeRaw").shouldBe(Condition.visible).click();
+        $("#rawEditorPanel").shouldBe(Condition.visible);
+        undoBtn.shouldBe(Condition.enabled);
+
+        // Type in raw textarea
+        final SelenideElement rawYamlTextarea = $("#rawYamlTextarea");
+        rawYamlTextarea.sendKeys("\n  - Assert \"Welcome\" is visible");
+
+        // Undo raw typing via Undo button
+        undoBtn.shouldBe(Condition.enabled).click();
+        rawYamlTextarea.shouldNotHave(Condition.value("Assert \"Welcome\" is visible"));
+        redoBtn.shouldBe(Condition.enabled);
+
+        // Redo raw typing via Redo button
+        redoBtn.click();
+        rawYamlTextarea.shouldHave(Condition.value("Assert \"Welcome\" is visible"));
+
+        // Action 4: Side Panel insertion in Raw mode
+        final SelenideElement continueOnErrorChip = $(".sidebar-palette-right").$$("button.btn-editor")
+            .findBy(Condition.exactText("(continue-on-error)"));
+        continueOnErrorChip.shouldBe(Condition.visible).click();
+
+        rawYamlTextarea.shouldHave(Condition.value("(continue-on-error)"));
+        undoBtn.shouldBe(Condition.enabled).click();
+        rawYamlTextarea.shouldNotHave(Condition.value("(continue-on-error)"));
+
+        redoBtn.shouldBe(Condition.enabled).click();
+        rawYamlTextarea.shouldHave(Condition.value("(continue-on-error)"));
     }
 }
 
