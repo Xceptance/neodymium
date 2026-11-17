@@ -2525,7 +2525,37 @@ function compilePlaybookToYaml(syncToRaw = true) {
 
     yaml += "# Neodymium YAML Test Data File\n\n";
 
-    // _properties block (Only for test playbooks, above steps)
+    // _meta block preservation (Only for test playbooks)
+    if (!isFragmentFile) {
+        const metaInput = document.getElementById('editorMetaYaml');
+        const metaKeyEl = document.getElementById('editorMetaKey');
+        const metaKey = (metaKeyEl && metaKeyEl.value) ? metaKeyEl.value.trim() : '_meta';
+        if (metaInput && metaInput.value && metaInput.value.trim().length > 0) {
+            yaml += metaKey + ":\n";
+            const metaLines = metaInput.value.trim().split("\n");
+            metaLines.forEach(line => {
+                yaml += (line.trim().length === 0 ? "" : (line.startsWith("  ") ? line : "  " + line)) + "\n";
+            });
+            yaml += "\n";
+        }
+
+        const descInput = document.getElementById('editorDescription');
+        if (descInput && descInput.value && descInput.value.trim().length > 0) {
+            yaml += "description: " + JSON.stringify(descInput.value.trim()) + "\n\n";
+        }
+
+        const promptAddonInput = document.getElementById('editorPromptAddonYaml');
+        if (promptAddonInput && promptAddonInput.value && promptAddonInput.value.trim().length > 0) {
+            yaml += "promptAddon:\n";
+            const lines = promptAddonInput.value.trim().split("\n");
+            lines.forEach(line => {
+                yaml += (line.trim().length === 0 ? "" : (line.startsWith("  ") ? line : "  " + line)) + "\n";
+            });
+            yaml += "\n";
+        }
+    }
+
+    // properties block (Only for test playbooks, above steps)
     if (!isFragmentFile) {
         const propertiesPanel = document.getElementById('playbookPropertiesPanel');
         if (propertiesPanel && propertiesPanel.style.display !== 'none') {
@@ -2542,7 +2572,9 @@ function compilePlaybookToYaml(syncToRaw = true) {
             });
 
             if (validProps.length > 0) {
-                yaml += "_properties:\n";
+                const propKeyEl = document.getElementById('editorPropertiesKey');
+                const propKey = (propKeyEl && propKeyEl.value) ? propKeyEl.value.trim() : '_properties';
+                yaml += propKey + ":\n";
                 validProps.forEach(p => {
                     yaml += `  ${p.key}: ${p.value}\n`;
                 });
@@ -5045,6 +5077,7 @@ function insertVariableFromInput(varName) {
                 lastCaretOffset = raw.length;
             }
             content.setAttribute('data-raw', raw);
+            content.innerText = raw;
             formatStepToTokens(activeLineNum);
             content.focus();
             setCaretOffset(content, lastCaretOffset);
@@ -5093,24 +5126,114 @@ function insertSnippetWithCaret(templateText, caretOffset = -1) {
     if (raw === null || raw === undefined) raw = content.innerText || '';
 
     if (lastCaretOffset >= 0 && lastCaretOffset <= raw.length) {
-        raw = raw.slice(0, lastCaretOffset) + templateText + raw.slice(lastCaretOffset);
+        const needsSpace = (lastCaretOffset > 0 && !/\s$/.test(raw.slice(0, lastCaretOffset)) && templateText.startsWith('('));
+        const prefix = needsSpace ? ' ' : '';
+        raw = raw.slice(0, lastCaretOffset) + prefix + templateText + raw.slice(lastCaretOffset);
         if (caretOffset >= 0) {
-            lastCaretOffset += caretOffset;
+            lastCaretOffset += prefix.length + caretOffset;
         } else {
-            lastCaretOffset += templateText.length;
+            lastCaretOffset += prefix.length + templateText.length;
         }
     } else {
-        raw += (raw.length > 0 ? ' ' : '') + templateText;
+        const needsSpace = (raw.length > 0 && !/\s$/.test(raw) && templateText.startsWith('('));
+        raw += (needsSpace ? ' ' : (raw.length > 0 ? ' ' : '')) + templateText;
         lastCaretOffset = raw.length;
     }
 
     content.setAttribute('data-raw', raw);
+    content.innerText = raw;
     formatStepToTokens(activeLineNum || activeRow.getAttribute('data-line'));
     content.focus();
     setCaretOffset(content, lastCaretOffset);
     if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+    if (typeof compilePlaybookToYaml === 'function') compilePlaybookToYaml();
+    if (typeof checkEditorDirtyStatus === 'function') checkEditorDirtyStatus();
 }
 window.insertSnippetWithCaret = insertSnippetWithCaret;
+
+function insertSubstepRow(initialText = '') {
+    const activeEl = document.activeElement;
+    let targetRow = null;
+    if (activeEl && activeEl.closest('.step-row')) {
+        targetRow = activeEl.closest('.step-row');
+    } else if (activeLineNum) {
+        targetRow = document.querySelector(`.step-row[data-line="${activeLineNum}"]`);
+    }
+    if (!targetRow) {
+        targetRow = document.querySelector('.step-row:last-child') || document.querySelector('.step-row');
+    }
+    if (!targetRow) {
+        targetRow = addStepToContainer('stepsList');
+    }
+    if (!targetRow) return null;
+
+    const contentEl = targetRow.querySelector('.step-content');
+    const rawText = contentEl ? (contentEl.getAttribute('data-raw') || contentEl.innerText || '').trim() : '';
+
+    // If the currently active row is completely empty, turn it into a substep directly
+    if (rawText === '' && !targetRow.classList.contains('step-row-substep')) {
+        targetRow.classList.add('step-row-substep');
+        targetRow.setAttribute('data-manual-substep', 'true');
+        if (initialText) {
+            contentEl.setAttribute('data-raw', initialText);
+            contentEl.innerText = initialText;
+            formatStepToTokens(targetRow);
+        }
+        updateAllLineNumbers();
+        refreshAllSubstepToggleBars();
+        contentEl.focus();
+        setCaretOffset(contentEl, (initialText || '').length);
+        if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+        if (typeof compilePlaybookToYaml === 'function') compilePlaybookToYaml();
+        if (typeof checkEditorDirtyStatus === 'function') checkEditorDirtyStatus();
+        return targetRow;
+    }
+
+    // Otherwise, create a new row immediately below targetRow and mark as substep
+    currentLineCount++;
+    const newRow = document.createElement('div');
+    newRow.className = 'step-row step-row-substep';
+    newRow.setAttribute('data-line', currentLineCount);
+    newRow.setAttribute('data-manual-substep', 'true');
+
+    const safeInitial = (initialText || '').replace(/"/g, '&quot;');
+    newRow.innerHTML = `
+        <span class="step-number">${currentLineCount}</span>
+        <div class="step-content" contenteditable="true" spellcheck="false" data-raw="${safeInitial}" onkeydown="handleKeyDown(event, ${currentLineCount})" onfocus="handleStepFocus(${currentLineCount})" onblur="handleStepBlur(${currentLineCount})" oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);">${safeInitial}</div>
+        <div class="step-actions">
+            <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${currentLineCount}, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+            <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${currentLineCount}, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+            <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${currentLineCount})"><span class="material-symbols-outlined">delete</span></button>
+        </div>
+    `;
+
+    const lineId = targetRow.getAttribute('data-line');
+    const treeCard = document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`);
+    let insertAfterRef = (treeCard && treeCard.parentElement === targetRow.parentElement) ? treeCard : targetRow;
+    while (insertAfterRef.nextElementSibling && insertAfterRef.nextElementSibling.classList.contains('review-suggestion-card')) {
+        insertAfterRef = insertAfterRef.nextElementSibling;
+    }
+    insertAfterRef.after(newRow);
+
+    reindexSteps();
+    updateAllLineNumbers();
+    refreshAllSubstepToggleBars();
+
+    const newContent = newRow.querySelector('.step-content');
+    if (newContent) {
+        newContent.focus();
+        setCaretOffset(newContent, 0);
+        activeLineNum = parseInt(newRow.getAttribute('data-line'), 10) || currentLineCount;
+        window.activeLineNum = activeLineNum;
+    }
+
+    if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+    if (typeof compilePlaybookToYaml === 'function') compilePlaybookToYaml();
+    if (typeof checkEditorDirtyStatus === 'function') checkEditorDirtyStatus();
+
+    return newRow;
+}
+window.insertSubstepRow = insertSubstepRow;
 
 function insertIncludePill(filePath) {
     const activeEl = document.activeElement;

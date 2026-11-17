@@ -2307,7 +2307,9 @@ public final class AuraFileService
                     }
 
                     // Root properties (_properties or properties)
-                    final Object rawProperties = root.containsKey("_properties") ? root.get("_properties") : root.get("properties");
+                    final String propertiesKey = root.containsKey("_properties") ? "_properties" : (root.containsKey("properties") ? "properties" : "_properties");
+                    result.put("propertiesKey", propertiesKey);
+                    final Object rawProperties = root.get(propertiesKey);
                     final List<Map<String, String>> propertiesList = new ArrayList<>();
                     if (rawProperties != null)
                     {
@@ -2338,7 +2340,9 @@ public final class AuraFileService
                     result.put("propertiesList", propertiesList);
 
                     // Root metadata (_meta or meta)
-                    final Object rawMeta = root.containsKey("_meta") ? root.get("_meta") : root.get("meta");
+                    final String metaKey = root.containsKey("_meta") ? "_meta" : (root.containsKey("meta") ? "meta" : "_meta");
+                    result.put("metaKey", metaKey);
+                    final Object rawMeta = root.get(metaKey);
                     if (rawMeta != null)
                     {
                         result.put("meta", rawMeta);
@@ -2854,7 +2858,7 @@ public final class AuraFileService
         // --- 2. Include file existence check ---
         final boolean isFragment = relativePath != null && relativePath.toLowerCase().endsWith(".steps");
         final List<String> availableIncludes = getStepsFilesList();
-        final Pattern includePattern = Pattern.compile("_include:\\s*(.+)");
+        final Pattern includePattern = Pattern.compile("(?:_include|include):\\s*(.+)");
         final Set<String> missingIncludes = new LinkedHashSet<>();
         final Set<String> foundIncludes = new LinkedHashSet<>();
 
@@ -2933,9 +2937,25 @@ public final class AuraFileService
                 while (vm.find())
                 {
                     final String varName = vm.group(1);
-                    if (varName != null && !varName.startsWith("neodymium."))
+                    if (varName != null && !varName.startsWith("neodymium.") && !varName.startsWith("_meta.") && !varName.startsWith("meta."))
                     {
                         usedVars.add(varName);
+                    }
+                }
+            }
+
+            // Identify variables defined dynamically at runtime (e.g. "Store text from ... as varName")
+            final Set<String> dynamicallyStoredVars = new LinkedHashSet<>();
+            final Pattern storePattern = Pattern.compile("(?i)\\bstore\\s+.+?\\s+as\\s+([a-zA-Z0-9_.-]+)");
+            for (final String step : allSteps)
+            {
+                final Matcher sm = storePattern.matcher(step);
+                while (sm.find())
+                {
+                    final String storedName = sm.group(1);
+                    if (storedName != null && !storedName.isBlank())
+                    {
+                        dynamicallyStoredVars.add(storedName.trim());
                     }
                 }
             }
@@ -2977,7 +2997,8 @@ public final class AuraFileService
             final List<String> undefinedVars = new ArrayList<>();
             for (final String usedVar : usedVars)
             {
-                if (!definedVarKeys.contains(usedVar) && !includedDefinedVars.contains(usedVar) && !rootVariables.containsKey(usedVar))
+                if (!definedVarKeys.contains(usedVar) && !includedDefinedVars.contains(usedVar)
+                        && !rootVariables.containsKey(usedVar) && !dynamicallyStoredVars.contains(usedVar))
                 {
                     undefinedVars.add(usedVar);
                 }
