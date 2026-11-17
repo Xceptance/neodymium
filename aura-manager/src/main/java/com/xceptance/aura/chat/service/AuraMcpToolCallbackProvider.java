@@ -18,39 +18,35 @@
  */
 package com.xceptance.aura.chat.service;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.xceptance.aura.mcp.tool.AuraAnalyticsToolService;
 import com.xceptance.aura.mcp.tool.AuraMcpToolService;
+import com.xceptance.aura.mcp.tool.McpToolCatalogHelper;
+import com.xceptance.aura.mcp.tool.McpToolCatalogHelper.McpToolDescriptor;
+import com.xceptance.aura.mcp.tool.McpToolCatalogHelper.McpToolParamDescriptor;
 import java.lang.reflect.Method;
-import java.lang.reflect.Parameter;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.model.ToolContext;
-import org.springframework.ai.mcp.annotation.McpTool;
-import org.springframework.ai.mcp.annotation.McpToolParam;
 import org.springframework.ai.tool.ToolCallback;
-import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.metadata.ToolMetadata;
 import org.springframework.ai.tool.method.MethodToolCallback;
 import org.springframework.ai.util.json.schema.JsonSchemaGenerator;
+import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
- * Bridges {@link AuraMcpToolService} and optional {@link AuraAnalyticsToolService} {@code @McpTool}
- * methods into Spring AI {@link ToolCallback}s so the dashboard chat agent shares full tool parity
- * with the MCP server without duplicating tool definitions.
+ * Bridges discovered {@code @McpTool}-annotated Spring beans into Spring AI {@link ToolCallback}s
+ * so the dashboard chat agent shares full tool parity with the MCP server without duplicating
+ * tool definitions.
  *
  * @author AI-generated: Gemini 4 Hydrogen
  * @author Xceptance GmbH 2026
@@ -64,7 +60,19 @@ public class AuraMcpToolCallbackProvider
     private final List<ToolCallback> delegateCallbacks;
 
     /**
-     * Constructs the callback provider by scanning all {@link McpTool}-annotated methods on {@link AuraMcpToolService}.
+     * Constructs the callback provider by discovering all {@code @McpTool}-annotated beans
+     * registered in the Spring {@link ListableBeanFactory}.
+     *
+     * @param beanFactory Spring bean factory containing registered MCP tool services
+     */
+    @Autowired
+    public AuraMcpToolCallbackProvider(final ListableBeanFactory beanFactory)
+    {
+        this.delegateCallbacks = buildDelegateCallbacks(McpToolCatalogHelper.resolveFromBeanFactory(beanFactory));
+    }
+
+    /**
+     * Constructs the callback provider from {@link AuraMcpToolService}.
      *
      * @param mcpToolService canonical MCP tool service instance
      */
@@ -74,66 +82,43 @@ public class AuraMcpToolCallbackProvider
     }
 
     /**
-     * Constructs the callback provider by scanning all {@link McpTool}-annotated methods on
-     * {@link AuraMcpToolService} and, when available, {@link AuraAnalyticsToolService}.
+     * Constructs the callback provider from explicit {@link AuraMcpToolService} and
+     * optional {@link AuraAnalyticsToolService} instances.
      *
      * @param mcpToolService canonical MCP tool service instance
      * @param analyticsToolService optional dashboard and run analytics MCP tool service
      */
-    @Autowired
     public AuraMcpToolCallbackProvider(final AuraMcpToolService mcpToolService,
-                                       @Autowired(required = false) final AuraAnalyticsToolService analyticsToolService)
+                                       final AuraAnalyticsToolService analyticsToolService)
     {
-        final List<ToolCallback> delegates = new ArrayList<>();
-        registerMcpTools(delegates, AuraMcpToolService.class, mcpToolService);
-        if (analyticsToolService != null)
-        {
-            registerMcpTools(delegates, AuraAnalyticsToolService.class, analyticsToolService);
-        }
-        this.delegateCallbacks = List.copyOf(delegates);
+        this.delegateCallbacks = buildDelegateCallbacks(
+                McpToolCatalogHelper.resolveFromBeans(mcpToolService, analyticsToolService));
     }
 
-    private static void registerMcpTools(final List<ToolCallback> delegates,
-                                         final Class<?> targetClass,
-                                         final Object targetInstance)
+    private static List<ToolCallback> buildDelegateCallbacks(final List<McpToolDescriptor> descriptors)
     {
-        if (targetInstance == null)
+        final List<ToolCallback> delegates = new ArrayList<>(descriptors.size());
+        for (final McpToolDescriptor descriptor : descriptors)
         {
-            return;
-        }
-        final Method[] methods = targetClass.getDeclaredMethods();
-        Arrays.sort(methods, Comparator.comparing(Method::getName));
-
-        for (final Method method : methods)
-        {
-            final McpTool annotation = method.getAnnotation(McpTool.class);
-            if (annotation == null)
-            {
-                continue;
-            }
-
-            final String toolName = (annotation.name() != null && !annotation.name().isBlank())
-                    ? annotation.name()
-                    : method.getName();
-            final String description = annotation.description() != null ? annotation.description() : "";
             final String inputSchema = enrichInputSchemaWithMcpParams(
-                    JsonSchemaGenerator.generateForMethodInput(method), method);
+                    JsonSchemaGenerator.generateForMethodInput(descriptor.method()), descriptor.method());
 
             final ToolDefinition definition = ToolDefinition.builder()
-                    .name(toolName)
-                    .description(description)
+                    .name(descriptor.name())
+                    .description(descriptor.description())
                     .inputSchema(inputSchema)
                     .build();
 
             final MethodToolCallback delegate = MethodToolCallback.builder()
                     .toolDefinition(definition)
                     .toolMetadata(ToolMetadata.builder().build())
-                    .toolMethod(method)
-                    .toolObject(targetInstance)
+                    .toolMethod(descriptor.method())
+                    .toolObject(descriptor.bean())
                     .build();
 
             delegates.add(delegate);
         }
+        return List.copyOf(delegates);
     }
 
     /**
@@ -177,56 +162,22 @@ public class AuraMcpToolCallbackProvider
             final JsonNode propsNode = rootObj.get("properties");
             final ObjectNode propsObj = (propsNode instanceof ObjectNode obj) ? obj : null;
 
-            for (final Parameter param : method.getParameters())
+            for (final McpToolParamDescriptor param : McpToolCatalogHelper.extractParameters(method))
             {
-                if (ToolContext.class.isAssignableFrom(param.getType()))
+                if (propsObj != null && !param.description().isBlank())
                 {
-                    continue;
-                }
-
-                final JsonProperty jsonProperty = param.getAnnotation(JsonProperty.class);
-                final String paramName = (jsonProperty != null && jsonProperty.value() != null
-                        && !jsonProperty.value().isBlank())
-                                ? jsonProperty.value()
-                                : param.getName();
-                final McpToolParam mcpParam = param.getAnnotation(McpToolParam.class);
-                final ToolParam toolParam = param.getAnnotation(ToolParam.class);
-
-                if (propsObj != null && mcpParam != null && mcpParam.description() != null && !mcpParam.description().isBlank())
-                {
-                    final JsonNode paramSchema = propsObj.has(paramName)
-                            ? propsObj.get(paramName)
-                            : propsObj.get(param.getName());
+                    final JsonNode paramSchema = propsObj.has(param.name())
+                            ? propsObj.get(param.name())
+                            : propsObj.get(param.rawName());
                     if (paramSchema instanceof ObjectNode paramObj && !paramObj.has("description"))
                     {
-                        paramObj.put("description", mcpParam.description());
+                        paramObj.put("description", param.description());
                     }
                 }
 
-                final boolean hasNullable = Arrays.stream(param.getAnnotations())
-                        .anyMatch(ann -> "Nullable".equals(ann.annotationType().getSimpleName()));
-
-                final boolean required;
-                if (hasNullable)
+                if (param.isRequired(originalRequired))
                 {
-                    required = false;
-                }
-                else if (mcpParam != null)
-                {
-                    required = mcpParam.required();
-                }
-                else if (toolParam != null)
-                {
-                    required = toolParam.required();
-                }
-                else
-                {
-                    required = originalRequired.contains(paramName) || originalRequired.contains(param.getName());
-                }
-
-                if (required)
-                {
-                    updatedRequired.add(paramName);
+                    updatedRequired.add(param.name());
                 }
             }
 

@@ -33,9 +33,11 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.execution.ToolExecutionException;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 
 /**
  * Unit tests for {@link AuraMcpToolCallbackProvider}.
@@ -166,6 +168,31 @@ public class AuraMcpToolCallbackProviderTest
         final ToolCallback analyzeCallback = findTool(callbacks, "analyze_dashboard_page");
         final JsonNode analyzeSchema = OBJECT_MAPPER.readTree(analyzeCallback.getToolDefinition().inputSchema());
         Assertions.assertEquals(List.of("pageId"), readRequiredList(analyzeSchema));
+    }
+
+    @Test
+    public void testBeanFactoryConstructorDiscoversCustomMcpToolBeansWithoutHardcoding()
+    {
+        final StaticListableBeanFactory beanFactory = new StaticListableBeanFactory();
+        beanFactory.addBean("mcpTools", Mockito.mock(AuraMcpToolService.class));
+        beanFactory.addBean("customTools", new CustomBeanFactoryTool());
+
+        final AuraMcpToolCallbackProvider provider = new AuraMcpToolCallbackProvider(beanFactory);
+        final Set<String> toolNames = Arrays.stream(provider.getToolCallbacks())
+                .map(cb -> cb.getToolDefinition().name())
+                .collect(Collectors.toSet());
+
+        Assertions.assertTrue(toolNames.containsAll(Set.of("list_tests", "custom_ping")));
+        Assertions.assertEquals(12, toolNames.size());
+    }
+
+    private static final class CustomBeanFactoryTool
+    {
+        @McpTool(name = "custom_ping", description = "Custom ping tool")
+        public Map<String, Object> ping()
+        {
+            return Map.of("ok", true);
+        }
     }
 
     private static final class SampleAnnotatedTool
