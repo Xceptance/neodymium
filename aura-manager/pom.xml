@@ -13,7 +13,7 @@
 
     <groupId>com.xceptance.aura</groupId>
     <artifactId>aura-manager</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>6.0.0-BETA</version>
     <name>Neodymium AI Manager</name>
     <description>Unified Neodymium AI Manager: Test Execution Hub, Visual Playbook Editor, and Reporting Dashboard.</description>
 
