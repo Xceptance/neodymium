@@ -410,7 +410,7 @@ public class AuraGlobalModelAdvice
             model.addAttribute("parseErrorMessage", "");
             model.addAttribute("editorMode", "visual");
 
-            if (!model.containsAttribute("chatSessions"))
+            if (!"true".equalsIgnoreCase(hxRequest) && !model.containsAttribute("chatSessions"))
             {
                 final List<ChatSessionDto> chatSessions = this.chatSessionService != null
                     ? this.chatSessionService.getSessions()

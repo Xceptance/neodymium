@@ -20,6 +20,7 @@ package com.xceptance.aura.test.controller;
 
 import com.xceptance.aura.mcp.config.AuraMcpProperties;
 import com.xceptance.aura.mcp.session.McpSubscriptionManager;
+import com.xceptance.aura.mcp.tool.AuraAnalyticsToolService;
 import com.xceptance.aura.mcp.tool.AuraMcpToolService;
 import com.xceptance.neodymium.aura.AuraSettingsService;
 import com.xceptance.neodymium.aura.AuraSettingsService.SettingsDataDto;
@@ -33,6 +34,8 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +43,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.boot.web.server.context.WebServerInitializedEvent;
@@ -70,6 +74,7 @@ public class AuraTestSettingsController implements ApplicationListener<WebServer
     private final AuraMcpProperties mcpProperties;
     private final McpSubscriptionManager subscriptionManager;
     private final AuraMcpToolService toolService;
+    private final AuraAnalyticsToolService analyticsToolService;
 
     @Value("${server.port:8080}")
     private int configuredServerPort = 8080;
@@ -84,10 +89,21 @@ public class AuraTestSettingsController implements ApplicationListener<WebServer
                                       final McpSubscriptionManager subscriptionManager,
                                       final AuraMcpToolService toolService)
     {
+        this(settingsService, mcpProperties, subscriptionManager, toolService, null);
+    }
+
+    @Autowired
+    public AuraTestSettingsController(final AuraSettingsService settingsService,
+                                      final AuraMcpProperties mcpProperties,
+                                      final McpSubscriptionManager subscriptionManager,
+                                      final AuraMcpToolService toolService,
+                                      @Autowired(required = false) final AuraAnalyticsToolService analyticsToolService)
+    {
         this.settingsService = settingsService;
         this.mcpProperties = mcpProperties;
         this.subscriptionManager = subscriptionManager;
         this.toolService = toolService;
+        this.analyticsToolService = analyticsToolService;
     }
 
     @Override
@@ -124,7 +140,7 @@ public class AuraTestSettingsController implements ApplicationListener<WebServer
         // MCP Server Tab Attributes
         final String endpointUrl = resolveFullEndpointUrl();
         final String protocolName = serverProtocol != null ? serverProtocol.toUpperCase() : "SSE";
-        final int registeredToolsCount = resolveMcpToolsList().size();
+        final List<Map<String, String>> mcpToolsList = resolveMcpToolsList();
 
         model.addAttribute("mcpEnabled", mcpProperties.isEnabled());
         model.addAttribute("mcpToken", mcpProperties.getAuth() != null ? mcpProperties.getAuth().getToken() : "");
@@ -139,8 +155,8 @@ public class AuraTestSettingsController implements ApplicationListener<WebServer
             default -> "Server-Sent Events (SSE) endpoint URL for Claude Desktop, Cursor, or Antigravity agents.";
         };
         model.addAttribute("mcpEndpointDesc", endpointDesc);
-        model.addAttribute("mcpToolsCount", registeredToolsCount);
-        model.addAttribute("mcpToolsList", resolveMcpToolsList());
+        model.addAttribute("mcpToolsCount", mcpToolsList.size());
+        model.addAttribute("mcpToolsList", mcpToolsList);
         model.addAttribute("mcpActiveSessionsCount", subscriptionManager != null ? subscriptionManager.getActiveSessionCount() : 0);
         model.addAttribute("mcpClientConfigSnippet", String.format("""
 {
@@ -162,33 +178,45 @@ public class AuraTestSettingsController implements ApplicationListener<WebServer
         final List<Map<String, String>> tools = new ArrayList<>();
         if (toolService != null)
         {
-            for (final Method method : toolService.getClass().getDeclaredMethods())
-            {
-                if (method.isAnnotationPresent(McpTool.class))
-                {
-                    final McpTool toolAnn = method.getAnnotation(McpTool.class);
-                    final StringBuilder paramsDesc = new StringBuilder();
-                    for (final Parameter param : method.getParameters())
-                    {
-                        if (param.isAnnotationPresent(McpToolParam.class))
-                        {
-                            final McpToolParam paramAnn = param.getAnnotation(McpToolParam.class);
-                            if (!paramsDesc.isEmpty())
-                            {
-                                paramsDesc.append(", ");
-                            }
-                            paramsDesc.append(param.getName()).append(" (").append(paramAnn.description()).append(")");
-                        }
-                    }
-                    final Map<String, String> item = new HashMap<>();
-                    item.put("name", toolAnn.name());
-                    item.put("description", toolAnn.description());
-                    item.put("parameters", paramsDesc.isEmpty() ? "None" : paramsDesc.toString());
-                    tools.add(item);
-                }
-            }
+            collectMcpTools(AuraMcpToolService.class, tools);
+        }
+        if (analyticsToolService != null)
+        {
+            collectMcpTools(AuraAnalyticsToolService.class, tools);
         }
         return tools;
+    }
+
+    private static void collectMcpTools(final Class<?> serviceClass, final List<Map<String, String>> tools)
+    {
+        final Method[] methods = serviceClass.getDeclaredMethods();
+        Arrays.sort(methods, Comparator.comparing(Method::getName));
+        for (final Method method : methods)
+        {
+            if (method.isAnnotationPresent(McpTool.class))
+            {
+                final McpTool toolAnn = method.getAnnotation(McpTool.class);
+                final StringBuilder paramsDesc = new StringBuilder();
+                for (final Parameter param : method.getParameters())
+                {
+                    if (param.isAnnotationPresent(McpToolParam.class))
+                    {
+                        final McpToolParam paramAnn = param.getAnnotation(McpToolParam.class);
+                        if (!paramsDesc.isEmpty())
+                        {
+                            paramsDesc.append(", ");
+                        }
+                        paramsDesc.append(param.getName()).append(" (").append(paramAnn.description()).append(")");
+                    }
+                }
+                final Map<String, String> item = new HashMap<>();
+                final String toolName = (toolAnn.name() != null && !toolAnn.name().isBlank()) ? toolAnn.name() : method.getName();
+                item.put("name", toolName);
+                item.put("description", toolAnn.description());
+                item.put("parameters", paramsDesc.isEmpty() ? "None" : paramsDesc.toString());
+                tools.add(item);
+            }
+        }
     }
 
     @GetMapping

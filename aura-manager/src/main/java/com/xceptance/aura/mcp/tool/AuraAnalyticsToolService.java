@@ -40,6 +40,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
 import org.springframework.stereotype.Service;
@@ -207,34 +208,45 @@ public class AuraAnalyticsToolService
         @McpToolParam(required = false, description = "Optional keyword matching runId, batchName, environment, browser, locale, area, or comment") final String search,
         @McpToolParam(required = false, description = "Maximum runs to return (1..50, default 15)") final Integer limit)
     {
-        final List<TestRunEntity> allRuns = loadAllRuns();
-        if (dataService != null && !allRuns.isEmpty())
-        {
-            dataService.populateRunTags(allRuns);
-        }
-
         final String normStatus = normalizeFilter(status);
         final String normBatch = normalizeFilter(batchName);
         final String normSearch = normalizeFilter(search);
         final int effectiveLimit = resolveRunLimit(limit);
 
-        final List<TestRunEntity> filtered = new ArrayList<>();
-        for (final TestRunEntity run : allRuns)
+        final List<TestRunEntity> matchingRuns;
+        final long totalMatching;
+
+        if (normStatus == null && normBatch == null && normSearch == null && runRepository != null)
         {
-            if (run == null || !matchesRunFilters(run, normStatus, normBatch, normSearch))
+            // Limit directly at SQL level and hydrate tags only for the returned slice
+            final List<TestRunEntity> fetched = runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc(PageRequest.of(0, effectiveLimit));
+            matchingRuns = fetched != null ? fetched.stream().filter(Objects::nonNull).toList() : Collections.emptyList();
+            populateTagsIfAvailable(matchingRuns);
+            totalMatching = Math.max(matchingRuns.size(), runRepository.countByIsDeletedFalse());
+        }
+        else
+        {
+            final List<TestRunEntity> allRuns = loadAllRuns();
+            populateTagsIfAvailable(allRuns);
+            final List<TestRunEntity> filtered = new ArrayList<>();
+            for (final TestRunEntity run : allRuns)
             {
-                continue;
+                if (run != null && matchesRunFilters(run, normStatus, normBatch, normSearch))
+                {
+                    filtered.add(run);
+                }
             }
-            filtered.add(run);
+            totalMatching = filtered.size();
+            matchingRuns = filtered.stream().limit(effectiveLimit).toList();
         }
 
-        final List<Map<String, Object>> summaries = filtered.stream()
+        final List<Map<String, Object>> summaries = matchingRuns.stream()
             .limit(effectiveLimit)
             .map(this::summarizeRun)
             .toList();
 
         final Map<String, Object> result = new LinkedHashMap<>();
-        result.put("totalMatching", filtered.size());
+        result.put("totalMatching", totalMatching);
         result.put("returned", summaries.size());
         result.put("runs", summaries);
         return result;
@@ -539,6 +551,14 @@ public class AuraAnalyticsToolService
         target.put("totalRunsCount", widget.getTotalRunsCount());
         target.put("showingRunsCount", widget.getShowingRunsCount());
         target.put("runs", runs.stream().filter(Objects::nonNull).limit(10).map(this::summarizeRun).toList());
+    }
+
+    private void populateTagsIfAvailable(final List<TestRunEntity> runs)
+    {
+        if (dataService != null && runs != null && !runs.isEmpty())
+        {
+            dataService.populateRunTags(runs);
+        }
     }
 
     private List<TestRunEntity> loadAllRuns()

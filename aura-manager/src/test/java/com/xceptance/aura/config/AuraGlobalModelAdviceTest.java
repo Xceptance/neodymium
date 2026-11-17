@@ -344,4 +344,21 @@ public final class AuraGlobalModelAdviceTest
         Assertions.assertEquals(active.messages, model.getAttribute("chatMessages"));
         Assertions.assertEquals(List.of(pending), model.getAttribute("pendingConfirmations"));
     }
+
+    @Test
+    public final void testGlobalChatAttributesSkippedOnHxRequest()
+    {
+        final AuraQueueService mockQueueService = Mockito.mock(AuraQueueService.class);
+        final AuraChatSessionService mockSessionService = Mockito.mock(AuraChatSessionService.class);
+        final AuraChatService mockChatService = Mockito.mock(AuraChatService.class);
+
+        final AuraGlobalModelAdvice globalAdvice = new AuraGlobalModelAdvice(
+            mockQueueService, null, null, null, mockSessionService, mockChatService);
+        final Model model = new ConcurrentModel();
+        globalAdvice.addGlobalAttributes("true", model);
+
+        Assertions.assertNull(model.getAttribute("chatSessions"));
+        Assertions.assertNull(model.getAttribute("pendingConfirmations"));
+        Mockito.verifyNoInteractions(mockSessionService, mockChatService);
+    }
 }

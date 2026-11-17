@@ -26,6 +26,7 @@ import com.xceptance.aura.chat.dto.ChatMessageDto;
 import com.xceptance.aura.chat.dto.ChatRequest;
 import com.xceptance.aura.chat.dto.ChatResponse;
 import com.xceptance.aura.chat.dto.PendingConfirmationDto;
+import com.xceptance.aura.mcp.security.TwoStepConfirmationManager;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -68,7 +69,7 @@ public class AuraChatService
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final int MAX_HISTORY_MESSAGES = 20;
     private static final int MAX_TRACE_LENGTH = 2000;
-    private static final int CONFIRMATION_TTL_SECONDS = 55;
+    private static final long CONFIRMATION_TTL_SECONDS = Math.max(1L, TwoStepConfirmationManager.DEFAULT_TTL.toSeconds() - 5L);
     private static final String DEFAULT_SESSION_KEY = "_default";
     private static final String TOOL_DELETE_TEST = "delete_test";
     private static final String TOOL_CANCEL_RUN = "cancel_run";

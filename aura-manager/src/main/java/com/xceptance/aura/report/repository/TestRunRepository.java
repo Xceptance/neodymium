@@ -21,6 +21,7 @@ package com.xceptance.aura.report.repository;
 import com.xceptance.aura.report.entity.TestRunEntity;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -35,6 +36,10 @@ public interface TestRunRepository extends JpaRepository<TestRunEntity, String>
     List<TestRunEntity> findByBatchNameAndIsDeletedFalseOrderByStartTimeMsDesc(String batchName);
 
     List<TestRunEntity> findByIsDeletedFalseOrderByStartTimeMsDesc();
+
+    List<TestRunEntity> findByIsDeletedFalseOrderByStartTimeMsDesc(Pageable pageable);
+
+    long countByIsDeletedFalse();
 
     Optional<TestRunEntity> findByIdAndIsDeletedFalse(String id);
 }

@@ -18,10 +18,6 @@
  */
 package com.xceptance.aura.test.controller;
 
-import com.xceptance.aura.chat.dto.ChatSessionDto;
-import com.xceptance.aura.chat.dto.PendingConfirmationDto;
-import com.xceptance.aura.chat.service.AuraChatService;
-import com.xceptance.aura.chat.service.AuraChatSessionService;
 import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
 import java.nio.charset.StandardCharsets;
@@ -53,7 +49,6 @@ public class AuraTestDashboardControllerTest
 {
     private AuraInteractiveService interactiveService;
     private AuraFileService fileService;
-    private AuraChatSessionService sessionService;
     private AuraTestQueueController queueController;
     private AuraTestDashboardController controller;
 
@@ -62,7 +57,6 @@ public class AuraTestDashboardControllerTest
     {
         interactiveService = Mockito.mock(AuraInteractiveService.class);
         fileService = Mockito.mock(AuraFileService.class);
-        sessionService = Mockito.mock(AuraChatSessionService.class);
         queueController = Mockito.mock(AuraTestQueueController.class);
 
         Mockito.when(fileService.getYamlFilesList()).thenReturn(List.of());
@@ -71,7 +65,6 @@ public class AuraTestDashboardControllerTest
         controller = new AuraTestDashboardController(
             interactiveService,
             fileService,
-            sessionService,
             queueController
         );
     }
@@ -220,25 +213,6 @@ public class AuraTestDashboardControllerTest
         final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
         mockMvc.perform(get("/"))
             .andExpect(status().isNotFound());
-    }
-
-    @Test
-    public void testRenderDashboardPopulatesPendingConfirmationsFromChatService()
-    {
-        final AuraChatService chatService = Mockito.mock(AuraChatService.class);
-        final ChatSessionDto session = new ChatSessionDto("sess-dash", "Main Chat", List.of());
-        final PendingConfirmationDto pending = new PendingConfirmationDto(
-                "act-9", "delete_test", "tests/old.yaml", 999999999L);
-        Mockito.when(sessionService.getSessions()).thenReturn(List.of(session));
-        Mockito.when(chatService.getPendingConfirmations("sess-dash")).thenReturn(List.of(pending));
-
-        final AuraTestDashboardController dashController = new AuraTestDashboardController(
-                interactiveService, fileService, sessionService, queueController, chatService);
-        final Model model = new ConcurrentModel();
-        dashController.renderDashboard("false", null, model);
-
-        Assertions.assertEquals("sess-dash", model.getAttribute("currentSessionId"));
-        Assertions.assertEquals(List.of(pending), model.getAttribute("pendingConfirmations"));
     }
 
     @Test

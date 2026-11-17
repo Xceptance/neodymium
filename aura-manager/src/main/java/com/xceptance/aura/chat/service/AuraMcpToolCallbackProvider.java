@@ -64,22 +64,6 @@ public class AuraMcpToolCallbackProvider
     private final List<ToolCallback> delegateCallbacks;
 
     /**
-     * Listener notified whenever a bridged MCP tool is invoked during a chat turn.
-     */
-    @FunctionalInterface
-    public interface ToolExecutionObserver
-    {
-        /**
-         * Called after a tool finishes executing or fails with an exception.
-         *
-         * @param toolName name of the invoked tool
-         * @param toolInput raw JSON arguments passed by the model
-         * @param toolOutput raw JSON result returned by the tool or error summary
-         */
-        void onToolExecuted(String toolName, String toolInput, String toolOutput);
-    }
-
-    /**
      * Constructs the callback provider by scanning all {@link McpTool}-annotated methods on {@link AuraMcpToolService}.
      *
      * @param mcpToolService canonical MCP tool service instance
@@ -153,29 +137,13 @@ public class AuraMcpToolCallbackProvider
     }
 
     /**
-     * Creates per-turn {@link ToolCallback} instances bound to the supplied observer.
-     *
-     * @param observer optional observer notified of each tool invocation during the turn
-     * @return array of observer-bound Spring AI {@link ToolCallback}s
-     */
-    public ToolCallback[] createToolCallbacks(final ToolExecutionObserver observer)
-    {
-        final ToolCallback[] callbacks = new ToolCallback[this.delegateCallbacks.size()];
-        for (int i = 0; i < this.delegateCallbacks.size(); i++)
-        {
-            callbacks[i] = new ObservingToolCallback(this.delegateCallbacks.get(i), observer);
-        }
-        return callbacks;
-    }
-
-    /**
-     * Returns all bridged MCP tool callbacks without an attached turn observer.
+     * Returns all bridged MCP tool callbacks.
      *
      * @return array of Spring AI {@link ToolCallback}s
      */
     public ToolCallback[] getToolCallbacks()
     {
-        return createToolCallbacks(null);
+        return this.delegateCallbacks.toArray(ToolCallback[]::new);
     }
 
     static String enrichInputSchemaWithMcpParams(final String rawSchema, final Method method)
@@ -277,76 +245,6 @@ public class AuraMcpToolCallbackProvider
         {
             LOGGER.warn("Failed to enrich JSON input schema for MCP tool method {}: {}", method.getName(), e.getMessage(), e);
             return rawSchema;
-        }
-    }
-
-    private static final class ObservingToolCallback implements ToolCallback
-    {
-        private final ToolCallback delegate;
-        private final ToolExecutionObserver observer;
-
-        private ObservingToolCallback(final ToolCallback delegate, final ToolExecutionObserver observer)
-        {
-            this.delegate = delegate;
-            this.observer = observer;
-        }
-
-        @Override
-        public ToolDefinition getToolDefinition()
-        {
-            return this.delegate.getToolDefinition();
-        }
-
-        @Override
-        public ToolMetadata getToolMetadata()
-        {
-            return this.delegate.getToolMetadata();
-        }
-
-        @Override
-        public String call(final String toolInput)
-        {
-            try
-            {
-                final String output = this.delegate.call(toolInput);
-                notifyObserver(toolInput, output);
-                return output;
-            }
-            catch (final RuntimeException e)
-            {
-                notifyObserver(toolInput, formatError(e));
-                throw e;
-            }
-        }
-
-        @Override
-        public String call(final String toolInput, final ToolContext toolContext)
-        {
-            try
-            {
-                final String output = this.delegate.call(toolInput, toolContext);
-                notifyObserver(toolInput, output);
-                return output;
-            }
-            catch (final RuntimeException e)
-            {
-                notifyObserver(toolInput, formatError(e));
-                throw e;
-            }
-        }
-
-        private void notifyObserver(final String toolInput, final String output)
-        {
-            if (this.observer != null)
-            {
-                this.observer.onToolExecuted(this.delegate.getToolDefinition().name(), toolInput, output);
-            }
-        }
-
-        private static String formatError(final RuntimeException e)
-        {
-            final String msg = e.getMessage() != null ? e.getMessage() : "Tool execution failed";
-            return "[ERROR] " + e.getClass().getSimpleName() + ": " + msg;
         }
     }
 }

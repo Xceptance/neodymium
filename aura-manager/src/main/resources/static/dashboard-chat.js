@@ -56,14 +56,6 @@ function buildActiveViewContext() {
         parts.push('view=CustomDashboard');
         if (pageId) parts.push('pageId=' + pageId);
         if (pageName) parts.push('pageName=' + pageName);
-    } else if (runReportEl && typeof runReportEl.getAttribute === 'function') {
-        const runId = runReportEl.getAttribute('data-run-id') || '';
-        const batchName = runReportEl.getAttribute('data-batch-name') || '';
-        const env = runReportEl.getAttribute('data-environment') || '';
-        parts.push('view=RunReport');
-        if (runId) parts.push('runId=' + runId);
-        if (batchName) parts.push('batchName=' + batchName);
-        if (env) parts.push('environment=' + env);
     } else if (batchOverviewEl && typeof batchOverviewEl.getAttribute === 'function') {
         const batchName = batchOverviewEl.getAttribute('data-batch-name') || '';
         const groupType = batchOverviewEl.getAttribute('data-group-type') || '';
@@ -76,7 +68,15 @@ function buildActiveViewContext() {
         if (scopeTitle) parts.push('scopeTitle=' + scopeTitle);
     } else if (testBaseEl) {
         parts.push('view=TestBase');
-    } else if (document.getElementById('editorFileName')) {
+    } else if (runReportEl && typeof runReportEl.getAttribute === 'function') {
+        const runId = runReportEl.getAttribute('data-run-id') || '';
+        const batchName = runReportEl.getAttribute('data-batch-name') || '';
+        const env = runReportEl.getAttribute('data-environment') || '';
+        parts.push('view=RunReport');
+        if (runId) parts.push('runId=' + runId);
+        if (batchName) parts.push('batchName=' + batchName);
+        if (env) parts.push('environment=' + env);
+    } else if (document.getElementById('auraTestManagerWorkspace')) {
         parts.push('view=PlaybooksAndQueue');
     }
 

@@ -24,6 +24,7 @@ import com.xceptance.aura.AuraManagerApplication;
 import com.xceptance.aura.core.service.AuraPlaybookService;
 import com.xceptance.aura.mcp.dto.RunStatusResponseDto;
 import com.xceptance.aura.mcp.resource.AuraMcpResourceService;
+import com.xceptance.aura.mcp.tool.AuraAnalyticsToolService;
 import com.xceptance.aura.mcp.tool.AuraMcpToolService;
 import com.xceptance.aura.test.controller.AuraTestSettingsController;
 import org.junit.jupiter.api.AfterEach;
@@ -32,13 +33,21 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.ui.ConcurrentModel;
+import org.springframework.ui.Model;
 
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Deterministic integration test verifying that the Aura Manager application boots cleanly,
@@ -59,6 +68,9 @@ public class AuraMcpIntegrationTest
 
     @Autowired
     private AuraMcpToolService toolService;
+
+    @Autowired
+    private AuraAnalyticsToolService analyticsToolService;
 
     @Autowired
     private AuraMcpResourceService resourceService;
@@ -455,5 +467,140 @@ public class AuraMcpIntegrationTest
         final Map<String, Object> cancelStep2 = toolService.cancelRun(runId2, token);
         Assertions.assertNotNull(cancelStep2.get("status"));
         Assertions.assertTrue(List.of("CANCELLED", "ALREADY_COMPLETED").contains(cancelStep2.get("status")));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testSettingsModalIncludesAllRegisteredMcpAndAnalyticsTools()
+    {
+        final Model model = new ConcurrentModel();
+        settingsController.getSettingsModal("mcp", model);
+
+        Assertions.assertEquals(15, model.getAttribute("mcpToolsCount"));
+        final List<Map<String, String>> tools = (List<Map<String, String>>) model.getAttribute("mcpToolsList");
+        Assertions.assertNotNull(tools);
+
+        final Set<String> names = new HashSet<>();
+        for (final Map<String, String> tool : tools)
+        {
+            names.add(tool.get("name"));
+        }
+        Assertions.assertTrue(names.containsAll(Set.of(
+                "list_tests",
+                "list_custom_dashboards",
+                "analyze_dashboard_page",
+                "list_runs",
+                "list_batches")));
+    }
+
+    @Test
+    public void testAnalyticsToolsIndependently()
+    {
+        Assertions.assertNotNull(analyticsToolService, "AuraAnalyticsToolService must be registered in Spring context");
+
+        final Map<String, Object> dashboards = analyticsToolService.listCustomDashboards();
+        Assertions.assertNotNull(dashboards.get("dashboards"));
+
+        final Map<String, Object> runs = analyticsToolService.listRuns(null, null, null, 5);
+        Assertions.assertTrue(runs.containsKey("totalMatching"));
+        Assertions.assertTrue(runs.containsKey("runs"));
+
+        final Map<String, Object> batches = analyticsToolService.listBatches();
+        Assertions.assertTrue(batches.containsKey("batches"));
+
+        final Map<String, Object> missingDashboard = analyticsToolService.analyzeDashboardPage("non-existent-page-id");
+        Assertions.assertTrue(missingDashboard.containsKey("error"));
+    }
+
+    @Test
+    public void testMcpHttpEndpointExposesAndCallsAnalyticsTools() throws Exception
+    {
+        final ObjectMapper mapper = new ObjectMapper();
+        final JsonNode listResponse = postMcpJsonRpc(mapper, """
+                {
+                  "jsonrpc": "2.0",
+                  "id": "tools-list-1",
+                  "method": "tools/list",
+                  "params": {}
+                }
+                """);
+
+        final JsonNode toolsArray = listResponse.path("result").path("tools");
+        Assertions.assertTrue(toolsArray.isArray(), "Expected tools array in /mcp tools/list response: " + listResponse);
+
+        final Set<String> registeredToolNames = new HashSet<>();
+        for (final JsonNode toolNode : toolsArray)
+        {
+            registeredToolNames.add(toolNode.path("name").asText());
+        }
+        Assertions.assertTrue(registeredToolNames.containsAll(Set.of(
+                "list_tests",
+                "list_custom_dashboards",
+                "analyze_dashboard_page",
+                "list_runs",
+                "list_batches")), "Missing expected analytics tools in /mcp tools/list: " + registeredToolNames);
+
+        final JsonNode callResponse = postMcpJsonRpc(mapper, """
+                {
+                  "jsonrpc": "2.0",
+                  "id": "tools-call-1",
+                  "method": "tools/call",
+                  "params": {
+                    "name": "list_runs",
+                    "arguments": {
+                      "limit": 5
+                    }
+                  }
+                }
+                """);
+
+        Assertions.assertTrue(callResponse.path("error").isMissingNode(),
+                "Expected no JSON-RPC error calling list_runs over /mcp: " + callResponse);
+        Assertions.assertFalse(callResponse.path("result").path("isError").asBoolean(false),
+                "Expected isError=false calling list_runs over /mcp: " + callResponse);
+        final JsonNode contentText = callResponse.path("result").path("content").path(0).path("text");
+        Assertions.assertFalse(contentText.asText().isBlank(),
+                "Expected non-empty serialized response text from list_runs over /mcp");
+        final JsonNode parsedPayload = mapper.readTree(contentText.asText());
+        Assertions.assertTrue(parsedPayload.has("runs"), "Expected 'runs' field in list_runs payload: " + parsedPayload);
+    }
+
+    private JsonNode postMcpJsonRpc(final ObjectMapper mapper, final String jsonRpcBody) throws Exception
+    {
+        final HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .build();
+        final HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/mcp"))
+                .timeout(Duration.ofSeconds(5))
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json, text/event-stream")
+                .POST(HttpRequest.BodyPublishers.ofString(jsonRpcBody, StandardCharsets.UTF_8))
+                .build();
+
+        final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        Assertions.assertEquals(200, response.statusCode(), "Unexpected HTTP status from /mcp: " + response.body());
+
+        final String rawBody = response.body() != null ? response.body().trim() : "";
+        final String jsonPayload = extractJsonRpcPayload(rawBody);
+        return mapper.readTree(jsonPayload);
+    }
+
+    private static String extractJsonRpcPayload(final String rawBody)
+    {
+        if (!rawBody.startsWith("{"))
+        {
+            for (final String line : rawBody.split("\\R"))
+            {
+                if (line.startsWith("data:"))
+                {
+                    final String candidate = line.substring("data:".length()).trim();
+                    if (!candidate.isEmpty())
+                    {
+                        return candidate;
+                    }
+                }
+            }
+        }
+        return rawBody;
     }
 }

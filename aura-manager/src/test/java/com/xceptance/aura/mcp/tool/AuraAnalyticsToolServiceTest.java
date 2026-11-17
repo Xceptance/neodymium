@@ -43,6 +43,7 @@ import java.util.Set;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.data.domain.PageRequest;
 
 /**
  * Unit tests for {@link AuraAnalyticsToolService} covering custom dashboard summaries,
@@ -185,12 +186,39 @@ public final class AuraAnalyticsToolServiceTest
         final AuraAnalyticsToolService service = new AuraAnalyticsToolService(null, null, runRepository, dataService);
         final Map<String, Object> filtered = service.listRuns("failed", "check", "staging", 5);
 
-        Assertions.assertEquals(1, filtered.get("totalMatching"));
+        Assertions.assertEquals(1L, ((Number) filtered.get("totalMatching")).longValue());
         @SuppressWarnings("unchecked")
         final List<Map<String, Object>> runs = (List<Map<String, Object>>) filtered.get("runs");
         Assertions.assertEquals("run_20261116_100000", runs.get(0).get("runId"));
         Assertions.assertEquals(2, runs.get(0).get("failedUnknown"));
         Assertions.assertEquals(0.03, runs.get(0).get("llmCost"));
+    }
+
+    @Test
+    public void testListRunsUnfilteredUsesBoundedRepositoryQuery()
+    {
+        final TestRunRepository runRepository = Mockito.mock(TestRunRepository.class);
+        final AuraReportDataService dataService = Mockito.mock(AuraReportDataService.class);
+
+        final TestRunEntity latestRun = new TestRunEntity();
+        latestRun.setId("run_20261117_120000");
+        latestRun.setBatchName("Checkout");
+        latestRun.setStatus("PASSED");
+        latestRun.setTotalTests(3);
+        latestRun.setPassedCount(3);
+
+        Mockito.when(runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc(PageRequest.of(0, 15)))
+            .thenReturn(List.of(latestRun));
+        Mockito.when(runRepository.countByIsDeletedFalse()).thenReturn(42L);
+
+        final AuraAnalyticsToolService service = new AuraAnalyticsToolService(null, null, runRepository, dataService);
+        final Map<String, Object> result = service.listRuns(null, null, null, null);
+
+        Assertions.assertEquals(42L, ((Number) result.get("totalMatching")).longValue());
+        Assertions.assertEquals(1, result.get("returned"));
+        Mockito.verify(runRepository).findByIsDeletedFalseOrderByStartTimeMsDesc(PageRequest.of(0, 15));
+        Mockito.verify(runRepository, Mockito.never()).findByIsDeletedFalseOrderByStartTimeMsDesc();
+        Mockito.verify(dataService).populateRunTags(List.of(latestRun));
     }
 
     @Test

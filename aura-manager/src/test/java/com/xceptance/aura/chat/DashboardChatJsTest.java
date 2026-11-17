@@ -844,10 +844,31 @@ public class DashboardChatJsTest
                     throw new Error('Unexpected run report context: ' + hiddenViewContext.value);
                 }
 
-                // 3. Playbooks & active editor file fallback
+                // 3. Runs overview context must take precedence over child [data-run-id] rows
+                elements['pageBatchHistoryOverview'] = {
+                    getAttribute: (name) => name === 'data-batch-name' ? 'Checkout'
+                            : (name === 'data-scope-title' ? 'All Runs' : '')
+                };
+                context.window.location.pathname = '/runs';
+                context.window.location.search = '';
+                context.syncHiddenViewContext();
+                if (!hiddenViewContext.value.includes('view=RunsOverview')
+                        || hiddenViewContext.value.includes('view=RunReport')
+                        || !hiddenViewContext.value.includes('batchName=Checkout')
+                        || !hiddenViewContext.value.includes('scopeTitle=All Runs')) {
+                    throw new Error('Expected RunsOverview to win over child [data-run-id]: ' + hiddenViewContext.value);
+                }
+                delete elements['pageBatchHistoryOverview'];
+
+                // 4. Playbooks workspace context and active editor file fallback
                 mainContainer.runEl = null;
                 context.window.location.pathname = '/playbooks';
                 context.window.location.search = '';
+                elements['auraTestManagerWorkspace'] = {};
+                context.syncHiddenViewContext();
+                if (!hiddenViewContext.value.includes('view=PlaybooksAndQueue')) {
+                    throw new Error('Expected PlaybooksAndQueue when #auraTestManagerWorkspace is present without editor: ' + hiddenViewContext.value);
+                }
                 elements['editorFileName'] = { getAttribute: () => 'tests/Smoke.yaml' };
                 context.syncHiddenActiveFile();
                 if (hiddenFile.value !== 'tests/Smoke.yaml' || !hiddenViewContext.value.includes('view=PlaybooksAndQueue')) {

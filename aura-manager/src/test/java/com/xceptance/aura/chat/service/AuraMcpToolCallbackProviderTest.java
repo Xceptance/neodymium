@@ -29,7 +29,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -91,21 +90,13 @@ public class AuraMcpToolCallbackProviderTest
     }
 
     @Test
-    public void testCallbackDelegatesAndNotifiesPerTurnObserver() throws Exception
+    public void testGetToolCallbacksDelegatesDirectlyToMcpToolService() throws Exception
     {
         final AuraMcpToolService mcpToolService = Mockito.mock(AuraMcpToolService.class);
         Mockito.when(mcpToolService.listTests("smoke")).thenReturn(Map.of("tests", List.of("smoke.yaml")));
 
         final AuraMcpToolCallbackProvider provider = new AuraMcpToolCallbackProvider(mcpToolService);
-        final AtomicReference<String> observedName = new AtomicReference<>();
-        final AtomicReference<String> observedInput = new AtomicReference<>();
-        final AtomicReference<String> observedOutput = new AtomicReference<>();
-
-        final ToolCallback[] callbacks = provider.createToolCallbacks((name, input, output) -> {
-            observedName.set(name);
-            observedInput.set(input);
-            observedOutput.set(output);
-        });
+        final ToolCallback[] callbacks = provider.getToolCallbacks();
         final ToolCallback listTestsCallback = findTool(callbacks, "list_tests");
 
         final String result = listTestsCallback.call("{\"filter\":\"smoke\"}");
@@ -113,30 +104,24 @@ public class AuraMcpToolCallbackProviderTest
 
         Assertions.assertEquals("smoke.yaml", resultJson.path("tests").get(0).asText());
         Mockito.verify(mcpToolService).listTests("smoke");
-        Assertions.assertEquals("list_tests", observedName.get());
-        Assertions.assertEquals("{\"filter\":\"smoke\"}", observedInput.get());
-        Assertions.assertEquals(result, observedOutput.get());
     }
 
     @Test
-    public void testCallbackObserverReceivesErrorSummaryWhenDelegateThrows()
+    public void testGetToolCallbacksPropagatesDelegateExceptionAsToolExecutionException()
     {
         final AuraMcpToolService mcpToolService = Mockito.mock(AuraMcpToolService.class);
         Mockito.when(mcpToolService.listTests(Mockito.any()))
                 .thenThrow(new IllegalStateException("Disk read failure"));
 
         final AuraMcpToolCallbackProvider provider = new AuraMcpToolCallbackProvider(mcpToolService);
-        final AtomicReference<String> observedOutput = new AtomicReference<>();
-        final ToolCallback[] callbacks = provider.createToolCallbacks((name, input, output) -> observedOutput.set(output));
+        final ToolCallback[] callbacks = provider.getToolCallbacks();
         final ToolCallback listTestsCallback = findTool(callbacks, "list_tests");
 
         final ToolExecutionException thrown = Assertions.assertThrows(
                 ToolExecutionException.class,
                 () -> listTestsCallback.call("{\"filter\":\"all\"}"));
         Assertions.assertInstanceOf(IllegalStateException.class, thrown.getCause());
-        Assertions.assertNotNull(observedOutput.get());
-        Assertions.assertTrue(observedOutput.get().contains("[ERROR]"));
-        Assertions.assertTrue(observedOutput.get().contains("Disk read failure"));
+        Assertions.assertTrue(thrown.getCause().getMessage().contains("Disk read failure"));
     }
 
     @Test

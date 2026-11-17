@@ -940,7 +940,7 @@ function init() {
             : (data.action ? [data.action] : []);
 
         if (actions.includes('refresh_files')) {
-            if (typeof loadFiles === 'function') await loadFiles();
+            if (typeof loadFiles === 'function' && document.getElementById('yamlFileList')) await loadFiles();
         }
         if (actions.includes('refresh_runs')) {
             if (window.htmx && document.getElementById('queueListContainer')) {
