@@ -77,10 +77,10 @@
                     <span class="material-symbols-outlined" style="font-size: 13px; vertical-align: middle;">code</span> Raw YAML
                 </button>
             </div>
-            <button class="btn-editor" id="undoBtn" onclick="editorUndo()" title="Undo (Ctrl+Z)" disabled>
+            <button class="btn-editor" id="undoBtn" onclick="editorUndo()" onmousedown="event.preventDefault()" title="Undo (Ctrl+Z)" disabled>
                 <span class="material-symbols-outlined">undo</span> Undo
             </button>
-            <button class="btn-editor" id="redoBtn" onclick="editorRedo()" title="Redo (Ctrl+Y)" disabled>
+            <button class="btn-editor" id="redoBtn" onclick="editorRedo()" onmousedown="event.preventDefault()" title="Redo (Ctrl+Y)" disabled>
                 <span class="material-symbols-outlined">redo</span> Redo
             </button>
             <button class="btn-editor btn-validate" id="reviewStepsBtn" onclick="runValidateFile()" title="Validate file: check YAML syntax, include paths, and variable definitions" th:disabled="${hasParseError != null and hasParseError}">
