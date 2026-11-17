@@ -102,5 +102,9 @@ public class MultibrowserSystemPropertyOverrideTest extends AbstractNeodymiumTes
         final TestEnvironment env = config.getTestEnvironment("myEnv");
         Assertions.assertNotNull(env);
         Assertions.assertEquals("https://override.example.com", env.getUrl());
+        Assertions.assertFalse(config.getBrowserProfiles().containsKey("testEnvironment"),
+                               "Test environment prefix must not be registered as a browser profile");
+        Assertions.assertFalse(config.getBrowserProfiles().containsKey("global"),
+                               "Reserved keyword 'global' must not be registered as a browser profile");
     }
 }

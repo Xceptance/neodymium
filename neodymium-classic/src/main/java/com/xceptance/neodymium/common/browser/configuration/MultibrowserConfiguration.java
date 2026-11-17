@@ -67,7 +67,7 @@ public class MultibrowserConfiguration
         testEnvironmentProperties = new Properties();
         loadPropertiesFromFile(DEFAULT_TEST_ENVIRONMENT_FILE, testEnvironmentProperties);
         loadPropertiesFromFile(DEVELOPMENT_TEST_ENVIRONMENT_FILE, testEnvironmentProperties);
-        loadSystemProperties(testEnvironmentProperties, TEST_ENVIRONMENT_PREFIX);
+        loadSystemProperties(testEnvironmentProperties, TEST_ENVIRONMENT_PREFIX, null);
         parseTestEnvironments();
 
         // setting up the browser profiles
@@ -87,7 +87,7 @@ public class MultibrowserConfiguration
         browserProfileProperties.put("browserprofile." + DEFAULT_BROWSER_ID + ".arguments", "-ignore-certificate-errors");
 
         // overlay JVM system properties (e.g. -Dbrowserprofile.global.headless=true)
-        loadSystemProperties(browserProfileProperties, BROWSER_PROFILE_PREFIX);
+        loadSystemProperties(browserProfileProperties, BROWSER_PROFILE_PREFIX, TEST_ENVIRONMENT_PREFIX);
 
         parseBrowserProfiles();
     }
@@ -108,6 +108,8 @@ public class MultibrowserConfiguration
     {
         browserProfiles = new LinkedHashMap<String, BrowserConfiguration>();
         Set<String> browserProfileKeys = getSubkeysForPrefix(browserProfileProperties, BROWSER_PROFILE_PREFIX);
+        browserProfileKeys.remove("global");
+        browserProfileKeys.remove("testEnvironment");
 
         BrowserConfigurationMapper mapper = new BrowserConfigurationMapper();
 
@@ -232,21 +234,24 @@ public class MultibrowserConfiguration
     }
 
     /**
-     * Loads JVM system properties that start with the specified prefix into the target {@link Properties}.
+     * Loads JVM system properties that start with the specified prefix into the target {@link Properties},
+     * optionally excluding properties that match an exclude prefix.
      *
      * @param properties
      *            the target properties instance to populate
      * @param prefix
      *            the key prefix to filter system properties
+     * @param excludePrefix
+     *            an optional prefix to exclude (e.g. test environments when parsing profiles), or null
      */
-    private static void loadSystemProperties(final Properties properties, final String prefix)
+    private static void loadSystemProperties(final Properties properties, final String prefix, final String excludePrefix)
     {
         try
         {
             final Properties systemProperties = System.getProperties();
             for (final String propertyName : systemProperties.stringPropertyNames())
             {
-                if (propertyName.startsWith(prefix))
+                if (propertyName.startsWith(prefix) && (excludePrefix == null || !propertyName.startsWith(excludePrefix)))
                 {
                     properties.setProperty(propertyName, systemProperties.getProperty(propertyName));
                 }
