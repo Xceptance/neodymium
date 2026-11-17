@@ -382,6 +382,27 @@ function openSettingsForApiKey() {
 }
 window.openSettingsForApiKey = openSettingsForApiKey;
 
+// HTMX pre-flight confirmation listener for test execution
+document.addEventListener('htmx:confirm', function(evt) {
+    if (evt.target && (evt.target.id === 'runQueueBtn' || evt.target.id === 'runCurrentTestBtn')) {
+        if (!hasConfiguredApiKey() && !isApiKeyWarningIgnored()) {
+            evt.preventDefault();
+            const targetBtn = evt.target;
+            showApiKeyWarningModal();
+            pendingRunCallback = function() {
+                if (evt.detail && typeof evt.detail.issueRequest === 'function') {
+                    prepareClientForExecution();
+                    evt.detail.issueRequest(true);
+                } else if (targetBtn.id === 'runQueueBtn') {
+                    triggerRunQueue();
+                } else {
+                    triggerRunCurrentTest();
+                }
+            };
+        }
+    }
+});
+
 function prepareClientForExecution() {
     userAborted = false;
     window.userAborted = false;

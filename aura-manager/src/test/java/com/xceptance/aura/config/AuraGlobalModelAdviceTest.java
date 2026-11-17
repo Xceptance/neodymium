@@ -25,6 +25,7 @@ import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.ReportDashboardSettingService;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.AuraQueueService;
+import com.xceptance.neodymium.aura.AuraSettingsService;
 import com.xceptance.neodymium.aura.dto.DatasetSelection;
 import com.xceptance.neodymium.aura.dto.RunRequest;
 import java.util.List;
@@ -94,6 +95,24 @@ public final class AuraGlobalModelAdviceTest
         Assertions.assertEquals("running", model.getAttribute("activeRunStatus"));
         Assertions.assertEquals("/run-report?runId=run_20261021_121942", model.getAttribute("activeRunReportUrl"));
         Assertions.assertEquals(Boolean.TRUE, model.getAttribute("running"));
+    }
+
+    @Test
+    public final void testAddGlobalAttributesPopulatesApiKeyAndProjectMetadata()
+    {
+        final AuraSettingsService mockSettings = Mockito.mock(AuraSettingsService.class);
+        Mockito.when(mockSettings.hasConfiguredApiKey()).thenReturn(true);
+        Mockito.when(mockSettings.isApiKeyWarningIgnored()).thenReturn(false);
+        Mockito.when(mockSettings.getProjectId()).thenReturn("my-project-1234abcd");
+
+        final AuraGlobalModelAdvice customAdvice = new AuraGlobalModelAdvice(
+            this.queueService, null, null, null, mockSettings);
+        final Model model = new ConcurrentModel();
+        customAdvice.addGlobalAttributes(model);
+
+        Assertions.assertEquals(Boolean.TRUE, model.getAttribute("hasApiKey"));
+        Assertions.assertEquals(Boolean.FALSE, model.getAttribute("apiKeyWarningIgnored"));
+        Assertions.assertEquals("my-project-1234abcd", model.getAttribute("projectId"));
     }
 
     @Test
