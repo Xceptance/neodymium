@@ -27,7 +27,11 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
 /**
@@ -56,34 +60,116 @@ public class AiLauncher
 
         System.setProperty(SPLASH_ACTIVE_PROPERTY, "true");
 
-        if (isBrowserOpenEnabled())
-        {
-            // 1. Start a lightweight HTTP server on an ephemeral port (port 0) on the loopback interface
-            final HttpServer server = startSplashServer();
-            final int tempPort = server.getAddress().getPort();
-            final String loadingUrl = "http://localhost:" + tempPort + "/loading.html";
-
-            // Register JVM shutdown hook to clean up the temporary server upon termination
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> server.stop(0)));
-
-            // 2. Open default browser to the loading splash screen in a detached process
-            openBrowser(loadingUrl);
-
-            // 3. Hand off control to the Spring Boot application
-            try
-            {
-                AuraManagerApplication.main(args);
-            }
-            finally
-            {
-                server.stop(0);
-            }
-        }
-        else
+        if (!isBrowserOpenEnabled())
         {
             System.out.println("[Neodymium AI Manager] Browser auto-open is disabled. Dashboard will be available at http://localhost:8080");
             AuraManagerApplication.main(args);
+            return;
         }
+
+        final int serverPort = resolveServerPort(args);
+        final boolean clientDetected = probePortForClient(serverPort, 400);
+
+        if (clientDetected)
+        {
+            System.out.println("[Neodymium AI Manager] Active dashboard tab detected. Suppressing duplicate browser launch.");
+            AuraManagerApplication.main(args);
+            return;
+        }
+
+        // 1. Start a lightweight HTTP server on an ephemeral port (port 0) on the loopback interface
+        final HttpServer server = startSplashServer(serverPort);
+        final int tempPort = server.getAddress().getPort();
+        final String loadingUrl = "http://localhost:" + tempPort + "/loading.html";
+
+        // Register JVM shutdown hook to clean up the temporary server upon termination
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> server.stop(0)));
+
+        // 2. Open default browser to the loading splash screen in a detached process
+        openBrowser(loadingUrl);
+
+        // 3. Hand off control to the Spring Boot application
+        try
+        {
+            AuraManagerApplication.main(args);
+        }
+        finally
+        {
+            server.stop(0);
+        }
+    }
+
+    /**
+     * Probes the specified port briefly on the loopback interface to detect whether an active client
+     * (such as an open dashboard browser tab polling /api/status) is already connected.
+     *
+     * @param port the target server port to probe
+     * @param timeoutMs the maximum duration in milliseconds to wait for a client connection
+     * @return true if a client connected during the probe, false otherwise
+     */
+    static boolean probePortForClient(final int port, final int timeoutMs)
+    {
+        try (final ServerSocket serverSocket = new ServerSocket())
+        {
+            serverSocket.setReuseAddress(true);
+            serverSocket.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
+            serverSocket.setSoTimeout(timeoutMs);
+            try (final Socket client = serverSocket.accept())
+            {
+                client.setSoTimeout(1000);
+                final OutputStream out = client.getOutputStream();
+                final String response = "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                out.write(response.getBytes(StandardCharsets.US_ASCII));
+                out.flush();
+                return true;
+            }
+            catch (final SocketTimeoutException ignored)
+            {
+                return false;
+            }
+        }
+        catch (final Exception ignored)
+        {
+            return false;
+        }
+    }
+
+    /**
+     * Resolves the target HTTP server port from system properties, command line arguments, or defaults to 8080.
+     *
+     * @param args command line arguments
+     * @return resolved server port
+     */
+    static int resolveServerPort(final String[] args)
+    {
+        final String sysProp = System.getProperty("server.port");
+        if (sysProp != null)
+        {
+            try
+            {
+                return Integer.parseInt(sysProp.trim());
+            }
+            catch (final NumberFormatException ignored)
+            {
+            }
+        }
+        if (args != null)
+        {
+            for (final String arg : args)
+            {
+                if (arg != null && arg.startsWith("--server.port="))
+                {
+                    try
+                    {
+                        return Integer.parseInt(arg.substring("--server.port=".length()).trim());
+                    }
+                    catch (final NumberFormatException ignored)
+                    {
+                    }
+                }
+            }
+        }
+        return 8080;
     }
 
     /**
@@ -115,8 +201,20 @@ public class AiLauncher
      */
     static HttpServer startSplashServer() throws IOException
     {
+        return startSplashServer(8080);
+    }
+
+    /**
+     * Starts the lightweight HTTP server to serve the splash screen on an ephemeral port targeting the specified server port.
+     *
+     * @param targetPort the target Spring Boot HTTP port
+     * @return the running HttpServer instance
+     * @throws IOException if server socket initialization fails
+     */
+    static HttpServer startSplashServer(final int targetPort) throws IOException
+    {
         final HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
-        server.createContext("/loading.html", new LoadingHandler());
+        server.createContext("/loading.html", new LoadingHandler(targetPort));
         server.setExecutor(null);
         server.start();
         return server;
@@ -145,7 +243,6 @@ public class AiLauncher
             else if (osName.contains("mac"))
             {
                 new ProcessBuilder("open", url)
-                    .redirectInput(ProcessBuilder.Redirect.DISCARD)
                     .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                     .redirectError(ProcessBuilder.Redirect.DISCARD)
                     .start();
@@ -159,7 +256,6 @@ public class AiLauncher
                 else
                 {
                     new ProcessBuilder("rundll32", "url.dll,FileProtocolHandler", url)
-                        .redirectInput(ProcessBuilder.Redirect.DISCARD)
                         .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                         .redirectError(ProcessBuilder.Redirect.DISCARD)
                         .start();
@@ -172,7 +268,6 @@ public class AiLauncher
             else
             {
                 new ProcessBuilder("xdg-open", url)
-                    .redirectInput(ProcessBuilder.Redirect.DISCARD)
                     .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                     .redirectError(ProcessBuilder.Redirect.DISCARD)
                     .start();
@@ -196,13 +291,12 @@ public class AiLauncher
         try
         {
             new ProcessBuilder("setsid", "xdg-open", url)
-                .redirectInput(ProcessBuilder.Redirect.DISCARD)
                 .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                 .redirectError(ProcessBuilder.Redirect.DISCARD)
                 .start();
             return;
         }
-        catch (final IOException ignored)
+        catch (final Exception ignored)
         {
             // Fall back to gio open or standard xdg-open if setsid is unavailable
         }
@@ -210,13 +304,12 @@ public class AiLauncher
         try
         {
             new ProcessBuilder("gio", "open", url)
-                .redirectInput(ProcessBuilder.Redirect.DISCARD)
                 .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                 .redirectError(ProcessBuilder.Redirect.DISCARD)
                 .start();
             return;
         }
-        catch (final IOException ignored)
+        catch (final Exception ignored)
         {
             // Fall through to Desktop browse / plain xdg-open
         }
@@ -235,7 +328,6 @@ public class AiLauncher
         }
 
         new ProcessBuilder("xdg-open", url)
-            .redirectInput(ProcessBuilder.Redirect.DISCARD)
             .redirectOutput(ProcessBuilder.Redirect.DISCARD)
             .redirectError(ProcessBuilder.Redirect.DISCARD)
             .start();
@@ -246,6 +338,18 @@ public class AiLauncher
      */
     static class LoadingHandler implements HttpHandler
     {
+        private final int targetPort;
+
+        LoadingHandler()
+        {
+            this(8080);
+        }
+
+        LoadingHandler(final int targetPort)
+        {
+            this.targetPort = targetPort;
+        }
+
         @Override
         public void handle(final HttpExchange exchange)
         {
@@ -256,7 +360,7 @@ public class AiLauncher
                     if (is == null)
                     {
                         final String error = "loading.html not found in resources";
-                        final byte[] errorBytes = error.getBytes();
+                        final byte[] errorBytes = error.getBytes(StandardCharsets.UTF_8);
                         exchange.sendResponseHeaders(404, errorBytes.length);
                         try (final OutputStream os = exchange.getResponseBody())
                         {
@@ -265,7 +369,12 @@ public class AiLauncher
                         return;
                     }
 
-                    final byte[] bytes = is.readAllBytes();
+                    String html = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                    if (targetPort != 8080)
+                    {
+                        html = html.replace("http://localhost:8080", "http://localhost:" + targetPort);
+                    }
+                    final byte[] bytes = html.getBytes(StandardCharsets.UTF_8);
                     exchange.getResponseHeaders().set("Content-Type", "text/html; charset=UTF-8");
                     exchange.sendResponseHeaders(200, bytes.length);
                     try (final OutputStream os = exchange.getResponseBody())
