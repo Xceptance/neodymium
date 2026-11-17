@@ -58,32 +58,14 @@ public class AiLauncher
 
         if (isBrowserOpenEnabled())
         {
-            // 1. Start a lightweight HTTP server on an ephemeral port (port 0) on the loopback interface
-            final HttpServer server = startSplashServer();
-            final int tempPort = server.getAddress().getPort();
-            final String loadingUrl = "http://localhost:" + tempPort + "/loading.html";
-
-            // Register JVM shutdown hook to clean up the temporary server upon termination
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> server.stop(0)));
-
-            // 2. Open default browser to the loading splash screen in a detached process
-            openBrowser(loadingUrl);
-
-            // 3. Hand off control to the Spring Boot application
-            try
-            {
-                AuraManagerApplication.main(args);
-            }
-            finally
-            {
-                server.stop(0);
-            }
+            BrowserAutoOpenService.setAutoOpenRequested(true);
         }
         else
         {
             System.out.println("[Neodymium AI Manager] Browser auto-open is disabled. Dashboard will be available at http://localhost:8080");
-            AuraManagerApplication.main(args);
         }
+
+        AuraManagerApplication.main(args);
     }
 
     /**
