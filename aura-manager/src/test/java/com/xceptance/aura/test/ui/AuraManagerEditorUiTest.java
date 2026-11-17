@@ -33,6 +33,8 @@ import com.xceptance.aura.AuraManagerApplication;
 import com.xceptance.neodymium.aura.AuraFileService;
 import java.io.File;
 import java.io.IOException;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -102,7 +104,8 @@ public final class AuraManagerEditorUiTest
             "SubstepTypingTest.yaml", "EnterSubstepTest.yaml", "UndoSubstepTest.yaml", "FragmentStep.steps", "GrandChild.steps", "MultiChild.steps",
             "New Line Include Cursor Test.yaml", "ParentInclude.steps", "VariablePersistenceTest.yaml", "AuthFragment.steps", "SubstepNameTest.yaml",
             "CleanStepsSaveTest.yaml", "PlaybookPropertiesTest.yaml", "PlaybookAddPropsTest.yaml",
-            "MarkerChipTest.yaml", "MetaPreservationTest.yaml"
+            "MarkerChipTest.yaml", "MetaPreservationTest.yaml",
+            "AllControlTagsTest.yaml", "AllActionChipsTest.yaml"
         };
 
         for (final String dirPath : dirPaths)
@@ -2384,6 +2387,166 @@ public final class AuraManagerEditorUiTest
             "Saved YAML must preserve metadata ticket: " + savedContent);
         Assertions.assertTrue(savedContent.contains("and verify title"),
             "Saved YAML must contain edited step: " + savedContent);
+    }
+
+    @Test
+    public final void testClickAllControlTagChipsInsertsCorrectSnippetsIntoActiveStep() throws Exception
+    {
+        final String playbookFile = "AllControlTagsTest.yaml";
+
+        final Map<String, String> controlTags = new LinkedHashMap<>();
+        controlTags.put("(optional)", "(optional)");
+        controlTags.put("(soft)", "(soft)");
+        controlTags.put("(continue-on-error)", "(continue-on-error)");
+        controlTags.put("(no-replay)", "(no-replay)");
+        controlTags.put("(no-healing)", "(no-healing)");
+        controlTags.put("(bug: ID)", "(bug: )");
+        controlTags.put("(hint: #)", "(hint: #)");
+        controlTags.put("(hint: java)", "(hint: use java method)");
+        controlTags.put("(marker)", "(marker)");
+        controlTags.put("(timeout: 10s)", "(timeout: 10s)");
+        controlTags.put("(threshold: 0.95)", "(threshold: 0.95)");
+        controlTags.put("(context: minimal)", "(context: minimal)");
+        controlTags.put("(visual)", "(visual)");
+        controlTags.put("(visual: full)", "(visual: full)");
+        controlTags.put("(layout)", "(layout)");
+        controlTags.put("(layout: full)", "(layout: full)");
+
+        final StringBuilder stepsBuilder = new StringBuilder();
+        int stepIdx = 1;
+        for (final String ignored : controlTags.keySet())
+        {
+            stepsBuilder.append("  Step ").append(String.format("%02d", stepIdx++)).append("\n");
+        }
+
+        final String initialPlaybook = "# Neodymium YAML Test Data File\n\n"
+                                     + "steps: |\n"
+                                     + stepsBuilder;
+
+        this.fileService.saveYamlFileContent(playbookFile, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/?file=" + playbookFile);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        int index = 0;
+        for (final Map.Entry<String, String> entry : controlTags.entrySet())
+        {
+            final String buttonText = entry.getKey();
+            final String expectedSnippet = entry.getValue();
+
+            final SelenideElement stepContent = $$("#stepsList .step-row .step-content").get(index++);
+            stepContent.shouldBe(Condition.visible).click();
+
+            final SelenideElement tagBtn = $$(".sidebar-palette-right button.tag-chip-btn").findBy(Condition.text(buttonText));
+            tagBtn.scrollIntoView(true).shouldBe(Condition.visible).click();
+
+            stepContent.shouldHave(Condition.text(expectedSnippet));
+            final String raw = stepContent.getAttribute("data-raw");
+            Assertions.assertNotNull(raw);
+            Assertions.assertTrue(raw.endsWith(expectedSnippet),
+                "Step data-raw should end with '" + expectedSnippet + "', but was: " + raw);
+        }
+
+        // Save and verify disk content contains all inserted control tags
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        final String savedContent = this.fileService.readYamlFileContent(playbookFile);
+        Assertions.assertNotNull(savedContent);
+        for (final String expectedSnippet : controlTags.values())
+        {
+            Assertions.assertTrue(savedContent.contains(expectedSnippet),
+                "Saved YAML must contain control tag: " + expectedSnippet + "\nFull content:\n" + savedContent);
+        }
+    }
+
+    @Test
+    public final void testClickAllActionAndTemplateChipsInsertsCorrectSnippets() throws Exception
+    {
+        final String playbookFile = "AllActionChipsTest.yaml";
+
+        final Map<String, String> actionChips = new LinkedHashMap<>();
+        actionChips.put("Open Base URL", "Open ${neodymium.url}");
+        actionChips.put("Type Text", "Type \"\"");
+        actionChips.put("Wait for Visible", "Wait for  to be visible");
+        actionChips.put("Assert Visible", "Assert  is visible");
+        actionChips.put("Assert Text", "Assert page contains \"\"");
+        actionChips.put("Select Option", "Select option \"\"");
+        actionChips.put("Click Element", "Click ");
+        actionChips.put("Store text from", "Store text from  as ");
+        actionChips.put("Store literal as", "Store \"\" as ");
+        actionChips.put("Arrow Substep ->-", "->- ");
+        actionChips.put("Call Java Method", "Execute Java method \"\"");
+        actionChips.put("Insert Variable", "${}");
+
+        final StringBuilder stepsBuilder = new StringBuilder();
+        int stepIdx = 1;
+        for (final String ignored : actionChips.keySet())
+        {
+            stepsBuilder.append("  Action ").append(String.format("%02d", stepIdx++)).append("\n");
+        }
+
+        final String initialPlaybook = "# Neodymium YAML Test Data File\n\n"
+                                     + "steps: |\n"
+                                     + stepsBuilder;
+
+        this.fileService.saveYamlFileContent(playbookFile, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/?file=" + playbookFile);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        final ElementsCollection chips = $$(".sidebar-palette-right .action-chip");
+        chips.shouldHave(CollectionCondition.size(actionChips.size()));
+
+        int index = 0;
+        for (final Map.Entry<String, String> entry : actionChips.entrySet())
+        {
+            final String chipLabel = entry.getKey();
+            final String expectedSnippet = entry.getValue();
+
+            final SelenideElement stepContent = $$("#stepsList .step-row .step-content").get(index);
+            stepContent.shouldBe(Condition.visible).click();
+
+            // Clear the existing text so the chip template is inserted into an empty step
+            Selenide.executeJavaScript("arguments[0].setAttribute('data-raw', ''); arguments[0].innerText = '';", stepContent);
+
+            final SelenideElement chipEl = chips.get(index++);
+            chipEl.scrollIntoView(true).shouldBe(Condition.visible).click();
+
+            if (chipLabel.equals("Arrow Substep ->-"))
+            {
+                final SelenideElement row = stepContent.closest(".step-row");
+                Assertions.assertTrue(row.has(Condition.cssClass("step-row-substep")),
+                    "Row should have 'step-row-substep' class after clicking Arrow Substep chip");
+                // Type a micro-action so the substep contains actionable content for disk serialization
+                stepContent.sendKeys("Perform sub-action");
+            }
+            else
+            {
+                final String raw = stepContent.getAttribute("data-raw");
+                Assertions.assertNotNull(raw);
+                final String normalizedExpected = expectedSnippet.replaceAll("\\s+", " ").trim();
+                final String normalizedRaw = raw.replaceAll("\\s+", " ").trim();
+                Assertions.assertEquals(normalizedExpected, normalizedRaw,
+                    "Step data-raw should match inserted action snippet for " + chipLabel);
+            }
+        }
+
+        // Save and verify disk content contains inserted action snippets
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        final String savedContent = this.fileService.readYamlFileContent(playbookFile);
+        Assertions.assertNotNull(savedContent);
+        final String normalizedSaved = savedContent.replaceAll("\\s+", " ");
+        for (final String expectedSnippet : actionChips.values())
+        {
+            final String checkSnippet = expectedSnippet.equals("->- ") ? "- >-" : expectedSnippet.replaceAll("\\s+", " ").trim();
+            Assertions.assertTrue(normalizedSaved.contains(checkSnippet),
+                "Saved YAML must contain action snippet: " + checkSnippet + "\nFull content:\n" + savedContent);
+        }
+        Assertions.assertTrue(savedContent.contains("Perform sub-action"),
+            "Saved YAML must contain substep action text: " + savedContent);
     }
 }
 
