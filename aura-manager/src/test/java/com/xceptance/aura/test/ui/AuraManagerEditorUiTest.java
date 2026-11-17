@@ -105,7 +105,7 @@ public final class AuraManagerEditorUiTest
             "New Line Include Cursor Test.yaml", "ParentInclude.steps", "VariablePersistenceTest.yaml", "AuthFragment.steps", "SubstepNameTest.yaml",
             "CleanStepsSaveTest.yaml", "PlaybookPropertiesTest.yaml", "PlaybookAddPropsTest.yaml",
             "MarkerChipTest.yaml", "MetaPreservationTest.yaml",
-            "AllControlTagsTest.yaml", "AllActionChipsTest.yaml"
+            "AllControlTagsTest.yaml", "AllActionChipsTest.yaml", "InsertSubstepRowTest.yaml"
         };
 
         for (final String dirPath : dirPaths)
@@ -2475,7 +2475,7 @@ public final class AuraManagerEditorUiTest
         actionChips.put("Click Element", "Click ");
         actionChips.put("Store text from", "Store text from  as ");
         actionChips.put("Store literal as", "Store \"\" as ");
-        actionChips.put("Arrow Substep ->-", "->- ");
+        actionChips.put("Substep", "");
         actionChips.put("Call Java Method", "Execute Java method \"\"");
         actionChips.put("Insert Variable", "${}");
 
@@ -2513,11 +2513,11 @@ public final class AuraManagerEditorUiTest
             final SelenideElement chipEl = chips.get(index++);
             chipEl.scrollIntoView(true).shouldBe(Condition.visible).click();
 
-            if (chipLabel.equals("Arrow Substep ->-"))
+            if (chipLabel.equals("Substep"))
             {
                 final SelenideElement row = stepContent.closest(".step-row");
                 Assertions.assertTrue(row.has(Condition.cssClass("step-row-substep")),
-                    "Row should have 'step-row-substep' class after clicking Arrow Substep chip");
+                    "Row should have 'step-row-substep' class after clicking Substep chip");
                 // Type a micro-action so the substep contains actionable content for disk serialization
                 stepContent.sendKeys("Perform sub-action");
             }
@@ -2541,12 +2541,69 @@ public final class AuraManagerEditorUiTest
         final String normalizedSaved = savedContent.replaceAll("\\s+", " ");
         for (final String expectedSnippet : actionChips.values())
         {
-            final String checkSnippet = expectedSnippet.equals("->- ") ? "- >-" : expectedSnippet.replaceAll("\\s+", " ").trim();
+            if (expectedSnippet.isBlank())
+            {
+                continue;
+            }
+            final String checkSnippet = expectedSnippet.replaceAll("\\s+", " ").trim();
             Assertions.assertTrue(normalizedSaved.contains(checkSnippet),
                 "Saved YAML must contain action snippet: " + checkSnippet + "\nFull content:\n" + savedContent);
         }
+        Assertions.assertTrue(savedContent.contains("- >-") || savedContent.contains("->-"),
+            "Saved YAML must contain substep list prefix: " + savedContent);
         Assertions.assertTrue(savedContent.contains("Perform sub-action"),
             "Saved YAML must contain substep action text: " + savedContent);
+    }
+
+    @Test
+    public final void testClickSubstepChipInsertsNewSubstepRowBelowActiveStep() throws Exception
+    {
+        final String playbookFile = "InsertSubstepRowTest.yaml";
+
+        final String initialPlaybook = "# Neodymium YAML Test Data File\n\n"
+                                     + "steps: |\n"
+                                     + "  Open Home Page\n"
+                                     + "  Verify Footer\n";
+
+        this.fileService.saveYamlFileContent(playbookFile, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/?file=" + playbookFile);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Steps should initially have 2 rows
+        $$("#stepsList .step-row").shouldHave(CollectionCondition.size(2));
+
+        // Focus the first step
+        final SelenideElement firstStep = $$("#stepsList .step-row .step-content").get(0);
+        firstStep.shouldBe(Condition.visible).click();
+
+        // Click the Substep action chip in the palette
+        final SelenideElement substepChip = $$(".sidebar-palette-right .action-chip").findBy(Condition.text("Substep"));
+        substepChip.scrollIntoView(true).shouldBe(Condition.visible).click();
+
+        // There should now be 3 rows
+        final ElementsCollection rows = $$("#stepsList .step-row");
+        rows.shouldHave(CollectionCondition.size(3));
+
+        // The newly inserted row (at index 1) must be a substep with fractional numbering 1.1
+        final SelenideElement insertedRow = rows.get(1);
+        insertedRow.shouldHave(Condition.cssClass("step-row-substep"));
+        insertedRow.$(".step-number").shouldHave(Condition.text("1.1"));
+
+        // Type action into the new substep
+        final SelenideElement substepContent = insertedRow.$(".step-content");
+        substepContent.sendKeys("Click navigation menu");
+
+        // Save and verify disk serialization contains the folded substep
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        final String savedContent = this.fileService.readYamlFileContent(playbookFile);
+        Assertions.assertNotNull(savedContent);
+        Assertions.assertTrue(savedContent.contains("Open Home Page"), "Saved YAML must contain first step");
+        Assertions.assertTrue(savedContent.contains("- >-") || savedContent.contains("->-"), "Saved YAML must contain substep list prefix");
+        Assertions.assertTrue(savedContent.contains("Click navigation menu"), "Saved YAML must contain substep action text");
+        Assertions.assertTrue(savedContent.contains("Verify Footer"), "Saved YAML must contain second step");
     }
 }
 

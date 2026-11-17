@@ -5151,6 +5151,90 @@ function insertSnippetWithCaret(templateText, caretOffset = -1) {
 }
 window.insertSnippetWithCaret = insertSnippetWithCaret;
 
+function insertSubstepRow(initialText = '') {
+    const activeEl = document.activeElement;
+    let targetRow = null;
+    if (activeEl && activeEl.closest('.step-row')) {
+        targetRow = activeEl.closest('.step-row');
+    } else if (activeLineNum) {
+        targetRow = document.querySelector(`.step-row[data-line="${activeLineNum}"]`);
+    }
+    if (!targetRow) {
+        targetRow = document.querySelector('.step-row:last-child') || document.querySelector('.step-row');
+    }
+    if (!targetRow) {
+        targetRow = addStepToContainer('stepsList');
+    }
+    if (!targetRow) return null;
+
+    const contentEl = targetRow.querySelector('.step-content');
+    const rawText = contentEl ? (contentEl.getAttribute('data-raw') || contentEl.innerText || '').trim() : '';
+
+    // If the currently active row is completely empty, turn it into a substep directly
+    if (rawText === '' && !targetRow.classList.contains('step-row-substep')) {
+        targetRow.classList.add('step-row-substep');
+        targetRow.setAttribute('data-manual-substep', 'true');
+        if (initialText) {
+            contentEl.setAttribute('data-raw', initialText);
+            contentEl.innerText = initialText;
+            formatStepToTokens(targetRow);
+        }
+        updateAllLineNumbers();
+        refreshAllSubstepToggleBars();
+        contentEl.focus();
+        setCaretOffset(contentEl, (initialText || '').length);
+        if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+        if (typeof compilePlaybookToYaml === 'function') compilePlaybookToYaml();
+        if (typeof checkEditorDirtyStatus === 'function') checkEditorDirtyStatus();
+        return targetRow;
+    }
+
+    // Otherwise, create a new row immediately below targetRow and mark as substep
+    currentLineCount++;
+    const newRow = document.createElement('div');
+    newRow.className = 'step-row step-row-substep';
+    newRow.setAttribute('data-line', currentLineCount);
+    newRow.setAttribute('data-manual-substep', 'true');
+
+    const safeInitial = (initialText || '').replace(/"/g, '&quot;');
+    newRow.innerHTML = `
+        <span class="step-number">${currentLineCount}</span>
+        <div class="step-content" contenteditable="true" spellcheck="false" data-raw="${safeInitial}" onkeydown="handleKeyDown(event, ${currentLineCount})" onfocus="handleStepFocus(${currentLineCount})" onblur="handleStepBlur(${currentLineCount})" oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);">${safeInitial}</div>
+        <div class="step-actions">
+            <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${currentLineCount}, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+            <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${currentLineCount}, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+            <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${currentLineCount})"><span class="material-symbols-outlined">delete</span></button>
+        </div>
+    `;
+
+    const lineId = targetRow.getAttribute('data-line');
+    const treeCard = document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`);
+    let insertAfterRef = (treeCard && treeCard.parentElement === targetRow.parentElement) ? treeCard : targetRow;
+    while (insertAfterRef.nextElementSibling && insertAfterRef.nextElementSibling.classList.contains('review-suggestion-card')) {
+        insertAfterRef = insertAfterRef.nextElementSibling;
+    }
+    insertAfterRef.after(newRow);
+
+    reindexSteps();
+    updateAllLineNumbers();
+    refreshAllSubstepToggleBars();
+
+    const newContent = newRow.querySelector('.step-content');
+    if (newContent) {
+        newContent.focus();
+        setCaretOffset(newContent, 0);
+        activeLineNum = parseInt(newRow.getAttribute('data-line'), 10) || currentLineCount;
+        window.activeLineNum = activeLineNum;
+    }
+
+    if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+    if (typeof compilePlaybookToYaml === 'function') compilePlaybookToYaml();
+    if (typeof checkEditorDirtyStatus === 'function') checkEditorDirtyStatus();
+
+    return newRow;
+}
+window.insertSubstepRow = insertSubstepRow;
+
 function insertIncludePill(filePath) {
     const activeEl = document.activeElement;
     const nestedStep = (activeEl && activeEl.closest('.nested-editable-step')) ? activeEl.closest('.nested-editable-step') : activeNestedStep;
