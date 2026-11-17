@@ -17,7 +17,8 @@
   3. Added `[title=...]` to `LocatorImprover.scoreLocator` (score 8) and `QualityJudgeToolInterceptor.determineStrategy` (`TITLE`, weight 70).
   4. Extended `LocatorImprover.generateCandidates` to extract `title` attributes and generate ancestor container-scoped candidates (`tr[title='...'] td.price`, `tr[data-testid='...'] td.price`, `#rowId td.price`).
   5. Updated `QualityJudgeToolInterceptor` to fast-path unique positional selectors when an ordinal instruction is present, avoid generating volatile candidate alternatives for them, and added `isPositionalHijack(...)` checks to reject non-positional candidates in consensus, refinement, exhaustion fallback, and heuristic deliberation.
-  6. Updated `LocatorImprover.improveLocator` to preserve positional selectors when an ordinal instruction is present.
+  6. Updated `LocatorImprover.improveLocator` to preserve positional selectors when an ordinal instruction is present, while still allowing fragile positional locators to be upgraded to stable IDs when instruction is omitted or non-ordinal.
+  7. Refined `LocatorImprover.ORDINAL_INSTRUCTION_PATTERN` to target sequence contexts (e.g. `sort order`, `ascending`, `descending`, `in order`, `order of`) while avoiding false positive matches on common e-commerce action phrases like `Place Order` or `Verify order total`.
 - **Safety Net Added:**
   - `QualityJudgeToolInterceptorTest.testOrdinalInstructionPreservesUniquePositionalSelectorInDom`
   - `QualityJudgeToolInterceptorTest.testPositionalHijackRejectedWhenOrdinalCommanded`
@@ -28,4 +29,5 @@
   - `LocatorImproverTest.testGenerateCandidates_titleAttribute`
   - `LocatorImproverTest.testGenerateCandidates_ancestorContainerScoping`
   - `LocatorImproverTest.testImproveLocator_preservesPositionalLocatorsForOrdinals`
-  - `LocatorImproverTest.testImproveLocator_preservesPositionalLocatorsWhenInstructionOmitted`
+  - `LocatorImproverTest.testImproveLocator_upgradesPositionalLocatorsWhenInstructionOmitted`
+  - `LocatorImproverTest.testImproveLocator_upgradesPositionalLocatorsWhenInstructionNonOrdinal`

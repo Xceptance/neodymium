@@ -314,8 +314,15 @@ public final class LocatorImproverTest
         assertTrue(LocatorImprover.isOrdinalInstruction("Check the sorted order of table rows"));
         assertTrue(LocatorImprover.isOrdinalInstruction("Verify items are in ascending order"));
         assertTrue(LocatorImprover.isOrdinalInstruction("Verify item position"));
+        assertTrue(LocatorImprover.isOrdinalInstruction("Verify the order of elements"));
+        assertTrue(LocatorImprover.isOrdinalInstruction("Verify items are in order"));
+        assertTrue(LocatorImprover.isOrdinalInstruction("Check alphabetical order"));
 
         assertFalse(LocatorImprover.isOrdinalInstruction("Click the submit button"));
+        assertFalse(LocatorImprover.isOrdinalInstruction("Click the button 'Place Order'"));
+        assertFalse(LocatorImprover.isOrdinalInstruction("Submit order"));
+        assertFalse(LocatorImprover.isOrdinalInstruction("Verify order total is $25.00"));
+        assertFalse(LocatorImprover.isOrdinalInstruction("Order confirmation is displayed"));
         assertFalse(LocatorImprover.isOrdinalInstruction("Type 'hello' into the search input"));
         assertFalse(LocatorImprover.isOrdinalInstruction("Verify price is $5.00"));
         assertFalse(LocatorImprover.isOrdinalInstruction(null));
@@ -377,14 +384,30 @@ public final class LocatorImproverTest
     }
 
     @Test
-    public void testImproveLocator_preservesPositionalLocatorsWhenInstructionOmitted()
+    public void testImproveLocator_upgradesPositionalLocatorsWhenInstructionOmitted()
     {
         final WebElement target = createMockElement("div", Map.of("id", "cherry"));
         final WebDriver driver = createMockDriver(Map.of("#cherry", List.of(target)));
 
         final String result = LocatorImprover.improveLocator(driver, target, "div:nth-of-type(3)");
 
-        assertEquals("div:nth-of-type(3)", result);
+        assertEquals("#cherry", result);
+    }
+
+    @Test
+    public void testImproveLocator_upgradesPositionalLocatorsWhenInstructionNonOrdinal()
+    {
+        final WebElement target = createMockElement("div", Map.of("id", "cherry"));
+        final WebDriver driver = createMockDriver(Map.of("#cherry", List.of(target)));
+
+        final String result = LocatorImprover.improveLocator(
+                driver,
+                target,
+                "div:nth-of-type(3)",
+                "Click the button 'Place Order'"
+        );
+
+        assertEquals("#cherry", result);
     }
 
     private static WebElement createMockElementWithContainer(

@@ -72,7 +72,8 @@ public final class LocatorImprover
 
     private static final Pattern ORDINAL_INSTRUCTION_PATTERN = Pattern.compile(
             "\\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|"
-            + "\\d+(st|nd|rd|th)|nth|last|sort(ed|ing)?|order(ing)?|position|rank(ing)?)\\b",
+            + "\\d+(st|nd|rd|th)|nth|last|sort(ed|ing)?|rank(ing)?|position|"
+            + "ascending|descending|in\\s+order|order\\s+of|(sort(ed|ing)?|alphabetical(ly)?)\\s+order)\\b",
             Pattern.CASE_INSENSITIVE);
 
     /**
@@ -464,7 +465,7 @@ public final class LocatorImprover
         {
             final List<WebElement> containers = element.findElements(
                     By.xpath("./ancestor::tr[1] | ./ancestor::li[1] | ./ancestor::*[@role='row' or @role='listitem'][1]"));
-            if (containers.isEmpty())
+            if (containers == null || containers.isEmpty())
             {
                 return;
             }
@@ -586,7 +587,7 @@ public final class LocatorImprover
             return originalLocator;
         }
 
-        if (isPositional(originalLocator) && (instruction == null || isOrdinalInstruction(instruction)))
+        if (isPositional(originalLocator) && instruction != null && isOrdinalInstruction(instruction))
         {
             // Do not overwrite intentional positional/ordinal targeting with static attributes
             return originalLocator;
