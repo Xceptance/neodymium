@@ -281,6 +281,146 @@ public final class LocatorImproverTest
         assertEquals("[data-ai='xc857xln']", result);
     }
 
+    @Test
+    public void testIsPositional()
+    {
+        assertTrue(LocatorImprover.isPositional(".myList div:nth-of-type(3)"));
+        assertTrue(LocatorImprover.isPositional("div:nth-child(2)"));
+        assertTrue(LocatorImprover.isPositional("ul >> li >> nth=2"));
+        assertTrue(LocatorImprover.isPositional("//div[3]/span"));
+        assertTrue(LocatorImprover.isPositional("div:first-child"));
+        assertTrue(LocatorImprover.isPositional("li:last-of-type"));
+        assertTrue(LocatorImprover.isPositional(":nth-match(div, 2)"));
+
+        assertFalse(LocatorImprover.isPositional("#cherry"));
+        assertFalse(LocatorImprover.isPositional(".lastItem"));
+        assertFalse(LocatorImprover.isPositional("tr[title='Item 18491'] td.price"));
+        assertFalse(LocatorImprover.isPositional("tr:has-text('Item 18491') >> td.price"));
+        assertFalse(LocatorImprover.isPositional(null));
+        assertFalse(LocatorImprover.isPositional(""));
+    }
+
+    @Test
+    public void testIsOrdinalInstruction()
+    {
+        assertTrue(LocatorImprover.isOrdinalInstruction("Verify the first item in the list has text \"Apple\"."));
+        assertTrue(LocatorImprover.isOrdinalInstruction("Verify the second item in the list has text \"Banana\"."));
+        assertTrue(LocatorImprover.isOrdinalInstruction("Verify the third item in the list has text \"Cherry\"."));
+        assertTrue(LocatorImprover.isOrdinalInstruction("Click the 2nd element"));
+        assertTrue(LocatorImprover.isOrdinalInstruction("Click the 1st row"));
+        assertTrue(LocatorImprover.isOrdinalInstruction("Select the 4th option"));
+        assertTrue(LocatorImprover.isOrdinalInstruction("Target the nth element"));
+        assertTrue(LocatorImprover.isOrdinalInstruction("Verify the last item in the list"));
+        assertTrue(LocatorImprover.isOrdinalInstruction("Check the sorted order of table rows"));
+        assertTrue(LocatorImprover.isOrdinalInstruction("Verify items are in ascending order"));
+        assertTrue(LocatorImprover.isOrdinalInstruction("Verify item position"));
+
+        assertFalse(LocatorImprover.isOrdinalInstruction("Click the submit button"));
+        assertFalse(LocatorImprover.isOrdinalInstruction("Type 'hello' into the search input"));
+        assertFalse(LocatorImprover.isOrdinalInstruction("Verify price is $5.00"));
+        assertFalse(LocatorImprover.isOrdinalInstruction(null));
+        assertFalse(LocatorImprover.isOrdinalInstruction(""));
+    }
+
+    @Test
+    public void testScoreLocator_titleAttribute()
+    {
+        assertEquals(8, LocatorImprover.scoreLocator("tr[title='Item 18491'] td.price"));
+        assertEquals(8, LocatorImprover.scoreLocator("[title='Item 18491']"));
+        assertEquals(8, LocatorImprover.scoreLocator("button[title='Close Dialog']"));
+    }
+
+    @Test
+    public void testGenerateCandidates_titleAttribute()
+    {
+        final Map<String, String> attrs = new HashMap<>();
+        attrs.put("title", "Item 18491");
+
+        final WebElement element = createMockElement("div", attrs);
+        final List<String> candidates = LocatorImprover.generateCandidates(element);
+
+        assertTrue(candidates.contains("div[title='Item 18491']"));
+        assertTrue(candidates.contains("[title='Item 18491']"));
+    }
+
+    @Test
+    public void testGenerateCandidates_ancestorContainerScoping()
+    {
+        final WebElement rowContainer = createMockElement("tr", Map.of("title", "Item 18491"));
+        final WebElement childCell = createMockElementWithContainer(
+                "td",
+                Map.of("class", "price"),
+                rowContainer
+        );
+
+        final List<String> candidates = LocatorImprover.generateCandidates(childCell);
+
+        assertTrue(candidates.contains("tr[title='Item 18491'] td.price"));
+    }
+
+    @Test
+    public void testImproveLocator_preservesPositionalLocatorsForOrdinals()
+    {
+        final WebElement target = createMockElement("div", Map.of("id", "cherry", "class", "lastItem"));
+        final WebDriver driver = createMockDriver(Map.of("#cherry", List.of(target)));
+
+        // Ordinal instruction explicitly commanding third item
+        final String result = LocatorImprover.improveLocator(
+                driver,
+                target,
+                ".myList div:nth-of-type(3)",
+                "Verify the third item in the list has text \"Cherry\"."
+        );
+
+        // Must preserve the positional locator, not replace with #cherry
+        assertEquals(".myList div:nth-of-type(3)", result);
+    }
+
+    @Test
+    public void testImproveLocator_preservesPositionalLocatorsWhenInstructionOmitted()
+    {
+        final WebElement target = createMockElement("div", Map.of("id", "cherry"));
+        final WebDriver driver = createMockDriver(Map.of("#cherry", List.of(target)));
+
+        final String result = LocatorImprover.improveLocator(driver, target, "div:nth-of-type(3)");
+
+        assertEquals("div:nth-of-type(3)", result);
+    }
+
+    private static WebElement createMockElementWithContainer(
+            final String tag,
+            final Map<String, String> attributes,
+            final WebElement container)
+    {
+        return (WebElement) Proxy.newProxyInstance(
+            WebElement.class.getClassLoader(),
+            new Class<?>[]{WebElement.class},
+            (proxy, method, args) -> {
+                if ("getTagName".equals(method.getName()))
+                {
+                    return tag;
+                }
+                if ("getAttribute".equals(method.getName()) && args != null && args.length > 0)
+                {
+                    return attributes.get(String.valueOf(args[0]));
+                }
+                if ("findElements".equals(method.getName()) && args != null && args.length > 0)
+                {
+                    if (container != null)
+                    {
+                        return List.of(container);
+                    }
+                    return List.of();
+                }
+                if ("equals".equals(method.getName()) && args != null && args.length > 0)
+                {
+                    return proxy == args[0];
+                }
+                return null;
+            }
+        );
+    }
+
     private static WebElement createMockElement(final String tag, final Map<String, String> attributes)
     {
         return (WebElement) Proxy.newProxyInstance(

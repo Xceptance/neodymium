@@ -70,6 +70,11 @@ public final class LocatorImprover
             ":(has-text|contains|text)\\(",
             Pattern.CASE_INSENSITIVE);
 
+    private static final Pattern ORDINAL_INSTRUCTION_PATTERN = Pattern.compile(
+            "\\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|"
+            + "\\d+(st|nd|rd|th)|nth|last|sort(ed|ing)?|order(ing)?|position|rank(ing)?)\\b",
+            Pattern.CASE_INSENSITIVE);
+
     /**
      * Private constructor to prevent instantiation.
      */
@@ -113,6 +118,42 @@ public final class LocatorImprover
             }
         }
         return sb.toString();
+    }
+
+    /**
+     * Determines whether a locator string targets an element based on its DOM position or ordinal index.
+     * Matches CSS positional pseudo-classes, raw indexed XPath predicates, and Playwright nth selectors.
+     *
+     * @param locator the locator string to inspect
+     * @return true if the locator specifies a positional or ordinal selector, false otherwise
+     */
+    public static boolean isPositional(final String locator)
+    {
+        if (locator == null || locator.isBlank())
+        {
+            return false;
+        }
+        final String unquoted = stripQuotedStrings(locator.trim());
+        return POSITIONAL_PSEUDO_PATTERN.matcher(unquoted).find()
+                || XPATH_INDEXED_PATTERN.matcher(unquoted).find()
+                || PLAYWRIGHT_NTH_PATTERN.matcher(unquoted).find()
+                || unquoted.contains(":nth-match(");
+    }
+
+    /**
+     * Determines whether an instruction text explicitly commands targeting or verifying an ordinal position
+     * (e.g. "first item", "second row", "3rd element", "nth element", "last row", or sorted order).
+     *
+     * @param instruction the natural language instruction
+     * @return true if the instruction commands ordinal or positional targeting, false otherwise
+     */
+    public static boolean isOrdinalInstruction(final String instruction)
+    {
+        if (instruction == null || instruction.isBlank())
+        {
+            return false;
+        }
+        return ORDINAL_INSTRUCTION_PATTERN.matcher(instruction).find();
     }
 
     private static boolean hasChildCombinatorOutsideBrackets(final String input)
@@ -267,8 +308,8 @@ public final class LocatorImprover
             return 9;
         }
 
-        // 5. Standard attributes (name, aria-label, placeholder)
-        if (unquoted.contains("[name=") || unquoted.contains("[aria-label=") || unquoted.contains("[placeholder="))
+        // 5. Standard attributes (name, aria-label, placeholder, title)
+        if (unquoted.contains("[name=") || unquoted.contains("[aria-label=") || unquoted.contains("[placeholder=") || unquoted.contains("[title="))
         {
             return 8;
         }
@@ -393,6 +434,18 @@ public final class LocatorImprover
             {
                 candidates.add("[placeholder='" + escapeAttributeValue(placeholder) + "']");
             }
+
+            // Candidate 7: title
+            final String title = element.getAttribute("title");
+            if (title != null && !title.isBlank())
+            {
+                final String tagPrefix = !tagName.isBlank() ? tagName : "";
+                candidates.add(tagPrefix + "[title='" + escapeAttributeValue(title) + "']");
+                candidates.add("[title='" + escapeAttributeValue(title) + "']");
+            }
+
+            // Candidate 8: Ancestor row/item container scoping (e.g. tr[title='...'] td.price)
+            generateAncestorContainerCandidates(element, tagName, candidates);
         }
         catch (final Exception e)
         {
@@ -400,6 +453,94 @@ public final class LocatorImprover
         }
 
         return candidates;
+    }
+
+    private static void generateAncestorContainerCandidates(
+            final WebElement element,
+            final String tagName,
+            final List<String> candidates)
+    {
+        try
+        {
+            final List<WebElement> containers = element.findElements(
+                    By.xpath("./ancestor::tr[1] | ./ancestor::li[1] | ./ancestor::*[@role='row' or @role='listitem'][1]"));
+            if (containers.isEmpty())
+            {
+                return;
+            }
+            final WebElement container = containers.get(0);
+            final String containerTag = container.getTagName() != null ? container.getTagName().toLowerCase() : "";
+
+            // Check container ID
+            final String containerId = container.getAttribute("id");
+            final String containerIdSel;
+            if (containerId != null && !containerId.isBlank() && !VOLATILE_ID_DETECTOR.isVolatile(containerId))
+            {
+                containerIdSel = "#" + escapeCssIdentifier(containerId);
+            }
+            else
+            {
+                containerIdSel = null;
+            }
+
+            // Check container title
+            final String containerTitle = container.getAttribute("title");
+            final String containerTitleSel;
+            if (containerTitle != null && !containerTitle.isBlank())
+            {
+                final String prefix = !containerTag.isBlank() ? containerTag : "";
+                containerTitleSel = prefix + "[title='" + escapeAttributeValue(containerTitle) + "']";
+            }
+            else
+            {
+                containerTitleSel = null;
+            }
+
+            // Check container testid
+            String containerTestIdSel = null;
+            for (final String testAttr : new String[] {"data-testid", "data-test-id", "data-test", "data-qa", "data-cy"})
+            {
+                final String val = container.getAttribute(testAttr);
+                if (val != null && !val.isBlank())
+                {
+                    containerTestIdSel = "[" + testAttr + "='" + escapeAttributeValue(val) + "']";
+                    break;
+                }
+            }
+
+            // Check element class
+            final String elementClass = element.getAttribute("class");
+            final String childSel;
+            if (elementClass != null && !elementClass.isBlank())
+            {
+                final String[] classes = elementClass.trim().split("\\s+");
+                final String firstClass = classes.length > 0 ? classes[0] : "";
+                if (!firstClass.isBlank() && !firstClass.startsWith("_") && !firstClass.contains(":") && !firstClass.contains("$"))
+                {
+                    childSel = !tagName.isBlank() ? tagName + "." + escapeCssIdentifier(firstClass) : "." + escapeCssIdentifier(firstClass);
+                }
+                else
+                {
+                    childSel = !tagName.isBlank() ? tagName : "*";
+                }
+            }
+            else
+            {
+                childSel = !tagName.isBlank() ? tagName : "*";
+            }
+
+            for (final String containerPrefix : new String[] {containerTestIdSel, containerIdSel, containerTitleSel})
+            {
+                if (containerPrefix != null && !childSel.equals("*"))
+                {
+                    candidates.add(containerPrefix + " " + childSel);
+                }
+            }
+        }
+        catch (final Exception e)
+        {
+            LOGGER.debug("Failed extracting ancestor container candidates: {}", e.getMessage());
+        }
     }
 
     /**
@@ -414,6 +555,27 @@ public final class LocatorImprover
      */
     public static String improveLocator(final WebDriver driver, final WebElement targetElement, final String originalLocator)
     {
+        return improveLocator(driver, targetElement, originalLocator, null);
+    }
+
+    /**
+     * Attempts to improve a given locator for a target element with instruction awareness.
+     * Evaluates candidate attributes, validates uniqueness and identity match against the active WebDriver,
+     * and returns the upgraded locator if candidate score strictly exceeds the original score.
+     * Preserves intentional positional/ordinal locators when an ordinal instruction is present.
+     *
+     * @param driver the active WebDriver instance
+     * @param targetElement the resolved target element
+     * @param originalLocator the current locator string
+     * @param instruction the active step instruction (if known)
+     * @return the upgraded locator if valid and higher scoring, or originalLocator otherwise
+     */
+    public static String improveLocator(
+            final WebDriver driver,
+            final WebElement targetElement,
+            final String originalLocator,
+            final String instruction)
+    {
         if (!AiConfiguration.getInstance().isLocatorImproverEnabled())
         {
             return originalLocator;
@@ -421,6 +583,12 @@ public final class LocatorImprover
 
         if (driver == null || targetElement == null)
         {
+            return originalLocator;
+        }
+
+        if (isPositional(originalLocator) && (instruction == null || isOrdinalInstruction(instruction)))
+        {
+            // Do not overwrite intentional positional/ordinal targeting with static attributes
             return originalLocator;
         }
 
