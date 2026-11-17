@@ -4915,6 +4915,111 @@ public final class StaticResourceSyntaxTest
         Assertions.assertTrue(jsContent.contains("updateSidebarRunnerProgress"),
             "dashboard-core.js must define updateSidebarRunnerProgress");
     }
+
+    @Test
+    public void testSidebarRunnerProgressLogicEdgeCases() throws Exception
+    {
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final Path jsFilePath = Paths.get("src/main/resources/static/dashboard-core.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "dashboard-core.js must exist: " + jsFilePath.toAbsolutePath());
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const assert = require('assert');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "function createMockElement(id) {\n" +
+            "    return {\n" +
+            "        id: id,\n" +
+            "        textContent: '',\n" +
+            "        title: '',\n" +
+            "        style: { display: '', width: '' },\n" +
+            "        classList: {\n" +
+            "            classes: new Set(),\n" +
+            "            add: function(c) { this.classes.add(c); },\n" +
+            "            remove: function(c) { this.classes.delete(c); },\n" +
+            "            contains: function(c) { return this.classes.has(c); }\n" +
+            "        },\n" +
+            "        setAttribute: function(k, v) { this[k] = v; }\n" +
+            "    };\n" +
+            "}\n" +
+            "const elements = {\n" +
+            "    sidebarActiveProgressContainer: createMockElement('sidebarActiveProgressContainer'),\n" +
+            "    sidebarActiveProgress: createMockElement('sidebarActiveProgress'),\n" +
+            "    sidebarProgressTrack: createMockElement('sidebarProgressTrack'),\n" +
+            "    sidebarProgressSegPassed: createMockElement('sidebarProgressSegPassed'),\n" +
+            "    sidebarProgressSegFailed: createMockElement('sidebarProgressSegFailed'),\n" +
+            "    sidebarProgressSegRunning: createMockElement('sidebarProgressSegRunning'),\n" +
+            "    sidebarChipPassed: createMockElement('sidebarChipPassed'),\n" +
+            "    sidebarChipPassedVal: createMockElement('sidebarChipPassedVal'),\n" +
+            "    sidebarChipFailed: createMockElement('sidebarChipFailed'),\n" +
+            "    sidebarChipFailedVal: createMockElement('sidebarChipFailedVal'),\n" +
+            "    sidebarCollapsedFailIndicator: createMockElement('sidebarCollapsedFailIndicator')\n" +
+            "};\n" +
+            "const sandbox = {\n" +
+            "    document: {\n" +
+            "        documentElement: createMockElement('html'),\n" +
+            "        body: createMockElement('body'),\n" +
+            "        getElementById: (id) => elements[id] || null,\n" +
+            "        querySelector: () => null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        addEventListener: () => {}\n" +
+            "    },\n" +
+            "    addEventListener: () => {},\n" +
+            "    window: {\n" +
+            "        addEventListener: () => {}\n" +
+            "    },\n" +
+            "    localStorage: {\n" +
+            "        store: {},\n" +
+            "        setItem: function(k, v) { this.store[k] = v; },\n" +
+            "        getItem: function(k) { return this.store[k]; },\n" +
+            "        removeItem: function(k) { delete this.store[k]; }\n" +
+            "    },\n" +
+            "    Intl: Intl,\n" +
+            "    console: console\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "vm.runInNewContext(code, sandbox);\n" +
+            "const updateProgress = sandbox.updateSidebarRunnerProgress || sandbox.window.updateSidebarRunnerProgress;\n" +
+            "assert(typeof updateProgress === 'function', 'updateSidebarRunnerProgress must be a function');\n" +
+            "\n" +
+            "// 1. Single test queue: running (0 / 1)\n" +
+            "updateProgress({ running: true, runningCount: 1, scheduledCount: 1, executedCount: 0, passed: 0, failed: 0 });\n" +
+            "assert.strictEqual(elements.sidebarActiveProgress.textContent, '0 / 1');\n" +
+            "assert.strictEqual(elements.sidebarProgressSegRunning.style.display, 'block');\n" +
+            "assert.strictEqual(elements.sidebarChipFailed.style.display, 'none');\n" +
+            "assert.strictEqual(elements.sidebarChipPassed.style.display, 'none');\n" +
+            "assert.strictEqual(elements.sidebarCollapsedFailIndicator.style.display, 'none');\n" +
+            "\n" +
+            "// 2. Single test queue: passed (1 / 1)\n" +
+            "updateProgress({ running: false, scheduledCount: 1, executedCount: 1, passed: 1, failed: 0 });\n" +
+            "assert.strictEqual(elements.sidebarActiveProgress.textContent, '1 / 1');\n" +
+            "assert.strictEqual(elements.sidebarProgressSegPassed.style.display, 'block');\n" +
+            "assert.strictEqual(elements.sidebarProgressSegPassed.style.width, '100%');\n" +
+            "assert.strictEqual(elements.sidebarChipPassed.style.display, 'inline-flex');\n" +
+            "assert.strictEqual(elements.sidebarChipPassedVal.textContent, '1');\n" +
+            "assert.strictEqual(elements.sidebarChipFailed.style.display, 'none');\n" +
+            "\n" +
+            "// 3. 10,000 tests queue with 1 failure: formatting, segment display, min-width support\n" +
+            "updateProgress({ running: true, runningCount: 2, scheduledCount: 10000, executedCount: 4500, passed: 4499, failed: 1 });\n" +
+            "assert(elements.sidebarActiveProgress.textContent.includes('4,500') || elements.sidebarActiveProgress.textContent.includes('4500'), 'Formatted count');\n" +
+            "assert(elements.sidebarActiveProgress.textContent.includes('10,000') || elements.sidebarActiveProgress.textContent.includes('10000'), 'Formatted total');\n" +
+            "assert.strictEqual(elements.sidebarProgressSegFailed.style.display, 'block', 'Failed segment must be visible');\n" +
+            "assert.strictEqual(elements.sidebarChipFailed.style.display, 'inline-flex', 'Failed chip must be visible');\n" +
+            "assert.strictEqual(elements.sidebarChipFailedVal.textContent, '1');\n" +
+            "assert.strictEqual(elements.sidebarCollapsedFailIndicator.style.display, 'block', 'Collapsed fail indicator must be visible');\n" +
+            "\n" +
+            "// 4. Unknown/Dynamic discovery (total = 0, running = true): indeterminate shimmer\n" +
+            "updateProgress({ running: true, total: 0, scheduledCount: 0, executedCount: 0, progressText: 'Discovering...' });\n" +
+            "assert(elements.sidebarProgressTrack.classList.contains('is-indeterminate'), 'Track must have is-indeterminate class');\n" +
+            "console.log('SIDEBAR_PROGRESS_UNIT_TEST_SUCCESS');\n";
+
+        runNodeScript(nodeTestScript, "Sidebar runner progress unit test failed");
+    }
 }
 
 

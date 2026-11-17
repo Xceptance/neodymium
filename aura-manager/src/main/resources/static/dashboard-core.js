@@ -570,52 +570,6 @@ function organizeContainerView(container, itemSelector, mode) {
 let isResizingH = false;
 let isResizingV = false;
 
-function restoreActiveRunContextUI() {
-    const sidebarCard = document.getElementById('sidebarContextCard');
-    if (!sidebarCard) return;
-
-    const savedRunId = localStorage.getItem('aura_active_run_id');
-    const savedStatus = localStorage.getItem('aura_active_run_status') || 'finished';
-    const savedReportUrl = localStorage.getItem('aura_active_run_report_url') || (savedRunId ? `/run-report?runId=${encodeURIComponent(savedRunId)}` : '');
-
-    const sidebarRunIdEl = document.getElementById('sidebarActiveRunId');
-    const currentRunIdText = sidebarRunIdEl ? sidebarRunIdEl.textContent.trim() : '';
-    const hasHtmlRunId = currentRunIdText && !currentRunIdText.includes('RUN_ID') && currentRunIdText !== 'Run #' && currentRunIdText !== '#';
-
-    const effectiveRunId = hasHtmlRunId ? currentRunIdText.replace(/^(Run\s*)?#?/, '').trim() : (savedRunId ? savedRunId.replace(/^(Run\s*)?#?/, '').trim() : null);
-
-    if (effectiveRunId) {
-        activeRunStats.runId = effectiveRunId;
-        const reportUrl = savedReportUrl || `/run-report?runId=${encodeURIComponent(effectiveRunId)}`;
-
-        sidebarCard.setAttribute('href', reportUrl);
-        sidebarCard.style.display = 'flex';
-
-        if (sidebarRunIdEl) {
-            sidebarRunIdEl.textContent = effectiveRunId.startsWith('#') ? effectiveRunId : `#${effectiveRunId}`;
-        }
-
-        const sidebarBatchNameEl = document.getElementById('sidebarActiveBatchName');
-        if (sidebarBatchNameEl) {
-            const rawBatch = (sidebarBatchNameEl.textContent || '').trim();
-            if (!rawBatch || ['default', 'unknown', 'queue', 'suite', 'all', 'n/a'].includes(rawBatch.toLowerCase())) {
-                sidebarBatchNameEl.style.display = 'none';
-            } else {
-                sidebarBatchNameEl.style.display = 'block';
-            }
-        }
-
-        const sidebarStatusEl = document.getElementById('sidebarActiveStatus') || document.getElementById('sidebarActiveEnv');
-        if (sidebarStatusEl && (sidebarStatusEl.textContent === 'Unknown' || !sidebarStatusEl.textContent)) {
-            sidebarStatusEl.textContent = savedStatus;
-        }
-
-        const pulseDot = document.getElementById('sidebarContextPulseDot');
-        if (pulseDot) {
-            const isRunningState = (sidebarStatusEl && sidebarStatusEl.textContent === 'running') || savedStatus === 'running';
-            pulseDot.style.display = isRunningState ? 'inline-block' : 'none';
-        }
-
 function updateSidebarRunnerProgress(statusData) {
     const sidebarProgressEl = document.getElementById('sidebarActiveProgress');
     const sidebarProgressContainer = document.getElementById('sidebarActiveProgressContainer');
@@ -766,6 +720,52 @@ function updateSidebarRunnerProgress(statusData) {
     } catch (e) {}
 }
 window.updateSidebarRunnerProgress = updateSidebarRunnerProgress;
+
+function restoreActiveRunContextUI() {
+    const sidebarCard = document.getElementById('sidebarContextCard');
+    if (!sidebarCard) return;
+
+    const savedRunId = localStorage.getItem('aura_active_run_id');
+    const savedStatus = localStorage.getItem('aura_active_run_status') || 'finished';
+    const savedReportUrl = localStorage.getItem('aura_active_run_report_url') || (savedRunId ? `/run-report?runId=${encodeURIComponent(savedRunId)}` : '');
+
+    const sidebarRunIdEl = document.getElementById('sidebarActiveRunId');
+    const currentRunIdText = sidebarRunIdEl ? sidebarRunIdEl.textContent.trim() : '';
+    const hasHtmlRunId = currentRunIdText && !currentRunIdText.includes('RUN_ID') && currentRunIdText !== 'Run #' && currentRunIdText !== '#';
+
+    const effectiveRunId = hasHtmlRunId ? currentRunIdText.replace(/^(Run\s*)?#?/, '').trim() : (savedRunId ? savedRunId.replace(/^(Run\s*)?#?/, '').trim() : null);
+
+    if (effectiveRunId) {
+        activeRunStats.runId = effectiveRunId;
+        const reportUrl = savedReportUrl || `/run-report?runId=${encodeURIComponent(effectiveRunId)}`;
+
+        sidebarCard.setAttribute('href', reportUrl);
+        sidebarCard.style.display = 'flex';
+
+        if (sidebarRunIdEl) {
+            sidebarRunIdEl.textContent = effectiveRunId.startsWith('#') ? effectiveRunId : `#${effectiveRunId}`;
+        }
+
+        const sidebarBatchNameEl = document.getElementById('sidebarActiveBatchName');
+        if (sidebarBatchNameEl) {
+            const rawBatch = (sidebarBatchNameEl.textContent || '').trim();
+            if (!rawBatch || ['default', 'unknown', 'queue', 'suite', 'all', 'n/a'].includes(rawBatch.toLowerCase())) {
+                sidebarBatchNameEl.style.display = 'none';
+            } else {
+                sidebarBatchNameEl.style.display = 'block';
+            }
+        }
+
+        const sidebarStatusEl = document.getElementById('sidebarActiveStatus') || document.getElementById('sidebarActiveEnv');
+        if (sidebarStatusEl && (sidebarStatusEl.textContent === 'Unknown' || !sidebarStatusEl.textContent)) {
+            sidebarStatusEl.textContent = savedStatus;
+        }
+
+        const pulseDot = document.getElementById('sidebarContextPulseDot');
+        if (pulseDot) {
+            const isRunningState = (sidebarStatusEl && sidebarStatusEl.textContent === 'running') || savedStatus === 'running';
+            pulseDot.style.display = isRunningState ? 'inline-block' : 'none';
+        }
 
         const savedProgress = localStorage.getItem('aura_active_run_progress');
         const savedMetaStr = localStorage.getItem('aura_active_run_progress_meta');
