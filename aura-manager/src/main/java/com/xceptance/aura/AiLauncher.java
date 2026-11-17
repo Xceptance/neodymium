@@ -32,8 +32,8 @@ import java.util.Locale;
 
 /**
  * Launcher for Neodymium AI Manager.
- * Launches a lightweight splash server on an ephemeral port to provide immediate visual feedback
- * in the user's browser while Spring Boot initializes in the background.
+ * Initializes the AI Manager server and coordinates automated browser launching
+ * with {@link BrowserAutoOpenService} to provide seamless reconnection and tab deduplication.
  *
  * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
@@ -59,6 +59,7 @@ public class AiLauncher
         if (isBrowserOpenEnabled())
         {
             BrowserAutoOpenService.setAutoOpenRequested(true);
+            System.out.println("[Neodymium AI Manager] Initializing server... Browser will open automatically once ready.");
         }
         else
         {
