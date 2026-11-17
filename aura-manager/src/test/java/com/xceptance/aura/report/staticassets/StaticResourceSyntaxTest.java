@@ -5027,6 +5027,40 @@ public final class StaticResourceSyntaxTest
 
         runNodeScript(nodeTestScript, "Sidebar runner progress unit test failed");
     }
+
+    @Test
+    public void testCustomDashboardCompactHeaderAndNoRedundantWidgetsHeadline() throws Exception
+    {
+        final Path customPagePath = Paths.get("src/main/resources/templates/fragments/custom-dashboard-page.html");
+        Assertions.assertTrue(Files.exists(customPagePath), "custom-dashboard-page.html must exist");
+        final String customPageContent = Files.readString(customPagePath, StandardCharsets.UTF_8);
+
+        final Path dashboardWidgetsPath = Paths.get("src/main/resources/templates/fragments/dashboard-widgets.html");
+        Assertions.assertTrue(Files.exists(dashboardWidgetsPath), "dashboard-widgets.html must exist");
+        final String widgetsContent = Files.readString(dashboardWidgetsPath, StandardCharsets.UTF_8);
+
+        final Path cssPath = Paths.get("src/main/resources/static/css/report-manager.css");
+        Assertions.assertTrue(Files.exists(cssPath), "report-manager.css must exist");
+        final String cssContent = Files.readString(cssPath, StandardCharsets.UTF_8);
+
+        // 1. Verify custom-dashboard-page.html uses compact gap-3
+        Assertions.assertTrue(customPageContent.contains("class=\"d-flex flex-column gap-3\""),
+            "custom-dashboard-page.html must use gap-3 for compact footprint");
+        Assertions.assertFalse(customPageContent.contains("class=\"d-flex flex-column gap-4\""),
+            "custom-dashboard-page.html must not use excessive gap-4");
+
+        // 2. Verify dashboard-widgets.html has removed redundant headline and guarded #dashboardWidgetsHeader
+        Assertions.assertFalse(widgetsContent.contains("Dashboard Widgets</span>"),
+            "dashboard-widgets.html must not contain redundant 'Dashboard Widgets' headline");
+        Assertions.assertTrue(widgetsContent.contains("id=\"dashboardWidgetsHeader\" th:if=\"${customPage == null}\""),
+            "dashboard-widgets.html must guard #dashboardWidgetsHeader with th:if=\"${customPage == null}\"");
+
+        // 3. Verify report-manager.css styles #customDashboardPageToolbar as sticky, flush, and compact
+        Assertions.assertTrue(cssContent.contains("#customDashboardPageToolbar {"),
+            "report-manager.css must configure #customDashboardPageToolbar");
+        Assertions.assertTrue(cssContent.contains(".content-body:has(#pageCustomDashboard) {"),
+            "report-manager.css must declare .content-body:has(#pageCustomDashboard)");
+    }
 }
 
 
