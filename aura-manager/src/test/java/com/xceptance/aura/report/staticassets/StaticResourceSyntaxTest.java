@@ -5060,6 +5060,23 @@ public final class StaticResourceSyntaxTest
             "report-manager.css must configure #customDashboardPageToolbar");
         Assertions.assertTrue(cssContent.contains(".content-body:has(#pageCustomDashboard) {"),
             "report-manager.css must declare .content-body:has(#pageCustomDashboard)");
+
+        // 4. Verify unified single top header bar on custom dashboards
+        Assertions.assertTrue(cssContent.contains("body:has(#pageCustomDashboard) #appHeader {"),
+            "report-manager.css must hide redundant #appHeader when #pageCustomDashboard is active");
+        Assertions.assertTrue(cssContent.contains(".custom-dashboard-body {"),
+            "report-manager.css must define .custom-dashboard-body for content padding");
+
+        // 5. Verify custom-dashboard-page.html toolbar integrates global actions and theme controls
+        Assertions.assertTrue(customPageContent.contains("class=\"custom-dashboard-body d-flex flex-column gap-3\""),
+            "custom-dashboard-page.html must wrap body sections in .custom-dashboard-body");
+        Assertions.assertTrue(customPageContent.contains("<span>Resync</span>")
+                && customPageContent.contains("<span>Refresh</span>"),
+            "custom-dashboard-page.html toolbar must provide Resync and Refresh actions");
+        Assertions.assertTrue(customPageContent.contains("onclick=\"changeTheme('light')\"")
+                && customPageContent.contains("onclick=\"changeTheme('dark')\"")
+                && customPageContent.contains("onclick=\"changeTheme('system')\""),
+            "custom-dashboard-page.html toolbar must include unified theme switcher");
     }
 }
 

@@ -13,7 +13,7 @@
      th:attr="data-page-id=${customPage != null ? customPage.id : ''}, data-page-name=${customPage != null ? customPage.name : ''}, data-prohibited-group-by=${prohibitedGroupDimensionsCsv != null ? prohibitedGroupDimensionsCsv : ''}">
 
     <!-- PAGE HEADER TOOLBAR -->
-    <div class="test-filters-toolbar d-flex align-items-center justify-content-between flex-wrap gap-2" id="customDashboardPageToolbar">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2" id="customDashboardPageToolbar">
         <div class="d-flex align-items-center gap-2 flex-wrap">
             <a th:if="${isSubPage == true and parentDashboard != null}"
                class="btn-secondary"
@@ -115,8 +115,41 @@
                 <span class="material-symbols-outlined" style="font-size: 0.9rem;">delete</span>
                 <span>Delete Page</span>
             </button>
+
+            <!-- Divider between page actions and global actions -->
+            <div style="width: 1px; height: 22px; background: var(--border); margin: 0 0.25rem;"></div>
+
+            <!-- Global Action: Resync Storage -->
+            <button class="btn-secondary btn-compact d-inline-flex align-items-center gap-1"
+                    hx-post="/runs/refresh"
+                    hx-target="#mainViewContainer"
+                    hx-swap="innerHTML"
+                    title="Analyze storage report folders, generate run.json files, and refresh views">
+                <span class="material-symbols-outlined" style="font-size: 0.9rem;">sync</span>
+                <span>Resync</span>
+            </button>
+
+            <!-- Global Action: Refresh -->
+            <button class="btn-secondary btn-compact d-inline-flex align-items-center gap-1"
+                    hx-post="/runs/refresh"
+                    hx-target="#mainViewContainer"
+                    hx-swap="innerHTML"
+                    title="Refresh reports and re-sync database">
+                <span class="material-symbols-outlined" style="font-size: 0.9rem;">refresh</span>
+                <span>Refresh</span>
+            </button>
+
+            <!-- Global Action: Theme Switcher -->
+            <div class="d-flex align-items-center gap-1" style="background: var(--bg-main); padding: 2px; border-radius: 6px; border: 1px solid var(--border-color);">
+                <button class="btn-edit" onclick="changeTheme('light')" title="Light Mode" style="padding: 2px 6px; border: none; background: transparent;"><span class="material-symbols-outlined" style="font-size: 1rem;">light_mode</span></button>
+                <button class="btn-edit" onclick="changeTheme('dark')" title="Dark Mode" style="padding: 2px 6px; border: none; background: transparent;"><span class="material-symbols-outlined" style="font-size: 1rem;">dark_mode</span></button>
+                <button class="btn-edit" onclick="changeTheme('system')" title="System Theme" style="padding: 2px 6px; border: none; background: transparent;"><span class="material-symbols-outlined" style="font-size: 1rem;">desktop_windows</span></button>
+            </div>
         </div>
     </div>
+
+    <!-- DASHBOARD BODY CONTENT -->
+    <div class="custom-dashboard-body d-flex flex-column gap-3">
 
     <!-- GROUP OVERVIEW CARDS (DISPLAYED ON MAIN GROUP DASHBOARD) -->
     <div th:if="${isGroupDashboard == true or (customPage != null and customPage.isGroupParent)}"
@@ -391,6 +424,7 @@
         <div th:if="${dashboardWidgets != null and !#lists.isEmpty(dashboardWidgets)}" id="customPageWidgetsSection">
             <div th:replace="~{fragments/dashboard-widgets :: dashboardWidgetsSection}"></div>
         </div>
+    </div>
     </div>
 
     <!-- WIDGET CONFIGURATOR MODAL CONTAINER -->

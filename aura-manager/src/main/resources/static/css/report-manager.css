@@ -867,7 +867,8 @@ header { height: 64px; background-color: var(--bg-panel); border-bottom: 1px sol
 
 .content-body { flex: 1; overflow-y: auto; padding: 1.5rem 1.75rem; display: flex; flex-direction: column; gap: 1.5rem; container-type: inline-size; overflow-anchor: none; }
 .content-body:has(.aura-manager-integrated-root) { padding: 0; gap: 0; overflow: hidden; height: 100%; }
-.content-body:has(#pageCustomDashboard) { padding-top: 0; gap: 1rem; }
+.content-body:has(#pageCustomDashboard) { padding: 0 0 1.5rem 0; gap: 1rem; }
+body:has(#pageCustomDashboard) #appHeader { display: none; }
 
 /* Prevent browser scroll anchoring from pulling or jumping viewport to lower lists on filter changes */
 #batchRunsHistoryTableBody,
@@ -938,11 +939,25 @@ header { height: 64px; background-color: var(--bg-panel); border-bottom: 1px sol
     position: sticky;
     top: 0;
     z-index: 1010;
-    margin-bottom: 0;
+    min-height: 56px;
+    background-color: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
     border-top: none;
-    border-top-left-radius: 0;
-    border-top-right-radius: 0;
-    padding: 0.45rem 1rem;
+    border-left: none;
+    border-right: none;
+    border-radius: 0;
+    margin-bottom: 0;
+    padding: 0.5rem 1.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.custom-dashboard-body {
+    padding: 0 1.75rem;
 }
 
 .multiselect-dropdown { position: relative; display: inline-block; }
