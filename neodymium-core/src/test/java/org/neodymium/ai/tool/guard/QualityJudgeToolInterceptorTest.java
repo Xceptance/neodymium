@@ -1184,5 +1184,169 @@ public class QualityJudgeToolInterceptorTest
             System.clearProperty("neodymium.ai.judge.mode");
         }
     }
+
+    @Test
+    public void testOrdinalInstructionPreservesUniquePositionalSelectorInDom()
+    {
+        final WebElement mockCherry = (WebElement) Proxy.newProxyInstance(
+                WebElement.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (final Object proxy, final Method method, final Object[] args) ->
+                {
+                    if ("getTagName".equals(method.getName()))
+                    {
+                        return "div";
+                    }
+                    if ("getAttribute".equals(method.getName()) && args != null && args.length > 0)
+                    {
+                        if ("id".equals(args[0]))
+                        {
+                            return "cherry";
+                        }
+                        if ("class".equals(args[0]))
+                        {
+                            return "lastItem";
+                        }
+                        return null;
+                    }
+                    return null;
+                }
+        );
+
+        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
+                WebDriver.class.getClassLoader(),
+                new Class<?>[]{WebDriver.class},
+                (final Object proxy, final Method method, final Object[] args) ->
+                {
+                    if ("findElements".equals(method.getName()))
+                    {
+                        return List.of(mockCherry);
+                    }
+                    return List.of();
+                }
+        );
+
+        WebDriverRunner.setWebDriver(mockDriver);
+        System.setProperty("neodymium.ai.locatorImprover.enabled", "true");
+        try
+        {
+            final SessionData sessionData = new SessionData(new HashMap<>());
+            final ExecutionContext execContext = new ExecutionContext(sessionData);
+            execContext.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify the third item in the list has text \"Cherry\".");
+            ExecutionContext.setActiveContext(execContext);
+
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", ".myList div:nth-of-type(3)");
+
+            final ToolCall call = new ToolCall("call-ordinal", "click", args);
+            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
+
+            Assertions.assertTrue(verdict.isAllowed());
+            Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, verdict.decision());
+            Assertions.assertTrue(verdict.reason().contains("unique positional selector for ordinal instruction"));
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.locatorImprover.enabled");
+            ExecutionContext.setActiveContext(null);
+            WebDriverRunner.closeWebDriver();
+        }
+    }
+
+    @Test
+    public void testPositionalHijackRejectedWhenOrdinalCommanded()
+    {
+        final SessionData sessionData = new SessionData(new HashMap<>());
+        final ExecutionContext execContext = new ExecutionContext(sessionData);
+        execContext.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify the second item in the list has text \"Banana\".");
+        ExecutionContext.setActiveContext(execContext);
+
+        try
+        {
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", "div:nth-of-type(2)");
+            final ArrayNode candidates = args.putArray("candidates");
+
+            final ObjectNode c1 = candidates.addObject();
+            c1.put("locator", "div:nth-of-type(2)");
+            c1.put("strategy", "ATTRIBUTE");
+            c1.put("score", 0.20);
+
+            final ObjectNode c2 = candidates.addObject();
+            c2.put("locator", "#banana");
+            c2.put("strategy", "ID");
+            c2.put("score", 0.98);
+
+            final ToolCall call = new ToolCall("call-hijack-test", "click", args);
+            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
+
+            // Rejection of positional hijack means original selector div:nth-of-type(2) is retained
+            Assertions.assertTrue(verdict.isAllowed());
+            Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, verdict.decision());
+            Assertions.assertTrue(verdict.reason().contains("Positional hijack rejected"));
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
+    }
+
+    @Test
+    public void testContainerScopedLocatorWithTitleAllowedImmediately()
+    {
+        final WebElement mockCell = (WebElement) Proxy.newProxyInstance(
+                WebElement.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (final Object proxy, final Method method, final Object[] args) ->
+                {
+                    if ("getTagName".equals(method.getName()))
+                    {
+                        return "td";
+                    }
+                    if ("getAttribute".equals(method.getName()) && args != null && args.length > 0)
+                    {
+                        if ("class".equals(args[0]))
+                        {
+                            return "price";
+                        }
+                        return null;
+                    }
+                    return null;
+                }
+        );
+
+        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
+                WebDriver.class.getClassLoader(),
+                new Class<?>[]{WebDriver.class},
+                (final Object proxy, final Method method, final Object[] args) ->
+                {
+                    if ("findElements".equals(method.getName()))
+                    {
+                        return List.of(mockCell);
+                    }
+                    return List.of();
+                }
+        );
+
+        WebDriverRunner.setWebDriver(mockDriver);
+        System.setProperty("neodymium.ai.locatorImprover.enabled", "true");
+        try
+        {
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", "tr[title='Item 18491'] td.price");
+
+            final ToolCall call = new ToolCall("call-price", "has_text", args);
+            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
+
+            Assertions.assertTrue(verdict.isAllowed());
+            Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, verdict.decision());
+            Assertions.assertTrue(verdict.reason().contains("score: 8 >= 8"));
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.locatorImprover.enabled");
+            WebDriverRunner.closeWebDriver();
+        }
+    }
 }
 
