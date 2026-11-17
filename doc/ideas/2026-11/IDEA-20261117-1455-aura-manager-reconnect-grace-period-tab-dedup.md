@@ -16,10 +16,10 @@ When developers restart the server during iterative testing, their existing brow
    - Reduce the reconnect polling delay from 2,000 ms to 500 ms when the server is offline or unreachable (`isServerOffline || serverFailureCount > 0`).
    - Ensures an existing tab checks in within 500 ms after port 8080 opens.
 
-2. **Server-Side Grace Period (`BrowserAutoOpenService`):**
-   - Defer automated browser launching until Spring Boot reaches `ApplicationReadyEvent`.
-   - Maintain an `autoOpenRequested` flag set only when started via `AiLauncher.main()`, ensuring zero interference or browser launches during `@SpringBootTest` test executions.
-   - Intercept incoming client activity via a lightweight servlet filter (`BrowserAutoOpenFilter`).
-   - Schedule a 1,500 ms grace window on startup:
-     - If an active client connects during the window: log reconnect detection and suppress opening a new window.
-     - If no client connects within 1,500 ms: launch the default browser directly to `http://localhost:<port>`.
+2. **Pre-Boot Socket Probe & Instant Splash Screen (`AiLauncher`):**
+   - At launcher startup before Spring Boot boot-up, execute a 400 ms loopback `ServerSocket` probe on the configured target server port.
+   - If an open dashboard tab is polling, it connects to the probe within ~100 ms. The probe responds with `503 Service Unavailable`, records client presence, and `AiLauncher` suppresses browser/splash launch, allowing the existing tab to seamlessly reconnect when Spring Boot finishes booting.
+   - If no client connects within 400 ms (cold start), `AiLauncher` starts the ephemeral splash server and immediately launches `loading.html` in the user's browser, providing instant visual feedback (spinner) while Spring Boot initializes in the background.
+
+3. **Fallback Reconnection Grace Period (`BrowserAutoOpenService`):**
+   - Retain `BrowserAutoOpenService` and `BrowserAutoOpenFilter` as secondary runtime safety nets for programmatic/headless invocations.

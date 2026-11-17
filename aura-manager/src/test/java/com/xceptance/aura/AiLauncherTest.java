@@ -21,6 +21,9 @@ package com.xceptance.aura;
 import com.sun.net.httpserver.HttpServer;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
@@ -142,6 +145,61 @@ public final class AiLauncherTest
         {
             Assertions.assertDoesNotThrow(() -> AiLauncher.openLinuxBrowserDetached("http://localhost:8080"),
                 "openLinuxBrowserDetached must not throw IllegalArgumentException for input redirection");
+        }
+    }
+
+    @Test
+    public void testResolveServerPort()
+    {
+        System.clearProperty("server.port");
+        Assertions.assertEquals(8080, AiLauncher.resolveServerPort(new String[0]));
+
+        Assertions.assertEquals(9090, AiLauncher.resolveServerPort(new String[]{"--server.port=9090"}));
+
+        System.setProperty("server.port", "8888");
+        Assertions.assertEquals(8888, AiLauncher.resolveServerPort(new String[0]));
+        System.clearProperty("server.port");
+    }
+
+    @Test
+    public void testProbePortForClientDetectsConnectingClient() throws Exception
+    {
+        try (final ServerSocket socket = new ServerSocket(0))
+        {
+            final int ephemeralPort = socket.getLocalPort();
+            socket.close();
+
+            new Thread(() -> {
+                try
+                {
+                    Thread.sleep(60);
+                    try (final Socket s = new Socket(InetAddress.getLoopbackAddress(), ephemeralPort))
+                    {
+                        s.getOutputStream().write("GET /api/status HTTP/1.1\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
+                        s.getOutputStream().flush();
+                        s.getInputStream().read();
+                    }
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }).start();
+
+            final boolean detected = AiLauncher.probePortForClient(ephemeralPort, 500);
+            Assertions.assertTrue(detected, "probePortForClient must return true when client connects");
+        }
+    }
+
+    @Test
+    public void testProbePortForClientReturnsFalseOnTimeout() throws Exception
+    {
+        try (final ServerSocket socket = new ServerSocket(0))
+        {
+            final int ephemeralPort = socket.getLocalPort();
+            socket.close();
+
+            final boolean detected = AiLauncher.probePortForClient(ephemeralPort, 150);
+            Assertions.assertFalse(detected, "probePortForClient must return false when no client connects");
         }
     }
 }

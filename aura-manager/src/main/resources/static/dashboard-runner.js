@@ -1158,7 +1158,7 @@ async function pollStatus() {
     } finally {
         if (thisSession !== currentPollSession) return;
         if (!disconnected) {
-            const nextDelay = (serverFailureCount > 0 || isServerOffline) ? 500 : (window._pendingRunStart ? 300 : 2000);
+            const nextDelay = (serverFailureCount > 0 || isServerOffline) ? 300 : (window._pendingRunStart ? 300 : 2000);
             pollingIntervalId = setTimeout(pollStatus, nextDelay);
         }
     }
