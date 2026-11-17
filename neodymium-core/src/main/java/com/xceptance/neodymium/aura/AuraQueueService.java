@@ -93,6 +93,9 @@ public final class AuraQueueService
     /** Wall-clock start time in ms of the current (or most recent) queue run. */
     private final AtomicLong runStartTimeMs = new AtomicLong(0);
 
+    /** Wall-clock duration in ms of the most recently completed queue run. */
+    private final AtomicLong lastRunDurationMs = new AtomicLong(0);
+
     /** The RunRequest that initiated the most recent queue execution, used for archiving metadata. */
     private final AtomicReference<RunRequest> lastRunRequest = new AtomicReference<>(null);
 
@@ -226,6 +229,11 @@ public final class AuraQueueService
     public long getRunStartTimeMs()
     {
         return runStartTimeMs.get();
+    }
+
+    public long getLastRunDurationMs()
+    {
+        return lastRunDurationMs.get();
     }
 
     public RunRequest getLastRunRequest()
@@ -427,6 +435,7 @@ public final class AuraQueueService
                 interactiveService.resetExecutionIndexes();
 
                 runStartTimeMs.set(System.currentTimeMillis());
+                lastRunDurationMs.set(0);
                 final String generatedRunId = (req.targetRunId != null && !req.targetRunId.isBlank())
                         ? req.targetRunId
                         : "run_" + new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date(runStartTimeMs.get()));
@@ -1071,6 +1080,10 @@ public final class AuraQueueService
                     {
                         break;
                     }
+                }
+                if (runStartTimeMs.get() > 0)
+                {
+                    lastRunDurationMs.set(Math.max(0, System.currentTimeMillis() - runStartTimeMs.get()));
                 }
                 runningQueue.set(false);
                 activeFile.set("");
