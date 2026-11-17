@@ -343,7 +343,9 @@ public class AuraGlobalModelAdvice
                     scheduledCount = total;
                 }
                 passedCount = activeEntity.getPassedCleanCount() + activeEntity.getFixedCleanCount() + activeEntity.getPassedHealedCountSafe() + activeEntity.getFixedHealedCountSafe();
-                failedCount = activeEntity.getFailedKnownCount() + activeEntity.getFailedUnknownCount();
+                final int activeFailKnown = activeEntity.getFailedKnownCount() != null ? activeEntity.getFailedKnownCount() : 0;
+                final int activeFailUnknown = activeEntity.getFailedUnknownCount() != null ? activeEntity.getFailedUnknownCount() : 0;
+                failedCount = activeFailKnown + activeFailUnknown;
                 skippedCount = activeEntity.getIgnoredCount() != null ? activeEntity.getIgnoredCount() : 0;
 
                 if (running)
@@ -401,7 +403,9 @@ public class AuraGlobalModelAdvice
                 executedCount = latestRun.getTotalTestsSafe();
                 scheduledCount = latestRun.getTotalTestsSafe();
                 passedCount = latestRun.getPassedCleanCount() + latestRun.getFixedCleanCount() + latestRun.getPassedHealedCountSafe() + latestRun.getFixedHealedCountSafe();
-                failedCount = latestRun.getFailedKnownCount() + latestRun.getFailedUnknownCount();
+                final int latestFailKnown = latestRun.getFailedKnownCount() != null ? latestRun.getFailedKnownCount() : 0;
+                final int latestFailUnknown = latestRun.getFailedUnknownCount() != null ? latestRun.getFailedUnknownCount() : 0;
+                failedCount = latestFailKnown + latestFailUnknown;
                 skippedCount = latestRun.getIgnoredCount() != null ? latestRun.getIgnoredCount() : 0;
                 runningCount = 0;
                 progressText = executedCount + " tests completed";

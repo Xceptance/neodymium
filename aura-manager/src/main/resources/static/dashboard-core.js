@@ -575,7 +575,7 @@ function updateSidebarRunnerProgress(statusData) {
     const sidebarProgressContainer = document.getElementById('sidebarActiveProgressContainer');
     if (!sidebarProgressContainer || !sidebarProgressEl) return;
 
-    if (!statusData || (!statusData.progressText && !statusData.total && !statusData.executedCount && !statusData.running)) {
+    if (!statusData || (!statusData.progressText && !statusData.total && !statusData.scheduledCount && !statusData.executedCount && !statusData.running)) {
         sidebarProgressContainer.style.display = 'none';
         try {
             localStorage.removeItem('aura_active_run_progress');

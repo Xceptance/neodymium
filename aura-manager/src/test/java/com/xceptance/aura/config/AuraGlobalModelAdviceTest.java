@@ -348,4 +348,31 @@ public final class AuraGlobalModelAdviceTest
         final long suiteCount = availableIdentityTags.stream().filter("Suite"::equalsIgnoreCase).count();
         Assertions.assertEquals(1, suiteCount);
     }
+
+    @Test
+    public final void testExternalRunContextWithNullFailureCountsDoesNotThrowNpe()
+    {
+        final AuraQueueService mockQueueService = Mockito.mock(AuraQueueService.class);
+        Mockito.when(mockQueueService.getCurrentRunId()).thenReturn("");
+        Mockito.when(mockQueueService.isRunningQueue()).thenReturn(false);
+
+        final TestRunRepository mockRunRepo = Mockito.mock(TestRunRepository.class);
+        final TestRunEntity runWithNullCounts = new TestRunEntity();
+        runWithNullCounts.setId("run_null_counts");
+        runWithNullCounts.setStatus("IN_PROGRESS");
+        runWithNullCounts.setTotalTests(3);
+        runWithNullCounts.setRunningCount(1);
+        runWithNullCounts.setPassedCount(null);
+        runWithNullCounts.setFailedKnownCount(null);
+        runWithNullCounts.setFailedUnknownCount(null);
+
+        Mockito.when(mockRunRepo.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of(runWithNullCounts));
+
+        final AuraGlobalModelAdvice advice = new AuraGlobalModelAdvice(mockQueueService, null, mockRunRepo, null);
+        final Model model = new ConcurrentModel();
+        Assertions.assertDoesNotThrow(() -> advice.addGlobalAttributes(model));
+
+        Assertions.assertEquals(0, model.getAttribute("activeRunPassedCount"));
+        Assertions.assertEquals(0, model.getAttribute("activeRunFailedCount"));
+    }
 }

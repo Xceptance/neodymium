@@ -4897,6 +4897,8 @@ public final class StaticResourceSyntaxTest
             "sidebar.html must contain #sidebarOutcomeChips");
         Assertions.assertTrue(sidebarContent.contains("sidebarCollapsedFailIndicator"),
             "sidebar.html must contain #sidebarCollapsedFailIndicator");
+        Assertions.assertTrue(sidebarContent.contains("th:style=\"${activeRunFailedCount != null and activeRunFailedCount > 0"),
+            "sidebar.html must conditionally show collapsed fail indicator via SSR when failures exist");
 
         final Path cssPath = Paths.get("src/main/resources/static/css/report-manager.css");
         Assertions.assertTrue(Files.exists(cssPath));
@@ -5016,6 +5018,11 @@ public final class StaticResourceSyntaxTest
             "// 4. Unknown/Dynamic discovery (total = 0, running = true): indeterminate shimmer\n" +
             "updateProgress({ running: true, total: 0, scheduledCount: 0, executedCount: 0, progressText: 'Discovering...' });\n" +
             "assert(elements.sidebarProgressTrack.classList.contains('is-indeterminate'), 'Track must have is-indeterminate class');\n" +
+            "\n" +
+            "// 5. Queued state (scheduledCount > 0, running = false, executedCount = 0): preserve container visibility\n" +
+            "updateProgress({ running: false, scheduledCount: 5, executedCount: 0, total: 0, progressText: '' });\n" +
+            "assert.strictEqual(elements.sidebarActiveProgressContainer.style.display, 'flex', 'Container must remain visible when scheduledCount > 0');\n" +
+            "assert.strictEqual(elements.sidebarActiveProgress.textContent, '0 / 5');\n" +
             "console.log('SIDEBAR_PROGRESS_UNIT_TEST_SUCCESS');\n";
 
         runNodeScript(nodeTestScript, "Sidebar runner progress unit test failed");
