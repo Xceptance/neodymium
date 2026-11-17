@@ -264,7 +264,7 @@
             id="runQueueBtn" 
             hx-post="/api/run" 
             hx-swap="none"
-            onclick="prepareClientForExecution()"
+            onclick="if (!checkApiKeyBeforeRun(event, () => triggerRunQueue())) return false; prepareClientForExecution();"
             th:disabled="${queue == null or queue.isEmpty()}"
             th:classappend="${running ? 'd-none' : ((activeEditingFile != null or (queue == null or queue.isEmpty())) ? 'btn-muted d-flex' : 'd-flex')}">
         <span class="material-symbols-outlined">play_arrow</span> <span>Run Queue</span> 
@@ -276,7 +276,7 @@
             id="runCurrentTestBtn" 
             hx-post="/api/run?runCurrent=true" 
             hx-swap="none"
-            onclick="prepareClientForExecution()"
+            onclick="if (!checkApiKeyBeforeRun(event, () => triggerRunCurrentTest())) return false; prepareClientForExecution();"
             th:classappend="${!running and activeEditingFile != null ? 'd-flex' : 'd-none'}">
         <span class="material-symbols-outlined">play_arrow</span> Run Open Test
     </button>

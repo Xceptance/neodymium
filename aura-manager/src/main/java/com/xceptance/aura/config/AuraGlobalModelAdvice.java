@@ -23,6 +23,7 @@ import com.xceptance.aura.report.repository.TestRunRepository;
 import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.ReportDashboardSettingService;
 import com.xceptance.neodymium.aura.AuraQueueService;
+import com.xceptance.neodymium.aura.AuraSettingsService;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -50,30 +51,42 @@ public class AuraGlobalModelAdvice
     private final ReportDashboardSettingService dashboardSettingService;
     private final TestRunRepository runRepository;
     private final AuraReportDataService dataService;
+    private final AuraSettingsService settingsService;
 
     @Autowired
     public AuraGlobalModelAdvice(
         final AuraQueueService queueService,
         @Autowired(required = false) final ReportDashboardSettingService dashboardSettingService,
         @Autowired(required = false) final TestRunRepository runRepository,
-        @Autowired(required = false) final AuraReportDataService dataService)
+        @Autowired(required = false) final AuraReportDataService dataService,
+        @Autowired(required = false) final AuraSettingsService settingsService)
     {
         this.queueService = queueService;
         this.dashboardSettingService = dashboardSettingService;
         this.runRepository = runRepository;
         this.dataService = dataService;
+        this.settingsService = settingsService != null ? settingsService : new AuraSettingsService();
+    }
+
+    public AuraGlobalModelAdvice(
+        final AuraQueueService queueService,
+        final ReportDashboardSettingService dashboardSettingService,
+        final TestRunRepository runRepository,
+        final AuraReportDataService dataService)
+    {
+        this(queueService, dashboardSettingService, runRepository, dataService, null);
     }
 
     public AuraGlobalModelAdvice(
         final AuraQueueService queueService,
         final ReportDashboardSettingService dashboardSettingService)
     {
-        this(queueService, dashboardSettingService, null, null);
+        this(queueService, dashboardSettingService, null, null, null);
     }
 
     public AuraGlobalModelAdvice(final AuraQueueService queueService)
     {
-        this(queueService, null, null, null);
+        this(queueService, null, null, null, null);
     }
 
     @ModelAttribute
@@ -97,6 +110,12 @@ public class AuraGlobalModelAdvice
             model.addAttribute("customPages", Collections.emptyList());
             model.addAttribute("rootCustomPages", Collections.emptyList());
             model.addAttribute("defaultWidgetsCount", 0);
+        }
+        if (settingsService != null && model != null)
+        {
+            model.addAttribute("hasApiKey", settingsService.hasConfiguredApiKey());
+            model.addAttribute("apiKeyWarningIgnored", settingsService.isApiKeyWarningIgnored());
+            model.addAttribute("projectId", settingsService.getProjectId());
         }
         if (model != null && !model.containsAttribute("candidateBrowsers"))
         {
@@ -278,7 +297,7 @@ public class AuraGlobalModelAdvice
                     .findFirst()
                     .orElse(null);
             }
-            if (activeEntity == null && isQueueRunning)
+            if (activeEntity == null && (isQueueRunning || dataService == null))
             {
                 activeEntity = allRuns.stream()
                     .filter(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus()))
@@ -297,7 +316,7 @@ public class AuraGlobalModelAdvice
                     && (stoppedRunId != null && !stoppedRunId.isBlank() && stoppedRunId.equals(activeEntity.getId()));
                 running = !isCurrentRunStopped && (isQueueRunning
                     || (!"CANCELLED".equalsIgnoreCase(activeEntity.getStatus())
-                        && dataService != null && dataService.isRunCurrentlyActiveOnDisk(activeEntity.getId())));
+                        && (dataService == null || dataService.isRunCurrentlyActiveOnDisk(activeEntity.getId()))));
                 if (currentBatch == null || !AuraReportDataService.isRealBatch(currentBatch))
                 {
                     currentBatch = AuraReportDataService.resolveEffectiveBatchName(activeEntity.getBatchName(), activeEntity.getTags());

@@ -200,4 +200,33 @@ public class AuraTestSettingsControllerTest
         Mockito.verify(settingsService).savePropertyFile("ai.properties", Map.of("neodymium.ai.apiKey", "secret-key-456"));
         Mockito.verify(settingsService).savePropertyFile("browser.properties", Map.of("browserprofile.global.headless", "true"));
     }
+
+    @Test
+    public void testGetApiKeyStatus()
+    {
+        Mockito.when(settingsService.hasConfiguredApiKey()).thenReturn(true);
+        Mockito.when(settingsService.isApiKeyWarningIgnored()).thenReturn(false);
+        Mockito.when(settingsService.getProjectId()).thenReturn("test-proj-12345");
+
+        final ResponseEntity<Map<String, Object>> response = controller.getApiKeyStatus();
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertEquals(true, response.getBody().get("hasApiKey"));
+        Assertions.assertEquals(false, response.getBody().get("warningIgnored"));
+        Assertions.assertEquals("test-proj-12345", response.getBody().get("projectId"));
+    }
+
+    @Test
+    public void testIgnoreApiKeyWarning()
+    {
+        Mockito.when(settingsService.getProjectId()).thenReturn("test-proj-12345");
+
+        final ResponseEntity<Map<String, Object>> response = controller.ignoreApiKeyWarning();
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertEquals(true, response.getBody().get("success"));
+        Assertions.assertEquals(true, response.getBody().get("warningIgnored"));
+        Assertions.assertEquals("test-proj-12345", response.getBody().get("projectId"));
+        Mockito.verify(settingsService).setApiKeyWarningIgnored(true);
+    }
 }

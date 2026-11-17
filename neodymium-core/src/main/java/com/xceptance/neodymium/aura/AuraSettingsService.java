@@ -35,6 +35,7 @@ import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.neodymium.ai.config.AiConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,6 +55,7 @@ public final class AuraSettingsService
     private static final Pattern COMMENTED_KEY_PATTERN = Pattern.compile("^\\s*[#!]\\s*([a-zA-Z0-9_.-]+)\\s*[:=]\\s*(.*)$");
 
     private final Path configDirectory;
+    private volatile boolean apiKeyWarningIgnored = false;
 
     public AuraSettingsService()
     {
@@ -63,6 +65,132 @@ public final class AuraSettingsService
     public AuraSettingsService(final Path configDirectory)
     {
         this.configDirectory = configDirectory;
+    }
+
+    /**
+     * Checks if the missing API key warning has been ignored for this server session.
+     *
+     * @return {@code true} if dismissed by the user for now
+     */
+    public boolean isApiKeyWarningIgnored()
+    {
+        return apiKeyWarningIgnored;
+    }
+
+    /**
+     * Sets whether the missing API key warning is ignored for this server session.
+     *
+     * @param ignored {@code true} to suppress the warning for now
+     */
+    public void setApiKeyWarningIgnored(final boolean ignored)
+    {
+        this.apiKeyWarningIgnored = ignored;
+    }
+
+    /**
+     * Returns a stable, deterministic project identifier for the current workspace
+     * derived from the canonical root path and folder name.
+     *
+     * @return project identifier string
+     */
+    public String getProjectId()
+    {
+        final Path absoluteConfig = this.configDirectory.toAbsolutePath().normalize();
+        final Path projectRoot = absoluteConfig.getParent() != null ? absoluteConfig.getParent() : absoluteConfig;
+        final String folderName = projectRoot.getFileName() != null ? projectRoot.getFileName().toString() : "root";
+        final String hash = Integer.toHexString(projectRoot.toString().hashCode());
+        return folderName + "-" + hash;
+    }
+
+    /**
+     * Checks whether an AI API key is configured and valid in configuration files,
+     * system properties, or environment variables without unresolved placeholders.
+     *
+     * @return {@code true} if an API key is detected and configured
+     */
+    public boolean hasConfiguredApiKey()
+    {
+        // 1. Direct configuration from AiConfiguration
+        try
+        {
+            final String aiApiKey = AiConfiguration.getInstance().aiApiKey();
+            if (isValidApiKey(aiApiKey))
+            {
+                return true;
+            }
+        }
+        catch (final Throwable ignored)
+        {
+        }
+
+        // 2. Check System properties
+        final String sysPropKey = System.getProperty("neodymium.ai.apiKey");
+        if (isValidApiKey(sysPropKey))
+        {
+            return true;
+        }
+
+        // 3. Check environment variables (standard Gemini or Neodymium AI)
+        final String geminiEnv = System.getenv("GEMINI_API_KEY");
+        if (isValidApiKey(geminiEnv))
+        {
+            return true;
+        }
+
+        final String neoEnv = System.getenv("NEODYMIUM_AI_API_KEY");
+        if (isValidApiKey(neoEnv))
+        {
+            return true;
+        }
+
+        // 4. Check active provider-specific keys (e.g. OpenAI, Anthropic, Vertex, Mistral)
+        String resolvedProvider = "gemini";
+        try
+        {
+            resolvedProvider = AiConfiguration.getInstance().getProperty("neodymium.ai.provider", "gemini");
+        }
+        catch (final Throwable ignored)
+        {
+        }
+        final String provider = resolvedProvider;
+
+        if ("openai".equalsIgnoreCase(provider) && isValidApiKey(System.getenv("OPENAI_API_KEY")))
+        {
+            return true;
+        }
+        if ("anthropic".equalsIgnoreCase(provider) && isValidApiKey(System.getenv("ANTHROPIC_API_KEY")))
+        {
+            return true;
+        }
+        if ("vertex".equalsIgnoreCase(provider) && isValidApiKey(System.getenv("VERTEX_API_KEY")))
+        {
+            return true;
+        }
+        if ("mistral".equalsIgnoreCase(provider) && isValidApiKey(System.getenv("MISTRAL_API_KEY")))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static boolean isValidApiKey(final String key)
+    {
+        if (key == null)
+        {
+            return false;
+        }
+        final String trimmed = key.trim();
+        if (trimmed.isEmpty())
+        {
+            return false;
+        }
+        // Unresolved placeholder check (e.g. ${env:GEMINI_API_KEY} or ${GEMINI_API_KEY})
+        if (trimmed.startsWith("${") || trimmed.startsWith("#{"))
+        {
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -891,6 +1019,17 @@ public final class AuraSettingsService
         }
 
         Files.write(path, newLines, StandardCharsets.UTF_8);
+
+        if ("ai.properties".equalsIgnoreCase(fileName))
+        {
+            try
+            {
+                AiConfiguration.resetInstance();
+            }
+            catch (final Throwable ignored)
+            {
+            }
+        }
     }
 
     /**
@@ -915,6 +1054,14 @@ public final class AuraSettingsService
         }
 
         Files.write(path, lines, StandardCharsets.UTF_8);
+
+        try
+        {
+            AiConfiguration.resetInstance();
+        }
+        catch (final Throwable ignored)
+        {
+        }
     }
 
     /**

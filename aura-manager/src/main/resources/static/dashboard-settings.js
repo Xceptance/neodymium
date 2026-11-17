@@ -236,3 +236,18 @@ function togglePasswordVisibility(button) {
     }
 }
 window.togglePasswordVisibility = togglePasswordVisibility;
+
+document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail && evt.detail.target && evt.detail.target.id === 'settingsModal') {
+        fetch('/api/settings/api-key-status')
+            .then(res => res.json())
+            .then(data => {
+                if (data && data.hasApiKey) {
+                    window.AURA_HAS_API_KEY = true;
+                    const configEl = document.getElementById('auraAppConfig');
+                    if (configEl) configEl.setAttribute('data-has-api-key', 'true');
+                }
+            })
+            .catch(() => {});
+    }
+});

@@ -2,6 +2,38 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 
+<!-- MISSING API KEY WARNING MODAL FRAGMENT -->
+<div class="modal-overlay" id="apiKeyWarningModal" th:fragment="apiKeyWarningModal" style="display: none;">
+    <div class="modal-card" style="max-width: 520px; border-top: 4px solid var(--warning, #f59e0b);">
+        <div class="modal-header" style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px;">
+            <div style="display: flex; align-items: center; gap: 8px; color: var(--warning, #f59e0b);">
+                <span class="material-symbols-outlined" style="font-size: 26px;">warning</span>
+                <span style="font-weight: 600; font-size: 16px; color: var(--text-primary, #1e293b);">No AI API Key Configured</span>
+            </div>
+            <button type="button" class="btn-close" onclick="closeApiKeyWarningModal()" title="Close">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+        <div class="modal-body" style="padding: 14px 20px; font-size: 13.5px; line-height: 1.55; color: var(--text-secondary, #475569);">
+            <p style="margin-top: 0; margin-bottom: 10px;">
+                No API key was detected for Neodymium AI (e.g. <code>neodymium.ai.apiKey</code> in <code>config/ai.properties</code> or <code>GEMINI_API_KEY</code> in environment).
+            </p>
+            <p style="margin-bottom: 0;">
+                Tests with AI features (healing, recording, agentic steps, or playbook linter) will fail without a key. Would you like to set a key now or ignore this warning for now?
+            </p>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--border, #e2e8f0);">
+            <button type="button" class="btn-editor" onclick="closeApiKeyWarningModal()">Cancel</button>
+            <button type="button" class="btn-secondary" id="apiKeyWarningIgnoreBtn" onclick="ignoreApiKeyWarningAndRun()" style="display: inline-flex; align-items: center; gap: 5px;">
+                <span class="material-symbols-outlined" style="font-size: 16px;">visibility_off</span> Ignore
+            </button>
+            <button type="button" class="btn-primary" id="apiKeyWarningSetKeyBtn" onclick="openSettingsForApiKey()" style="display: inline-flex; align-items: center; gap: 5px;">
+                <span class="material-symbols-outlined" style="font-size: 16px;">key</span> Set Key
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- CREATE TEST MODAL FRAGMENT -->
 <div class="modal-overlay" id="createTestModal" th:fragment="createTestModal" style="display: none;" th:style="${error != null} ? 'display: flex;' : null">
     <div class="modal-card">

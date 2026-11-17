@@ -30,6 +30,7 @@ import com.google.gson.Gson;
 import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.AuraQueueService;
+import com.xceptance.neodymium.aura.AuraSettingsService;
 import com.xceptance.neodymium.aura.dto.BrowserGroupDto;
 import com.xceptance.neodymium.aura.dto.BrowserProfileDto;
 import com.xceptance.neodymium.aura.dto.DatasetDto;
@@ -87,6 +88,8 @@ public class AuraTestQueueController
 
     private final AuraReportDataService reportDataService;
 
+    private final AuraSettingsService settingsService;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final List<DatasetSelection> selectedQueue = Collections.synchronizedList(new ArrayList<>());
@@ -106,19 +109,28 @@ public class AuraTestQueueController
     public AuraTestQueueController(final AuraQueueService queueService, final AuraFileService fileService,
         final AuraInteractiveService interactiveService)
     {
-        this(queueService, fileService, interactiveService, null, null);
+        this(queueService, fileService, interactiveService, null, null, null);
+    }
+
+    public AuraTestQueueController(final AuraQueueService queueService, final AuraFileService fileService,
+        final AuraInteractiveService interactiveService, final TestBatchRepository batchRepository,
+        final AuraReportDataService reportDataService)
+    {
+        this(queueService, fileService, interactiveService, batchRepository, reportDataService, null);
     }
 
     @Autowired
     public AuraTestQueueController(final AuraQueueService queueService, final AuraFileService fileService,
         final AuraInteractiveService interactiveService, final TestBatchRepository batchRepository,
-        final AuraReportDataService reportDataService)
+        final AuraReportDataService reportDataService,
+        @Autowired(required = false) final AuraSettingsService settingsService)
     {
         this.queueService = queueService;
         this.fileService = fileService;
         this.interactiveService = interactiveService;
         this.batchRepository = batchRepository;
         this.reportDataService = reportDataService;
+        this.settingsService = settingsService != null ? settingsService : new AuraSettingsService();
 
         final List<BrowserProfileDto> available = getAvailableBrowserProfiles();
         if (!available.isEmpty())
@@ -175,6 +187,12 @@ public class AuraTestQueueController
         model.addAttribute("queueController", this);
         model.addAttribute("activeEditingFile", fileService.getActiveEditingFile());
         model.addAttribute("runTags", runTags);
+        if (settingsService != null)
+        {
+            model.addAttribute("hasApiKey", settingsService.hasConfiguredApiKey());
+            model.addAttribute("apiKeyWarningIgnored", settingsService.isApiKeyWarningIgnored());
+            model.addAttribute("projectId", settingsService.getProjectId());
+        }
     }
 
     public Map<String, List<String>> getRunTags()
