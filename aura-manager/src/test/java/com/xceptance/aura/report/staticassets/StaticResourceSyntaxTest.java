@@ -4873,6 +4873,160 @@ public final class StaticResourceSyntaxTest
         Assertions.assertFalse(content.contains("beforeunload"),
             "dashboard-runner.js must not register a beforeunload event listener as it causes misleading unsaved changes prompts in browsers");
     }
+
+    @Test
+    public void testSidebarRunnerSegmentedProgressAndOutcomeChips() throws IOException
+    {
+        final Path sidebarPath = Paths.get("src/main/resources/templates/fragments/sidebar.html");
+        Assertions.assertTrue(Files.exists(sidebarPath), "sidebar.html must exist: " + sidebarPath.toAbsolutePath());
+        final String sidebarContent = Files.readString(sidebarPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(sidebarContent.contains("sidebar-runner-progress-box"),
+            "sidebar.html must wrap progress inside .sidebar-runner-progress-box");
+        Assertions.assertTrue(sidebarContent.contains("sidebar-progress-track"),
+            "sidebar.html must contain .sidebar-progress-track");
+        Assertions.assertTrue(sidebarContent.contains("sidebarProgressSegPassed"),
+            "sidebar.html must contain #sidebarProgressSegPassed");
+        Assertions.assertTrue(sidebarContent.contains("sidebarProgressSegFailed"),
+            "sidebar.html must contain #sidebarProgressSegFailed");
+        Assertions.assertTrue(sidebarContent.contains("sidebarProgressSegRunning"),
+            "sidebar.html must contain #sidebarProgressSegRunning");
+        Assertions.assertTrue(sidebarContent.contains("sidebar-progress-metrics"),
+            "sidebar.html must contain .sidebar-progress-metrics");
+        Assertions.assertTrue(sidebarContent.contains("sidebarOutcomeChips"),
+            "sidebar.html must contain #sidebarOutcomeChips");
+        Assertions.assertTrue(sidebarContent.contains("sidebarCollapsedFailIndicator"),
+            "sidebar.html must contain #sidebarCollapsedFailIndicator");
+        Assertions.assertTrue(sidebarContent.contains("th:style=\"${activeRunFailedCount != null and activeRunFailedCount > 0"),
+            "sidebar.html must conditionally show collapsed fail indicator via SSR when failures exist");
+
+        final Path cssPath = Paths.get("src/main/resources/static/css/report-manager.css");
+        Assertions.assertTrue(Files.exists(cssPath));
+        final String cssContent = Files.readString(cssPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(cssContent.contains(".sidebar-progress-track"),
+            "report-manager.css must define .sidebar-progress-track");
+        Assertions.assertTrue(cssContent.contains(".sidebar-progress-seg.seg-failed"),
+            "report-manager.css must define .sidebar-progress-seg.seg-failed");
+        Assertions.assertTrue(cssContent.contains("min-width: 4px"),
+            "report-manager.css must enforce min-width: 4px for failed segment to prevent sub-pixel rounding invisibility");
+
+        final Path jsPath = Paths.get("src/main/resources/static/dashboard-core.js");
+        Assertions.assertTrue(Files.exists(jsPath));
+        final String jsContent = Files.readString(jsPath, StandardCharsets.UTF_8);
+        Assertions.assertTrue(jsContent.contains("updateSidebarRunnerProgress"),
+            "dashboard-core.js must define updateSidebarRunnerProgress");
+    }
+
+    @Test
+    public void testSidebarRunnerProgressLogicEdgeCases() throws Exception
+    {
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final Path jsFilePath = Paths.get("src/main/resources/static/dashboard-core.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "dashboard-core.js must exist: " + jsFilePath.toAbsolutePath());
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const assert = require('assert');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "function createMockElement(id) {\n" +
+            "    return {\n" +
+            "        id: id,\n" +
+            "        textContent: '',\n" +
+            "        title: '',\n" +
+            "        style: { display: '', width: '' },\n" +
+            "        classList: {\n" +
+            "            classes: new Set(),\n" +
+            "            add: function(c) { this.classes.add(c); },\n" +
+            "            remove: function(c) { this.classes.delete(c); },\n" +
+            "            contains: function(c) { return this.classes.has(c); }\n" +
+            "        },\n" +
+            "        setAttribute: function(k, v) { this[k] = v; }\n" +
+            "    };\n" +
+            "}\n" +
+            "const elements = {\n" +
+            "    sidebarActiveProgressContainer: createMockElement('sidebarActiveProgressContainer'),\n" +
+            "    sidebarActiveProgress: createMockElement('sidebarActiveProgress'),\n" +
+            "    sidebarProgressTrack: createMockElement('sidebarProgressTrack'),\n" +
+            "    sidebarProgressSegPassed: createMockElement('sidebarProgressSegPassed'),\n" +
+            "    sidebarProgressSegFailed: createMockElement('sidebarProgressSegFailed'),\n" +
+            "    sidebarProgressSegRunning: createMockElement('sidebarProgressSegRunning'),\n" +
+            "    sidebarChipPassed: createMockElement('sidebarChipPassed'),\n" +
+            "    sidebarChipPassedVal: createMockElement('sidebarChipPassedVal'),\n" +
+            "    sidebarChipFailed: createMockElement('sidebarChipFailed'),\n" +
+            "    sidebarChipFailedVal: createMockElement('sidebarChipFailedVal'),\n" +
+            "    sidebarCollapsedFailIndicator: createMockElement('sidebarCollapsedFailIndicator')\n" +
+            "};\n" +
+            "const sandbox = {\n" +
+            "    document: {\n" +
+            "        documentElement: createMockElement('html'),\n" +
+            "        body: createMockElement('body'),\n" +
+            "        getElementById: (id) => elements[id] || null,\n" +
+            "        querySelector: () => null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        addEventListener: () => {}\n" +
+            "    },\n" +
+            "    addEventListener: () => {},\n" +
+            "    window: {\n" +
+            "        addEventListener: () => {}\n" +
+            "    },\n" +
+            "    localStorage: {\n" +
+            "        store: {},\n" +
+            "        setItem: function(k, v) { this.store[k] = v; },\n" +
+            "        getItem: function(k) { return this.store[k]; },\n" +
+            "        removeItem: function(k) { delete this.store[k]; }\n" +
+            "    },\n" +
+            "    Intl: Intl,\n" +
+            "    console: console\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "vm.runInNewContext(code, sandbox);\n" +
+            "const updateProgress = sandbox.updateSidebarRunnerProgress || sandbox.window.updateSidebarRunnerProgress;\n" +
+            "assert(typeof updateProgress === 'function', 'updateSidebarRunnerProgress must be a function');\n" +
+            "\n" +
+            "// 1. Single test queue: running (0 / 1)\n" +
+            "updateProgress({ running: true, runningCount: 1, scheduledCount: 1, executedCount: 0, passed: 0, failed: 0 });\n" +
+            "assert.strictEqual(elements.sidebarActiveProgress.textContent, '0 / 1');\n" +
+            "assert.strictEqual(elements.sidebarProgressSegRunning.style.display, 'block');\n" +
+            "assert.strictEqual(elements.sidebarChipFailed.style.display, 'none');\n" +
+            "assert.strictEqual(elements.sidebarChipPassed.style.display, 'none');\n" +
+            "assert.strictEqual(elements.sidebarCollapsedFailIndicator.style.display, 'none');\n" +
+            "\n" +
+            "// 2. Single test queue: passed (1 / 1)\n" +
+            "updateProgress({ running: false, scheduledCount: 1, executedCount: 1, passed: 1, failed: 0 });\n" +
+            "assert.strictEqual(elements.sidebarActiveProgress.textContent, '1 / 1');\n" +
+            "assert.strictEqual(elements.sidebarProgressSegPassed.style.display, 'block');\n" +
+            "assert.strictEqual(elements.sidebarProgressSegPassed.style.width, '100%');\n" +
+            "assert.strictEqual(elements.sidebarChipPassed.style.display, 'inline-flex');\n" +
+            "assert.strictEqual(elements.sidebarChipPassedVal.textContent, '1');\n" +
+            "assert.strictEqual(elements.sidebarChipFailed.style.display, 'none');\n" +
+            "\n" +
+            "// 3. 10,000 tests queue with 1 failure: formatting, segment display, min-width support\n" +
+            "updateProgress({ running: true, runningCount: 2, scheduledCount: 10000, executedCount: 4500, passed: 4499, failed: 1 });\n" +
+            "assert(elements.sidebarActiveProgress.textContent.includes('4,500') || elements.sidebarActiveProgress.textContent.includes('4500'), 'Formatted count');\n" +
+            "assert(elements.sidebarActiveProgress.textContent.includes('10,000') || elements.sidebarActiveProgress.textContent.includes('10000'), 'Formatted total');\n" +
+            "assert.strictEqual(elements.sidebarProgressSegFailed.style.display, 'block', 'Failed segment must be visible');\n" +
+            "assert.strictEqual(elements.sidebarChipFailed.style.display, 'inline-flex', 'Failed chip must be visible');\n" +
+            "assert.strictEqual(elements.sidebarChipFailedVal.textContent, '1');\n" +
+            "assert.strictEqual(elements.sidebarCollapsedFailIndicator.style.display, 'block', 'Collapsed fail indicator must be visible');\n" +
+            "\n" +
+            "// 4. Unknown/Dynamic discovery (total = 0, running = true): indeterminate shimmer\n" +
+            "updateProgress({ running: true, total: 0, scheduledCount: 0, executedCount: 0, progressText: 'Discovering...' });\n" +
+            "assert(elements.sidebarProgressTrack.classList.contains('is-indeterminate'), 'Track must have is-indeterminate class');\n" +
+            "\n" +
+            "// 5. Queued state (scheduledCount > 0, running = false, executedCount = 0): preserve container visibility\n" +
+            "updateProgress({ running: false, scheduledCount: 5, executedCount: 0, total: 0, progressText: '' });\n" +
+            "assert.strictEqual(elements.sidebarActiveProgressContainer.style.display, 'flex', 'Container must remain visible when scheduledCount > 0');\n" +
+            "assert.strictEqual(elements.sidebarActiveProgress.textContent, '0 / 5');\n" +
+            "console.log('SIDEBAR_PROGRESS_UNIT_TEST_SUCCESS');\n";
+
+        runNodeScript(nodeTestScript, "Sidebar runner progress unit test failed");
+    }
 }
 
 

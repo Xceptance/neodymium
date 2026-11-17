@@ -1798,6 +1798,7 @@ public class AuraTestQueueController
 
         Integer executedCount = totalTestsRun;
         String progressText = "";
+        int activeRunningCount = 0;
 
         if (activeEntity != null)
         {
@@ -1820,10 +1821,13 @@ public class AuraTestQueueController
             }
 
             final int runningCount = activeEntity.getRunningCountSafe();
+            activeRunningCount = runningCount;
             final int total = activeEntity.getTotalTestsSafe();
             final int entityExecuted = Math.max(0, total - runningCount);
             final int entityPassed = activeEntity.getPassedCleanCount() + activeEntity.getFixedCleanCount() + activeEntity.getPassedHealedCountSafe() + activeEntity.getFixedHealedCountSafe();
-            final int entityFailed = activeEntity.getFailedKnownCount() + activeEntity.getFailedUnknownCount();
+            final int activeFailKnown = activeEntity.getFailedKnownCount() != null ? activeEntity.getFailedKnownCount() : 0;
+            final int activeFailUnknown = activeEntity.getFailedUnknownCount() != null ? activeEntity.getFailedUnknownCount() : 0;
+            final int entityFailed = activeFailKnown + activeFailUnknown;
             final int entitySkipped = activeEntity.getIgnoredCount() != null ? activeEntity.getIgnoredCount() : 0;
 
             totalTestsRun = Math.max(totalTestsRun, entityExecuted);
@@ -1892,7 +1896,9 @@ public class AuraTestQueueController
                 scheduledCount = entityTotal;
                 totalTestsRun = executedCount;
                 passedCount = latestRun.getPassedCleanCount() + latestRun.getFixedCleanCount() + latestRun.getPassedHealedCountSafe() + latestRun.getFixedHealedCountSafe();
-                failedCount = latestRun.getFailedKnownCount() + latestRun.getFailedUnknownCount();
+                final int latestFailKnown = latestRun.getFailedKnownCount() != null ? latestRun.getFailedKnownCount() : 0;
+                final int latestFailUnknown = latestRun.getFailedUnknownCount() != null ? latestRun.getFailedUnknownCount() : 0;
+                failedCount = latestFailKnown + latestFailUnknown;
                 skippedCount = latestRun.getIgnoredCount() != null ? latestRun.getIgnoredCount() : 0;
             }
             progressText = totalTestsRun + " tests completed";
@@ -1941,6 +1947,7 @@ public class AuraTestQueueController
         {
             statusObj.put("scheduledCount", scheduledCount);
         }
+        statusObj.put("runningCount", running ? activeRunningCount : 0);
         statusObj.put("activeFile", queueService.getActiveFile());
 
         String activeTestId = "";

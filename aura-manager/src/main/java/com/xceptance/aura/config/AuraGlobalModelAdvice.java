@@ -282,10 +282,11 @@ public class AuraGlobalModelAdvice
                     .findFirst()
                     .orElse(null);
             }
-            if (activeEntity == null && dataService != null)
+            if (activeEntity == null)
             {
                 activeEntity = allRuns.stream()
-                    .filter(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus()) && dataService.isRunCurrentlyActiveOnDisk(r.getId()))
+                    .filter(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus())
+                        && (dataService == null || dataService.isRunCurrentlyActiveOnDisk(r.getId())))
                     .findFirst()
                     .orElse(null);
             }
@@ -306,6 +307,10 @@ public class AuraGlobalModelAdvice
             }
 
             String progressText = "";
+            int passedCount = 0;
+            int failedCount = 0;
+            int skippedCount = 0;
+            int runningCount = 0;
             if (activeEntity != null)
             {
                 if (activeRunId == null || activeRunId.isBlank())
@@ -326,7 +331,7 @@ public class AuraGlobalModelAdvice
                     }
                 }
 
-                final int runningCount = activeEntity.getRunningCountSafe();
+                runningCount = activeEntity.getRunningCountSafe();
                 final int total = activeEntity.getTotalTestsSafe();
                 final int entityExecuted = Math.max(0, total - runningCount);
                 if (executedCount == null || entityExecuted > executedCount)
@@ -337,6 +342,11 @@ public class AuraGlobalModelAdvice
                 {
                     scheduledCount = total;
                 }
+                passedCount = activeEntity.getPassedCleanCount() + activeEntity.getFixedCleanCount() + activeEntity.getPassedHealedCountSafe() + activeEntity.getFixedHealedCountSafe();
+                final int activeFailKnown = activeEntity.getFailedKnownCount() != null ? activeEntity.getFailedKnownCount() : 0;
+                final int activeFailUnknown = activeEntity.getFailedUnknownCount() != null ? activeEntity.getFailedUnknownCount() : 0;
+                failedCount = activeFailKnown + activeFailUnknown;
+                skippedCount = activeEntity.getIgnoredCount() != null ? activeEntity.getIgnoredCount() : 0;
 
                 if (running)
                 {
@@ -392,6 +402,12 @@ public class AuraGlobalModelAdvice
                 }
                 executedCount = latestRun.getTotalTestsSafe();
                 scheduledCount = latestRun.getTotalTestsSafe();
+                passedCount = latestRun.getPassedCleanCount() + latestRun.getFixedCleanCount() + latestRun.getPassedHealedCountSafe() + latestRun.getFixedHealedCountSafe();
+                final int latestFailKnown = latestRun.getFailedKnownCount() != null ? latestRun.getFailedKnownCount() : 0;
+                final int latestFailUnknown = latestRun.getFailedUnknownCount() != null ? latestRun.getFailedUnknownCount() : 0;
+                failedCount = latestFailKnown + latestFailUnknown;
+                skippedCount = latestRun.getIgnoredCount() != null ? latestRun.getIgnoredCount() : 0;
+                runningCount = 0;
                 progressText = executedCount + " tests completed";
             }
 
@@ -405,6 +421,10 @@ public class AuraGlobalModelAdvice
                 model.addAttribute("activeRunProgress", progressText);
                 model.addAttribute("activeRunExecutedCount", executedCount);
                 model.addAttribute("activeRunScheduledCount", scheduledCount);
+                model.addAttribute("activeRunPassedCount", passedCount);
+                model.addAttribute("activeRunFailedCount", failedCount);
+                model.addAttribute("activeRunSkippedCount", skippedCount);
+                model.addAttribute("activeRunRunningCount", running ? runningCount : 0);
                 model.addAttribute("hasRunContext", true);
             }
             else
@@ -416,6 +436,10 @@ public class AuraGlobalModelAdvice
                 model.addAttribute("activeRunProgress", "");
                 model.addAttribute("activeRunExecutedCount", 0);
                 model.addAttribute("activeRunScheduledCount", 0);
+                model.addAttribute("activeRunPassedCount", 0);
+                model.addAttribute("activeRunFailedCount", 0);
+                model.addAttribute("activeRunSkippedCount", 0);
+                model.addAttribute("activeRunRunningCount", 0);
                 model.addAttribute("hasRunContext", false);
             }
             model.addAttribute("running", running);

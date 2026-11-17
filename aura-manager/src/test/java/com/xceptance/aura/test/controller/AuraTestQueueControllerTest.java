@@ -451,6 +451,79 @@ public final class AuraTestQueueControllerTest
         Assertions.assertNotNull(statusObj);
         Assertions.assertEquals("Wikipedia", statusObj.get("batchName"));
         Assertions.assertEquals("run_123456", statusObj.get("runId"));
+        Assertions.assertEquals(0, statusObj.get("runningCount"));
+    }
+
+    @Test
+    public final void testGetStatusStreamIncludesRunningCountFromActiveRun()
+    {
+        final AuraQueueService mockQueueService = Mockito.mock(AuraQueueService.class);
+        Mockito.when(mockQueueService.getCurrentRunId()).thenReturn("run_active_progress");
+        Mockito.when(mockQueueService.isRunningQueue()).thenReturn(true);
+
+        final AuraReportDataService mockReportService = Mockito.mock(AuraReportDataService.class);
+        final TestRunEntity activeEntity = new TestRunEntity();
+        activeEntity.setId("run_active_progress");
+        activeEntity.setStatus("IN_PROGRESS");
+        activeEntity.setTotalTests(10);
+        activeEntity.setRunningCount(3);
+        activeEntity.setPassedCount(5);
+        activeEntity.setFailedUnknownCount(2);
+
+        Mockito.when(mockReportService.getAllRuns()).thenReturn(List.of(activeEntity));
+        Mockito.when(mockReportService.isRunCurrentlyActiveOnDisk("run_active_progress")).thenReturn(true);
+
+        final AuraTestQueueController testController = new AuraTestQueueController(
+            mockQueueService, this.fileService, this.interactiveService, this.batchRepository, mockReportService
+        );
+
+        final ResponseEntity<Map<String, Object>> response = testController.getStatusStream(null, 0, 0);
+        Assertions.assertEquals(200, response.getStatusCode().value());
+        final Map<String, Object> body = response.getBody();
+        Assertions.assertNotNull(body);
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> statusObj = (Map<String, Object>) body.get("status");
+        Assertions.assertNotNull(statusObj);
+        Assertions.assertEquals(3, statusObj.get("runningCount"));
+        Assertions.assertEquals(5, statusObj.get("passed"));
+        Assertions.assertEquals(2, statusObj.get("failed"));
+        Assertions.assertEquals(7, statusObj.get("executedCount"));
+        Assertions.assertEquals(10, statusObj.get("scheduledCount"));
+    }
+
+    @Test
+    public final void testGetStatusStreamWithNullFailureCountsDoesNotThrow()
+    {
+        final AuraQueueService mockQueueService = Mockito.mock(AuraQueueService.class);
+        Mockito.when(mockQueueService.getCurrentRunId()).thenReturn("run_null_failures");
+        Mockito.when(mockQueueService.isRunningQueue()).thenReturn(true);
+
+        final AuraReportDataService mockReportService = Mockito.mock(AuraReportDataService.class);
+        final TestRunEntity activeEntity = new TestRunEntity();
+        activeEntity.setId("run_null_failures");
+        activeEntity.setStatus("IN_PROGRESS");
+        activeEntity.setTotalTests(5);
+        activeEntity.setRunningCount(1);
+        activeEntity.setPassedCount(null);
+        activeEntity.setFailedKnownCount(null);
+        activeEntity.setFailedUnknownCount(null);
+
+        Mockito.when(mockReportService.getAllRuns()).thenReturn(List.of(activeEntity));
+        Mockito.when(mockReportService.isRunCurrentlyActiveOnDisk("run_null_failures")).thenReturn(true);
+
+        final AuraTestQueueController testController = new AuraTestQueueController(
+            mockQueueService, this.fileService, this.interactiveService, this.batchRepository, mockReportService
+        );
+
+        final ResponseEntity<Map<String, Object>> response = Assertions.assertDoesNotThrow(() -> testController.getStatusStream(null, 0, 0));
+        Assertions.assertEquals(200, response.getStatusCode().value());
+        final Map<String, Object> body = response.getBody();
+        Assertions.assertNotNull(body);
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> statusObj = (Map<String, Object>) body.get("status");
+        Assertions.assertNotNull(statusObj);
+        Assertions.assertEquals(0, statusObj.get("failed"));
+        Assertions.assertEquals(0, statusObj.get("passed"));
     }
 
     @Test

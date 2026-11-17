@@ -1187,27 +1187,31 @@ async function pollStatus() {
                         pulseDot.style.display = statusData.running ? 'inline-block' : 'none';
                     }
 
-                    const sidebarProgressEl = document.getElementById('sidebarActiveProgress');
-                    const sidebarProgressContainer = document.getElementById('sidebarActiveProgressContainer');
-                    if (sidebarProgressEl) {
-                        if (statusData.progressText) {
-                            sidebarProgressEl.textContent = statusData.progressText;
-                            if (sidebarProgressContainer) {
-                                sidebarProgressContainer.style.display = 'flex';
-                            }
-                            try {
-                                localStorage.setItem('aura_active_run_progress', statusData.progressText);
-                            } catch (e) {
-                                // ignore storage failure
-                            }
-                        } else {
-                            if (sidebarProgressContainer) {
-                                sidebarProgressContainer.style.display = 'none';
-                            }
-                            try {
-                                localStorage.removeItem('aura_active_run_progress');
-                            } catch (e) {
-                                // ignore storage failure
+                    if (typeof updateSidebarRunnerProgress === 'function') {
+                        updateSidebarRunnerProgress(statusData);
+                    } else {
+                        const sidebarProgressEl = document.getElementById('sidebarActiveProgress');
+                        const sidebarProgressContainer = document.getElementById('sidebarActiveProgressContainer');
+                        if (sidebarProgressEl) {
+                            if (statusData.progressText) {
+                                sidebarProgressEl.textContent = statusData.progressText;
+                                if (sidebarProgressContainer) {
+                                    sidebarProgressContainer.style.display = 'flex';
+                                }
+                                try {
+                                    localStorage.setItem('aura_active_run_progress', statusData.progressText);
+                                } catch (e) {
+                                    // ignore storage failure
+                                }
+                            } else {
+                                if (sidebarProgressContainer) {
+                                    sidebarProgressContainer.style.display = 'none';
+                                }
+                                try {
+                                    localStorage.removeItem('aura_active_run_progress');
+                                } catch (e) {
+                                    // ignore storage failure
+                                }
                             }
                         }
                     }
