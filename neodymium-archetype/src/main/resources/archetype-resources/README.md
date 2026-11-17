@@ -51,7 +51,7 @@ mvn clean test
 Run a specific AI test runner:
 
 ```bash
-# Homepage validation test
+# Homepage validation test (opens visible browser by default)
 mvn test -Dtest=PostersHomepageAiTest
 
 # Multilingual / multi-term search test
@@ -64,7 +64,7 @@ mvn test -Dtest=PostersRegistrationAiTest
 mvn test -Dtest=PostersNegativeLoginAiTest
 ```
 
-Run headlessly:
+Run headlessly (e.g. in CI pipelines or Docker):
 
 ```bash
 mvn test -Dbrowserprofile.global.headless=true
