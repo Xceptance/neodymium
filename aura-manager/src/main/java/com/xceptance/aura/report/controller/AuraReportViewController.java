@@ -56,6 +56,8 @@ import com.xceptance.aura.report.service.WidgetAggregationService;
 import com.xceptance.aura.report.repository.TestBatchRepository;
 import com.xceptance.aura.report.repository.TestRunRepository;
 import com.xceptance.aura.report.service.AuraReportDataService;
+import com.xceptance.aura.report.service.DashboardEvaluationService;
+import com.xceptance.aura.report.service.DashboardEvaluationService.EvaluatedDashboardPage;
 import com.xceptance.aura.report.service.ReportDashboardSettingService;
 import com.xceptance.aura.report.service.RunStorageSyncService;
 import java.net.URI;
@@ -132,6 +134,7 @@ public class AuraReportViewController
     private final TestBaseBugRepository bugRepository;
     private final ReportDashboardSettingService dashboardSettingService;
     private final WidgetAggregationService widgetAggregationService;
+    private final DashboardEvaluationService dashboardEvaluationService;
     private final ObjectMapper objectMapper;
 
     @Value("${aura.report.storage.runs.base-dir:storage/runs}")
@@ -146,7 +149,8 @@ public class AuraReportViewController
         final TestBaseVariationRepository variationRepository,
         final TestBaseBugRepository bugRepository,
         final ReportDashboardSettingService dashboardSettingService,
-        @Autowired(required = false) final WidgetAggregationService widgetAggregationService)
+        @Autowired(required = false) final WidgetAggregationService widgetAggregationService,
+        @Autowired(required = false) final DashboardEvaluationService dashboardEvaluationService)
     {
         this.dataService = dataService;
         this.runStorageSyncService = runStorageSyncService;
@@ -156,7 +160,24 @@ public class AuraReportViewController
         this.bugRepository = bugRepository;
         this.dashboardSettingService = dashboardSettingService;
         this.widgetAggregationService = (widgetAggregationService != null) ? widgetAggregationService : new WidgetAggregationService();
+        this.dashboardEvaluationService = (dashboardEvaluationService != null)
+            ? dashboardEvaluationService
+            : new DashboardEvaluationService(dataService, runRepository, bugRepository, dashboardSettingService, this.widgetAggregationService);
         this.objectMapper = new ObjectMapper();
+    }
+
+    public AuraReportViewController(
+        final AuraReportDataService dataService,
+        final RunStorageSyncService runStorageSyncService,
+        final TestRunRepository runRepository,
+        final TestBatchRepository batchRepository,
+        final TestBaseVariationRepository variationRepository,
+        final TestBaseBugRepository bugRepository,
+        final ReportDashboardSettingService dashboardSettingService,
+        final WidgetAggregationService widgetAggregationService)
+    {
+        this(dataService, runStorageSyncService, runRepository, batchRepository, variationRepository, bugRepository,
+            dashboardSettingService, widgetAggregationService, null);
     }
 
     public AuraReportViewController(
@@ -168,7 +189,8 @@ public class AuraReportViewController
         final TestBaseBugRepository bugRepository,
         final ReportDashboardSettingService dashboardSettingService)
     {
-        this(dataService, runStorageSyncService, runRepository, batchRepository, variationRepository, bugRepository, dashboardSettingService, new WidgetAggregationService());
+        this(dataService, runStorageSyncService, runRepository, batchRepository, variationRepository, bugRepository,
+            dashboardSettingService, new WidgetAggregationService(), null);
     }
 
     @ModelAttribute("allKnownTagMap")
@@ -847,176 +869,11 @@ public class AuraReportViewController
             response.setHeader("HX-Push-Url", "/dashboard-pages/" + page.getId());
         }
 
-        final List<DashboardWidgetConfigDto> widgetConfigs = (page.getWidgets() != null)
-            ? page.getWidgets()
-            : Collections.emptyList();
-
-        final List<TestRunEntity> allRuns = (runRepository != null)
-            ? runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc()
-            : Collections.emptyList();
-
-        final Map<String, String> runAreasMap = new HashMap<>();
-        for (final TestRunEntity r : allRuns)
-        {
-            if (r != null && r.getId() != null)
-            {
-                if (r.getAreasCsv() != null && !r.getAreasCsv().isBlank())
-                {
-                    runAreasMap.put(r.getId(), r.getAreasCsv());
-                }
-                else
-                {
-                    final List<String> fallbackAreas = (dataService != null)
-                        ? dataService.getRunAreas(r)
-                        : List.of(AuraReportDataService.normalizeArea("@Browsing (default)"));
-                    runAreasMap.put(r.getId(), String.join(",", fallbackAreas));
-                }
-            }
-        }
-
-        final List<TestRunEntity> pageEffectiveRuns;
-        if (page.hasRunFilters() && dataService != null)
-        {
-            final WidgetFilterConfigDto rf = page.getRunFilters();
-            final List<TestRunEntity> scoped = new ArrayList<>();
-            final Long fromTs = rf.getFromTimestampMs();
-            final Long toTs = rf.getToTimestampMs();
-
-            for (final TestRunEntity r : allRuns)
-            {
-                final Long startMs = r.getStartTimeMs();
-                if (fromTs != null && startMs != null && startMs < fromTs)
-                {
-                    continue;
-                }
-                if (toTs != null && startMs != null && startMs > toTs)
-                {
-                    continue;
-                }
-                final TestRunEntity sc = dataService.scopeRunToCriteria(
-                    r,
-                    rf.getBrowsers(), rf.getExcludeBrowsers(),
-                    rf.getLocales(), rf.getExcludeLocales(),
-                    rf.getEnvs(), rf.getExcludeEnvs(),
-                    rf.getAreas(), rf.getExcludeAreas(),
-                    rf.getTags(), rf.getExcludeTags(),
-                    null,
-                    rf.getTagsByType(), rf.getExcludeTagsByType()
-                );
-                if (sc != null && sc.getTotalTests() != null && sc.getTotalTests() > 0)
-                {
-                    scoped.add(sc);
-                }
-            }
-            if (rf.getLimit() != null && rf.getLimit() > 0)
-            {
-                scoped.sort(Comparator.comparing(
-                    TestRunEntity::getStartTimeMs,
-                    Comparator.nullsLast(Comparator.reverseOrder())
-                ));
-                if (scoped.size() > rf.getLimit())
-                {
-                    pageEffectiveRuns = new ArrayList<>(scoped.subList(0, rf.getLimit()));
-                }
-                else
-                {
-                    pageEffectiveRuns = scoped;
-                }
-            }
-            else
-            {
-                pageEffectiveRuns = scoped;
-            }
-        }
-        else
-        {
-            pageEffectiveRuns = allRuns;
-        }
-
-        final List<DashboardWidgetViewDto> dashboardWidgets;
-        if (!widgetConfigs.isEmpty() && widgetAggregationService != null)
-        {
-            final List<String> globalIdentity = (dashboardSettingService != null)
-                ? dashboardSettingService.getExecutionIdentityDimensions()
-                : ReportDashboardSettingService.DEFAULT_EXECUTION_IDENTITY_DIMENSIONS;
-            final List<String> identityDimensions = page.getEffectiveExecutionIdentityDimensions(globalIdentity);
-
-            final WidgetFilterConfigDto pageFilters = page.hasRunFilters() ? page.getRunFilters() : null;
-            final Long fromTs = (pageFilters != null) ? pageFilters.getFromTimestampMs() : null;
-            final Long toTs = (pageFilters != null) ? pageFilters.getToTimestampMs() : null;
-            final Set<String> runBrowsers = (pageFilters != null) ? pageFilters.getBrowsers() : Collections.emptySet();
-            final Set<String> excludedBrowsers = (pageFilters != null) ? pageFilters.getExcludeBrowsers() : Collections.emptySet();
-            final Set<String> runLocales = (pageFilters != null) ? pageFilters.getLocales() : Collections.emptySet();
-            final Set<String> excludedLocales = (pageFilters != null) ? pageFilters.getExcludeLocales() : Collections.emptySet();
-            final Set<String> runEnvs = (pageFilters != null) ? pageFilters.getEnvs() : Collections.emptySet();
-            final Set<String> excludedEnvs = (pageFilters != null) ? pageFilters.getExcludeEnvs() : Collections.emptySet();
-            final Set<String> runAreas = (pageFilters != null) ? pageFilters.getAreas() : Collections.emptySet();
-            final Set<String> excludedAreas = (pageFilters != null) ? pageFilters.getExcludeAreas() : Collections.emptySet();
-            final Set<String> runTags = (pageFilters != null) ? pageFilters.getTags() : Collections.emptySet();
-            final Set<String> excludedTags = (pageFilters != null) ? pageFilters.getExcludeTags() : Collections.emptySet();
-            final Map<String, Set<String>> runTagsByType = (pageFilters != null) ? pageFilters.getTagsByType() : Collections.emptyMap();
-            final Map<String, Set<String>> excludedTagsByType = (pageFilters != null) ? pageFilters.getExcludeTagsByType() : Collections.emptyMap();
-
-            final BatchLatestExecutionsDto latestExecResult = (dataService != null)
-                ? dataService.getBatchLatestTestExecutionsSummary(
-                    "all",
-                    pageEffectiveRuns,
-                    Collections.emptySet(),
-                    fromTs,
-                    toTs,
-                    runBrowsers,
-                    excludedBrowsers,
-                    runLocales,
-                    excludedLocales,
-                    runEnvs,
-                    excludedEnvs,
-                    runAreas,
-                    excludedAreas,
-                    runTags,
-                    excludedTags,
-                    runAreasMap,
-                    runTagsByType,
-                    excludedTagsByType,
-                    identityDimensions,
-                    null
-                )
-                : null;
-
-            final List<BatchLatestVariationDto> latestVariations = (latestExecResult != null && latestExecResult.getLatestVariations() != null)
-                ? latestExecResult.getLatestVariations()
-                : Collections.emptyList();
-
-            final List<DistributionRatioDto> browserRatios = (latestExecResult != null && latestExecResult.getBrowserRatios() != null)
-                ? latestExecResult.getBrowserRatios()
-                : Collections.emptyList();
-
-            final List<TagRatioCardDto> tagRatioCards = Collections.emptyList();
-
-            final List<TestBaseBugEntity> allBugs = (bugRepository != null)
-                ? bugRepository.findAll()
-                : Collections.emptyList();
-
-            final List<String> allTagKeys = (dataService != null)
-                ? dataService.getAllTagKeys()
-                : Collections.emptyList();
-
-            dashboardWidgets = widgetAggregationService.aggregateWidgets(
-                widgetConfigs, pageEffectiveRuns, latestVariations, browserRatios, tagRatioCards,
-                (latestExecResult != null) ? latestExecResult.getTokenCostTrend() : null,
-                (latestExecResult != null) ? latestExecResult.getSuiteEvolution() : null,
-                allBugs,
-                dataService,
-                allRuns,
-                "all",
-                identityDimensions,
-                runAreasMap,
-                allTagKeys
-            );
-        }
-        else
-        {
-            dashboardWidgets = Collections.emptyList();
-        }
+        final EvaluatedDashboardPage evaluated = dashboardEvaluationService.evaluatePage(page);
+        final List<TestRunEntity> allRuns = evaluated.allRuns();
+        final Map<String, String> runAreasMap = evaluated.runAreasMap();
+        final List<TestRunEntity> pageEffectiveRuns = evaluated.effectiveRuns();
+        final List<DashboardWidgetViewDto> dashboardWidgets = evaluated.widgets();
 
         final List<BatchSummaryDto> groupBatches;
         final Map<String, String> groupDashboardUrls = new LinkedHashMap<>();

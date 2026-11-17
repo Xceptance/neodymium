@@ -18,6 +18,9 @@
  */
 package com.xceptance.aura.config;
 
+import com.xceptance.aura.chat.dto.ChatSessionDto;
+import com.xceptance.aura.chat.service.AuraChatService;
+import com.xceptance.aura.chat.service.AuraChatSessionService;
 import com.xceptance.aura.report.entity.TestRunEntity;
 import com.xceptance.aura.report.repository.TestRunRepository;
 import com.xceptance.aura.report.service.AuraReportDataService;
@@ -37,8 +40,8 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestHeader;
 
 /**
- * Controller advice providing global model attributes for active run context and custom dashboard pages
- * across all Aura Manager views.
+ * Controller advice providing global model attributes for active run context, chat sessions,
+ * and custom dashboard pages across all Aura Manager views.
  *
  * @author AI-generated: Gemini 3.8 Flash (High)
  * @author Xceptance GmbH 2026
@@ -50,30 +53,45 @@ public class AuraGlobalModelAdvice
     private final ReportDashboardSettingService dashboardSettingService;
     private final TestRunRepository runRepository;
     private final AuraReportDataService dataService;
+    private final AuraChatSessionService chatSessionService;
+    private final AuraChatService chatService;
 
     @Autowired
     public AuraGlobalModelAdvice(
         final AuraQueueService queueService,
         @Autowired(required = false) final ReportDashboardSettingService dashboardSettingService,
         @Autowired(required = false) final TestRunRepository runRepository,
-        @Autowired(required = false) final AuraReportDataService dataService)
+        @Autowired(required = false) final AuraReportDataService dataService,
+        @Autowired(required = false) final AuraChatSessionService chatSessionService,
+        @Autowired(required = false) final AuraChatService chatService)
     {
         this.queueService = queueService;
         this.dashboardSettingService = dashboardSettingService;
         this.runRepository = runRepository;
         this.dataService = dataService;
+        this.chatSessionService = chatSessionService;
+        this.chatService = chatService;
+    }
+
+    public AuraGlobalModelAdvice(
+        final AuraQueueService queueService,
+        final ReportDashboardSettingService dashboardSettingService,
+        final TestRunRepository runRepository,
+        final AuraReportDataService dataService)
+    {
+        this(queueService, dashboardSettingService, runRepository, dataService, null, null);
     }
 
     public AuraGlobalModelAdvice(
         final AuraQueueService queueService,
         final ReportDashboardSettingService dashboardSettingService)
     {
-        this(queueService, dashboardSettingService, null, null);
+        this(queueService, dashboardSettingService, null, null, null, null);
     }
 
     public AuraGlobalModelAdvice(final AuraQueueService queueService)
     {
-        this(queueService, null, null, null);
+        this(queueService, null, null, null, null, null);
     }
 
     @ModelAttribute
@@ -391,6 +409,21 @@ public class AuraGlobalModelAdvice
             model.addAttribute("hasParseError", false);
             model.addAttribute("parseErrorMessage", "");
             model.addAttribute("editorMode", "visual");
+
+            if (!model.containsAttribute("chatSessions"))
+            {
+                final List<ChatSessionDto> chatSessions = this.chatSessionService != null
+                    ? this.chatSessionService.getSessions()
+                    : Collections.emptyList();
+                final String currentSessionId = chatSessions.isEmpty() ? "" : chatSessions.get(0).id;
+                model.addAttribute("chatSessions", chatSessions);
+                model.addAttribute("currentSessionId", currentSessionId);
+                model.addAttribute("chatMessages", chatSessions.isEmpty() ? Collections.emptyList() : chatSessions.get(0).messages);
+                model.addAttribute("pendingConfirmations",
+                    (this.chatService != null && !currentSessionId.isEmpty())
+                        ? this.chatService.getPendingConfirmations(currentSessionId)
+                        : Collections.emptyList());
+            }
         }
     }
 

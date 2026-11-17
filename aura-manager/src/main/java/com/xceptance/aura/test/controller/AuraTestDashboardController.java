@@ -18,10 +18,11 @@
  */
 package com.xceptance.aura.test.controller;
 
-import com.xceptance.neodymium.aura.AuraChatSessionService;
+import com.xceptance.aura.chat.dto.ChatSessionDto;
+import com.xceptance.aura.chat.service.AuraChatService;
+import com.xceptance.aura.chat.service.AuraChatSessionService;
 import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
-import com.xceptance.neodymium.aura.dto.ChatSessionDto;
 import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -29,6 +30,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.CookieValue;
@@ -50,16 +52,28 @@ public class AuraTestDashboardController
     private final AuraFileService fileService;
     private final AuraChatSessionService sessionService;
     private final AuraTestQueueController queueController;
+    private final AuraChatService chatService;
 
     public AuraTestDashboardController(final AuraInteractiveService interactiveService,
                                         final AuraFileService fileService,
                                         final AuraChatSessionService sessionService,
                                         final AuraTestQueueController queueController)
     {
+        this(interactiveService, fileService, sessionService, queueController, null);
+    }
+
+    @Autowired
+    public AuraTestDashboardController(final AuraInteractiveService interactiveService,
+                                        final AuraFileService fileService,
+                                        final AuraChatSessionService sessionService,
+                                        final AuraTestQueueController queueController,
+                                        final AuraChatService chatService)
+    {
         this.interactiveService = interactiveService;
         this.fileService = fileService;
         this.sessionService = sessionService;
         this.queueController = queueController;
+        this.chatService = chatService;
     }
 
     @GetMapping(
@@ -138,6 +152,10 @@ public class AuraTestDashboardController
         model.addAttribute("chatSessions", chatSessions);
         model.addAttribute("currentSessionId", currentSessionId);
         model.addAttribute("chatMessages", chatSessions.isEmpty() ? List.of() : chatSessions.get(0).messages);
+        model.addAttribute("pendingConfirmations",
+                (this.chatService != null && !currentSessionId.isEmpty())
+                        ? this.chatService.getPendingConfirmations(currentSessionId)
+                        : List.of());
 
         final boolean running = queueController.isRunning();
         model.addAttribute("running", running);

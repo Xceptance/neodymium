@@ -1143,6 +1143,9 @@ function toggleAuraChat() {
 window.toggleAuraChat = toggleAuraChat;
 
 function openAuraChat() {
+    if (typeof window.syncHiddenActiveFile === 'function') {
+        window.syncHiddenActiveFile();
+    }
     const overlay = document.getElementById('auraChatOverlay');
     const launcher = document.getElementById('auraChatLauncher');
     if (overlay) {

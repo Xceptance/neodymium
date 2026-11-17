@@ -20,8 +20,6 @@ package com.xceptance.aura.test.config;
 
 import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.RunStorageSyncService;
-import com.xceptance.neodymium.aura.AuraChatService;
-import com.xceptance.neodymium.aura.AuraChatSessionService;
 import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.AuraQueueService;
@@ -57,18 +55,6 @@ public class AuraServiceConfiguration
     public AuraSettingsService auraSettingsService()
     {
         return new AuraSettingsService();
-    }
-
-    @Bean
-    public AuraChatService auraChatService(final AuraFileService fileService)
-    {
-        return new AuraChatService(fileService);
-    }
-
-    @Bean
-    public AuraChatSessionService auraChatSessionService()
-    {
-        return new AuraChatSessionService();
     }
 
     @Bean

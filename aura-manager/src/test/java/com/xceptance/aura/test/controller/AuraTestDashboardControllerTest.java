@@ -18,9 +18,16 @@
  */
 package com.xceptance.aura.test.controller;
 
-import com.xceptance.neodymium.aura.AuraChatSessionService;
+import com.xceptance.aura.chat.dto.ChatSessionDto;
+import com.xceptance.aura.chat.dto.PendingConfirmationDto;
+import com.xceptance.aura.chat.service.AuraChatService;
+import com.xceptance.aura.chat.service.AuraChatSessionService;
 import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Assertions;
@@ -213,5 +220,44 @@ public class AuraTestDashboardControllerTest
         final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
         mockMvc.perform(get("/"))
             .andExpect(status().isNotFound());
+    }
+
+    @Test
+    public void testRenderDashboardPopulatesPendingConfirmationsFromChatService()
+    {
+        final AuraChatService chatService = Mockito.mock(AuraChatService.class);
+        final ChatSessionDto session = new ChatSessionDto("sess-dash", "Main Chat", List.of());
+        final PendingConfirmationDto pending = new PendingConfirmationDto(
+                "act-9", "delete_test", "tests/old.yaml", 999999999L);
+        Mockito.when(sessionService.getSessions()).thenReturn(List.of(session));
+        Mockito.when(chatService.getPendingConfirmations("sess-dash")).thenReturn(List.of(pending));
+
+        final AuraTestDashboardController dashController = new AuraTestDashboardController(
+                interactiveService, fileService, sessionService, queueController, chatService);
+        final Model model = new ConcurrentModel();
+        dashController.renderDashboard("false", null, model);
+
+        Assertions.assertEquals("sess-dash", model.getAttribute("currentSessionId"));
+        Assertions.assertEquals(List.of(pending), model.getAttribute("pendingConfirmations"));
+    }
+
+    @Test
+    public void testIndexTemplateIncludesCacheBustingVersionsForDashboardScripts() throws Exception
+    {
+        final Path indexPath = Files.exists(Paths.get("src/main/resources/templates/index.html"))
+                ? Paths.get("src/main/resources/templates/index.html")
+                : Paths.get("aura-manager/src/main/resources/templates/index.html");
+        final String html = Files.readString(indexPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(html.contains("dashboard-styles.css?v=1.2.8"),
+                "dashboard-styles.css must carry the updated ?v=1.2.8 cache-busting query parameter in index.html");
+        Assertions.assertTrue(html.contains("dashboard-core.js?v="),
+                "dashboard-core.js must carry a ?v= cache-busting query parameter in index.html");
+        Assertions.assertTrue(html.contains("dashboard-chat.js?v="),
+                "dashboard-chat.js must carry a ?v= cache-busting query parameter in index.html");
+        Assertions.assertTrue(html.contains("dashboard-runner.js?v="),
+                "dashboard-runner.js must carry a ?v= cache-busting query parameter in index.html");
+        Assertions.assertTrue(html.contains("dashboard-settings.js?v="),
+                "dashboard-settings.js must carry a ?v= cache-busting query parameter in index.html");
     }
 }

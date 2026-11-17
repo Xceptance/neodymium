@@ -1,0 +1,12 @@
+# [DEF-20261116-1630] Stale dashboard-styles.css Cache Version and Intermediate-Indent List Dedent Split
+
+- **Status:** `Resolved`
+- **Opened:** 2026-11-16 16:22
+- **Closed:** 2026-11-16 16:30
+- **Component:** `aura-manager`
+- **Scope:** `Framework & Config/Environment`
+- **Symptom:** Browsers with `dashboard-styles.css?v=1.2.7` cached continued loading old styles lacking the branch's new `.chat-markdown` blockquote/hr/table/pre/code and `.chat-confirmation-list` rules alongside `dashboard-chat.js?v=1.2.8`. Additionally, Markdown lists that skipped an indentation level and dedented to an intermediate indent with a list tag change (`- parent` -> `    - deep` -> `  1. numbered-child` -> `- next`) promoted `numbered-child` to top level and split the outer `<ul>`.
+- **Root Cause:** `templates/index.html` kept `dashboard-styles.css?v=1.2.7` while bumping dashboard scripts to `?v=1.2.8`. In `static/dashboard-chat.js`, `appendListBlock` evaluated `item.indent > top.indent && top.lastLi` only before popping deeper entries from `stack`; dedenting from indent `4` to indent `2` over an indent-`0` parent skipped the nested-child branch, hit `top.tag !== item.tag` with `stack.length === 1`, and broke out of the list block.
+- **Detection Gap ("What did we miss?"):** `AuraTestDashboardControllerTest.testIndexTemplateIncludesCacheBustingVersionsForDashboardScripts` verified `?v=` only on dashboard JavaScript files and not on `dashboard-styles.css`; `DashboardChatJsTest` only tested symmetric `0 -> 2` nesting without testing skipped-level dedent (`0 -> 4 -> 2 -> 0`).
+- **Resolution:** Updated `dashboard-styles.css?v=1.2.7` to `dashboard-styles.css?v=1.2.8` in `aura-manager/src/main/resources/templates/index.html` (along with the matching pinned assertion in `StaticResourceSyntaxTest.testRunReportStatusFilterStateTransitions`), and updated `appendListBlock` in `aura-manager/src/main/resources/static/dashboard-chat.js` to pop deeper `stack` frames before evaluating `item.indent > top.indent && top.lastLi`.
+- **Safety Net Added:** Updated `StaticResourceSyntaxTest.testRunReportStatusFilterStateTransitions` and added a `dashboard-styles.css?v=1.2.8` assertion in `AuraTestDashboardControllerTest.testIndexTemplateIncludesCacheBustingVersionsForDashboardScripts`, plus an intermediate-dedent nested-list assertion (`- parent` / `    - deep` / `  1. numbered-child` / `- next`) in `DashboardChatJsTest.testChatMarkdownReadyStateOobSwapAndNestedListsViaNode`.

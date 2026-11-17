@@ -100,24 +100,6 @@
         <iframe class="report-iframe" id="interactiveConsoleIframe" src="about:blank"></iframe>
     </div>
 
-    <!-- FLOATING AURA AI CHAT LAUNCHER BUBBLE -->
-    <div id="auraChatLauncher" class="aura-chat-launcher" onclick="toggleAuraChat()" title="Open Aura AI Assistant">
-        <div class="aura-chat-launcher-icon">
-            <span class="material-symbols-outlined">auto_awesome</span>
-        </div>
-        <span class="aura-chat-launcher-label">Aura AI</span>
-        <span class="aura-chat-launcher-badge" id="chatBadgeDot"></span>
-    </div>
-
-    <!-- FLOATING AURA AI CHAT OVERLAY -->
-    <div id="auraChatOverlay" class="aura-chat-overlay" style="display: none;">
-        <div class="aura-chat-overlay-card">
-            <div class="panel chat-container" id="chatContainer" th:fragment="chatContainer">
-                <div th:replace="~{fragments/chat :: chatContainerContent}"></div>
-            </div>
-        </div>
-    </div>
-
     <!-- PER-ITEM BROWSER PICKER MODAL -->
     <div class="modal-overlay" id="itemBrowserModal" style="display: none; align-items: center; justify-content: center; position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 9999; backdrop-filter: blur(3px);">
         <div class="modal-card" style="width: 380px; max-width: 92vw; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 20px 30px -5px rgba(0, 0, 0, 0.6); padding: 18px; animation: modalSlideIn 0.2s ease-out;">

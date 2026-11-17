@@ -71,7 +71,7 @@ public class AuraMcpToolService
      */
     @McpTool(name = "list_tests", description = "List all available test playbooks with step counts and tags.")
     public Map<String, Object> listTests(
-        @McpToolParam(description = "Optional filter string to match filename or tags") final String filter)
+        @McpToolParam(required = false, description = "Optional filter string to match filename or tags") final String filter)
     {
         final List<PlaybookSummaryDto> playbooks = playbookService.listPlaybooks(filter);
         final List<Map<String, Object>> resultList = new ArrayList<>();
@@ -101,9 +101,9 @@ public class AuraMcpToolService
      */
     @McpTool(name = "run_test", description = "Dispatch an asynchronous test playbook run. Call this tool directly with the provided test name or path without querying list_tests or list_browser_profiles first. Returns immediately with RUNNING or ENQUEUED status.")
     public Map<String, Object> runTest(
-        @McpToolParam(description = "Relative path or simple filename of YAML playbook (e.g. tests/Login.yaml or Login.yaml). Filenames are automatically resolved.") final String testPath,
-        @McpToolParam(description = "Optional browser profile tag (e.g. Chrome_1500x1000). If omitted or null, defaults automatically to the configured default Chrome profile. Pass directly without prior validation.") final String browserProfile,
-        @McpToolParam(description = "Optional dataset row identifier. Omit if not explicitly requested.") final String dataset)
+        @McpToolParam(required = true, description = "Relative path or simple filename of YAML playbook (e.g. tests/Login.yaml or Login.yaml). Filenames are automatically resolved.") final String testPath,
+        @McpToolParam(required = false, description = "Optional browser profile tag (e.g. Chrome_1500x1000). If omitted or null, defaults automatically to the configured default Chrome profile. Pass directly without prior validation.") final String browserProfile,
+        @McpToolParam(required = false, description = "Optional dataset row identifier. Omit if not explicitly requested.") final String dataset)
     {
         final ExecutionLaunchResultDto launch = executionService.dispatchRun(testPath, browserProfile, dataset);
         final Map<String, Object> res = new HashMap<>();
@@ -125,8 +125,8 @@ public class AuraMcpToolService
      */
     @McpTool(name = "run_suite", description = "Dispatch a batch of test playbooks as a unified test suite run. Returns immediately with RUNNING or ENQUEUED status.")
     public Map<String, Object> runSuite(
-        @McpToolParam(description = "List of relative YAML playbook paths or filenames") final List<String> testPaths,
-        @McpToolParam(description = "Optional browser profile tag (e.g. Chrome_1500x1000). If omitted or null, defaults automatically to the configured default Chrome profile. Pass directly without prior validation.") final String browserProfile)
+        @McpToolParam(required = true, description = "List of relative YAML playbook paths or filenames") final List<String> testPaths,
+        @McpToolParam(required = false, description = "Optional browser profile tag (e.g. Chrome_1500x1000). If omitted or null, defaults automatically to the configured default Chrome profile. Pass directly without prior validation.") final String browserProfile)
     {
         final ExecutionLaunchResultDto launch = executionService.dispatchSuite(testPaths, browserProfile);
         final Map<String, Object> res = new HashMap<>();
@@ -148,7 +148,7 @@ public class AuraMcpToolService
      */
     @McpTool(name = "get_status", description = "Query test execution status, universal metrics envelope, and adaptive failure clusters.")
     public RunStatusResponseDto getStatus(
-        @McpToolParam(description = "The test run identifier (e.g. run_20260930_101500)") final String runId)
+        @McpToolParam(required = true, description = "The test run identifier (e.g. run_20260930_101500)") final String runId)
     {
         return diagnosticService.getRunStatus(runId);
     }
@@ -158,10 +158,10 @@ public class AuraMcpToolService
      */
     @McpTool(name = "get_run_failures", description = "Cursor-paginated drill-down tool to inspect token-bounded stack traces across a test run.")
     public Map<String, Object> getRunFailures(
-        @McpToolParam(description = "The test run identifier") final String runId,
-        @McpToolParam(description = "Optional failure category filter (e.g. ELEMENT_NOT_FOUND)") final String category,
-        @McpToolParam(description = "Zero-based integer offset index (e.g. '0', '5', '10') from nextCursor of previous call") final String cursor,
-        @McpToolParam(description = "Page size between 1 and 10 (default: 5)") final Integer limit)
+        @McpToolParam(required = true, description = "The test run identifier") final String runId,
+        @McpToolParam(required = false, description = "Optional failure category filter (e.g. ELEMENT_NOT_FOUND)") final String category,
+        @McpToolParam(required = false, description = "Zero-based integer offset index (e.g. '0', '5', '10') from nextCursor of previous call") final String cursor,
+        @McpToolParam(required = false, description = "Page size between 1 and 10 (default: 5)") final Integer limit)
     {
         final FailurePageResultDto<DistilledFailureDto> pageResult = diagnosticService.getRunFailures(runId, category, cursor, limit);
         if (pageResult.getTotalCount() == 0 && (pageResult.getFailures() == null || pageResult.getFailures().isEmpty()))
@@ -193,8 +193,8 @@ public class AuraMcpToolService
      */
     @McpTool(name = "get_execution_failure", description = "Inspect detailed failure stack trace and DOM context for an individual test execution.")
     public Map<String, Object> getExecutionFailure(
-        @McpToolParam(description = "The test run identifier") final String runId,
-        @McpToolParam(description = "Test name, title, or identifier") final String testName)
+        @McpToolParam(required = true, description = "The test run identifier") final String runId,
+        @McpToolParam(required = true, description = "Test name, title, or identifier") final String testName)
     {
         final DistilledFailureDto failure = diagnosticService.getExecutionFailure(runId, testName);
         if (failure == null)
@@ -218,8 +218,8 @@ public class AuraMcpToolService
      */
     @McpTool(name = "create_test", description = "Create or update a test playbook YAML file.")
     public Map<String, Object> createTest(
-        @McpToolParam(description = "Destination relative YAML path (e.g. tests/Checkout.yaml)") final String testPath,
-        @McpToolParam(description = "YAML playbook file contents") final String content)
+        @McpToolParam(required = true, description = "Destination relative YAML path (e.g. tests/Checkout.yaml)") final String testPath,
+        @McpToolParam(required = true, description = "YAML playbook file contents") final String content)
     {
         final AuraOperationResult<Void> result = playbookService.savePlaybook(testPath, content);
         return Map.of(
@@ -233,8 +233,8 @@ public class AuraMcpToolService
      */
     @McpTool(name = "delete_test", description = "Delete a test playbook file. Enforces two-step confirmation handshake.")
     public Map<String, Object> deleteTest(
-        @McpToolParam(description = "Relative path of test playbook to delete") final String testPath,
-        @McpToolParam(description = "Confirmation token received from initial delete request") final String confirmationToken)
+        @McpToolParam(required = true, description = "Relative path of test playbook to delete") final String testPath,
+        @McpToolParam(required = false, description = "Confirmation token received from initial delete request") final String confirmationToken)
     {
         if (testPath == null || testPath.isBlank())
         {
@@ -270,8 +270,8 @@ public class AuraMcpToolService
      */
     @McpTool(name = "cancel_run", description = "Abort an active test run. Enforces two-step confirmation handshake.")
     public Map<String, Object> cancelRun(
-        @McpToolParam(description = "Run identifier to cancel") final String runId,
-        @McpToolParam(description = "Confirmation token received from initial cancel request") final String confirmationToken)
+        @McpToolParam(required = true, description = "Run identifier to cancel") final String runId,
+        @McpToolParam(required = false, description = "Confirmation token received from initial cancel request") final String confirmationToken)
     {
         if (runId == null || runId.isBlank())
         {
@@ -347,7 +347,7 @@ public class AuraMcpToolService
      */
     @McpTool(name = "get_test_content", description = "Read the raw YAML content of a test playbook file.")
     public Map<String, Object> getTestContent(
-        @McpToolParam(description = "Relative path of the test playbook (e.g. tests/Login.yaml)") final String testPath)
+        @McpToolParam(required = true, description = "Relative path of the test playbook (e.g. tests/Login.yaml)") final String testPath)
     {
         final AuraOperationResult<String> result = playbookService.readPlaybook(testPath);
         if (!result.isSuccess())

@@ -24,22 +24,16 @@
                         th:text="${sess.name}"
                         th:selected="${sess.id == currentSessionId}"></option>
             </select>
-            <button class="btn-edit" 
+            <button type="button" class="btn-edit" 
                     hx-post="/api/chat/create" 
                     hx-target="#chatContainer" 
                     hx-swap="innerHTML" 
                     title="New Chat"><span class="material-symbols-outlined" style="font-size: 16px;">add</span></button>
-            <button class="btn-edit" 
-                    th:hx-post="'/api/chat/rename?id=' + ${currentSessionId}"
-                    hx-prompt="Enter new chat session name:"
-                    hx-target="#chatContainer" 
-                    hx-swap="innerHTML" 
+            <button type="button" class="btn-edit" 
+                    onclick="renameCurrentChatSession()"
                     title="Rename Chat"><span class="material-symbols-outlined" style="font-size: 15px;">edit</span></button>
-            <button class="btn-edit" 
-                    th:hx-post="'/api/chat/delete?id=' + ${currentSessionId}"
-                    hx-confirm="Are you sure you want to delete this chat session?"
-                    hx-target="#chatContainer" 
-                    hx-swap="innerHTML" 
+            <button type="button" class="btn-edit" 
+                    onclick="deleteCurrentChatSession()"
                     title="Delete Chat" style="color: var(--danger);"><span class="material-symbols-outlined" style="font-size: 15px;">delete</span></button>
             <button type="button" class="btn-edit" onclick="closeAuraChat()" title="Close Assistant" style="margin-left: 2px;">
                 <span class="material-symbols-outlined" style="font-size: 16px;">close</span>
@@ -54,7 +48,7 @@
         <span class="material-symbols-outlined">warning</span> <span id="warningBannerText"></span>
     </div>
 
-    <div class="chat-messages" id="chatMessages" th:fragment="chatMessages">
+    <div class="chat-messages" id="chatMessages" th:fragment="chatMessages" th:with="omitOobHiddenSessionId=true">
         <th:block th:replace="~{fragments/chat :: chatMessagesContent}"></th:block>
     </div>
 
@@ -63,9 +57,11 @@
     <form hx-post="/api/chat" 
           hx-target="#chatMessages" 
           hx-swap="innerHTML" 
-          onsubmit="clearChatInput()"
+          onsubmit="return clearChatInput(event)"
           class="chat-input-form" style="padding: 8px 12px 12px 12px; background: var(--bg-card); border-top: 1px solid var(--border);">
         <input type="hidden" name="sessionId" id="hiddenSessionId" th:value="${currentSessionId}"/>
+        <input type="hidden" name="activeFile" id="hiddenActiveFile" value=""/>
+        <input type="hidden" name="viewContext" id="hiddenViewContext" value=""/>
         <div class="chat-input-wrapper" style="display: flex; gap: 6px; align-items: center; background: var(--bg-main); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px;">
             <input class="chat-input" id="chatInput" name="prompt" placeholder="Ask Aura or type a command..." type="text" autocomplete="off" style="flex: 1; border: none; background: transparent; color: var(--text-primary); font-size: 12.5px; outline: none; padding: 4px;"/>
             <button type="submit" class="chat-send-btn" title="Send Message" style="background: var(--accent); color: white; border: none; border-radius: 6px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
@@ -76,13 +72,38 @@
 </th:block>
 
 <th:block th:fragment="chatMessagesContent">
+    <input th:if="${omitOobHiddenSessionId != true}"
+           type="hidden"
+           name="sessionId"
+           id="hiddenSessionId"
+           th:value="${currentSessionId}"
+           hx-swap-oob="outerHTML"/>
+
+    <select th:if="${oobSessionSelect}"
+            class="neo-u-25"
+            id="chatSessionSelect"
+            name="sessionId"
+            hx-swap-oob="outerHTML"
+            hx-get="/api/chat/messages"
+            hx-target="#chatMessages"
+            hx-swap="innerHTML"
+            hx-trigger="change"
+            onchange="updateHiddenSessionId(this.value)"
+            style="max-width: 120px; font-size: 11px; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-main); color: var(--text-primary);">
+        <option th:each="sess : ${chatSessions}"
+                th:value="${sess.id}"
+                th:text="${sess.name}"
+                th:selected="${sess.id == currentSessionId}"></option>
+    </select>
+
     <div th:if="${#lists.isEmpty(chatMessages)}" class="chat-welcome-card">
         <div class="chat-welcome-icon"><span class="material-symbols-outlined">smart_toy</span></div>
         <div class="chat-welcome-title">Hello, I'm Aura. How can I help?</div>
-        <div class="chat-welcome-desc">I can select test cases, configure multi-browser profiles, and help you create or repair tests.</div>
+        <div class="chat-welcome-desc">I can analyze dashboard metrics, inspect test run results and failures, list or edit YAML playbooks, and dispatch or manage test runs.</div>
         <div class="chat-prompts">
-            <button type="button" class="prompt-chip" onclick="setChatPrompt('Select all test cases using the search')"><span class="material-symbols-outlined">checklist</span> Select all "search" tests</button>
-            <button type="button" class="prompt-chip" onclick="setChatPrompt('Create a test case for searching items')"><span class="material-symbols-outlined">add_circle</span> Create a "search" test</button>
+            <button type="button" class="prompt-chip" onclick="setChatPrompt('Analyze the current dashboard and highlight any issues or failures')"><span class="material-symbols-outlined">analytics</span> Analyze current dashboard</button>
+            <button type="button" class="prompt-chip" onclick="setChatPrompt('Summarize the latest test runs and pass rates')"><span class="material-symbols-outlined">history</span> Summarize recent runs</button>
+            <button type="button" class="prompt-chip" onclick="setChatPrompt('List all available test playbooks')"><span class="material-symbols-outlined">checklist</span> List all test playbooks</button>
         </div>
     </div>
     
@@ -100,6 +121,28 @@
                 <pre class="thinking-text" th:text="${msg.thinking}"></pre>
             </details>
         </div>
-        <div class="text" th:utext="${msg.content}">Message Content</div>
+        <div th:class="${msg.role == 'ai' ? 'text chat-markdown' : 'text'}" th:text="${msg.content}">Message Content</div>
+    </div>
+
+    <div th:if="${not #lists.isEmpty(pendingConfirmations)}" class="chat-confirmation-list">
+        <div th:each="pending : ${pendingConfirmations}" class="chat-confirmation-card">
+            <div class="chat-confirmation-info">
+                <span class="material-symbols-outlined chat-confirmation-icon">warning</span>
+                <div class="chat-confirmation-text">
+                    <div class="chat-confirmation-title">Confirmation required: <code th:text="${pending.toolName}"></code></div>
+                    <div class="chat-confirmation-target" th:text="${pending.target}"></div>
+                </div>
+            </div>
+            <div class="chat-confirmation-actions">
+                <button type="button"
+                        class="btn-confirm-action"
+                        th:attr="data-session-id=${currentSessionId},data-action-id=${pending.actionId}"
+                        onclick="submitChatConfirmation(this, 'confirm')">Confirm</button>
+                <button type="button"
+                        class="btn-cancel-action"
+                        th:attr="data-session-id=${currentSessionId},data-action-id=${pending.actionId}"
+                        onclick="submitChatConfirmation(this, 'cancel')">Cancel</button>
+            </div>
+        </div>
     </div>
 </th:block>

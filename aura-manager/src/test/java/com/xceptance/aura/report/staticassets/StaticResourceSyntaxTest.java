@@ -425,8 +425,8 @@ public final class StaticResourceSyntaxTest
             "index.html must reference report-manager.js with cache buster ?v=1.1.7"
         );
         Assertions.assertTrue(
-            indexContent.contains("dashboard-styles.css?v=1.2.7"),
-            "index.html must reference dashboard-styles.css with cache buster ?v=1.2.7"
+            indexContent.contains("dashboard-styles.css?v=1.2.8"),
+            "index.html must reference dashboard-styles.css with cache buster ?v=1.2.8"
         );
         Assertions.assertTrue(
             indexContent.contains("report-manager.css?v=1.1.15"),
@@ -4569,6 +4569,55 @@ public final class StaticResourceSyntaxTest
         final int exitCode = p.waitFor();
         Assertions.assertEquals(0, exitCode, "Known test variations widget row click regression test failed:\n" + out);
         Assertions.assertTrue(out.toString().contains("SUCCESS"), "Output must contain SUCCESS: " + out);
+    }
+
+    /**
+     * Verifies that the Aura AI launcher button is rendered across both header blocks in header.html
+     * and that #auraChatOverlay is mounted globally inside index.html below the top-right header.
+     */
+    @Test
+    public void testAuraChatLauncherInTopHeaderAndTopRightOverlay() throws Exception
+    {
+        final Path indexPath = Paths.get("src/main/resources/templates/index.html");
+        final Path headerPath = Paths.get("src/main/resources/templates/fragments/header.html");
+        final Path managerPath = Paths.get("src/main/resources/templates/fragments/aura-test-manager.html");
+        final Path cssPath = Paths.get("src/main/resources/static/dashboard-styles.css");
+
+        final String indexHtml = Files.readString(indexPath, StandardCharsets.UTF_8);
+        final String headerHtml = Files.readString(headerPath, StandardCharsets.UTF_8);
+        final String managerHtml = Files.readString(managerPath, StandardCharsets.UTF_8);
+        final String css = Files.readString(cssPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(headerHtml.contains("id=\"auraChatLauncher\""),
+            "header.html must define #auraChatLauncher");
+        Assertions.assertTrue(headerHtml.contains("onclick=\"toggleAuraChat()\""),
+            "header.html launcher must call toggleAuraChat()");
+        final int launcherUses = headerHtml.split("fragments/header :: chatLauncherBtn", -1).length - 1;
+        Assertions.assertEquals(2, launcherUses,
+            "header.html must include chatLauncherBtn in both AuraTestManager and Report/Dashboard header blocks");
+
+        Assertions.assertFalse(managerHtml.contains("id=\"auraChatLauncher\""),
+            "aura-test-manager.html must not keep a duplicate bottom-right #auraChatLauncher");
+        Assertions.assertFalse(managerHtml.contains("id=\"auraChatOverlay\""),
+            "aura-test-manager.html must not scope #auraChatOverlay solely to Playbooks & Queue");
+        Assertions.assertTrue(indexHtml.contains("id=\"auraChatOverlay\""),
+            "index.html must mount #auraChatOverlay globally");
+
+        final int launcherStart = css.indexOf(".aura-chat-launcher {");
+        final int launcherEnd = css.indexOf("}", launcherStart);
+        Assertions.assertTrue(launcherStart >= 0 && launcherEnd > launcherStart,
+            "dashboard-styles.css must define .aura-chat-launcher");
+        final String launcherBlock = css.substring(launcherStart, launcherEnd);
+        Assertions.assertFalse(launcherBlock.contains("position: fixed"),
+            ".aura-chat-launcher must flow inside header actions instead of position: fixed");
+
+        final int overlayStart = css.indexOf(".aura-chat-overlay {");
+        final int overlayEnd = css.indexOf("}", overlayStart);
+        Assertions.assertTrue(overlayStart >= 0 && overlayEnd > overlayStart,
+            "dashboard-styles.css must define .aura-chat-overlay");
+        final String overlayBlock = css.substring(overlayStart, overlayEnd);
+        Assertions.assertTrue(overlayBlock.contains("top: 72px;") && overlayBlock.contains("right: 24px;"),
+            ".aura-chat-overlay must open below the top-right header");
     }
 }
 
