@@ -101,7 +101,8 @@ public final class AuraManagerEditorUiTest
             "RawYamlPasteTest.yaml", "RawYamlSyncTest.yaml", "FoldedScalarTest.yaml", "CommentTypingTest.yaml", "InlineCommentTypingTest.yaml",
             "SubstepTypingTest.yaml", "EnterSubstepTest.yaml", "UndoSubstepTest.yaml", "FragmentStep.steps", "GrandChild.steps", "MultiChild.steps",
             "New Line Include Cursor Test.yaml", "ParentInclude.steps", "VariablePersistenceTest.yaml", "AuthFragment.steps", "SubstepNameTest.yaml",
-            "CleanStepsSaveTest.yaml", "PlaybookPropertiesTest.yaml", "PlaybookAddPropsTest.yaml"
+            "CleanStepsSaveTest.yaml", "PlaybookPropertiesTest.yaml", "PlaybookAddPropsTest.yaml",
+            "MarkerChipTest.yaml", "MetaPreservationTest.yaml"
         };
 
         for (final String dirPath : dirPaths)
@@ -2298,6 +2299,9 @@ public final class AuraManagerEditorUiTest
         propsPanel.shouldNotBe(Condition.visible);
         addPropsContainer.shouldBe(Condition.visible);
 
+        // Dismiss existing toast notifications to verify the next save generates a fresh toast
+        Selenide.executeJavaScript("document.querySelectorAll('.toast').forEach(t => t.remove());");
+
         // Save playbook again
         $("#saveYamlBtn").shouldBe(Condition.visible).click();
         $(".toast.success").shouldBe(Condition.visible);
@@ -2309,6 +2313,77 @@ public final class AuraManagerEditorUiTest
             "Saved YAML must not contain _properties block after removal: " + savedWithoutProps);
         Assertions.assertFalse(savedWithoutProps.contains("custom.test.timeout"),
             "Saved YAML must not contain custom property after removal: " + savedWithoutProps);
+    }
+
+    @Test
+    public final void testClickMarkerControlTagChipInsertsTagIntoActiveStep() throws Exception
+    {
+        final String playbookFile = "MarkerChipTest.yaml";
+        final String initialPlaybook = "# Neodymium YAML Test Data File\n\n"
+                                     + "steps: |\n"
+                                     + "  Click on shopping cart icon\n";
+
+        this.fileService.saveYamlFileContent(playbookFile, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/?file=" + playbookFile);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Verify step 1 exists and click into it to focus
+        final SelenideElement stepContent = $("#stepsList .step-row[data-line='1'] .step-content");
+        stepContent.shouldBe(Condition.visible).click();
+
+        // Click the '(marker)' control tag button in the sidebar palette
+        final SelenideElement markerBtn = $$(".sidebar-palette-right button").findBy(Condition.text("(marker)"));
+        markerBtn.shouldBe(Condition.visible).click();
+
+        // Verify that step 1 content now contains '(marker)'
+        stepContent.shouldHave(Condition.text("(marker)"));
+
+        // Save and verify on disk
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        final String savedContent = this.fileService.readYamlFileContent(playbookFile);
+        Assertions.assertNotNull(savedContent);
+        Assertions.assertTrue(savedContent.contains("Click on shopping cart icon (marker)"),
+            "Saved YAML must contain inserted (marker) tag: " + savedContent);
+    }
+
+    @Test
+    public final void testMetaBlockPreservedAcrossVisualEditorSave() throws Exception
+    {
+        final String playbookFile = "MetaPreservationTest.yaml";
+        final String initialPlaybook = "_meta:\n"
+                                     + "  author: Test Team\n"
+                                     + "  ticket: NEO-139\n\n"
+                                     + "steps: |\n"
+                                     + "  Open https://example.com/meta-test\n";
+
+        this.fileService.saveYamlFileContent(playbookFile, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/?file=" + playbookFile);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Modify step in visual mode
+        final SelenideElement stepContent = $("#stepsList .step-row[data-line='1'] .step-content");
+        stepContent.shouldBe(Condition.visible).click();
+        stepContent.sendKeys(" and verify title");
+
+        // Save playbook in visual mode
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        // Verify on disk that _meta block was preserved along with updated step
+        final String savedContent = this.fileService.readYamlFileContent(playbookFile);
+        Assertions.assertNotNull(savedContent);
+        Assertions.assertTrue(savedContent.contains("_meta:") || savedContent.contains("meta:"),
+            "Saved YAML must contain metadata block: " + savedContent);
+        Assertions.assertTrue(savedContent.contains("author: Test Team"),
+            "Saved YAML must preserve metadata author: " + savedContent);
+        Assertions.assertTrue(savedContent.contains("ticket: NEO-139"),
+            "Saved YAML must preserve metadata ticket: " + savedContent);
+        Assertions.assertTrue(savedContent.contains("and verify title"),
+            "Saved YAML must contain edited step: " + savedContent);
     }
 }
 

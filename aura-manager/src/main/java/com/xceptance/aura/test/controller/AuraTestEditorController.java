@@ -133,8 +133,10 @@ public class AuraTestEditorController
             final Object dsTagsObj = sections.get("datasetTagsList");
             model.addAttribute("datasetTagsList", dsTagsObj != null ? dsTagsObj : List.of());
             model.addAttribute("areaTag", sections.get("areaTag"));
+            model.addAttribute("propertiesKey", sections.get("propertiesKey") != null ? sections.get("propertiesKey") : "_properties");
             model.addAttribute("propertiesYaml", sections.get("propertiesYaml") != null ? sections.get("propertiesYaml") : "");
             model.addAttribute("propertiesList", sections.get("propertiesList") != null ? sections.get("propertiesList") : List.of());
+            model.addAttribute("metaKey", sections.get("metaKey") != null ? sections.get("metaKey") : "_meta");
             model.addAttribute("metaYaml", sections.get("metaYaml") != null ? sections.get("metaYaml") : "");
             model.addAttribute("description", sections.get("description") != null ? sections.get("description") : "");
             model.addAttribute("promptAddonYaml", sections.get("promptAddonYaml") != null ? sections.get("promptAddonYaml") : "");
@@ -160,8 +162,10 @@ public class AuraTestEditorController
             model.addAttribute("rootTags", Map.of());
             model.addAttribute("datasetTagsList", List.of());
             model.addAttribute("areaTag", null);
+            model.addAttribute("propertiesKey", "_properties");
             model.addAttribute("propertiesYaml", "");
             model.addAttribute("propertiesList", List.of());
+            model.addAttribute("metaKey", "_meta");
             model.addAttribute("metaYaml", "");
             model.addAttribute("description", "");
             model.addAttribute("promptAddonYaml", "");

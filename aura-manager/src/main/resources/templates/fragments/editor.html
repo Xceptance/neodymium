@@ -138,6 +138,11 @@
 
     <!-- Hidden input holding compiled YAML payload for HTMX form submission -->
     <input type="hidden" id="editorContent" name="content" th:value="${editorContent != null ? editorContent : ''}" />
+    <input type="hidden" id="editorPropertiesKey" th:value="${propertiesKey != null ? propertiesKey : '_properties'}" />
+    <input type="hidden" id="editorMetaKey" th:value="${metaKey != null ? metaKey : '_meta'}" />
+    <input type="hidden" id="editorMetaYaml" th:value="${metaYaml != null ? metaYaml : ''}" />
+    <input type="hidden" id="editorDescription" th:value="${description != null ? description : ''}" />
+    <input type="hidden" id="editorPromptAddonYaml" th:value="${promptAddonYaml != null ? promptAddonYaml : ''}" />
 
     <!-- Main Visual Editor Layout Container -->
     <div id="visualEditorContainer" class="visual-editor-container" th:style="${'raw'.equals(editorMode) ? 'display: none;' : 'display: flex;'}">
@@ -145,7 +150,7 @@
         <!-- Central Visual Editor Area -->
         <main class="editor-main-area" id="visualEditorMain">
 
-            <!-- Subtle Add '_properties:' Button Container (Only for test playbooks, not fragments) -->
+            <!-- Subtle Add Properties Button Container (Only for test playbooks, not fragments) -->
             <div id="addPropertiesBtnContainer" th:style="${(isFragment != null and isFragment) or ((propertiesList != null and !#lists.isEmpty(propertiesList)) or (propertiesYaml != null and !#strings.isEmpty(propertiesYaml))) ? 'display: none;' : 'display: block;'}">
                 <button class="btn-add-section-block" onclick="addPropertiesBlock()">
                     <span class="material-symbols-outlined">tune</span>
@@ -153,12 +158,12 @@
                 </button>
             </div>
 
-            <!-- _properties: Section Code Panel -->
+            <!-- properties: Section Code Panel -->
             <div class="editor-code-panel" id="playbookPropertiesPanel" th:style="${(propertiesList != null and !#lists.isEmpty(propertiesList)) or (propertiesYaml != null and !#strings.isEmpty(propertiesYaml)) ? 'display: flex;' : 'display: none;'}">
                 <div class="panel-header">
                     <div class="panel-title">
                         <span class="material-symbols-outlined" style="font-size: 18px; color: var(--accent);">tune</span>
-                        Playbook Properties (_properties:)
+                        <span th:text="${'Playbook Properties (' + (propertiesKey != null ? propertiesKey : '_properties') + ':)'}">Playbook Properties (_properties:)</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 12px;">
                         <div style="font-size: 12px; color: var(--text-secondary);">
@@ -587,26 +592,35 @@
                     Actions & Templates
                 </div>
                 <div class="action-chip-list">
-                    <div class="action-chip" onclick="insertSnippetWithCaret('Open ${neodymium.url}')">
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Open ${neodymium.url}')" title="Navigate browser to the base application URL configured in neodymium.properties">
                         <span class="label"><span class="material-symbols-outlined icon">public</span> Open Base URL</span>
                     </div>
-                    <div class="action-chip" onclick="insertSnippetWithCaret('Type &quot;&quot;', 6)">
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Type &quot;&quot;', 6)" title="Input text into an input field or text area">
                         <span class="label"><span class="material-symbols-outlined icon">edit_note</span> Type Text</span>
                     </div>
-                    <div class="action-chip" onclick="insertSnippetWithCaret('Wait for  to be visible',9)">
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Wait for  to be visible',9)" title="Wait asynchronously for an element to appear on the page">
                         <span class="label"><span class="material-symbols-outlined icon">timer</span> Wait for Visible</span>
                     </div>
-                    <div class="action-chip" onclick="insertSnippetWithCaret('Assert  is visible',7)">
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Assert  is visible',7)" title="Verify that an element is present and visible in the viewport">
                         <span class="label"><span class="material-symbols-outlined icon">visibility</span> Assert Visible</span>
                     </div>
-                    <div class="action-chip" onclick="insertSnippetWithCaret('Assert page contains &quot;&quot;', 22)">
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Assert page contains &quot;&quot;', 22)" title="Verify that the page content contains the expected string">
                         <span class="label"><span class="material-symbols-outlined icon">find_in_page</span> Assert Text</span>
                     </div>
-                    <div class="action-chip" onclick="insertSnippetWithCaret('Select option &quot;&quot;', 15)">
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Select option &quot;&quot;', 15)" title="Select an option from a dropdown or custom select component">
                         <span class="label"><span class="material-symbols-outlined icon">checklist</span> Select Option</span>
                     </div>
-                    <div class="action-chip" onclick="insertSnippetWithCaret('Click ',6)">
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Click ',6)" title="Click a button, link, or interactive element">
                         <span class="label"><span class="material-symbols-outlined icon">touch_app</span> Click Element</span>
+                    </div>
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Store text from  as ', 16)" title="Dynamic variable extraction: Captures text from a live element and stores it into a variable">
+                        <span class="label"><span class="material-symbols-outlined icon">save</span> Store text from</span>
+                    </div>
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Store &quot;&quot; as ', 7)" title="Variable assignment: Stores a fixed string into a dynamic variable">
+                        <span class="label"><span class="material-symbols-outlined icon">pin</span> Store literal as</span>
+                    </div>
+                    <div class="action-chip" onclick="insertSnippetWithCaret('->- ', 4)" title="Arrow sub-step: Sequential micro-action evaluated under the preceding goal or comment">
+                        <span class="label"><span class="material-symbols-outlined icon">subdirectory_arrow_right</span> Arrow Substep -&gt;-</span>
                     </div>
                 </div>
             </div>
@@ -618,14 +632,22 @@
                     Control Tags & Flags
                 </div>
                 <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-                    <button class="btn-editor" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(optional)')">(optional)</button>
-                    <button class="btn-editor" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(continue-on-error)')">(continue-on-error)</button>
-                    <button class="btn-editor" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(no-replay)')">(no-replay)</button>
-                    <button class="btn-editor" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(bug: )', 6)">(bug: ID)</button>
-                    <button class="btn-editor" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(hint: #)', 8)">(hint: #)</button>
-                    <button class="btn-editor" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(timeout: 10s)')">(timeout: 10s)</button>
-                    <button class="btn-editor" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(visual)')">(visual)</button>
-                    <button class="btn-editor" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(layout)')">(layout)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(optional)')" title="Soft assertion: Logs warning on failure and continues execution without failing test">(optional)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(soft)')" title="Synonym for (optional): Soft assertion that does not abort or fail the test">(soft)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(continue-on-error)')" title="Error recovery: Records failure warning and proceeds with subsequent steps">(continue-on-error)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(no-replay)')" title="Bypass replay: Forces live LLM inference instead of recorded companion action">(no-replay)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(no-healing)')" title="Disable self-healing: Fails immediately on selector divergence without AI recovery">(no-healing)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(bug: )', 6)" title="Expected bug: Test passes if step fails; fails if step unexpectedly passes">(bug: ID)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(hint: #)', 8)" title="Selector hint: Attempts direct CSS/XPath locator, saving 100% of DOM tokens">(hint: #)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(hint: use java method)')" title="Method hint: Delegates step execution to an annotated @Tool Java method">(hint: java)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(marker)')" title="Visual grounding: Overlays Set-of-Marks numbered badges on visual elements">(marker)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(timeout: 10s)')" title="Step timeout: Overrides default execution timeout (e.g. 10s, 5000ms)">(timeout: 10s)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(threshold: 0.95)')" title="SSIM tolerance: Overrides minimum image match score (e.g. 0.95 or 95%)">(threshold: 0.95)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(context: minimal)')" title="DOM context level: Overrides initial context sent to LLM (minimal, lean, standard, full, hint)">(context: minimal)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(visual)')" title="Visual check: Viewport screenshot comparison against recorded visual baseline">(visual)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(visual: full)')" title="Full-page visual check: Scrolling full-page capture for visual baseline comparison">(visual: full)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(layout)')" title="Layout check: Redacts text and media to verify layout wireframe structure">(layout)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(layout: full)')" title="Full-page layout check: Full-page layout wireframe verification">(layout: full)</button>
                 </div>
             </div>
 

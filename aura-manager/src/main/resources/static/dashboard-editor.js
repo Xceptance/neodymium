@@ -2525,7 +2525,37 @@ function compilePlaybookToYaml(syncToRaw = true) {
 
     yaml += "# Neodymium YAML Test Data File\n\n";
 
-    // _properties block (Only for test playbooks, above steps)
+    // _meta block preservation (Only for test playbooks)
+    if (!isFragmentFile) {
+        const metaInput = document.getElementById('editorMetaYaml');
+        const metaKeyEl = document.getElementById('editorMetaKey');
+        const metaKey = (metaKeyEl && metaKeyEl.value) ? metaKeyEl.value.trim() : '_meta';
+        if (metaInput && metaInput.value && metaInput.value.trim().length > 0) {
+            yaml += metaKey + ":\n";
+            const metaLines = metaInput.value.trim().split("\n");
+            metaLines.forEach(line => {
+                yaml += (line.startsWith("  ") ? line : "  " + line) + "\n";
+            });
+            yaml += "\n";
+        }
+
+        const descInput = document.getElementById('editorDescription');
+        if (descInput && descInput.value && descInput.value.trim().length > 0) {
+            yaml += "description: " + JSON.stringify(descInput.value.trim()) + "\n\n";
+        }
+
+        const promptAddonInput = document.getElementById('editorPromptAddonYaml');
+        if (promptAddonInput && promptAddonInput.value && promptAddonInput.value.trim().length > 0) {
+            yaml += "promptAddon:\n";
+            const lines = promptAddonInput.value.trim().split("\n");
+            lines.forEach(line => {
+                yaml += (line.startsWith("  ") ? line : "  " + line) + "\n";
+            });
+            yaml += "\n";
+        }
+    }
+
+    // properties block (Only for test playbooks, above steps)
     if (!isFragmentFile) {
         const propertiesPanel = document.getElementById('playbookPropertiesPanel');
         if (propertiesPanel && propertiesPanel.style.display !== 'none') {
@@ -2542,7 +2572,9 @@ function compilePlaybookToYaml(syncToRaw = true) {
             });
 
             if (validProps.length > 0) {
-                yaml += "_properties:\n";
+                const propKeyEl = document.getElementById('editorPropertiesKey');
+                const propKey = (propKeyEl && propKeyEl.value) ? propKeyEl.value.trim() : '_properties';
+                yaml += propKey + ":\n";
                 validProps.forEach(p => {
                     yaml += `  ${p.key}: ${p.value}\n`;
                 });
@@ -5045,6 +5077,7 @@ function insertVariableFromInput(varName) {
                 lastCaretOffset = raw.length;
             }
             content.setAttribute('data-raw', raw);
+            content.innerText = raw;
             formatStepToTokens(activeLineNum);
             content.focus();
             setCaretOffset(content, lastCaretOffset);
@@ -5093,22 +5126,28 @@ function insertSnippetWithCaret(templateText, caretOffset = -1) {
     if (raw === null || raw === undefined) raw = content.innerText || '';
 
     if (lastCaretOffset >= 0 && lastCaretOffset <= raw.length) {
-        raw = raw.slice(0, lastCaretOffset) + templateText + raw.slice(lastCaretOffset);
+        const needsSpace = (lastCaretOffset > 0 && !/\s$/.test(raw.slice(0, lastCaretOffset)) && templateText.startsWith('('));
+        const prefix = needsSpace ? ' ' : '';
+        raw = raw.slice(0, lastCaretOffset) + prefix + templateText + raw.slice(lastCaretOffset);
         if (caretOffset >= 0) {
-            lastCaretOffset += caretOffset;
+            lastCaretOffset += prefix.length + caretOffset;
         } else {
-            lastCaretOffset += templateText.length;
+            lastCaretOffset += prefix.length + templateText.length;
         }
     } else {
-        raw += (raw.length > 0 ? ' ' : '') + templateText;
+        const needsSpace = (raw.length > 0 && !/\s$/.test(raw) && templateText.startsWith('('));
+        raw += (needsSpace ? ' ' : (raw.length > 0 ? ' ' : '')) + templateText;
         lastCaretOffset = raw.length;
     }
 
     content.setAttribute('data-raw', raw);
+    content.innerText = raw;
     formatStepToTokens(activeLineNum || activeRow.getAttribute('data-line'));
     content.focus();
     setCaretOffset(content, lastCaretOffset);
     if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+    if (typeof compilePlaybookToYaml === 'function') compilePlaybookToYaml();
+    if (typeof checkEditorDirtyStatus === 'function') checkEditorDirtyStatus();
 }
 window.insertSnippetWithCaret = insertSnippetWithCaret;
 
