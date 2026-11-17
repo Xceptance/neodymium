@@ -19,14 +19,8 @@
         <button type="button" class="btn-close" style="font-size: 0.75rem; filter: invert(1); opacity: 0.7; cursor: pointer; background: transparent; border: none; color: inherit;" onclick="this.closest('.alert').remove()">✕</button>
     </div>
 
-    <!-- DASHBOARD WIDGETS TOOLBAR / HEADER -->
-    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 pt-1 pb-1" id="dashboardWidgetsHeader">
-        <div class="d-flex align-items-center gap-2">
-            <span class="material-symbols-outlined text-accent" style="font-size: 1.15rem;">dashboard_customize</span>
-            <span style="font-size: 0.9rem; font-weight: 700; color: var(--text-main); text-transform: uppercase; letter-spacing: 0.05em;">Dashboard Widgets</span>
-            <span class="badge-status" style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.72rem; padding: 0.1rem 0.45rem;"
-                  th:text="${dashboardWidgets != null ? #lists.size(dashboardWidgets) + ' Active' : '0 Active'}">4 Active</span>
-        </div>
+    <!-- DASHBOARD WIDGETS TOOLBAR / HEADER (ONLY WHEN NO CUSTOM PAGE) -->
+    <div class="d-flex align-items-center justify-content-end flex-wrap gap-2 pt-1 pb-1" id="dashboardWidgetsHeader" th:if="${customPage == null}">
         <div class="d-flex align-items-center gap-2">
             <button type="button"
                     class="btn-primary btn-compact d-inline-flex align-items-center gap-1"
