@@ -2840,7 +2840,7 @@ public final class AuraFileService
 
             // Identify variables defined dynamically at runtime (e.g. "Store text from ... as varName")
             final Set<String> dynamicallyStoredVars = new LinkedHashSet<>();
-            final Pattern storePattern = Pattern.compile("(?i)(?:store\\s+(?:text\\s+from\\s+.+?|.+?)\\s+as\\s+|as\\s+)([a-zA-Z0-9_.-]+)");
+            final Pattern storePattern = Pattern.compile("(?i)\\bstore\\s+.+?\\s+as\\s+([a-zA-Z0-9_.-]+)");
             for (final String step : allSteps)
             {
                 final Matcher sm = storePattern.matcher(step);

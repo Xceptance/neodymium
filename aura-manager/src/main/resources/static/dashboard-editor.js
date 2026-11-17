@@ -2534,7 +2534,7 @@ function compilePlaybookToYaml(syncToRaw = true) {
             yaml += metaKey + ":\n";
             const metaLines = metaInput.value.trim().split("\n");
             metaLines.forEach(line => {
-                yaml += (line.startsWith("  ") ? line : "  " + line) + "\n";
+                yaml += (line.trim().length === 0 ? "" : (line.startsWith("  ") ? line : "  " + line)) + "\n";
             });
             yaml += "\n";
         }
@@ -2549,7 +2549,7 @@ function compilePlaybookToYaml(syncToRaw = true) {
             yaml += "promptAddon:\n";
             const lines = promptAddonInput.value.trim().split("\n");
             lines.forEach(line => {
-                yaml += (line.startsWith("  ") ? line : "  " + line) + "\n";
+                yaml += (line.trim().length === 0 ? "" : (line.startsWith("  ") ? line : "  " + line)) + "\n";
             });
             yaml += "\n";
         }

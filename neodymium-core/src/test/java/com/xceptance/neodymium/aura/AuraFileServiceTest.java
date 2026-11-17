@@ -1159,6 +1159,53 @@ public class AuraFileServiceTest
     }
 
     @Test
+    public final void testValidateFileContentDynamicVariableExtractionAndNaturalLanguageAs()
+    {
+        final AuraFileService fileService = new AuraFileService();
+
+        // 1. Playbook using stored variables and whitelisted meta placeholders -> should be completely clean (no undefined variable errors)
+        final String validContent = """
+            _meta:
+              author: "AI Team"
+            steps: |
+              Store text from #header as pageTitle
+              Store "admin" as userRole
+              Assert page contains ${pageTitle}
+              Type ${userRole} into #role
+              Assert page contains ${_meta.author}
+              Assert page contains ${meta.author}
+              Open ${neodymium.url}
+            """;
+
+        final List<ValidationIssue> validIssues = fileService.validateFileContent("validDynamic.yaml", validContent);
+        Assertions.assertNotNull(validIssues);
+        final boolean hasUndefinedInValid = validIssues.stream().anyMatch(issue ->
+                issue.severity() == IssueSeverity.WARNING && (issue.context() != null || issue.message().contains("not defined")));
+        Assertions.assertFalse(hasUndefinedInValid, "Stored variables and meta variables should not produce undefined variable warnings");
+
+        // 2. Playbook using natural language 'as user' and 'as expected' followed by undeclared ${user} -> should report undefined variable warning
+        final String invalidContent = """
+            steps: |
+              Click button as user
+              Assert status is as expected
+              Type ${user} into #username
+              Assert text is ${expected}
+            """;
+
+        final List<ValidationIssue> invalidIssues = fileService.validateFileContent("invalidDynamic.yaml", invalidContent);
+        Assertions.assertNotNull(invalidIssues);
+        final List<String> undefinedVars = invalidIssues.stream()
+                .filter(issue -> issue.severity() == IssueSeverity.WARNING && issue.context() != null)
+                .map(ValidationIssue::context)
+                .toList();
+
+        Assertions.assertTrue(undefinedVars.contains("user"),
+                "Undeclared variable 'user' should be flagged as undefined even though earlier step had 'as user'");
+        Assertions.assertTrue(undefinedVars.contains("expected"),
+                "Undeclared variable 'expected' should be flagged as undefined even though earlier step had 'as expected'");
+    }
+
+    @Test
     public final void testFilteredYamlFilesListWithListArg()
     {
         final AuraFileService fileService = new AuraFileService();
