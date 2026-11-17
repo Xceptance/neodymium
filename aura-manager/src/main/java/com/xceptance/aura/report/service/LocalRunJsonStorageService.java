@@ -2072,19 +2072,20 @@ public class LocalRunJsonStorageService
                         final String fullKeyDatasetId = tClass + "#" + nodeDatasetId + "#" + tBrowser;
                         final String classMethodBrowser = tClass + "#" + tMethod + "#" + tBrowser;
 
-                        final boolean matches = (rowId != null && !rowId.isEmpty() && (
-                            rowId.equalsIgnoreCase(nodeId)
-                            || rowId.equalsIgnoreCase(nodeTestId)
-                            || rowId.equalsIgnoreCase(nodeDatasetId)
-                            || rowId.equalsIgnoreCase(fileNameNoExt)
-                            || rowId.equalsIgnoreCase(execKey)
-                            || rowId.equalsIgnoreCase(execKeyNoMethod)
-                            || rowId.equalsIgnoreCase(fullKey)
-                            || rowId.equalsIgnoreCase(fullKeyTestId)
-                            || rowId.equalsIgnoreCase(fullKeyDatasetId)
-                            || rowId.equalsIgnoreCase(classMethodBrowser)
-                            || (rowId.contains("#") && rowId.contains(tClass) && (!tTitle.isEmpty() && rowId.contains(tTitle)) && rowId.contains(tBrowser))
-                        )) || (jsonFiles.size() == 1);
+                        final boolean matches = (rowId != null && !rowId.isEmpty())
+                            ? (rowId.equalsIgnoreCase(nodeId)
+                                || rowId.equalsIgnoreCase(nodeTestId)
+                                || rowId.equalsIgnoreCase(nodeDatasetId)
+                                || rowId.equalsIgnoreCase(fileNameNoExt)
+                                || rowId.equalsIgnoreCase(execKey)
+                                || rowId.equalsIgnoreCase(execKeyNoMethod)
+                                || rowId.equalsIgnoreCase(fullKey)
+                                || rowId.equalsIgnoreCase(fullKeyTestId)
+                                || rowId.equalsIgnoreCase(fullKeyDatasetId)
+                                || rowId.equalsIgnoreCase(classMethodBrowser)
+                                || (rowId.contains("#") && rowId.contains(tClass) && (!tTitle.isEmpty() && rowId.contains(tTitle)) && rowId.contains(tBrowser))
+                                || (jsonFiles.size() == 1 && nodeId.isEmpty() && nodeTestId.isEmpty() && (tClass.isEmpty() || "DefaultClass".equalsIgnoreCase(tClass))))
+                            : (jsonFiles.size() == 1);
 
                         if (matches)
                         {

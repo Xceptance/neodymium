@@ -8,9 +8,10 @@ import org.aeonbits.owner.Mutable;
 @LoadPolicy(LoadType.MERGE)
 @Sources(
 {
-  "system:env",
-  "system:properties",
-  "file:config/dev-testconfiguration.properties"
+    "system:env",
+    "system:properties",
+    "file:config/dev-testconfiguration.properties",
+    "file:../config/dev-testconfiguration.properties"
 })
 public interface TestConfiguration extends Mutable
 {

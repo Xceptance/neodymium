@@ -8358,10 +8358,7 @@ public class AuraReportDataService
         for (final String dim : primaryDimensions)
         {
             final Set<String> values = rawTagMap.remove(dim);
-            if (values != null && !values.isEmpty())
-            {
-                result.put(dim, new ArrayList<>(values));
-            }
+            result.put(dim, values != null ? new ArrayList<>(values) : new ArrayList<>());
         }
 
         final List<String> sortedCustomKeys = new ArrayList<>(rawTagMap.keySet());

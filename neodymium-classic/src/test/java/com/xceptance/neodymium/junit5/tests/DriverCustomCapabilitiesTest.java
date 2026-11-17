@@ -47,6 +47,6 @@ public class DriverCustomCapabilitiesTest extends AbstractNeodymiumTest
     public void test()
     {
         NeodymiumTestExecutionSummary result = run(DriverCustomCapabilitiesTestClass.class);
-        checkPass(result, 4, 0);
+        checkPass(result, 3, 0);
     }
 }

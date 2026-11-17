@@ -54,6 +54,8 @@ import com.xceptance.aura.report.dto.widget.WidgetValueFormat;
 import com.xceptance.aura.report.entity.TestBaseBugEntity;
 import com.xceptance.aura.report.entity.TestRunEntity;
 import com.xceptance.aura.report.entity.TestRunTagEntity;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -5598,13 +5600,16 @@ public class WidgetAggregationServiceTest
             "half", 1
         );
 
+        final long baseTimeMs = LocalDateTime.of(2026, 11, 16, 10, 0, 0)
+            .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+
         final List<TestRunEntity> runs = new ArrayList<>();
         for (int i = 1; i <= 5; i++)
         {
             final TestRunEntity r = new TestRunEntity();
             r.setId("run-" + i);
-            r.setStartTimeMs(1000L * i);
-            r.setTimestampLabel("10:0" + i + " AM");
+            r.setStartTimeMs(baseTimeMs + 60_000L * i);
+            r.setTimestampLabel("2026-11-16 10:0" + i + ":00");
             r.setPassRate(90.0 + i);
             r.setTotalTests(100);
             r.setPassedCount(90 + i);
@@ -5635,7 +5640,7 @@ public class WidgetAggregationServiceTest
             Assertions.assertEquals(90.0, b.getCy(), 0.01);
             Assertions.assertEquals(36.0, b.getRadius(), 0.01);
             Assertions.assertEquals("#run-" + (i + 1), b.getLabel());
-            Assertions.assertEquals("01:00", b.getTimestampLabel());
+            Assertions.assertEquals("10:0" + (i + 1), b.getTimestampLabel());
             Assertions.assertEquals(runs.get(i).getTimestampLabel(), b.getDetails().get("Timestamp"));
             Assertions.assertFalse(b.getInnerValue().isBlank());
         }

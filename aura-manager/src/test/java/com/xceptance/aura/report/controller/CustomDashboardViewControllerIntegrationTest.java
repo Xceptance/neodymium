@@ -20,6 +20,7 @@ package com.xceptance.aura.report.controller;
 
 import com.xceptance.aura.report.dto.widget.DashboardPageConfigDto;
 import com.xceptance.aura.report.dto.widget.DashboardWidgetConfigDto;
+import com.xceptance.aura.report.dto.widget.WidgetFilterConfigDto;
 import com.xceptance.aura.report.dto.widget.WidgetMetric;
 import com.xceptance.aura.report.dto.widget.WidgetPointScope;
 import com.xceptance.aura.report.dto.widget.WidgetPresentation;
@@ -32,8 +33,10 @@ import com.xceptance.aura.report.repository.TestRunRepository;
 import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.ReportDashboardSettingService;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -649,7 +652,7 @@ public final class CustomDashboardViewControllerIntegrationTest
     {
         final String runId = "run-pattern-test-" + System.currentTimeMillis();
         final String batchName = "PatternBatch";
-        final String browser = "Chrome";
+        final String browser = "ChromePattern_" + System.nanoTime();
         final long startTime = System.currentTimeMillis();
 
         final TestRunEntity runEntity = new TestRunEntity(
@@ -657,6 +660,8 @@ public final class CustomDashboardViewControllerIntegrationTest
         );
         runEntity.setTotalTests(2);
         runEntity.setPassedCount(2);
+        runEntity.setPassedHealedCount(1);
+        runEntity.setPassedAiCount(1);
         runEntity.setBrowsersCsv(browser);
         runEntity.setLocalesCsv("US");
         runEntity.setEnvironment("Staging");
@@ -689,12 +694,21 @@ public final class CustomDashboardViewControllerIntegrationTest
         );
         dataService.saveRunReportToDisk(runId, report);
 
+        final WidgetFilterConfigDto runFilters = new WidgetFilterConfigDto(
+            Set.of(browser), Collections.emptySet(),
+            Collections.emptySet(), Collections.emptySet(),
+            Collections.emptySet(), Collections.emptySet(),
+            Collections.emptySet(), Collections.emptySet(),
+            Collections.emptySet(), Collections.emptySet(),
+            Collections.emptyMap(), Collections.emptyMap()
+        );
+
         final DashboardPageConfigDto groupPage = dashboardSettingService.createGroupDashboard(
             "Pattern Test Dashboard",
             "browser",
             WidgetPointScope.LATEST_TEST_STATUS,
             List.of("browser"),
-            null,
+            runFilters,
             List.of(browser)
         );
         createdPageIds.add(groupPage.getId());

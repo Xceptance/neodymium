@@ -16,6 +16,7 @@ public class JavaScriptUtilsTest
     @Test
     public void testWaitingAnimationSelectorUnconfigured()
     {
+        Neodymium.configuration().setProperty("neodymium.javaScriptUtils.loading.jQueryIsRequired", "false");
         Neodymium.configuration().setProperty("neodymium.javaScriptUtils.timeout", "10000");
         Selenide.open("https://blog.xceptance.com/");
         final long start = System.currentTimeMillis();
@@ -28,7 +29,8 @@ public class JavaScriptUtilsTest
     @Test
     public void testWaitingAnimationSelectorExistsOnPage()
     {
-        Neodymium.configuration().setProperty("neodymium.javaScriptUtils.loading.animationSelector", "#main-content");
+        Neodymium.configuration().setProperty("neodymium.javaScriptUtils.loading.jQueryIsRequired", "false");
+        Neodymium.configuration().setProperty("neodymium.javaScriptUtils.loading.animationSelector", "main");
         Neodymium.configuration().setProperty("neodymium.javaScriptUtils.timeout", "10000");
 
         Selenide.open("https://blog.xceptance.com/");
@@ -43,6 +45,7 @@ public class JavaScriptUtilsTest
     @Test
     public void testWaitingAnimationSelectorUnavailableOnPage()
     {
+        Neodymium.configuration().setProperty("neodymium.javaScriptUtils.loading.jQueryIsRequired", "false");
         Neodymium.configuration().setProperty("neodymium.javaScriptUtils.loading.animationSelector", ".cantFindThisClass");
         Neodymium.configuration().setProperty("neodymium.javaScriptUtils.timeout", "10000");
 

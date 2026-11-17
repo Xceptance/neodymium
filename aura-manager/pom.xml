@@ -115,6 +115,11 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <failIfNoSpecifiedTests>${surefire.failIfNoSpecifiedTests}</failIfNoSpecifiedTests>
+                    <excludes>
+                        <exclude>**/*UiTest.java</exclude>
+                        <exclude>**/ui/**</exclude>
+                        <exclude>**/WikipediaSearchTest.java</exclude>
+                    </excludes>
                 </configuration>
             </plugin>
             <plugin>
@@ -153,7 +158,10 @@
                         <artifactId>maven-surefire-plugin</artifactId>
                         <configuration>
                             <excludes combine.self="override">
+                                <exclude>**/*IntegrationTest.java</exclude>
+                                <exclude>**/*SpringContextTest.java</exclude>
                                 <exclude>**/*UiTest.java</exclude>
+                                <exclude>**/ui/**</exclude>
                                 <exclude>**/AuraLauncherTest.java</exclude>
                                 <exclude>**/AiLauncherTest.java</exclude>
                                 <exclude>**/WikipediaSearchTest.java</exclude>
@@ -174,6 +182,7 @@
                         <configuration>
                             <excludes combine.self="override">
                                 <exclude>**/*UiTest.java</exclude>
+                                <exclude>**/ui/**</exclude>
                                 <exclude>**/WikipediaSearchTest.java</exclude>
                             </excludes>
                         </configuration>

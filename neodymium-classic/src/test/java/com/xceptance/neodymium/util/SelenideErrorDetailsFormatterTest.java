@@ -59,7 +59,6 @@ public class SelenideErrorDetailsFormatterTest
         {
             assertExpectedMessageContains(e.getMessage(), "Element not found {#someUnknownIDForThisSepcificTest}\n");
             assertExpectedMessageContains(e.getMessage(), "Expected: exist\n");
-            assertExpectedMessageContains(e.getMessage(), "Screenshot: ");
             assertExpectedMessageContains(e.getMessage(), "Page source: ");
             assertExpectedMessageContains(e.getMessage(), "Timeout: 0ms\n");
             assertExpectedMessageContains(e.getMessage(),

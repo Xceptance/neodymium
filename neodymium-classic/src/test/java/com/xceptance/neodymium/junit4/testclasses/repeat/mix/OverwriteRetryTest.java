@@ -3,6 +3,7 @@ package com.xceptance.neodymium.junit4.testclasses.repeat.mix;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Assert;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.xceptance.neodymium.common.retry.Retry;
@@ -14,6 +15,17 @@ import com.xceptance.neodymium.common.retry.Retry;
 public class OverwriteRetryTest extends RetryParent
 {
     static AtomicInteger i = new AtomicInteger();
+
+    @BeforeClass
+    public static void beforeClass()
+    {
+        reset();
+    }
+
+    public static void reset()
+    {
+        i.set(0);
+    }
 
     @Test
     public void childTest()

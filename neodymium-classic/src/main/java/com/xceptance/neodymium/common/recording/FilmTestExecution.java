@@ -18,6 +18,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.Assert.assertTrue;
 
@@ -33,9 +34,9 @@ public class FilmTestExecution
 
     private static final Map<Thread, GifRecordingConfigurations> CONTEXTS_GIF = Collections.synchronizedMap(new WeakHashMap<>());
 
-    private static final Map<String, TakeScreenshotsThread> GIF_THREADS = Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<String, TakeScreenshotsThread> GIF_THREADS = new ConcurrentHashMap<>();
 
-    private static final Map<String, TakeScreenshotsThread> VIDEO_THREADS = Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<String, TakeScreenshotsThread> VIDEO_THREADS = new ConcurrentHashMap<>();
 
     public final static String TEMPORARY_CONFIG_FILE_PROPERTY_NAME = "recording.temporaryConfigFile";
 
@@ -160,9 +161,13 @@ public class FilmTestExecution
      *     should the desired {@link TakeScreenshotsThread} create a gif
      * @return constructed {@link TakeScreenshotsThread}
      */
-    private static TakeScreenshotsThread createThread(String testName, boolean isGif)
+    private static TakeScreenshotsThread createThread(final String testName, final boolean isGif)
     {
-        Map<String, TakeScreenshotsThread> threads = isGif ? GIF_THREADS : VIDEO_THREADS;
+        if (testName == null)
+        {
+            return null;
+        }
+        final Map<String, TakeScreenshotsThread> threads = isGif ? GIF_THREADS : VIDEO_THREADS;
         return threads.computeIfAbsent(testName, key -> {
             return createTakeScreenshotsThread(testName, isGif);
         });
@@ -175,10 +180,14 @@ public class FilmTestExecution
      *     should the desired {@link TakeScreenshotsThread} create a gif
      * @return {@link TakeScreenshotsThread} for the current thread
      */
-    private static TakeScreenshotsThread popThread(String testName, boolean isGif)
+    private static TakeScreenshotsThread popThread(final String testName, final boolean isGif)
     {
-        Map<String, TakeScreenshotsThread> threads = isGif ? GIF_THREADS : VIDEO_THREADS;
-        TakeScreenshotsThread thread = threads.get(testName);
+        if (testName == null)
+        {
+            return null;
+        }
+        final Map<String, TakeScreenshotsThread> threads = isGif ? GIF_THREADS : VIDEO_THREADS;
+        final TakeScreenshotsThread thread = threads.get(testName);
         threads.remove(testName);
         return thread;
     }
