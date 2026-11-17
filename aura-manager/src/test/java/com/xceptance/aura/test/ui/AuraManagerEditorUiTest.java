@@ -33,6 +33,10 @@ import com.xceptance.aura.AuraManagerApplication;
 import com.xceptance.neodymium.aura.AuraFileService;
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
@@ -40,6 +44,16 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.neodymium.ai.event.ExecutionEventBus;
+import org.neodymium.ai.event.structural.SessionFinishedEvent;
+import org.neodymium.ai.event.structural.StepFinishedEvent;
+import org.neodymium.ai.event.structural.StepStartedEvent;
+import org.neodymium.ai.model.Playbook;
+import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.PlaybookStepStatus;
+import org.neodymium.ai.playbook.YamlPlaybookParser;
+import org.neodymium.ai.report.DiskReportFormat;
+import org.neodymium.ai.report.PreliminaryReportListener;
 import org.openqa.selenium.Keys;
 import org.openqa.selenium.WebElement;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -105,7 +119,7 @@ public final class AuraManagerEditorUiTest
             "New Line Include Cursor Test.yaml", "ParentInclude.steps", "VariablePersistenceTest.yaml", "AuthFragment.steps", "SubstepNameTest.yaml",
             "CleanStepsSaveTest.yaml", "PlaybookPropertiesTest.yaml", "PlaybookAddPropsTest.yaml",
             "MarkerChipTest.yaml", "MetaPreservationTest.yaml",
-            "AllControlTagsTest.yaml", "AllActionChipsTest.yaml", "InsertSubstepRowTest.yaml"
+            "AllControlTagsTest.yaml", "AllActionChipsTest.yaml", "InsertSubstepRowTest.yaml", "EditorSubstepMockRunTest.yaml"
         };
 
         for (final String dirPath : dirPaths)
@@ -2604,6 +2618,81 @@ public final class AuraManagerEditorUiTest
         Assertions.assertTrue(savedContent.contains("- >-") || savedContent.contains("->-"), "Saved YAML must contain substep list prefix");
         Assertions.assertTrue(savedContent.contains("Click navigation menu"), "Saved YAML must contain substep action text");
         Assertions.assertTrue(savedContent.contains("Verify Footer"), "Saved YAML must contain second step");
+    }
+
+    @Test
+    public final void testInsertSubstepInEditorAndExecuteMockedRun() throws Exception
+    {
+        final String playbookFile = "EditorSubstepMockRunTest.yaml";
+
+        final String initialPlaybook = "# Neodymium YAML Test Data File\n\n"
+                                     + "steps: |\n"
+                                     + "  Open Home Page\n";
+
+        this.fileService.saveYamlFileContent(playbookFile, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/?file=" + playbookFile);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // 1. In visual editor: focus the initial step and click the Substep action chip
+        final SelenideElement firstStep = $$("#stepsList .step-row .step-content").get(0);
+        firstStep.shouldBe(Condition.visible).click();
+
+        final SelenideElement substepChip = $$(".sidebar-palette-right .action-chip").findBy(Condition.text("Substep"));
+        substepChip.scrollIntoView(true).shouldBe(Condition.visible).click();
+
+        // 2. Type micro-action into the inserted substep row
+        final ElementsCollection rows = $$("#stepsList .step-row");
+        rows.shouldHave(CollectionCondition.size(2));
+        final SelenideElement insertedRow = rows.get(1);
+        insertedRow.shouldHave(Condition.cssClass("step-row-substep"));
+        insertedRow.$(".step-number").shouldHave(Condition.text("1.1"));
+
+        final SelenideElement substepContent = insertedRow.$(".step-content");
+        substepContent.sendKeys("Click navigation menu");
+
+        // 3. Save via editor button
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        final String savedContent = this.fileService.readYamlFileContent(playbookFile);
+        Assertions.assertNotNull(savedContent);
+
+        // 4. Parse saved YAML via Neodymium AI Playbook Parser
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parseString(savedContent);
+        Assertions.assertNotNull(playbook);
+
+        final PlaybookStep substepParent = playbook.getSteps().stream()
+                .filter(PlaybookStep::hasSubSteps)
+                .findFirst()
+                .orElse(null);
+        Assertions.assertNotNull(substepParent, "Must contain a parent step with substeps");
+        Assertions.assertEquals(1, substepParent.getSubSteps().size(), "Substep group must contain 1 child step");
+
+        final PlaybookStep subStep = substepParent.getSubSteps().get(0);
+        Assertions.assertEquals("Click navigation menu", subStep.getInstruction());
+        Assertions.assertEquals(substepParent, subStep.getParent(), "Sub-step parent reference must match");
+
+        // 5. Execute mocked run across the parsed step hierarchy
+        final File reportDir = new File("target/test-reports/editor-substep-mock-run").getAbsoluteFile();
+        reportDir.mkdirs();
+        final PreliminaryReportListener reportListener = new PreliminaryReportListener(reportDir.toPath(), EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(reportListener);
+
+        bus.dispatch(new StepStartedEvent(substepParent, 0));
+        bus.dispatch(new StepStartedEvent(subStep, 0));
+        bus.dispatch(new StepFinishedEvent(subStep, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new StepFinishedEvent(substepParent, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new SessionFinishedEvent(1000, true));
+
+        // 6. Verify executed step report details
+        final Path htmlPath = reportDir.toPath().resolve(reportListener.getLastBaseFileName() + ".html");
+        Assertions.assertTrue(Files.exists(htmlPath), "HTML report should be generated for mocked run");
+        final String htmlContent = Files.readString(htmlPath, StandardCharsets.UTF_8);
+        Assertions.assertTrue(htmlContent.contains("Click navigation menu"), "Report must contain substep instruction");
     }
 }
 
