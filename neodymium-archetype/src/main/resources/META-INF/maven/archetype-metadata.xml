@@ -38,7 +38,7 @@
         <fileSet filtered="false" encoding="UTF-8">
             <directory></directory>
             <includes>
-                <include>__gitignore__</include>
+                <include>gitignore</include>
                 <include>run-aura.sh</include>
                 <include>run-aura.bat</include>
             </includes>

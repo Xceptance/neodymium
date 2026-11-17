@@ -10,16 +10,16 @@ if (runScript.exists()) {
     }
 }
 
-File gitignore = new File(projectDir, "__gitignore__")
+File gitignore = new File(projectDir, "gitignore")
 if (!gitignore.exists()) {
-    gitignore = new File(request.getOutputDirectory(), "__gitignore__")
+    gitignore = new File(request.getOutputDirectory(), "gitignore")
 }
 if (gitignore.exists()) {
     File targetGitignore = new File(gitignore.getParentFile(), ".gitignore")
     if (!targetGitignore.exists()) {
         boolean renamed = gitignore.renameTo(targetGitignore)
         if (!renamed) {
-            System.err.println("[WARN] Could not rename __gitignore__ to .gitignore in " + gitignore.getParent())
+            System.err.println("[WARN] Could not rename gitignore to .gitignore in " + gitignore.getParent())
         }
     }
 }
