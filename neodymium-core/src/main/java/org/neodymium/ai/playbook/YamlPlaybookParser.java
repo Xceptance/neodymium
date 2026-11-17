@@ -328,7 +328,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                 {
                     final byte[] bytes = in.readAllBytes();
                     final String fileContent = new String(bytes, StandardCharsets.UTF_8);
-                    final String normalizedContent = AuraFileService.normalizeBlockScalars(fileContent);
+                    final String normalizedContent = AuraFileService.preprocessYamlSteps(fileContent);
                     final Yaml yaml = new Yaml();
                     final Object loadedObject = yaml.load(normalizedContent);
                     if (loadedObject instanceof Map<?, ?> loadedMap)
@@ -572,11 +572,25 @@ public final class YamlPlaybookParser implements PlaybookParser
 
             final byte[] bytes = in.readAllBytes();
             final String fileContent = new String(bytes, StandardCharsets.UTF_8);
-            final String normalizedContent = AuraFileService.normalizeBlockScalars(fileContent);
+            final String normalizedContent = AuraFileService.preprocessYamlSteps(fileContent);
             final String fileName = new File(identifier).getName();
 
             final Yaml yaml = new Yaml();
-            final Object loadedObject = yaml.load(normalizedContent);
+            final Object loadedObject;
+            try
+            {
+                loadedObject = yaml.load(normalizedContent);
+            }
+            catch (final Exception e)
+            {
+                if (e.getMessage() != null && (e.getMessage().contains("while parsing a block mapping") || e.getMessage().contains("while parsing a block collection")))
+                {
+                    throw new IOException("Error parsing YAML in playbook " + fileName + ": in YAML, square brackets '[...]' and colons (':') indicate flow sequences or mappings. "
+                        + "If your step contains CSS attribute selectors or colons, wrap the step instruction in quotes. "
+                        + "Original error: " + e.getMessage(), e);
+                }
+                throw new IOException("Failed to parse YAML playbook " + fileName + ": " + e.getMessage(), e);
+            }
 
             if (loadedObject == null)
             {
