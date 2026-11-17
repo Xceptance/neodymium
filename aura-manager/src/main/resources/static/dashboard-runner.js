@@ -207,6 +207,8 @@ window.updateRunButtons = updateRunButtons;
 function stopQueue() {
     userAborted = true;
     window.userAborted = true;
+    window._pendingRunStart = null;
+    window._runAlreadyAutoOpened = false;
     fetch('/api/stop', { method: 'POST' }).catch(e => console.error('Failed to stop queue', e));
     isRunning = false;
     window.isRunning = false;
@@ -224,9 +226,13 @@ function prepareClientForExecution() {
     isRunning = true;
     consoleOpened = true;
     consoleCollapsed = false;
+    lastKnownRunning = true;
     window.isRunning = true;
     window.consoleOpened = true;
     window.consoleCollapsed = false;
+    window.lastKnownRunning = true;
+    window._runAlreadyAutoOpened = true;
+    window._pendingRunStart = Date.now();
     currentPollSession++;
     lastLogIndex = 0;
     lastEventIndex = 0;
@@ -242,6 +248,14 @@ function prepareClientForExecution() {
     activeRunStats.tests = [];
     liveCompletedFiles.clear();
     liveLastActiveFile = null;
+
+    const summaryEl = document.getElementById('consoleMinimizedSummary');
+    if (summaryEl) {
+        summaryEl.innerHTML = `<span class="console-summary-running" style="display: inline-flex; align-items: center; gap: 4px;">
+            <span class="material-symbols-outlined spinner" style="font-size: 12px; color: var(--accent);">progress_activity</span>
+            <span id="consoleRunningText">Running tests...</span>
+        </span>`;
+    }
 
     const runSpinner = document.getElementById('runSpinner');
     const terminalConsole = document.getElementById('terminalConsole');
@@ -780,6 +794,85 @@ document.addEventListener('htmx:responseError', (evt) => {
     }
 });
 
+function safeEscape(str) {
+    if (typeof escapeHtml === 'function') return escapeHtml(str);
+    if (!str) return '';
+    return String(str).replace(/[&<>"']/g, function(m) {
+        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m];
+    });
+}
+
+function updateConsoleMinimizedSummary(statusData) {
+    const summaryEl = document.getElementById('consoleMinimizedSummary');
+    if (!summaryEl) return;
+
+    if (statusData.running) {
+        let runningText = '';
+        if (statusData.progressText) {
+            runningText = statusData.progressText.toLowerCase().startsWith('running')
+                ? statusData.progressText
+                : 'Running: ' + statusData.progressText;
+        } else if (statusData.total !== undefined && statusData.total > 0) {
+            const scheduled = statusData.scheduledCount || statusData.total;
+            runningText = `Running ${statusData.total} of ${scheduled} tests`;
+        } else {
+            runningText = 'Running tests...';
+        }
+        if (statusData.formattedDuration) {
+            runningText += ` (${statusData.formattedDuration})`;
+        }
+        summaryEl.innerHTML = `<span class="console-summary-running" style="display: inline-flex; align-items: center; gap: 4px;">
+            <span class="material-symbols-outlined spinner" style="font-size: 12px; color: var(--accent);">progress_activity</span>
+            <span id="consoleRunningText">${safeEscape(runningText)}</span>
+        </span>`;
+    } else {
+        if (isRunning && (!statusData.total || statusData.total === 0)) {
+            return;
+        }
+        const total = statusData.total || 0;
+        if (total > 0) {
+            const passed = statusData.passed || 0;
+            const failed = statusData.failed || 0;
+            const skipped = statusData.skipped || 0;
+            const duration = statusData.formattedDuration || '';
+
+            let html = '<span class="console-summary-label">Last Run:</span>';
+            let hasItem = false;
+
+            if (passed > 0) {
+                html += ` <span class="summary-pass" style="color: var(--success); font-weight: 500;">
+                    <span style="font-size: 8px; vertical-align: middle;">●</span> <span id="consolePassCount">${passed}</span> passed
+                </span>`;
+                hasItem = true;
+            }
+            if (failed > 0) {
+                if (hasItem) html += '<span style="color: var(--text-muted); margin: 0 2px;">·</span>';
+                html += ` <span class="summary-fail" style="color: var(--danger); font-weight: 500;">
+                    <span style="font-size: 8px; vertical-align: middle;">●</span> <span id="consoleFailCount">${failed}</span> failed
+                </span>`;
+                hasItem = true;
+            }
+            if (skipped > 0) {
+                if (hasItem) html += '<span style="color: var(--text-muted); margin: 0 2px;">·</span>';
+                html += ` <span class="summary-skip" style="color: var(--warning, #ff9800); font-weight: 500;">
+                    <span style="font-size: 8px; vertical-align: middle;">●</span> <span id="consoleSkipCount">${skipped}</span> skipped
+                </span>`;
+                hasItem = true;
+            }
+            if (!hasItem) {
+                html += ` <span style="color: var(--text-muted);">${total} tests completed</span>`;
+            }
+            if (duration) {
+                html += ` <span class="summary-duration" id="consoleDurationText" style="color: var(--text-muted); margin-left: 2px;">(${safeEscape(duration)})</span>`;
+            }
+            summaryEl.innerHTML = html;
+        } else {
+            summaryEl.innerHTML = '<span class="console-summary-idle" style="color: var(--text-muted);">Idle · Ready for execution</span>';
+        }
+    }
+}
+window.updateConsoleMinimizedSummary = updateConsoleMinimizedSummary;
+
 function startPolling() {
     if (pollingIntervalId) {
         clearTimeout(pollingIntervalId);
@@ -828,6 +921,18 @@ async function pollStatus() {
 
             if (data.status) {
                 const statusData = data.status;
+
+                if (window._pendingRunStart) {
+                    if (statusData.running) {
+                        window._pendingRunStart = null;
+                    } else if (Date.now() - window._pendingRunStart < 3000) {
+                        // Execution was just initiated on client; POST /api/run may still be in transit.
+                        // Skip this transient idle response and re-poll quickly.
+                        return;
+                    } else {
+                        window._pendingRunStart = null;
+                    }
+                }
 
                 if (statusData.tests) {
                     activeRunStats.tests = statusData.tests;
@@ -958,6 +1063,8 @@ async function pollStatus() {
                     window._lastStatsStr = currentStatsStr;
                 }
 
+                updateConsoleMinimizedSummary(statusData);
+
                 try {
                     const wasRunning = lastKnownRunning;
                     isRunning = statusData.running;
@@ -965,8 +1072,9 @@ async function pollStatus() {
                     updateRunButtons();
                     const runSpinner = document.getElementById('runSpinner');
                     if (isRunning) {
-                        if (!wasRunning) {
-                            // Test execution newly detected or just started -> automatically open console
+                        if (!wasRunning && !window._runAlreadyAutoOpened) {
+                            // Test execution newly detected or just started -> automatically open console once
+                            window._runAlreadyAutoOpened = true;
                             consoleCollapsed = false;
                             window.consoleCollapsed = false;
                             if (typeof updateCenterLayout === 'function') updateCenterLayout();
@@ -989,6 +1097,7 @@ async function pollStatus() {
                             sidebarBadge.innerHTML = `<span class="material-symbols-outlined spinner">progress_activity</span> ${statusData.passed + statusData.failed + (statusData.skipped || 0) + 1}/${testsCount}`;
                         }
                     } else {
+                        window._runAlreadyAutoOpened = false;
                         if (runSpinner) runSpinner.style.display = 'none';
                         const sidebarBadge = document.getElementById('sidebarRunBadge');
                         if (sidebarBadge) sidebarBadge.style.display = 'none';
@@ -1049,7 +1158,8 @@ async function pollStatus() {
     } finally {
         if (thisSession !== currentPollSession) return;
         if (!disconnected) {
-            pollingIntervalId = setTimeout(pollStatus, 2000);
+            const nextDelay = window._pendingRunStart ? 300 : 2000;
+            pollingIntervalId = setTimeout(pollStatus, nextDelay);
         }
     }
 }

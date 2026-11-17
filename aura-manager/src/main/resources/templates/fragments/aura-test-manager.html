@@ -49,9 +49,37 @@
                  th:style="${running ? 'display: flex; height: 280px;' : 'display: flex; height: 38px;'}">
                 <div class="terminal-panel">
                     <div class="neo-u-20" onclick="toggleConsoleCollapse()" style="cursor: pointer; user-select: none;">
-                        <div style="display: flex; align-items: center; gap: 6px;">
+                        <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
                             <span class="material-symbols-outlined" style="font-size: 16px; color: var(--accent);">terminal</span>
                             <span>TERMINAL OUTPUT <span class="neo-u-1" id="runSpinner" th:style="${running ? 'display: inline-block;' : 'display: none;'}"><span class="material-symbols-outlined spinner neo-u-21">progress_activity</span></span></span>
+                        </div>
+                        <div id="consoleMinimizedSummary" class="console-minimized-summary">
+                            <th:block th:if="${running}">
+                                <span class="console-summary-running" style="display: inline-flex; align-items: center; gap: 4px;">
+                                    <span class="material-symbols-outlined spinner" style="font-size: 12px; color: var(--accent);">progress_activity</span>
+                                    <span id="consoleRunningText" th:text="${'Running ' + (total != null ? total : 0) + ' tests' + (formattedDuration != null and !formattedDuration.isEmpty() ? ' (' + formattedDuration + ')' : '')}">Running...</span>
+                                </span>
+                            </th:block>
+                            <th:block th:unless="${running}">
+                                <th:block th:if="${total != null and total > 0}">
+                                    <span class="console-summary-label">Last Run:</span>
+                                    <span th:if="${passed != null and passed > 0}" class="summary-pass" style="color: var(--success); font-weight: 500;">
+                                        <span style="font-size: 8px; vertical-align: middle;">●</span> <span id="consolePassCount" th:text="${passed}">0</span> passed
+                                    </span>
+                                    <span th:if="${failed != null and failed > 0}" class="summary-fail" style="color: var(--danger); font-weight: 500;">
+                                        <span style="color: var(--text-muted); margin: 0 2px;">·</span>
+                                        <span style="font-size: 8px; vertical-align: middle;">●</span> <span id="consoleFailCount" th:text="${failed}">0</span> failed
+                                    </span>
+                                    <span th:if="${skipped != null and skipped > 0}" class="summary-skip" style="color: var(--warning, #ff9800); font-weight: 500;">
+                                        <span style="color: var(--text-muted); margin: 0 2px;">·</span>
+                                        <span style="font-size: 8px; vertical-align: middle;">●</span> <span id="consoleSkipCount" th:text="${skipped}">0</span> skipped
+                                    </span>
+                                    <span class="summary-duration" id="consoleDurationText" style="color: var(--text-muted); margin-left: 2px;" th:text="${formattedDuration != null and !formattedDuration.isEmpty() ? '(' + formattedDuration + ')' : ''}"></span>
+                                </th:block>
+                                <th:block th:unless="${total != null and total > 0}">
+                                    <span class="console-summary-idle" style="color: var(--text-muted);">Idle · Ready for execution</span>
+                                </th:block>
+                            </th:block>
                         </div>
                         <div class="neo-u-22" onclick="event.stopPropagation();">
                             <span class="console-expanded-controls" style="display: inline-flex; align-items: center; gap: 12px;">

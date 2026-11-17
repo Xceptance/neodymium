@@ -267,10 +267,32 @@
             margin-bottom: 0 !important;
             align-items: center;
             width: 100%;
+            opacity: 0.9;
         }
 
         #consolePanel.console-collapsed:hover .neo-u-20 {
             opacity: 1;
+        }
+
+        .console-minimized-summary {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: var(--text-secondary, #9e9e9e);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            user-select: none;
+            max-width: 60%;
+        }
+
+        #consolePanel.console-collapsed .console-minimized-summary {
+            display: inline-flex;
+        }
+
+        #consolePanel:not(.console-collapsed) .console-minimized-summary {
+            display: none !important;
         }
 
         .col-minimized {

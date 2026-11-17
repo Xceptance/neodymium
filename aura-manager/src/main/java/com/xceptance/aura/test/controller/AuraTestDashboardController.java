@@ -147,6 +147,18 @@ public class AuraTestDashboardController
         model.addAttribute("failed", queueController.getGlobalFailed());
         model.addAttribute("skipped", queueController.getGlobalSkipped());
 
+        final long durationMs;
+        if (running && queueController.getRunStartTimeMs() > 0)
+        {
+            durationMs = Math.max(0, System.currentTimeMillis() - queueController.getRunStartTimeMs());
+        }
+        else
+        {
+            durationMs = queueController.getLastRunDurationMs();
+        }
+        model.addAttribute("durationMs", durationMs);
+        model.addAttribute("formattedDuration", AuraTestQueueController.formatDuration(durationMs));
+
         final String rawFile = (file != null && !file.isBlank()) ? file : fileService.getActiveEditingFile();
         final String activeFileToUse = (rawFile != null && rawFile.contains(",")) ? rawFile.split(",")[0].trim() : rawFile;
         if (activeFileToUse != null && !activeFileToUse.isBlank())
