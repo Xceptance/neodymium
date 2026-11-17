@@ -220,6 +220,168 @@ function stopQueue() {
 }
 window.stopQueue = stopQueue;
 
+// ============================================================================
+// Neodymium Aura AI - API Key Pre-Flight Verification & Session Dismissal
+// ============================================================================
+
+let pendingRunCallback = null;
+
+function getAuraAppConfig() {
+    const configEl = document.getElementById('auraAppConfig');
+    let hasKey = window.AURA_HAS_API_KEY;
+    let ignored = window.AURA_API_KEY_WARNING_IGNORED;
+    let projId = window.AURA_PROJECT_ID;
+
+    if (configEl) {
+        if (hasKey === undefined) {
+            hasKey = configEl.getAttribute('data-has-api-key') === 'true';
+            window.AURA_HAS_API_KEY = hasKey;
+        }
+        if (ignored === undefined) {
+            ignored = configEl.getAttribute('data-api-key-warning-ignored') === 'true';
+            window.AURA_API_KEY_WARNING_IGNORED = ignored;
+        }
+        if (!projId) {
+            projId = configEl.getAttribute('data-project-id') || '';
+            window.AURA_PROJECT_ID = projId;
+        }
+    }
+
+    return {
+        hasApiKey: !!window.AURA_HAS_API_KEY,
+        warningIgnored: !!window.AURA_API_KEY_WARNING_IGNORED,
+        projectId: window.AURA_PROJECT_ID || ''
+    };
+}
+window.getAuraAppConfig = getAuraAppConfig;
+
+function isApiKeyWarningIgnored() {
+    const cfg = getAuraAppConfig();
+    if (cfg.warningIgnored) {
+        return true;
+    }
+    if (cfg.projectId) {
+        const stored = sessionStorage.getItem('neodymium_aura_ignore_api_key_' + cfg.projectId);
+        if (stored === 'true') {
+            window.AURA_API_KEY_WARNING_IGNORED = true;
+            return true;
+        }
+    }
+    return false;
+}
+window.isApiKeyWarningIgnored = isApiKeyWarningIgnored;
+
+function hasConfiguredApiKey() {
+    const cfg = getAuraAppConfig();
+    return cfg.hasApiKey;
+}
+window.hasConfiguredApiKey = hasConfiguredApiKey;
+
+function showApiKeyWarningModal() {
+    const modal = document.getElementById('apiKeyWarningModal');
+    if (modal) {
+        modal.style.display = 'flex';
+    }
+}
+window.showApiKeyWarningModal = showApiKeyWarningModal;
+
+function closeApiKeyWarningModal() {
+    const modal = document.getElementById('apiKeyWarningModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+window.closeApiKeyWarningModal = closeApiKeyWarningModal;
+
+function checkApiKeyBeforeRun(event, callback) {
+    if (hasConfiguredApiKey() || isApiKeyWarningIgnored()) {
+        return true;
+    }
+
+    if (event) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+    }
+
+    pendingRunCallback = callback || null;
+    showApiKeyWarningModal();
+    return false;
+}
+window.checkApiKeyBeforeRun = checkApiKeyBeforeRun;
+
+function triggerRunQueue() {
+    prepareClientForExecution();
+    if (typeof htmx !== 'undefined') {
+        htmx.ajax('POST', '/api/run', { swap: 'none' });
+    }
+}
+window.triggerRunQueue = triggerRunQueue;
+
+function triggerRunCurrentTest() {
+    prepareClientForExecution();
+    if (typeof htmx !== 'undefined') {
+        htmx.ajax('POST', '/api/run?runCurrent=true', { swap: 'none' });
+    }
+}
+window.triggerRunCurrentTest = triggerRunCurrentTest;
+
+async function ignoreApiKeyWarningAndRun() {
+    closeApiKeyWarningModal();
+    window.AURA_API_KEY_WARNING_IGNORED = true;
+    const cfg = getAuraAppConfig();
+    if (cfg.projectId) {
+        sessionStorage.setItem('neodymium_aura_ignore_api_key_' + cfg.projectId, 'true');
+    }
+
+    try {
+        await fetch('/api/settings/ignore-api-key-warning', { method: 'POST' });
+    } catch (e) {
+        console.warn('Failed to register ignored warning on server:', e);
+    }
+
+    if (typeof pendingRunCallback === 'function') {
+        const cb = pendingRunCallback;
+        pendingRunCallback = null;
+        cb();
+    } else {
+        triggerRunQueue();
+    }
+}
+window.ignoreApiKeyWarningAndRun = ignoreApiKeyWarningAndRun;
+
+function openSettingsForApiKey() {
+    closeApiKeyWarningModal();
+    pendingRunCallback = null;
+    if (typeof openSettingsModal === 'function') {
+        openSettingsModal();
+        setTimeout(() => {
+            if (typeof switchSettingsTab === 'function') {
+                switchSettingsTab('general');
+            }
+            const aiCard = document.getElementById('group-ai-properties');
+            if (aiCard) {
+                const content = aiCard.querySelector('.settings-group-content');
+                const arrow = aiCard.querySelector('.accordion-arrow');
+                if (content) content.style.display = 'block';
+                if (arrow) arrow.classList.add('open');
+            }
+            const searchInput = document.getElementById('settingsSearchInput');
+            if (searchInput) {
+                searchInput.value = 'apiKey';
+                if (typeof filterSettingsProperties === 'function') {
+                    filterSettingsProperties('apiKey');
+                }
+            }
+            const keyInput = document.querySelector('input[name*="neodymium.ai.apiKey"]');
+            if (keyInput) {
+                keyInput.focus();
+                keyInput.select();
+            }
+        }, 300);
+    }
+}
+window.openSettingsForApiKey = openSettingsForApiKey;
+
 function prepareClientForExecution() {
     userAborted = false;
     window.userAborted = false;
@@ -275,6 +437,7 @@ window.prepareClientForExecution = prepareClientForExecution;
 
 async function rerunFullRun(runConfigJson) {
     if (isRunning) return;
+    if (!checkApiKeyBeforeRun(null, () => rerunFullRun(runConfigJson))) return;
     let payload;
     try {
         payload = JSON.parse(runConfigJson);
