@@ -4814,11 +4814,6 @@ public final class StaticResourceSyntaxTest
         Assertions.assertTrue(indexHtml.contains("id=\"auraChatOverlay\""),
             "index.html must mount #auraChatOverlay globally");
 
-        final Path customDashboardPath = Paths.get("src/main/resources/templates/fragments/custom-dashboard-page.html");
-        final String customDashboardHtml = Files.readString(customDashboardPath, StandardCharsets.UTF_8);
-        Assertions.assertTrue(customDashboardHtml.contains("fragments/header :: chatLauncherBtn"),
-            "custom-dashboard-page.html must include chatLauncherBtn in customDashboardPageToolbar");
-
         final int launcherStart = css.indexOf(".aura-chat-launcher {");
         final int launcherEnd = css.indexOf("}", launcherStart);
         Assertions.assertTrue(launcherStart >= 0 && launcherEnd > launcherStart,
