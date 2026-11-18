@@ -4832,6 +4832,23 @@ public final class StaticResourceSyntaxTest
     }
 
     @Test
+    public void testDashboardEditorNavigationInterceptorExemptsAiChatAndEditor() throws Exception
+    {
+        final Path editorJsPath = Paths.get("src/main/resources/static/dashboard-editor.js");
+        Assertions.assertTrue(Files.exists(editorJsPath), "dashboard-editor.js must exist: " + editorJsPath.toAbsolutePath());
+        final String editorJsContent = Files.readString(editorJsPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(
+            editorJsContent.contains("if (e.target.closest('.modal-overlay, .modal-card, #editorPanel, #auraChatOverlay, .aura-chat-overlay, .aura-chat-launcher')) return;"),
+            "dashboard-editor.js navigation click interceptor must ignore clicks inside editor panel and Aura AI Assistant overlay/launcher"
+        );
+        Assertions.assertTrue(
+            editorJsContent.contains("if (link.closest('#editorPanel, #auraChatOverlay, .aura-chat-overlay, .aura-chat-launcher')) return;"),
+            "dashboard-editor.js navigation click interceptor must not treat links or forms within editor panel or AI Assistant as navigating away"
+        );
+    }
+
+    @Test
     public void testGenerateFullTestDiagnosticsMarkdownWithInlinedAttachmentsAndLocalArtifacts() throws Exception
     {
         final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");

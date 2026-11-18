@@ -1727,15 +1727,19 @@ document.addEventListener('click', function(e) {
     const activeFile = activeEditingFile || window.activeEditingFile;
     if (!activeFile) return;
 
+    // Ignore clicks inside modal overlays, the editor itself, or the Aura AI Assistant overlay/launcher
+    if (e.target.closest('.modal-overlay, .modal-card, #editorPanel, #auraChatOverlay, .aura-chat-overlay, .aura-chat-launcher')) return;
+
     const link = e.target.closest('a[href], [hx-get], [hx-post]');
     if (!link) return;
+
+    // Do not intercept clicks originating from or targeting within the editor panel or AI Assistant
+    if (link.closest('#editorPanel, #auraChatOverlay, .aura-chat-overlay, .aura-chat-launcher')) return;
 
     const isCloseAction = link.id === 'closeEditorBtn' 
         || link.getAttribute('onclick') === 'closeEditor()' 
         || (link.closest('#editorPanel') && link.classList.contains('btn-editor') && link.textContent && link.textContent.trim().includes('Close'));
     if (isCloseAction) return;
-
-    if (e.target.closest('.modal-overlay, .modal-card')) return;
 
     const href = link.getAttribute('href');
     const hxGet = link.getAttribute('hx-get');
