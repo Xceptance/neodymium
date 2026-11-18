@@ -18,8 +18,10 @@
  */
 package com.xceptance.aura.test.controller;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.xceptance.aura.mcp.config.AuraMcpProperties;
 import com.xceptance.aura.mcp.session.McpSubscriptionManager;
+import com.xceptance.aura.mcp.tool.AuraAnalyticsToolService;
 import com.xceptance.aura.mcp.tool.AuraMcpToolService;
 import com.xceptance.neodymium.aura.AuraSettingsService;
 import com.xceptance.neodymium.aura.AuraSettingsService.SettingsDataDto;
@@ -27,10 +29,14 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.ai.mcp.annotation.McpTool;
+import org.springframework.ai.mcp.annotation.McpToolParam;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.ui.ConcurrentModel;
@@ -151,6 +157,66 @@ public class AuraTestSettingsControllerTest
         final Map<String, Object> body = response.getBody();
         Assertions.assertNotNull(body);
         Assertions.assertEquals(true, body.get("enabled"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testGetSettingsModalIncludesAnalyticsToolsWhenConfigured()
+    {
+        final AuraAnalyticsToolService analyticsToolService = Mockito.mock(AuraAnalyticsToolService.class);
+        final AuraTestSettingsController fullController = new AuraTestSettingsController(
+                settingsService, mcpProperties, subscriptionManager, toolService, analyticsToolService);
+
+        final Model model = new ConcurrentModel();
+        fullController.getSettingsModal("mcp", model);
+
+        Assertions.assertEquals(15, model.getAttribute("mcpToolsCount"));
+        final List<Map<String, String>> tools = (List<Map<String, String>>) model.getAttribute("mcpToolsList");
+        Assertions.assertNotNull(tools);
+        final Set<String> toolNames = tools.stream()
+                .map(t -> t.get("name"))
+                .collect(Collectors.toSet());
+        Assertions.assertTrue(toolNames.containsAll(Set.of(
+                "list_tests",
+                "list_custom_dashboards",
+                "analyze_dashboard_page",
+                "list_runs",
+                "list_batches")));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testBeanFactoryConstructorDiscoversCustomMcpToolsAndJsonPropertyNames()
+    {
+        final StaticListableBeanFactory beanFactory = new StaticListableBeanFactory();
+        beanFactory.addBean("toolService", toolService);
+        beanFactory.addBean("customTools", new SampleCustomToolBean());
+
+        final AuraTestSettingsController beanFactoryController = new AuraTestSettingsController(
+                settingsService, mcpProperties, subscriptionManager, beanFactory);
+
+        final Model model = new ConcurrentModel();
+        beanFactoryController.getSettingsModal("mcp", model);
+
+        Assertions.assertEquals(12, model.getAttribute("mcpToolsCount"));
+        final List<Map<String, String>> tools = (List<Map<String, String>>) model.getAttribute("mcpToolsList");
+        Assertions.assertNotNull(tools);
+        final Map<String, String> customTool = tools.stream()
+                .filter(t -> "custom_echo".equals(t.get("name")))
+                .findFirst()
+                .orElseThrow();
+        Assertions.assertEquals("echo_text (Text to echo)", customTool.get("parameters"));
+    }
+
+    private static final class SampleCustomToolBean
+    {
+        @McpTool(name = "custom_echo", description = "Echoes text")
+        public String echo(
+                @JsonProperty("echo_text")
+                @McpToolParam(required = true, description = "Text to echo") final String rawText)
+        {
+            return rawText;
+        }
     }
 
     @Test

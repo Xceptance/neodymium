@@ -3,6 +3,17 @@
 <head></head>
 <body>
 
+<!-- Shared Neodymium AI Launcher Button Fragment -->
+<th:block th:fragment="chatLauncherBtn">
+    <button type="button" id="auraChatLauncher" class="aura-chat-launcher" onclick="toggleAuraChat()" title="Open Neodymium AI Assistant">
+        <span class="aura-chat-launcher-icon">
+            <span class="material-symbols-outlined">auto_awesome</span>
+        </span>
+        <span class="aura-chat-launcher-label">Neodymium AI</span>
+        <span class="aura-chat-launcher-badge" id="chatBadgeDot"></span>
+    </button>
+</th:block>
+
 <!-- Top Header Fragment -->
 <header th:fragment="header" id="appHeader">
     <!-- Test Manager Section Header Content -->
@@ -18,6 +29,7 @@
             <button class="btn-edit btn-secondary" id="btnInteractiveConsole" onclick="openInteractiveConsoleViewLive('/interactive_console.html')" title="Switch to Interactive Console" style="display: none; padding: 0.35rem 0.75rem; font-size: 0.85rem; align-items: center; gap: 0.35rem;" th:style="${running and (interactive != null and interactive) ? 'display: inline-flex; padding: 0.35rem 0.75rem; font-size: 0.85rem; align-items: center; gap: 0.35rem;' : 'display: none; padding: 0.35rem 0.75rem; font-size: 0.85rem; align-items: center; gap: 0.35rem;'}">
                 <span class="material-symbols-outlined text-accent" style="font-size: 1.1rem;">terminal</span> Interactive Console
             </button>
+            <th:block th:replace="~{fragments/header :: chatLauncherBtn}"></th:block>
             <button class="btn-edit btn-secondary" id="settingsBtn" onclick="openSettingsModal()" title="Settings" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 0.35rem;">
                 <span class="material-symbols-outlined" style="font-size: 1.1rem;">settings</span> Settings
             </button>
@@ -57,6 +69,7 @@
                     title="Refresh reports and re-sync database">
                 <span class="material-symbols-outlined">refresh</span> Refresh
             </button>
+            <th:block th:replace="~{fragments/header :: chatLauncherBtn}"></th:block>
             <div class="d-flex align-items-center gap-1" id="themeContainer" th:fragment="themeContainer" style="background: var(--bg-main); padding: 2px; border-radius: 6px; border: 1px solid var(--border-color);">
                 <button class="btn-edit" id="themeLight" onclick="changeTheme('light')" title="Light Mode" style="padding: 2px 6px; border: none; background: transparent;"><span class="material-symbols-outlined" style="font-size: 1rem;">light_mode</span></button>
                 <button class="btn-edit" id="themeDark" onclick="changeTheme('dark')" title="Dark Mode" style="padding: 2px 6px; border: none; background: transparent;"><span class="material-symbols-outlined" style="font-size: 1rem;">dark_mode</span></button>

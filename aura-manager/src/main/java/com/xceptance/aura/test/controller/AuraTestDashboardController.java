@@ -18,11 +18,9 @@
  */
 package com.xceptance.aura.test.controller;
 
-import com.xceptance.neodymium.aura.AuraChatSessionService;
 import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.AuraSettingsService;
-import com.xceptance.neodymium.aura.dto.ChatSessionDto;
 import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -50,28 +48,24 @@ public class AuraTestDashboardController
 {
     private final AuraInteractiveService interactiveService;
     private final AuraFileService fileService;
-    private final AuraChatSessionService sessionService;
     private final AuraTestQueueController queueController;
     private final AuraSettingsService settingsService;
 
     public AuraTestDashboardController(final AuraInteractiveService interactiveService,
                                         final AuraFileService fileService,
-                                        final AuraChatSessionService sessionService,
                                         final AuraTestQueueController queueController)
     {
-        this(interactiveService, fileService, sessionService, queueController, null);
+        this(interactiveService, fileService, queueController, null);
     }
 
     @Autowired
     public AuraTestDashboardController(final AuraInteractiveService interactiveService,
                                         final AuraFileService fileService,
-                                        final AuraChatSessionService sessionService,
                                         final AuraTestQueueController queueController,
                                         @Autowired(required = false) final AuraSettingsService settingsService)
     {
         this.interactiveService = interactiveService;
         this.fileService = fileService;
-        this.sessionService = sessionService;
         this.queueController = queueController;
         this.settingsService = settingsService != null ? settingsService : new AuraSettingsService();
     }
@@ -146,12 +140,6 @@ public class AuraTestDashboardController
         model.addAttribute("totalRuns", queueController.getTotalExecutionRuns());
         model.addAttribute("queueController", queueController);
         model.addAttribute("runTags", queueController.getRunTags());
-
-        final List<ChatSessionDto> chatSessions = sessionService != null ? sessionService.getSessions() : List.of();
-        final String currentSessionId = chatSessions.isEmpty() ? "" : chatSessions.get(0).id;
-        model.addAttribute("chatSessions", chatSessions);
-        model.addAttribute("currentSessionId", currentSessionId);
-        model.addAttribute("chatMessages", chatSessions.isEmpty() ? List.of() : chatSessions.get(0).messages);
 
         final boolean running = queueController.isRunning();
         model.addAttribute("running", running);

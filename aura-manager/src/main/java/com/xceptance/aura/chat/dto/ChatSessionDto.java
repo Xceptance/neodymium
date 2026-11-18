@@ -16,32 +16,72 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.xceptance.neodymium.aura.dto;
+package com.xceptance.aura.chat.dto;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Data transfer object representing an AI chat session and its full message history.
+ * Data transfer object representing an AI chat session and its persisted message history.
  *
- * @author AI-generated: Antigravity
+ * @author AI-generated: Gemini 4 Hydrogen
  * @author Xceptance GmbH 2026
  */
 public final class ChatSessionDto
 {
+    /**
+     * Unique session identifier.
+     */
     public String id;
+
+    /**
+     * Human-readable session name.
+     */
     public String name;
+
+    /**
+     * Ordered list of messages in this session.
+     */
     public List<ChatMessageDto> messages;
 
+    /**
+     * Epoch timestamp in milliseconds of the most recent update (creation, rename, or message append).
+     */
+    public long updatedAt;
+
+    /**
+     * Default constructor initializing an empty message list.
+     */
     public ChatSessionDto()
     {
         this.messages = new ArrayList<>();
     }
 
+    /**
+     * Creates a chat session with the given metadata and messages.
+     *
+     * @param id unique session identifier
+     * @param name display name
+     * @param messages initial message history
+     */
     public ChatSessionDto(final String id, final String name, final List<ChatMessageDto> messages)
+    {
+        this(id, name, messages, 0L);
+    }
+
+    /**
+     * Creates a chat session with explicit last-updated timestamp metadata.
+     *
+     * @param id unique session identifier
+     * @param name display name
+     * @param messages initial message history
+     * @param updatedAt last update timestamp in epoch milliseconds
+     */
+    public ChatSessionDto(final String id, final String name, final List<ChatMessageDto> messages, final long updatedAt)
     {
         this.id = id;
         this.name = name;
         this.messages = messages != null ? messages : new ArrayList<>();
+        this.updatedAt = updatedAt;
     }
 }

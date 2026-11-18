@@ -115,7 +115,7 @@ function showWarning(msg) {
     const banner = document.getElementById('warningBanner');
     const bannerText = document.getElementById('warningBannerText');
     if (banner && bannerText) {
-        bannerText.innerHTML = msg;
+        bannerText.textContent = msg;
         banner.style.display = 'block';
         setTimeout(() => {
             banner.style.display = 'none';
@@ -1026,16 +1026,33 @@ function init() {
     });
 
     document.addEventListener('htmx:responseError', function(evt) {
-        const xhr = evt.detail.xhr;
-        let errorMsg = 'Server returned HTTP ' + xhr.status;
-        try {
-            const data = JSON.parse(xhr.responseText);
-            if (data && data.error) {
-                errorMsg = data.error;
+        const detail = evt ? evt.detail : null;
+        const xhr = detail ? detail.xhr : null;
+        let errorMsg = 'Server returned HTTP ' + (xhr && xhr.status ? xhr.status : 'Error');
+        if (xhr && xhr.responseText) {
+            try {
+                const data = JSON.parse(xhr.responseText);
+                if (data && data.error) {
+                    errorMsg = data.error;
+                } else {
+                    const plain = xhr.responseText.trim();
+                    if (plain && !plain.startsWith('<')) {
+                        errorMsg = plain.slice(0, 300);
+                    }
+                }
+            } catch (e) {
+                const plain = xhr.responseText.trim();
+                if (plain && !plain.startsWith('<')) {
+                    errorMsg = plain.slice(0, 300);
+                }
             }
-        } catch(e) {}
-        
+        }
+
         showWarning(errorMsg);
+    });
+
+    document.addEventListener('htmx:sendError', function(evt) {
+        showWarning('Network error communicating with server.');
     });
 
     if (typeof syncStateFromQueueContainer === 'function') syncStateFromQueueContainer();
@@ -1044,44 +1061,32 @@ function init() {
         const data = evt.detail;
         if (!data) return;
 
-        if (data.action === 'select_tests') {
-            if (data.selectedDatasets) {
-                selectedDatasets = data.selectedDatasets;
-                window.selectedDatasets = selectedDatasets;
-            } else if (data.files) {
-                selectedDatasets = [];
-                data.files.forEach(file => {
-                    const fileDto = currentFilesListCached.find(f => f.file === file);
-                    if (fileDto && fileDto.datasets) {
-                        fileDto.datasets.forEach(d => {
-                            selectedDatasets.push({ file, id: d.id });
-                        });
-                    }
-                });
-                window.selectedDatasets = selectedDatasets;
-            }
-            if (typeof loadFiles === 'function') await loadFiles();
-            if (typeof updateQueueList === 'function') updateQueueList();
-        } else if (data.action === 'edit_or_create_test' && data.filename && data.content) {
-            if (typeof loadFiles === 'function') await loadFiles();
-            activeEditingFile = data.filename;
-            window.activeEditingFile = activeEditingFile;
-            if (getEditorFileName()) getEditorFileName().innerText = data.filename;
-            if (getEditorContent()) getEditorContent().value = data.content;
-            if (typeof updateCenterLayout === 'function') updateCenterLayout();
-            if (getEditorContent()) getEditorContent().focus();
-        } else if (data.action === 'select_browser' || data.selectedBrowserProfiles) {
-            if (window.htmx) {
-                window.htmx.ajax('GET', '/', {
-                    target: '#configPanel',
-                    select: '#configPanel',
-                    swap: 'outerHTML'
-                });
-                window.htmx.ajax('GET', '/', {
+        const actions = Array.isArray(data.actions) && data.actions.length > 0
+            ? data.actions
+            : (data.action ? [data.action] : []);
+
+        if (actions.includes('refresh_files')) {
+            if (typeof loadFiles === 'function' && document.getElementById('yamlFileList')) await loadFiles();
+        }
+        if (actions.includes('refresh_runs')) {
+            if (window.htmx && document.getElementById('queueListContainer')) {
+                window.htmx.ajax('GET', '/playbooks', {
                     target: '#queueListContainer',
                     select: '#queueListContainer',
+                    swap: 'outerHTML'
+                });
+            } else if (window.htmx && document.getElementById('mainViewContainer')
+                    && (document.getElementById('pageCustomDashboard') || document.getElementById('pageBatchHistoryOverview'))) {
+                window.htmx.ajax('POST', '/runs/refresh', {
+                    target: '#mainViewContainer',
                     swap: 'innerHTML'
                 });
+            }
+            if (typeof pollStatus === 'function') {
+                pollStatus();
+            }
+            if (typeof showToast === 'function') {
+                showToast('Run status updated via Aura AI Assistant.');
             }
         }
     });
@@ -1097,11 +1102,6 @@ function init() {
         if (evt.detail.target.id === 'chatMessages' || evt.detail.target.id === 'chatContainer') {
             if (typeof scrollToBottom === 'function') scrollToBottom();
         }
-    });
-
-    document.body.addEventListener('htmx:responseError', function(evt) {
-        const thinkingBubbles = document.querySelectorAll('.thinking-bubble');
-        thinkingBubbles.forEach(el => el.remove());
     });
 }
 window.init = init;
