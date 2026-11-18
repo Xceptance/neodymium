@@ -1,5 +1,11 @@
 # Neodymium YAML Test Data File
 
+tags:
+  area: Account
+  feature: Authentication
+  type: Negative
+  severity: Major
+
 before: |
   Open https://posters.xceptance.io:8443/
   _include: fragments/cookie_consent.steps
@@ -21,11 +27,17 @@ data:
     testId: "invalid_password"
     invalidEmail: "peter.peterson@varmail.de"
     invalidPassword: "IncorrectPassword999!"
+    tags:
+      errorType: wrong_password
   -
     testId: "invalid_mail"
     invalidEmail: "peter.peterson@varmail.net"
     invalidPassword: "topsecret"
+    tags:
+      errorType: wrong_domain
   -
     testId: "invalid_account"
     invalidEmail: "peter.peterson@varmail.net"
     invalidPassword: "IncorrectPassword999!"
+    tags:
+      errorType: nonexistent_user

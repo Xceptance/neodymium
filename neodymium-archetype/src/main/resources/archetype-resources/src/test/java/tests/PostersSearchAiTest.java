@@ -1,5 +1,6 @@
 package ${package}.tests;
 
+import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.common.browser.Browser;
@@ -16,6 +17,9 @@ import org.neodymium.junit5.NeodymiumTest;
 @Browser("Chrome_1500x1000")
 @AiPlaybook("tests/posters_search.yaml")
 @NeodymiumAiTest
+@Tag("regression")
+@Tag("catalog")
+@Tag("search")
 public class PostersSearchAiTest
 {
     /**

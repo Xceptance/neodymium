@@ -70,6 +70,28 @@ Run headlessly (e.g. in CI pipelines or Docker):
 mvn test -Dbrowserprofile.global.headless=true
 ```
 
+${h2} Test Categorization and Reporting Tags
+
+Each test runner and YAML playbook includes tags to showcase test organization and reporting capabilities in the **Aura Dashboard** (area breakdown, feature metrics, and tag-filtered test runs):
+
+- **`PostersHomepageAiTest`** (`@Tag("smoke")`, `@Tag("browsing")`, `@Tag("homepage")`): Smoke validation for the storefront browsing area.
+- **`PostersSearchAiTest`** (`@Tag("regression")`, `@Tag("catalog")`, `@Tag("search")`): Regression suite covering the catalog search area with dataset-specific category tags (`art`, `outdoor`, `wildlife`, `vehicles`).
+- **`PostersRegistrationAiTest`** (`@Tag("e2e")`, `@Tag("account")`, `@Tag("registration")`): End-to-end critical user journey for account creation and cleanup.
+- **`PostersNegativeLoginAiTest`** (`@Tag("negative")`, `@Tag("account")`, `@Tag("login")`): Negative authentication tests with dataset-specific error classifications (`wrong_password`, `wrong_domain`, `nonexistent_user`).
+
+Filter test execution by JUnit tags using Maven:
+
+```bash
+# Run only smoke tests
+mvn test -Dgroups="smoke"
+
+# Run all tests in the account area
+mvn test -Dgroups="account"
+
+# Exclude negative tests from a standard run
+mvn test -Dgroups="!negative"
+```
+
 ${h2} Configuration
 
 - `config/neodymium.properties`: Base URLs, timeouts, screenshot capture behavior, and debugging flags.
