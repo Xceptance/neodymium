@@ -4782,12 +4782,16 @@ public final class StaticResourceSyntaxTest
         final Path indexPath = Paths.get("src/main/resources/templates/index.html");
         final Path headerPath = Paths.get("src/main/resources/templates/fragments/header.html");
         final Path managerPath = Paths.get("src/main/resources/templates/fragments/aura-test-manager.html");
+        final Path customDashboardPath = Paths.get("src/main/resources/templates/fragments/custom-dashboard-page.html");
         final Path cssPath = Paths.get("src/main/resources/static/dashboard-styles.css");
+        final Path reportCssPath = Paths.get("src/main/resources/static/css/report-manager.css");
 
         final String indexHtml = Files.readString(indexPath, StandardCharsets.UTF_8);
         final String headerHtml = Files.readString(headerPath, StandardCharsets.UTF_8);
         final String managerHtml = Files.readString(managerPath, StandardCharsets.UTF_8);
+        final String customDashboardHtml = Files.readString(customDashboardPath, StandardCharsets.UTF_8);
         final String css = Files.readString(cssPath, StandardCharsets.UTF_8);
+        final String reportCss = Files.readString(reportCssPath, StandardCharsets.UTF_8);
 
         Assertions.assertTrue(headerHtml.contains("id=\"auraChatLauncher\""),
             "header.html must define #auraChatLauncher");
@@ -4796,6 +4800,12 @@ public final class StaticResourceSyntaxTest
         final int launcherUses = headerHtml.split("fragments/header :: chatLauncherBtn", -1).length - 1;
         Assertions.assertEquals(2, launcherUses,
             "header.html must include chatLauncherBtn in both AuraTestManager and Report/Dashboard header blocks");
+        Assertions.assertTrue(customDashboardHtml.contains("fragments/header :: chatLauncherBtn"),
+            "custom-dashboard-page.html must include chatLauncherBtn in #customDashboardPageToolbar because #appHeader is hidden on custom dashboards");
+        Assertions.assertTrue(reportCss.contains("aside#mainSidebar.collapsed"),
+            "report-manager.css must include aside#mainSidebar.collapsed so collapsed width (72px) beats aside#mainSidebar (260px)");
+        Assertions.assertTrue(reportCss.contains("aside.collapsed .nav-group-label { display: none !important; }"),
+            "report-manager.css must use display: none !important on aside.collapsed .nav-group-label to override Bootstrap .d-flex");
 
         Assertions.assertFalse(managerHtml.contains("id=\"auraChatLauncher\""),
             "aura-test-manager.html must not keep a duplicate bottom-right #auraChatLauncher");

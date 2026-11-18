@@ -1553,6 +1553,9 @@ function openAuraChat() {
         if (input) setTimeout(() => input.focus(), 150);
     }
     if (launcher) launcher.classList.add('active');
+    if (typeof document !== 'undefined' && typeof document.querySelectorAll === 'function') {
+        document.querySelectorAll('.aura-chat-launcher').forEach((el) => el.classList.add('active'));
+    }
 }
 window.openAuraChat = openAuraChat;
 
@@ -1561,6 +1564,9 @@ function closeAuraChat() {
     const launcher = document.getElementById('auraChatLauncher');
     if (overlay) overlay.style.display = 'none';
     if (launcher) launcher.classList.remove('active');
+    if (typeof document !== 'undefined' && typeof document.querySelectorAll === 'function') {
+        document.querySelectorAll('.aura-chat-launcher').forEach((el) => el.classList.remove('active'));
+    }
 }
 window.closeAuraChat = closeAuraChat;
 
