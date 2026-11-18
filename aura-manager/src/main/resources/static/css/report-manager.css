@@ -354,7 +354,7 @@ body { font-family: var(--font-family); background-color: var(--bg-base); color:
 }
 
 /* Sidebar Navigation with Collapse Support and Scrolling */
-aside {
+aside#mainSidebar, aside:not(.sidebar-palette-right) {
     width: 260px;
     height: 100vh;
     max-height: 100vh;
