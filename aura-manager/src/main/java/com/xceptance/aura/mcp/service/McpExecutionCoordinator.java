@@ -27,6 +27,8 @@ import org.springframework.stereotype.Service;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Queue;
@@ -87,10 +89,11 @@ public class McpExecutionCoordinator implements ApplicationListener<WebServerIni
         final DatasetSelection sel = new DatasetSelection();
         sel.file = testPath;
         sel.id = dataset;
-        if (browserProfile != null && !browserProfile.isBlank())
+        final List<String> profiles = parseBrowserProfiles(browserProfile);
+        if (!profiles.isEmpty())
         {
-            sel.browserProfiles = List.of(browserProfile);
-            req.globalBrowserProfiles = List.of(browserProfile);
+            sel.browserProfiles = profiles;
+            req.globalBrowserProfiles = profiles;
         }
         req.datasets = List.of(sel);
         req.headless = true;
@@ -127,21 +130,22 @@ public class McpExecutionCoordinator implements ApplicationListener<WebServerIni
 
         final RunRequest req = new RunRequest();
         req.targetRunId = runId;
+        final List<String> profiles = parseBrowserProfiles(browserProfile);
         final List<DatasetSelection> selections = new ArrayList<>();
         for (final String path : testPaths)
         {
             final DatasetSelection sel = new DatasetSelection();
             sel.file = path;
-            if (browserProfile != null && !browserProfile.isBlank())
+            if (!profiles.isEmpty())
             {
-                sel.browserProfiles = List.of(browserProfile);
+                sel.browserProfiles = profiles;
             }
             selections.add(sel);
         }
 
-        if (browserProfile != null && !browserProfile.isBlank())
+        if (!profiles.isEmpty())
         {
-            req.globalBrowserProfiles = List.of(browserProfile);
+            req.globalBrowserProfiles = profiles;
         }
         req.datasets = selections;
         req.headless = true;
@@ -257,6 +261,38 @@ public class McpExecutionCoordinator implements ApplicationListener<WebServerIni
             return activeServerPort;
         }
         return this.serverPort <= 0 ? 8080 : this.serverPort;
+    }
+
+    /**
+     * Parses a browser profile string into an immutable list of profile tags.
+     * Supports single tags, comma/semicolon-separated tags, and bracketed/quoted array strings.
+     *
+     * @param browserProfile raw browser profile parameter, or null
+     * @return non-null immutable list of parsed profile tags
+     */
+    static List<String> parseBrowserProfiles(final String browserProfile)
+    {
+        if (browserProfile == null || browserProfile.isBlank())
+        {
+            return Collections.emptyList();
+        }
+
+        String cleaned = browserProfile.trim();
+        if (cleaned.startsWith("[") && cleaned.endsWith("]"))
+        {
+            cleaned = cleaned.substring(1, cleaned.length() - 1).trim();
+        }
+
+        if (cleaned.isEmpty())
+        {
+            return Collections.emptyList();
+        }
+
+        return Arrays.stream(cleaned.split("[,;]+"))
+                .map(String::trim)
+                .map(token -> token.replaceAll("^[\"']+|[\"']+$", ""))
+                .filter(token -> !token.isEmpty())
+                .toList();
     }
 
     private String generateRunId()

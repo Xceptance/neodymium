@@ -22,6 +22,7 @@
         <surefire.failIfNoSpecifiedTests>false</surefire.failIfNoSpecifiedTests>
         <spring-framework.version>7.0.9</spring-framework.version>
         <spring-ai.version>2.0.0</spring-ai.version>
+        <google-genai.version>1.58.0</google-genai.version>
     </properties>
 
     <dependencyManagement>
@@ -32,6 +33,11 @@
                 <version>${spring-ai.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.google.genai</groupId>
+                <artifactId>google-genai</artifactId>
+                <version>${google-genai.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -134,10 +140,21 @@
 			<groupId>org.springframework.ai</groupId>
 			<artifactId>spring-ai-mistral-ai</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>com.google.genai</groupId>
+			<artifactId>google-genai</artifactId>
+		</dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <parameters>true</parameters>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>

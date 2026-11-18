@@ -1546,21 +1546,23 @@ function openAuraChat() {
         window.syncHiddenActiveFile();
     }
     const overlay = document.getElementById('auraChatOverlay');
-    const launcher = document.getElementById('auraChatLauncher');
     if (overlay) {
         overlay.style.display = 'block';
         const input = document.getElementById('chatInput');
         if (input) setTimeout(() => input.focus(), 150);
     }
-    if (launcher) launcher.classList.add('active');
+    if (typeof document !== 'undefined' && typeof document.querySelectorAll === 'function') {
+        document.querySelectorAll('.aura-chat-launcher').forEach((btn) => btn.classList.add('active'));
+    }
 }
 window.openAuraChat = openAuraChat;
 
 function closeAuraChat() {
     const overlay = document.getElementById('auraChatOverlay');
-    const launcher = document.getElementById('auraChatLauncher');
     if (overlay) overlay.style.display = 'none';
-    if (launcher) launcher.classList.remove('active');
+    if (typeof document !== 'undefined' && typeof document.querySelectorAll === 'function') {
+        document.querySelectorAll('.aura-chat-launcher').forEach((btn) => btn.classList.remove('active'));
+    }
 }
 window.closeAuraChat = closeAuraChat;
 

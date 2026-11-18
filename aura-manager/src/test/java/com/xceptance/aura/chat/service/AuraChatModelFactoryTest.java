@@ -19,9 +19,11 @@
 package com.xceptance.aura.chat.service;
 
 import com.google.genai.types.HttpOptions;
+import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -198,6 +200,16 @@ public class AuraChatModelFactoryTest
         Assertions.assertNotNull(AuraChatModelFactory.buildMistralRestClientBuilder(Duration.ofSeconds(45)).build());
         Assertions.assertNotNull(AuraChatModelFactory.buildMistralRestClientBuilder(Duration.ZERO).build());
         Assertions.assertNotNull(AuraChatModelFactory.buildMistralRestClientBuilder(null).build());
+    }
+
+    @Test
+    public void testGoogleGenAiPartToolCallMethodAvailableOnClasspath() throws Exception
+    {
+        final Class<?> partClass = Class.forName("com.google.genai.types.Part");
+        final Method toolCallMethod = partClass.getMethod("toolCall");
+        Assertions.assertNotNull(toolCallMethod, "Part.toolCall() must be available to prevent Spring AI NoSuchMethodError");
+        Assertions.assertEquals(Optional.class, toolCallMethod.getReturnType(),
+                "Part.toolCall() must return java.util.Optional in google-genai 1.58.0+");
     }
 
     private static AiConfiguration mockConfig(final Map<String, String> properties)

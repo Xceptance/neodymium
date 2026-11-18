@@ -102,7 +102,7 @@ public class AuraMcpToolService
     @McpTool(name = "run_test", description = "Dispatch an asynchronous test playbook run. Call this tool directly with the provided test name or path without querying list_tests or list_browser_profiles first. Returns immediately with RUNNING or ENQUEUED status.")
     public Map<String, Object> runTest(
         @McpToolParam(required = true, description = "Relative path or simple filename of YAML playbook (e.g. tests/Login.yaml or Login.yaml). Filenames are automatically resolved.") final String testPath,
-        @McpToolParam(required = false, description = "Optional browser profile tag (e.g. Chrome_1500x1000). If omitted or null, defaults automatically to the configured default Chrome profile. Pass directly without prior validation.") final String browserProfile,
+        @McpToolParam(required = false, description = "Optional browser profile tag or comma-separated list of tags (e.g. 'Chrome_1500x1000' or 'Chrome_1500x1000, Firefox_1500x1000'). If omitted or null, defaults automatically to the configured default Chrome profile. Pass directly without prior validation.") final String browserProfile,
         @McpToolParam(required = false, description = "Optional dataset row identifier. Omit if not explicitly requested.") final String dataset)
     {
         final ExecutionLaunchResultDto launch = executionService.dispatchRun(testPath, browserProfile, dataset);
@@ -126,7 +126,7 @@ public class AuraMcpToolService
     @McpTool(name = "run_suite", description = "Dispatch a batch of test playbooks as a unified test suite run. Returns immediately with RUNNING or ENQUEUED status.")
     public Map<String, Object> runSuite(
         @McpToolParam(required = true, description = "List of relative YAML playbook paths or filenames") final List<String> testPaths,
-        @McpToolParam(required = false, description = "Optional browser profile tag (e.g. Chrome_1500x1000). If omitted or null, defaults automatically to the configured default Chrome profile. Pass directly without prior validation.") final String browserProfile)
+        @McpToolParam(required = false, description = "Optional browser profile tag or comma-separated list of tags (e.g. 'Chrome_1500x1000' or 'Chrome_1500x1000, Firefox_1500x1000'). If omitted or null, defaults automatically to the configured default Chrome profile. Pass directly without prior validation.") final String browserProfile)
     {
         final ExecutionLaunchResultDto launch = executionService.dispatchSuite(testPaths, browserProfile);
         final Map<String, Object> res = new HashMap<>();

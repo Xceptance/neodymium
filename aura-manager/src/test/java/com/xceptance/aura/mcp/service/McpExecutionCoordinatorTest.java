@@ -160,4 +160,65 @@ public class McpExecutionCoordinatorTest
         Assertions.assertEquals(result.getRunId(), reqCaptor.getValue().targetRunId);
         Assertions.assertEquals(2, reqCaptor.getValue().datasets.size());
     }
+
+    @Test
+    public void testParseBrowserProfilesVariations()
+    {
+        Assertions.assertEquals(List.of(), McpExecutionCoordinator.parseBrowserProfiles(null));
+        Assertions.assertEquals(List.of(), McpExecutionCoordinator.parseBrowserProfiles("   "));
+        Assertions.assertEquals(List.of(), McpExecutionCoordinator.parseBrowserProfiles("[]"));
+        Assertions.assertEquals(List.of("Chrome_1500x1000"),
+                McpExecutionCoordinator.parseBrowserProfiles("Chrome_1500x1000"));
+        Assertions.assertEquals(List.of("Chrome_1500x1000", "Firefox_1500x1000"),
+                McpExecutionCoordinator.parseBrowserProfiles("Chrome_1500x1000, Firefox_1500x1000"));
+        Assertions.assertEquals(List.of("Chrome_1500x1000", "Firefox_1500x1000"),
+                McpExecutionCoordinator.parseBrowserProfiles("Chrome_1500x1000;Firefox_1500x1000"));
+        Assertions.assertEquals(List.of("Chrome_1500x1000", "Firefox_1500x1000"),
+                McpExecutionCoordinator.parseBrowserProfiles("[Chrome_1500x1000, Firefox_1500x1000]"));
+        Assertions.assertEquals(List.of("Chrome_1500x1000", "Firefox_1500x1000"),
+                McpExecutionCoordinator.parseBrowserProfiles("[\"Chrome_1500x1000\", \"Firefox_1500x1000\"]"));
+        Assertions.assertEquals(List.of("Chrome_1500x1000", "Firefox_1500x1000"),
+                McpExecutionCoordinator.parseBrowserProfiles(" 'Chrome_1500x1000' , 'Firefox_1500x1000' "));
+    }
+
+    @Test
+    public void testSubmitRunWithMultipleBrowserProfiles()
+    {
+        Mockito.when(queueService.isRunningQueue()).thenReturn(false);
+
+        final DispatchResult result = coordinator.submitRun("tests/sample.yaml", "Chrome_1500x1000, Firefox_1500x1000", null);
+
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals("RUNNING", result.getStatus());
+
+        final ArgumentCaptor<RunRequest> reqCaptor = ArgumentCaptor.forClass(RunRequest.class);
+        Mockito.verify(queueService).executeQueue(reqCaptor.capture(), Mockito.eq(8080));
+
+        final RunRequest capturedReq = reqCaptor.getValue();
+        Assertions.assertEquals(List.of("Chrome_1500x1000", "Firefox_1500x1000"), capturedReq.globalBrowserProfiles);
+        Assertions.assertEquals(List.of("Chrome_1500x1000", "Firefox_1500x1000"), capturedReq.datasets.getFirst().browserProfiles);
+    }
+
+    @Test
+    public void testSubmitSuiteWithMultipleBrowserProfiles()
+    {
+        Mockito.when(queueService.isRunningQueue()).thenReturn(false);
+
+        final DispatchResult result = coordinator.submitSuite(
+                List.of("tests/s1.yaml", "tests/s2.yaml"),
+                "[\"Chrome_1500x1000\", \"Firefox_1500x1000\"]");
+
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals("RUNNING", result.getStatus());
+
+        final ArgumentCaptor<RunRequest> reqCaptor = ArgumentCaptor.forClass(RunRequest.class);
+        Mockito.verify(queueService).executeQueue(reqCaptor.capture(), Mockito.eq(8080));
+
+        final RunRequest capturedReq = reqCaptor.getValue();
+        final List<String> expectedProfiles = List.of("Chrome_1500x1000", "Firefox_1500x1000");
+        Assertions.assertEquals(expectedProfiles, capturedReq.globalBrowserProfiles);
+        Assertions.assertEquals(2, capturedReq.datasets.size());
+        Assertions.assertEquals(expectedProfiles, capturedReq.datasets.get(0).browserProfiles);
+        Assertions.assertEquals(expectedProfiles, capturedReq.datasets.get(1).browserProfiles);
+    }
 }

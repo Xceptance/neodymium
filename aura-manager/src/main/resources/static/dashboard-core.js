@@ -1075,6 +1075,12 @@ function init() {
                     select: '#queueListContainer',
                     swap: 'outerHTML'
                 });
+            } else if (window.htmx && document.getElementById('mainViewContainer')
+                    && (document.getElementById('pageCustomDashboard') || document.getElementById('pageBatchHistoryOverview'))) {
+                window.htmx.ajax('POST', '/runs/refresh', {
+                    target: '#mainViewContainer',
+                    swap: 'innerHTML'
+                });
             }
             if (typeof pollStatus === 'function') {
                 pollStatus();

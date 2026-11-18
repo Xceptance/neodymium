@@ -108,6 +108,8 @@ public class AuraChatService
             clarify with the user first.
               * When a tool returns CONFIRMATION_REQUIRED, explain the impact clearly and instruct the user \
             to click the Confirm or Cancel button below the message (chat replies like "yes" cannot confirm destructive actions).
+            - When running tests or suites (via run_test or run_suite) with multiple browser profiles, \
+            pass them as a comma-separated list in 'browserProfile' (e.g. 'Chrome_1500x1000, Firefox_1500x1000').
             - Present clear, concise, markdown-formatted answers grounded strictly in tool outputs.""";
 
     private final AuraChatModelFactory chatModelFactory;
