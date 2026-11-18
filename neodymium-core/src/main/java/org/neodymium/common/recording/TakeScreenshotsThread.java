@@ -1,3 +1,26 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2026 Xceptance
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
 package org.neodymium.common.recording;
 
 import java.awt.image.BufferedImage;
@@ -18,11 +41,11 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 
 import com.codeborne.selenide.WebDriverRunner;
-import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import org.neodymium.util.Neodymium;
 import static org.openqa.selenium.support.ui.ExpectedConditions.alertIsPresent;
 
@@ -229,31 +252,28 @@ public class TakeScreenshotsThread extends Thread
                     File finalRecording = tempRecording;
                     if (tempRecording.exists())
                     {
-                        final String runFolder = InteractiveConsoleEngine.getRunFolder();
-                        final File runFolderDir = new File(recordingConfigurations.tempFolderToStoreRecording(), runFolder);
-                        if (!runFolderDir.exists())
+                        final String runFolder = resolveInteractiveConsoleRunFolder();
+                        if (runFolder != null && !runFolder.isEmpty())
                         {
-                            runFolderDir.mkdirs();
-                        }
-                        final File movedFile = new File(runFolderDir, tempRecording.getName());
-                        try
-                        {
-                            Files.move(tempRecording.toPath(), movedFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                            finalRecording = movedFile;
-                        }
-                        catch (final IOException e)
-                        {
-                            LOGGER.warn("Could not move recording file to run folder: {}", e.getMessage());
+                            final File runFolderDir = new File(recordingConfigurations.tempFolderToStoreRecording(), runFolder);
+                            if (!runFolderDir.exists())
+                            {
+                                runFolderDir.mkdirs();
+                            }
+                            final File movedFile = new File(runFolderDir, tempRecording.getName());
+                            try
+                            {
+                                Files.move(tempRecording.toPath(), movedFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                                finalRecording = movedFile;
+                            }
+                            catch (final IOException e)
+                            {
+                                LOGGER.warn("Could not move recording file to run folder: {}", e.getMessage());
+                            }
                         }
                     }
 
-                    try
-                    {
-                        InteractiveConsoleEngine.attachVideoToLatestExecutionLog(finalRecording, testName);
-                    }
-                    catch (final Exception ignored)
-                    {
-                    }
+                    notifyInteractiveConsole(finalRecording, testName);
 
                     if (recordingConfigurations.appendAllRecordingsToAllureReport() || testFailed)
                     {
@@ -319,5 +339,33 @@ public class TakeScreenshotsThread extends Thread
     {
         this.testFailed = testFailed;
         run = false;
+    }
+
+    private static void notifyInteractiveConsole(final File finalRecording, final String testName)
+    {
+        try
+        {
+            final Class<?> consoleClass = Class.forName("com.xceptance.neodymium.ai.console.InteractiveConsoleEngine");
+            final Method attachMethod = consoleClass.getMethod("attachVideoToLatestExecutionLog", File.class, String.class);
+            attachMethod.invoke(null, finalRecording, testName);
+        }
+        catch (final Exception ignored)
+        {
+        }
+    }
+
+    private static String resolveInteractiveConsoleRunFolder()
+    {
+        try
+        {
+            final Class<?> consoleClass = Class.forName("com.xceptance.neodymium.ai.console.InteractiveConsoleEngine");
+            final Method getFolderMethod = consoleClass.getMethod("getRunFolder");
+            final Object result = getFolderMethod.invoke(null);
+            return result instanceof String ? (String) result : null;
+        }
+        catch (final Exception ignored)
+        {
+            return null;
+        }
     }
 }

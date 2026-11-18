@@ -1,0 +1,8 @@
+SIL OPEN FONT LICENSE (OFL-1.1)
+
+This directory bundles web fonts for test fixture pages:
+- Outfit (Copyright 2021 The Outfit Project Authors, https://github.com/Outfitio/Outfit-Fonts)
+- Plus Jakarta Sans (Copyright 2020 The Plus Jakarta Sans Project Authors, https://github.com/tokotype/PlusJakartaSans)
+
+Both font families are licensed under the SIL Open Font License, Version 1.1.
+https://openfontlicense.org/

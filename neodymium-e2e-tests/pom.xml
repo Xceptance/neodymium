@@ -44,6 +44,11 @@
 		</dependency>
 		<dependency>
 			<groupId>com.xceptance</groupId>
+			<artifactId>neodymium-ai</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.xceptance</groupId>
 			<artifactId>neodymium-test-server</artifactId>
 			<version>${project.version}</version>
 		</dependency>

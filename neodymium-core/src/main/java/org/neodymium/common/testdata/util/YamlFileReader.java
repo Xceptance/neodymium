@@ -44,7 +44,6 @@ import org.yaml.snakeyaml.Yaml;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.xceptance.neodymium.aura.AuraFileService;
 import org.neodymium.util.Neodymium;
 import org.neodymium.util.TagUtils;
 
@@ -1199,7 +1198,7 @@ public class YamlFileReader
 
     private static String preprocessYamlString(final String yamlStr)
     {
-        return AuraFileService.preprocessYamlSteps(yamlStr);
+        return YamlStepPreprocessor.preprocessYamlSteps(yamlStr);
     }
 
     public static List<Step> loadInclude(final String path)

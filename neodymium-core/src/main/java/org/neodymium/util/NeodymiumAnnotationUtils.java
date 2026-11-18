@@ -163,6 +163,32 @@ public final class NeodymiumAnnotationUtils
         return false;
     }
 
+    /**
+     * Checks if an annotation matching the specified simple or fully-qualified class name is present on the element.
+     *
+     * @param element the annotated element
+     * @param annotationClassName the annotation simple name or fully qualified class name
+     * @return true if present, false otherwise
+     */
+    public static boolean isAnnotationPresent(final AnnotatedElement element, final String annotationClassName)
+    {
+        if (element == null || annotationClassName == null || annotationClassName.isEmpty())
+        {
+            return false;
+        }
+
+        for (final Annotation annotation : element.getAnnotations())
+        {
+            final Class<?> type = annotation.annotationType();
+            if (type.getName().equals(annotationClassName) || type.getSimpleName().equals(annotationClassName))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
     @SuppressWarnings("unchecked")
     private static <A extends Annotation> void collectAnnotationsForType(final AnnotatedElement element, final Class<A> type, final List<A> collector)
     {

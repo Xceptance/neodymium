@@ -1,3 +1,26 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2026 Xceptance
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
 package com.xceptance.neodymium.junit4.tests.recording;
 
 import java.io.File;
@@ -62,13 +85,31 @@ public abstract class AbstractRecordingTest extends NeodymiumTest
         Selenide.sleep(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).oneImagePerMilliseconds());
     }
 
+    private static String resolveRunFolder()
+    {
+        try
+        {
+            final Class<?> engineClass = Class.forName("com.xceptance.neodymium.ai.console.InteractiveConsoleEngine");
+            final Object folder = engineClass.getMethod("getRunFolder").invoke(null);
+            return folder != null ? folder.toString() : "";
+        }
+        catch (final Throwable ignored)
+        {
+            return "";
+        }
+    }
+
     @AfterClass
     public static void assertRecordingFileExists()
     {
-        final String runFolder = com.xceptance.neodymium.ai.console.InteractiveConsoleEngine.getRunFolder();
-        File recordingFile = new File(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).tempFolderToStoreRecording() + runFolder + "/" + uuid.get(Thread.currentThread()) + "."
-            + FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).format());
-        if (!recordingFile.exists())
+        final String runFolder = resolveRunFolder();
+        File recordingFile = null;
+        if (!runFolder.isEmpty())
+        {
+            recordingFile = new File(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).tempFolderToStoreRecording() + runFolder + "/" + uuid.get(Thread.currentThread()) + "."
+                + FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).format());
+        }
+        if (recordingFile == null || !recordingFile.exists())
         {
             recordingFile = new File(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).tempFolderToStoreRecording() + uuid.get(Thread.currentThread()) + "."
                 + FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).format());

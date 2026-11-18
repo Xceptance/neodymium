@@ -94,6 +94,11 @@
 			<version>6.0.0-BETA</version>
 		</dependency>
 		<dependency>
+			<groupId>com.xceptance</groupId>
+			<artifactId>neodymium-ai</artifactId>
+			<version>6.0.0-BETA</version>
+		</dependency>
+		<dependency>
 			<groupId>org.yaml</groupId>
 			<artifactId>snakeyaml</artifactId>
 		</dependency>

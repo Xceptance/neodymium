@@ -1,0 +1,39 @@
+Neodymium Test Automation Framework
+Copyright (c) 2017-2026 Xceptance Software Technologies GmbH (https://www.xceptance.com)
+
+This product includes software developed at
+Xceptance Software Technologies GmbH (https://www.xceptance.com/).
+
+========================================================================
+Third-Party Software and Modification Attributions
+========================================================================
+
+1. Selenium / Software Freedom Conservancy
+   This product includes software modified from the Selenium project
+   (org.openqa.selenium.remote.http.jdk.JdkHttpClient).
+   Copyright (c) Software Freedom Conservancy.
+   Licensed under the Apache License, Version 2.0.
+   Prominent modification notices are preserved in the respective source files
+   in compliance with Section 4(b) of the Apache License, Version 2.0.
+
+2. HTMX
+   This product includes HTMX (https://htmx.org/).
+   Copyright (c) 2020-2026 Big Sky Software LLC.
+   Licensed under the BSD 2-Clause License.
+
+3. Google Material Symbols & Icons
+   This product includes Google Material Symbols icons and web fonts
+   (https://fonts.google.com/icons).
+   Copyright (c) Google LLC.
+   Licensed under the Apache License, Version 2.0.
+
+4. SIL Open Font License (OFL) Fonts
+   This product bundles web fonts licensed under the SIL Open Font
+   License, Version 1.1 (http://scripts.sil.org/OFL).
+   Copyright (c) individual font authors.
+
+5. Apache Software Foundation & Other Permissive Dependencies
+   This product bundles or depends upon various third-party libraries
+   licensed under the Apache License, Version 2.0, MIT License, BSD Licenses,
+   and Eclipse Public License. Detailed dependency licenses are generated
+   during packaging in META-INF/THIRD-PARTY.txt via the license-maven-plugin.

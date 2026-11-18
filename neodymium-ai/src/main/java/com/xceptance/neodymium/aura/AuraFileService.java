@@ -1,0 +1,3002 @@
+/*
+ * GNU Affero General Public License (AGPLv3)
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package com.xceptance.neodymium.aura;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xceptance.neodymium.aura.dto.DatasetDto;
+import com.xceptance.neodymium.aura.dto.YamlFileDto;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
+import org.neodymium.ai.util.AtomicFileUtils;
+import org.neodymium.common.testdata.util.YamlStepPreprocessor;
+import org.neodymium.util.TagUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.yaml.snakeyaml.DumperOptions;
+import org.yaml.snakeyaml.Yaml;
+
+/**
+ * Service handling test YAML file management, scanning, file CRUD operations,
+ * directory expansions, and metadata extraction.
+ *
+ * @author AI-generated: Gemini 3.8 Flash (High)
+ * @author Xceptance GmbH 2026
+ */
+public final class AuraFileService
+{
+    private static final Logger LOGGER = LoggerFactory.getLogger(AuraFileService.class);
+    private static final Pattern STRUCTURED_AREA_TAG_PATTERN = Pattern.compile(
+        "(?im)^[ \\t]*(?:tags|_tags)\\s*:\\s*\\r?\\n(?:[ \\t]+[^\\r\\n]*\\r?\\n)*?[ \\t]+(?:area|Area)\\s*:\\s*(?:\\r?\\n[ \\t]*-\\s*[\"']?@?([a-zA-Z0-9][a-zA-Z0-9_-]*)[\"']?|[ \\t]*[\"']?@?([a-zA-Z0-9][a-zA-Z0-9_-]*)[\"']?)"
+    );
+
+    /**
+     * Normalizes folded block scalars ({@code >} and {@code >-}) to literal block scalars
+     * ({@code |} and {@code |-}) for step lists and playbook lifecycle sections.
+     * <p>
+     * Under standard YAML 1.2 specifications, folded block scalars replace single line breaks
+     * with spaces, flattening multi-line verification or step blocks into a single run-on sentence.
+     * Normalizing to literal block scalars preserves line breaks across YAML parsers, allowing
+     * individual step statements to be decomposed cleanly into discrete steps.
+     * </p>
+     *
+     * @param content the raw YAML string content
+     * @return the normalized YAML content with preserved line break semantics for steps
+     */
+    public static String normalizeBlockScalars(final String content)
+    {
+        return YamlStepPreprocessor.normalizeBlockScalars(content);
+    }
+
+    /**
+     * Preprocesses YAML script content to normalize block scalars and sanitize unquoted
+     * step instructions containing YAML special characters (such as square brackets {@code [...]}
+     * used in CSS attribute selectors or parameter hints, and inline conditional includes).
+     *
+     * @param content the raw YAML string content
+     * @return the preprocessed YAML content safe for parsing
+     */
+    public static String preprocessYamlSteps(final String content)
+    {
+        return YamlStepPreprocessor.preprocessYamlSteps(content);
+    }
+
+
+    /**
+     * Extracts all ordered area tags from the given playbook content.
+     * Searches structured tags/tags blocks ({@code tags:} or {@code _tags:}).
+     *
+     * @param content the raw playbook YAML content
+     * @return the list of formatted area tags (e.g. {@code ["@Search", "@Browsing"]}), never null
+     */
+    public static List<String> extractAreaTags(final String content)
+    {
+        if (content == null || content.isBlank())
+        {
+            return List.of();
+        }
+        final List<String> result = new ArrayList<>();
+        if (content.contains("tags:") || content.contains("_tags:"))
+        {
+            try
+            {
+                final String safeYaml = content.replaceAll("(?m)(-\\s*)@([a-zA-Z0-9_-]+)", "$1$2");
+                final Yaml yaml = new Yaml();
+                final Object data = yaml.load(safeYaml);
+                if (data instanceof Map<?, ?> map)
+                {
+                    final Object tagsObj = map.containsKey("tags") ? map.get("tags") : map.get("_tags");
+                    if (tagsObj != null)
+                    {
+                        final Map<String, List<String>> parsedTags = TagUtils.parseTags(tagsObj);
+                        for (final Map.Entry<String, List<String>> entry : parsedTags.entrySet())
+                        {
+                            if ("area".equalsIgnoreCase(entry.getKey()) && entry.getValue() != null && !entry.getValue().isEmpty())
+                            {
+                                for (final String val : entry.getValue())
+                                {
+                                    if (val != null && !val.isBlank())
+                                    {
+                                        final String clean = val.trim();
+                                        final String formatted = clean.startsWith("@") ? clean : "@" + clean;
+                                        if (!result.contains(formatted))
+                                        {
+                                            result.add(formatted);
+                                        }
+                                    }
+                                }
+                                if (!result.isEmpty())
+                                {
+                                    return result;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+
+            final Matcher tagMatcher = STRUCTURED_AREA_TAG_PATTERN.matcher(content);
+            if (tagMatcher.find())
+            {
+                final String matched = tagMatcher.group(1) != null ? tagMatcher.group(1) : tagMatcher.group(2);
+                if (matched != null && !matched.isBlank())
+                {
+                    final String clean = matched.trim();
+                    final String formatted = clean.startsWith("@") ? clean : "@" + clean;
+                    result.add(formatted);
+                    return result;
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Extracts an area tag from the given playbook content.
+     * Searches structured tags/tags blocks ({@code tags:} or {@code _tags:}).
+     *
+     * @param content the raw playbook YAML content
+     * @return the formatted area tag (e.g. {@code "@Checkout"}), or null if none is present
+     */
+    public static String extractAreaTag(final String content)
+    {
+        final List<String> tags = extractAreaTags(content);
+        return tags.isEmpty() ? null : tags.get(0);
+    }
+
+    /**
+     * Extracts an area tag from a playbook YAML file path.
+     *
+     * @param filePath the relative or absolute path of the playbook YAML file
+     * @return the formatted area tag (e.g. {@code "@Checkout"}), or null if not found
+     */
+    public String extractAreaTagFromFile(final String filePath)
+    {
+        if (filePath == null || filePath.isBlank())
+        {
+            return null;
+        }
+        try
+        {
+            final String content = readYamlFileContent(filePath);
+            return extractAreaTag(content);
+        }
+        catch (final Exception e)
+        {
+            return null;
+        }
+    }
+
+    /**
+     * Extracts all ordered area tags from a playbook file path directly on the filesystem or classpath resources.
+     *
+     * @param filePath the relative or absolute path of the playbook YAML file
+     * @return the list of formatted area tags (e.g. {@code ["@Search", "@Browsing"]}), never null
+     */
+    public static List<String> extractAreaTagsFromFileSystem(final String filePath)
+    {
+        if (filePath == null || filePath.isBlank())
+        {
+            return List.of();
+        }
+        final File f = new File(filePath);
+        if (f.exists() && f.isFile())
+        {
+            try
+            {
+                return extractAreaTags(Files.readString(f.toPath(), StandardCharsets.UTF_8));
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+        final File resourceFile = new File("src/test/resources", filePath);
+        if (resourceFile.exists() && resourceFile.isFile())
+        {
+            try
+            {
+                return extractAreaTags(Files.readString(resourceFile.toPath(), StandardCharsets.UTF_8));
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+        return List.of();
+    }
+
+    /**
+     * Extracts an area tag from a playbook file path directly on the filesystem or classpath resources.
+     *
+     * @param filePath the relative or absolute path of the playbook YAML file
+     * @return the formatted area tag (e.g. {@code "@Checkout"}), or null if not found
+     */
+    public static String extractAreaTagFromFileSystem(final String filePath)
+    {
+        final List<String> tags = extractAreaTagsFromFileSystem(filePath);
+        return tags.isEmpty() ? null : tags.get(0);
+    }
+
+    private final Set<String> expandedFiles = ConcurrentHashMap.newKeySet();
+    private final File customResourcesDir;
+    private volatile String activeEditingFile = null;
+    private volatile File cachedResourcesDir = null;
+    private final Map<String, CachedFragmentVars> fragmentVarsCache = new ConcurrentHashMap<>();
+
+    private static final class CachedFragmentVars
+    {
+        private final long lastModified;
+        private final List<String> requiredVars;
+
+        CachedFragmentVars(final long lastModified, final List<String> requiredVars)
+        {
+            this.lastModified = lastModified;
+            this.requiredVars = requiredVars;
+        }
+    }
+
+    public AuraFileService()
+    {
+        this(null);
+    }
+
+    public AuraFileService(final File customResourcesDir)
+    {
+        this.customResourcesDir = customResourcesDir;
+    }
+
+    /**
+     * Resolves the active test resources base directory.
+     *
+     * @return the resolved test resources directory
+     */
+    public File getResourcesDirectory()
+    {
+        if (customResourcesDir != null && customResourcesDir.exists() && customResourcesDir.isDirectory())
+        {
+            return customResourcesDir.getAbsoluteFile();
+        }
+
+        final String configuredPath = System.getProperty("neodymium.aura.tests.directory");
+        if (configuredPath != null && !configuredPath.isBlank())
+        {
+            final File configuredDir = new File(configuredPath).getAbsoluteFile();
+            if (configuredDir.exists() && configuredDir.isDirectory())
+            {
+                return configuredDir;
+            }
+        }
+
+        final File cached = cachedResourcesDir;
+        if (cached != null && cached.exists() && cached.isDirectory())
+        {
+            return cached;
+        }
+
+        final List<File> candidates = List.of(
+                new File("src/test/resources").getAbsoluteFile(),
+                new File("neodymium-core/src/test/resources").getAbsoluteFile(),
+                new File("aura-manager/src/test/resources").getAbsoluteFile(),
+                new File("neodymium-e2e-tests/src/test/resources").getAbsoluteFile()
+        );
+
+        for (final File candidate : candidates)
+        {
+            if (candidate.exists() && candidate.isDirectory() && containsYamlFiles(candidate))
+            {
+                cachedResourcesDir = candidate;
+                return candidate;
+            }
+        }
+
+        for (final File candidate : candidates)
+        {
+            if (candidate.exists() && candidate.isDirectory())
+            {
+                cachedResourcesDir = candidate;
+                return candidate;
+            }
+        }
+
+        cachedResourcesDir = candidates.getFirst();
+        return cachedResourcesDir;
+    }
+
+    private boolean containsYamlFiles(final File dir)
+    {
+        final File[] files = dir.listFiles();
+        if (files == null)
+        {
+            return false;
+        }
+        for (final File file : files)
+        {
+            if (file.isDirectory())
+            {
+                if (containsYamlFiles(file))
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                final String name = file.getName().toLowerCase();
+                if (name.endsWith(".yaml") || name.endsWith(".yml"))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public String getActiveEditingFile()
+    {
+        return activeEditingFile;
+    }
+
+    public void setActiveEditingFile(final String file)
+    {
+        this.activeEditingFile = file;
+    }
+
+    public Set<String> getExpandedFiles()
+    {
+        return expandedFiles;
+    }
+
+    public boolean isExpanded(final String file)
+    {
+        return expandedFiles.contains(file);
+    }
+
+    public void toggleFileExpansion(final String file)
+    {
+        if (expandedFiles.contains(file))
+        {
+            expandedFiles.remove(file);
+        }
+        else
+        {
+            expandedFiles.add(file);
+        }
+    }
+
+    private record CachedYamlEntry(long lastModified, long length, YamlFileDto dto)
+    {
+    }
+
+    private final Map<String, CachedYamlEntry> yamlFilesCache = new ConcurrentHashMap<>();
+
+    public void clearYamlFilesCache()
+    {
+        yamlFilesCache.clear();
+    }
+
+    public List<YamlFileDto> getYamlFilesList()
+    {
+        final List<String> yamlFiles = new ArrayList<>();
+        final File resourcesDir = getResourcesDirectory();
+        if (resourcesDir.exists() && resourcesDir.isDirectory())
+        {
+            scanDirStatic(resourcesDir, resourcesDir, yamlFiles);
+            yamlFiles.sort(String::compareTo);
+        }
+        final List<YamlFileDto> responseList = new ArrayList<>();
+        for (final String file : yamlFiles)
+        {
+            final File yamlFile = new File(resourcesDir, file);
+            final long lastModified = yamlFile.lastModified();
+            final long length = yamlFile.length();
+            final CachedYamlEntry cached = yamlFilesCache.get(file);
+            if (cached != null && cached.lastModified() == lastModified && cached.length() == length)
+            {
+                responseList.add(cached.dto());
+                continue;
+            }
+
+            final Map<String, Object> details = getFileDetails(yamlFile);
+            @SuppressWarnings("unchecked")
+            final List<DatasetDto> datasets = (List<DatasetDto>) details.get("datasets");
+            final String error = (String) details.get("error");
+            final boolean hasError = Boolean.TRUE.equals(details.get("hasError")) || (error != null && !error.isBlank());
+
+            final List<DatasetDto> enrichedDatasets = new ArrayList<>();
+            boolean fileHasPlaybook = false;
+            if (datasets != null)
+            {
+                for (final DatasetDto ds : datasets)
+                {
+                    final File pbFile = findPlaybookFile(file, ds.id);
+                    final boolean dsHasPb = pbFile != null;
+                    if (dsHasPb)
+                    {
+                        fileHasPlaybook = true;
+                    }
+                    enrichedDatasets.add(new DatasetDto(ds.id, ds.label, ds.hasTestId, dsHasPb, pbFile != null ? pbFile.getPath() : null, ds.tags));
+                }
+            }
+            if (!fileHasPlaybook)
+            {
+                fileHasPlaybook = hasPlaybook(file, null);
+            }
+            @SuppressWarnings("unchecked")
+            final Map<String, List<String>> fileTags = (Map<String, List<String>>) details.getOrDefault("tags", Collections.emptyMap());
+            final YamlFileDto dto = new YamlFileDto(file, enrichedDatasets, hasError, error, fileHasPlaybook, fileTags);
+            yamlFilesCache.put(file, new CachedYamlEntry(lastModified, length, dto));
+            responseList.add(dto);
+        }
+        yamlFilesCache.keySet().retainAll(yamlFiles);
+        return responseList;
+    }
+
+    /**
+     * Resolves all test resources directories across all project modules.
+     *
+     * @return list of resource directories
+     */
+    public List<File> getAllResourceDirectories()
+    {
+        final List<File> dirs = new ArrayList<>();
+        final File primary = getResourcesDirectory();
+        if (primary != null && primary.exists() && primary.isDirectory())
+        {
+            dirs.add(primary);
+        }
+        for (final String moduleName : List.of("neodymium-core", "aura-manager", "neodymium-e2e-tests"))
+        {
+            final File modDir = new File(moduleName, "src/test/resources").getAbsoluteFile();
+            if (modDir.exists() && modDir.isDirectory() && !dirs.contains(modDir))
+            {
+                dirs.add(modDir);
+            }
+        }
+        return dirs;
+    }
+
+    /**
+     * Resolves a recorded companion JSON playbook file matching the specified test file and dataset ID.
+     *
+     * @param file test file relative path (e.g. "verla/SearchTest.yaml")
+     * @param datasetId dataset ID (e.g. "normal")
+     * @return resolved File or null if not found
+     */
+    public File findPlaybookFile(final String file, final String datasetId)
+    {
+        if (file == null || file.isBlank())
+        {
+            return null;
+        }
+
+        final String cleanFileName;
+        final int lastSlash = file.lastIndexOf('/');
+        cleanFileName = lastSlash >= 0 ? file.substring(lastSlash + 1) : file;
+        final int lastDot = cleanFileName.lastIndexOf('.');
+        final String baseName = lastDot > 0 ? cleanFileName.substring(0, lastDot) : cleanFileName;
+
+        final List<File> resourceRoots = getAllResourceDirectories();
+        for (final File root : resourceRoots)
+        {
+            final List<File> jsonFiles = new ArrayList<>();
+            scanJsonFiles(root, jsonFiles);
+
+            // 1. Precise name match
+            for (final File jsonFile : jsonFiles)
+            {
+                final String nameLower = jsonFile.getName().toLowerCase();
+                final String baseLower = baseName.toLowerCase();
+
+                if (nameLower.contains(baseLower))
+                {
+                    if (datasetId != null && !datasetId.isBlank())
+                    {
+                        if (nameLower.contains(datasetId.toLowerCase()))
+                        {
+                            return jsonFile;
+                        }
+                    }
+                    else
+                    {
+                        return jsonFile;
+                    }
+                }
+            }
+
+            // 2. Content fallback match
+            for (final File jsonFile : jsonFiles)
+            {
+                try
+                {
+                    final String content = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
+                    if (content.contains(cleanFileName))
+                    {
+                        if (datasetId != null && !datasetId.isBlank())
+                        {
+                            if (jsonFile.getName().toLowerCase().contains(datasetId.toLowerCase()) || content.contains(datasetId))
+                            {
+                                return jsonFile;
+                            }
+                        }
+                        else
+                        {
+                            return jsonFile;
+                        }
+                    }
+                }
+                catch (final IOException ignored)
+                {
+                }
+            }
+        }
+        return null;
+    }
+
+    public File findSourceTestFile(final String file)
+    {
+        if (file == null || file.isBlank())
+        {
+            return null;
+        }
+        try
+        {
+            final File canonical = resolveCanonicalFile(file);
+            if (canonical != null && canonical.exists())
+            {
+                return canonical;
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+
+        final List<File> resourceRoots = getAllResourceDirectories();
+        for (final File root : resourceRoots)
+        {
+            try
+            {
+                final File candidate = new File(root, file).getCanonicalFile();
+                if (candidate.exists() && candidate.isFile())
+                {
+                    return candidate;
+                }
+                final File found = findFileRecursively(root, file);
+                if (found != null && found.exists())
+                {
+                    return found;
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+        return null;
+    }
+
+    public boolean hasPlaybook(final String file, final String datasetId)
+    {
+        return findPlaybookFile(file, datasetId) != null;
+    }
+
+    private void scanJsonFiles(final File dir, final List<File> results)
+    {
+        final File[] files = dir.listFiles();
+        if (files == null)
+        {
+            return;
+        }
+        for (final File f : files)
+        {
+            if (f.isDirectory())
+            {
+                scanJsonFiles(f, results);
+            }
+            else if (f.getName().endsWith(".json") && !f.getName().startsWith("package") && !f.getName().startsWith("pom"))
+            {
+                results.add(f);
+            }
+        }
+    }
+
+    /**
+     * Loads and parses recorded playbook details for a given test file and dataset ID.
+     *
+     * @param file test file relative path
+     * @param datasetId optional dataset ID
+     * @return map of playbook details for UI view, or null if no playbook found
+     */
+    public Map<String, Object> loadPlaybookDetails(final String file, final String datasetId)
+    {
+        final File pbFile = findPlaybookFile(file, datasetId);
+        if (pbFile == null || !pbFile.exists() || !pbFile.isFile())
+        {
+            return null;
+        }
+
+        final Map<String, Object> result = new HashMap<>();
+        result.put("file", file);
+        result.put("datasetId", datasetId != null ? datasetId : "");
+        result.put("playbookPath", pbFile.getPath());
+        result.put("playbookFileName", pbFile.getName());
+
+        final long lastModified = pbFile.lastModified();
+        result.put("lastModifiedEpoch", lastModified);
+        if (lastModified > 0)
+        {
+            final String formattedDate = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+                    .withZone(ZoneId.systemDefault())
+                    .format(Instant.ofEpochMilli(lastModified));
+            result.put("generatedAt", formattedDate);
+        }
+
+        final File sourceTestFile = findSourceTestFile(file);
+        if (sourceTestFile != null && sourceTestFile.exists())
+        {
+            final long sourceLastModified = sourceTestFile.lastModified();
+            result.put("testFileLastModifiedEpoch", sourceLastModified);
+            if (sourceLastModified > 0)
+            {
+                final String formattedSourceDate = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+                        .withZone(ZoneId.systemDefault())
+                        .format(Instant.ofEpochMilli(sourceLastModified));
+                result.put("testFileLastEdited", formattedSourceDate);
+            }
+        }
+
+        try
+        {
+            final String rawContent = Files.readString(pbFile.toPath(), StandardCharsets.UTF_8);
+            result.put("rawJson", rawContent);
+
+            final ObjectMapper mapper = new ObjectMapper();
+            final Object parsedRoot = mapper.readValue(rawContent, Object.class);
+            final List<?> stepsList;
+            if (parsedRoot instanceof List)
+            {
+                stepsList = (List<?>) parsedRoot;
+            }
+            else if (parsedRoot instanceof Map)
+            {
+                final Map<?, ?> rootMap = (Map<?, ?>) parsedRoot;
+                final Object idObj = rootMap.get("id");
+                if (idObj != null)
+                {
+                    result.put("playbookId", idObj.toString());
+                }
+                final Object candidateSteps = rootMap.containsKey("steps") ? rootMap.get("steps")
+                        : (rootMap.containsKey("_steps") ? rootMap.get("_steps") : rootMap.get("recordedSteps"));
+                if (candidateSteps instanceof List)
+                {
+                    stepsList = (List<?>) candidateSteps;
+                }
+                else
+                {
+                    stepsList = Collections.emptyList();
+                }
+            }
+            else
+            {
+                stepsList = Collections.emptyList();
+            }
+
+            result.put("steps", stepsList);
+            result.put("totalSteps", stepsList.size());
+
+            int passedCount = 0;
+            int healedCount = 0;
+            int failedCount = 0;
+            long totalDur = 0;
+
+            for (final Object stepObj : stepsList)
+            {
+                if (stepObj instanceof Map)
+                {
+                    @SuppressWarnings("unchecked")
+                    final Map<String, Object> stepMap = (Map<String, Object>) stepObj;
+
+                    if (stepMap.get("instruction") == null)
+                    {
+                        if (stepMap.get("promptLine") != null)
+                        {
+                            stepMap.put("instruction", stepMap.get("promptLine"));
+                        }
+                        else if (stepMap.get("step") != null)
+                        {
+                            stepMap.put("instruction", stepMap.get("step"));
+                        }
+                        else if (stepMap.get("description") != null)
+                        {
+                            stepMap.put("instruction", stepMap.get("description"));
+                        }
+                    }
+
+                    final Object statusObj = stepMap.get("status");
+                    final String status = statusObj != null ? String.valueOf(statusObj) : "SUCCESS";
+                    final boolean isStepHealed = "HEALED".equalsIgnoreCase(status);
+                    if (isStepHealed)
+                    {
+                        healedCount++;
+                    }
+                    else if ("FAILED".equalsIgnoreCase(status) || Boolean.TRUE.equals(stepMap.get("failed")))
+                    {
+                        failedCount++;
+                    }
+                    else
+                    {
+                        passedCount++;
+                    }
+
+                    final Object durObj = stepMap.get("durationMs");
+                    if (durObj instanceof Number)
+                    {
+                        totalDur += ((Number) durObj).longValue();
+                    }
+                    else
+                    {
+                        final Object actionsObj = stepMap.get("actions");
+                        if (actionsObj instanceof List)
+                        {
+                            long actTotalDur = 0;
+                            for (final Object actItem : (List<?>) actionsObj)
+                            {
+                                if (actItem instanceof Map && ((Map<?, ?>) actItem).get("durationMs") instanceof Number)
+                                {
+                                    actTotalDur += ((Number) ((Map<?, ?>) actItem).get("durationMs")).longValue();
+                                }
+                            }
+                            if (actTotalDur > 0)
+                            {
+                                stepMap.put("durationMs", actTotalDur);
+                                totalDur += actTotalDur;
+                            }
+                        }
+                    }
+
+                    // Reconcile and surface healed targets for actions
+                    final Object actionsObj = stepMap.get("actions");
+                    final Object toolCallsObj = stepMap.get("toolCalls");
+                    if (actionsObj instanceof List)
+                    {
+                        final List<?> actions = (List<?>) actionsObj;
+                        final List<?> toolCalls = toolCallsObj instanceof List ? (List<?>) toolCallsObj : null;
+
+                        for (int actIdx = 0; actIdx < actions.size(); actIdx++)
+                        {
+                            final Object actObj = actions.get(actIdx);
+                            if (actObj instanceof Map)
+                            {
+                                @SuppressWarnings("unchecked")
+                                final Map<String, Object> actMap = (Map<String, Object>) actObj;
+                                Object expectedTargetObj = actMap.get("expectedTarget");
+                                if (expectedTargetObj == null || expectedTargetObj.toString().isBlank())
+                                {
+                                    expectedTargetObj = actMap.get("originalTarget");
+                                }
+                                if (expectedTargetObj == null || expectedTargetObj.toString().isBlank())
+                                {
+                                    expectedTargetObj = actMap.get("healedFrom");
+                                }
+
+                                final Object currentTargetObj = actMap.get("target");
+                                final String currentTarget = currentTargetObj != null ? currentTargetObj.toString().trim() : "";
+
+                                if ((expectedTargetObj == null || expectedTargetObj.toString().isBlank()) && toolCalls != null && actIdx < toolCalls.size())
+                                {
+                                    final Object toolCallObj = toolCalls.get(actIdx);
+                                    if (toolCallObj instanceof Map)
+                                    {
+                                        final Map<?, ?> toolCallMap = (Map<?, ?>) toolCallObj;
+                                        final Object argsObj = toolCallMap.get("arguments");
+                                        if (argsObj instanceof Map)
+                                        {
+                                            final Map<?, ?> argsMap = (Map<?, ?>) argsObj;
+                                            final Object selObj = argsMap.get("selector") != null ? argsMap.get("selector") : argsMap.get("target");
+                                            if (selObj != null && !selObj.toString().isBlank())
+                                            {
+                                                final String originalSelector = selObj.toString().trim();
+                                                if (isStepHealed || (!currentTarget.isEmpty() && !currentTarget.equals(originalSelector)))
+                                                {
+                                                    expectedTargetObj = originalSelector;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (expectedTargetObj != null && !expectedTargetObj.toString().isBlank())
+                                {
+                                    final String expectedTargetStr = expectedTargetObj.toString().trim();
+                                    actMap.put("expectedTarget", expectedTargetStr);
+                                    actMap.put("originalTarget", expectedTargetStr);
+                                    if (!currentTarget.isEmpty() && !currentTarget.equals(expectedTargetStr))
+                                    {
+                                        actMap.put("healed", true);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    boolean hasHealedAction = false;
+                    if (actionsObj instanceof List)
+                    {
+                        for (final Object actObj : (List<?>) actionsObj)
+                        {
+                            if (actObj instanceof Map && Boolean.TRUE.equals(((Map<?, ?>) actObj).get("healed")))
+                            {
+                                hasHealedAction = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    final boolean isStepActuallyHealed = isStepHealed || hasHealedAction;
+                    stepMap.put("healed", isStepActuallyHealed);
+                    final boolean isFailed = "FAILED".equalsIgnoreCase(status) || Boolean.TRUE.equals(stepMap.get("failed"));
+                    stepMap.put("failed", isFailed);
+                    if (isStepActuallyHealed && !isStepHealed)
+                    {
+                        healedCount++;
+                        if (passedCount > 0)
+                        {
+                            passedCount--;
+                        }
+                    }
+                }
+            }
+
+            result.put("passedSteps", passedCount);
+            result.put("healedSteps", healedCount);
+            result.put("failedSteps", failedCount);
+            result.put("totalDurationMs", totalDur);
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("Failed to parse playbook JSON {}: {}", pbFile.getAbsolutePath(), e.getMessage());
+            result.put("error", "Failed to parse playbook JSON: " + e.getMessage());
+        }
+
+        return result;
+    }
+
+    /**
+     * Accepts a self-healed locator change in a recorded playbook, updating the playbook JSON on disk
+     * so that the healed action becomes the canonical recorded action.
+     *
+     * @param file relative test file path
+     * @param datasetId optional dataset ID
+     * @param stepIndex 0-based index of the step to accept, or null to accept all healed steps
+     * @return true if playbook was found and updated successfully, false otherwise
+     */
+    public boolean acceptPlaybookHealing(final String file, final String datasetId, final Integer stepIndex)
+    {
+        return acceptPlaybookHealing(file, datasetId, stepIndex, null);
+    }
+
+    /**
+     * Accepts a self-healed locator change in a recorded playbook, updating the playbook JSON on disk
+     * so that the healed action becomes the canonical recorded action.
+     *
+     * @param file relative test file path
+     * @param datasetId optional dataset ID
+     * @param stepIndex 0-based index of the step to accept, or null to accept all healed steps
+     * @param actionIndex 0-based index of the action within the step to accept, or null for all actions in step
+     * @return true if playbook was found and updated successfully, false otherwise
+     */
+    public boolean acceptPlaybookHealing(final String file, final String datasetId, final Integer stepIndex, final Integer actionIndex)
+    {
+        final File pbFile = findPlaybookFile(file, datasetId);
+        if (pbFile == null || !pbFile.exists() || !pbFile.isFile())
+        {
+            LOGGER.warn("Cannot accept playbook healing: Playbook file not found for file='{}', datasetId='{}'", file, datasetId);
+            return false;
+        }
+
+        try
+        {
+            final String rawContent = Files.readString(pbFile.toPath(), StandardCharsets.UTF_8);
+            final ObjectMapper mapper = new ObjectMapper();
+            final Object parsedRoot = mapper.readValue(rawContent, Object.class);
+            if (parsedRoot == null)
+            {
+                return false;
+            }
+
+            final List<Map<String, Object>> stepsList;
+            final Map<String, Object> rootMap;
+            final String stepsKey;
+
+            if (parsedRoot instanceof List)
+            {
+                @SuppressWarnings("unchecked")
+                final List<Map<String, Object>> list = (List<Map<String, Object>>) parsedRoot;
+                stepsList = list;
+                rootMap = null;
+                stepsKey = null;
+            }
+            else if (parsedRoot instanceof Map)
+            {
+                @SuppressWarnings("unchecked")
+                final Map<String, Object> map = (Map<String, Object>) parsedRoot;
+                rootMap = map;
+                stepsKey = rootMap.containsKey("steps") ? "steps"
+                        : (rootMap.containsKey("_steps") ? "_steps" : "recordedSteps");
+                final Object candidateSteps = rootMap.get(stepsKey);
+                if (candidateSteps instanceof List)
+                {
+                    @SuppressWarnings("unchecked")
+                    final List<Map<String, Object>> list = (List<Map<String, Object>>) candidateSteps;
+                    stepsList = list;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                return false;
+            }
+
+            if (stepsList.isEmpty())
+            {
+                return false;
+            }
+
+            boolean modified = false;
+
+            for (int sIdx = 0; sIdx < stepsList.size(); sIdx++)
+            {
+                if (stepIndex != null && stepIndex.intValue() != sIdx)
+                {
+                    continue;
+                }
+
+                final Map<String, Object> stepMap = stepsList.get(sIdx);
+                final Object actionsObj = stepMap.get("actions");
+                final Object toolCallsObj = stepMap.get("toolCalls");
+                final List<?> actions = actionsObj instanceof List ? (List<?>) actionsObj : null;
+                final List<?> toolCalls = toolCallsObj instanceof List ? (List<?>) toolCallsObj : null;
+
+                boolean stepModified = false;
+
+                if (actions != null)
+                {
+                    for (int actIdx = 0; actIdx < actions.size(); actIdx++)
+                    {
+                        if (actionIndex != null && actionIndex.intValue() != actIdx)
+                        {
+                            continue;
+                        }
+
+                        final Object actObj = actions.get(actIdx);
+                        if (actObj instanceof Map)
+                        {
+                            @SuppressWarnings("unchecked")
+                            final Map<String, Object> actMap = (Map<String, Object>) actObj;
+
+                            final Object currentTargetObj = actMap.get("target");
+                            final String currentTarget = currentTargetObj != null ? currentTargetObj.toString().trim() : "";
+
+                            // Clear healing flags
+                            actMap.remove("expectedTarget");
+                            actMap.remove("originalTarget");
+                            actMap.remove("healedFrom");
+                            actMap.remove("healed");
+
+                            if (!currentTarget.isEmpty())
+                            {
+                                actMap.put("bestCandidateLocator", currentTarget);
+                            }
+
+                            // Synchronize corresponding tool call
+                            if (toolCalls != null && actIdx < toolCalls.size())
+                            {
+                                final Object tcObj = toolCalls.get(actIdx);
+                                if (tcObj instanceof Map)
+                                {
+                                    @SuppressWarnings("unchecked")
+                                    final Map<String, Object> tcMap = (Map<String, Object>) tcObj;
+                                    final Object argsObj = tcMap.get("arguments");
+                                    if (argsObj instanceof Map)
+                                    {
+                                        @SuppressWarnings("unchecked")
+                                        final Map<String, Object> argsMap = (Map<String, Object>) argsObj;
+                                        if (argsMap.containsKey("selector") || argsMap.containsKey("target") || argsMap.containsKey("locator"))
+                                        {
+                                            if (argsMap.containsKey("selector"))
+                                            {
+                                                argsMap.put("selector", currentTarget);
+                                            }
+                                            if (argsMap.containsKey("target"))
+                                            {
+                                                argsMap.put("target", currentTarget);
+                                            }
+                                            if (argsMap.containsKey("locator"))
+                                            {
+                                                argsMap.put("locator", currentTarget);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            stepModified = true;
+                        }
+                    }
+                }
+
+                // If step actions were modified or step was HEALED, transition status to SUCCESS
+                final Object statusObj = stepMap.get("status");
+                final String status = statusObj != null ? String.valueOf(statusObj) : "";
+                if (stepModified || "HEALED".equalsIgnoreCase(status))
+                {
+                    stepMap.put("status", "SUCCESS");
+                    stepMap.put("failed", false);
+                    stepMap.remove("failureReason");
+                    stepModified = true;
+                }
+
+                if (stepModified)
+                {
+                    modified = true;
+                }
+            }
+
+            if (modified)
+            {
+                final Object toSerialize;
+                if (rootMap != null && stepsKey != null)
+                {
+                    rootMap.put(stepsKey, stepsList);
+                    toSerialize = rootMap;
+                }
+                else
+                {
+                    toSerialize = stepsList;
+                }
+                final String updatedJson = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(toSerialize);
+                AtomicFileUtils.writeStringAtomic(pbFile.toPath(), updatedJson);
+                LOGGER.info("Successfully accepted healing and updated playbook JSON at {}", pbFile.getAbsolutePath());
+                return true;
+            }
+
+            return false;
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("Failed to accept playbook healing for file='{}', datasetId='{}': {}", file, datasetId, e.getMessage(), e);
+            return false;
+        }
+    }
+
+    public List<YamlFileDto> getFilteredYamlFilesList(final List<YamlFileDto> files, final String query)
+    {
+        return filterYamlFiles(files != null ? files : getYamlFilesList(), query);
+    }
+
+    public List<YamlFileDto> getFilteredYamlFilesList(final String query)
+    {
+        return filterYamlFiles(getYamlFilesList(), query);
+    }
+
+    /**
+     * Filters a list of YAML files by the specified search query, evaluating multi-tag conjunction (AND)
+     * across file-level and dataset-level tags, labels, and filenames.
+     *
+     * @param fullList the unfiltered list of YAML files
+     * @param query the raw search query
+     * @return the filtered list of YAML files, never null
+     */
+    public static List<YamlFileDto> filterYamlFiles(final List<YamlFileDto> fullList, final String query)
+    {
+        if (fullList == null || fullList.isEmpty())
+        {
+            return Collections.emptyList();
+        }
+        final List<String> tokens = parseSearchTokens(query);
+        if (tokens.isEmpty())
+        {
+            return fullList;
+        }
+
+        final List<String> lowerTokens = tokens.stream().map(String::toLowerCase).toList();
+        final List<YamlFileDto> filtered = new ArrayList<>();
+
+        for (final YamlFileDto file : fullList)
+        {
+            // 1. Check if the file level matches all tokens
+            boolean fileLevelMatchesAll = true;
+            for (final String token : lowerTokens)
+            {
+                if (!matchesFileOrTags(file, token))
+                {
+                    fileLevelMatchesAll = false;
+                    break;
+                }
+            }
+            if (fileLevelMatchesAll)
+            {
+                filtered.add(file);
+                continue;
+            }
+
+            // 2. Check if at least one dataset satisfies all tokens (inheriting file tags)
+            if (file.datasets != null && !file.datasets.isEmpty())
+            {
+                boolean anyDatasetMatchesAll = false;
+                for (final DatasetDto dataset : file.datasets)
+                {
+                    final Map<String, List<String>> mergedTags = (dataset.tags != null && !dataset.tags.isEmpty())
+                        ? TagUtils.mergeTags(file.tags, dataset.tags, null)
+                        : file.tags;
+
+                    boolean datasetMatchesAll = true;
+                    for (final String token : lowerTokens)
+                    {
+                        if (!matchesDatasetToken(file, dataset, mergedTags, token))
+                        {
+                            datasetMatchesAll = false;
+                            break;
+                        }
+                    }
+                    if (datasetMatchesAll)
+                    {
+                        anyDatasetMatchesAll = true;
+                        break;
+                    }
+                }
+                if (anyDatasetMatchesAll)
+                {
+                    filtered.add(file);
+                }
+            }
+        }
+        return filtered;
+    }
+
+    /**
+     * Splits a raw search query into individual search tokens.
+     * Supports comma- or semicolon-separated tokens, space-separated key-value tag pairs,
+     * or single query strings.
+     *
+     * @param rawQuery the raw query string
+     * @return a list of trimmed search tokens, never null
+     */
+    public static List<String> parseSearchTokens(final String rawQuery)
+    {
+        if (rawQuery == null || rawQuery.isBlank())
+        {
+            return Collections.emptyList();
+        }
+
+        final List<String> tokens = new ArrayList<>();
+        if (rawQuery.contains(",") || rawQuery.contains(";"))
+        {
+            for (final String part : rawQuery.split("[,;]+"))
+            {
+                final String trimmed = part.trim();
+                if (!trimmed.isEmpty())
+                {
+                    tokens.add(trimmed);
+                }
+            }
+        }
+        else if (rawQuery.contains(" ") && (rawQuery.contains(":") || rawQuery.contains("=") || rawQuery.toLowerCase().contains("tag:")))
+        {
+            for (final String part : rawQuery.split("\\s+"))
+            {
+                final String trimmed = part.trim();
+                if (!trimmed.isEmpty())
+                {
+                    tokens.add(trimmed);
+                }
+            }
+        }
+        else
+        {
+            final String trimmed = rawQuery.trim();
+            if (!trimmed.isEmpty())
+            {
+                tokens.add(trimmed);
+            }
+        }
+        return tokens;
+    }
+
+    private static boolean matchesFileOrTags(final YamlFileDto file, final String lowerToken)
+    {
+        if (file.file != null && file.file.toLowerCase().contains(lowerToken))
+        {
+            return true;
+        }
+        if (file.tags != null && matchesTagQuery(file.tags, lowerToken))
+        {
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean matchesDatasetToken(final YamlFileDto file, final DatasetDto dataset, final Map<String, List<String>> mergedTags, final String lowerToken)
+    {
+        if (file.file != null && file.file.toLowerCase().contains(lowerToken))
+        {
+            return true;
+        }
+        if (dataset.label != null && dataset.label.toLowerCase().contains(lowerToken))
+        {
+            return true;
+        }
+        if (dataset.id != null && dataset.id.toLowerCase().contains(lowerToken))
+        {
+            return true;
+        }
+        if (mergedTags != null && matchesTagQuery(mergedTags, lowerToken))
+        {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Determines whether a map of tags matches a user filter or search query.
+     * Supports exact tag key/value pairs ({@code key:val} or {@code key=val}),
+     * tag prefixes ({@code tag:key:val}), partial values, and boolean flags.
+     *
+     * @param tags the map of tag names to value lists
+     * @param rawQuery the filter or search query string
+     * @return true if the tags match the query, false otherwise
+     */
+    public static boolean matchesTagQuery(final Map<String, List<String>> tags, final String rawQuery)
+    {
+        if (tags == null || tags.isEmpty() || rawQuery == null || rawQuery.isBlank())
+        {
+            return false;
+        }
+
+        String query = rawQuery.trim().toLowerCase();
+        if (query.startsWith("tag:"))
+        {
+            query = query.substring(4).trim();
+        }
+        else if (query.startsWith("tags:"))
+        {
+            query = query.substring(5).trim();
+        }
+
+        if (query.isEmpty())
+        {
+            return false;
+        }
+
+        // 1. Key-value criteria query (e.g. "feature:checkout", "feature=checkout", "feature: checkout")
+        final int sepIdx = query.indexOf(':') >= 0 ? query.indexOf(':') : query.indexOf('=');
+        if (sepIdx > 0)
+        {
+            final String reqKey = query.substring(0, sepIdx).trim();
+            final String reqVal = query.substring(sepIdx + 1).trim();
+
+            for (final Map.Entry<String, List<String>> entry : tags.entrySet())
+            {
+                if (entry.getKey() != null && entry.getKey().trim().equalsIgnoreCase(reqKey))
+                {
+                    if (reqVal.isEmpty())
+                    {
+                        return true;
+                    }
+                    if (entry.getValue() != null)
+                    {
+                        for (final String val : entry.getValue())
+                        {
+                            if (val != null)
+                            {
+                                final String normVal = val.trim().toLowerCase();
+                                if (normVal.equals(reqVal) || normVal.contains(reqVal) || reqVal.contains(normVal))
+                                {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        // 2. Exact or substring match against any tag key, tag value, or combined key:value
+        for (final Map.Entry<String, List<String>> entry : tags.entrySet())
+        {
+            if (entry.getKey() == null)
+            {
+                continue;
+            }
+            final String keyNorm = entry.getKey().trim().toLowerCase();
+            if (keyNorm.contains(query) || query.contains(keyNorm))
+            {
+                return true;
+            }
+
+            if (entry.getValue() != null)
+            {
+                for (final String val : entry.getValue())
+                {
+                    if (val != null)
+                    {
+                        final String valNorm = val.trim().toLowerCase();
+                        if (valNorm.contains(query) || query.contains(valNorm))
+                        {
+                            return true;
+                        }
+                        final String combined = keyNorm + ":" + valNorm;
+                        if (combined.contains(query) || query.contains(combined))
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Fallback to TagUtils criteria matching
+        return TagUtils.matchesTagCriteria(tags, null, null, null, null, null, query);
+    }
+
+    /**
+     * Extracts all unique tag expressions (in {@code key:val} format) defined across
+     * a collection of test files, sorted alphabetically.
+     *
+     * @param files the collection of YAML test file DTOs
+     * @return an unmodifiable list of unique sorted tag expressions
+     */
+    public static List<String> extractAvailableTestTags(final List<YamlFileDto> files)
+    {
+        if (files == null || files.isEmpty())
+        {
+            return Collections.emptyList();
+        }
+
+        final Set<String> distinctTags = new LinkedHashSet<>();
+        for (final YamlFileDto file : files)
+        {
+            if (file.tags != null)
+            {
+                for (final Map.Entry<String, List<String>> entry : file.tags.entrySet())
+                {
+                    final String key = entry.getKey() != null ? entry.getKey().trim() : "";
+                    if (key.isEmpty() || entry.getValue() == null)
+                    {
+                        continue;
+                    }
+                    for (final String val : entry.getValue())
+                    {
+                        if (val != null && !val.trim().isEmpty())
+                        {
+                            distinctTags.add(key + ":" + val.trim());
+                        }
+                    }
+                }
+            }
+        }
+        final List<String> sortedList = new ArrayList<>(distinctTags);
+        Collections.sort(sortedList);
+        return Collections.unmodifiableList(sortedList);
+    }
+
+    public List<String> getStepsFilesList()
+    {
+        final List<String> stepsFiles = new ArrayList<>();
+        final File resourcesDir = getResourcesDirectory();
+        if (resourcesDir.exists() && resourcesDir.isDirectory())
+        {
+            scanDirForStepsStatic(resourcesDir, resourcesDir, stepsFiles);
+            stepsFiles.sort(String::compareTo);
+        }
+        return stepsFiles;
+    }
+
+    public List<String> getFilteredStepsFilesList(final String query)
+    {
+        final List<String> fullList = getStepsFilesList();
+        final List<String> tokens = parseSearchTokens(query);
+        if (tokens.isEmpty())
+        {
+            return fullList;
+        }
+
+        final List<String> lowerTokens = tokens.stream().map(String::toLowerCase).toList();
+        final List<String> filtered = new ArrayList<>();
+        for (final String file : fullList)
+        {
+            if (file == null)
+            {
+                continue;
+            }
+            String content = null;
+            boolean matchesAll = true;
+            for (final String token : lowerTokens)
+            {
+                boolean tokenMatch = file.toLowerCase().contains(token);
+                if (!tokenMatch)
+                {
+                    if (content == null)
+                    {
+                        try
+                        {
+                            content = readYamlFileContent(file);
+                        }
+                        catch (final Exception e)
+                        {
+                            LOGGER.debug("Could not read steps file content for filter matching: {}", file, e);
+                            content = "";
+                        }
+                    }
+                    if (content != null && content.toLowerCase().contains(token))
+                    {
+                        tokenMatch = true;
+                    }
+                }
+                if (!tokenMatch)
+                {
+                    matchesAll = false;
+                    break;
+                }
+            }
+            if (matchesAll)
+            {
+                filtered.add(file);
+            }
+        }
+        return filtered;
+    }
+
+    private static final Pattern VAR_PATTERN = Pattern.compile("\\$\\{([a-zA-Z0-9_.-]+)(?::[^}]*)?\\}");
+
+    /**
+     * Retrieves a map of relative step fragment paths to their formatted string of required variables coming from test/caller.
+     *
+     * @return map of fragment file path to comma-separated required variable names
+     */
+    public Map<String, String> getFragmentRequiredVariablesMap()
+    {
+        final Map<String, String> result = new HashMap<>();
+        final List<String> stepsFiles = getStepsFilesList();
+        for (final String stepFile : stepsFiles)
+        {
+            final List<String> reqVars = getRequiredVariablesForFragment(stepFile);
+            if (!reqVars.isEmpty())
+            {
+                result.put(stepFile, String.join(", ", reqVars));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Extracts required variables for a given step fragment file that are not defined within it.
+     *
+     * @param relativePath relative file path of the step fragment
+     * @return list of required variable names
+     */
+    public List<String> getRequiredVariablesForFragment(final String relativePath)
+    {
+        if (relativePath == null || relativePath.isBlank() || !relativePath.toLowerCase().endsWith(".steps"))
+        {
+            return List.of();
+        }
+
+        final File file = findSourceTestFile(relativePath);
+        final long lastModified = (file != null && file.exists()) ? file.lastModified() : -1L;
+        final CachedFragmentVars cached = fragmentVarsCache.get(relativePath);
+        if (cached != null && lastModified != -1L && cached.lastModified == lastModified)
+        {
+            return cached.requiredVars;
+        }
+
+        try
+        {
+            final String content = readYamlFileContent(relativePath);
+            if (content == null || content.isBlank())
+            {
+                return List.of();
+            }
+            final Map<String, Object> sections = parsePlaybookSections(content);
+            @SuppressWarnings("unchecked")
+            final Map<String, String> fragmentVarScopes = (Map<String, String>) sections.get("fragmentVarScopes");
+
+            final Set<String> referencedVars = new LinkedHashSet<>();
+            extractVarsFromObject(sections.get("beforeSteps"), referencedVars);
+            extractVarsFromObject(sections.get("mainSteps"), referencedVars);
+            extractVarsFromObject(sections.get("afterSteps"), referencedVars);
+
+            final List<String> requiredVars = new ArrayList<>();
+            for (final String varName : referencedVars)
+            {
+                final String scope = fragmentVarScopes != null ? fragmentVarScopes.get(varName) : null;
+                if (!"defined".equalsIgnoreCase(scope))
+                {
+                    requiredVars.add(varName);
+                }
+            }
+            final List<String> unmodifiableRequiredVars = List.copyOf(requiredVars);
+            if (lastModified != -1L)
+            {
+                fragmentVarsCache.put(relativePath, new CachedFragmentVars(lastModified, unmodifiableRequiredVars));
+            }
+            return unmodifiableRequiredVars;
+        }
+        catch (final Exception e)
+        {
+            LOGGER.debug("Could not parse fragment required variables for {}", relativePath, e);
+            return List.of();
+        }
+    }
+
+    private void extractVarsFromObject(final Object stepsObj, final Set<String> targetSet)
+    {
+        if (stepsObj instanceof List)
+        {
+            for (final Object item : (List<?>) stepsObj)
+            {
+                if (item != null)
+                {
+                    final String str = String.valueOf(item);
+                    final Matcher matcher = VAR_PATTERN.matcher(str);
+                    while (matcher.find())
+                    {
+                        if (matcher.group(1) != null)
+                        {
+                            targetSet.add(matcher.group(1));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public void scanDirForStepsStatic(final File baseDir, final File currentDir, final List<String> stepsFiles)
+    {
+        final File[] files = currentDir.listFiles();
+        if (files != null)
+        {
+            for (final File file : files)
+            {
+                if (file.isDirectory())
+                {
+                    scanDirForStepsStatic(baseDir, file, stepsFiles);
+                }
+                else
+                {
+                    final String name = file.getName().toLowerCase();
+                    if (name.endsWith(".steps"))
+                    {
+                        final String relativePath = baseDir.toURI().relativize(file.toURI()).getPath();
+                        stepsFiles.add(relativePath);
+                    }
+                }
+            }
+        }
+    }
+
+    public boolean isValidIncludeTarget(final String relativePath)
+    {
+        if (relativePath == null || relativePath.isBlank())
+        {
+            return false;
+        }
+        return relativePath.toLowerCase().endsWith(".steps");
+    }
+
+    public void scanDirStatic(final File baseDir, final File currentDir, final List<String> yamlFiles)
+    {
+        final File[] files = currentDir.listFiles();
+        if (files != null)
+        {
+            for (final File file : files)
+            {
+                if (file.isDirectory())
+                {
+                    scanDirStatic(baseDir, file, yamlFiles);
+                }
+                else
+                {
+                    final String name = file.getName().toLowerCase();
+                    if (name.endsWith(".yaml") || name.endsWith(".yml"))
+                    {
+                        final String relativePath = baseDir.toURI().relativize(file.toURI()).getPath();
+                        yamlFiles.add(relativePath);
+                    }
+                }
+            }
+        }
+    }
+
+    public Map<String, Object> getFileDetails(final File file)
+    {
+        final Map<String, Object> details = new HashMap<>();
+        details.put("path", file.getName());
+        try
+        {
+            final Yaml yaml = new Yaml();
+            final Object data;
+            try (final InputStream is = new FileInputStream(file))
+            {
+                data = yaml.load(is);
+            }
+            if (data instanceof Map)
+            {
+                @SuppressWarnings("unchecked")
+                final Map<String, Object> root = (Map<String, Object>) data;
+
+                // Extract root tags and area tags
+                final Object tagsObj = root.containsKey("tags") ? root.get("tags") : root.get("_tags");
+                final Map<String, List<String>> parsedRootTags = tagsObj != null ? TagUtils.parseTags(tagsObj) : Collections.emptyMap();
+                final Map<String, List<String>> effectiveRootTags = new LinkedHashMap<>(parsedRootTags);
+                final String areaTag = extractAreaTagFromFile(file.getPath());
+                if (areaTag != null && !areaTag.isBlank())
+                {
+                    final boolean hasArea = effectiveRootTags.keySet().stream().anyMatch("area"::equalsIgnoreCase);
+                    if (!hasArea)
+                    {
+                        effectiveRootTags.put("area", List.of(areaTag));
+                    }
+                }
+
+                // Extract steps info
+                if (root.containsKey("steps"))
+                {
+                    final String stepsStr = String.valueOf(root.get("steps"));
+                    final String[] steps = stepsStr.split("\n");
+                    final List<String> cleanSteps = new ArrayList<>();
+                    for (final String step : steps)
+                    {
+                        if (!step.trim().isEmpty())
+                        {
+                            cleanSteps.add(step.trim());
+                        }
+                    }
+                    details.put("totalSteps", cleanSteps.size());
+                    final List<String> summary = cleanSteps.subList(0, Math.min(cleanSteps.size(), 3));
+                    details.put("stepsSummary", summary);
+                }
+                else
+                {
+                    details.put("totalSteps", 0);
+                    details.put("stepsSummary", new ArrayList<>());
+                }
+
+                // Extract data / test IDs / dataset keys
+                final List<DatasetDto> datasetsList = new ArrayList<>();
+                final List<String> datasetKeys = new ArrayList<>();
+                if (root.containsKey("data"))
+                {
+                    final Object dataObj = root.get("data");
+                    if (dataObj instanceof List)
+                    {
+                        final List<?> dataList = (List<?>) dataObj;
+                        for (int i = 0; i < dataList.size(); i++)
+                        {
+                            final Object item = dataList.get(i);
+                            if (item instanceof Map)
+                            {
+                                final Map<?, ?> itemMap = (Map<?, ?>) item;
+                                final Object dsTagsObj = itemMap.containsKey("tags") ? itemMap.get("tags") : itemMap.get("_tags");
+                                final Map<String, List<String>> dsTags = dsTagsObj != null ? TagUtils.parseTags(dsTagsObj) : Collections.emptyMap();
+
+                                final Object tId = itemMap.get("testId") != null ? itemMap.get("testId")
+                                        : itemMap.get("TEST_ID") != null ? itemMap.get("TEST_ID")
+                                        : itemMap.get("id") != null ? itemMap.get("id")
+                                        : itemMap.get("testid") != null ? itemMap.get("testid")
+                                        : itemMap.get("testID");
+                                if (tId != null && !String.valueOf(tId).trim().isEmpty())
+                                {
+                                    datasetsList.add(new DatasetDto(String.valueOf(tId), String.valueOf(tId), true, false, null, dsTags));
+                                }
+                                else
+                                {
+                                    datasetsList.add(new DatasetDto(String.valueOf(i + 1), "Dataset " + (i + 1), false, false, null, dsTags));
+                                }
+                                for (final Object key : itemMap.keySet())
+                                {
+                                    final String keyStr = String.valueOf(key);
+                                    if (!datasetKeys.contains(keyStr) && !keyStr.startsWith("neodymium."))
+                                    {
+                                        datasetKeys.add(keyStr);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    final Object tId = root.get("testId") != null ? root.get("testId")
+                            : root.get("TEST_ID") != null ? root.get("TEST_ID")
+                            : root.get("id") != null ? root.get("id")
+                            : root.get("testid") != null ? root.get("testid")
+                            : root.get("testID");
+                    if (tId != null && !String.valueOf(tId).trim().isEmpty())
+                    {
+                        datasetsList.add(new DatasetDto(String.valueOf(tId), String.valueOf(tId), true, false, null, effectiveRootTags));
+                    }
+                    else
+                    {
+                        datasetsList.add(new DatasetDto("1", "Dataset 1", false, false, null, effectiveRootTags));
+                    }
+                    for (final Object key : root.keySet())
+                    {
+                        final String keyStr = String.valueOf(key);
+                        if (!"steps".equals(keyStr) && !"data".equals(keyStr) && !keyStr.startsWith("neodymium."))
+                        {
+                            datasetKeys.add(keyStr);
+                        }
+                    }
+                }
+                details.put("datasets", datasetsList);
+                final List<String> testIds = new ArrayList<>();
+                for (final DatasetDto d : datasetsList)
+                {
+                    testIds.add(d.label);
+                }
+                details.put("testIds", testIds);
+                details.put("datasetKeys", datasetKeys);
+
+                final Map<String, List<String>> allTestTags = new LinkedHashMap<>();
+                for (final Map.Entry<String, List<String>> e : effectiveRootTags.entrySet())
+                {
+                    allTestTags.computeIfAbsent(e.getKey(), k -> new ArrayList<>()).addAll(e.getValue());
+                }
+                for (final DatasetDto d : datasetsList)
+                {
+                    if (d.tags != null)
+                    {
+                        for (final Map.Entry<String, List<String>> e : d.tags.entrySet())
+                        {
+                            final List<String> list = allTestTags.computeIfAbsent(e.getKey(), k -> new ArrayList<>());
+                            for (final String v : e.getValue())
+                            {
+                                if (!list.contains(v))
+                                {
+                                    list.add(v);
+                                }
+                            }
+                        }
+                    }
+                }
+                details.put("rootTags", Collections.unmodifiableMap(effectiveRootTags));
+                details.put("tags", Collections.unmodifiableMap(allTestTags));
+            }
+        }
+        catch (final Exception e)
+        {
+            final String summary = e.getMessage() != null ? e.getMessage().replace('\n', ' ').replaceAll(" +", " ") : "Unknown syntax error";
+            LOGGER.warn("Defective YAML file detected [{}]: {}", file.getName(), summary);
+            LOGGER.debug("Stack trace for YAML parse failure:", e);
+            details.put("hasError", true);
+            details.put("error", e.getMessage());
+            details.put("datasets", new ArrayList<DatasetDto>());
+            details.put("rootTags", Collections.emptyMap());
+            details.put("tags", Collections.emptyMap());
+        }
+        return details;
+    }
+
+    public File resolveCanonicalFile(final String file) throws IOException
+    {
+        final File resourcesDir = getResourcesDirectory().getCanonicalFile();
+        File yamlFile = new File(resourcesDir, file).getCanonicalFile();
+        if (!yamlFile.exists())
+        {
+            final File found = findFileRecursively(resourcesDir, file);
+            if (found != null)
+            {
+                yamlFile = found.getCanonicalFile();
+            }
+        }
+        if (!yamlFile.toPath().normalize().startsWith(resourcesDir.toPath().normalize()))
+        {
+            throw new SecurityException("Access denied: Directory traversal detected");
+        }
+        return yamlFile;
+    }
+
+    private File findFileRecursively(final File dir, final String targetName)
+    {
+        final String cleanTarget = targetName.contains("/") ? targetName.substring(targetName.lastIndexOf('/') + 1) : targetName;
+        final boolean targetHasExt = cleanTarget.contains(".");
+        final String baseTarget = targetHasExt
+                ? cleanTarget.substring(0, cleanTarget.lastIndexOf('.'))
+                : cleanTarget;
+
+        final File[] files = dir.listFiles();
+        if (files != null)
+        {
+            for (final File f : files)
+            {
+                if (f.isDirectory())
+                {
+                    final File found = findFileRecursively(f, targetName);
+                    if (found != null)
+                    {
+                        return found;
+                    }
+                }
+                else
+                {
+                    final String fName = f.getName();
+                    if (fName.equalsIgnoreCase(cleanTarget))
+                    {
+                        return f;
+                    }
+                    final String fBase = fName.contains(".")
+                            ? fName.substring(0, fName.lastIndexOf('.'))
+                            : fName;
+                    if (fBase.equalsIgnoreCase(baseTarget))
+                    {
+                        return f;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    public String readYamlFileContent(final String file) throws IOException
+    {
+        final File yamlFile = resolveCanonicalFile(file);
+        if (yamlFile.exists() && yamlFile.isFile())
+        {
+            return Files.readString(yamlFile.toPath(), StandardCharsets.UTF_8);
+        }
+        return null;
+    }
+
+    public void saveYamlFileContent(final String file, final String content) throws IOException
+    {
+        fragmentVarsCache.remove(file);
+        final File yamlFile = resolveCanonicalFile(file);
+        if (yamlFile.getParentFile() != null && !yamlFile.getParentFile().exists())
+        {
+            yamlFile.getParentFile().mkdirs();
+        }
+        Files.writeString(yamlFile.toPath(), content, StandardCharsets.UTF_8);
+        clearYamlFilesCache();
+    }
+
+    public void createYamlFile(final String name) throws IOException
+    {
+        final String sanitizedName = (name.endsWith(".yaml") || name.endsWith(".yml") || name.endsWith(".steps"))
+                ? name
+                : name + ".yaml";
+        fragmentVarsCache.remove(sanitizedName);
+        final File yamlFile = resolveCanonicalFile(sanitizedName);
+        if (!yamlFile.exists())
+        {
+            if (yamlFile.getParentFile() != null && !yamlFile.getParentFile().exists())
+            {
+                yamlFile.getParentFile().mkdirs();
+            }
+            Files.writeString(yamlFile.toPath(), "", StandardCharsets.UTF_8);
+            clearYamlFilesCache();
+        }
+    }
+
+    public boolean deleteYamlFile(final String file) throws IOException
+    {
+        fragmentVarsCache.remove(file);
+        final File yamlFile = resolveCanonicalFile(file);
+        if (yamlFile.exists() && yamlFile.isFile())
+        {
+            Files.delete(yamlFile.toPath());
+            clearYamlFilesCache();
+            return true;
+        }
+        return false;
+    }
+
+    public boolean renameOrMoveFile(final String oldRelativePath, final String newRelativePath) throws IOException
+    {
+        if (oldRelativePath == null || oldRelativePath.isBlank() || newRelativePath == null || newRelativePath.isBlank())
+        {
+            return false;
+        }
+
+        final File oldFile = resolveCanonicalFile(oldRelativePath);
+        if (!oldFile.exists() || !oldFile.isFile())
+        {
+            return false;
+        }
+
+        final String oldLower = oldRelativePath.toLowerCase();
+        final String rawTarget = newRelativePath.trim().replace('\\', '/');
+        final String targetPath;
+        if (!rawTarget.toLowerCase().endsWith(".yaml") && !rawTarget.toLowerCase().endsWith(".yml") && !rawTarget.toLowerCase().endsWith(".steps"))
+        {
+            if (oldLower.endsWith(".steps"))
+            {
+                targetPath = rawTarget + ".steps";
+            }
+            else if (oldLower.endsWith(".yml"))
+            {
+                targetPath = rawTarget + ".yml";
+            }
+            else
+            {
+                targetPath = rawTarget + ".yaml";
+            }
+        }
+        else
+        {
+            targetPath = rawTarget;
+        }
+
+        final File resourcesDir = getResourcesDirectory().getCanonicalFile();
+        final File newFile = new File(resourcesDir, targetPath).getCanonicalFile();
+        if (!newFile.toPath().normalize().startsWith(resourcesDir.toPath().normalize()))
+        {
+            throw new SecurityException("Access denied: Directory traversal detected");
+        }
+
+        if (newFile.exists())
+        {
+            throw new IllegalArgumentException("Destination file already exists: " + targetPath);
+        }
+
+        if (newFile.getParentFile() != null && !newFile.getParentFile().exists())
+        {
+            newFile.getParentFile().mkdirs();
+        }
+
+        Files.move(oldFile.toPath(), newFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+
+        if (oldRelativePath.equals(activeEditingFile))
+        {
+            activeEditingFile = targetPath;
+        }
+        if (expandedFiles.contains(oldRelativePath))
+        {
+            expandedFiles.remove(oldRelativePath);
+            expandedFiles.add(targetPath);
+        }
+        fragmentVarsCache.remove(oldRelativePath);
+        fragmentVarsCache.remove(targetPath);
+
+        clearYamlFilesCache();
+        return true;
+    }
+
+    /**
+     * Immutable result returned by {@link #updateFragmentReferences(String, String)}.
+     *
+     * @param updatedFileCount the number of YAML files whose content was modified
+     * @param updatedFiles     relative paths of every file that was actually updated
+     */
+    public record UpdateFragmentRefsResult(int updatedFileCount, List<String> updatedFiles)
+    {
+    }
+
+    /**
+     * Severity of a single file-validation finding.
+     */
+    public enum IssueSeverity
+    {
+        ERROR, WARNING, INFO
+    }
+
+    /**
+     * A single diagnostic finding produced by {@link #validateFileContent}.
+     *
+     * @param severity human-readable severity level
+     * @param message  description of the problem or information
+     * @param context  optional short context (e.g. the offending variable name or include path)
+     */
+    public record ValidationIssue(IssueSeverity severity, String message, String context)
+    {
+    }
+
+    /**
+     * Scans all {@code .yaml} and {@code .yml} files under the resources directory and
+     * replaces any occurrence of {@code oldFragmentPath} with {@code newFragmentPath}
+     * inside their text content (covers both {@code _include:} values and inline
+     * fragment path strings). Each modified file is written back atomically and an
+     * {@code INFO}-level log entry is emitted so operators can trace what was changed.
+     *
+     * <p>The check is a plain case-sensitive string match, intentionally avoiding YAML
+     * parsing so that even malformed or comment-only files are handled gracefully.
+     *
+     * @param oldFragmentPath relative path of the fragment before the move (e.g. {@code fragments/login.steps})
+     * @param newFragmentPath relative path of the fragment after the move  (e.g. {@code auth/login.steps})
+     * @return an {@link UpdateFragmentRefsResult} with the count and list of updated files
+     * @throws IOException if walking the directory or reading/writing a file fails
+     */
+    public UpdateFragmentRefsResult updateFragmentReferences(
+            final String oldFragmentPath,
+            final String newFragmentPath) throws IOException
+    {
+        if (oldFragmentPath == null || oldFragmentPath.isBlank()
+                || newFragmentPath == null || newFragmentPath.isBlank())
+        {
+            LOGGER.warn("[Fragment Refs] updateFragmentReferences called with blank path(s); skipping.");
+            return new UpdateFragmentRefsResult(0, List.of());
+        }
+
+        if (oldFragmentPath.equals(newFragmentPath))
+        {
+            LOGGER.debug("[Fragment Refs] Old and new paths are identical ({}); nothing to update.", oldFragmentPath);
+            return new UpdateFragmentRefsResult(0, List.of());
+        }
+
+        final File resourcesDir = getResourcesDirectory().getCanonicalFile();
+        LOGGER.info("[Fragment Refs] Scanning '{}' for references to '{}' → '{}'",
+                resourcesDir.getPath(), oldFragmentPath, newFragmentPath);
+
+        final List<String> updatedFiles = new ArrayList<>();
+
+        // Walk all YAML / YML files; .steps files are not expected to include each other
+        // but are included in the scan for completeness.
+        try (final Stream<Path> paths = Files.walk(resourcesDir.toPath()))
+        {
+            final List<Path> candidateFiles = paths
+                    .filter(Files::isRegularFile)
+                    .filter(p ->
+                    {
+                        final String name = p.getFileName().toString().toLowerCase();
+                        return name.endsWith(".yaml") || name.endsWith(".yml");
+                    })
+                    .toList();
+
+            for (final Path candidate : candidateFiles)
+            {
+                final String original = Files.readString(candidate, StandardCharsets.UTF_8);
+                if (!original.contains(oldFragmentPath))
+                {
+                    // Fast-path: no reference present — skip without rewriting.
+                    continue;
+                }
+
+                final String updated = original.replace(oldFragmentPath, newFragmentPath);
+                Files.writeString(candidate, updated, StandardCharsets.UTF_8);
+
+                final String relativePath = resourcesDir.toURI()
+                        .relativize(candidate.toUri())
+                        .getPath();
+                updatedFiles.add(relativePath);
+                LOGGER.info("[Fragment Refs] Updated reference in: {}  ('{}' → '{}')",
+                        relativePath, oldFragmentPath, newFragmentPath);
+            }
+        }
+
+        if (!updatedFiles.isEmpty())
+        {
+            fragmentVarsCache.clear();
+        }
+        LOGGER.info("[Fragment Refs] Finished. {} file(s) updated.", updatedFiles.size());
+        if (!updatedFiles.isEmpty())
+        {
+            clearYamlFilesCache();
+        }
+        return new UpdateFragmentRefsResult(updatedFiles.size(), List.copyOf(updatedFiles));
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> parsePlaybookSections(final String content)
+    {
+        final Map<String, Object> result = new HashMap<>();
+        final List<String> beforeSteps = new ArrayList<>();
+        final List<String> mainSteps = new ArrayList<>();
+        final List<String> afterSteps = new ArrayList<>();
+        final List<Map<String, String>> dataMatrix = new ArrayList<>();
+        final List<String> varKeys = new ArrayList<>();
+        final Map<String, String> fragmentVarScopes = new HashMap<>();
+        final Map<String, List<String>> rootTags = new LinkedHashMap<>();
+        final List<Map<String, List<String>>> datasetTagsList = new ArrayList<>();
+
+        if (content != null && !content.trim().isEmpty())
+        {
+            try
+            {
+                final String normalizedContent = preprocessYamlSteps(content);
+                final DumperOptions dumperOptions = new DumperOptions();
+                dumperOptions.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+                dumperOptions.setPrettyFlow(true);
+                final Yaml yaml = new Yaml(dumperOptions);
+                final Object loaded = yaml.load(normalizedContent);
+                if (loaded instanceof Map)
+                {
+                    final Map<String, Object> root = (Map<String, Object>) loaded;
+
+                    final Object tagsObj = root.containsKey("tags") ? root.get("tags") : root.get("_tags");
+                    if (tagsObj != null)
+                    {
+                        rootTags.putAll(TagUtils.parseTags(tagsObj));
+                    }
+
+                    final String[] beforeAliases = {"before", "beforeEach", "_beforeEach", "_beforeAll", "beforeAll"};
+                    for (final String alias : beforeAliases)
+                    {
+                        if (beforeSteps.isEmpty())
+                        {
+                            final List<String> extractedBefore = extractSectionStepsWithComments(content, alias);
+                            if (!extractedBefore.isEmpty())
+                            {
+                                beforeSteps.addAll(extractedBefore);
+                            }
+                            else if (root.containsKey(alias))
+                            {
+                                parseSectionSteps(root.get(alias), beforeSteps);
+                            }
+                        }
+                    }
+
+                    if (!root.containsKey("steps") && !root.containsKey("_steps") && beforeSteps.isEmpty() && afterSteps.isEmpty()
+                            && (root.containsKey("_include") || root.containsKey("include")))
+                    {
+                        final String incPath = root.containsKey("_include")
+                                ? String.valueOf(root.get("_include"))
+                                : String.valueOf(root.get("include"));
+                        mainSteps.add("_include: " + incPath);
+                    }
+
+                    final String[] stepsAliases = {"steps", "_steps"};
+                    for (final String alias : stepsAliases)
+                    {
+                        if (mainSteps.isEmpty())
+                        {
+                            final List<String> extractedSteps = extractSectionStepsWithComments(content, alias);
+                            if (!extractedSteps.isEmpty())
+                            {
+                                mainSteps.addAll(extractedSteps);
+                            }
+                            else if (root.containsKey(alias))
+                            {
+                                parseSectionSteps(root.get(alias), mainSteps);
+                            }
+                        }
+                    }
+
+                    final String[] afterAliases = {"after", "afterEach", "_afterEach", "_afterAll", "afterAll"};
+                    for (final String alias : afterAliases)
+                    {
+                        if (afterSteps.isEmpty())
+                        {
+                            final List<String> extractedAfter = extractSectionStepsWithComments(content, alias);
+                            if (!extractedAfter.isEmpty())
+                            {
+                                afterSteps.addAll(extractedAfter);
+                            }
+                            else if (root.containsKey(alias))
+                            {
+                                parseSectionSteps(root.get(alias), afterSteps);
+                            }
+                        }
+                    }
+
+                    // Root properties (_properties or properties)
+                    final String propertiesKey = root.containsKey("_properties") ? "_properties" : (root.containsKey("properties") ? "properties" : "_properties");
+                    result.put("propertiesKey", propertiesKey);
+                    final Object rawProperties = root.get(propertiesKey);
+                    final List<Map<String, String>> propertiesList = new ArrayList<>();
+                    if (rawProperties != null)
+                    {
+                        result.put("properties", rawProperties);
+                        if (rawProperties instanceof Map<?, ?> map)
+                        {
+                            for (final Map.Entry<?, ?> entry : map.entrySet())
+                            {
+                                if (entry.getKey() != null)
+                                {
+                                    final Map<String, String> propEntry = new LinkedHashMap<>();
+                                    propEntry.put("key", String.valueOf(entry.getKey()));
+                                    propEntry.put("value", entry.getValue() != null ? String.valueOf(entry.getValue()) : "");
+                                    propertiesList.add(propEntry);
+                                }
+                            }
+                            result.put("propertiesYaml", yaml.dump(rawProperties).trim());
+                        }
+                        else if (rawProperties instanceof List<?>)
+                        {
+                            result.put("propertiesYaml", yaml.dump(rawProperties).trim());
+                        }
+                        else
+                        {
+                            result.put("propertiesYaml", String.valueOf(rawProperties).trim());
+                        }
+                    }
+                    result.put("propertiesList", propertiesList);
+
+                    // Root metadata (_meta or meta)
+                    final String metaKey = root.containsKey("_meta") ? "_meta" : (root.containsKey("meta") ? "meta" : "_meta");
+                    result.put("metaKey", metaKey);
+                    final Object rawMeta = root.get(metaKey);
+                    if (rawMeta != null)
+                    {
+                        result.put("meta", rawMeta);
+                        if (rawMeta instanceof Map<?, ?> || rawMeta instanceof List<?>)
+                        {
+                            result.put("metaYaml", yaml.dump(rawMeta).trim());
+                        }
+                        else
+                        {
+                            result.put("metaYaml", String.valueOf(rawMeta).trim());
+                        }
+                    }
+
+                    // Playbook description
+                    if (root.get("description") instanceof String desc && !desc.isBlank())
+                    {
+                        result.put("description", desc.trim());
+                    }
+
+                    // Prompt addon
+                    final Object rawPromptAddon = root.get("promptAddon");
+                    if (rawPromptAddon != null)
+                    {
+                        result.put("promptAddon", rawPromptAddon);
+                        if (rawPromptAddon instanceof Map<?, ?> || rawPromptAddon instanceof List<?>)
+                        {
+                            result.put("promptAddonYaml", yaml.dump(rawPromptAddon).trim());
+                        }
+                        else
+                        {
+                            result.put("promptAddonYaml", String.valueOf(rawPromptAddon).trim());
+                        }
+                    }
+
+                    // Top-level variables (unreserved keys)
+                    final Set<String> reservedKeys = Set.of(
+                        "before", "beforeEach", "_beforeEach", "_beforeAll", "beforeAll",
+                        "steps", "_steps",
+                        "after", "afterEach", "_afterEach", "_afterAll", "afterAll",
+                        "variables", "data", "_data",
+                        "_properties", "properties",
+                        "_meta", "meta",
+                        "description", "promptAddon",
+                        "_include", "include",
+                        "_onSuccess", "_onSuccessEach", "_onSuccessAll", "onSuccessAll",
+                        "_onFailure", "_onFailureEach", "_onFailureAll", "onFailureAll"
+                    );
+                    final Map<String, Object> rootVariables = new LinkedHashMap<>();
+                    for (final Map.Entry<String, Object> entry : root.entrySet())
+                    {
+                        final String k = entry.getKey();
+                        if (!reservedKeys.contains(k) && entry.getValue() != null)
+                        {
+                            rootVariables.put(k, entry.getValue());
+                        }
+                    }
+                    result.put("rootVariables", rootVariables);
+
+                    if (root.containsKey("variables") && root.get("variables") instanceof Map)
+                    {
+                        final Map<?, ?> varMap = (Map<?, ?>) root.get("variables");
+                        for (final Map.Entry<?, ?> entry : varMap.entrySet())
+                        {
+                            fragmentVarScopes.put(String.valueOf(entry.getKey()), String.valueOf(entry.getValue()));
+                        }
+                    }
+
+                    final Object rawData = root.containsKey("data") ? root.get("data") : root.get("_data");
+                    if (rawData instanceof List)
+                    {
+                        final List<?> dataList = (List<?>) rawData;
+                        for (final Object item : dataList)
+                        {
+                            if (item instanceof Map)
+                            {
+                                final Map<?, ?> itemMap = (Map<?, ?>) item;
+                                final Object dsTagsObj = itemMap.containsKey("tags") ? itemMap.get("tags") : itemMap.get("_tags");
+                                final Map<String, List<String>> dsTags = dsTagsObj != null ? TagUtils.parseTags(dsTagsObj) : new LinkedHashMap<>();
+                                datasetTagsList.add(dsTags);
+
+                                final Map<String, String> row = new HashMap<>();
+                                for (final Map.Entry<?, ?> entry : itemMap.entrySet())
+                                {
+                                    final String k = String.valueOf(entry.getKey());
+                                    if ("tags".equals(k) || "_tags".equals(k))
+                                    {
+                                        continue;
+                                    }
+                                    final String v = entry.getValue() != null ? String.valueOf(entry.getValue()) : "";
+                                    row.put(k, v);
+                                    if (!varKeys.contains(k))
+                                    {
+                                        varKeys.add(k);
+                                    }
+                                }
+                                dataMatrix.add(row);
+                            }
+                        }
+                    }
+                }
+                else if (loaded instanceof List)
+                {
+                    parseSectionSteps(loaded, mainSteps);
+                }
+
+                // Fallback for raw text lines
+                if (mainSteps.isEmpty() && beforeSteps.isEmpty() && afterSteps.isEmpty())
+                {
+                    boolean inVarsSection = false;
+                    for (final String line : content.split("\n"))
+                    {
+                        String trimmed = line.trim();
+                        if (trimmed.startsWith("variables:"))
+                        {
+                            inVarsSection = true;
+                            continue;
+                        }
+                        if (inVarsSection)
+                        {
+                            if (trimmed.startsWith("steps:") || trimmed.startsWith("before:") || trimmed.startsWith("after:"))
+                            {
+                                inVarsSection = false;
+                            }
+                            else
+                            {
+                                final String[] parts = trimmed.split(":", 2);
+                                if (parts.length == 2)
+                                {
+                                    fragmentVarScopes.put(parts[0].trim(), parts[1].trim());
+                                }
+                                continue;
+                            }
+                        }
+                        if (!trimmed.isEmpty() && !trimmed.startsWith("#"))
+                        {
+                            if (trimmed.startsWith("-"))
+                            {
+                                trimmed = trimmed.substring(1).trim();
+                            }
+                            if (!trimmed.isEmpty())
+                            {
+                                mainSteps.add(trimmed);
+                            }
+                        }
+                    }
+                }
+                result.put("hasError", false);
+                result.put("error", null);
+            }
+            catch (final Exception e)
+            {
+                boolean parsedAsLines = false;
+                final String trimmedContent = content.trim();
+                if (!trimmedContent.startsWith("steps:") && !trimmedContent.contains("\nsteps:"))
+                {
+                    boolean inVarsSection = false;
+                    for (final String line : content.split("\n"))
+                    {
+                        String trimmed = line.trim();
+                        if (trimmed.startsWith("variables:"))
+                        {
+                            inVarsSection = true;
+                            continue;
+                        }
+                        if (inVarsSection)
+                        {
+                            if (trimmed.startsWith("steps:") || trimmed.startsWith("before:") || trimmed.startsWith("after:"))
+                            {
+                                inVarsSection = false;
+                            }
+                            else
+                            {
+                                final String[] parts = trimmed.split(":", 2);
+                                if (parts.length == 2)
+                                {
+                                    fragmentVarScopes.put(parts[0].trim(), parts[1].trim());
+                                }
+                                continue;
+                            }
+                        }
+                        if (!trimmed.isEmpty() && !trimmed.startsWith("#"))
+                        {
+                            if (trimmed.startsWith("-"))
+                            {
+                                trimmed = trimmed.substring(1).trim();
+                            }
+                            if (!trimmed.isEmpty())
+                            {
+                                mainSteps.add(trimmed);
+                            }
+                        }
+                    }
+                    if (!mainSteps.isEmpty())
+                    {
+                        parsedAsLines = true;
+                        result.put("hasError", false);
+                        result.put("error", null);
+                    }
+                }
+
+                if (!parsedAsLines)
+                {
+                    final String summary = e.getMessage() != null ? e.getMessage().replace('\n', ' ').replaceAll(" +", " ") : "Unknown syntax error";
+                    LOGGER.warn("Defective YAML content syntax: {}", summary);
+                    LOGGER.debug("Stack trace for YAML content parse failure:", e);
+                    result.put("hasError", true);
+                    result.put("error", e.getMessage());
+                }
+            }
+        }
+        else
+        {
+            result.put("hasError", false);
+            result.put("error", null);
+        }
+
+        result.putIfAbsent("propertiesList", List.of());
+        result.putIfAbsent("propertiesYaml", "");
+        result.put("beforeSteps", beforeSteps);
+        result.put("mainSteps", mainSteps);
+        result.put("afterSteps", afterSteps);
+        result.put("dataMatrix", dataMatrix);
+        result.put("varKeys", varKeys);
+        result.put("fragmentVarScopes", fragmentVarScopes);
+        result.put("rootTags", rootTags);
+        result.put("datasetTagsList", datasetTagsList);
+        result.put("areaTag", extractAreaTag(content));
+        return result;
+    }
+
+    private void parseSectionSteps(final Object stepsObj, final List<String> targetList)
+    {
+        if (stepsObj instanceof List<?> list)
+        {
+            for (final Object stepItem : list)
+            {
+                if (stepItem instanceof Map<?, ?> mapStep)
+                {
+                    if (mapStep.containsKey("_include") || mapStep.containsKey("include"))
+                    {
+                        final String incPath = mapStep.containsKey("_include")
+                                ? String.valueOf(mapStep.get("_include"))
+                                : String.valueOf(mapStep.get("include"));
+                        targetList.add("_include: " + incPath);
+                    }
+                    else if (mapStep.containsKey("instruction"))
+                    {
+                        final String inst = String.valueOf(mapStep.get("instruction")).trim();
+                        if (!inst.isEmpty())
+                        {
+                            targetList.add(inst);
+                        }
+                    }
+                    else if (mapStep.size() == 1)
+                    {
+                        final Map.Entry<?, ?> entry = mapStep.entrySet().iterator().next();
+                        final String keyStr = String.valueOf(entry.getKey()).trim();
+                        final Object valObj = entry.getValue();
+                        if (valObj == null || "null".equals(String.valueOf(valObj).trim()))
+                        {
+                            targetList.add(keyStr);
+                        }
+                        else if (valObj instanceof List<?> subList)
+                        {
+                            targetList.add(keyStr.endsWith(":") ? keyStr : keyStr + ":");
+                            for (final Object sub : subList)
+                            {
+                                if (sub != null && !String.valueOf(sub).trim().isEmpty())
+                                {
+                                    targetList.add(String.valueOf(sub).trim());
+                                }
+                            }
+                        }
+                        else
+                        {
+                            final String valStr = String.valueOf(valObj).trim();
+                            targetList.add(valStr.isEmpty() ? keyStr : keyStr + ": " + valStr);
+                        }
+                    }
+                    else
+                    {
+                        final String sMap = String.valueOf(mapStep).trim();
+                        if (!sMap.isEmpty())
+                        {
+                            targetList.add(sMap);
+                        }
+                    }
+                }
+                else if (stepItem instanceof String stepStr)
+                {
+                    if (stepStr.contains("\n"))
+                    {
+                        for (final String line : stepStr.split("\\r?\\n"))
+                        {
+                            final String trimmed = line.trim();
+                            if (!trimmed.isEmpty() && !trimmed.startsWith("#"))
+                            {
+                                final String unbulleted = (trimmed.startsWith("- ") || trimmed.startsWith("* "))
+                                        ? trimmed.substring(2).trim()
+                                        : trimmed;
+                                if (!unbulleted.isEmpty() && !unbulleted.startsWith("#"))
+                                {
+                                    targetList.add(unbulleted);
+                                }
+                            }
+                        }
+                    }
+                    else if (!stepStr.trim().isEmpty())
+                    {
+                        targetList.add(stepStr.trim());
+                    }
+                }
+                else if (stepItem != null && !String.valueOf(stepItem).trim().isEmpty())
+                {
+                    targetList.add(String.valueOf(stepItem).trim());
+                }
+            }
+        }
+        else if (stepsObj != null)
+        {
+            final String stepsStr = String.valueOf(stepsObj);
+            for (final String line : stepsStr.split("\n"))
+            {
+                if (!line.trim().isEmpty())
+                {
+                    targetList.add(line.trim());
+                }
+            }
+        }
+    }
+
+    /**
+     * Extracts steps from a named playbook section (e.g. {@code "steps"}, {@code "before"},
+     * {@code "after"}) while preserving line comments (starting with {@code '#'}) and marking
+     * folded/literal block scalar sub-steps with a leading sub-step prefix ({@code "  - "}).
+     *
+     * @param content the raw YAML string content
+     * @param sectionName the section key to extract ("before", "steps", or "after")
+     * @return list of preserved steps, comments, and substeps
+     */
+    public static List<String> extractSectionStepsWithComments(final String content, final String sectionName)
+    {
+        final List<String> steps = new ArrayList<>();
+        if (content == null || content.isBlank() || sectionName == null || sectionName.isBlank())
+        {
+            return steps;
+        }
+
+        final String[] lines = content.split("\\r?\\n");
+        boolean inTargetSection = false;
+        int sectionIndent = 0;
+        boolean inBlockScalar = false;
+        int foldedScalarIndent = -1;
+
+        final Pattern sectionPattern = Pattern.compile("(?i)^[ \\t]*\"?'?" + Pattern.quote(sectionName) + "\"?'?[ \\t]*:[ \\t]*(?:[|>]-?.*)?$");
+        final Pattern topLevelSectionPattern = Pattern.compile("^[a-zA-Z0-9_-]+[ \\t]*:.*$");
+
+        for (int i = 0; i < lines.length; i++)
+        {
+            final String line = lines[i];
+            final String trimmed = line.trim();
+
+            if (!inTargetSection)
+            {
+                if (sectionPattern.matcher(line).matches())
+                {
+                    inTargetSection = true;
+                    int indent = 0;
+                    while (indent < line.length() && (line.charAt(indent) == ' ' || line.charAt(indent) == '\t'))
+                    {
+                        indent++;
+                    }
+                    sectionIndent = indent;
+                    inBlockScalar = false;
+                    foldedScalarIndent = -1;
+                }
+                continue;
+            }
+
+            int currentIndent = 0;
+            while (currentIndent < line.length() && (line.charAt(currentIndent) == ' ' || line.charAt(currentIndent) == '\t'))
+            {
+                currentIndent++;
+            }
+
+            if (!trimmed.isEmpty() && !trimmed.startsWith("#"))
+            {
+                if (currentIndent <= sectionIndent && topLevelSectionPattern.matcher(line).matches())
+                {
+                    break;
+                }
+            }
+
+            if (trimmed.isEmpty())
+            {
+                continue;
+            }
+
+            if (trimmed.startsWith("#"))
+            {
+                if (inBlockScalar && currentIndent <= foldedScalarIndent)
+                {
+                    inBlockScalar = false;
+                    foldedScalarIndent = -1;
+                }
+                steps.add(trimmed);
+                continue;
+            }
+
+            if (inBlockScalar && currentIndent <= foldedScalarIndent)
+            {
+                inBlockScalar = false;
+                foldedScalarIndent = -1;
+            }
+
+            final Matcher foldedMatcher = Pattern.compile("^-\\s*>-[ \\t]*(.*)$").matcher(trimmed);
+            if (foldedMatcher.matches())
+            {
+                inBlockScalar = true;
+                foldedScalarIndent = currentIndent;
+                final String inlineText = foldedMatcher.group(1).trim();
+                if (!inlineText.isEmpty() && !inlineText.startsWith("#"))
+                {
+                    steps.add("  - " + inlineText);
+                }
+                continue;
+            }
+
+            if (trimmed.matches("^-\\s*[|>][^\r\n]*$"))
+            {
+                inBlockScalar = false;
+                foldedScalarIndent = -1;
+                continue;
+            }
+
+            if (trimmed.startsWith("- ") || trimmed.startsWith("-\t"))
+            {
+                inBlockScalar = false;
+                foldedScalarIndent = -1;
+                final String itemContent = trimmed.substring(1).trim();
+                steps.add(itemContent);
+                continue;
+            }
+
+            if (inBlockScalar)
+            {
+                final String clean = (trimmed.startsWith("- ") || trimmed.startsWith("* "))
+                    ? trimmed.substring(2).trim()
+                    : trimmed;
+                if (!clean.isEmpty())
+                {
+                    steps.add("  - " + clean);
+                }
+            }
+            else
+            {
+                final String clean = (trimmed.startsWith("- ") || trimmed.startsWith("* "))
+                    ? trimmed.substring(2).trim()
+                    : trimmed;
+                steps.add(clean);
+            }
+        }
+
+        return steps;
+    }
+
+    /**
+     * Validates the textual content of a test playbook ({@code .yaml}/{@code .yml}) or step fragment
+     * ({@code .steps}) file and returns a list of diagnostic findings.
+     *
+     * <p>Checks performed:
+     * <ol>
+     *   <li><b>YAML syntax</b> – the content must be parseable by SnakeYAML.</li>
+     *   <li><b>Include file existence</b> – every {@code _include:} path in the file
+     *       must resolve to an existing file under the resources directory.</li>
+     *   <li><b>Variable coverage</b> (YAML test files only) – every {@code ${varName}}
+     *       referenced in any step must be defined in the {@code data:} matrix.  Variables
+     *       that begin with {@code neodymium.} are treated as built-in and skipped.</li>
+     *   <li><b>Fragment variable scope</b> ({@code .steps} files only) – variables not
+     *       marked as {@code defined} in the fragment's {@code variables:} section are
+     *       flagged as required from the caller.</li>
+     * </ol>
+     *
+     * @param relativePath relative path of the file being edited (used to detect file type)
+     * @param content      raw YAML content to validate (the current in-editor state,
+     *                     which may differ from the saved file on disk)
+     * @return ordered list of {@link ValidationIssue} records; empty when the file is valid
+     */
+    public List<ValidationIssue> validateFileContent(final String relativePath, final String content)
+    {
+        final List<ValidationIssue> issues = new ArrayList<>();
+
+        if (content == null || content.isBlank())
+        {
+            issues.add(new ValidationIssue(IssueSeverity.WARNING, "File is empty.", null));
+            return issues;
+        }
+
+        // --- 1. YAML syntax check ---
+        final Map<String, Object> sections = parsePlaybookSections(content);
+        final boolean hasParseError = Boolean.TRUE.equals(sections.get("hasError"));
+        final String parseError = (String) sections.get("error");
+        if (hasParseError)
+        {
+            issues.add(new ValidationIssue(IssueSeverity.ERROR,
+                    "YAML syntax error: " + (parseError != null ? parseError : "unknown error"), null));
+            // Further checks are meaningless when the YAML cannot be parsed.
+            return issues;
+        }
+
+        issues.add(new ValidationIssue(IssueSeverity.INFO, "YAML syntax is valid.", null));
+
+        // --- 2. Include file existence check ---
+        final boolean isFragment = relativePath != null && relativePath.toLowerCase().endsWith(".steps");
+        final List<String> availableIncludes = getStepsFilesList();
+        final Pattern includePattern = Pattern.compile("(?:_include|include):\\s*(.+)");
+        final Set<String> missingIncludes = new LinkedHashSet<>();
+        final Set<String> foundIncludes = new LinkedHashSet<>();
+
+        // Collect all _include references from each step in every section
+        @SuppressWarnings("unchecked")
+        final List<String> allSteps = new ArrayList<>();
+        final Object before = sections.get("beforeSteps");
+        final Object main = sections.get("mainSteps");
+        final Object after = sections.get("afterSteps");
+        if (before instanceof List<?> bl) { for (final Object o : bl) { if (o != null) allSteps.add(o.toString()); } }
+        if (main instanceof List<?> ml)   { for (final Object o : ml) { if (o != null) allSteps.add(o.toString()); } }
+        if (after instanceof List<?> al)  { for (final Object o : al) { if (o != null) allSteps.add(o.toString()); } }
+
+        for (final String step : allSteps)
+        {
+            final Matcher m = includePattern.matcher(step.trim());
+            if (m.matches())
+            {
+                final String includePath = m.group(1).trim();
+                if (availableIncludes.contains(includePath))
+                {
+                    foundIncludes.add(includePath);
+                }
+                else
+                {
+                    // Also try resolving directly on disk for robustness
+                    boolean exists = false;
+                    try
+                    {
+                        final File resolved = resolveCanonicalFile(includePath);
+                        exists = resolved.exists() && resolved.isFile();
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                    if (exists)
+                    {
+                        foundIncludes.add(includePath);
+                    }
+                    else
+                    {
+                        missingIncludes.add(includePath);
+                    }
+                }
+            }
+        }
+
+        if (!missingIncludes.isEmpty())
+        {
+            for (final String missing : missingIncludes)
+            {
+                issues.add(new ValidationIssue(IssueSeverity.ERROR,
+                        "Included file does not exist: \"" + missing + "\"", missing));
+            }
+        }
+        if (!foundIncludes.isEmpty())
+        {
+            issues.add(new ValidationIssue(IssueSeverity.INFO,
+                    foundIncludes.size() + " include(s) resolved successfully.",
+                    String.join(", ", foundIncludes)));
+        }
+
+        // --- 3a. Variable coverage check for test playbook (.yaml/.yml) files ---
+        if (!isFragment)
+        {
+            @SuppressWarnings("unchecked")
+            final List<String> definedVarKeys = sections.get("varKeys") instanceof List
+                    ? (List<String>) sections.get("varKeys")
+                    : List.of();
+
+            // Collect all variables referenced in all steps
+            final Set<String> usedVars = new LinkedHashSet<>();
+            for (final String step : allSteps)
+            {
+                final Matcher vm = VAR_PATTERN.matcher(step);
+                while (vm.find())
+                {
+                    final String varName = vm.group(1);
+                    if (varName != null && !varName.startsWith("neodymium.") && !varName.startsWith("_meta.") && !varName.startsWith("meta."))
+                    {
+                        usedVars.add(varName);
+                    }
+                }
+            }
+
+            // Identify variables defined dynamically at runtime (e.g. "Store text from ... as varName")
+            final Set<String> dynamicallyStoredVars = new LinkedHashSet<>();
+            final Pattern storePattern = Pattern.compile("(?i)\\bstore\\s+.+?\\s+as\\s+([a-zA-Z0-9_.-]+)");
+            for (final String step : allSteps)
+            {
+                final Matcher sm = storePattern.matcher(step);
+                while (sm.find())
+                {
+                    final String storedName = sm.group(1);
+                    if (storedName != null && !storedName.isBlank())
+                    {
+                        dynamicallyStoredVars.add(storedName.trim());
+                    }
+                }
+            }
+
+            // Collect variables provided by successfully-resolved includes
+            final Set<String> includedDefinedVars = new LinkedHashSet<>();
+            for (final String includePath : foundIncludes)
+            {
+                try
+                {
+                    final String includeContent = readYamlFileContent(includePath);
+                    if (includeContent != null && !includeContent.isBlank())
+                    {
+                        final Map<String, Object> includeSections = parsePlaybookSections(includeContent);
+                        @SuppressWarnings("unchecked")
+                        final Map<String, String> varScopes = includeSections.get("fragmentVarScopes") instanceof Map
+                                ? (Map<String, String>) includeSections.get("fragmentVarScopes")
+                                : Map.of();
+                        for (final Map.Entry<String, String> entry : varScopes.entrySet())
+                        {
+                            if ("defined".equalsIgnoreCase(entry.getValue()))
+                            {
+                                includedDefinedVars.add(entry.getKey());
+                            }
+                        }
+                    }
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.debug("Could not read include file for variable resolution: {}", includePath, e);
+                }
+            }
+
+            @SuppressWarnings("unchecked")
+            final Map<String, Object> rootVariables = sections.get("rootVariables") instanceof Map
+                    ? (Map<String, Object>) sections.get("rootVariables")
+                    : Map.of();
+
+            final List<String> undefinedVars = new ArrayList<>();
+            for (final String usedVar : usedVars)
+            {
+                if (!definedVarKeys.contains(usedVar) && !includedDefinedVars.contains(usedVar)
+                        && !rootVariables.containsKey(usedVar) && !dynamicallyStoredVars.contains(usedVar))
+                {
+                    undefinedVars.add(usedVar);
+                }
+            }
+
+            if (!undefinedVars.isEmpty())
+            {
+                for (final String undef : undefinedVars)
+                {
+                    issues.add(new ValidationIssue(IssueSeverity.WARNING,
+                            "Variable \"${" + undef + "}\" is used in steps but not defined in the data matrix or any included fragment.",
+                            undef));
+                }
+            }
+            else if (!usedVars.isEmpty())
+            {
+                issues.add(new ValidationIssue(IssueSeverity.INFO,
+                        "All " + usedVars.size() + " variable(s) used in steps are properly defined.",
+                        String.join(", ", usedVars)));
+            }
+            else
+            {
+                issues.add(new ValidationIssue(IssueSeverity.INFO, "No variables are used in this file.", null));
+            }
+        }
+
+        // --- 3b. Fragment variable scope check (.steps files) ---
+        if (isFragment)
+        {
+            @SuppressWarnings("unchecked")
+            final Map<String, String> fragmentVarScopes = sections.get("fragmentVarScopes") instanceof Map
+                    ? (Map<String, String>) sections.get("fragmentVarScopes")
+                    : Map.of();
+
+            final Set<String> usedVars = new LinkedHashSet<>();
+            for (final String step : allSteps)
+            {
+                final Matcher vm = VAR_PATTERN.matcher(step);
+                while (vm.find())
+                {
+                    final String varName = vm.group(1);
+                    if (varName != null && !varName.startsWith("neodymium."))
+                    {
+                        usedVars.add(varName);
+                    }
+                }
+            }
+
+            final List<String> requiredVars = new ArrayList<>();
+            final List<String> definedVars = new ArrayList<>();
+            final List<String> undeclaredVars = new ArrayList<>();
+
+            for (final String usedVar : usedVars)
+            {
+                final String scope = fragmentVarScopes.get(usedVar);
+                if (scope == null)
+                {
+                    undeclaredVars.add(usedVar);
+                }
+                else if ("defined".equalsIgnoreCase(scope))
+                {
+                    definedVars.add(usedVar);
+                }
+                else
+                {
+                    requiredVars.add(usedVar);
+                }
+            }
+
+            if (!undeclaredVars.isEmpty())
+            {
+                for (final String undecl : undeclaredVars)
+                {
+                    issues.add(new ValidationIssue(IssueSeverity.WARNING,
+                            "Variable \"${" + undecl + "}\" is used but has no scope declaration in the \"variables:\" section.",
+                            undecl));
+                }
+            }
+            if (!requiredVars.isEmpty())
+            {
+                issues.add(new ValidationIssue(IssueSeverity.INFO,
+                        requiredVars.size() + " variable(s) are required from the calling test: " + String.join(", ", requiredVars),
+                        String.join(", ", requiredVars)));
+            }
+            if (!definedVars.isEmpty())
+            {
+                issues.add(new ValidationIssue(IssueSeverity.INFO,
+                        definedVars.size() + " variable(s) are defined within this fragment: " + String.join(", ", definedVars),
+                        String.join(", ", definedVars)));
+            }
+            if (usedVars.isEmpty())
+            {
+                issues.add(new ValidationIssue(IssueSeverity.INFO, "No variables are used in this fragment.", null));
+            }
+        }
+
+        return issues;
+    }
+}

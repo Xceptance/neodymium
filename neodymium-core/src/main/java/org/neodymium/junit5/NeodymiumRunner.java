@@ -1,3 +1,26 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2026 Xceptance
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
 package org.neodymium.junit5;
 
 import com.codeborne.selenide.logevents.SelenideLogger;
@@ -15,8 +38,7 @@ import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
 import java.util.stream.Stream;
-import org.neodymium.ai.junit.AiPlaybook;
-import org.neodymium.ai.junit.NeodymiumAiTest;
+import org.neodymium.util.NeodymiumAnnotationUtils;
 
 public class NeodymiumRunner implements TestTemplateInvocationContextProvider
 {
@@ -70,9 +92,9 @@ public class NeodymiumRunner implements TestTemplateInvocationContextProvider
         }
         final Class<?> testClass = context.getRequiredTestClass();
         final Method method = context.getRequiredTestMethod();
-        if (testClass.isAnnotationPresent(NeodymiumAiTest.class)
-            || testClass.isAnnotationPresent(AiPlaybook.class)
-            || method.isAnnotationPresent(AiPlaybook.class))
+        if (NeodymiumAnnotationUtils.isAnnotationPresent(testClass, "NeodymiumAiTest")
+            || NeodymiumAnnotationUtils.isAnnotationPresent(testClass, "AiPlaybook")
+            || NeodymiumAnnotationUtils.isAnnotationPresent(method, "AiPlaybook"))
         {
             return false;
         }

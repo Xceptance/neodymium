@@ -37,7 +37,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.neodymium.ai.model.ExecutionAttachment;
+import org.neodymium.common.model.ExecutionAttachment;
 
 /**
  * Unit tests for {@link Neodymium#addAttachment} and attachment lifecycle.

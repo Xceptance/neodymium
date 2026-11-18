@@ -1,3 +1,26 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2026 Xceptance
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
 package org.neodymium.util;
 
 import java.io.File;
@@ -23,8 +46,7 @@ import com.browserup.bup.BrowserUpProxy;
 import com.codeborne.selenide.AssertionMode;
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
-import org.neodymium.ai.config.AiConfiguration;
-import org.neodymium.ai.model.ExecutionAttachment;
+import org.neodymium.common.model.ExecutionAttachment;
 import org.neodymium.common.TestStepListener;
 import org.neodymium.common.browser.WebDriverStateContainer;
 import org.neodymium.common.browser.configuration.BrowserConfiguration;
@@ -69,9 +91,6 @@ public class Neodymium
     // our global configuration
     private NeodymiumConfiguration configuration;
 
-    // our AI configuration
-    private AiConfiguration aiConfiguration;
-
     // localization
     private final NeodymiumLocalization localization;
 
@@ -94,7 +113,6 @@ public class Neodymium
             ConfigFactory.setProperty(TEMPORARY_CONFIG_FILE_PROPERTY_NAME, "file:this/path/should/never/exist/noOneShouldCreateMe.properties");
         }
         configuration = ConfigFactory.create(NeodymiumConfiguration.class, System.getProperties(), System.getenv());
-        aiConfiguration = AiConfiguration.getInstance();
         localization = NeodymiumLocalization.build(configuration.localizationFile());
     }
 
@@ -250,15 +268,6 @@ public class Neodymium
         return getContext().configuration;
     }
 
-    /**
-     * Get the current AiConfiguration instance
-     * 
-     * @return aiConfiguration
-     */
-    public static AiConfiguration aiConfiguration()
-    {
-        return getContext().aiConfiguration;
-    }
 
     /**
      * Get access to the current Random instance of Neodymium. This can be used to have a fixed random setup to repeat
@@ -995,14 +1004,6 @@ public class Neodymium
         }
     }
 
-    /**
-     * Re-creates the thread-local AI configuration instance from the latest system properties and env.
-     */
-    public static void reloadAiConfiguration()
-    {
-        AiConfiguration.resetInstance();
-        getContext().aiConfiguration = AiConfiguration.getInstance();
-    }
 
     /**
      * Re-creates the thread-local main configuration instance from the latest system properties and env.

@@ -25,7 +25,7 @@ import com.xceptance.neodymium.aura.dto.ChatMessageDto;
 import com.xceptance.neodymium.aura.dto.ChatRequest;
 import com.xceptance.neodymium.aura.dto.ChatResponse;
 import com.xceptance.neodymium.aura.dto.ChatSessionDto;
-import com.xceptance.neodymium.util.Neodymium;
+import org.neodymium.ai.config.AiConfiguration;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.HashMap;
@@ -150,7 +150,7 @@ public class AuraTestChatController
 
             try
             {
-                final String apiKey = Neodymium.aiConfiguration().aiApiKey();
+                final String apiKey = AiConfiguration.getInstance().aiApiKey();
                 if (apiKey != null && !apiKey.isBlank())
                 {
                     final int historyEnd = Math.max(0, session.messages.size() - 1);

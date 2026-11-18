@@ -67,6 +67,11 @@
 			<version>${d}{neodymium.version}</version>
 		</dependency>
 		<dependency>
+			<groupId>com.xceptance</groupId>
+			<artifactId>neodymium-ai</artifactId>
+			<version>${d}{neodymium.version}</version>
+		</dependency>
+		<dependency>
 			<groupId>com.xceptance.aura</groupId>
 			<artifactId>aura-manager</artifactId>
 			<version>${d}{aura-manager.version}</version>
