@@ -781,6 +781,24 @@ function shouldPreserveChatInput(xhr) {
     return typeof hxTrigger === 'string' && hxTrigger.includes('chatPreserveInput');
 }
 
+function resolveSubmittedChatPrompt(detail) {
+    const params = detail && detail.requestConfig ? detail.requestConfig.parameters : null;
+    if (params && typeof params.prompt === 'string') {
+        return params.prompt.trim();
+    }
+    return null;
+}
+
+function restoreChatInputIfEmpty(detail) {
+    const requestPrompt = resolveSubmittedChatPrompt(detail);
+    const expectedPrompt = requestPrompt !== null ? requestPrompt : pendingSubmittedPrompt;
+    const input = typeof document !== 'undefined' ? document.getElementById('chatInput') : null;
+    if (input && typeof expectedPrompt === 'string' && expectedPrompt !== ''
+            && typeof input.value === 'string' && input.value.trim() === '') {
+        input.value = expectedPrompt;
+    }
+}
+
 function handleChatRequestFailureCleanup(detail) {
     if (!isChatHtmxRequest(detail)) {
         return;
@@ -788,6 +806,9 @@ function handleChatRequestFailureCleanup(detail) {
     if (typeof document !== 'undefined' && typeof document.querySelectorAll === 'function') {
         document.querySelectorAll('.thinking-bubble, .optimistic-user-bubble')
             .forEach((el) => el.remove());
+    }
+    if (getChatRequestPath(detail) === '/api/chat') {
+        restoreChatInputIfEmpty(detail);
     }
     restoreChatConfirmationButtons(detail && detail.target ? detail.target : document);
 }
@@ -804,12 +825,18 @@ if (typeof document !== 'undefined' && typeof document.addEventListener === 'fun
     document.addEventListener('htmx:afterSettle', scheduleChatMarkdownRender);
     document.addEventListener('htmx:beforeRequest', (evt) => {
         const detail = evt ? evt.detail : null;
-        const elt = detail ? detail.elt : null;
-        if (elt && typeof elt.getAttribute === 'function' && elt.getAttribute('hx-post') === '/api/chat') {
-            const params = detail.requestConfig ? detail.requestConfig.parameters : null;
-            const promptVal = params && typeof params.prompt === 'string' ? params.prompt.trim() : '';
-            if (!promptVal && typeof evt.preventDefault === 'function') {
-                evt.preventDefault();
+        if (getChatRequestPath(detail) === '/api/chat') {
+            const promptVal = resolveSubmittedChatPrompt(detail) || '';
+            if (!promptVal) {
+                if (evt && typeof evt.preventDefault === 'function') {
+                    evt.preventDefault();
+                }
+                return;
+            }
+            pendingSubmittedPrompt = promptVal;
+            const input = document.getElementById('chatInput');
+            if (input && typeof input.value === 'string' && input.value.trim() === promptVal) {
+                input.value = '';
             }
         }
     });
@@ -817,17 +844,10 @@ if (typeof document !== 'undefined' && typeof document.addEventListener === 'fun
         const detail = evt ? evt.detail : null;
         const path = getChatRequestPath(detail);
         if (path === '/api/chat') {
-            const params = detail && detail.requestConfig ? detail.requestConfig.parameters : null;
-            const requestPrompt = params && typeof params.prompt === 'string' ? params.prompt.trim() : null;
-            const expectedPrompt = requestPrompt !== null ? requestPrompt : pendingSubmittedPrompt;
-            if (detail
-                    && detail.successful === true
-                    && (!detail.xhr || detail.xhr.status < 400)
-                    && !shouldPreserveChatInput(detail.xhr)) {
-                const input = document.getElementById('chatInput');
-                if (input && expectedPrompt !== null && input.value.trim() === expectedPrompt) {
-                    input.value = '';
-                }
+            const requestPrompt = resolveSubmittedChatPrompt(detail);
+            const failed = !detail || detail.successful !== true || (detail.xhr && detail.xhr.status >= 400);
+            if (failed || (detail && shouldPreserveChatInput(detail.xhr))) {
+                restoreChatInputIfEmpty(detail);
             }
             if (requestPrompt === null || pendingSubmittedPrompt === requestPrompt) {
                 pendingSubmittedPrompt = null;

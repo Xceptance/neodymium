@@ -446,10 +446,17 @@ public class DashboardChatJsTest
 
                 context.init();
 
-                // 1. clearChatInput keeps prompt intact until successful /api/chat completion
+                // 1. clearChatInput leaves prompt for HTMX form serialization; htmx:beforeRequest clears chatInput immediately on send
                 context.clearChatInput({});
                 if (chatInput.value !== 'Run smoke tests') {
-                    throw new Error('Expected chatInput not to be cleared prematurely: ' + chatInput.value);
+                    throw new Error('Expected clearChatInput to keep value until htmx:beforeRequest serialization: ' + chatInput.value);
+                }
+                dispatchDoc('htmx:beforeRequest', {
+                    pathInfo: { requestPath: '/api/chat' },
+                    requestConfig: { parameters: { prompt: 'Run smoke tests' } }
+                });
+                if (chatInput.value !== '') {
+                    throw new Error('Expected htmx:beforeRequest to clear chatInput immediately after send: ' + chatInput.value);
                 }
 
                 // 2. Unrelated /api/status error must NOT delete active chat bubbles
@@ -462,27 +469,36 @@ public class DashboardChatJsTest
                     throw new Error('Unrelated /api/status error removed active chat bubbles');
                 }
 
-                // 3. Failed /api/chat response keeps chatInput text for retry, but clears bubbles
+                // 3. Failed /api/chat response restores chatInput text for retry if empty, and clears bubbles
                 dispatchDoc('htmx:responseError', {
                     pathInfo: { requestPath: '/api/chat' },
                     target: chatMessages,
+                    requestConfig: { parameters: { prompt: 'Run smoke tests' } },
                     xhr: { status: 500, responseText: 'LLM error' }
                 });
                 dispatchDoc('htmx:afterRequest', {
                     pathInfo: { requestPath: '/api/chat' },
+                    requestConfig: { parameters: { prompt: 'Run smoke tests' } },
                     successful: false,
                     xhr: { status: 500 }
                 });
                 if (chatInput.value !== 'Run smoke tests') {
-                    throw new Error('Failed /api/chat wiped user prompt from chatInput');
+                    throw new Error('Failed /api/chat did not restore user prompt to empty chatInput: ' + chatInput.value);
                 }
                 if (chatMessages.querySelectorAll('.thinking-bubble').length !== 0) {
                     throw new Error('Failed /api/chat left orphaned thinking bubble');
                 }
 
-                // 4. Successful /api/chat clears chatInput only if unchanged; edited follow-up text survives
+                // 4. chatPreserveInput restores empty input; successful /api/chat preserves any new follow-up draft
                 chatInput.value = 'Run smoke tests';
                 context.clearChatInput({});
+                dispatchDoc('htmx:beforeRequest', {
+                    pathInfo: { requestPath: '/api/chat' },
+                    requestConfig: { parameters: { prompt: 'Run smoke tests' } }
+                });
+                if (chatInput.value !== '') {
+                    throw new Error('Expected chatInput cleared immediately on send');
+                }
                 dispatchDoc('htmx:afterRequest', {
                     pathInfo: { requestPath: '/api/chat' },
                     requestConfig: { parameters: { prompt: 'Run smoke tests' } },
@@ -493,14 +509,19 @@ public class DashboardChatJsTest
                     }
                 });
                 if (chatInput.value !== 'Run smoke tests') {
-                    throw new Error('chatPreserveInput trigger must keep chatInput intact when session was missing');
+                    throw new Error('chatPreserveInput trigger must restore empty chatInput when session was missing: ' + chatInput.value);
                 }
 
                 chatInput.value = 'Run smoke tests';
                 context.clearChatInput({});
+                dispatchDoc('htmx:beforeRequest', {
+                    pathInfo: { requestPath: '/api/chat' },
+                    requestConfig: { parameters: { prompt: 'Run smoke tests' } }
+                });
                 chatInput.value = 'Edited follow-up prompt';
                 dispatchDoc('htmx:afterRequest', {
                     pathInfo: { requestPath: '/api/chat' },
+                    requestConfig: { parameters: { prompt: 'Run smoke tests' } },
                     successful: true,
                     xhr: { status: 200 }
                 });
@@ -508,22 +529,56 @@ public class DashboardChatJsTest
                     throw new Error('Successful /api/chat wiped newly edited follow-up prompt: ' + chatInput.value);
                 }
 
+                // chatPreserveInput must also not overwrite a newly typed draft
                 chatInput.value = 'Run smoke tests';
                 context.clearChatInput({});
+                dispatchDoc('htmx:beforeRequest', {
+                    pathInfo: { requestPath: '/api/chat' },
+                    requestConfig: { parameters: { prompt: 'Run smoke tests' } }
+                });
+                chatInput.value = 'New draft while waiting';
                 dispatchDoc('htmx:afterRequest', {
                     pathInfo: { requestPath: '/api/chat' },
+                    requestConfig: { parameters: { prompt: 'Run smoke tests' } },
+                    successful: true,
+                    xhr: {
+                        status: 200,
+                        getResponseHeader: (name) => name === 'HX-Trigger' ? '{"chatPreserveInput":true}' : null
+                    }
+                });
+                if (chatInput.value !== 'New draft while waiting') {
+                    throw new Error('chatPreserveInput overwrote newly typed draft: ' + chatInput.value);
+                }
+
+                chatInput.value = 'Run smoke tests';
+                context.clearChatInput({});
+                dispatchDoc('htmx:beforeRequest', {
+                    pathInfo: { requestPath: '/api/chat' },
+                    requestConfig: { parameters: { prompt: 'Run smoke tests' } }
+                });
+                dispatchDoc('htmx:afterRequest', {
+                    pathInfo: { requestPath: '/api/chat' },
+                    requestConfig: { parameters: { prompt: 'Run smoke tests' } },
                     successful: true,
                     xhr: { status: 200 }
                 });
                 if (chatInput.value !== '') {
-                    throw new Error('Successful /api/chat did not clear unchanged chatInput');
+                    throw new Error('Successful /api/chat did not keep chatInput cleared');
                 }
 
-                // 4b. Overlapping /api/chat completion must not reset pendingSubmittedPrompt or wipe new draft
+                // 4b. Overlapping /api/chat completion must not wipe new draft
                 chatInput.value = 'First slow prompt';
                 context.clearChatInput({});
+                dispatchDoc('htmx:beforeRequest', {
+                    pathInfo: { requestPath: '/api/chat' },
+                    requestConfig: { parameters: { prompt: 'First slow prompt' } }
+                });
                 chatInput.value = 'Second prompt';
                 context.clearChatInput({});
+                dispatchDoc('htmx:beforeRequest', {
+                    pathInfo: { requestPath: '/api/chat' },
+                    requestConfig: { parameters: { prompt: 'Second prompt' } }
+                });
                 chatInput.value = 'Third draft in progress';
                 dispatchDoc('htmx:afterRequest', {
                     pathInfo: { requestPath: '/api/chat' },
