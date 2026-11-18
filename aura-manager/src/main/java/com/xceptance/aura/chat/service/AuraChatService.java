@@ -229,8 +229,8 @@ public class AuraChatService
             LOGGER.error("Spring AI ChatClient execution failed", e);
             final List<PendingConfirmationDto> survivingPending = getPendingConfirmations(sessionKey);
             final List<String> actionList = snapshotUiActions(uiActions);
-            thinkingEntries.add("[Error] " + e.getMessage());
-            return new ChatResponse("Error processing request: " + e.getMessage(),
+            thinkingEntries.add("[Error] " + formatDiagnosticErrorTrace(e));
+            return new ChatResponse(formatSafeUserError(e),
                     joinTrace(thinkingEntries),
                     "error",
                     actionList.isEmpty() ? null : actionList,
@@ -355,10 +355,10 @@ public class AuraChatService
         catch (final Exception e)
         {
             LOGGER.error("Failed executing confirmed action {} on {}", pending.toolName(), pending.target(), e);
-            thinkingEntries.add("[Error] " + e.getMessage());
+            thinkingEntries.add("[Error] " + formatDiagnosticErrorTrace(e));
             return errorConfirmationResponse(
                     sessionKey,
-                    "Failed to execute `" + pending.toolName() + "`: " + e.getMessage(),
+                    "Failed to execute `" + pending.toolName() + "`. Check Thinking Process or server logs for details.",
                     joinTrace(thinkingEntries));
         }
     }
@@ -921,6 +921,43 @@ public class AuraChatService
             prefix.append("[Active editor file: ").append(req.activeFile.trim()).append("]\n");
         }
         return prefix.isEmpty() ? req.prompt : prefix + req.prompt;
+    }
+
+    /**
+     * Produces a concise user-facing error summary without exposing raw HTTP/SDK payloads in chat history.
+     *
+     * @param error caught execution exception
+     * @return user-safe error summary
+     */
+    public static String formatSafeUserError(final Exception error)
+    {
+        if (error instanceof IllegalStateException && error.getMessage() != null && !error.getMessage().isBlank())
+        {
+            final String msg = error.getMessage().trim();
+            if (msg.startsWith("API Key") || msg.startsWith("Unsupported chat LLM provider") || msg.startsWith("AiConfiguration"))
+            {
+                return msg;
+            }
+        }
+        return "Failed to process request with the AI provider. Check Thinking Process or server logs for details.";
+    }
+
+    /**
+     * Formats a bounded diagnostic trace line for storage inside collapsible Thinking Process blocks.
+     *
+     * @param error caught exception
+     * @return bounded single-exception summary
+     */
+    public static String formatDiagnosticErrorTrace(final Exception error)
+    {
+        if (error == null)
+        {
+            return "Unknown error";
+        }
+        final String simpleName = error.getClass().getSimpleName();
+        final String rawMsg = error.getMessage() != null ? error.getMessage().trim() : "";
+        final String combined = rawMsg.isEmpty() ? simpleName : simpleName + ": " + rawMsg;
+        return truncateForTrace(combined);
     }
 
     private static String truncateForTrace(final String text)

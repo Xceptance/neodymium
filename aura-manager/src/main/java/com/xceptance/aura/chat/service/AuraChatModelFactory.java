@@ -23,8 +23,10 @@ import com.google.genai.types.HttpOptions;
 import com.openai.client.OpenAIClient;
 import com.openai.client.OpenAIClientAsync;
 import io.micrometer.observation.ObservationRegistry;
+import jakarta.annotation.PreDestroy;
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,6 +34,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 import org.neodymium.ai.config.AiConfiguration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.google.genai.GoogleGenAiChatModel;
 import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
@@ -57,6 +61,7 @@ import org.springframework.web.client.RestClient;
 @Component
 public class AuraChatModelFactory
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(AuraChatModelFactory.class);
     private static final String CHAT_ROLE = "chat";
     private static final String PROVIDER_GEMINI = "gemini";
     private static final String PROVIDER_OPENAI = "openai";
@@ -64,11 +69,11 @@ public class AuraChatModelFactory
     private static final int MAX_MODEL_CACHE_SIZE = 16;
 
     private final Function<String, String> envLookup;
-    private final Map<ModelCacheKey, ChatModel> modelCache = Collections.synchronizedMap(
+    private final Map<ModelCacheKey, CachedChatModel> modelCache = Collections.synchronizedMap(
             new LinkedHashMap<>(16, 0.75f, true)
             {
                 @Override
-                protected boolean removeEldestEntry(final Map.Entry<ModelCacheKey, ChatModel> eldest)
+                protected boolean removeEldestEntry(final Map.Entry<ModelCacheKey, CachedChatModel> eldest)
                 {
                     return size() > MAX_MODEL_CACHE_SIZE;
                 }
@@ -124,12 +129,12 @@ public class AuraChatModelFactory
         final ModelCacheKey cacheKey = new ModelCacheKey(provider, apiKey, modelName, temperature, baseUrl, timeout);
         synchronized (this.modelCache)
         {
-            final ChatModel cached = this.modelCache.get(cacheKey);
+            final CachedChatModel cached = this.modelCache.get(cacheKey);
             if (cached != null)
             {
-                return cached;
+                return cached.model();
             }
-            final ChatModel created = switch (cacheKey.provider())
+            final CachedChatModel created = switch (cacheKey.provider())
             {
                 case PROVIDER_GEMINI -> createGeminiModel(
                         cacheKey.baseUrl(), cacheKey.apiKey(), cacheKey.modelName(), cacheKey.temperature(), cacheKey.timeout());
@@ -142,7 +147,25 @@ public class AuraChatModelFactory
                                 + "'. Supported providers for Spring AI ChatClient are: gemini, openai, mistral.");
             };
             this.modelCache.put(cacheKey, created);
-            return created;
+            return created.model();
+        }
+    }
+
+    /**
+     * Releases cached HTTP/SDK clients when the Spring context shuts down without interrupting active turns during runtime LRU eviction.
+     */
+    @PreDestroy
+    public void closeCachedClients()
+    {
+        final List<CachedChatModel> snapshot;
+        synchronized (this.modelCache)
+        {
+            snapshot = new ArrayList<>(this.modelCache.values());
+            this.modelCache.clear();
+        }
+        for (final CachedChatModel entry : snapshot)
+        {
+            entry.closeQuietly();
         }
     }
 
@@ -186,6 +209,13 @@ public class AuraChatModelFactory
 
     String resolveApiKey(final AiConfiguration config, final String canonicalProvider)
     {
+        final String roleProviderKey = trimToNull(
+                config.getProperty("neodymium.ai.chat." + canonicalProvider + ".apiKey", null));
+        if (roleProviderKey != null)
+        {
+            return roleProviderKey;
+        }
+
         final String chatKey = trimToNull(config.getProperty("neodymium.ai.chat.apiKey", null));
         if (chatKey != null)
         {
@@ -303,8 +333,8 @@ public class AuraChatModelFactory
         return builder.build();
     }
 
-    private static ChatModel createGeminiModel(final String baseUrl, final String apiKey, final String modelName,
-                                               final double temperature, final Duration timeout)
+    private static CachedChatModel createGeminiModel(final String baseUrl, final String apiKey, final String modelName,
+                                                     final double temperature, final Duration timeout)
     {
         final Client client = Client.builder()
                 .apiKey(apiKey)
@@ -316,15 +346,16 @@ public class AuraChatModelFactory
         {
             optionsBuilder.model(modelName.trim());
         }
-        return GoogleGenAiChatModel.builder()
+        final ChatModel model = GoogleGenAiChatModel.builder()
                 .genAiClient(client)
                 .options(optionsBuilder.build())
                 .build();
+        return CachedChatModel.of(model, client);
     }
 
-    private static ChatModel createOpenAiModel(final String baseUrl, final String apiKey,
-                                               final String modelName, final double temperature,
-                                               final Duration timeout)
+    private static CachedChatModel createOpenAiModel(final String baseUrl, final String apiKey,
+                                                     final String modelName, final double temperature,
+                                                     final Duration timeout)
     {
         final OpenAIClient openAiClient = OpenAiSetup.setupSyncClient(
                 baseUrl, apiKey, null, null, null, null, false, false,
@@ -338,11 +369,12 @@ public class AuraChatModelFactory
         {
             optionsBuilder.model(modelName.trim());
         }
-        return OpenAiChatModel.builder()
+        final ChatModel model = OpenAiChatModel.builder()
                 .openAiClient(openAiClient)
                 .openAiClientAsync(openAiClientAsync)
                 .options(optionsBuilder.build())
                 .build();
+        return CachedChatModel.of(model, openAiClient, openAiClientAsync);
     }
 
     static RestClient.Builder buildMistralRestClientBuilder(final Duration timeout)
@@ -361,9 +393,9 @@ public class AuraChatModelFactory
         return RestClient.builder().requestFactory(requestFactory);
     }
 
-    private static ChatModel createMistralModel(final String baseUrl, final String apiKey,
-                                                final String modelName, final double temperature,
-                                                final Duration timeout)
+    private static CachedChatModel createMistralModel(final String baseUrl, final String apiKey,
+                                                      final String modelName, final double temperature,
+                                                      final Duration timeout)
     {
         final MistralAiApi.Builder apiBuilder = MistralAiApi.builder()
                 .apiKey(apiKey)
@@ -378,10 +410,45 @@ public class AuraChatModelFactory
         {
             optionsBuilder.model(modelName.trim());
         }
-        return MistralAiChatModel.builder()
+        final ChatModel model = MistralAiChatModel.builder()
                 .mistralAiApi(apiBuilder.build())
                 .options(optionsBuilder.build())
                 .build();
+        return CachedChatModel.of(model);
+    }
+
+    private record CachedChatModel(ChatModel model, List<AutoCloseable> closeables)
+    {
+        private static CachedChatModel of(final ChatModel model, final Object... resources)
+        {
+            final List<AutoCloseable> handles = new ArrayList<>();
+            if (resources != null)
+            {
+                for (final Object resource : resources)
+                {
+                    if (resource instanceof AutoCloseable closeable)
+                    {
+                        handles.add(closeable);
+                    }
+                }
+            }
+            return new CachedChatModel(model, List.copyOf(handles));
+        }
+
+        private void closeQuietly()
+        {
+            for (final AutoCloseable closeable : this.closeables)
+            {
+                try
+                {
+                    closeable.close();
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.debug("Ignoring error while closing cached chat client: {}", e.getMessage());
+                }
+            }
+        }
     }
 
     private record ModelCacheKey(String provider, String apiKey, String modelName,

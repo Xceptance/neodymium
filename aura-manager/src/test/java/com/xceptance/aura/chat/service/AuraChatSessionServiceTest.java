@@ -149,4 +149,18 @@ public class AuraChatSessionServiceTest
         Assertions.assertEquals(s1.id, remaining.get(0).id);
         Assertions.assertEquals(1, remaining.get(0).messages.size());
     }
+
+    @Test
+    public void testSessionNamesAreBoundedToMaximumLength()
+    {
+        final AuraChatSessionService service = new AuraChatSessionService(tempDir.toFile());
+        final String overlyLongName = "A".repeat(120);
+
+        final ChatSessionDto created = service.createSession("  " + overlyLongName + "  ");
+        Assertions.assertEquals(80, created.name.length());
+
+        final ChatSessionDto renamed = service.renameSession(created.id, "B".repeat(150));
+        Assertions.assertNotNull(renamed);
+        Assertions.assertEquals(80, renamed.name.length());
+    }
 }

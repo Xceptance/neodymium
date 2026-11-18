@@ -101,7 +101,9 @@ public class AuraMcpToolCallbackProvider
         for (final McpToolDescriptor descriptor : descriptors)
         {
             final String inputSchema = enrichInputSchemaWithMcpParams(
-                    JsonSchemaGenerator.generateForMethodInput(descriptor.method()), descriptor.method());
+                    JsonSchemaGenerator.generateForMethodInput(descriptor.method()),
+                    descriptor.method(),
+                    descriptor.parameters());
 
             final ToolDefinition definition = ToolDefinition.builder()
                     .name(descriptor.name())
@@ -133,6 +135,13 @@ public class AuraMcpToolCallbackProvider
 
     static String enrichInputSchemaWithMcpParams(final String rawSchema, final Method method)
     {
+        return enrichInputSchemaWithMcpParams(rawSchema, method, McpToolCatalogHelper.extractParameters(method));
+    }
+
+    static String enrichInputSchemaWithMcpParams(final String rawSchema,
+                                                 final Method method,
+                                                 final List<McpToolParamDescriptor> params)
+    {
         if (rawSchema == null || rawSchema.isBlank())
         {
             return rawSchema;
@@ -161,8 +170,11 @@ public class AuraMcpToolCallbackProvider
             final ArrayNode updatedRequired = OBJECT_MAPPER.createArrayNode();
             final JsonNode propsNode = rootObj.get("properties");
             final ObjectNode propsObj = (propsNode instanceof ObjectNode obj) ? obj : null;
+            final List<McpToolParamDescriptor> effectiveParams = params != null
+                    ? params
+                    : McpToolCatalogHelper.extractParameters(method);
 
-            for (final McpToolParamDescriptor param : McpToolCatalogHelper.extractParameters(method))
+            for (final McpToolParamDescriptor param : effectiveParams)
             {
                 if (propsObj != null && !param.description().isBlank())
                 {

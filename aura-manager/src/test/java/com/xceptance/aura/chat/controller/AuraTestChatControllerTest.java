@@ -203,29 +203,57 @@ public class AuraTestChatControllerTest
     }
 
     @Test
-    public void testHandleChatCreatesFreshSessionInsteadOfMutatingDefaultWhenExplicitSessionMissing() throws Exception
+    public void testHandleChatRejectsMissingExplicitSessionWithoutCreatingSessionAndPreservesInput() throws Exception
     {
-        final ChatSessionDto created = new ChatSessionDto("sess-fresh", "New Chat", new ArrayList<>());
+        final ChatSessionDto fallback = new ChatSessionDto("sess-fallback", "Default Session", List.of());
         Mockito.when(sessionService.findSession("deleted-id")).thenReturn(Optional.empty());
-        Mockito.when(sessionService.createSession("New Chat")).thenReturn(created);
-        Mockito.when(sessionService.renameSession("sess-fresh", "List tests"))
-                .thenReturn(new ChatSessionDto("sess-fresh", "List tests", List.of()));
-        Mockito.when(sessionService.getSessions())
-                .thenReturn(List.of(new ChatSessionDto("sess-fresh", "List tests", List.of())));
-        Mockito.when(chatService.runChatWorkflow(Mockito.any(ChatRequest.class)))
-                .thenReturn(new ChatResponse("Here are the tests.", ""));
+        Mockito.when(sessionService.getSession(null)).thenReturn(fallback);
+        Mockito.when(sessionService.getSessions()).thenReturn(List.of(fallback));
 
         mockMvc.perform(MockMvcRequestBuilders.post("/api/chat")
                         .param("sessionId", "deleted-id")
                         .param("prompt", "List tests"))
                 .andExpect(MockMvcResultMatchers.status().isOk())
-                .andExpect(MockMvcResultMatchers.model().attribute("currentSessionId", "sess-fresh"))
-                .andExpect(MockMvcResultMatchers.model().attribute("oobSessionSelect", true));
+                .andExpect(MockMvcResultMatchers.view().name("fragments/chat :: chatMessagesContent"))
+                .andExpect(MockMvcResultMatchers.model().attribute("currentSessionId", "sess-fallback"))
+                .andExpect(MockMvcResultMatchers.model().attribute("oobSessionSelect", true))
+                .andExpect(MockMvcResultMatchers.model().attribute("chatMessages", Matchers.hasSize(1)))
+                .andExpect(MockMvcResultMatchers.header().string("HX-Trigger",
+                        Matchers.containsString("chatPreserveInput")));
 
-        Mockito.verify(sessionService, Mockito.never()).getSession("deleted-id");
-        Mockito.verify(sessionService).createSession("New Chat");
-        Mockito.verify(sessionService, Mockito.times(2))
-                .addMessage(Mockito.eq("sess-fresh"), Mockito.any(ChatMessageDto.class));
+        Mockito.verify(sessionService, Mockito.never()).createSession(Mockito.anyString());
+        Mockito.verify(sessionService, Mockito.never()).addMessage(Mockito.anyString(), Mockito.any());
+        Mockito.verify(chatService, Mockito.never()).runChatWorkflow(Mockito.any());
+    }
+
+    @Test
+    public void testPlaceholderSessionIsNotAutoRenamedWhenChatTurnErrorsAndRenameMissingReturnsNotice() throws Exception
+    {
+        final ChatSessionDto placeholder = new ChatSessionDto("sess-new", "New Chat", new ArrayList<>());
+        Mockito.when(sessionService.findSession("sess-new")).thenReturn(Optional.of(placeholder));
+        Mockito.when(sessionService.getSessions()).thenReturn(List.of(placeholder));
+        Mockito.when(chatService.runChatWorkflow(Mockito.any(ChatRequest.class)))
+                .thenReturn(new ChatResponse("API Key is missing.", "", "error", null));
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/chat")
+                        .param("sessionId", "sess-new")
+                        .param("prompt", "Failed initial prompt"))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.header().doesNotExist("HX-Trigger"));
+
+        Mockito.verify(sessionService, Mockito.never()).renameSession(Mockito.anyString(), Mockito.anyString());
+
+        Mockito.when(sessionService.renameSession("missing-rename", "Custom Name")).thenReturn(null);
+        Mockito.when(sessionService.getSession(null)).thenReturn(placeholder);
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/chat/rename")
+                        .param("id", "missing-rename")
+                        .param("name", "Custom Name"))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.view().name("fragments/chat :: chatMessagesContent"))
+                .andExpect(MockMvcResultMatchers.model().attribute("currentSessionId", "sess-new"))
+                .andExpect(MockMvcResultMatchers.model().attribute("oobSessionSelect", true))
+                .andExpect(MockMvcResultMatchers.model().attribute("chatMessages", Matchers.hasSize(1)));
     }
 
     @Test
@@ -339,14 +367,17 @@ public class AuraTestChatControllerTest
     }
 
     @Test
-    public void testDashboardCoreHandlesPlainTextErrorAndCleansOptimisticUserBubble() throws Exception
+    public void testDashboardCoreHandlesPlainTextErrorAndChatJsCleansOptimisticUserBubble() throws Exception
     {
         final Path coreJs = Paths.get("src/main/resources/static/dashboard-core.js");
-        final String jsContent = Files.readString(coreJs, StandardCharsets.UTF_8);
-        Assertions.assertTrue(jsContent.contains("optimistic-user-bubble"),
-                "dashboard-core.js must remove orphaned optimistic user bubbles on htmx:responseError");
-        Assertions.assertTrue(jsContent.contains("xhr.responseText"),
+        final String coreJsContent = Files.readString(coreJs, StandardCharsets.UTF_8);
+        Assertions.assertTrue(coreJsContent.contains("xhr.responseText"),
                 "dashboard-core.js must surface plain-text HTTP 400 error bodies from xhr.responseText");
+
+        final Path chatJs = Paths.get("src/main/resources/static/dashboard-chat.js");
+        final String chatJsContent = Files.readString(chatJs, StandardCharsets.UTF_8);
+        Assertions.assertTrue(chatJsContent.contains("optimistic-user-bubble"),
+                "dashboard-chat.js must remove orphaned optimistic user bubbles on chat HTMX errors");
     }
 
     @Test

@@ -74,6 +74,7 @@ public class AuraTestSettingsController implements ApplicationListener<WebServer
     private final McpSubscriptionManager subscriptionManager;
     private final ListableBeanFactory beanFactory;
     private final List<Object> explicitToolBeans;
+    private volatile List<Map<String, String>> cachedMcpToolsList;
 
     @Value("${server.port:8080}")
     private int configuredServerPort = 8080;
@@ -198,6 +199,12 @@ public class AuraTestSettingsController implements ApplicationListener<WebServer
 
     private List<Map<String, String>> resolveMcpToolsList()
     {
+        final List<Map<String, String>> cached = this.cachedMcpToolsList;
+        if (cached != null)
+        {
+            return cached;
+        }
+
         final List<McpToolDescriptor> descriptors = (beanFactory != null)
                 ? McpToolCatalogHelper.resolveFromBeanFactory(beanFactory)
                 : McpToolCatalogHelper.resolveFromBeans(explicitToolBeans);
@@ -209,9 +216,11 @@ public class AuraTestSettingsController implements ApplicationListener<WebServer
             item.put("name", descriptor.name());
             item.put("description", descriptor.description());
             item.put("parameters", descriptor.formatParametersSummary());
-            tools.add(item);
+            tools.add(Map.copyOf(item));
         }
-        return tools;
+        final List<Map<String, String>> immutable = List.copyOf(tools);
+        this.cachedMcpToolsList = immutable;
+        return immutable;
     }
 
     @GetMapping

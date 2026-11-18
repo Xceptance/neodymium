@@ -56,6 +56,7 @@ public class AuraChatSessionService
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(AuraChatSessionService.class);
     private static final Pattern SAFE_SESSION_ID_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]{1,128}$");
+    private static final int MAX_SESSION_NAME_LENGTH = 80;
 
     private final File chatHistoryDir;
     private final Gson gson;
@@ -306,7 +307,7 @@ public class AuraChatSessionService
     public synchronized ChatSessionDto createSession(final String name)
     {
         ensureDirectoryExists();
-        final String cleanName = (name == null || name.trim().isEmpty()) ? "New Chat" : name.trim();
+        final String cleanName = normalizeSessionName(name, "New Chat");
         final String id = "s-" + UUID.randomUUID().toString().substring(0, 8) + "-" + System.currentTimeMillis();
 
         final ChatSessionDto session = new ChatSessionDto(id, cleanName, new ArrayList<>(), System.currentTimeMillis());
@@ -334,15 +335,32 @@ public class AuraChatSessionService
         }
 
         final ChatSessionDto session = target.get();
-        if (newName == null || newName.trim().isEmpty())
+        final String cleanName = normalizeSessionName(newName, null);
+        if (cleanName == null)
         {
             return snapshotOf(session);
         }
 
-        session.name = newName.trim();
+        session.name = cleanName;
         session.updatedAt = System.currentTimeMillis();
         persistSession(session);
         return snapshotOf(session);
+    }
+
+    private static String normalizeSessionName(final String rawName, final String fallback)
+    {
+        if (rawName == null)
+        {
+            return fallback;
+        }
+        final String trimmed = rawName.trim();
+        if (trimmed.isEmpty())
+        {
+            return fallback;
+        }
+        return trimmed.length() > MAX_SESSION_NAME_LENGTH
+                ? trimmed.substring(0, MAX_SESSION_NAME_LENGTH)
+                : trimmed;
     }
 
     /**

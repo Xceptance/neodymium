@@ -131,17 +131,22 @@ public class AuraTestChatController
             name = "Renamed Chat";
         }
 
+        if (id == null || id.isBlank())
+        {
+            return renderMissingSessionActionFragment(null, model, false);
+        }
+
         final ChatSessionDto renamed = chatSessionService.renameSession(id, name);
+        if (renamed == null)
+        {
+            return renderMissingSessionActionFragment(null, model, false);
+        }
         final List<ChatSessionDto> sessions = chatSessionService.getSessions();
-        final ChatSessionDto activeSession = renamed != null
-                ? renamed
-                : (!sessions.isEmpty() ? sessions.get(0) : null);
 
         model.addAttribute("chatSessions", sessions);
-        model.addAttribute("currentSessionId", activeSession != null ? activeSession.id : "");
-        model.addAttribute("chatMessages", activeSession != null ? activeSession.messages : List.of());
-        model.addAttribute("pendingConfirmations",
-                activeSession != null ? this.chatService.getPendingConfirmations(activeSession.id) : List.of());
+        model.addAttribute("currentSessionId", renamed.id);
+        model.addAttribute("chatMessages", renamed.messages);
+        model.addAttribute("pendingConfirmations", this.chatService.getPendingConfirmations(renamed.id));
         return "fragments/chat :: chatContainerContent";
     }
 
@@ -154,33 +159,24 @@ public class AuraTestChatController
                              final Model model)
     {
         final boolean hasExplicitSessionId = sessionId != null && !sessionId.isBlank();
+        final boolean hasPrompt = prompt != null && !prompt.isBlank();
         final ChatSessionDto session;
-        boolean shouldRefreshSessionSelect = false;
 
         if (hasExplicitSessionId)
         {
             final Optional<ChatSessionDto> found = this.chatSessionService.findSession(sessionId.trim());
-            if (found.isPresent())
+            if (found.isEmpty())
             {
-                session = found.get();
+                return renderMissingSessionActionFragment(response, model, hasPrompt);
             }
-            else if (prompt != null && !prompt.isBlank())
-            {
-                session = this.chatSessionService.createSession("New Chat");
-                shouldRefreshSessionSelect = session != null;
-            }
-            else
-            {
-                session = this.chatSessionService.getSession(null);
-                shouldRefreshSessionSelect = true;
-            }
+            session = found.get();
         }
         else
         {
             session = this.chatSessionService.getSession(null);
         }
 
-        if (session != null && prompt != null && !prompt.isBlank())
+        if (session != null && hasPrompt)
         {
             final List<ChatMessageDto> historyBeforeTurn = session.messages != null
                     ? List.copyOf(session.messages)
@@ -189,17 +185,6 @@ public class AuraTestChatController
             // 1. Save user prompt
             final ChatMessageDto userMsg = new ChatMessageDto("user", prompt);
             this.chatSessionService.addMessage(session.id, userMsg);
-            shouldRefreshSessionSelect = true;
-
-            // 2. Auto-rename session only if it still has a default placeholder name
-            if ("New Chat".equalsIgnoreCase(session.name) || "Default Session".equalsIgnoreCase(session.name))
-            {
-                final String trimmedPrompt = prompt.trim();
-                final String newName = trimmedPrompt.length() > 25
-                        ? trimmedPrompt.substring(0, 25) + "..."
-                        : trimmedPrompt;
-                this.chatSessionService.renameSession(session.id, newName);
-            }
 
             try
             {
@@ -214,6 +199,16 @@ public class AuraTestChatController
                 final ChatResponse chatResp = this.chatService.runChatWorkflow(req);
                 final boolean isError = "error".equals(chatResp.action);
 
+                // 2. Auto-rename placeholder sessions only when the turn succeeded
+                if (!isError && ("New Chat".equalsIgnoreCase(session.name) || "Default Session".equalsIgnoreCase(session.name)))
+                {
+                    final String trimmedPrompt = prompt.trim();
+                    final String newName = trimmedPrompt.length() > 25
+                            ? trimmedPrompt.substring(0, 25) + "..."
+                            : trimmedPrompt;
+                    this.chatSessionService.renameSession(session.id, newName);
+                }
+
                 final ChatMessageDto assistantMsg = new ChatMessageDto("ai", chatResp.message, chatResp.thinking, isError);
                 this.chatSessionService.addMessage(session.id, assistantMsg);
 
@@ -227,23 +222,19 @@ public class AuraTestChatController
                 LOGGER.error("Chat execution error", e);
                 this.chatSessionService.addMessage(
                         session.id,
-                        new ChatMessageDto("ai", "Error processing request: " + e.getMessage(), "", true));
+                        new ChatMessageDto(
+                                "ai",
+                                AuraChatService.formatSafeUserError(e),
+                                "[Error] " + AuraChatService.formatDiagnosticErrorTrace(e),
+                                true));
             }
 
             final ChatSessionDto effectiveSession = this.chatSessionService.findSession(session.id).orElse(session);
-            if (shouldRefreshSessionSelect)
-            {
-                model.addAttribute("chatSessions", this.chatSessionService.getSessions());
-                model.addAttribute("oobSessionSelect", true);
-            }
+            model.addAttribute("chatSessions", this.chatSessionService.getSessions());
+            model.addAttribute("oobSessionSelect", true);
             return populateMessagesFragment(effectiveSession, model);
         }
 
-        if (shouldRefreshSessionSelect)
-        {
-            model.addAttribute("chatSessions", this.chatSessionService.getSessions());
-            model.addAttribute("oobSessionSelect", true);
-        }
         return populateMessagesFragment(session, model);
     }
 
@@ -267,7 +258,7 @@ public class AuraTestChatController
                 : Optional.empty();
         if (found.isEmpty())
         {
-            return renderMissingSessionActionFragment(model);
+            return renderMissingSessionActionFragment(null, model, false);
         }
 
         final ChatSessionDto session = found.get();
@@ -309,7 +300,7 @@ public class AuraTestChatController
                 : Optional.empty();
         if (found.isEmpty())
         {
-            return renderMissingSessionActionFragment(model);
+            return renderMissingSessionActionFragment(null, model, false);
         }
 
         final ChatSessionDto session = found.get();
@@ -327,8 +318,21 @@ public class AuraTestChatController
         return populateMessagesFragment(refreshed, model);
     }
 
-    private String renderMissingSessionActionFragment(final Model model)
+    private String renderMissingSessionActionFragment(final HttpServletResponse response,
+                                                      final Model model,
+                                                      final boolean preserveInput)
     {
+        if (preserveInput && response != null)
+        {
+            try
+            {
+                response.setHeader("HX-Trigger", OBJECT_MAPPER.writeValueAsString(Map.of("chatPreserveInput", true)));
+            }
+            catch (final JsonProcessingException e)
+            {
+                LOGGER.warn("Failed to serialize chatPreserveInput HX-Trigger: {}", e.getMessage());
+            }
+        }
         final ChatSessionDto fallback = this.chatSessionService.getSession(null);
         final List<ChatMessageDto> transientMessages = new ArrayList<>();
         if (fallback != null && fallback.messages != null)

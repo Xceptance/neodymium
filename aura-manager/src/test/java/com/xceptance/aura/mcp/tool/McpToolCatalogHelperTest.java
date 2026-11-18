@@ -106,6 +106,44 @@ public final class McpToolCatalogHelperTest
                 descriptors.stream().map(McpToolDescriptor::name).toList());
     }
 
+    @Test
+    public void testResolveFromBeansDiscoversInheritedSuperclassAndInterfaceMcpTools()
+    {
+        final SubclassTools bean = new SubclassTools();
+        final List<McpToolDescriptor> descriptors = McpToolCatalogHelper.resolveFromBeans(bean);
+
+        Assertions.assertEquals(
+                List.of("base_tool", "interface_tool", "sub_tool"),
+                descriptors.stream().map(McpToolDescriptor::name).toList());
+    }
+
+    interface InterfaceToolContract
+    {
+        @McpTool(name = "interface_tool", description = "Interface default tool")
+        default Map<String, Object> interfacePing()
+        {
+            return Map.of("iface", true);
+        }
+    }
+
+    static class BaseTools implements InterfaceToolContract
+    {
+        @McpTool(name = "base_tool", description = "Base class tool")
+        public Map<String, Object> basePing()
+        {
+            return Map.of("base", true);
+        }
+    }
+
+    static class SubclassTools extends BaseTools
+    {
+        @McpTool(name = "sub_tool", description = "Subclass tool")
+        public Map<String, Object> subPing()
+        {
+            return Map.of("sub", true);
+        }
+    }
+
     static class SamplePrimaryTools
     {
         @McpTool(name = "alpha_tool", description = "Alpha tool description")

@@ -761,6 +761,37 @@ function renderChatMarkdown(root) {
 }
 window.renderChatMarkdown = renderChatMarkdown;
 
+function isChatHtmxRequest(detail) {
+    if (!detail) return false;
+    const reqPath = getChatRequestPath(detail);
+    if (typeof reqPath === 'string' && reqPath.startsWith('/api/chat')) {
+        return true;
+    }
+    if (detail.target && (detail.target.id === 'chatMessages' || detail.target.id === 'chatContainer')) {
+        return true;
+    }
+    return false;
+}
+
+function shouldPreserveChatInput(xhr) {
+    if (!xhr || typeof xhr.getResponseHeader !== 'function') {
+        return false;
+    }
+    const hxTrigger = xhr.getResponseHeader('HX-Trigger');
+    return typeof hxTrigger === 'string' && hxTrigger.includes('chatPreserveInput');
+}
+
+function handleChatRequestFailureCleanup(detail) {
+    if (!isChatHtmxRequest(detail)) {
+        return;
+    }
+    if (typeof document !== 'undefined' && typeof document.querySelectorAll === 'function') {
+        document.querySelectorAll('.thinking-bubble, .optimistic-user-bubble')
+            .forEach((el) => el.remove());
+    }
+    restoreChatConfirmationButtons(detail && detail.target ? detail.target : document);
+}
+
 if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
     const scheduleChatMarkdownRender = () => renderChatMarkdown(document);
     if (document.readyState === 'loading') {
@@ -789,7 +820,10 @@ if (typeof document !== 'undefined' && typeof document.addEventListener === 'fun
             const params = detail && detail.requestConfig ? detail.requestConfig.parameters : null;
             const requestPrompt = params && typeof params.prompt === 'string' ? params.prompt.trim() : null;
             const expectedPrompt = requestPrompt !== null ? requestPrompt : pendingSubmittedPrompt;
-            if (detail && detail.successful === true && (!detail.xhr || detail.xhr.status < 400)) {
+            if (detail
+                    && detail.successful === true
+                    && (!detail.xhr || detail.xhr.status < 400)
+                    && !shouldPreserveChatInput(detail.xhr)) {
                 const input = document.getElementById('chatInput');
                 if (input && expectedPrompt !== null && input.value.trim() === expectedPrompt) {
                     input.value = '';
@@ -800,18 +834,14 @@ if (typeof document !== 'undefined' && typeof document.addEventListener === 'fun
             }
         } else if ((path === '/api/chat/confirm' || path === '/api/chat/cancel')
                 && (!detail || detail.successful !== true || (detail.xhr && detail.xhr.status >= 400))) {
-            restoreChatConfirmationButtons(detail ? detail.target : document);
+            handleChatRequestFailureCleanup(detail);
         }
     });
-    const restoreConfirmationOnError = (evt) => {
-        const detail = evt ? evt.detail : null;
-        const path = getChatRequestPath(detail);
-        if (path === '/api/chat/confirm' || path === '/api/chat/cancel') {
-            restoreChatConfirmationButtons(detail ? detail.target : document);
-        }
+    const cleanupChatOnError = (evt) => {
+        handleChatRequestFailureCleanup(evt ? evt.detail : null);
     };
-    document.addEventListener('htmx:responseError', restoreConfirmationOnError);
-    document.addEventListener('htmx:sendError', restoreConfirmationOnError);
+    document.addEventListener('htmx:responseError', cleanupChatOnError);
+    document.addEventListener('htmx:sendError', cleanupChatOnError);
 }
 
 function renameCurrentChatSession() {

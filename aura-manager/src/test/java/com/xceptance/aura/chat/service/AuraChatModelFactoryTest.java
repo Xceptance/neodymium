@@ -173,6 +173,23 @@ public class AuraChatModelFactoryTest
 
         Assertions.assertTrue(factory.getCacheSize() <= 16,
                 "Model cache must remain bounded (LRU) to avoid unbounded heap growth");
+        factory.closeCachedClients();
+        Assertions.assertEquals(0, factory.getCacheSize());
+    }
+
+    @Test
+    public void testProviderScopedChatApiKeyTakesPrecedenceOverGenericChatApiKey()
+    {
+        final AiConfiguration config = mockConfig(Map.of(
+                "neodymium.ai.chat.provider", "openai",
+                "neodymium.ai.chat.apiKey", "stale-gemini-role-key",
+                "neodymium.ai.chat.openai.apiKey", "sk-role-openai-key"
+        ));
+        Mockito.when(config.getProvider("chat")).thenReturn("openai");
+        Mockito.when(config.getTemperature("chat")).thenReturn(0.0);
+
+        final AuraChatModelFactory factory = new AuraChatModelFactory(key -> null);
+        Assertions.assertEquals("sk-role-openai-key", factory.resolveApiKey(config, "openai"));
     }
 
     @Test

@@ -307,6 +307,9 @@ public class AuraChatServiceTest
         final var failedTurn = chatService.runChatWorkflow(
                 new ChatRequest("Delete tests/danger.yaml", null, List.of(), "sess-fail"));
         Assertions.assertEquals("error", failedTurn.action);
+        Assertions.assertFalse(failedTurn.message.contains("Upstream rate limit"),
+                "Raw upstream SDK error details should stay in Thinking Process rather than main message");
+        Assertions.assertTrue(failedTurn.thinking.contains("Upstream rate limit"));
 
         chatService.runChatWorkflow(new ChatRequest("Delete tests/danger.yaml", null, List.of(), "sess-fail"));
         Mockito.verify(mcpToolService, Mockito.times(2)).deleteTest("tests/danger.yaml", null);

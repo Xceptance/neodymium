@@ -483,6 +483,21 @@ public class DashboardChatJsTest
                 // 4. Successful /api/chat clears chatInput only if unchanged; edited follow-up text survives
                 chatInput.value = 'Run smoke tests';
                 context.clearChatInput({});
+                dispatchDoc('htmx:afterRequest', {
+                    pathInfo: { requestPath: '/api/chat' },
+                    requestConfig: { parameters: { prompt: 'Run smoke tests' } },
+                    successful: true,
+                    xhr: {
+                        status: 200,
+                        getResponseHeader: (name) => name === 'HX-Trigger' ? '{"chatPreserveInput":true}' : null
+                    }
+                });
+                if (chatInput.value !== 'Run smoke tests') {
+                    throw new Error('chatPreserveInput trigger must keep chatInput intact when session was missing');
+                }
+
+                chatInput.value = 'Run smoke tests';
+                context.clearChatInput({});
                 chatInput.value = 'Edited follow-up prompt';
                 dispatchDoc('htmx:afterRequest', {
                     pathInfo: { requestPath: '/api/chat' },
@@ -492,6 +507,7 @@ public class DashboardChatJsTest
                 if (chatInput.value !== 'Edited follow-up prompt') {
                     throw new Error('Successful /api/chat wiped newly edited follow-up prompt: ' + chatInput.value);
                 }
+
                 chatInput.value = 'Run smoke tests';
                 context.clearChatInput({});
                 dispatchDoc('htmx:afterRequest', {

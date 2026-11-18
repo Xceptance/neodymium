@@ -864,38 +864,6 @@ function init() {
         onEditorPanelSwapped(evt);
     });
 
-    function isChatHtmxRequest(detail) {
-        if (!detail) return false;
-        const reqPath = (detail.pathInfo && detail.pathInfo.requestPath)
-            || (detail.requestConfig && detail.requestConfig.path)
-            || '';
-        if (typeof reqPath === 'string' && reqPath.startsWith('/api/chat')) {
-            return true;
-        }
-        if (detail.target && (detail.target.id === 'chatMessages' || detail.target.id === 'chatContainer')) {
-            return true;
-        }
-        const elt = detail.elt;
-        if (elt && typeof elt.getAttribute === 'function') {
-            const attrPath = elt.getAttribute('hx-post') || elt.getAttribute('hx-get') || '';
-            if (attrPath.startsWith('/api/chat')) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    function handleChatRequestFailureCleanup(detail) {
-        if (!isChatHtmxRequest(detail)) {
-            return;
-        }
-        document.querySelectorAll('.thinking-bubble, .optimistic-user-bubble')
-            .forEach(el => el.remove());
-        if (typeof window.restoreChatConfirmationButtons === 'function') {
-            window.restoreChatConfirmationButtons(detail && detail.target ? detail.target : document);
-        }
-    }
-
     document.addEventListener('htmx:responseError', function(evt) {
         const detail = evt ? evt.detail : null;
         const xhr = detail ? detail.xhr : null;
@@ -919,13 +887,10 @@ function init() {
             }
         }
 
-        handleChatRequestFailureCleanup(detail);
         showWarning(errorMsg);
     });
 
     document.addEventListener('htmx:sendError', function(evt) {
-        const detail = evt ? evt.detail : null;
-        handleChatRequestFailureCleanup(detail);
         showWarning('Network error communicating with server.');
     });
 

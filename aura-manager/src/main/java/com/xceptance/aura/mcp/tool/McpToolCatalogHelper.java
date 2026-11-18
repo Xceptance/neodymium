@@ -235,8 +235,8 @@ public final class McpToolCatalogHelper
                 continue;
             }
 
-            final Method[] methods = targetClass.getDeclaredMethods();
-            Arrays.sort(methods, Comparator.comparing(Method::getName));
+            final List<Method> methods = collectCandidateMethods(targetClass);
+            methods.sort(Comparator.comparing(Method::getName));
             for (final Method method : methods)
             {
                 final McpTool annotation = method.getAnnotation(McpTool.class);
@@ -350,20 +350,20 @@ public final class McpToolCatalogHelper
     private static Class<?> resolveAnnotatedClass(final Class<?> candidateClass)
     {
         Class<?> current = ClassUtils.getUserClass(candidateClass);
-        while (current != null && current != Object.class)
+        while (current != null && current.getName().contains("$MockitoMock$"))
         {
-            if (!current.getName().contains("$MockitoMock$") && hasDeclaredMcpToolMethods(current))
-            {
-                return current;
-            }
             current = current.getSuperclass();
         }
-        return null;
+        if (current == null || current == Object.class)
+        {
+            return null;
+        }
+        return hasDeclaredMcpToolMethods(current) ? current : null;
     }
 
     private static boolean hasDeclaredMcpToolMethods(final Class<?> type)
     {
-        for (final Method method : type.getDeclaredMethods())
+        for (final Method method : collectCandidateMethods(type))
         {
             if (method.isAnnotationPresent(McpTool.class))
             {
@@ -371,5 +371,32 @@ public final class McpToolCatalogHelper
             }
         }
         return false;
+    }
+
+    private static List<Method> collectCandidateMethods(final Class<?> targetClass)
+    {
+        final List<Method> collected = new ArrayList<>();
+        Class<?> current = targetClass;
+        while (current != null && current != Object.class)
+        {
+            addNonSyntheticDeclaredMethods(current, collected);
+            current = current.getSuperclass();
+        }
+        for (final Class<?> iface : ClassUtils.getAllInterfacesForClassAsSet(targetClass))
+        {
+            addNonSyntheticDeclaredMethods(iface, collected);
+        }
+        return collected;
+    }
+
+    private static void addNonSyntheticDeclaredMethods(final Class<?> type, final List<Method> target)
+    {
+        for (final Method method : type.getDeclaredMethods())
+        {
+            if (!method.isBridge() && !method.isSynthetic())
+            {
+                target.add(method);
+            }
+        }
     }
 }
