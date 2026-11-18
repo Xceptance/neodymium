@@ -25,7 +25,32 @@ import static com.codeborne.selenide.Selenide.$$;
 
 @RunWith(NeodymiumRunner.class)
 @Browser("Chrome_1500x1000_headless")
-public class DebugUtilsTest {
+public class DebugUtilsTest
+{
+    private static final String TEST_PAGE_URL = "data:text/html;charset=utf-8,"
+        + "<!DOCTYPE html><html><head><title>DebugUtils Test</title></head><body>"
+        + "<div id='masthead'>"
+        + "  <h1 class='site-title'>Neodymium Test Page</h1>"
+        + "  <button class='search-toggle' onclick=\"document.getElementById('search-container').style.display='block'\">Search</button>"
+        + "</div>"
+        + "<div id='content'>"
+        + "  <article>"
+        + "    <h1 onclick=\"this.innerText='Clicked'\">Article Heading</h1>"
+        + "    <p>Sample content</p>"
+        + "  </article>"
+        + "</div>"
+        + "<div id='search-container'>"
+        + "  <form class='search-form' onsubmit='return false;'>"
+        + "    <input class='search-field' type='text' />"
+        + "  </form>"
+        + "</div>"
+        + "</body></html>";
+
+    private static final String IFRAME_TEST_PAGE_URL = "data:text/html;charset=utf-8,"
+        + "<!DOCTYPE html><html><head><title>iFrame Test</title></head><body>"
+        + "<iframe id='iframeResult' srcdoc='<!DOCTYPE html><html><body><select><option>Volvo</option><option>Saab</option></select></body></html>'></iframe>"
+        + "</body></html>";
+
     @Before
     public void setUp()
     {
@@ -33,34 +58,17 @@ public class DebugUtilsTest {
     }
 
     @Test
-    public void testHighlighting() throws Exception {
+    public void testHighlighting() throws Exception
+    {
         Neodymium.configuration().setProperty("neodymium.debugUtils.highlight", "true");
         Neodymium.configuration().setProperty("neodymium.debugUtils.highlight.duration", "1000");
 
-        Selenide.open("https://blog.xceptance.com/");
+        Selenide.open(TEST_PAGE_URL);
         $(".site-title").shouldBe(visible);
         DebugUtils.injectJavaScript();
         assertJsSuccessfullyInjected();
 
         final List<WebElement> list = Neodymium.getDriver().findElements(By.cssSelector(".site-title"));
-        System.out.println("=== DIAGNOSTIC START ===");
-        System.out.println("Element list size: " + list.size());
-        if (!list.isEmpty())
-        {
-            final WebElement el = list.get(0);
-            System.out.println("TagName: " + el.getTagName());
-            System.out.println("Displayed (Java): " + el.isDisplayed());
-            System.out.println("Location: " + el.getLocation());
-            System.out.println("Size: " + el.getSize());
-            System.out.println("JS getComputedStyle visibility: " + Selenide.executeJavaScript("return window.getComputedStyle(arguments[0]).visibility;", el));
-            System.out.println("JS getComputedStyle display: " + Selenide.executeJavaScript("return window.getComputedStyle(arguments[0]).display;", el));
-            System.out.println("JS getBoundingClientRect: " + Selenide.executeJavaScript("var r = arguments[0].getBoundingClientRect(); return r.width + 'x' + r.height;", el));
-            System.out.println("JS window.NEODYMIUM.isDisplayed: " + Selenide.executeJavaScript("return window.NEODYMIUM ? window.NEODYMIUM.isDisplayed(arguments[0]) : 'undefined';", el));
-            System.out.println("JS window.NEODYMIUM.consumesSpace: " + Selenide.executeJavaScript("return window.NEODYMIUM ? window.NEODYMIUM.consumesSpace(arguments[0]) : 'undefined';", el));
-            System.out.println("JS window.NEODYMIUM.getOverflowState: " + Selenide.executeJavaScript("return window.NEODYMIUM ? window.NEODYMIUM.getOverflowState(arguments[0]) : 'undefined';", el));
-            System.out.println("JS window.NEODYMIUM.isVisible: " + Selenide.executeJavaScript("return window.NEODYMIUM ? window.NEODYMIUM.isVisible(arguments[0]) : 'undefined';", el));
-        }
-        System.out.println("=== DIAGNOSTIC END ===");
         DebugUtils.highlightElements(list, Neodymium.getDriver());
         $(".neodymium-highlight-box").shouldBe(visible);
 
@@ -81,7 +89,7 @@ public class DebugUtilsTest {
         Neodymium.configuration().setProperty("neodymium.debugUtils.highlight", "true");
         Neodymium.configuration().setProperty("neodymium.debugUtils.highlight.duration", "1000");
 
-        Selenide.open("https://blog.xceptance.com/");
+        Selenide.open(TEST_PAGE_URL);
         $(".site-title").shouldBe(visible);
         DebugUtils.injectJavaScript();
         assertJsSuccessfullyInjected();
@@ -95,16 +103,17 @@ public class DebugUtilsTest {
     }
 
     @Test
-    public void testWaiting() {
-        NeodymiumWebDriverTestListener eventListener = new NeodymiumWebDriverTestListener();
-        RemoteWebDriver driver = Neodymium.getRemoteWebDriver();
-        WebDriver decoratedDriver = new EventFiringDecorator<WebDriver>(eventListener).decorate(driver);
+    public void testWaiting()
+    {
+        final NeodymiumWebDriverTestListener eventListener = new NeodymiumWebDriverTestListener();
+        final RemoteWebDriver driver = Neodymium.getRemoteWebDriver();
+        final WebDriver decoratedDriver = new EventFiringDecorator<WebDriver>(eventListener).decorate(driver);
         Neodymium.getWebDriverStateContainer().setDecoratedWebDriver(decoratedDriver);
         WebDriverRunner.setWebDriver(decoratedDriver);
         Neodymium.configuration().setProperty("neodymium.debugUtils.highlight", "true");
 
         // no wait due to navigation
-        Selenide.open("https://blog.xceptance.com/");
+        Selenide.open(TEST_PAGE_URL);
         Assert.assertEquals(0, eventListener.implicitWaitCount);
 
         // one wait due to find
@@ -137,24 +146,15 @@ public class DebugUtilsTest {
     }
 
     @Test
-    public void testIFrames() throws Exception {
+    public void testIFrames() throws Exception
+    {
         Neodymium.configuration().setProperty("neodymium.debugUtils.highlight", "true");
         Neodymium.configuration().setProperty("neodymium.debugUtils.highlight.duration", "750");
 
-        Selenide.open("https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_select");
-
-        // check if the cookie banner is present and accept it if so
-        SelenideElement acceptCookiesButtonFrame = $("#fast-cmp-iframe");
-
-        SelenideAddons.optionalWaitUntilCondition(acceptCookiesButtonFrame, visible);
-        if (acceptCookiesButtonFrame.isDisplayed()) {
-            Neodymium.getDriver().switchTo().frame(acceptCookiesButtonFrame);
-            $(".fast-cmp-button-primary").click();
-            Neodymium.getDriver().switchTo().defaultContent();
-        }
+        Selenide.open(IFRAME_TEST_PAGE_URL);
 
         Neodymium.getDriver().switchTo().frame("iframeResult");
-        SelenideElement body = $("body");
+        final SelenideElement body = $("body");
         body.click();
         assertJsSuccessfullyInjected();
 
@@ -175,7 +175,7 @@ public class DebugUtilsTest {
         Neodymium.configuration().setProperty("neodymium.debugUtils.highlight.duration", "150");
         Neodymium.configuration().setProperty("neodymium.debugUtils.highlight.blink.count", "2");
 
-        Selenide.open("https://blog.xceptance.com/");
+        Selenide.open(TEST_PAGE_URL);
         $(".site-title").shouldBe(visible);
         DebugUtils.injectJavaScript();
         assertJsSuccessfullyInjected();
@@ -185,7 +185,8 @@ public class DebugUtilsTest {
         $(".neodymium-highlight-box").shouldNot(exist);
     }
 
-    private void assertJsSuccessfullyInjected() {
+    private void assertJsSuccessfullyInjected()
+    {
         Assert.assertTrue(Selenide.executeJavaScript("return !!window.NEODYMIUM"));
     }
 }
