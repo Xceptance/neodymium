@@ -18,9 +18,12 @@
  */
 package com.xceptance.aura.test.controller;
 
-import com.xceptance.neodymium.aura.AuraChatSessionService;
 import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Assertions;
@@ -46,7 +49,6 @@ public class AuraTestDashboardControllerTest
 {
     private AuraInteractiveService interactiveService;
     private AuraFileService fileService;
-    private AuraChatSessionService sessionService;
     private AuraTestQueueController queueController;
     private AuraTestDashboardController controller;
 
@@ -55,7 +57,6 @@ public class AuraTestDashboardControllerTest
     {
         interactiveService = Mockito.mock(AuraInteractiveService.class);
         fileService = Mockito.mock(AuraFileService.class);
-        sessionService = Mockito.mock(AuraChatSessionService.class);
         queueController = Mockito.mock(AuraTestQueueController.class);
 
         Mockito.when(fileService.getYamlFilesList()).thenReturn(List.of());
@@ -64,7 +65,6 @@ public class AuraTestDashboardControllerTest
         controller = new AuraTestDashboardController(
             interactiveService,
             fileService,
-            sessionService,
             queueController
         );
     }
@@ -213,5 +213,25 @@ public class AuraTestDashboardControllerTest
         final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
         mockMvc.perform(get("/"))
             .andExpect(status().isNotFound());
+    }
+
+    @Test
+    public void testIndexTemplateIncludesCacheBustingVersionsForDashboardScripts() throws Exception
+    {
+        final Path indexPath = Files.exists(Paths.get("src/main/resources/templates/index.html"))
+                ? Paths.get("src/main/resources/templates/index.html")
+                : Paths.get("aura-manager/src/main/resources/templates/index.html");
+        final String html = Files.readString(indexPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(html.contains("dashboard-styles.css?v=1.2.8"),
+                "dashboard-styles.css must carry the updated ?v=1.2.8 cache-busting query parameter in index.html");
+        Assertions.assertTrue(html.contains("dashboard-core.js?v="),
+                "dashboard-core.js must carry a ?v= cache-busting query parameter in index.html");
+        Assertions.assertTrue(html.contains("dashboard-chat.js?v="),
+                "dashboard-chat.js must carry a ?v= cache-busting query parameter in index.html");
+        Assertions.assertTrue(html.contains("dashboard-runner.js?v="),
+                "dashboard-runner.js must carry a ?v= cache-busting query parameter in index.html");
+        Assertions.assertTrue(html.contains("dashboard-settings.js?v="),
+                "dashboard-settings.js must carry a ?v= cache-busting query parameter in index.html");
     }
 }

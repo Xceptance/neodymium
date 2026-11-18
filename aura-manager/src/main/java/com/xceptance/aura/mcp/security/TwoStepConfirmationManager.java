@@ -35,7 +35,8 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class TwoStepConfirmationManager
 {
-    private static final Duration DEFAULT_TTL = Duration.ofSeconds(60);
+    /** Default validity window for single-use confirmation tokens. */
+    public static final Duration DEFAULT_TTL = Duration.ofSeconds(60);
 
     private final Map<String, TokenEntry> tokenCache = new ConcurrentHashMap<>();
 

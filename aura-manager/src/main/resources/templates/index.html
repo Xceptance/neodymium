@@ -23,7 +23,7 @@
 
     <!-- Custom Modular CSS -->
     <link rel="stylesheet" th:href="@{/css/report-manager.css?v=1.1.15}" href="css/report-manager.css?v=1.1.15">
-    <link rel="stylesheet" th:href="@{/dashboard-styles.css?v=1.2.7}" href="dashboard-styles.css?v=1.2.7">
+    <link rel="stylesheet" th:href="@{/dashboard-styles.css?v=1.2.8}" href="dashboard-styles.css?v=1.2.8">
 </head>
 <body th:classappend="${theme == 'light' ? 'light-mode' : ''}">
 
@@ -96,6 +96,15 @@
         </div>
     </main>
 
+    <!-- GLOBAL AURA AI CHAT OVERLAY -->
+    <div id="auraChatOverlay" class="aura-chat-overlay" style="display: none;">
+        <div class="aura-chat-overlay-card">
+            <div class="panel chat-container" id="chatContainer" th:fragment="chatContainer">
+                <div th:replace="~{fragments/chat :: chatContainerContent}"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Allure-style Draggable Panel Resizer & Side Panel Inspector Drawer Fragment -->
     <div class="panel-resizer" id="allurePanelResizer"></div>
     <div th:replace="~{fragments/side-panel-step-list :: stepListPanel}"></div>
@@ -121,10 +130,10 @@
 
     <!-- Custom Modular Unobtrusive JavaScript Controller -->
     <script th:src="@{/js/report-manager.js?v=1.1.7}" src="js/report-manager.js?v=1.1.7"></script>
-    <script th:src="@{/dashboard-core.js}" src="dashboard-core.js"></script>
-    <script th:src="@{/dashboard-chat.js}" src="dashboard-chat.js"></script>
+    <script th:src="@{/dashboard-core.js?v=1.2.8}" src="dashboard-core.js?v=1.2.8"></script>
+    <script th:src="@{/dashboard-chat.js?v=1.2.8}" src="dashboard-chat.js?v=1.2.8"></script>
     <script th:src="@{/dashboard-editor.js?v=1.2.8}" src="dashboard-editor.js?v=1.2.8"></script>
     <script th:src="@{/dashboard-runner.js?v=1.2.9}" src="dashboard-runner.js?v=1.2.9"></script>
-    <script th:src="@{/dashboard-settings.js}" src="dashboard-settings.js"></script>
+    <script th:src="@{/dashboard-settings.js?v=1.2.8}" src="dashboard-settings.js?v=1.2.8"></script>
 </body>
 </html>

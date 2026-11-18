@@ -18,6 +18,11 @@
  */
 package com.xceptance.aura.config;
 
+import com.xceptance.aura.chat.dto.ChatMessageDto;
+import com.xceptance.aura.chat.dto.ChatSessionDto;
+import com.xceptance.aura.chat.dto.PendingConfirmationDto;
+import com.xceptance.aura.chat.service.AuraChatService;
+import com.xceptance.aura.chat.service.AuraChatSessionService;
 import com.xceptance.aura.report.entity.TestRunEntity;
 import com.xceptance.aura.report.entity.TestRunTagEntity;
 import com.xceptance.aura.report.repository.TestRunRepository;
@@ -347,6 +352,46 @@ public final class AuraGlobalModelAdviceTest
         Assertions.assertEquals(1, projectCount);
         final long suiteCount = availableIdentityTags.stream().filter("Suite"::equalsIgnoreCase).count();
         Assertions.assertEquals(1, suiteCount);
+    }
+
+    @Test
+    public final void testGlobalChatAttributesPopulatedWhenServicesConfigured()
+    {
+        final AuraQueueService mockQueueService = Mockito.mock(AuraQueueService.class);
+        final AuraChatSessionService mockSessionService = Mockito.mock(AuraChatSessionService.class);
+        final AuraChatService mockChatService = Mockito.mock(AuraChatService.class);
+
+        final ChatSessionDto active = new ChatSessionDto("sess-global", "Overview", List.of(new ChatMessageDto("user", "Hi")));
+        final PendingConfirmationDto pending = new PendingConfirmationDto("act-1", "delete_test", "a.yaml", 30L);
+        Mockito.when(mockSessionService.getSessions()).thenReturn(List.of(active));
+        Mockito.when(mockChatService.getPendingConfirmations("sess-global")).thenReturn(List.of(pending));
+
+        final AuraGlobalModelAdvice globalAdvice = new AuraGlobalModelAdvice(
+            mockQueueService, null, null, null, mockSessionService, mockChatService);
+        final Model model = new ConcurrentModel();
+        globalAdvice.addGlobalAttributes(model);
+
+        Assertions.assertEquals(List.of(active), model.getAttribute("chatSessions"));
+        Assertions.assertEquals("sess-global", model.getAttribute("currentSessionId"));
+        Assertions.assertEquals(active.messages, model.getAttribute("chatMessages"));
+        Assertions.assertEquals(List.of(pending), model.getAttribute("pendingConfirmations"));
+    }
+
+    @Test
+    public final void testGlobalChatAttributesSkippedOnHxRequest()
+    {
+        final AuraQueueService mockQueueService = Mockito.mock(AuraQueueService.class);
+        final AuraChatSessionService mockSessionService = Mockito.mock(AuraChatSessionService.class);
+        final AuraChatService mockChatService = Mockito.mock(AuraChatService.class);
+
+        final AuraGlobalModelAdvice globalAdvice = new AuraGlobalModelAdvice(
+            mockQueueService, null, null, null, mockSessionService, mockChatService);
+        final Model model = new ConcurrentModel();
+        globalAdvice.addGlobalAttributes("true", model);
+
+        Assertions.assertNull(model.getAttribute("chatSessions"));
+        Assertions.assertNull(model.getAttribute("pendingConfirmations"));
+        Mockito.verifyNoInteractions(mockSessionService, mockChatService);
     }
 
     @Test

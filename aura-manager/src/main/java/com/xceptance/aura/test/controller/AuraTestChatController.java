@@ -18,23 +18,27 @@
  */
 package com.xceptance.aura.test.controller;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.xceptance.neodymium.aura.AuraChatService;
-import com.xceptance.neodymium.aura.AuraChatSessionService;
-import com.xceptance.neodymium.aura.dto.ChatMessageDto;
-import com.xceptance.neodymium.aura.dto.ChatRequest;
-import com.xceptance.neodymium.aura.dto.ChatResponse;
-import com.xceptance.neodymium.aura.dto.ChatSessionDto;
-import org.neodymium.ai.config.AiConfiguration;
+import com.xceptance.aura.chat.dto.ChatMessageDto;
+import com.xceptance.aura.chat.dto.ChatRequest;
+import com.xceptance.aura.chat.dto.ChatResponse;
+import com.xceptance.aura.chat.dto.ChatSessionDto;
+import com.xceptance.aura.chat.service.AuraChatService;
+import com.xceptance.aura.chat.service.AuraChatSessionService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -51,10 +55,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 public class AuraTestChatController
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(AuraTestChatController.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final AuraChatService chatService;
     private final AuraChatSessionService chatSessionService;
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AuraTestChatController(final AuraChatService chatService, final AuraChatSessionService chatSessionService)
     {
@@ -65,10 +69,15 @@ public class AuraTestChatController
     @GetMapping("/messages")
     public String getMessages(@RequestParam(value = "sessionId", required = false) final String sessionId, final Model model)
     {
-        final ChatSessionDto session = chatSessionService.getSession(sessionId);
-        model.addAttribute("chatMessages", session != null ? session.messages : List.of());
-        model.addAttribute("currentSessionId", session != null ? session.id : "");
-        return "fragments/chat :: chatMessagesContent";
+        final String trimmedSessionId = sessionId != null ? sessionId.trim() : null;
+        final ChatSessionDto session = this.chatSessionService.getSession(trimmedSessionId);
+        if (trimmedSessionId != null && !trimmedSessionId.isBlank()
+                && (session == null || !trimmedSessionId.equals(session.id)))
+        {
+            model.addAttribute("chatSessions", this.chatSessionService.getSessions());
+            model.addAttribute("oobSessionSelect", true);
+        }
+        return populateMessagesFragment(session, model);
     }
 
     @PostMapping({"/create", "/sessions"})
@@ -79,6 +88,8 @@ public class AuraTestChatController
         model.addAttribute("chatSessions", sessions);
         model.addAttribute("currentSessionId", newSession != null ? newSession.id : "");
         model.addAttribute("chatMessages", newSession != null ? newSession.messages : List.of());
+        model.addAttribute("pendingConfirmations",
+                newSession != null ? this.chatService.getPendingConfirmations(newSession.id) : List.of());
         return "fragments/chat :: chatContainerContent";
     }
 
@@ -87,8 +98,9 @@ public class AuraTestChatController
                                 @RequestParam(value = "sessionId", required = false) final String sessionIdParam,
                                 final Model model)
     {
-        final String id = idParam != null && !idParam.isBlank() ? idParam : sessionIdParam;
+        final String id = resolveTrimmedId(idParam, sessionIdParam);
         chatSessionService.deleteSession(id);
+        this.chatService.clearPendingConfirmations(id);
 
         final List<ChatSessionDto> sessions = chatSessionService.getSessions();
         final ChatSessionDto fallback = !sessions.isEmpty() ? sessions.get(0) : null;
@@ -96,6 +108,8 @@ public class AuraTestChatController
         model.addAttribute("chatSessions", sessions);
         model.addAttribute("currentSessionId", fallback != null ? fallback.id : "");
         model.addAttribute("chatMessages", fallback != null ? fallback.messages : List.of());
+        model.addAttribute("pendingConfirmations",
+                fallback != null ? this.chatService.getPendingConfirmations(fallback.id) : List.of());
         return "fragments/chat :: chatContainerContent";
     }
 
@@ -106,7 +120,7 @@ public class AuraTestChatController
                                 final HttpServletRequest request,
                                 final Model model)
     {
-        final String id = idParam != null && !idParam.isBlank() ? idParam : sessionIdParam;
+        final String id = resolveTrimmedId(idParam, sessionIdParam);
         String name = nameParam;
         if (name == null || name.isBlank())
         {
@@ -117,85 +131,289 @@ public class AuraTestChatController
             name = "Renamed Chat";
         }
 
+        if (id == null || id.isBlank())
+        {
+            return renderMissingSessionActionFragment(null, model, false);
+        }
+
         final ChatSessionDto renamed = chatSessionService.renameSession(id, name);
+        if (renamed == null)
+        {
+            return renderMissingSessionActionFragment(null, model, false);
+        }
         final List<ChatSessionDto> sessions = chatSessionService.getSessions();
 
         model.addAttribute("chatSessions", sessions);
-        model.addAttribute("currentSessionId", renamed != null ? renamed.id : "");
-        model.addAttribute("chatMessages", renamed != null ? renamed.messages : List.of());
+        model.addAttribute("currentSessionId", renamed.id);
+        model.addAttribute("chatMessages", renamed.messages);
+        model.addAttribute("pendingConfirmations", this.chatService.getPendingConfirmations(renamed.id));
         return "fragments/chat :: chatContainerContent";
     }
 
     @PostMapping
     public String handleChat(@RequestParam(value = "sessionId", required = false) final String sessionId,
                              @RequestParam(value = "prompt", required = false) final String prompt,
+                             @RequestParam(value = "activeFile", required = false) final String activeFile,
+                             @RequestParam(value = "viewContext", required = false) final String viewContext,
                              final HttpServletResponse response,
                              final Model model)
     {
-        final ChatSessionDto session = chatSessionService.getSession(sessionId);
+        final boolean hasExplicitSessionId = sessionId != null && !sessionId.isBlank();
+        final boolean hasPrompt = prompt != null && !prompt.isBlank();
+        final ChatSessionDto session;
 
-        if (session != null && prompt != null && !prompt.isBlank())
+        if (hasExplicitSessionId)
         {
+            final Optional<ChatSessionDto> found = this.chatSessionService.findSession(sessionId.trim());
+            if (found.isEmpty())
+            {
+                return renderMissingSessionActionFragment(response, model, hasPrompt);
+            }
+            session = found.get();
+        }
+        else
+        {
+            session = this.chatSessionService.getSession(null);
+        }
+
+        if (session != null && hasPrompt)
+        {
+            final List<ChatMessageDto> historyBeforeTurn = session.messages != null
+                    ? List.copyOf(session.messages)
+                    : List.of();
+
             // 1. Save user prompt
             final ChatMessageDto userMsg = new ChatMessageDto("user", prompt);
-            chatSessionService.addMessage(session.id, userMsg);
-
-            // 2. Auto-rename session if it's currently generic
-            if ("New Chat".equalsIgnoreCase(session.name) || "Default Session".equalsIgnoreCase(session.name)
-                    || session.messages.size() <= 1)
-            {
-                final String newName = prompt.length() > 25 ? prompt.substring(0, 25) + "..." : prompt;
-                chatSessionService.renameSession(session.id, newName);
-            }
+            this.chatSessionService.addMessage(session.id, userMsg);
 
             try
             {
-                final String apiKey = AiConfiguration.getInstance().aiApiKey();
-                if (apiKey != null && !apiKey.isBlank())
+                final String trimmedActiveFile = (activeFile != null && !activeFile.isBlank())
+                        ? activeFile.trim()
+                        : null;
+                final String trimmedViewContext = (viewContext != null && !viewContext.isBlank())
+                        ? viewContext.trim()
+                        : null;
+                final ChatRequest req = new ChatRequest(prompt, trimmedActiveFile, historyBeforeTurn, session.id, trimmedViewContext);
+
+                final ChatResponse chatResp = this.chatService.runChatWorkflow(req);
+                final boolean isError = "error".equals(chatResp.action);
+
+                // 2. Auto-rename placeholder sessions only when the turn succeeded
+                if (!isError && ("New Chat".equalsIgnoreCase(session.name) || "Default Session".equalsIgnoreCase(session.name)))
                 {
-                    final int historyEnd = Math.max(0, session.messages.size() - 1);
-                    final List<ChatMessageDto> history = session.messages.subList(0, historyEnd);
-                    final ChatRequest req = new ChatRequest(prompt, null, history);
-
-                    final ChatResponse chatResp = chatService.runChatWorkflow(req);
-
-                    final ChatMessageDto assistantMsg = new ChatMessageDto("ai", chatResp.message, chatResp.thinking);
-                    chatSessionService.addMessage(session.id, assistantMsg);
-
-                    if (chatResp.action != null && !chatResp.action.isBlank())
-                    {
-                        final Map<String, Object> triggerPayload = new HashMap<>();
-                        triggerPayload.put("action", chatResp.action);
-                        triggerPayload.put("selectedDatasets", chatResp.selectedDatasets);
-                        triggerPayload.put("files", chatResp.files);
-                        triggerPayload.put("filename", chatResp.filename);
-                        triggerPayload.put("content", chatResp.content);
-
-                        final String triggerJson = objectMapper.writeValueAsString(Map.of("aiAction", triggerPayload));
-                        response.setHeader("HX-Trigger", triggerJson);
-                    }
+                    final String trimmedPrompt = prompt.trim();
+                    final String newName = trimmedPrompt.length() > 25
+                            ? trimmedPrompt.substring(0, 25) + "..."
+                            : trimmedPrompt;
+                    this.chatSessionService.renameSession(session.id, newName);
                 }
-                else
+
+                final ChatMessageDto assistantMsg = new ChatMessageDto("ai", chatResp.message, chatResp.thinking, isError);
+                this.chatSessionService.addMessage(session.id, assistantMsg);
+
+                if (hasTriggerActions(chatResp, isError))
                 {
-                    chatSessionService.addMessage(session.id, new ChatMessageDto("ai",
-                        "API Key is missing or invalid. Please configure 'neodymium.ai.apiKey' in properties or system environment."));
+                    emitAiTriggerHeader(response, chatResp, isError);
                 }
             }
             catch (final Exception e)
             {
                 LOGGER.error("Chat execution error", e);
-                chatSessionService.addMessage(session.id, new ChatMessageDto("ai", "Error processing request: " + e.getMessage()));
+                this.chatSessionService.addMessage(
+                        session.id,
+                        new ChatMessageDto(
+                                "ai",
+                                AuraChatService.formatSafeUserError(e),
+                                "[Error] " + AuraChatService.formatDiagnosticErrorTrace(e),
+                                true));
             }
 
-            model.addAttribute("chatMessages", session.messages);
-            model.addAttribute("currentSessionId", session.id);
+            final ChatSessionDto effectiveSession = this.chatSessionService.findSession(session.id).orElse(session);
+            model.addAttribute("chatSessions", this.chatSessionService.getSessions());
+            model.addAttribute("oobSessionSelect", true);
+            return populateMessagesFragment(effectiveSession, model);
+        }
+
+        return populateMessagesFragment(session, model);
+    }
+
+    /**
+     * Executes an explicitly confirmed pending destructive action initiated via the UI Confirm button.
+     *
+     * @param sessionId active chat session identifier
+     * @param actionId server-assigned confirmation action identifier
+     * @param response HTTP servlet response used to emit optional {@code HX-Trigger} headers
+     * @param model Spring MVC model populated for fragment rendering
+     * @return rendered chat messages fragment
+     */
+    @PostMapping("/confirm")
+    public String confirmPendingAction(@RequestParam(value = "sessionId", required = false) final String sessionId,
+                                       @RequestParam(value = "actionId", required = false) final String actionId,
+                                       final HttpServletResponse response,
+                                       final Model model)
+    {
+        final Optional<ChatSessionDto> found = (sessionId != null && !sessionId.isBlank())
+                ? this.chatSessionService.findSession(sessionId.trim())
+                : Optional.empty();
+        if (found.isEmpty())
+        {
+            return renderMissingSessionActionFragment(null, model, false);
+        }
+
+        final ChatSessionDto session = found.get();
+        if (actionId != null && !actionId.isBlank())
+        {
+            final ChatResponse chatResp = this.chatService.executePendingConfirmation(session.id, actionId);
+            final boolean isError = "error".equals(chatResp.action);
+            final boolean hasExecutedToolTrace = chatResp.thinking != null && chatResp.thinking.contains("[Tool Call]");
+            this.chatSessionService.addMessage(
+                    session.id,
+                    new ChatMessageDto("ai", chatResp.message, chatResp.thinking, isError && !hasExecutedToolTrace));
+
+            if (hasTriggerActions(chatResp, isError))
+            {
+                emitAiTriggerHeader(response, chatResp, isError);
+            }
+        }
+        final ChatSessionDto refreshed = this.chatSessionService.findSession(session.id).orElse(session);
+        model.addAttribute("chatSessions", this.chatSessionService.getSessions());
+        model.addAttribute("oobSessionSelect", true);
+        return populateMessagesFragment(refreshed, model);
+    }
+
+    /**
+     * Cancels a pending destructive action explicitly dismissed via the UI Cancel button.
+     *
+     * @param sessionId active chat session identifier
+     * @param actionId server-assigned confirmation action identifier
+     * @param model Spring MVC model populated for fragment rendering
+     * @return rendered chat messages fragment
+     */
+    @PostMapping("/cancel")
+    public String cancelPendingAction(@RequestParam(value = "sessionId", required = false) final String sessionId,
+                                      @RequestParam(value = "actionId", required = false) final String actionId,
+                                      final Model model)
+    {
+        final Optional<ChatSessionDto> found = (sessionId != null && !sessionId.isBlank())
+                ? this.chatSessionService.findSession(sessionId.trim())
+                : Optional.empty();
+        if (found.isEmpty())
+        {
+            return renderMissingSessionActionFragment(null, model, false);
+        }
+
+        final ChatSessionDto session = found.get();
+        if (actionId != null && !actionId.isBlank())
+        {
+            final ChatResponse chatResp = this.chatService.cancelPendingConfirmation(session.id, actionId);
+            final boolean isError = "error".equals(chatResp.action);
+            this.chatSessionService.addMessage(
+                    session.id,
+                    new ChatMessageDto("ai", chatResp.message, chatResp.thinking, isError));
+        }
+        final ChatSessionDto refreshed = this.chatSessionService.findSession(session.id).orElse(session);
+        model.addAttribute("chatSessions", this.chatSessionService.getSessions());
+        model.addAttribute("oobSessionSelect", true);
+        return populateMessagesFragment(refreshed, model);
+    }
+
+    private String renderMissingSessionActionFragment(final HttpServletResponse response,
+                                                      final Model model,
+                                                      final boolean preserveInput)
+    {
+        if (preserveInput && response != null)
+        {
+            try
+            {
+                response.setHeader("HX-Trigger", OBJECT_MAPPER.writeValueAsString(Map.of("chatPreserveInput", true)));
+            }
+            catch (final JsonProcessingException e)
+            {
+                LOGGER.warn("Failed to serialize chatPreserveInput HX-Trigger: {}", e.getMessage());
+            }
+        }
+        final ChatSessionDto fallback = this.chatSessionService.getSession(null);
+        final List<ChatMessageDto> transientMessages = new ArrayList<>();
+        if (fallback != null && fallback.messages != null)
+        {
+            transientMessages.addAll(fallback.messages);
+        }
+        transientMessages.add(new ChatMessageDto(
+                "ai",
+                "Chat session was not found or was deleted. No action was executed.",
+                "",
+                true));
+
+        model.addAttribute("chatSessions", this.chatSessionService.getSessions());
+        model.addAttribute("oobSessionSelect", true);
+        model.addAttribute("chatMessages", List.copyOf(transientMessages));
+        model.addAttribute("currentSessionId", fallback != null ? fallback.id : "");
+        model.addAttribute("pendingConfirmations",
+                fallback != null ? this.chatService.getPendingConfirmations(fallback.id) : List.of());
+        return "fragments/chat :: chatMessagesContent";
+    }
+
+    private String populateMessagesFragment(final ChatSessionDto session, final Model model)
+    {
+        model.addAttribute("chatMessages", session != null && session.messages != null ? session.messages : List.of());
+        model.addAttribute("currentSessionId", session != null ? session.id : "");
+        model.addAttribute("pendingConfirmations",
+                session != null ? this.chatService.getPendingConfirmations(session.id) : List.of());
+        return "fragments/chat :: chatMessagesContent";
+    }
+
+    private static String resolveTrimmedId(final String primaryId, final String fallbackId)
+    {
+        final String candidate = (primaryId != null && !primaryId.isBlank()) ? primaryId : fallbackId;
+        return (candidate != null && !candidate.isBlank()) ? candidate.trim() : null;
+    }
+
+    private static boolean hasTriggerActions(final ChatResponse chatResp, final boolean isError)
+    {
+        if (chatResp.actions != null && !chatResp.actions.isEmpty())
+        {
+            return true;
+        }
+        return !isError && chatResp.action != null && !chatResp.action.isBlank();
+    }
+
+    private static void emitAiTriggerHeader(final HttpServletResponse response, final ChatResponse chatResp,
+                                            final boolean isError)
+    {
+        final Map<String, Object> triggerPayload = new HashMap<>();
+        if (isError && chatResp.actions != null && !chatResp.actions.isEmpty())
+        {
+            triggerPayload.put("action", chatResp.actions.get(0));
         }
         else
         {
-            model.addAttribute("chatMessages", session != null ? session.messages : List.of());
-            model.addAttribute("currentSessionId", session != null ? session.id : "");
+            triggerPayload.put("action", chatResp.action);
         }
+        if (chatResp.actions != null && !chatResp.actions.isEmpty())
+        {
+            triggerPayload.put("actions", chatResp.actions);
+        }
+        try
+        {
+            final String triggerJson = OBJECT_MAPPER.writeValueAsString(Map.of("aiAction", triggerPayload));
+            response.setHeader("HX-Trigger", triggerJson);
+        }
+        catch (final JsonProcessingException e)
+        {
+            LOGGER.warn("Failed to serialize HX-Trigger payload: {}", e.getMessage());
+        }
+    }
 
-        return "fragments/chat :: chatMessagesContent";
+    /**
+     * Rejects malformed or unsafe session identifiers with HTTP 400 Bad Request instead of 500.
+     *
+     * @param ex validation exception raised by the session service
+     * @return HTTP 400 response containing the validation error message
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<String> handleInvalidSessionId(final IllegalArgumentException ex)
+    {
+        return ResponseEntity.badRequest().body(ex.getMessage());
     }
 }
