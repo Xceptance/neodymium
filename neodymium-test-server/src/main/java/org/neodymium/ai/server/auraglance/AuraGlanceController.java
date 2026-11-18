@@ -53,7 +53,19 @@ public final class AuraGlanceController
         Map.entry("/AuraGlanceTest/spa", "/AuraGlanceTest/spa/index.html"),
         Map.entry("/AuraGlanceTest/spa/", "/AuraGlanceTest/spa/index.html"),
         Map.entry("/AuraGlanceTest/shop/sandbox", "/AuraGlanceTest/shop/sandbox/index.html"),
-        Map.entry("/AuraGlanceTest/shop/sandbox/", "/AuraGlanceTest/shop/sandbox/index.html")
+        Map.entry("/AuraGlanceTest/shop/sandbox/", "/AuraGlanceTest/shop/sandbox/index.html"),
+        Map.entry("/AiGlanceTest", "/AiGlanceTest/index.html"),
+        Map.entry("/AiGlanceTest/", "/AiGlanceTest/index.html"),
+        Map.entry("/AiGlanceTest/shop", "/AiGlanceTest/shop/index.html"),
+        Map.entry("/AiGlanceTest/shop/", "/AiGlanceTest/shop/index.html"),
+        Map.entry("/AiGlanceTest/dashboard", "/AiGlanceTest/dashboard/index.html"),
+        Map.entry("/AiGlanceTest/dashboard/", "/AiGlanceTest/dashboard/index.html"),
+        Map.entry("/AiGlanceTest/a11y", "/AiGlanceTest/a11y/index.html"),
+        Map.entry("/AiGlanceTest/a11y/", "/AiGlanceTest/a11y/index.html"),
+        Map.entry("/AiGlanceTest/spa", "/AiGlanceTest/spa/index.html"),
+        Map.entry("/AiGlanceTest/spa/", "/AiGlanceTest/spa/index.html"),
+        Map.entry("/AiGlanceTest/shop/sandbox", "/AiGlanceTest/shop/sandbox/index.html"),
+        Map.entry("/AiGlanceTest/shop/sandbox/", "/AiGlanceTest/shop/sandbox/index.html")
     );
 
     private final SessionManager sessionManager;
@@ -123,13 +135,16 @@ public final class AuraGlanceController
 
         // 6. Map path to classpath resource
         final String relativePath = path.startsWith("/") ? path.substring(1) : path;
-        final String resourcePath = "ai-test-pages/" + relativePath;
+        final String resolvedRelativePath = relativePath.startsWith("AiGlanceTest")
+            ? "AuraGlanceTest" + relativePath.substring("AiGlanceTest".length())
+            : relativePath;
+        final String resourcePath = "ai-test-pages/" + resolvedRelativePath;
 
         try (final InputStream is = AuraGlanceController.class.getClassLoader().getResourceAsStream(resourcePath))
         {
             if (is == null)
             {
-                LOG.debug("Aura Glance resource not found: {}", resourcePath);
+                LOG.debug("AI Glance resource not found: {}", resourcePath);
                 ctx.status(HttpStatus.NOT_FOUND).result("404 Not Found");
                 return;
             }
@@ -138,7 +153,7 @@ public final class AuraGlanceController
             {
                 ctx.contentType(ContentType.HTML);
                 ctx.header("Cache-Control", "no-cache, no-store, must-revalidate");
-                ctx.render(relativePath, Collections.emptyMap());
+                ctx.render(resolvedRelativePath, Collections.emptyMap());
                 return;
             }
 

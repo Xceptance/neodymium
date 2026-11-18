@@ -2280,4 +2280,58 @@ public class RunStorageSyncServiceTest
             tagRepository.deleteByRunId(runId);
         }
     }
+
+    @Test
+    public void testStaleInProgressRunTransitionsToCompletedWhenProcessNotActive() throws IOException
+    {
+        final String runId = "run_stale_in_progress_test";
+        final File baseDir = new File("storage/runs");
+        final File runDir = new File(baseDir, runId);
+        final File classDir = new File(runDir, "SampleTestClass");
+        classDir.mkdirs();
+
+        try
+        {
+            // Seed DB with an IN_PROGRESS run entity
+            final TestRunEntity initialRun = new TestRunEntity(
+                runId, "DefaultBatch", "IN_PROGRESS", "CLI", "Default", "Default", "Chrome", "Recently",
+                System.currentTimeMillis() - 600_000L
+            );
+            initialRun.setRunningCount(1);
+            runRepository.save(initialRun);
+
+            final String execJson = """
+                {
+                  "runId": "%s",
+                  "testClass": "SampleTestClass",
+                  "title": "Default",
+                  "status": "running",
+                  "totalStepsCount": 5,
+                  "failedStepsCount": 0,
+                  "durationMs": 1000
+                }
+                """.formatted(runId);
+            final File execFile = new File(classDir, "console-execution-1.json");
+            Files.writeString(execFile.toPath(), execJson, StandardCharsets.UTF_8);
+
+            // Make the file older than 2 minutes (e.g. 5 minutes ago)
+            final long oldTimestamp = System.currentTimeMillis() - 300_000L;
+            execFile.setLastModified(oldTimestamp);
+
+            final boolean synced = syncService.importOrUpdateRunReport(runId);
+            Assertions.assertTrue(synced, "Expected run to sync successfully");
+
+            final Optional<TestRunEntity> updatedRunOpt = runRepository.findById(runId);
+            Assertions.assertTrue(updatedRunOpt.isPresent(), "Run entity must exist in DB");
+            final TestRunEntity updatedRun = updatedRunOpt.get();
+
+            Assertions.assertEquals("COMPLETED", updatedRun.getStatus(), "Stale IN_PROGRESS run must transition to COMPLETED");
+            Assertions.assertEquals(0, updatedRun.getRunningCountSafe(), "Running count must be 0 for inactive run");
+        }
+        finally
+        {
+            FileSystemUtils.deleteRecursively(runDir);
+            runRepository.deleteById(runId);
+        }
+    }
 }

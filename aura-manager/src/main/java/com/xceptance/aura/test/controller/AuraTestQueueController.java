@@ -30,6 +30,7 @@ import com.google.gson.Gson;
 import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.AuraQueueService;
+import com.xceptance.neodymium.aura.AuraSettingsService;
 import com.xceptance.neodymium.aura.dto.BrowserGroupDto;
 import com.xceptance.neodymium.aura.dto.BrowserProfileDto;
 import com.xceptance.neodymium.aura.dto.DatasetDto;
@@ -87,6 +88,8 @@ public class AuraTestQueueController
 
     private final AuraReportDataService reportDataService;
 
+    private final AuraSettingsService settingsService;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final List<DatasetSelection> selectedQueue = Collections.synchronizedList(new ArrayList<>());
@@ -106,19 +109,28 @@ public class AuraTestQueueController
     public AuraTestQueueController(final AuraQueueService queueService, final AuraFileService fileService,
         final AuraInteractiveService interactiveService)
     {
-        this(queueService, fileService, interactiveService, null, null);
+        this(queueService, fileService, interactiveService, null, null, null);
+    }
+
+    public AuraTestQueueController(final AuraQueueService queueService, final AuraFileService fileService,
+        final AuraInteractiveService interactiveService, final TestBatchRepository batchRepository,
+        final AuraReportDataService reportDataService)
+    {
+        this(queueService, fileService, interactiveService, batchRepository, reportDataService, null);
     }
 
     @Autowired
     public AuraTestQueueController(final AuraQueueService queueService, final AuraFileService fileService,
         final AuraInteractiveService interactiveService, final TestBatchRepository batchRepository,
-        final AuraReportDataService reportDataService)
+        final AuraReportDataService reportDataService,
+        @Autowired(required = false) final AuraSettingsService settingsService)
     {
         this.queueService = queueService;
         this.fileService = fileService;
         this.interactiveService = interactiveService;
         this.batchRepository = batchRepository;
         this.reportDataService = reportDataService;
+        this.settingsService = settingsService != null ? settingsService : new AuraSettingsService();
 
         final List<BrowserProfileDto> available = getAvailableBrowserProfiles();
         if (!available.isEmpty())
@@ -175,6 +187,12 @@ public class AuraTestQueueController
         model.addAttribute("queueController", this);
         model.addAttribute("activeEditingFile", fileService.getActiveEditingFile());
         model.addAttribute("runTags", runTags);
+        if (settingsService != null)
+        {
+            model.addAttribute("hasApiKey", settingsService.hasConfiguredApiKey());
+            model.addAttribute("apiKeyWarningIgnored", settingsService.isApiKeyWarningIgnored());
+            model.addAttribute("projectId", settingsService.getProjectId());
+        }
     }
 
     public Map<String, List<String>> getRunTags()
@@ -721,6 +739,41 @@ public class AuraTestQueueController
     public int getGlobalSkipped()
     {
         return queueService.getGlobalSkipped();
+    }
+
+    public long getRunStartTimeMs()
+    {
+        return queueService.getRunStartTimeMs();
+    }
+
+    public long getLastRunDurationMs()
+    {
+        return queueService.getLastRunDurationMs();
+    }
+
+    public static String formatDuration(final long durationMs)
+    {
+        if (durationMs <= 0)
+        {
+            return "0s";
+        }
+        final long totalSeconds = durationMs / 1000;
+        if (totalSeconds < 1)
+        {
+            return durationMs + "ms";
+        }
+        final long seconds = totalSeconds % 60;
+        final long minutes = (totalSeconds / 60) % 60;
+        final long hours = totalSeconds / 3600;
+        if (hours > 0)
+        {
+            return hours + "h " + minutes + "m " + seconds + "s";
+        }
+        if (minutes > 0)
+        {
+            return minutes + "m " + seconds + "s";
+        }
+        return seconds + "s";
     }
 
     @PostMapping("/api/queue/toggle")
@@ -1678,7 +1731,12 @@ public class AuraTestQueueController
     public String stopExecution(final Model model)
     {
         LOGGER.info("[Aura Server] User requested to stop active execution subprocess");
-        queueService.stopCurrentTest();
+        final String curRunId = queueService.getCurrentRunId();
+        queueService.stopProcess();
+        if (curRunId != null && !curRunId.isBlank() && reportDataService != null)
+        {
+            reportDataService.cancelRun(curRunId);
+        }
         return renderExecutionStatePanels(model);
     }
 
@@ -1691,14 +1749,15 @@ public class AuraTestQueueController
     {
         final String clientId = (clientIdParam != null && !clientIdParam.isBlank()) ? clientIdParam : "fallback-" + UUID.randomUUID().toString();
 
+        final String stoppedRunId = queueService.getCurrentRunId();
         final boolean isQueueRunning = queueService.isRunningQueue();
         String runId = isQueueRunning ? queueService.getCurrentRunId() : null;
         String currentBatch = isQueueRunning ? queueService.getCurrentBatchName() : null;
         boolean running = isQueueRunning;
-        int totalTestsRun = isQueueRunning ? queueService.getGlobalTestsRun() : 0;
-        int passedCount = isQueueRunning ? queueService.getGlobalPassed() : 0;
-        int failedCount = isQueueRunning ? queueService.getGlobalFailed() : 0;
-        int skippedCount = isQueueRunning ? queueService.getGlobalSkipped() : 0;
+        int totalTestsRun = queueService.getGlobalTestsRun();
+        int passedCount = queueService.getGlobalPassed();
+        int failedCount = queueService.getGlobalFailed();
+        int skippedCount = queueService.getGlobalSkipped();
 
         final RunRequest lastReq = queueService.getLastRunRequest();
         Integer scheduledCount = (isQueueRunning && lastReq != null && lastReq.datasets != null) ? lastReq.datasets.size() : null;
@@ -1717,17 +1776,29 @@ public class AuraTestQueueController
         {
             activeEntity = allRuns.stream().filter(r -> queueRunId.equals(r.getId())).findFirst().orElse(null);
         }
-        if (activeEntity == null)
+        if (activeEntity == null && reportDataService != null)
         {
-            activeEntity = allRuns.stream().filter(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus())).findFirst().orElse(null);
+            activeEntity = allRuns.stream()
+                .filter(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus()) && reportDataService.isRunCurrentlyActiveOnDisk(r.getId()))
+                .findFirst()
+                .orElse(null);
         }
         if (activeEntity == null && reportDataService != null)
         {
-            activeEntity = allRuns.stream().filter(r -> reportDataService.isRunCurrentlyActiveOnDisk(r.getId())).findFirst().orElse(null);
+            activeEntity = allRuns.stream()
+                .limit(5)
+                .filter(r -> !"CANCELLED".equalsIgnoreCase(r.getStatus()) && reportDataService.isRunCurrentlyActiveOnDisk(r.getId()))
+                .findFirst()
+                .orElse(null);
+        }
+        if (activeEntity == null && isQueueRunning)
+        {
+            activeEntity = allRuns.stream().filter(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus())).findFirst().orElse(null);
         }
 
         Integer executedCount = totalTestsRun;
         String progressText = "";
+        int activeRunningCount = 0;
 
         if (activeEntity != null)
         {
@@ -1735,8 +1806,11 @@ public class AuraTestQueueController
             {
                 runId = activeEntity.getId();
             }
-            running = isQueueRunning || "IN_PROGRESS".equalsIgnoreCase(activeEntity.getStatus())
-                || (reportDataService != null && reportDataService.isRunCurrentlyActiveOnDisk(activeEntity.getId()));
+            final boolean isCurrentRunStopped = queueService.isManuallyStopped()
+                && (stoppedRunId != null && !stoppedRunId.isBlank() && stoppedRunId.equals(activeEntity.getId()));
+            running = !isCurrentRunStopped && (isQueueRunning
+                || (!"CANCELLED".equalsIgnoreCase(activeEntity.getStatus())
+                    && reportDataService != null && reportDataService.isRunCurrentlyActiveOnDisk(activeEntity.getId())));
             if (currentBatch == null || !AuraReportDataService.isRealBatch(currentBatch))
             {
                 currentBatch = AuraReportDataService.resolveEffectiveBatchName(activeEntity.getBatchName(), activeEntity.getTags());
@@ -1747,10 +1821,13 @@ public class AuraTestQueueController
             }
 
             final int runningCount = activeEntity.getRunningCountSafe();
+            activeRunningCount = runningCount;
             final int total = activeEntity.getTotalTestsSafe();
             final int entityExecuted = Math.max(0, total - runningCount);
             final int entityPassed = activeEntity.getPassedCleanCount() + activeEntity.getFixedCleanCount() + activeEntity.getPassedHealedCountSafe() + activeEntity.getFixedHealedCountSafe();
-            final int entityFailed = activeEntity.getFailedKnownCount() + activeEntity.getFailedUnknownCount();
+            final int activeFailKnown = activeEntity.getFailedKnownCount() != null ? activeEntity.getFailedKnownCount() : 0;
+            final int activeFailUnknown = activeEntity.getFailedUnknownCount() != null ? activeEntity.getFailedUnknownCount() : 0;
+            final int entityFailed = activeFailKnown + activeFailUnknown;
             final int entitySkipped = activeEntity.getIgnoredCount() != null ? activeEntity.getIgnoredCount() : 0;
 
             totalTestsRun = Math.max(totalTestsRun, entityExecuted);
@@ -1812,13 +1889,42 @@ public class AuraTestQueueController
                 currentBatch = AuraReportDataService.resolveEffectiveBatchNameFromMap(latestRun.getBatchName(), reportDataService.getRunTagsMap(latestRun.getId()));
             }
             running = false;
-            executedCount = latestRun.getTotalTestsSafe();
-            scheduledCount = latestRun.getTotalTestsSafe();
-            totalTestsRun = executedCount;
-            passedCount = latestRun.getPassedCleanCount() + latestRun.getFixedCleanCount() + latestRun.getPassedHealedCountSafe() + latestRun.getFixedHealedCountSafe();
-            failedCount = latestRun.getFailedKnownCount() + latestRun.getFailedUnknownCount();
-            skippedCount = latestRun.getIgnoredCount() != null ? latestRun.getIgnoredCount() : 0;
-            progressText = executedCount + " tests completed";
+            final int entityTotal = latestRun.getTotalTestsSafe();
+            if (entityTotal > 0 || totalTestsRun == 0)
+            {
+                executedCount = entityTotal;
+                scheduledCount = entityTotal;
+                totalTestsRun = executedCount;
+                passedCount = latestRun.getPassedCleanCount() + latestRun.getFixedCleanCount() + latestRun.getPassedHealedCountSafe() + latestRun.getFixedHealedCountSafe();
+                final int latestFailKnown = latestRun.getFailedKnownCount() != null ? latestRun.getFailedKnownCount() : 0;
+                final int latestFailUnknown = latestRun.getFailedUnknownCount() != null ? latestRun.getFailedUnknownCount() : 0;
+                failedCount = latestFailKnown + latestFailUnknown;
+                skippedCount = latestRun.getIgnoredCount() != null ? latestRun.getIgnoredCount() : 0;
+            }
+            progressText = totalTestsRun + " tests completed";
+        }
+
+        if (!running && totalTestsRun > 0 && (progressText == null || progressText.isBlank()))
+        {
+            progressText = totalTestsRun + " tests completed";
+        }
+
+        final long durationMs;
+        if (running && queueService.getRunStartTimeMs() > 0)
+        {
+            durationMs = Math.max(0, System.currentTimeMillis() - queueService.getRunStartTimeMs());
+        }
+        else if (queueService.getLastRunDurationMs() > 0)
+        {
+            durationMs = queueService.getLastRunDurationMs();
+        }
+        else if (!allRuns.isEmpty() && allRuns.get(0).getDurationMs() != null && allRuns.get(0).getDurationMs() > 0)
+        {
+            durationMs = allRuns.get(0).getDurationMs();
+        }
+        else
+        {
+            durationMs = 0L;
         }
 
         final Map<String, Object> statusObj = new HashMap<>();
@@ -1828,6 +1934,9 @@ public class AuraTestQueueController
         statusObj.put("passed", passedCount);
         statusObj.put("failed", failedCount);
         statusObj.put("skipped", skippedCount);
+        statusObj.put("durationMs", durationMs);
+        statusObj.put("formattedDuration", formatDuration(durationMs));
+        statusObj.put("lastRunDurationMs", queueService.getLastRunDurationMs());
         statusObj.put("runId", runId != null ? runId : "");
         statusObj.put("batchName", (currentBatch != null && AuraReportDataService.isRealBatch(currentBatch)) ? currentBatch.trim() : "");
         statusObj.put("runReportUrl", (runId != null && !runId.isEmpty()) ? "/run-report?runId=" + runId : "");
@@ -1838,6 +1947,7 @@ public class AuraTestQueueController
         {
             statusObj.put("scheduledCount", scheduledCount);
         }
+        statusObj.put("runningCount", running ? activeRunningCount : 0);
         statusObj.put("activeFile", queueService.getActiveFile());
 
         String activeTestId = "";

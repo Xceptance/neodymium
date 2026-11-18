@@ -119,7 +119,6 @@
                         <span style="font-weight: 600; font-size: 12px;" th:text="${grp.title}">Google Chrome</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 6px;">
-                        <span class="browser-info-icon" th:if="${grp.key == 'chrome'}" style="font-size: 15px; color: var(--accent); background: rgba(37, 99, 235, 0.12); border-radius: 50%; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center;" title="Default Primary Browser">info</span>
                         <span class="group-selected-count" th:if="${grp.selectedCount > 0 and grp.key != 'chrome'}" th:text="${grp.selectedCount}" title="Selected count in this group">2</span>
                         <span class="material-symbols-outlined group-caret" style="font-size: 18px; color: var(--text-secondary); transition: transform 0.2s ease;">expand_more</span>
                     </div>
@@ -265,7 +264,7 @@
             id="runQueueBtn" 
             hx-post="/api/run" 
             hx-swap="none"
-            onclick="prepareClientForExecution()"
+            onclick="if (!checkApiKeyBeforeRun(event, () => triggerRunQueue())) return false; prepareClientForExecution();"
             th:disabled="${queue == null or queue.isEmpty()}"
             th:classappend="${running ? 'd-none' : ((activeEditingFile != null or (queue == null or queue.isEmpty())) ? 'btn-muted d-flex' : 'd-flex')}">
         <span class="material-symbols-outlined">play_arrow</span> <span>Run Queue</span> 
@@ -277,7 +276,7 @@
             id="runCurrentTestBtn" 
             hx-post="/api/run?runCurrent=true" 
             hx-swap="none"
-            onclick="prepareClientForExecution()"
+            onclick="if (!checkApiKeyBeforeRun(event, () => triggerRunCurrentTest())) return false; prepareClientForExecution();"
             th:classappend="${!running and activeEditingFile != null ? 'd-flex' : 'd-none'}">
         <span class="material-symbols-outlined">play_arrow</span> Run Open Test
     </button>
@@ -287,6 +286,7 @@
             id="stopQueueBtn" 
             hx-post="/api/stop" 
             hx-swap="none"
+            onclick="stopQueue()"
             th:classappend="${running ? 'd-flex' : 'd-none'}">
         <span class="material-symbols-outlined">stop</span> Stop Execution
     </button>

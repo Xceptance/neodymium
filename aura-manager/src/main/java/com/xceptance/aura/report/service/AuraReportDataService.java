@@ -4180,9 +4180,7 @@ public class AuraReportDataService
 
         final Optional<TestRunEntity> runOpt = runRepository.findById(effectiveRunId);
         final boolean isActiveOnDisk = localRunJsonStorageService.isRunCurrentlyActiveOnDisk(effectiveRunId);
-        final boolean isInProgress = (runOpt.isPresent() && "IN_PROGRESS".equalsIgnoreCase(runOpt.get().getStatus()))
-                || liveRunBuffer.containsKey(effectiveRunId)
-                || isActiveOnDisk;
+        final boolean isInProgress = liveRunBuffer.containsKey(effectiveRunId) || isActiveOnDisk;
 
         if (!isInProgress && runReportCache.containsKey(effectiveRunId))
         {
@@ -4410,6 +4408,47 @@ public class AuraReportDataService
             final RunReportDto report = buildRunReportDto(runEntity, executions);
             if (!isInProgress)
             {
+                if (runOpt.isPresent() && "IN_PROGRESS".equalsIgnoreCase(runOpt.get().getStatus()))
+                {
+                    final TestRunEntity finishedRun = runOpt.get();
+                    finishedRun.setStatus("COMPLETED");
+                    finishedRun.setTotalTests(report.getTotalCount());
+                    finishedRun.setPassedCount(report.getPassCount());
+                    finishedRun.setSucceededFixedCount(report.getFixedCount());
+                    finishedRun.setFailedKnownCount(report.getKnownCount());
+                    finishedRun.setFailedUnknownCount(report.getUnknownCount());
+                    finishedRun.setIgnoredCount(report.getIgnoredCount());
+                    finishedRun.setRunningCount(0);
+                    finishedRun.setPassedHealedCount(report.getPassHealedCount());
+                    finishedRun.setSucceededFixedHealedCount(report.getFixedHealedCount());
+                    finishedRun.setFailedKnownHealedCount(report.getKnownHealedCount());
+                    finishedRun.setFailedUnknownHealedCount(report.getUnknownHealedCount());
+                    if (report.getExecutions() != null && !report.getExecutions().isEmpty())
+                    {
+                        final String bCsv = report.getExecutions().stream()
+                            .map(TestExecutionDto::getBrowser)
+                            .filter(b -> b != null && !b.isBlank() && !"Unknown".equalsIgnoreCase(b))
+                            .distinct()
+                            .sorted()
+                            .collect(Collectors.joining(", "));
+                        if (!bCsv.isBlank())
+                        {
+                            finishedRun.setBrowsersCsv(bCsv);
+                        }
+                        final String lCsv = report.getExecutions().stream()
+                            .map(TestExecutionDto::getLocation)
+                            .filter(l -> l != null && !l.isBlank() && !"Unknown".equalsIgnoreCase(l))
+                            .distinct()
+                            .sorted()
+                            .collect(Collectors.joining(", "));
+                        if (!lCsv.isBlank())
+                        {
+                            finishedRun.setLocalesCsv(lCsv);
+                        }
+                    }
+                    finishedRun.recalculatePassRate();
+                    runRepository.save(finishedRun);
+                }
                 runReportCache.put(effectiveRunId, report);
             }
             else
@@ -5234,6 +5273,9 @@ public class AuraReportDataService
                         catch (final Exception ignored)
                         {
                         }
+                        att.setRelativePath(resolveWorkspaceRelativePath(fPath));
+                        att.setFileUri(fPath.toAbsolutePath().normalize().toUri().toString());
+                        att.setContent(readAttachmentContentIfSmall(fPath, att.getType()));
                         resolvedAttachments.add(att);
                         if (att.getName() != null)
                         {
@@ -5262,7 +5304,15 @@ public class AuraReportDataService
                     if (vf.startsWith(cDir) && Files.isRegularFile(vf) && Files.isReadable(vf))
                     {
                         final TestExecutionDto.ExecutionAttachmentDto vAtt = new TestExecutionDto.ExecutionAttachmentDto(
-                            videoName, videoName, "video", videoName.endsWith(".webm") ? "video/webm" : "video/mp4", true, vf.toFile().length());
+                            videoName,
+                            videoName,
+                            "video",
+                            videoName.endsWith(".webm") ? "video/webm" : "video/mp4",
+                            true,
+                            vf.toFile().length(),
+                            resolveWorkspaceRelativePath(vf),
+                            vf.toAbsolutePath().normalize().toUri().toString(),
+                            null);
                         resolvedAttachments.add(vAtt);
                         seenNames.add(videoName.toLowerCase(Locale.ROOT));
                         break;
@@ -5280,7 +5330,15 @@ public class AuraReportDataService
                 if (pf.startsWith(cDir) && Files.isRegularFile(pf) && Files.isReadable(pf))
                 {
                     final TestExecutionDto.ExecutionAttachmentDto pAtt = new TestExecutionDto.ExecutionAttachmentDto(
-                        "playbook.yaml", "playbook.yaml", "yaml", "text/yaml", false, pf.toFile().length());
+                        "playbook.yaml",
+                        "playbook.yaml",
+                        "yaml",
+                        "text/yaml",
+                        false,
+                        pf.toFile().length(),
+                        resolveWorkspaceRelativePath(pf),
+                        pf.toAbsolutePath().normalize().toUri().toString(),
+                        readAttachmentContentIfSmall(pf, "yaml"));
                     resolvedAttachments.add(pAtt);
                     seenNames.add("playbook.yaml");
                     break;
@@ -5297,7 +5355,15 @@ public class AuraReportDataService
                 if (lf.startsWith(cDir) && Files.isRegularFile(lf) && Files.isReadable(lf))
                 {
                     final TestExecutionDto.ExecutionAttachmentDto lAtt = new TestExecutionDto.ExecutionAttachmentDto(
-                        "execution.log", "execution.log", "log", "text/plain", false, lf.toFile().length());
+                        "execution.log",
+                        "execution.log",
+                        "log",
+                        "text/plain",
+                        false,
+                        lf.toFile().length(),
+                        resolveWorkspaceRelativePath(lf),
+                        lf.toAbsolutePath().normalize().toUri().toString(),
+                        readAttachmentContentIfSmall(lf, "log"));
                     resolvedAttachments.add(lAtt);
                     seenNames.add("execution.log");
                     break;
@@ -5309,6 +5375,55 @@ public class AuraReportDataService
 
         resolveBugsForExecution(effectiveRunId, dto);
         return dto;
+    }
+
+    private static boolean isTextAttachment(final Path path, final String type)
+    {
+        if ("log".equalsIgnoreCase(type) || "yaml".equalsIgnoreCase(type) || "json".equalsIgnoreCase(type) || "text".equalsIgnoreCase(type))
+        {
+            return true;
+        }
+        if (path == null || path.getFileName() == null)
+        {
+            return false;
+        }
+        final String fn = path.getFileName().toString().toLowerCase(Locale.ROOT);
+        return fn.endsWith(".log") || fn.endsWith(".yaml") || fn.endsWith(".yml") || fn.endsWith(".json")
+            || fn.endsWith(".txt") || fn.endsWith(".csv") || fn.endsWith(".tsv") || fn.endsWith(".xml") || fn.endsWith(".md");
+    }
+
+    private static String resolveWorkspaceRelativePath(final Path path)
+    {
+        if (path == null)
+        {
+            return "";
+        }
+        final Path userDir = Path.of("").toAbsolutePath().normalize();
+        final Path absPath = path.toAbsolutePath().normalize();
+        if (absPath.startsWith(userDir))
+        {
+            return userDir.relativize(absPath).toString().replace('\\', '/');
+        }
+        return absPath.toString().replace('\\', '/');
+    }
+
+    private static String readAttachmentContentIfSmall(final Path path, final String type)
+    {
+        if (path == null || !Files.isRegularFile(path) || !isTextAttachment(path, type))
+        {
+            return null;
+        }
+        try
+        {
+            if (Files.size(path) <= 50_000L)
+            {
+                return Files.readString(path, StandardCharsets.UTF_8);
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+        return null;
     }
 
     /**
@@ -8243,10 +8358,7 @@ public class AuraReportDataService
         for (final String dim : primaryDimensions)
         {
             final Set<String> values = rawTagMap.remove(dim);
-            if (values != null && !values.isEmpty())
-            {
-                result.put(dim, new ArrayList<>(values));
-            }
+            result.put(dim, values != null ? new ArrayList<>(values) : new ArrayList<>());
         }
 
         final List<String> sortedCustomKeys = new ArrayList<>(rawTagMap.keySet());

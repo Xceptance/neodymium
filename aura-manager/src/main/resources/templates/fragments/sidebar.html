@@ -15,7 +15,7 @@
             <div class="logo-icon"><span class="material-symbols-outlined">auto_awesome</span></div>
             <div class="logo-text">
                 <span class="logo-brand">Neodymium</span>
-                <span class="logo-title">Aura Manager</span>
+                <span class="logo-title">AI Manager</span>
             </div>
         </div>
 
@@ -51,8 +51,11 @@
            th:href="${(activeRunReportUrl != null and !activeRunReportUrl.isEmpty()) ? activeRunReportUrl : ((activeRunId != null and !activeRunId.isEmpty()) ? '/run-report?runId=' + activeRunId : '/')}" 
            href="/" 
            style="text-decoration: none; cursor: pointer; display: none;">
-            <div class="context-symbolic-icon" title="Active Context">
+            <div class="context-symbolic-icon" title="Active Context" id="sidebarContextSymbolicIcon">
                 <span class="material-symbols-outlined">science</span>
+                <span class="collapsed-fail-indicator" id="sidebarCollapsedFailIndicator" 
+                      th:style="${activeRunFailedCount != null and activeRunFailedCount > 0 ? 'display: block;' : 'display: none;'}"
+                      style="display: none;"></span>
             </div>
             <div class="context-full-details">
                 <div class="status-indicator">
@@ -64,9 +67,34 @@
                     <span id="sidebarActiveRunId" th:text="${activeRunId != null and !activeRunId.isEmpty() ? (activeRunId.startsWith('#') ? activeRunId : '#' + activeRunId) : '#RUN_ID'}">#RUN_ID</span>
                     <span class="tag-chip" id="sidebarActiveStatus" th:text="${activeRunStatus != null ? activeRunStatus : (activeEnv ?: 'Default')}">Default</span>
                 </div>
-                <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem; display: flex; align-items: center; gap: 0.35rem;" id="sidebarActiveProgressContainer" th:style="${activeRunProgress != null and !activeRunProgress.isEmpty() ? 'display: flex;' : 'display: none;'}">
-                    <span class="material-symbols-outlined" style="font-size: 0.8rem; color: var(--primary);">trending_up</span>
-                    <span id="sidebarActiveProgress" th:text="${activeRunProgress ?: ''}"></span>
+                <div class="sidebar-runner-progress-box" id="sidebarActiveProgressContainer" 
+                     th:style="${activeRunProgress != null and !activeRunProgress.isEmpty() ? 'display: flex;' : 'display: none;'}"
+                     th:title="${activeRunProgress}">
+                    <div class="sidebar-progress-track" id="sidebarProgressTrack"
+                         th:classappend="${running == true and (activeRunScheduledCount == null or activeRunScheduledCount == 0) ? 'is-indeterminate' : ''}">
+                        <div class="sidebar-progress-seg seg-passed" id="sidebarProgressSegPassed" 
+                             th:style="${activeRunScheduledCount != null and activeRunScheduledCount > 0 and activeRunPassedCount != null and activeRunPassedCount > 0 ? 'width: ' + ((activeRunPassedCount * 100) / activeRunScheduledCount) + '%; display: block;' : 'width: 0%; display: none;'}"
+                             style="width: 0%; display: none;"></div>
+                        <div class="sidebar-progress-seg seg-failed" id="sidebarProgressSegFailed" 
+                             th:style="${activeRunScheduledCount != null and activeRunScheduledCount > 0 and activeRunFailedCount != null and activeRunFailedCount > 0 ? 'width: ' + ((activeRunFailedCount * 100) / activeRunScheduledCount) + '%; display: block;' : 'width: 0%; display: none;'}"
+                             style="width: 0%; display: none;"></div>
+                        <div class="sidebar-progress-seg seg-running" id="sidebarProgressSegRunning" 
+                             th:style="${activeRunScheduledCount != null and activeRunScheduledCount > 0 and activeRunRunningCount != null and activeRunRunningCount > 0 ? 'width: ' + (activeRunRunningCount * 100 / activeRunScheduledCount < 2 ? 2 : (activeRunRunningCount * 100 / activeRunScheduledCount)) + '%; display: block;' : 'width: 0%; display: none;'}"
+                             style="width: 0%; display: none;"></div>
+                    </div>
+                    <div class="sidebar-progress-metrics">
+                        <span class="sidebar-progress-counter" id="sidebarActiveProgress" th:text="${activeRunProgress ?: ''}"></span>
+                        <div class="sidebar-outcome-chips" id="sidebarOutcomeChips">
+                            <span class="sidebar-chip-passed" id="sidebarChipPassed" 
+                                  th:style="${activeRunPassedCount != null and activeRunPassedCount > 0 ? 'display: inline-flex;' : 'display: none;'}">
+                                <span class="chip-dot"></span><span class="chip-val" id="sidebarChipPassedVal" th:text="${activeRunPassedCount ?: 0}">0</span>
+                            </span>
+                            <span class="sidebar-chip-failed" id="sidebarChipFailed" 
+                                  th:style="${activeRunFailedCount != null and activeRunFailedCount > 0 ? 'display: inline-flex;' : 'display: none;'}">
+                                <span class="chip-dot"></span><span class="chip-val" id="sidebarChipFailedVal" th:text="${activeRunFailedCount ?: 0}">0</span>
+                            </span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </a>

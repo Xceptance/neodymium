@@ -5,7 +5,7 @@
 
 	<groupId>com.xceptance</groupId>
 	<artifactId>neodymium-parent</artifactId>
-	<version>5.6.0-SNAPSHOT</version>
+	<version>6.0.0-BETA</version>
 	<packaging>pom</packaging>
 
 	<name>neodymium-parent</name>
@@ -47,6 +47,7 @@
 		<module>aura-manager</module>
 		<module>neodymium-e2e-tests</module>
 		<module>neodymium-classic</module>
+		<module>neodymium-archetype</module>
 	</modules>
 
 	<properties>
@@ -96,12 +97,18 @@
 			<id>ai-live-tests</id>
 		</profile>
 
-		<!-- 8. Aura Glance visual defect & baseline sandbox tests -->
+		<!-- 8. AI Glance visual defect & baseline sandbox tests (legacy alias: aura-sandbox) -->
+		<profile>
+			<id>ai-sandbox</id>
+		</profile>
 		<profile>
 			<id>aura-sandbox</id>
 		</profile>
 
-		<!-- 9. Aura Manager Spring Boot hub test suite -->
+		<!-- 9. AI Manager Spring Boot hub test suite (legacy alias: aura-manager) -->
+		<profile>
+			<id>ai-manager</id>
+		</profile>
 		<profile>
 			<id>aura-manager</id>
 		</profile>
@@ -118,7 +125,7 @@
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-surefire-plugin</artifactId>
-					<version>3.5.4</version>
+					<version>3.6.1</version>
 					<configuration>
 						<failIfNoSpecifiedTests>${surefire.failIfNoSpecifiedTests}</failIfNoSpecifiedTests>
 					</configuration>

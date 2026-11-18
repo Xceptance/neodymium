@@ -1,16 +1,8 @@
 #!/bin/bash
 # AI-generated: Gemini 3.8 Flash
 # Xceptance GmbH 2026
-# Compiles the project and executes the Neodymium Aura Manager (dual-mode).
+# Deprecated wrapper for run-ai.sh
 
-echo "========================================================================"
-echo "  Starting Neodymium Aura Manager..."
-echo "========================================================================"
-
-if [ -d "aura-manager" ]; then
-    # Running inside Neodymium multi-module repository
-    mvn -U spring-boot:run -pl aura-manager -am
-else
-    # Running inside external test project with aura-manager dependency
-    mvn -U test-compile exec:java -Dexec.mainClass="com.xceptance.aura.AuraLauncher" -Dexec.classpathScope="test"
-fi
+echo "[DEPRECATED] run-aura.sh has been renamed to run-ai.sh. Forwarding..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec "${SCRIPT_DIR}/run-ai.sh" "$@"

@@ -11,8 +11,14 @@ import com.xceptance.neodymium.util.Neodymium;
 
 public class DriverCustomCapabilitiesTestClass
 {
+    private static final String DATA_URI_PAGE =
+        "data:text/html;charset=utf-8,"
+        + "<html><body>"
+        + "<button id='alertBtn' onclick=\"alert('I am a JS Alert')\">Show alert</button>"
+        + "<div id='navLink'>Next action</div>"
+        + "</body></html>";
+
     @Browser("Chrome_headless")
-    @Browser("FF_headless")
     @NeodymiumTest
     public void failsOnUnhandledAlert()
     {
@@ -29,18 +35,11 @@ public class DriverCustomCapabilitiesTestClass
 
     public void provokeUnhandledAlertException()
     {
-        Selenide.open("https://www.xceptance.com/");
-        String elementToProvokeAlert = "var e = document.createElement('div');"
-                                       + " e.innerHTML = 'testThing'; "
-                                       + "e.setAttribute('data-testid','closeIcon');"
-                                       + " document.body.appendChild(e);"
-                                       + "e.addEventListener('click', function() {\n"
-                                       + "        alert(\"I am a JS Alert\");\n"
-                                       + "});";
-        Selenide.executeJavaScript(elementToProvokeAlert);
-        Selenide.sleep(1500);
-        // could only reproduce with pure Selenium calls, Selenide logs the exception but doesn't throw is
-        Neodymium.getDriver().findElement(By.cssSelector("[data-testid='closeIcon']")).click();
-        Neodymium.getDriver().findElement(By.cssSelector(".navbar-brand")).click();
+        Selenide.open(DATA_URI_PAGE);
+
+        Neodymium.getDriver().findElement(By.id("alertBtn")).click();
+        Selenide.sleep(300);
+
+        Neodymium.getDriver().findElement(By.id("navLink")).click();
     }
 }

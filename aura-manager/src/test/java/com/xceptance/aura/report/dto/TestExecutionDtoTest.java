@@ -740,6 +740,9 @@ public final class TestExecutionDtoTest
         Assertions.assertEquals("video", videoAtt.getType());
         Assertions.assertTrue(videoAtt.isOpenByDefault());
         Assertions.assertEquals(1048576L, videoAtt.getSize());
+        Assertions.assertEquals("video-1.mp4", videoAtt.getRelativePath());
+        Assertions.assertNull(videoAtt.getFileUri());
+        Assertions.assertNull(videoAtt.getContent());
 
         final TestExecutionDto.ExecutionAttachmentDto yamlAtt = dto.getAttachments().get(1);
         Assertions.assertEquals("playbook.yaml", yamlAtt.getName());
@@ -750,6 +753,36 @@ public final class TestExecutionDtoTest
         Assertions.assertEquals("execution.log", logAtt.getName());
         Assertions.assertEquals("log", logAtt.getType());
         Assertions.assertFalse(logAtt.isOpenByDefault());
+    }
+
+    @Test
+    public void testAttachmentsSerializationAndDeserializationWithInlinedContentAndPaths() throws Exception
+    {
+        final TestExecutionDto.ExecutionAttachmentDto att = new TestExecutionDto.ExecutionAttachmentDto(
+            "execution.log",
+            "execution.log",
+            "log",
+            "text/plain",
+            false,
+            128L,
+            "storage/runs/run-1/com.example.TestClass/execution.log",
+            "file:///workspace/storage/runs/run-1/com.example.TestClass/execution.log",
+            "[INFO] Step 1 passed\n[INFO] Step 2 passed"
+        );
+
+        final String json = this.objectMapper.writeValueAsString(att);
+        final TestExecutionDto.ExecutionAttachmentDto deserialized = this.objectMapper.readValue(json, TestExecutionDto.ExecutionAttachmentDto.class);
+
+        Assertions.assertNotNull(deserialized);
+        Assertions.assertEquals("execution.log", deserialized.getName());
+        Assertions.assertEquals("execution.log", deserialized.getPath());
+        Assertions.assertEquals("log", deserialized.getType());
+        Assertions.assertEquals("text/plain", deserialized.getContentType());
+        Assertions.assertFalse(deserialized.isOpenByDefault());
+        Assertions.assertEquals(128L, deserialized.getSize());
+        Assertions.assertEquals("storage/runs/run-1/com.example.TestClass/execution.log", deserialized.getRelativePath());
+        Assertions.assertEquals("file:///workspace/storage/runs/run-1/com.example.TestClass/execution.log", deserialized.getFileUri());
+        Assertions.assertEquals("[INFO] Step 1 passed\n[INFO] Step 2 passed", deserialized.getContent());
     }
 }
 

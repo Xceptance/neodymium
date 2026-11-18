@@ -11,7 +11,9 @@ import java.util.WeakHashMap;
 import org.aeonbits.owner.ConfigFactory;
 import org.apache.commons.lang3.StringUtils;
 import org.openqa.selenium.By;
+import org.openqa.selenium.Capabilities;
 import org.openqa.selenium.Dimension;
+import org.openqa.selenium.HasCapabilities;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.remote.RemoteWebDriver;
@@ -22,6 +24,9 @@ import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.common.TestStepListener;
 import com.xceptance.neodymium.common.browser.WebDriverStateContainer;
+import com.xceptance.neodymium.common.browser.configuration.BrowserConfiguration;
+import com.xceptance.neodymium.common.browser.configuration.MultibrowserConfiguration;
+import com.xceptance.neodymium.common.recording.FilmTestExecution;
 import com.xceptance.neodymium.common.testdata.TestData;
 
 /**
@@ -248,6 +253,117 @@ public class Neodymium
     {
         final WebDriverStateContainer wDSC = getContext().webDriverStateContainer;
         return wDSC != null && wDSC.getWebDriver() != null;
+    }
+
+    /**
+     * Checks if the active browser is running in headless mode.
+     *
+     * @return true if running in headless mode, false otherwise
+     */
+    public static boolean isHeadless()
+    {
+        return isHeadless(hasDriver() ? getDriver() : null);
+    }
+
+    /**
+     * Checks whether the given driver or execution context is running in headless mode.
+     *
+     * @param driver
+     *            the target WebDriver instance
+     * @return true if running in headless mode, false otherwise
+     */
+    public static boolean isHeadless(final WebDriver driver)
+    {
+        final WebDriverStateContainer container = getContext().webDriverStateContainer;
+        if (container != null && container.getBrowserConfiguration() != null)
+        {
+            return container.getBrowserConfiguration().isHeadless();
+        }
+        final String profileName = getBrowserProfileName();
+        if (profileName != null)
+        {
+            final BrowserConfiguration config = MultibrowserConfiguration.getInstance().getBrowserProfiles().get(profileName);
+            if (config != null)
+            {
+                return config.isHeadless();
+            }
+        }
+        if (Configuration.headless)
+        {
+            return true;
+        }
+        final WebDriver targetDriver = driver != null ? driver : (hasDriver() ? getDriver() : null);
+        if (targetDriver != null)
+        {
+            try
+            {
+                if (targetDriver instanceof HasCapabilities hasCaps)
+                {
+                    final Capabilities caps = hasCaps.getCapabilities();
+                    final Object chromeOpts = caps.getCapability("goog:chromeOptions");
+                    if (chromeOpts instanceof Map<?, ?> optionsMap)
+                    {
+                        final Object args = optionsMap.get("args");
+                        if (args instanceof List<?> argList && (argList.contains("--headless") || argList.contains("--headless=new")))
+                        {
+                            return true;
+                        }
+                    }
+                    final Object mozOpts = caps.getCapability("moz:firefoxOptions");
+                    if (mozOpts instanceof Map<?, ?> optionsMap)
+                    {
+                        final Object args = optionsMap.get("args");
+                        if (args instanceof List<?> argList && (argList.contains("-headless") || argList.contains("--headless")))
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+            catch (final Throwable ignored)
+            {
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Checks whether element highlighting should be performed for selected elements.
+     * Highlighting is skipped if running in headless mode without active video/gif recording,
+     * unless explicitly enabled via neodymium.debugUtils.highlight.headless.withoutVideo.
+     *
+     * @return true if elements should be highlighted, false otherwise
+     */
+    public static boolean shouldHighlightElements()
+    {
+        return shouldHighlightElements(hasDriver() ? getDriver() : null);
+    }
+
+    /**
+     * Checks whether element highlighting should be performed for selected elements on a target driver.
+     * Highlighting is skipped if running in headless mode without active video/gif recording,
+     * unless explicitly enabled via neodymium.debugUtils.highlight.headless.withoutVideo.
+     *
+     * @param driver
+     *            the target WebDriver instance
+     * @return true if elements should be highlighted, false otherwise
+     */
+    public static boolean shouldHighlightElements(final WebDriver driver)
+    {
+        if (!configuration().debuggingHighlightSelectedElements())
+        {
+            return false;
+        }
+        if (configuration().debuggingHighlightHeadlessWithoutVideo())
+        {
+            return true;
+        }
+        final WebDriver targetDriver = driver != null ? driver : (hasDriver() ? getDriver() : null);
+        if (isHeadless(targetDriver) && !FilmTestExecution.isRecording(targetDriver))
+        {
+            return false;
+        }
+        return true;
     }
 
     /**

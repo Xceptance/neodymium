@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -34,6 +35,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.LlmCapability;
@@ -59,6 +61,7 @@ import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.PlaybookPipelineStep;
 import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
+import org.neodymium.ai.report.PreliminaryReportListener;
 import org.neodymium.ai.report.TestExecutionReport;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.util.Neodymium;
@@ -588,7 +591,7 @@ public class InteractiveConsoleListenerTest
         final JsonArray steps = stateObj.getAsJsonObject("blocks").getAsJsonArray("steps");
         assertEquals("passed", steps.get(0).getAsJsonObject().get("status").getAsString());
         assertEquals("failed", steps.get(1).getAsJsonObject().get("status").getAsString());
-        assertEquals("skipped", steps.get(2).getAsJsonObject().get("status").getAsString());
+        assertEquals("not_run", steps.get(2).getAsJsonObject().get("status").getAsString());
         assertFalse(steps.get(2).getAsJsonObject().has("duration"), "Skipped step should not have duration");
     }
 
@@ -2760,5 +2763,47 @@ public class InteractiveConsoleListenerTest
         final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
         assertEquals(3, executedSteps.size(), "setup + 2 main steps, each exactly once: " + executedSteps);
         assertEquals(3, flatSteps.size(), "flatSteps must hold each step exactly once: " + flatSteps);
+    }
+
+    @Test
+    @DisplayName("Verify InteractiveConsoleListener reuses PreliminaryReportListener registered on session event bus")
+    public void testReusesPreliminaryReportListenerFromSessionEventBus()
+    {
+        final PreliminaryReportListener sessionPrl = (PreliminaryReportListener) session.getEventBus().getListeners().stream()
+            .filter(l -> l instanceof PreliminaryReportListener)
+            .findFirst()
+            .orElse(null);
+        assertNotNull(sessionPrl, "Session event bus must contain a PreliminaryReportListener");
+
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, false);
+        assertSame(sessionPrl, listener.getReportListener(), "InteractiveConsoleListener must reuse the existing PreliminaryReportListener from the session");
+    }
+
+    @Test
+    @DisplayName("Verify InteractiveConsoleListener does not duplicate event dispatch or flushes when reusing report listener")
+    public void testNoDuplicateDispatchOrFlushWhenReusingReportListener()
+    {
+        final PreliminaryReportListener sessionPrl = (PreliminaryReportListener) session.getEventBus().getListeners().stream()
+            .filter(l -> l instanceof PreliminaryReportListener)
+            .findFirst()
+            .orElse(null);
+        assertNotNull(sessionPrl);
+
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, false);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step = new PlaybookStep("Open search page");
+        session.getExecutionContext().getTransientData().put("playbook.flatSteps", List.of(step));
+
+        eventBus.dispatch(new StepStartedEvent(step, 0));
+        eventBus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
+        eventBus.dispatch(new SessionFinishedEvent(100L, true, Collections.emptyList()));
+
+        assertEquals(1, sessionPrl.getReport().getSteps().size(), "Step count must be exactly 1, not duplicated");
+        assertEquals(1, sessionPrl.getFlushCount(), "Preliminary report must be flushed exactly once on session finished");
+
+        // Reconcile matching outcome
+        listener.reconcileTestOutcome(true, null);
+        assertEquals(1, sessionPrl.getFlushCount(), "Reconciliation of matching outcome must not re-flush");
     }
 }

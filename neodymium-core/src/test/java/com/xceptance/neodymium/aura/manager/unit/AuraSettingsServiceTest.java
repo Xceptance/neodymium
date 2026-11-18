@@ -122,4 +122,68 @@ public final class AuraSettingsServiceTest
         Assertions.assertTrue(updatedContent.contains("neodymium.ai.apiKey = newKey"));
         Assertions.assertTrue(updatedContent.contains("# AI Test Prompt Generation"));
     }
+
+    @Test
+    public void testProjectIdComputation(@TempDir final Path tempDir)
+    {
+        final Path configDir = tempDir.resolve("config");
+        final AuraSettingsService service = new AuraSettingsService(configDir);
+        final String projectId = service.getProjectId();
+
+        Assertions.assertNotNull(projectId);
+        Assertions.assertTrue(projectId.contains("-"), "ProjectId should contain a hyphen between folder and hash");
+        Assertions.assertEquals(projectId, service.getProjectId(), "ProjectId should be deterministic");
+    }
+
+    @Test
+    public void testApiKeyWarningIgnoredSessionFlag(@TempDir final Path tempDir)
+    {
+        final AuraSettingsService service = new AuraSettingsService(tempDir);
+        Assertions.assertFalse(service.isApiKeyWarningIgnored(), "Warning should not be ignored by default");
+
+        service.setApiKeyWarningIgnored(true);
+        Assertions.assertTrue(service.isApiKeyWarningIgnored(), "Warning should be ignored after setting true");
+
+        service.setApiKeyWarningIgnored(false);
+        Assertions.assertFalse(service.isApiKeyWarningIgnored(), "Warning should reflect reset to false");
+    }
+
+    @Test
+    public void testHasConfiguredApiKey_MissingAndPlaceholder(@TempDir final Path tempDir) throws IOException
+    {
+        final String aiContent = """
+                neodymium.ai.provider = gemini
+                neodymium.ai.apiKey = ${GEMINI_API_KEY}
+                """;
+        Files.writeString(tempDir.resolve("ai.properties"), aiContent);
+
+        final AuraSettingsService service = new AuraSettingsService(tempDir);
+        // In clean test environment without GEMINI_API_KEY env var, unresolved placeholder counts as missing
+        if (System.getenv("GEMINI_API_KEY") == null && System.getProperty("neodymium.ai.apiKey") == null)
+        {
+            Assertions.assertFalse(service.hasConfiguredApiKey(), "Placeholder key should count as missing");
+        }
+    }
+
+    @Test
+    public void testHasConfiguredApiKey_WithDirectKey(@TempDir final Path tempDir) throws IOException
+    {
+        final String aiContent = """
+                neodymium.ai.provider = gemini
+                neodymium.ai.apiKey = valid-test-api-key-12345
+                """;
+        Files.writeString(tempDir.resolve("ai.properties"), aiContent);
+
+        final AuraSettingsService service = new AuraSettingsService(tempDir);
+        // Set system property to simulate configured key in test environment
+        System.setProperty("neodymium.ai.apiKey", "valid-test-api-key-12345");
+        try
+        {
+            Assertions.assertTrue(service.hasConfiguredApiKey(), "Explicit key should be recognized as configured");
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.apiKey");
+        }
+    }
 }

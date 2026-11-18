@@ -80,7 +80,7 @@ public class AuraTestDashboardControllerTest
 
         Assertions.assertEquals("index", view);
         Assertions.assertEquals("AuraTestManager", model.getAttribute("activeTab"));
-        Assertions.assertEquals("Neodymium Aura Manager Dashboard", model.getAttribute("pageTitle"));
+        Assertions.assertEquals("Neodymium AI Manager Dashboard", model.getAttribute("pageTitle"));
         Assertions.assertEquals("fragments/aura-test-manager :: auraTestManager", model.getAttribute("viewFragment"));
         Assertions.assertEquals("{\"tests\":\"indeterminate\"}", model.getAttribute("folderSelectionStatesJson"));
         Assertions.assertEquals("{\"tests\":10}", model.getAttribute("folderTotalDatasetsJson"));
@@ -139,7 +139,7 @@ public class AuraTestDashboardControllerTest
 
         Assertions.assertEquals("fragments/aura-test-manager :: auraTestManager", view);
         Assertions.assertEquals("AuraTestManager", model.getAttribute("activeTab"));
-        Assertions.assertEquals("Neodymium Aura Manager Dashboard", model.getAttribute("pageTitle"));
+        Assertions.assertEquals("Neodymium AI Manager Dashboard", model.getAttribute("pageTitle"));
     }
 
     @Test

@@ -207,11 +207,11 @@ window.updateRunButtons = updateRunButtons;
 function stopQueue() {
     userAborted = true;
     window.userAborted = true;
+    window._pendingRunStart = null;
+    window._runAlreadyAutoOpened = false;
     fetch('/api/stop', { method: 'POST' }).catch(e => console.error('Failed to stop queue', e));
     isRunning = false;
-    consoleCollapsed = true;
     window.isRunning = false;
-    window.consoleCollapsed = true;
     if (typeof closeInteractiveConsoleView === 'function') {
         closeInteractiveConsoleView();
     }
@@ -220,15 +220,202 @@ function stopQueue() {
 }
 window.stopQueue = stopQueue;
 
+// ============================================================================
+// Neodymium Aura AI - API Key Pre-Flight Verification & Session Dismissal
+// ============================================================================
+
+let pendingRunCallback = null;
+
+function getAuraAppConfig() {
+    const configEl = document.getElementById('auraAppConfig');
+    let hasKey = window.AURA_HAS_API_KEY;
+    let ignored = window.AURA_API_KEY_WARNING_IGNORED;
+    let projId = window.AURA_PROJECT_ID;
+
+    if (configEl) {
+        if (hasKey === undefined) {
+            hasKey = configEl.getAttribute('data-has-api-key') === 'true';
+            window.AURA_HAS_API_KEY = hasKey;
+        }
+        if (ignored === undefined) {
+            ignored = configEl.getAttribute('data-api-key-warning-ignored') === 'true';
+            window.AURA_API_KEY_WARNING_IGNORED = ignored;
+        }
+        if (!projId) {
+            projId = configEl.getAttribute('data-project-id') || '';
+            window.AURA_PROJECT_ID = projId;
+        }
+    }
+
+    return {
+        hasApiKey: !!window.AURA_HAS_API_KEY,
+        warningIgnored: !!window.AURA_API_KEY_WARNING_IGNORED,
+        projectId: window.AURA_PROJECT_ID || ''
+    };
+}
+window.getAuraAppConfig = getAuraAppConfig;
+
+function isApiKeyWarningIgnored() {
+    const cfg = getAuraAppConfig();
+    if (cfg.warningIgnored) {
+        return true;
+    }
+    if (cfg.projectId) {
+        const stored = sessionStorage.getItem('neodymium_aura_ignore_api_key_' + cfg.projectId);
+        if (stored === 'true') {
+            window.AURA_API_KEY_WARNING_IGNORED = true;
+            return true;
+        }
+    }
+    return false;
+}
+window.isApiKeyWarningIgnored = isApiKeyWarningIgnored;
+
+function hasConfiguredApiKey() {
+    const cfg = getAuraAppConfig();
+    return cfg.hasApiKey;
+}
+window.hasConfiguredApiKey = hasConfiguredApiKey;
+
+function showApiKeyWarningModal() {
+    const modal = document.getElementById('apiKeyWarningModal');
+    if (modal) {
+        modal.style.display = 'flex';
+    }
+}
+window.showApiKeyWarningModal = showApiKeyWarningModal;
+
+function closeApiKeyWarningModal() {
+    const modal = document.getElementById('apiKeyWarningModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+window.closeApiKeyWarningModal = closeApiKeyWarningModal;
+
+function checkApiKeyBeforeRun(event, callback) {
+    if (hasConfiguredApiKey() || isApiKeyWarningIgnored()) {
+        return true;
+    }
+
+    if (event) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+    }
+
+    pendingRunCallback = callback || null;
+    showApiKeyWarningModal();
+    return false;
+}
+window.checkApiKeyBeforeRun = checkApiKeyBeforeRun;
+
+function triggerRunQueue() {
+    prepareClientForExecution();
+    if (typeof htmx !== 'undefined') {
+        htmx.ajax('POST', '/api/run', { swap: 'none' });
+    }
+}
+window.triggerRunQueue = triggerRunQueue;
+
+function triggerRunCurrentTest() {
+    prepareClientForExecution();
+    if (typeof htmx !== 'undefined') {
+        htmx.ajax('POST', '/api/run?runCurrent=true', { swap: 'none' });
+    }
+}
+window.triggerRunCurrentTest = triggerRunCurrentTest;
+
+async function ignoreApiKeyWarningAndRun() {
+    closeApiKeyWarningModal();
+    window.AURA_API_KEY_WARNING_IGNORED = true;
+    const cfg = getAuraAppConfig();
+    if (cfg.projectId) {
+        sessionStorage.setItem('neodymium_aura_ignore_api_key_' + cfg.projectId, 'true');
+    }
+
+    try {
+        await fetch('/api/settings/ignore-api-key-warning', { method: 'POST' });
+    } catch (e) {
+        console.warn('Failed to register ignored warning on server:', e);
+    }
+
+    if (typeof pendingRunCallback === 'function') {
+        const cb = pendingRunCallback;
+        pendingRunCallback = null;
+        cb();
+    } else {
+        triggerRunQueue();
+    }
+}
+window.ignoreApiKeyWarningAndRun = ignoreApiKeyWarningAndRun;
+
+function openSettingsForApiKey() {
+    closeApiKeyWarningModal();
+    pendingRunCallback = null;
+    if (typeof openSettingsModal === 'function') {
+        openSettingsModal();
+        setTimeout(() => {
+            if (typeof switchSettingsTab === 'function') {
+                switchSettingsTab('general');
+            }
+            const aiCard = document.getElementById('group-ai-properties');
+            if (aiCard) {
+                const content = aiCard.querySelector('.settings-group-content');
+                const arrow = aiCard.querySelector('.accordion-arrow');
+                if (content) content.style.display = 'block';
+                if (arrow) arrow.classList.add('open');
+            }
+            const searchInput = document.getElementById('settingsSearchInput');
+            if (searchInput) {
+                searchInput.value = 'apiKey';
+                if (typeof filterSettingsProperties === 'function') {
+                    filterSettingsProperties('apiKey');
+                }
+            }
+            const keyInput = document.querySelector('input[name*="neodymium.ai.apiKey"]');
+            if (keyInput) {
+                keyInput.focus();
+                keyInput.select();
+            }
+        }, 300);
+    }
+}
+window.openSettingsForApiKey = openSettingsForApiKey;
+
+// HTMX pre-flight confirmation listener for test execution
+document.addEventListener('htmx:confirm', function(evt) {
+    if (evt.target && (evt.target.id === 'runQueueBtn' || evt.target.id === 'runCurrentTestBtn')) {
+        if (!hasConfiguredApiKey() && !isApiKeyWarningIgnored()) {
+            evt.preventDefault();
+            const targetBtn = evt.target;
+            showApiKeyWarningModal();
+            pendingRunCallback = function() {
+                if (evt.detail && typeof evt.detail.issueRequest === 'function') {
+                    prepareClientForExecution();
+                    evt.detail.issueRequest(true);
+                } else if (targetBtn.id === 'runQueueBtn') {
+                    triggerRunQueue();
+                } else {
+                    triggerRunCurrentTest();
+                }
+            };
+        }
+    }
+});
+
 function prepareClientForExecution() {
     userAborted = false;
     window.userAborted = false;
     isRunning = true;
     consoleOpened = true;
     consoleCollapsed = false;
+    lastKnownRunning = true;
     window.isRunning = true;
     window.consoleOpened = true;
     window.consoleCollapsed = false;
+    window.lastKnownRunning = true;
+    window._runAlreadyAutoOpened = true;
+    window._pendingRunStart = Date.now();
     currentPollSession++;
     lastLogIndex = 0;
     lastEventIndex = 0;
@@ -245,6 +432,14 @@ function prepareClientForExecution() {
     liveCompletedFiles.clear();
     liveLastActiveFile = null;
 
+    const summaryEl = document.getElementById('consoleMinimizedSummary');
+    if (summaryEl) {
+        summaryEl.innerHTML = `<span class="console-summary-running" style="display: inline-flex; align-items: center; gap: 4px;">
+            <span class="material-symbols-outlined spinner" style="font-size: 12px; color: var(--accent);">progress_activity</span>
+            <span id="consoleRunningText">Running tests...</span>
+        </span>`;
+    }
+
     const runSpinner = document.getElementById('runSpinner');
     const terminalConsole = document.getElementById('terminalConsole');
     if (runSpinner) runSpinner.style.display = 'inline-block';
@@ -253,11 +448,17 @@ function prepareClientForExecution() {
     if (terminalConsole) terminalConsole.innerHTML = 'Connecting to run stream...\n';
     hasShownStartMessage = false;
     lastLineWasAi = false;
+    if (typeof startPolling === 'function') {
+        startPolling();
+    } else if (typeof pollStatus === 'function') {
+        pollStatus();
+    }
 }
 window.prepareClientForExecution = prepareClientForExecution;
 
 async function rerunFullRun(runConfigJson) {
     if (isRunning) return;
+    if (!checkApiKeyBeforeRun(null, () => rerunFullRun(runConfigJson))) return;
     let payload;
     try {
         payload = JSON.parse(runConfigJson);
@@ -304,6 +505,10 @@ window.rerunSingleTest = rerunSingleTest;
 
 var lastLineWasAi = false;
 window.lastLineWasAi = lastLineWasAi;
+var logFilterAiOnly = true;
+window.logFilterAiOnly = logFilterAiOnly;
+var logFilterErrorsOnly = false;
+window.logFilterErrorsOnly = logFilterErrorsOnly;
 
 const AI_LOG_EMOJIS_REGEX = /[🤖🧠💭🔧📥🎯🚀🎬🏁🏆👣🔮⚙✨🔍▶✅❌🛑⚠️⚖🔄📊🐞🐛🚨📸💾📜📂⏱🎟⚡💬📌💡🧬🚫•]/u;
 
@@ -445,6 +650,20 @@ function allowsAiContinuation(line) {
 }
 window.allowsAiContinuation = allowsAiContinuation;
 
+function formatLogLineForDisplay(line) {
+    if (!line) return line;
+    // Strip standard Java/Log4j/Logback/Surefire logging boilerplate prefixes:
+    // e.g. "15:20:49.742 [main] INFO org.neodymium.ai.pipeline.steps.AgentToolLoopStep -- 🚀 Starting..."
+    // or   "2026-11-16 15:20:49.742 [main] INFO org.neodymium.ai.pipeline.steps.AgentToolLoopStep - 🚀 Starting..."
+    // or   "15:20:49 [main] INFO dev.langchain4j.http-client: 🚀 Starting..."
+    const match = line.match(/^(?:\d{4}-\d{2}-\d{2}[T ])?(\d{2}:\d{2}:\d{2})(?:\.\d+)?(?:\s+\[.*?\])?\s+(?:TRACE|DEBUG|INFO|WARN|ERROR|FATAL)(?:\s+[\w\.\$-]+)?(?:\s+--?|\s*:)\s+(.*)$/i);
+    if (match) {
+        return match[1] + ' ' + match[2];
+    }
+    return line;
+}
+window.formatLogLineForDisplay = formatLogLineForDisplay;
+
 function isAiLogLine(line, previousWasAi) {
     if (!line) return false;
     const trimmed = line.trim();
@@ -462,8 +681,9 @@ function isAiLogLine(line, previousWasAi) {
         return false;
     }
 
-    // Strip leading timestamp / log level for pattern testing
-    const cleanContent = trimmed.replace(/^(?:\d{2}:\d{2}:\d{2}\s+)?(?:\[?[A-Z]{3,5}\]?\s*[-:]?\s*)?/, '');
+    // Strip leading timestamp / log level / logger header for pattern testing
+    const formatted = formatLogLineForDisplay(trimmed);
+    const cleanContent = formatted.replace(/^(?:\d{2}:\d{2}:\d{2}\s+)?(?:\[?[A-Z]{3,5}\]?\s*[-:]?\s*)?/, '');
 
     // Check suppressed patterns (JSON properties, punctuation, HTTP wire headers)
     if (AI_SUPPRESS_PATTERNS.some(p => p.test(cleanContent) || p.test(trimmed))) {
@@ -532,7 +752,7 @@ function refreshLogFiltering() {
     let prevAi = false;
     logLines.forEach(line => {
         const text = line.textContent;
-        const isErrorOrWarn = text.includes('[ERROR]') || text.includes('[WARN]') || text.includes('[FATAL]') || text.includes('❌') || text.includes('🛑');
+        const isErrorOrWarn = line.classList.contains('log-error') || text.includes('[ERROR]') || text.includes('[WARN]') || text.includes('[FATAL]') || text.includes('❌') || text.includes('🛑');
 
         const matchesErrorFilter = !logFilterErrorsOnly || isErrorOrWarn;
         const matchesAiFilter = !logFilterAiOnly || isAiLogLine(text, prevAi);
@@ -584,7 +804,8 @@ function appendLogsBatch(lines) {
 
         const matchesErrorFilter = !logFilterErrorsOnly || isErrorOrWarn;
         const displayStyle = (matchesErrorFilter && matchesAiFilter) ? 'block' : 'none';
-        const escapedLine = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const displayLine = formatLogLineForDisplay(line);
+        const escapedLine = displayLine.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const cssClass = isErrorOrWarn ? 'log-error' : 'log-info';
 
         batchHtml += `<div class="log-line ${cssClass}" style="display: ${displayStyle}; margin: 0; padding: 0;">${escapedLine}</div>`;
@@ -673,6 +894,169 @@ function fallbackCopyText(text, callback) {
     document.body.removeChild(textArea);
 }
 
+let serverFailureCount = 0;
+let isServerOffline = false;
+
+function setServerOffline(offline, message) {
+    isServerOffline = offline;
+    const banner = document.getElementById('serverOfflineBanner');
+    const msgEl = document.getElementById('serverOfflineMessage');
+    if (banner) {
+        if (offline) {
+            banner.style.display = 'flex';
+            document.body.classList.add('server-offline-active');
+            if (msgEl && message) {
+                msgEl.innerText = message;
+            }
+        } else {
+            banner.style.display = 'none';
+            document.body.classList.remove('server-offline-active');
+        }
+    }
+    const apiKeyBanner = document.getElementById('apiKeyBanner');
+    const apiKeyBannerText = document.getElementById('apiKeyBannerText');
+    if (apiKeyBanner && apiKeyBannerText) {
+        if (offline) {
+            apiKeyBanner.style.display = 'block';
+            apiKeyBannerText.innerHTML = message || "Server is offline or unreachable.";
+        } else if (apiKeyBannerText.innerHTML.includes('offline')) {
+            apiKeyBanner.style.display = 'none';
+        }
+    }
+}
+window.setServerOffline = setServerOffline;
+
+async function checkServerConnectivity(manual = false) {
+    const msgEl = document.getElementById('serverOfflineMessage');
+    if (manual && msgEl) {
+        msgEl.innerText = "Attempting to reconnect to Neodymium AI Manager...";
+    }
+    try {
+        const activeClientId = (typeof clientId !== 'undefined') ? clientId : (window.clientId || 'default');
+        const res = await fetch('/api/status?clientId=' + encodeURIComponent(activeClientId), { method: 'GET', cache: 'no-store' });
+        if (res.ok) {
+            serverFailureCount = 0;
+            if (isServerOffline) {
+                setServerOffline(false);
+                if (typeof startPolling === 'function') {
+                    startPolling();
+                } else if (typeof pollStatus === 'function') {
+                    pollStatus();
+                }
+            }
+            return true;
+        } else {
+            serverFailureCount++;
+            if (serverFailureCount >= 2 || manual) {
+                setServerOffline(true, "Neodymium AI Manager server returned HTTP " + res.status + ". Reconnecting...");
+            }
+            return false;
+        }
+    } catch (e) {
+        serverFailureCount++;
+        if (serverFailureCount >= 2 || manual) {
+            setServerOffline(true, "Neodymium AI Manager server is offline or unreachable. Reconnecting...");
+        }
+        return false;
+    }
+}
+window.checkServerConnectivity = checkServerConnectivity;
+
+document.addEventListener('htmx:sendError', () => {
+    serverFailureCount++;
+    if (serverFailureCount >= 2) {
+        setServerOffline(true, "Neodymium AI Manager server is offline or unreachable. Reconnecting...");
+    }
+});
+
+document.addEventListener('htmx:responseError', (evt) => {
+    if (evt.detail && evt.detail.xhr && evt.detail.xhr.status === 0) {
+        serverFailureCount++;
+        if (serverFailureCount >= 2) {
+            setServerOffline(true, "Neodymium AI Manager server is offline or unreachable. Reconnecting...");
+        }
+    }
+});
+
+function safeEscape(str) {
+    if (typeof escapeHtml === 'function') return escapeHtml(str);
+    if (!str) return '';
+    return String(str).replace(/[&<>"']/g, function(m) {
+        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m];
+    });
+}
+
+function updateConsoleMinimizedSummary(statusData) {
+    const summaryEl = document.getElementById('consoleMinimizedSummary');
+    if (!summaryEl) return;
+
+    if (statusData.running) {
+        let runningText = '';
+        if (statusData.progressText) {
+            runningText = statusData.progressText.toLowerCase().startsWith('running')
+                ? statusData.progressText
+                : 'Running: ' + statusData.progressText;
+        } else if (statusData.total !== undefined && statusData.total > 0) {
+            const scheduled = statusData.scheduledCount || statusData.total;
+            runningText = `Running ${statusData.total} of ${scheduled} tests`;
+        } else {
+            runningText = 'Running tests...';
+        }
+        if (statusData.formattedDuration) {
+            runningText += ` (${statusData.formattedDuration})`;
+        }
+        summaryEl.innerHTML = `<span class="console-summary-running" style="display: inline-flex; align-items: center; gap: 4px;">
+            <span class="material-symbols-outlined spinner" style="font-size: 12px; color: var(--accent);">progress_activity</span>
+            <span id="consoleRunningText">${safeEscape(runningText)}</span>
+        </span>`;
+    } else {
+        if (isRunning && (!statusData.total || statusData.total === 0)) {
+            return;
+        }
+        const total = statusData.total || 0;
+        if (total > 0) {
+            const passed = statusData.passed || 0;
+            const failed = statusData.failed || 0;
+            const skipped = statusData.skipped || 0;
+            const duration = statusData.formattedDuration || '';
+
+            let html = '<span class="console-summary-label">Last Run:</span>';
+            let hasItem = false;
+
+            if (passed > 0) {
+                html += ` <span class="summary-pass" style="color: var(--success); font-weight: 500;">
+                    <span style="font-size: 8px; vertical-align: middle;">●</span> <span id="consolePassCount">${passed}</span> passed
+                </span>`;
+                hasItem = true;
+            }
+            if (failed > 0) {
+                if (hasItem) html += '<span style="color: var(--text-muted); margin: 0 2px;">·</span>';
+                html += ` <span class="summary-fail" style="color: var(--danger); font-weight: 500;">
+                    <span style="font-size: 8px; vertical-align: middle;">●</span> <span id="consoleFailCount">${failed}</span> failed
+                </span>`;
+                hasItem = true;
+            }
+            if (skipped > 0) {
+                if (hasItem) html += '<span style="color: var(--text-muted); margin: 0 2px;">·</span>';
+                html += ` <span class="summary-skip" style="color: var(--warning, #ff9800); font-weight: 500;">
+                    <span style="font-size: 8px; vertical-align: middle;">●</span> <span id="consoleSkipCount">${skipped}</span> skipped
+                </span>`;
+                hasItem = true;
+            }
+            if (!hasItem) {
+                html += ` <span style="color: var(--text-muted);">${total} tests completed</span>`;
+            }
+            if (duration) {
+                html += ` <span class="summary-duration" id="consoleDurationText" style="color: var(--text-muted); margin-left: 2px;">(${safeEscape(duration)})</span>`;
+            }
+            summaryEl.innerHTML = html;
+        } else {
+            summaryEl.innerHTML = '<span class="console-summary-idle" style="color: var(--text-muted);">Idle · Ready for execution</span>';
+        }
+    }
+}
+window.updateConsoleMinimizedSummary = updateConsoleMinimizedSummary;
+
 function startPolling() {
     if (pollingIntervalId) {
         clearTimeout(pollingIntervalId);
@@ -721,6 +1105,18 @@ async function pollStatus() {
 
             if (data.status) {
                 const statusData = data.status;
+
+                if (window._pendingRunStart) {
+                    if (statusData.running) {
+                        window._pendingRunStart = null;
+                    } else if (Date.now() - window._pendingRunStart < 3000) {
+                        // Execution was just initiated on client; POST /api/run may still be in transit.
+                        // Skip this transient idle response and re-poll quickly.
+                        return;
+                    } else {
+                        window._pendingRunStart = null;
+                    }
+                }
 
                 if (statusData.tests) {
                     activeRunStats.tests = statusData.tests;
@@ -791,27 +1187,31 @@ async function pollStatus() {
                         pulseDot.style.display = statusData.running ? 'inline-block' : 'none';
                     }
 
-                    const sidebarProgressEl = document.getElementById('sidebarActiveProgress');
-                    const sidebarProgressContainer = document.getElementById('sidebarActiveProgressContainer');
-                    if (sidebarProgressEl) {
-                        if (statusData.progressText) {
-                            sidebarProgressEl.textContent = statusData.progressText;
-                            if (sidebarProgressContainer) {
-                                sidebarProgressContainer.style.display = 'flex';
-                            }
-                            try {
-                                localStorage.setItem('aura_active_run_progress', statusData.progressText);
-                            } catch (e) {
-                                // ignore storage failure
-                            }
-                        } else {
-                            if (sidebarProgressContainer) {
-                                sidebarProgressContainer.style.display = 'none';
-                            }
-                            try {
-                                localStorage.removeItem('aura_active_run_progress');
-                            } catch (e) {
-                                // ignore storage failure
+                    if (typeof updateSidebarRunnerProgress === 'function') {
+                        updateSidebarRunnerProgress(statusData);
+                    } else {
+                        const sidebarProgressEl = document.getElementById('sidebarActiveProgress');
+                        const sidebarProgressContainer = document.getElementById('sidebarActiveProgressContainer');
+                        if (sidebarProgressEl) {
+                            if (statusData.progressText) {
+                                sidebarProgressEl.textContent = statusData.progressText;
+                                if (sidebarProgressContainer) {
+                                    sidebarProgressContainer.style.display = 'flex';
+                                }
+                                try {
+                                    localStorage.setItem('aura_active_run_progress', statusData.progressText);
+                                } catch (e) {
+                                    // ignore storage failure
+                                }
+                            } else {
+                                if (sidebarProgressContainer) {
+                                    sidebarProgressContainer.style.display = 'none';
+                                }
+                                try {
+                                    localStorage.removeItem('aura_active_run_progress');
+                                } catch (e) {
+                                    // ignore storage failure
+                                }
                             }
                         }
                     }
@@ -851,6 +1251,8 @@ async function pollStatus() {
                     window._lastStatsStr = currentStatsStr;
                 }
 
+                updateConsoleMinimizedSummary(statusData);
+
                 try {
                     const wasRunning = lastKnownRunning;
                     isRunning = statusData.running;
@@ -858,6 +1260,13 @@ async function pollStatus() {
                     updateRunButtons();
                     const runSpinner = document.getElementById('runSpinner');
                     if (isRunning) {
+                        if (!wasRunning && !window._runAlreadyAutoOpened) {
+                            // Test execution newly detected or just started -> automatically open console once
+                            window._runAlreadyAutoOpened = true;
+                            consoleCollapsed = false;
+                            window.consoleCollapsed = false;
+                            if (typeof updateCenterLayout === 'function') updateCenterLayout();
+                        }
                         lastKnownRunning = true;
                         window.lastKnownRunning = true;
                         if (activeRunStats.activeFile !== statusData.activeFile || activeRunStats.activeTestId !== statusData.activeTestId) {
@@ -876,6 +1285,7 @@ async function pollStatus() {
                             sidebarBadge.innerHTML = `<span class="material-symbols-outlined spinner">progress_activity</span> ${statusData.passed + statusData.failed + (statusData.skipped || 0) + 1}/${testsCount}`;
                         }
                     } else {
+                        window._runAlreadyAutoOpened = false;
                         if (runSpinner) runSpinner.style.display = 'none';
                         const sidebarBadge = document.getElementById('sidebarRunBadge');
                         if (sidebarBadge) sidebarBadge.style.display = 'none';
@@ -916,43 +1326,32 @@ async function pollStatus() {
                     console.error('Error updating UI state from status:', err);
                 }
             }
-            const apiKeyBanner = document.getElementById('apiKeyBanner');
-            if (apiKeyBanner && apiKeyBanner.style.display === 'block' && document.getElementById('apiKeyBannerText').innerHTML.includes('offline')) {
-                apiKeyBanner.style.display = 'none';
+            if (serverFailureCount > 0 || isServerOffline) {
+                serverFailureCount = 0;
+                setServerOffline(false);
             }
         } else {
             console.error("Polling response error:", response.status);
-            const apiKeyBanner = document.getElementById('apiKeyBanner');
-            const apiKeyBannerText = document.getElementById('apiKeyBannerText');
-            if (apiKeyBanner && apiKeyBannerText) {
-                apiKeyBanner.style.display = 'block';
-                apiKeyBannerText.innerHTML = "Server is offline or unreachable.";
+            serverFailureCount++;
+            if (serverFailureCount >= 2) {
+                setServerOffline(true, "Neodymium AI Manager server returned HTTP " + response.status + ". Reconnecting...");
             }
         }
     } catch (err) {
         console.error("Polling fetch error:", err);
-        const apiKeyBanner = document.getElementById('apiKeyBanner');
-        const apiKeyBannerText = document.getElementById('apiKeyBannerText');
-        if (apiKeyBanner && apiKeyBannerText) {
-            apiKeyBanner.style.display = 'block';
-            apiKeyBannerText.innerHTML = "Server is offline or unreachable.";
+        serverFailureCount++;
+        if (serverFailureCount >= 2) {
+            setServerOffline(true, "Neodymium AI Manager server is offline or unreachable. Reconnecting...");
         }
     } finally {
         if (thisSession !== currentPollSession) return;
         if (!disconnected) {
-            pollingIntervalId = setTimeout(pollStatus, 2000);
+            const nextDelay = (serverFailureCount > 0 || isServerOffline) ? 300 : (window._pendingRunStart ? 300 : 2000);
+            pollingIntervalId = setTimeout(pollStatus, nextDelay);
         }
     }
 }
 window.pollStatus = pollStatus;
-
-window.addEventListener('beforeunload', (event) => {
-    if (isRunning) {
-        event.preventDefault();
-        event.returnValue = 'A test queue is currently running. If you close this tab, the server will shut down and the test execution will be terminated.';
-        return event.returnValue;
-    }
-});
 
 function sendDisconnect() {
     if (!disconnected) {

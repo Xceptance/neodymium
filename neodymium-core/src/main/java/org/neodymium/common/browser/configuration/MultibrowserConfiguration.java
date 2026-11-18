@@ -19,6 +19,13 @@ import org.slf4j.LoggerFactory;
 
 import com.codeborne.selenide.Configuration;
 
+/**
+ * Loads, parses, and provides browser profiles and test environment configurations.
+ * Supports file-based configuration as well as JVM system property overrides.
+ *
+ * @author AI-generated: Gemini 3.8 Flash
+ * @author Xceptance GmbH 2026
+ */
 public class MultibrowserConfiguration
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(MultibrowserConfiguration.class);
@@ -55,12 +62,13 @@ public class MultibrowserConfiguration
 
     private Properties browserProfileProperties;
 
-    protected MultibrowserConfiguration(String temporaryConfigFile)
+    protected MultibrowserConfiguration(final String temporaryConfigFile)
     {
         // setting up the test environment
         testEnvironmentProperties = new Properties();
         loadPropertiesFromFile(DEFAULT_TEST_ENVIRONMENT_FILE, testEnvironmentProperties);
         loadPropertiesFromFile(DEVELOPMENT_TEST_ENVIRONMENT_FILE, testEnvironmentProperties);
+        loadSystemProperties(testEnvironmentProperties, TEST_ENVIRONMENT_PREFIX, null);
         parseTestEnvironments();
 
         // setting up the browser profiles
@@ -79,14 +87,8 @@ public class MultibrowserConfiguration
                                      Optional.ofNullable(Configuration.browserSize).orElse("1920x1080"));
         browserProfileProperties.put("browserprofile." + DEFAULT_BROWSER_ID + ".arguments", "-ignore-certificate-errors");
 
-        // Override with system properties starting with "browserprofile."
-        for (final String key : System.getProperties().stringPropertyNames())
-        {
-            if (key.startsWith(BROWSER_PROFILE_PREFIX))
-            {
-                browserProfileProperties.put(key, System.getProperty(key));
-            }
-        }
+        // overlay JVM system properties (e.g. -Dbrowserprofile.global.headless=true)
+        loadSystemProperties(browserProfileProperties, BROWSER_PROFILE_PREFIX, TEST_ENVIRONMENT_PREFIX);
 
         parseBrowserProfiles();
     }
@@ -107,6 +109,8 @@ public class MultibrowserConfiguration
     {
         browserProfiles = new LinkedHashMap<String, BrowserConfiguration>();
         Set<String> browserProfileKeys = getSubkeysForPrefix(browserProfileProperties, BROWSER_PROFILE_PREFIX);
+        browserProfileKeys.remove("global");
+        browserProfileKeys.remove("testEnvironment");
 
         BrowserConfigurationMapper mapper = new BrowserConfigurationMapper();
 
@@ -278,6 +282,36 @@ public class MultibrowserConfiguration
         catch (final Exception e)
         {
             throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Loads JVM system properties that start with the specified prefix into the target {@link Properties},
+     * optionally excluding properties that match an exclude prefix.
+     *
+     * @param properties
+     *            the target properties instance to populate
+     * @param prefix
+     *            the key prefix to filter system properties
+     * @param excludePrefix
+     *            an optional prefix to exclude (e.g. test environments when parsing profiles), or null
+     */
+    private static void loadSystemProperties(final Properties properties, final String prefix, final String excludePrefix)
+    {
+        try
+        {
+            final Properties systemProperties = System.getProperties();
+            for (final String propertyName : systemProperties.stringPropertyNames())
+            {
+                if (propertyName.startsWith(prefix) && (excludePrefix == null || !propertyName.startsWith(excludePrefix)))
+                {
+                    properties.setProperty(propertyName, systemProperties.getProperty(propertyName));
+                }
+            }
+        }
+        catch (final SecurityException e)
+        {
+            LOGGER.warn("SecurityManager prevented reading system properties for prefix '{}': {}", prefix, e.getMessage());
         }
     }
 }

@@ -22,6 +22,7 @@ import com.xceptance.neodymium.aura.dto.DatasetDto;
 import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import jakarta.servlet.http.HttpServletResponse;
 import com.xceptance.aura.report.entity.TestBatchEntity;
+import com.xceptance.aura.report.entity.TestRunEntity;
 import com.xceptance.aura.report.repository.TestBatchRepository;
 import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.neodymium.aura.AuraFileService;
@@ -450,6 +451,79 @@ public final class AuraTestQueueControllerTest
         Assertions.assertNotNull(statusObj);
         Assertions.assertEquals("Wikipedia", statusObj.get("batchName"));
         Assertions.assertEquals("run_123456", statusObj.get("runId"));
+        Assertions.assertEquals(0, statusObj.get("runningCount"));
+    }
+
+    @Test
+    public final void testGetStatusStreamIncludesRunningCountFromActiveRun()
+    {
+        final AuraQueueService mockQueueService = Mockito.mock(AuraQueueService.class);
+        Mockito.when(mockQueueService.getCurrentRunId()).thenReturn("run_active_progress");
+        Mockito.when(mockQueueService.isRunningQueue()).thenReturn(true);
+
+        final AuraReportDataService mockReportService = Mockito.mock(AuraReportDataService.class);
+        final TestRunEntity activeEntity = new TestRunEntity();
+        activeEntity.setId("run_active_progress");
+        activeEntity.setStatus("IN_PROGRESS");
+        activeEntity.setTotalTests(10);
+        activeEntity.setRunningCount(3);
+        activeEntity.setPassedCount(5);
+        activeEntity.setFailedUnknownCount(2);
+
+        Mockito.when(mockReportService.getAllRuns()).thenReturn(List.of(activeEntity));
+        Mockito.when(mockReportService.isRunCurrentlyActiveOnDisk("run_active_progress")).thenReturn(true);
+
+        final AuraTestQueueController testController = new AuraTestQueueController(
+            mockQueueService, this.fileService, this.interactiveService, this.batchRepository, mockReportService
+        );
+
+        final ResponseEntity<Map<String, Object>> response = testController.getStatusStream(null, 0, 0);
+        Assertions.assertEquals(200, response.getStatusCode().value());
+        final Map<String, Object> body = response.getBody();
+        Assertions.assertNotNull(body);
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> statusObj = (Map<String, Object>) body.get("status");
+        Assertions.assertNotNull(statusObj);
+        Assertions.assertEquals(3, statusObj.get("runningCount"));
+        Assertions.assertEquals(5, statusObj.get("passed"));
+        Assertions.assertEquals(2, statusObj.get("failed"));
+        Assertions.assertEquals(7, statusObj.get("executedCount"));
+        Assertions.assertEquals(10, statusObj.get("scheduledCount"));
+    }
+
+    @Test
+    public final void testGetStatusStreamWithNullFailureCountsDoesNotThrow()
+    {
+        final AuraQueueService mockQueueService = Mockito.mock(AuraQueueService.class);
+        Mockito.when(mockQueueService.getCurrentRunId()).thenReturn("run_null_failures");
+        Mockito.when(mockQueueService.isRunningQueue()).thenReturn(true);
+
+        final AuraReportDataService mockReportService = Mockito.mock(AuraReportDataService.class);
+        final TestRunEntity activeEntity = new TestRunEntity();
+        activeEntity.setId("run_null_failures");
+        activeEntity.setStatus("IN_PROGRESS");
+        activeEntity.setTotalTests(5);
+        activeEntity.setRunningCount(1);
+        activeEntity.setPassedCount(null);
+        activeEntity.setFailedKnownCount(null);
+        activeEntity.setFailedUnknownCount(null);
+
+        Mockito.when(mockReportService.getAllRuns()).thenReturn(List.of(activeEntity));
+        Mockito.when(mockReportService.isRunCurrentlyActiveOnDisk("run_null_failures")).thenReturn(true);
+
+        final AuraTestQueueController testController = new AuraTestQueueController(
+            mockQueueService, this.fileService, this.interactiveService, this.batchRepository, mockReportService
+        );
+
+        final ResponseEntity<Map<String, Object>> response = Assertions.assertDoesNotThrow(() -> testController.getStatusStream(null, 0, 0));
+        Assertions.assertEquals(200, response.getStatusCode().value());
+        final Map<String, Object> body = response.getBody();
+        Assertions.assertNotNull(body);
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> statusObj = (Map<String, Object>) body.get("status");
+        Assertions.assertNotNull(statusObj);
+        Assertions.assertEquals(0, statusObj.get("failed"));
+        Assertions.assertEquals(0, statusObj.get("passed"));
     }
 
     @Test
@@ -906,5 +980,110 @@ public final class AuraTestQueueControllerTest
         Assertions.assertEquals(1, queue.size(), "Only matching dataset 'admin-user' should be queued");
         Assertions.assertEquals("admin-user", queue.get(0).id);
         Assertions.assertEquals("tests/smoke/LoginTest.yaml", queue.get(0).file);
+    }
+
+    @Test
+    public final void testStopExecutionHaltsQueueAndReturnsRunControls()
+    {
+        final Model model = new ConcurrentModel();
+        final String view = this.controller.stopExecution(model);
+
+        Assertions.assertEquals("fragments/queue :: runControls", view);
+        Assertions.assertTrue(this.queueService.isManuallyStopped(),
+                "AuraQueueService must be flagged as manually stopped after controller stopExecution is invoked");
+        Assertions.assertEquals(Boolean.FALSE, model.getAttribute("running"),
+                "Model 'running' attribute must be false");
+    }
+
+    @Test
+    public final void testQueueTemplateRendersStopExecutionButtonAttributes()
+    {
+        final SpringTemplateEngine engine = new SpringTemplateEngine();
+        final ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setPrefix("templates/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCharacterEncoding("UTF-8");
+        engine.setTemplateResolver(resolver);
+
+        // Case 1: Running state -> stop button should have d-flex, onclick="stopQueue()", and hx-post="/api/stop"
+        final Context contextRunning = new Context();
+        contextRunning.setVariable("running", true);
+        contextRunning.setVariable("queue", List.of());
+        contextRunning.setVariable("totalRuns", 0);
+        contextRunning.setVariable("activeEditingFile", null);
+
+        final String htmlRunning = engine.process("fragments/queue", Collections.singleton("runControlsContent"), contextRunning);
+        Assertions.assertNotNull(htmlRunning);
+        Assertions.assertTrue(htmlRunning.contains("id=\"stopQueueBtn\""), "Fragment must contain stopQueueBtn");
+        Assertions.assertTrue(htmlRunning.contains("onclick=\"stopQueue()\""), "stopQueueBtn must contain onclick=\"stopQueue()\"");
+        Assertions.assertTrue(htmlRunning.contains("hx-post=\"/api/stop\""), "stopQueueBtn must contain hx-post=\"/api/stop\"");
+        Assertions.assertTrue(htmlRunning.contains("Stop Execution"), "stopQueueBtn must have 'Stop Execution' label");
+        Assertions.assertTrue(htmlRunning.contains("d-flex"), "stopQueueBtn must be visible (d-flex) when running");
+
+        // Case 2: Idle state -> stop button should have d-none
+        final Context contextIdle = new Context();
+        contextIdle.setVariable("running", false);
+        contextIdle.setVariable("queue", List.of());
+        contextIdle.setVariable("totalRuns", 0);
+        contextIdle.setVariable("activeEditingFile", null);
+
+        final String htmlIdle = engine.process("fragments/queue", Collections.singleton("runControlsContent"), contextIdle);
+        Assertions.assertNotNull(htmlIdle);
+        Assertions.assertTrue(htmlIdle.contains("d-none"), "stopQueueBtn must be hidden (d-none) when not running");
+    }
+
+    @Test
+    public final void testManuallyStoppedSuppressesRunningInStatusStream()
+    {
+        final AuraQueueService queueSpy = Mockito.spy(this.queueService);
+        Mockito.doReturn("run-stop-test").when(queueSpy).getCurrentRunId();
+        final AuraTestQueueController testController = new AuraTestQueueController(
+            queueSpy, this.fileService, this.interactiveService, this.batchRepository, this.reportDataService
+        );
+
+        final TestRunEntity runEntity = new TestRunEntity(
+            "run-stop-test", "SmokeBatch", "IN_PROGRESS", "queue", "dev", "en_US", "chrome", "15:00", System.currentTimeMillis()
+        );
+        Mockito.when(reportDataService.getAllRuns()).thenReturn(List.of(runEntity));
+        Mockito.when(reportDataService.isRunCurrentlyActiveOnDisk("run-stop-test")).thenReturn(true);
+
+        // Case 1: Not manually stopped -> reports running = true
+        queueSpy.setManuallyStopped(false);
+        final ResponseEntity<Map<String, Object>> res1 = testController.getStatusStream("client-1", 0, 0);
+        final Map<?, ?> statusMap1 = (Map<?, ?>) res1.getBody().get("status");
+        Assertions.assertEquals(Boolean.TRUE, statusMap1.get("running"), "Status stream must report running=true when active on disk and not stopped");
+
+        // Case 2: Manually stopped for this run -> reports running = false
+        queueSpy.setManuallyStopped(true);
+        final ResponseEntity<Map<String, Object>> res2 = testController.getStatusStream("client-1", 0, 0);
+        final Map<?, ?> statusMap2 = (Map<?, ?>) res2.getBody().get("status");
+        Assertions.assertEquals(Boolean.FALSE, statusMap2.get("running"), "Status stream must report running=false when manually stopped for this run");
+
+        // Case 3: A different run started on disk is NOT suppressed by an old stopped run
+        final TestRunEntity diffRunEntity = new TestRunEntity(
+            "run-new-cli", "CliBatch", "IN_PROGRESS", "cli", "dev", "en_US", "chrome", "15:05", System.currentTimeMillis()
+        );
+        Mockito.when(reportDataService.getAllRuns()).thenReturn(List.of(diffRunEntity));
+        Mockito.when(reportDataService.isRunCurrentlyActiveOnDisk("run-new-cli")).thenReturn(true);
+        final ResponseEntity<Map<String, Object>> res3 = testController.getStatusStream("client-1", 0, 0);
+        final Map<?, ?> statusMap3 = (Map<?, ?>) res3.getBody().get("status");
+        Assertions.assertEquals(Boolean.TRUE, statusMap3.get("running"), "A new standalone CLI run must NOT be suppressed by an old stopped queue run");
+    }
+
+    @Test
+    public final void testStopExecutionCancelsActiveRun()
+    {
+        final AuraQueueService queueSpy = Mockito.spy(this.queueService);
+        Mockito.doReturn("run-abort-123").when(queueSpy).getCurrentRunId();
+        final AuraTestQueueController testController = new AuraTestQueueController(
+            queueSpy, this.fileService, this.interactiveService, this.batchRepository, this.reportDataService
+        );
+
+        final Model model = new ConcurrentModel();
+        testController.stopExecution(model);
+
+        Assertions.assertTrue(queueSpy.isManuallyStopped(), "queueService must be set to manuallyStopped");
+        Mockito.verify(reportDataService).cancelRun("run-abort-123");
     }
 }

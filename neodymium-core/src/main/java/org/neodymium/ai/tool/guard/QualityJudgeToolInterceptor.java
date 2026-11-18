@@ -125,6 +125,9 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
         }
 
         final ExecutionContext activeContext = ExecutionContext.getActiveContext();
+        final String instruction = activeContext != null
+                ? (String) activeContext.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "")
+                : "";
 
         // 1. Only inspect browser actions that interact with elements (exempt tools pass immediately)
         final String rawName = call.toolName();
@@ -181,12 +184,21 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
             }
 
             final int score = LocatorImprover.scoreLocator(selector);
+            final boolean isPositional = LocatorImprover.isPositional(selector);
+            final boolean isOrdinal = LocatorImprover.isOrdinalInstruction(instruction);
 
             // Fast-path: single match and strong resilience score (>= 8) passes immediately in 0ms
             if (matchedElements.size() == 1 && score >= 8 && candidates.isEmpty())
             {
                 LOGGER.debug("Quality Judge fast-path: decisive unique selector '{}' (score: {})", selector, score);
                 return InterceptionVerdict.allow("Clean unique high-resilience selector (score: " + score + " >= 8)");
+            }
+
+            // Fast-path: single match and positional selector targeting an ordinal instruction passes immediately
+            if (matchedElements.size() == 1 && isPositional && isOrdinal && candidates.isEmpty())
+            {
+                LOGGER.debug("Quality Judge fast-path: verified unique ordinal selector '{}' matching instruction", selector);
+                return InterceptionVerdict.allow("Verified unique positional selector for ordinal instruction");
             }
 
             // If selector does not match any element in DOM and no candidates exist, defer to normal execution
@@ -204,8 +216,9 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
                 return InterceptionVerdict.allow("Element not currently matched in DOM; proceeding to execution");
             }
 
-            // If ambiguous (multiple elements) or volatile (score < 6), generate candidate alternatives
-            if (candidates.isEmpty() && !matchedElements.isEmpty() && (matchedElements.size() > 1 || score < 6))
+            // If ambiguous (multiple elements) or volatile (score < 6), generate candidate alternatives.
+            // Positional selectors matching unique elements for an ordinal instruction are intentional and preserved.
+            if (candidates.isEmpty() && !matchedElements.isEmpty() && (matchedElements.size() > 1 || (score < 6 && !(isPositional && isOrdinal))))
             {
                 candidates = new ArrayList<>();
                 candidates.add(new LocatorCandidate(selector, determineStrategy(selector), (double) score / 10.0, "Original proposed selector"));
@@ -285,6 +298,17 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
     {
         final LocatorCandidate top = candidates.get(0);
         final double score1 = top.getScore();
+        final String instruction = activeContext != null
+                ? (String) activeContext.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "")
+                : "";
+        final boolean isOrdinal = LocatorImprover.isOrdinalInstruction(instruction);
+        final boolean topIsPositional = LocatorImprover.isPositional(top.getLocator());
+
+        if (topIsPositional && isOrdinal && candidates.size() == 1)
+        {
+            LOGGER.debug("Quality Judge passed positional candidate for ordinal instruction: '{}'", top.getLocator());
+            return InterceptionVerdict.allow("Positional candidate preserved for ordinal instruction: " + top.getLocator());
+        }
 
         // High confidence decisive candidate (>= 0.95) passes through immediately
         if (score1 >= 0.95)
@@ -368,6 +392,9 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
             final ExecutionContext activeContext,
             final String deliberationReason)
     {
+        final String instruction = activeContext != null
+                ? (String) activeContext.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "")
+                : "";
         final AiSession session = activeContext != null
                 ? (AiSession) activeContext.getTransientData().get(ExecutionContext.KEY_SESSION)
                 : null;
@@ -376,7 +403,6 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
         {
             try
             {
-                final String instruction = (String) activeContext.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "");
                 final Object stateObj = activeContext.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
                 final String domContext = stateObj instanceof final SutState sutState ? sutState.getTextContent() : "";
                 final String toolName = call.toolName();
@@ -493,9 +519,9 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
                         final String chosen = judgeResult.getChosenLocator();
                         if (chosen != null && !chosen.isBlank())
                         {
-                            if (isContainerHijack(selector, chosen, call.toolName()))
+                            if (isContainerHijack(selector, chosen, call.toolName()) || isPositionalHijack(selector, chosen, instruction))
                             {
-                                return InterceptionVerdict.allow("Container hijack rejected; retaining original locator: " + selector);
+                                return InterceptionVerdict.allow("Hijack rejected; retaining original locator: " + selector);
                             }
                             lastProposal = chosen;
                             final Optional<LocatorProbeResult> matchedProbe = probeResults.stream()
@@ -536,10 +562,10 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
                         final String refined = judgeResult.getRefinedProposal();
                         if (refined != null && !refined.isBlank())
                         {
-                            if (isContainerHijack(selector, refined, call.toolName()))
+                            if (isContainerHijack(selector, refined, call.toolName()) || isPositionalHijack(selector, refined, instruction))
                             {
-                                LOGGER.warn("🚨 [Quality Judge] Refinement proposal '{}' is a container hijack of '{}'. Stopping deliberation and keeping original locator.", refined, selector);
-                                return InterceptionVerdict.allow("Container hijack rejected in refinement; retaining original locator: " + selector);
+                                LOGGER.warn("🚨 [Quality Judge] Refinement proposal '{}' is a hijack of '{}'. Stopping deliberation and keeping original locator.", refined, selector);
+                                return InterceptionVerdict.allow("Hijack rejected in refinement; retaining original locator: " + selector);
                             }
                             lastProposal = refined;
                             history.add(String.format("Turn %d Critique: %s -> Refined Proposal: '%s'", turn, judgeResult.getReasoning(), refined));
@@ -560,9 +586,9 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
                 LOGGER.warn("⚠️ [Quality Judge] Reached max turns ({}) without explicit consensus. Proceeding with last proposal: '{}'", maxTurns, lastProposal);
                 if (lastProposal != null && !lastProposal.isBlank() && !lastProposal.equals(selector))
                 {
-                    if (isContainerHijack(selector, lastProposal, call.toolName()))
+                    if (isContainerHijack(selector, lastProposal, call.toolName()) || isPositionalHijack(selector, lastProposal, instruction))
                     {
-                        return InterceptionVerdict.allow("Container hijack rejected in exhaustion fallback; retaining original locator: " + selector);
+                        return InterceptionVerdict.allow("Hijack rejected in exhaustion fallback; retaining original locator: " + selector);
                     }
                     final ObjectNode newArgs = call.arguments().deepCopy();
                     applyLocator(newArgs, lastProposal);
@@ -577,7 +603,7 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
             }
         }
 
-        return deliberateCandidatesHeuristically(call, candidates, deliberationReason);
+        return deliberateCandidatesHeuristically(call, candidates, deliberationReason, instruction);
     }
 
     private List<LocatorProbeResult> probeCandidateLocators(
@@ -640,6 +666,9 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
             final ExecutionContext activeContext,
             final String deliberationReason)
     {
+        final String instruction = activeContext != null
+                ? (String) activeContext.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "")
+                : "";
         final AiSession session = activeContext != null
                 ? (AiSession) activeContext.getTransientData().get(ExecutionContext.KEY_SESSION)
                 : null;
@@ -648,7 +677,6 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
         {
             try
             {
-                final String instruction = (String) activeContext.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "");
                 final Object stateObj = activeContext.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
                 final String domContext = stateObj instanceof final SutState sutState ? sutState.getTextContent() : "";
 
@@ -694,11 +722,11 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
                     final String chosen = judgeResult.getChosenLocator();
                     final boolean hasChosenLocator = chosen != null && !chosen.isBlank();
                     final boolean locatorChanged = hasChosenLocator && !chosen.equals(selector);
-                    if (locatorChanged && isContainerHijack(selector, chosen, call.toolName()))
+                    if (locatorChanged && (isContainerHijack(selector, chosen, call.toolName()) || isPositionalHijack(selector, chosen, instruction)))
                     {
-                        LOGGER.warn("🚨 [Quality Judge] Single-shot proposal '{}' is a container hijack of '{}'. Retaining original locator.", chosen, selector);
+                        LOGGER.warn("🚨 [Quality Judge] Single-shot proposal '{}' is a hijack of '{}'. Retaining original locator.", chosen, selector);
                         return InterceptionVerdict.allow(
-                                "Container hijack rejected; retaining original locator: " + selector + " (" + judgeResult.getReasoning() + ")"
+                                "Hijack rejected; retaining original locator: " + selector + " (" + judgeResult.getReasoning() + ")"
                         );
                     }
                     final ObjectNode newArgs = call.arguments().deepCopy();
@@ -740,13 +768,22 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
         }
 
         // Fallback: heuristic candidate deliberation
-        return deliberateCandidatesHeuristically(call, candidates, deliberationReason);
+        return deliberateCandidatesHeuristically(call, candidates, deliberationReason, instruction);
     }
 
     private InterceptionVerdict deliberateCandidatesHeuristically(
             final ToolCall call,
             final List<LocatorCandidate> candidates,
             final String deliberationReason)
+    {
+        return deliberateCandidatesHeuristically(call, candidates, deliberationReason, "");
+    }
+
+    private InterceptionVerdict deliberateCandidatesHeuristically(
+            final ToolCall call,
+            final List<LocatorCandidate> candidates,
+            final String deliberationReason,
+            final String instruction)
     {
         LocatorCandidate bestCandidate = candidates.get(0);
         int bestWeight = getStrategyWeight(bestCandidate.getStrategy());
@@ -778,6 +815,12 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
 
         if (!chosenLocator.isEmpty() && !chosenLocator.equals(originalSelector))
         {
+            if (isPositionalHijack(originalSelector, chosenLocator, instruction))
+            {
+                LOGGER.warn("🚨 [Quality Judge] Heuristic deliberation proposal '{}' is a positional hijack of '{}' for ordinal instruction. Retaining original locator.", chosenLocator, originalSelector);
+                return InterceptionVerdict.allow("Positional hijack rejected in heuristic deliberation; retaining original locator: " + originalSelector);
+            }
+
             final ObjectNode newArgs = args.deepCopy();
             newArgs.put("selector", chosenLocator);
             final ToolCall adjustedCall = new ToolCall(call.callId(), call.toolName(), newArgs);
@@ -816,6 +859,10 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
         {
             return "NAME";
         }
+        if (trimmed.contains("[title="))
+        {
+            return "TITLE";
+        }
         if (trimmed.contains("placeholder"))
         {
             return "PLACEHOLDER";
@@ -843,12 +890,41 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
             case "ID" -> 90;
             case "TEST_ID", "DATA_TESTID", "DATA-TESTID" -> 85;
             case "ACCESSIBILITY", "ARIA" -> 80;
-            case "ATTRIBUTE", "NAME" -> 70;
+            case "ATTRIBUTE", "NAME", "TITLE" -> 70;
             case "PLACEHOLDER" -> 60;
             case "TEXT" -> 50;
             case "CLASS" -> 40;
             default -> 10;
         };
+    }
+
+    /**
+     * Determines whether a proposed candidate or refinement hijacks an intentional positional selector
+     * by replacing it with a static non-positional attribute selector when an ordinal was commanded.
+     *
+     * @param originalSelector the selector chosen by the agent or originally proposed
+     * @param proposedLocator the locator proposed or refined by the Quality Judge
+     * @param instruction the current instruction text
+     * @return true if the proposed locator replaces an intentional positional selector with a non-positional one
+     */
+    boolean isPositionalHijack(final String originalSelector, final String proposedLocator, final String instruction)
+    {
+        if (originalSelector == null || originalSelector.isBlank() || proposedLocator == null || proposedLocator.isBlank())
+        {
+            return false;
+        }
+        if (originalSelector.trim().equals(proposedLocator.trim()))
+        {
+            return false;
+        }
+        if (LocatorImprover.isPositional(originalSelector) && !LocatorImprover.isPositional(proposedLocator))
+        {
+            if (LocatorImprover.isOrdinalInstruction(instruction))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

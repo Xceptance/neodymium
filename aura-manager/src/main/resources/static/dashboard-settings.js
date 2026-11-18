@@ -217,3 +217,37 @@ function toggleBrowserHelpGuide(headerElem) {
     }
 }
 window.toggleBrowserHelpGuide = toggleBrowserHelpGuide;
+
+function togglePasswordVisibility(button) {
+    const wrapper = button.closest('.password-input-wrapper');
+    if (!wrapper) return;
+    const input = wrapper.querySelector('input');
+    const icon = button.querySelector('.material-symbols-outlined');
+    if (!input || !icon) return;
+
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.textContent = 'visibility_off';
+        button.title = 'Hide password';
+    } else {
+        input.type = 'password';
+        icon.textContent = 'visibility';
+        button.title = 'Show password';
+    }
+}
+window.togglePasswordVisibility = togglePasswordVisibility;
+
+document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail && evt.detail.target && evt.detail.target.id === 'settingsModal') {
+        fetch('/api/settings/api-key-status')
+            .then(res => res.json())
+            .then(data => {
+                if (data && data.hasApiKey) {
+                    window.AURA_HAS_API_KEY = true;
+                    const configEl = document.getElementById('auraAppConfig');
+                    if (configEl) configEl.setAttribute('data-has-api-key', 'true');
+                }
+            })
+            .catch(() => {});
+    }
+});

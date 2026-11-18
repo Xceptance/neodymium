@@ -79,11 +79,11 @@ public class BrowserRunner
     {
         try
         {
-            if (FilmTestExecution.getContextGif().filmAutomatically())
+            if (recordingID != null && FilmTestExecution.getContextGif().filmAutomatically())
             {
                 FilmTestExecution.finishGifFilming(recordingID, testFailed);
             }
-            if (FilmTestExecution.getContextVideo().filmAutomatically())
+            if (recordingID != null && FilmTestExecution.getContextVideo().filmAutomatically())
             {
                 FilmTestExecution.finishVideoFilming(recordingID, testFailed);
             }

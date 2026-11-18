@@ -246,6 +246,17 @@ Instead of executing LLM calls dynamically on every run, the framework uses **St
       - "Type \"${username}\" into the email input field"
     ```
 
+    > [!IMPORTANT]
+    > **Quoting Steps with Special YAML Characters (`[...]`, `:`, `{...}`):**
+    > In YAML, square brackets (`[...]`) indicate flow sequences (inline arrays) and colons (`:`) indicate key-value mappings.
+    > When writing step instructions that contain CSS attribute selectors (e.g. `[data-cse='...']`, `[data-testid='submit']`) or colon-separated hints (e.g. `(hint selector: [...])`), wrap the entire step in double quotes:
+    > ```yaml
+    > steps:
+    >   - "Enter credit card (hint selector: [data-cse='encryptedCardNumber' iframe]) ${creditCardNumber}."
+    >   - "[data-testid='submit-btn'] Click button"
+    > ```
+    > While Neodymium includes automated preprocessor safeguards for unquoted bracketed step lines, explicit double-quoting remains the standard, robust YAML authoring practice.
+
   - **Folded Scalar Format (`- >-`) for Single-Turn Batch Assertions**:
     Standard YAML folded block scalar with strip chomping (`>-`). It folds consecutive lines of text into a single space-separated string, stripping any trailing newline:
     ```yaml
@@ -1861,6 +1872,8 @@ mvn test -Dtest=AddToCartJudgeAndVerificationsTest -Dneodymium.ai.apiKey="your-g
 * `neodymium.ai.judge.enabled` - (Boolean) LLM Quality Judge second-opinion evaluation. (Default: `false`)
 * `neodymium.ai.judge.mode` - Mode of Quality Judge (`ON_AMBIGUITY`, `ALWAYS`, `ON_FAIL`). (Default: `ON_AMBIGUITY`)
 * `neodymium.ai.judge.recommendMarker` - (Boolean) Whether Quality Judge and selector evaluation recommend invoking visual element markers (`mark_elements`) when proposed locators are fragile with no resilient DOM alternatives. (Default: `true`)
+* `neodymium.ai.navigation.guard.enabled` - (Boolean) Pre-execution provenance guard (`NavigationProvenanceInterceptor`) validating autonomous `navigate` tool calls against blank-page state, step instruction host/path provenance, and configured allowed hosts. (Default: `true`)
+* `neodymium.ai.navigation.allowedHosts` - (String, CSV) Comma-separated list of hostnames or registrable domains explicitly permitted for autonomous `navigate` calls without appearing in the step instruction. (Default: `""`)
 * `neodymium.ai.network.monitorEnabled` - (Boolean) Protocol-level network traffic and console log monitoring for introspection tools and passive diagnostic enrichment. (Default: `true`)
 * `neodymium.ai.network.ignorePattern` - (String, Regex) Regular expression matching URLs of benign background requests (e.g. analytics, telemetry, tracking pixels) to exclude from captured network failure buffers. (Default: `""`)
 

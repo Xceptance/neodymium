@@ -20,6 +20,7 @@ package com.xceptance.aura.test.controller;
 
 import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
+import com.xceptance.neodymium.aura.AuraSettingsService;
 import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -48,15 +49,25 @@ public class AuraTestDashboardController
     private final AuraInteractiveService interactiveService;
     private final AuraFileService fileService;
     private final AuraTestQueueController queueController;
+    private final AuraSettingsService settingsService;
 
-    @Autowired
     public AuraTestDashboardController(final AuraInteractiveService interactiveService,
                                         final AuraFileService fileService,
                                         final AuraTestQueueController queueController)
     {
+        this(interactiveService, fileService, queueController, null);
+    }
+
+    @Autowired
+    public AuraTestDashboardController(final AuraInteractiveService interactiveService,
+                                        final AuraFileService fileService,
+                                        final AuraTestQueueController queueController,
+                                        @Autowired(required = false) final AuraSettingsService settingsService)
+    {
         this.interactiveService = interactiveService;
         this.fileService = fileService;
         this.queueController = queueController;
+        this.settingsService = settingsService != null ? settingsService : new AuraSettingsService();
     }
 
     @GetMapping(
@@ -98,7 +109,7 @@ public class AuraTestDashboardController
             stepsFiles = fileService.getStepsFilesList();
         }
 
-        model.addAttribute("pageTitle", "Neodymium Aura Manager Dashboard");
+        model.addAttribute("pageTitle", "Neodymium AI Manager Dashboard");
         model.addAttribute("activeTab", "AuraTestManager");
         model.addAttribute("activeView", "workspace");
         model.addAttribute("viewFragment", "fragments/aura-test-manager :: auraTestManager");
@@ -138,6 +149,18 @@ public class AuraTestDashboardController
         model.addAttribute("failed", queueController.getGlobalFailed());
         model.addAttribute("skipped", queueController.getGlobalSkipped());
 
+        final long durationMs;
+        if (running && queueController.getRunStartTimeMs() > 0)
+        {
+            durationMs = Math.max(0, System.currentTimeMillis() - queueController.getRunStartTimeMs());
+        }
+        else
+        {
+            durationMs = queueController.getLastRunDurationMs();
+        }
+        model.addAttribute("durationMs", durationMs);
+        model.addAttribute("formattedDuration", AuraTestQueueController.formatDuration(durationMs));
+
         final String rawFile = (file != null && !file.isBlank()) ? file : fileService.getActiveEditingFile();
         final String activeFileToUse = (rawFile != null && rawFile.contains(",")) ? rawFile.split(",")[0].trim() : rawFile;
         if (activeFileToUse != null && !activeFileToUse.isBlank())
@@ -170,8 +193,10 @@ public class AuraTestDashboardController
             model.addAttribute("dataMatrix", sections.get("dataMatrix"));
             model.addAttribute("varKeys", sections.get("varKeys"));
             model.addAttribute("fragmentVarScopes", sections.get("fragmentVarScopes"));
+            model.addAttribute("propertiesKey", sections.get("propertiesKey") != null ? sections.get("propertiesKey") : "_properties");
             model.addAttribute("propertiesYaml", sections.get("propertiesYaml") != null ? sections.get("propertiesYaml") : "");
             model.addAttribute("propertiesList", sections.get("propertiesList") != null ? sections.get("propertiesList") : List.of());
+            model.addAttribute("metaKey", sections.get("metaKey") != null ? sections.get("metaKey") : "_meta");
             model.addAttribute("metaYaml", sections.get("metaYaml") != null ? sections.get("metaYaml") : "");
             model.addAttribute("description", sections.get("description") != null ? sections.get("description") : "");
             model.addAttribute("promptAddonYaml", sections.get("promptAddonYaml") != null ? sections.get("promptAddonYaml") : "");
@@ -191,8 +216,10 @@ public class AuraTestDashboardController
             model.addAttribute("dataMatrix", List.of());
             model.addAttribute("varKeys", List.of());
             model.addAttribute("fragmentVarScopes", Map.of());
+            model.addAttribute("propertiesKey", "_properties");
             model.addAttribute("propertiesYaml", "");
             model.addAttribute("propertiesList", List.of());
+            model.addAttribute("metaKey", "_meta");
             model.addAttribute("metaYaml", "");
             model.addAttribute("description", "");
             model.addAttribute("promptAddonYaml", "");
@@ -213,6 +240,13 @@ public class AuraTestDashboardController
             final LocalDateTime ldt = LocalDateTime.now();
             final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
             model.addAttribute("runningStartTime", ldt.format(formatter));
+        }
+
+        if (settingsService != null)
+        {
+            model.addAttribute("hasApiKey", settingsService.hasConfiguredApiKey());
+            model.addAttribute("apiKeyWarningIgnored", settingsService.isApiKeyWarningIgnored());
+            model.addAttribute("projectId", settingsService.getProjectId());
         }
 
         if ("true".equals(hxRequest))

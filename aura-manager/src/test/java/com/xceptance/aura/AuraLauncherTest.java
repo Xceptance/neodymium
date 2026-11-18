@@ -69,7 +69,7 @@ public final class AuraLauncherTest
         try (final InputStream in = connection.getInputStream())
         {
             final String body = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-            Assertions.assertTrue(body.contains("Starting Aura Manager"), "Response must contain splash screen text");
+            Assertions.assertTrue(body.contains("Starting AI Manager"), "Response must contain splash screen text");
             Assertions.assertTrue(body.contains("http://localhost:8080"), "Splash script must poll target localhost:8080");
         }
     }

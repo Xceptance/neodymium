@@ -27,7 +27,9 @@ import java.io.File;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -66,6 +68,14 @@ public final class AuraQueueServiceTest
             queueService.stopProcess();
         });
         Assertions.assertTrue(queueService.isManuallyStopped());
+    }
+
+    @Test
+    public void testStopCurrentTestWhenNoActiveProcess()
+    {
+        Assertions.assertDoesNotThrow(() -> {
+            queueService.stopCurrentTest();
+        });
     }
 
     @Test
@@ -179,6 +189,57 @@ public final class AuraQueueServiceTest
         final String extractedError = AuraQueueService.extractSubprocessErrorMessage(logs);
 
         Assertions.assertNull(extractedError, "Extracted error message should be null for log streams containing only WARN entries");
+    }
+
+    @Test
+    public void testExtractSubprocessErrorMessageFiltersMavenSurefireBoilerplateAndDeduplicates()
+    {
+        final List<String> logs = List.of(
+            "Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 5.790 s <<< FAILURE! -- in com.xceptance.neodymium.aura.sandbox.Aura_tests_posters_homepage_yaml_Test",
+            "com.xceptance.neodymium.aura.sandbox.Aura_tests_posters_homepage_yaml_Test.executeYamlTest()[1] -- Time elapsed: 5.128 s <<< ERROR!",
+            "java.lang.IllegalStateException: Failed to instantiate LLM provider class 'org.neodymium.ai.client.GeminiLlmProvider' for provider 'gemini' (role 'global'): Gemini API key is missing. Please configure neodymium.ai.gemini.apiKey or set GEMINI_API_KEY.",
+            "Caused by: java.lang.IllegalArgumentException: Gemini API key is missing. Please configure neodymium.ai.gemini.apiKey or set GEMINI_API_KEY.",
+            "[ERROR] Errors:",
+            "[ERROR]   Aura_tests_posters_homepage_yaml_Test.executeYamlTest()[1] » IllegalState Failed to instantiate LLM provider class 'org.neodymium.ai.client.GeminiLlmProvider' for provider 'gemini' (role 'global'): Gemini API key is missing. Please configure neodymium.ai.gemini.apiKey or set GEMINI_API_KEY.",
+            "[ERROR] Tests run: 1, Failures: 0, Errors: 1, Skipped: 0",
+            "[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.5.2:test (default-test) on project archy_test:",
+            "[ERROR] See /home/weigel/Documents/projects/automation/archy_test/target/surefire-reports for the individual test results.",
+            "[ERROR] See dump files (if any exist) [date].dump, [date]-jvmRun].dump and [date].dumpstream. -> [Help 1]",
+            "[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.",
+            "[ERROR] Re-run Maven using the -X switch to enable full debug logging.",
+            "[ERROR] For more information about the errors and possible solutions, please read the following articles:",
+            "[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException"
+        );
+
+        final String extracted = AuraQueueService.extractSubprocessErrorMessage(logs);
+
+        Assertions.assertNotNull(extracted);
+        Assertions.assertTrue(extracted.contains("Failed to instantiate LLM provider class 'org.neodymium.ai.client.GeminiLlmProvider'"));
+        Assertions.assertTrue(extracted.contains("Caused by: java.lang.IllegalArgumentException: Gemini API key is missing."));
+        Assertions.assertFalse(extracted.contains("Failed to execute goal"), "Should exclude Maven execution goal failure");
+        Assertions.assertFalse(extracted.contains("surefire-reports"), "Should exclude surefire report directory advice");
+        Assertions.assertFalse(extracted.contains("To see the full stack trace"), "Should exclude Maven debug CLI tips");
+        Assertions.assertFalse(extracted.contains("http://cwiki.apache.org"), "Should exclude Apache wiki links");
+        Assertions.assertFalse(extracted.contains("<<< FAILURE!"), "Should exclude surefire test lifecycle header");
+        Assertions.assertFalse(extracted.contains("<<< ERROR!"), "Should exclude surefire test lifecycle header");
+        Assertions.assertFalse(extracted.contains("Tests run: 1"), "Should exclude surefire summary counts");
+        Assertions.assertFalse(extracted.contains("» IllegalState"), "Should omit redundant Surefire summary marker when full exception was already captured");
+    }
+
+    @Test
+    public void testExtractSubprocessErrorMessagePreservesDirectSummaryWhenNoPriorExceptionLogged()
+    {
+        final List<String> logs = List.of(
+            "[ERROR] Errors:",
+            "[ERROR]   Aura_test.executeYamlTest()[1] » AssertionFailedError expected: <true> but was: <false>",
+            "[ERROR] Tests run: 1, Failures: 1, Errors: 0, Skipped: 0"
+        );
+
+        final String extracted = AuraQueueService.extractSubprocessErrorMessage(logs);
+
+        Assertions.assertNotNull(extracted);
+        Assertions.assertTrue(extracted.contains("AssertionFailedError expected: <true> but was: <false>"));
+        Assertions.assertFalse(extracted.contains("Tests run:"));
     }
 
     @Test
@@ -495,6 +556,80 @@ public final class AuraQueueServiceTest
         finally
         {
             AuraQueueService.deleteDirRecursively(tempDir.toFile());
+        }
+    }
+
+    @Test
+    public void testIngestBatchExecutionFilesDeduplicatesAcrossMultipleStorageRoots() throws Exception
+    {
+        final java.nio.file.Path tempDir1 = Files.createTempDirectory("aura_queue_test_storage1_");
+        final java.nio.file.Path tempDir2 = Files.createTempDirectory("aura_queue_test_storage2_");
+        try
+        {
+            final String className = "Aura_tests_checkout_process_yaml_Test";
+            final File testDir1 = new File(tempDir1.toFile(), className);
+            final File testDir2 = new File(tempDir2.toFile(), className);
+            Assertions.assertTrue(testDir1.mkdirs());
+            Assertions.assertTrue(testDir2.mkdirs());
+
+            final ObjectMapper mapper = new ObjectMapper();
+            final ObjectNode node = mapper.createObjectNode();
+            node.put("id", "dataset_1");
+            node.put("status", "passed");
+
+            // Write identical execution files in both storage directories
+            final File exec1 = new File(testDir1, "console-execution-1.json");
+            final File exec2 = new File(testDir2, "console-execution-1.json");
+            mapper.writeValue(exec1, node);
+            mapper.writeValue(exec2, node);
+
+            final java.lang.reflect.Method ingestMethod = AuraQueueService.class.getDeclaredMethod(
+                "ingestBatchExecutionFiles",
+                com.xceptance.neodymium.aura.QueueRunProgressListener.class,
+                String.class,
+                String.class,
+                List.class,
+                boolean.class,
+                AtomicInteger.class,
+                AtomicInteger.class
+            );
+            ingestMethod.setAccessible(true);
+
+            final AtomicInteger batchIngestedRuns = new AtomicInteger(0);
+            final AtomicInteger batchReportedSurefireRuns = new AtomicInteger(0);
+            final List<File> storageRoots = List.of(tempDir1.toFile(), tempDir2.toFile());
+
+            final List<Map<String, Object>> completedPayloads = new ArrayList<>();
+            final com.xceptance.neodymium.aura.QueueRunProgressListener listener = new com.xceptance.neodymium.aura.QueueRunProgressListener()
+            {
+                @Override
+                public void onRunStarted(final String rId, final String bName, final String env)
+                {
+                }
+
+                @Override
+                public void onTestExecutionCompleted(final String rId, final Map<String, Object> executionData)
+                {
+                    completedPayloads.add(executionData);
+                }
+
+                @Override
+                public void onRunFinished(final String rId)
+                {
+                }
+            };
+
+            ingestMethod.invoke(queueService, listener, "run_123", className, storageRoots, true, batchIngestedRuns, batchReportedSurefireRuns);
+
+            Assertions.assertEquals(1, batchIngestedRuns.get(), "Batch ingested runs should be exactly 1 despite existing in 2 storage roots");
+            Assertions.assertEquals(1, queueService.getGlobalTestsRun(), "Global tests run counter should be incremented exactly once");
+            Assertions.assertEquals(1, queueService.getGlobalPassed(), "Global passed counter should be incremented exactly once");
+            Assertions.assertEquals(1, completedPayloads.size(), "Listener should receive completed execution exactly once");
+        }
+        finally
+        {
+            AuraQueueService.deleteDirRecursively(tempDir1.toFile());
+            AuraQueueService.deleteDirRecursively(tempDir2.toFile());
         }
     }
 }

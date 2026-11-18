@@ -664,7 +664,7 @@ public final class SessionData
      */
     private DataEntry resolveNestedPath(final Map<String, DataEntry> layer, final String key)
     {
-        if (layer == null || key == null || !key.contains("."))
+        if (layer == null || key == null || !key.contains(".") || key.endsWith("."))
         {
             return null;
         }

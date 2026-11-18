@@ -97,7 +97,7 @@
                                                 <th:block th:if="${!entry.overridden}">
                                                     <!-- Boolean Toggle Switch / Select -->
                                                     <th:block th:if="${entry.inputType == 'boolean'}">
-                                                        <select class="modal-select" th:name="'prop__' + ${group.fileName} + '__' + ${entry.key}">
+                                                        <select class="modal-select" th:name="|prop--${group.fileName}--${entry.key}|">
                                                             <option value="true" th:selected="${entry.value == 'true'}">true</option>
                                                             <option value="false" th:selected="${entry.value == 'false' or entry.value == ''}">false</option>
                                                         </select>
@@ -105,17 +105,22 @@
 
                                                     <!-- Number Input -->
                                                     <th:block th:if="${entry.inputType == 'number'}">
-                                                        <input type="number" class="modal-input" th:name="'prop__' + ${group.fileName} + '__' + ${entry.key}" th:value="${entry.value}"/>
+                                                        <input type="number" class="modal-input" th:name="|prop--${group.fileName}--${entry.key}|" th:value="${entry.value}"/>
                                                     </th:block>
 
-                                                    <!-- Password Input -->
+                                                    <!-- Password Input with Visibility Toggle -->
                                                     <th:block th:if="${entry.inputType == 'password'}">
-                                                        <input type="password" class="modal-input" th:name="'prop__' + ${group.fileName} + '__' + ${entry.key}" th:value="${entry.value}"/>
+                                                        <div class="password-input-wrapper" style="position: relative; display: flex; align-items: center; width: 100%;">
+                                                            <input type="password" class="modal-input" style="padding-right: 36px; width: 100%;" th:name="|prop--${group.fileName}--${entry.key}|" th:value="${entry.value}"/>
+                                                            <button type="button" class="btn-toggle-password" onclick="togglePasswordVisibility(this)" title="Toggle password visibility" style="position: absolute; right: 8px; background: transparent; border: none; color: var(--text-secondary, #94a3b8); cursor: pointer; display: flex; align-items: center; padding: 2px;">
+                                                                <span class="material-symbols-outlined" style="font-size: 18px;">visibility</span>
+                                                            </button>
+                                                        </div>
                                                     </th:block>
 
                                                     <!-- Text Input -->
                                                     <th:block th:if="${entry.inputType == 'text'}">
-                                                        <input type="text" class="modal-input" th:name="'prop__' + ${group.fileName} + '__' + ${entry.key}" th:value="${entry.value}"/>
+                                                        <input type="text" class="modal-input" th:name="|prop--${group.fileName}--${entry.key}|" th:value="${entry.value}"/>
                                                     </th:block>
                                                 </th:block>
                                             </div>
@@ -220,7 +225,7 @@
                                             <th:block th:if="${!entry.overridden}">
                                                 <!-- Boolean Toggle Switch / Select -->
                                                 <th:block th:if="${entry.inputType == 'boolean'}">
-                                                    <select class="modal-select" th:name="'prop__browser.properties__' + ${entry.key}">
+                                                    <select class="modal-select" th:name="|prop--browser.properties--${entry.key}|">
                                                         <option value="true" th:selected="${entry.value == 'true'}">true</option>
                                                         <option value="false" th:selected="${entry.value == 'false' or entry.value == ''}">false</option>
                                                     </select>
@@ -228,12 +233,12 @@
 
                                                 <!-- Number Input -->
                                                 <th:block th:if="${entry.inputType == 'number'}">
-                                                    <input type="number" class="modal-input" th:name="'prop__browser.properties__' + ${entry.key}" th:value="${entry.value}"/>
+                                                    <input type="number" class="modal-input" th:name="|prop--browser.properties--${entry.key}|" th:value="${entry.value}"/>
                                                 </th:block>
 
                                                 <!-- Text Input -->
                                                 <th:block th:if="${entry.inputType != 'boolean' and entry.inputType != 'number'}">
-                                                    <input type="text" class="modal-input" th:name="'prop__browser.properties__' + ${entry.key}" th:value="${entry.value}"/>
+                                                    <input type="text" class="modal-input" th:name="|prop--browser.properties--${entry.key}|" th:value="${entry.value}"/>
                                                 </th:block>
                                             </th:block>
                                         </div>

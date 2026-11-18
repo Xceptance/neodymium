@@ -10,15 +10,15 @@ To provide fast, reproducible, and cost-effective test execution, dedicated Mave
 
 | Profile | Command | Target Scope | Key Inclusions | Strict Exclusions |
 | :--- | :--- | :--- | :--- | :--- |
-| **Non-LLM Modern** | `mvn test -Pnon-llm-tests` | Complete modern suite (CI default) | Core AI, Server, VÉRLA UI, VÉRLA mock AI, Sandbox mock, Aura Manager | **Zero** classic JUnit 4/5, **zero** live LLMs |
+| **Non-LLM Modern** | `mvn test -Pnon-llm-tests` | Complete modern suite (CI default) | Core AI, Server, VÉRLA UI, VÉRLA mock AI, Sandbox mock, AI Manager | **Zero** classic JUnit 4/5, **zero** live LLMs |
 | **Direct Unit** | `mvn test -Punit-tests` | Pure in-memory unit tests (< 5s) | AI prompts, models, telemetry, catalog parsing, manager DTOs/entities | **Zero** browsers, **zero** servers, **zero** AI/LLM |
 | **Neo Classic JUnit 4** | `mvn test -Pneo-classic-junit4` | Legacy JUnit 4 Neodymium tests | `com.xceptance.neodymium.junit4.tests.**` (Vintage engine) | **Zero** JUnit 5, **zero** AI, **zero** Verla |
 | **Neo Classic JUnit 5** | `mvn test -Pneo-classic-junit5` | Legacy JUnit 5 Neodymium tests | `com.xceptance.neodymium.junit5.tests.**`, classic data utils | **Zero** JUnit 4, **zero** AI, **zero** Verla |
 | **VÉRLA Storefront** | `mvn test -Pverla-tests` | VÉRLA storefront UI & mock AI flows | Storefront UI tests (Tailwind, Claude, Apocalypse, etc.), VÉRLA AI mock checkout | **Zero** classic tests, **zero** live LLMs |
 | **AI Mock** | `mvn test -Pai-mock-tests` | AI pipelines with mocked LLMs (0 tokens) | Core AI, replay, sandbox mock, VÉRLA mock | **Zero** live LLMs, **zero** classic tests |
 | **AI Live** | `mvn test -Pai-live-tests` | Real LLM verification (`GEMINI_API_KEY`) | Tests tagged `@Tag("LiveAPI")`, `@Tag("LiveLlm")` | **Zero** mock tests, **zero** classic tests |
-| **Aura Sandbox** | `mvn test -Paura-sandbox` | Aura Glance visual defect sandbox | `org.neodymium.ai.integration.sandbox.**` | **Zero** classic tests, **zero** live LLMs |
-| **Aura Manager** | `mvn test -Paura-manager` | Aura Manager Spring Boot hub | Web controllers, services, repositories, UI in `aura-manager` | Other modules skipped |
+| **AI Sandbox** | `mvn test -Pai-sandbox` (or `-Paura-sandbox`) | AI Glance visual defect sandbox | `org.neodymium.ai.integration.sandbox.**` | **Zero** classic tests, **zero** live LLMs |
+| **AI Manager** | `mvn test -Pai-manager` (or `-Paura-manager`) | Neodymium AI Manager Spring Boot hub | Web controllers, services, repositories, UI in `aura-manager` | Other modules skipped |
 | **Smoke** | `mvn test -Psmoke` | Fast sanity verification (< 60s) | 1 Verla storefront, 1 mock checkout, 1 sandbox mock, core catalog & unit tests | Non-smoke tests |
 
 ---
@@ -27,7 +27,7 @@ To provide fast, reproducible, and cost-effective test execution, dedicated Mave
 
 ### 1. `non-llm-tests` (Modern Neodymium Suite)
 The default recommended profile for Pull Requests, continuous integration, and local pre-commit checks.
-* **Why use it**: Runs the comprehensive modern Neodymium and Aura AI test suite with 100% determinism.
+* **Why use it**: Runs the comprehensive modern Neodymium and AI test suite with 100% determinism.
 * **Guarantees**: Never connects to live LLMs (zero token consumption, no API keys required) and never executes legacy "Neo Classic" tests.
 * **Usage**:
   ```bash
@@ -56,7 +56,7 @@ To prevent cross-framework collisions and deprecated engine overhead, JUnit 4 an
   ```
 
 ### 4. `verla-tests` (VÉRLA Storefronts & AI Flows)
-* **Why use it**: Validates both the raw HTML/HTMX storefront behavior and Aura AI test flows against the local embedded VÉRLA e-commerce application.
+* **Why use it**: Validates both the raw HTML/HTMX storefront behavior and Neodymium AI test flows against the local embedded VÉRLA e-commerce application.
 * **Target Storefronts**: Tailwind, Claude Tailwind, Apocalypse, Headless, Apparel, PWA Chaos, and multi-locale i18n variants.
 * **Usage**:
   ```bash
@@ -77,17 +77,21 @@ Mocked and real LLM tests are strictly partitioned:
   mvn test -Pai-live-tests
   ```
 
-### 6. `aura-sandbox`
-* **Why use it**: Focuses specifically on Aura Glance visual defect detection, dHash baseline persistence, multi-port visual comparisons, and dynamic defect replays against the `AuraGlanceTest` sandbox suite.
+### 6. `ai-sandbox` (legacy: `aura-sandbox`)
+* **Why use it**: Focuses specifically on AI Glance visual defect detection, dHash baseline persistence, multi-port visual comparisons, and dynamic defect replays against the `AuraGlanceTest` sandbox suite.
 * **Usage**:
   ```bash
+  mvn test -Pai-sandbox
+  # or legacy alias:
   mvn test -Paura-sandbox
   ```
 
-### 7. `aura-manager`
-* **Why use it**: Focuses solely on testing the Aura Manager Spring Boot hub (`aura-manager` module), including dashboard controllers, queue management, file controllers, and reporting storage.
+### 7. `ai-manager` (legacy: `aura-manager`)
+* **Why use it**: Focuses solely on testing the Neodymium AI Manager Spring Boot hub (`aura-manager` module), including dashboard controllers, queue management, file controllers, and reporting storage.
 * **Usage**:
   ```bash
+  mvn test -Pai-manager
+  # or legacy alias:
   mvn test -Paura-manager
   ```
 

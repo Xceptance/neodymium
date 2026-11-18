@@ -422,19 +422,6 @@ public class JdkHttpClient implements HttpClient
         return handler.execute(req);
     }
 
-    @Override
-    public <T> java.net.http.HttpResponse<T> sendNative(
-            java.net.http.HttpRequest request, java.net.http.HttpResponse.BodyHandler<T> responseHandler)
-            throws IOException, InterruptedException {
-        return client.send(request, responseHandler);
-    }
-
-    @Override
-    public <T> CompletableFuture<java.net.http.HttpResponse<T>> sendAsyncNative(
-            java.net.http.HttpRequest request, java.net.http.HttpResponse.BodyHandler<T> responseHandler) {
-        return client.sendAsync(request, responseHandler);
-    }
-
     private HttpResponse execute0(HttpRequest req) throws UncheckedIOException
     {
         Objects.requireNonNull(req, "Request");

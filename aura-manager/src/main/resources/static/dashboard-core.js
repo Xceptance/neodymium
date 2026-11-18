@@ -570,6 +570,157 @@ function organizeContainerView(container, itemSelector, mode) {
 let isResizingH = false;
 let isResizingV = false;
 
+function updateSidebarRunnerProgress(statusData) {
+    const sidebarProgressEl = document.getElementById('sidebarActiveProgress');
+    const sidebarProgressContainer = document.getElementById('sidebarActiveProgressContainer');
+    if (!sidebarProgressContainer || !sidebarProgressEl) return;
+
+    if (!statusData || (!statusData.progressText && !statusData.total && !statusData.scheduledCount && !statusData.executedCount && !statusData.running)) {
+        sidebarProgressContainer.style.display = 'none';
+        try {
+            localStorage.removeItem('aura_active_run_progress');
+            localStorage.removeItem('aura_active_run_progress_meta');
+        } catch (e) {}
+        return;
+    }
+
+    sidebarProgressContainer.style.display = 'flex';
+
+    const passed = Number(statusData.passed) || 0;
+    const failed = Number(statusData.failed) || 0;
+    const skipped = Number(statusData.skipped) || 0;
+    const runningCount = Number(statusData.runningCount) || (statusData.running ? 1 : 0);
+    const scheduled = Number(statusData.scheduledCount) || 0;
+    const total = scheduled > 0 ? scheduled : (Number(statusData.total) || 0);
+    const executed = statusData.executedCount != null ? Number(statusData.executedCount) : (passed + failed);
+
+    // Number formatter for scaling to 10k+ tests gracefully
+    const fmt = (n) => (typeof Intl !== 'undefined' && Intl.NumberFormat) ? new Intl.NumberFormat().format(n) : String(n);
+
+    // Update text counter (e.g. "3 / 9", "1,450 / 10,000", or "3 executed")
+    if (total > 0) {
+        sidebarProgressEl.textContent = `${fmt(executed)} / ${fmt(total)}`;
+    } else if (executed > 0) {
+        sidebarProgressEl.textContent = `${fmt(executed)} executed`;
+    } else if (statusData.progressText) {
+        sidebarProgressEl.textContent = statusData.progressText;
+    } else {
+        sidebarProgressEl.textContent = statusData.running ? 'Running...' : 'Ready';
+    }
+
+    // Update progress track and segments
+    const track = document.getElementById('sidebarProgressTrack');
+    const segPassed = document.getElementById('sidebarProgressSegPassed');
+    const segFailed = document.getElementById('sidebarProgressSegFailed');
+    const segRunning = document.getElementById('sidebarProgressSegRunning');
+
+    if (track) {
+        if (total > 0) {
+            track.classList.remove('is-indeterminate');
+
+            const passedPct = Math.max(0, Math.min(100, (passed / total) * 100));
+            const failedPct = Math.max(0, Math.min(100, (failed / total) * 100));
+            const runningPct = statusData.running ? Math.max(0, Math.min(100, (runningCount / total) * 100)) : 0;
+
+            if (segPassed) {
+                if (passed > 0) {
+                    segPassed.style.display = 'block';
+                    segPassed.style.width = passedPct + '%';
+                } else {
+                    segPassed.style.display = 'none';
+                    segPassed.style.width = '0%';
+                }
+            }
+
+            if (segFailed) {
+                if (failed > 0) {
+                    segFailed.style.display = 'block';
+                    segFailed.style.width = failedPct + '%';
+                } else {
+                    segFailed.style.display = 'none';
+                    segFailed.style.width = '0%';
+                }
+            }
+
+            if (segRunning) {
+                if (statusData.running && (runningCount > 0 || (total > executed && executed > 0))) {
+                    segRunning.style.display = 'block';
+                    segRunning.style.width = Math.max(runningPct, 2) + '%';
+                } else {
+                    segRunning.style.display = 'none';
+                    segRunning.style.width = '0%';
+                }
+            }
+        } else if (statusData.running) {
+            // Indeterminate state when total is unknown during discovery
+            track.classList.add('is-indeterminate');
+            if (segPassed) { segPassed.style.display = 'none'; segPassed.style.width = '0%'; }
+            if (segFailed) { segFailed.style.display = 'none'; segFailed.style.width = '0%'; }
+            if (segRunning) { segRunning.style.display = 'none'; segRunning.style.width = '0%'; }
+        } else {
+            track.classList.remove('is-indeterminate');
+            if (segPassed) { segPassed.style.display = 'none'; segPassed.style.width = '0%'; }
+            if (segFailed) { segFailed.style.display = 'none'; segFailed.style.width = '0%'; }
+            if (segRunning) { segRunning.style.display = 'none'; segRunning.style.width = '0%'; }
+        }
+    }
+
+    // Update outcome chips (Quiet until broken: only display passed when > 0, failure when > 0)
+    const chipPassed = document.getElementById('sidebarChipPassed');
+    const chipPassedVal = document.getElementById('sidebarChipPassedVal');
+    if (chipPassed && chipPassedVal) {
+        if (passed > 0) {
+            chipPassed.style.display = 'inline-flex';
+            chipPassedVal.textContent = fmt(passed);
+        } else {
+            chipPassed.style.display = 'none';
+        }
+    }
+
+    const chipFailed = document.getElementById('sidebarChipFailed');
+    const chipFailedVal = document.getElementById('sidebarChipFailedVal');
+    if (chipFailed && chipFailedVal) {
+        if (failed > 0) {
+            chipFailed.style.display = 'inline-flex';
+            chipFailedVal.textContent = fmt(failed);
+        } else {
+            chipFailed.style.display = 'none';
+        }
+    }
+
+    // Collapsed sidebar beaker notification dot
+    const collapsedFailDot = document.getElementById('sidebarCollapsedFailIndicator');
+    if (collapsedFailDot) {
+        collapsedFailDot.style.display = failed > 0 ? 'block' : 'none';
+    }
+
+    // Comprehensive hover tooltip
+    const tooltipParts = [];
+    if (total > 0) tooltipParts.push(`${fmt(executed)} of ${fmt(total)} executed`);
+    if (passed > 0) tooltipParts.push(`${fmt(passed)} passed`);
+    if (failed > 0) tooltipParts.push(`${fmt(failed)} failed`);
+    if (statusData.running && runningCount > 0) tooltipParts.push(`${fmt(runningCount)} running`);
+    if (tooltipParts.length > 0) {
+        sidebarProgressContainer.setAttribute('title', tooltipParts.join(' · '));
+    }
+
+    try {
+        localStorage.setItem('aura_active_run_progress', sidebarProgressEl.textContent);
+        localStorage.setItem('aura_active_run_progress_meta', JSON.stringify({
+            passed: passed,
+            failed: failed,
+            skipped: skipped,
+            runningCount: runningCount,
+            scheduledCount: scheduled,
+            total: total,
+            executedCount: executed,
+            running: !!statusData.running,
+            progressText: statusData.progressText || ''
+        }));
+    } catch (e) {}
+}
+window.updateSidebarRunnerProgress = updateSidebarRunnerProgress;
+
 function restoreActiveRunContextUI() {
     const sidebarCard = document.getElementById('sidebarContextCard');
     if (!sidebarCard) return;
@@ -617,12 +768,22 @@ function restoreActiveRunContextUI() {
         }
 
         const savedProgress = localStorage.getItem('aura_active_run_progress');
+        const savedMetaStr = localStorage.getItem('aura_active_run_progress_meta');
         const sidebarProgressEl = document.getElementById('sidebarActiveProgress');
         const sidebarProgressContainer = document.getElementById('sidebarActiveProgressContainer');
-        if (sidebarProgressEl && savedProgress) {
-            sidebarProgressEl.textContent = savedProgress;
+        if (sidebarProgressEl && (savedProgress || savedMetaStr)) {
             if (sidebarProgressContainer) {
                 sidebarProgressContainer.style.display = 'flex';
+            }
+            if (savedMetaStr) {
+                try {
+                    const meta = JSON.parse(savedMetaStr);
+                    updateSidebarRunnerProgress(meta);
+                } catch (e) {
+                    sidebarProgressEl.textContent = savedProgress;
+                }
+            } else if (savedProgress) {
+                sidebarProgressEl.textContent = savedProgress;
             }
         }
     } else {

@@ -26,6 +26,7 @@ import com.xceptance.aura.report.repository.TestRunRepository;
 import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.ReportDashboardSettingService;
 import com.xceptance.neodymium.aura.AuraQueueService;
+import com.xceptance.neodymium.aura.AuraSettingsService;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -55,6 +56,7 @@ public class AuraGlobalModelAdvice
     private final AuraReportDataService dataService;
     private final AuraChatSessionService chatSessionService;
     private final AuraChatService chatService;
+    private final AuraSettingsService settingsService;
 
     @Autowired
     public AuraGlobalModelAdvice(
@@ -63,7 +65,8 @@ public class AuraGlobalModelAdvice
         @Autowired(required = false) final TestRunRepository runRepository,
         @Autowired(required = false) final AuraReportDataService dataService,
         @Autowired(required = false) final AuraChatSessionService chatSessionService,
-        @Autowired(required = false) final AuraChatService chatService)
+        @Autowired(required = false) final AuraChatService chatService,
+        @Autowired(required = false) final AuraSettingsService settingsService)
     {
         this.queueService = queueService;
         this.dashboardSettingService = dashboardSettingService;
@@ -71,6 +74,28 @@ public class AuraGlobalModelAdvice
         this.dataService = dataService;
         this.chatSessionService = chatSessionService;
         this.chatService = chatService;
+        this.settingsService = settingsService != null ? settingsService : new AuraSettingsService();
+    }
+
+    public AuraGlobalModelAdvice(
+        final AuraQueueService queueService,
+        final ReportDashboardSettingService dashboardSettingService,
+        final TestRunRepository runRepository,
+        final AuraReportDataService dataService,
+        final AuraChatSessionService chatSessionService,
+        final AuraChatService chatService)
+    {
+        this(queueService, dashboardSettingService, runRepository, dataService, chatSessionService, chatService, null);
+    }
+
+    public AuraGlobalModelAdvice(
+        final AuraQueueService queueService,
+        final ReportDashboardSettingService dashboardSettingService,
+        final TestRunRepository runRepository,
+        final AuraReportDataService dataService,
+        final AuraSettingsService settingsService)
+    {
+        this(queueService, dashboardSettingService, runRepository, dataService, null, null, settingsService);
     }
 
     public AuraGlobalModelAdvice(
@@ -79,19 +104,19 @@ public class AuraGlobalModelAdvice
         final TestRunRepository runRepository,
         final AuraReportDataService dataService)
     {
-        this(queueService, dashboardSettingService, runRepository, dataService, null, null);
+        this(queueService, dashboardSettingService, runRepository, dataService, null, null, null);
     }
 
     public AuraGlobalModelAdvice(
         final AuraQueueService queueService,
         final ReportDashboardSettingService dashboardSettingService)
     {
-        this(queueService, dashboardSettingService, null, null, null, null);
+        this(queueService, dashboardSettingService, null, null, null, null, null);
     }
 
     public AuraGlobalModelAdvice(final AuraQueueService queueService)
     {
-        this(queueService, null, null, null, null, null);
+        this(queueService, null, null, null, null, null, null);
     }
 
     @ModelAttribute
@@ -115,6 +140,12 @@ public class AuraGlobalModelAdvice
             model.addAttribute("customPages", Collections.emptyList());
             model.addAttribute("rootCustomPages", Collections.emptyList());
             model.addAttribute("defaultWidgetsCount", 0);
+        }
+        if (settingsService != null && model != null)
+        {
+            model.addAttribute("hasApiKey", settingsService.hasConfiguredApiKey());
+            model.addAttribute("apiKeyWarningIgnored", settingsService.isApiKeyWarningIgnored());
+            model.addAttribute("projectId", settingsService.getProjectId());
         }
         if (model != null && !model.containsAttribute("candidateBrowsers"))
         {
@@ -246,6 +277,7 @@ public class AuraGlobalModelAdvice
         if (model != null)
         {
             final boolean isQueueRunning = queueService != null && queueService.isRunningQueue();
+            final String stoppedRunId = queueService != null ? queueService.getCurrentRunId() : null;
             String activeRunId = isQueueRunning ? queueService.getCurrentRunId() : null;
             boolean running = isQueueRunning;
             String currentBatch = isQueueRunning ? queueService.getCurrentBatchName() : null;
@@ -283,27 +315,43 @@ public class AuraGlobalModelAdvice
             if (activeEntity == null)
             {
                 activeEntity = allRuns.stream()
-                    .filter(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus()))
+                    .filter(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus())
+                        && (dataService == null || dataService.isRunCurrentlyActiveOnDisk(r.getId())))
                     .findFirst()
                     .orElse(null);
             }
             if (activeEntity == null && dataService != null)
             {
                 activeEntity = allRuns.stream()
-                    .filter(r -> dataService.isRunCurrentlyActiveOnDisk(r.getId()))
+                    .limit(5)
+                    .filter(r -> !"CANCELLED".equalsIgnoreCase(r.getStatus()) && dataService.isRunCurrentlyActiveOnDisk(r.getId()))
+                    .findFirst()
+                    .orElse(null);
+            }
+            if (activeEntity == null && (isQueueRunning || dataService == null))
+            {
+                activeEntity = allRuns.stream()
+                    .filter(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus()))
                     .findFirst()
                     .orElse(null);
             }
 
             String progressText = "";
+            int passedCount = 0;
+            int failedCount = 0;
+            int skippedCount = 0;
+            int runningCount = 0;
             if (activeEntity != null)
             {
                 if (activeRunId == null || activeRunId.isBlank())
                 {
                     activeRunId = activeEntity.getId();
                 }
-                running = isQueueRunning || "IN_PROGRESS".equalsIgnoreCase(activeEntity.getStatus())
-                    || (dataService != null && dataService.isRunCurrentlyActiveOnDisk(activeEntity.getId()));
+                final boolean isCurrentRunStopped = queueService != null && queueService.isManuallyStopped()
+                    && (stoppedRunId != null && !stoppedRunId.isBlank() && stoppedRunId.equals(activeEntity.getId()));
+                running = !isCurrentRunStopped && (isQueueRunning
+                    || (!"CANCELLED".equalsIgnoreCase(activeEntity.getStatus())
+                        && (dataService == null || dataService.isRunCurrentlyActiveOnDisk(activeEntity.getId()))));
                 if (currentBatch == null || !AuraReportDataService.isRealBatch(currentBatch))
                 {
                     currentBatch = AuraReportDataService.resolveEffectiveBatchName(activeEntity.getBatchName(), activeEntity.getTags());
@@ -313,7 +361,7 @@ public class AuraGlobalModelAdvice
                     }
                 }
 
-                final int runningCount = activeEntity.getRunningCountSafe();
+                runningCount = activeEntity.getRunningCountSafe();
                 final int total = activeEntity.getTotalTestsSafe();
                 final int entityExecuted = Math.max(0, total - runningCount);
                 if (executedCount == null || entityExecuted > executedCount)
@@ -324,6 +372,11 @@ public class AuraGlobalModelAdvice
                 {
                     scheduledCount = total;
                 }
+                passedCount = activeEntity.getPassedCleanCount() + activeEntity.getFixedCleanCount() + activeEntity.getPassedHealedCountSafe() + activeEntity.getFixedHealedCountSafe();
+                final int activeFailKnown = activeEntity.getFailedKnownCount() != null ? activeEntity.getFailedKnownCount() : 0;
+                final int activeFailUnknown = activeEntity.getFailedUnknownCount() != null ? activeEntity.getFailedUnknownCount() : 0;
+                failedCount = activeFailKnown + activeFailUnknown;
+                skippedCount = activeEntity.getIgnoredCount() != null ? activeEntity.getIgnoredCount() : 0;
 
                 if (running)
                 {
@@ -379,6 +432,12 @@ public class AuraGlobalModelAdvice
                 }
                 executedCount = latestRun.getTotalTestsSafe();
                 scheduledCount = latestRun.getTotalTestsSafe();
+                passedCount = latestRun.getPassedCleanCount() + latestRun.getFixedCleanCount() + latestRun.getPassedHealedCountSafe() + latestRun.getFixedHealedCountSafe();
+                final int latestFailKnown = latestRun.getFailedKnownCount() != null ? latestRun.getFailedKnownCount() : 0;
+                final int latestFailUnknown = latestRun.getFailedUnknownCount() != null ? latestRun.getFailedUnknownCount() : 0;
+                failedCount = latestFailKnown + latestFailUnknown;
+                skippedCount = latestRun.getIgnoredCount() != null ? latestRun.getIgnoredCount() : 0;
+                runningCount = 0;
                 progressText = executedCount + " tests completed";
             }
 
@@ -392,6 +451,10 @@ public class AuraGlobalModelAdvice
                 model.addAttribute("activeRunProgress", progressText);
                 model.addAttribute("activeRunExecutedCount", executedCount);
                 model.addAttribute("activeRunScheduledCount", scheduledCount);
+                model.addAttribute("activeRunPassedCount", passedCount);
+                model.addAttribute("activeRunFailedCount", failedCount);
+                model.addAttribute("activeRunSkippedCount", skippedCount);
+                model.addAttribute("activeRunRunningCount", running ? runningCount : 0);
                 model.addAttribute("hasRunContext", true);
             }
             else
@@ -403,6 +466,10 @@ public class AuraGlobalModelAdvice
                 model.addAttribute("activeRunProgress", "");
                 model.addAttribute("activeRunExecutedCount", 0);
                 model.addAttribute("activeRunScheduledCount", 0);
+                model.addAttribute("activeRunPassedCount", 0);
+                model.addAttribute("activeRunFailedCount", 0);
+                model.addAttribute("activeRunSkippedCount", 0);
+                model.addAttribute("activeRunRunningCount", 0);
                 model.addAttribute("hasRunContext", false);
             }
             model.addAttribute("running", running);

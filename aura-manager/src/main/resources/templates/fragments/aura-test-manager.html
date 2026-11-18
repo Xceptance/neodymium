@@ -4,7 +4,7 @@
 <body>
 
 <!-- Integrated Neodymium Aura Test Manager Dashboard Fragment -->
-<div th:fragment="auraTestManager" id="auraTestManagerWorkspace" class="aura-manager-integrated-root" style="width: 100%; height: 100%; display: flex; flex-direction: column; position: relative;">
+<div th:fragment="auraTestManager" id="auraTestManagerWorkspace" class="aura-manager-integrated-root" th:data-running="${running}" style="width: 100%; height: 100%; display: flex; flex-direction: column; position: relative;">
 
     <!-- Layout Container: Workspace -->
     <div class="workspace-layout neo-u-6" id="dashboardView" style="display: flex;">
@@ -43,30 +43,62 @@
             </div>
             
             <!-- Terminal Panel -->
-            <div class="resizer-v neo-u-1" id="consoleResizer" style="display: none;"></div>
-            <div class="panel neo-u-19" id="consolePanel" style="display: flex; height: 38px;">
+            <div class="resizer-v neo-u-1" id="consoleResizer" th:style="${running ? 'display: block;' : 'display: none;'}"></div>
+            <div class="panel neo-u-19" id="consolePanel"
+                 th:classappend="${running ? '' : ' console-collapsed'}"
+                 th:style="${running ? 'display: flex; height: 280px;' : 'display: flex; height: 38px;'}">
                 <div class="terminal-panel">
                     <div class="neo-u-20" onclick="toggleConsoleCollapse()" style="cursor: pointer; user-select: none;">
-                        <div style="display: flex; align-items: center; gap: 6px;">
+                        <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
                             <span class="material-symbols-outlined" style="font-size: 16px; color: var(--accent);">terminal</span>
-                            <span>TERMINAL OUTPUT <span class="neo-u-1" id="runSpinner" style="display: none;"><span class="material-symbols-outlined spinner neo-u-21">progress_activity</span></span></span>
+                            <span>TERMINAL OUTPUT <span class="neo-u-1" id="runSpinner" th:style="${running ? 'display: inline-block;' : 'display: none;'}"><span class="material-symbols-outlined spinner neo-u-21">progress_activity</span></span></span>
+                        </div>
+                        <div id="consoleMinimizedSummary" class="console-minimized-summary">
+                            <th:block th:if="${running}">
+                                <span class="console-summary-running" style="display: inline-flex; align-items: center; gap: 4px;">
+                                    <span class="material-symbols-outlined spinner" style="font-size: 12px; color: var(--accent);">progress_activity</span>
+                                    <span id="consoleRunningText" th:text="${'Running ' + (total != null ? total : 0) + ' tests' + (formattedDuration != null and !formattedDuration.isEmpty() ? ' (' + formattedDuration + ')' : '')}">Running...</span>
+                                </span>
+                            </th:block>
+                            <th:block th:unless="${running}">
+                                <th:block th:if="${total != null and total > 0}">
+                                    <span class="console-summary-label">Last Run:</span>
+                                    <span th:if="${passed != null and passed > 0}" class="summary-pass" style="color: var(--success); font-weight: 500;">
+                                        <span style="font-size: 8px; vertical-align: middle;">●</span> <span id="consolePassCount" th:text="${passed}">0</span> passed
+                                    </span>
+                                    <span th:if="${failed != null and failed > 0}" class="summary-fail" style="color: var(--danger); font-weight: 500;">
+                                        <span style="color: var(--text-muted); margin: 0 2px;">·</span>
+                                        <span style="font-size: 8px; vertical-align: middle;">●</span> <span id="consoleFailCount" th:text="${failed}">0</span> failed
+                                    </span>
+                                    <span th:if="${skipped != null and skipped > 0}" class="summary-skip" style="color: var(--warning, #ff9800); font-weight: 500;">
+                                        <span style="color: var(--text-muted); margin: 0 2px;">·</span>
+                                        <span style="font-size: 8px; vertical-align: middle;">●</span> <span id="consoleSkipCount" th:text="${skipped}">0</span> skipped
+                                    </span>
+                                    <span class="summary-duration" id="consoleDurationText" style="color: var(--text-muted); margin-left: 2px;" th:text="${formattedDuration != null and !formattedDuration.isEmpty() ? '(' + formattedDuration + ')' : ''}"></span>
+                                </th:block>
+                                <th:block th:unless="${total != null and total > 0}">
+                                    <span class="console-summary-idle" style="color: var(--text-muted);">Idle · Ready for execution</span>
+                                </th:block>
+                            </th:block>
                         </div>
                         <div class="neo-u-22" onclick="event.stopPropagation();">
-                            <input checked="" id="aiOnlyCb" onchange="toggleAiOnly(this.checked)" type="checkbox"/>
-                            <label for="aiOnlyCb">AI Only</label>
-                            <input id="errorsOnlyCb" onchange="toggleErrorsOnly(this.checked)" type="checkbox"/>
-                            <label for="errorsOnlyCb">Errors Only</label>
-                            <button id="terminalInteractiveBtn" class="btn-edit" onclick="openInteractiveConsoleViewLive('/interactive_console.html')" title="Switch to Interactive Console" style="display: none; margin-left: 8px; padding: 2px 6px; font-size: 11px; align-items: center; gap: 4px;" th:style="${running and (interactive != null and interactive) ? 'display: inline-flex; margin-left: 8px; padding: 2px 6px; font-size: 11px; align-items: center; gap: 4px;' : 'display: none; margin-left: 8px; padding: 2px 6px; font-size: 11px; align-items: center; gap: 4px;'}">
-                                <span class="material-symbols-outlined" style="font-size: 14px; color: var(--accent);">terminal</span>
-                                <span>Interactive Console</span>
-                            </button>
-                            <button id="copyTerminalBtn" class="btn-edit" onclick="copyTerminalOutput()" title="Copy terminal output" style="margin-left: 8px; padding: 2px 6px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px;">
-                                <span class="material-symbols-outlined" id="copyTerminalIcon">content_copy</span>
-                                <span id="copyTerminalText">Copy</span>
-                            </button>
+                            <span class="console-expanded-controls" style="display: inline-flex; align-items: center; gap: 12px;">
+                                <input checked="" id="aiOnlyCb" onchange="toggleAiOnly(this.checked)" type="checkbox"/>
+                                <label for="aiOnlyCb">AI Only</label>
+                                <input id="errorsOnlyCb" onchange="toggleErrorsOnly(this.checked)" type="checkbox"/>
+                                <label for="errorsOnlyCb">Errors Only</label>
+                                <button id="terminalInteractiveBtn" class="btn-edit" onclick="openInteractiveConsoleViewLive('/interactive_console.html')" title="Switch to Interactive Console" style="display: none; margin-left: 8px; padding: 2px 6px; font-size: 11px; align-items: center; gap: 4px;" th:style="${running and (interactive != null and interactive) ? 'display: inline-flex; margin-left: 8px; padding: 2px 6px; font-size: 11px; align-items: center; gap: 4px;' : 'display: none; margin-left: 8px; padding: 2px 6px; font-size: 11px; align-items: center; gap: 4px;'}">
+                                    <span class="material-symbols-outlined" style="font-size: 14px; color: var(--accent);">terminal</span>
+                                    <span>Interactive Console</span>
+                                </button>
+                                <button id="copyTerminalBtn" class="btn-edit" onclick="copyTerminalOutput()" title="Copy terminal output" style="margin-left: 8px; padding: 2px 6px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px;">
+                                    <span class="material-symbols-outlined" id="copyTerminalIcon">content_copy</span>
+                                    <span id="copyTerminalText">Copy</span>
+                                </button>
+                            </span>
                             <button id="toggleConsoleCollapseBtn" class="btn-edit" onclick="toggleConsoleCollapse()" title="Toggle console collapse" style="margin-left: 8px; padding: 2px 6px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px;">
-                                <span class="material-symbols-outlined" id="consoleCollapseIcon">keyboard_arrow_up</span>
-                                <span id="consoleCollapseText">Expand</span>
+                                <span class="material-symbols-outlined" id="consoleCollapseIcon" th:text="${running ? 'keyboard_arrow_down' : 'keyboard_arrow_up'}">keyboard_arrow_up</span>
+                                <span id="consoleCollapseText" th:text="${running ? 'Collapse' : 'Expand'}">Expand</span>
                             </button>
                         </div>
                     </div>

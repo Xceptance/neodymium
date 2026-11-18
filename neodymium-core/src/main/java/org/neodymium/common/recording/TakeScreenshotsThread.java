@@ -39,7 +39,7 @@ public class TakeScreenshotsThread extends Thread
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(TakeScreenshotsThread.class);
 
-    private WebDriver driver;
+    private volatile WebDriver driver;
 
     private String fileName;
 
@@ -69,6 +69,16 @@ public class TakeScreenshotsThread extends Thread
                    + testName.replaceAll("\\s", "-").replaceAll(":", "-").replaceAll("/", "_") + "." + recordingConfigurations.format();
         this.writer = Writer.instantiate(writerClass, recordingConfigurations, fileName);
         this.driver = driver;
+    }
+
+    /**
+     * Gets the {@link WebDriver} instance currently being filmed.
+     *
+     * @return the driver instance
+     */
+    public WebDriver getDriver()
+    {
+        return driver;
     }
 
     /**
@@ -131,6 +141,10 @@ public class TakeScreenshotsThread extends Thread
                             {
                             }
                             continue;
+                        }
+                        if (this.driver == null)
+                        {
+                            this.driver = activeDriver;
                         }
 
                         long delay = Math.max(recordingConfigurations.oneImagePerMilliseconds(), duration);

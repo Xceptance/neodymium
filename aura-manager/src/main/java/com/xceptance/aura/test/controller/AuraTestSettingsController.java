@@ -52,7 +52,6 @@ import org.springframework.ui.Model;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
@@ -158,6 +157,9 @@ public class AuraTestSettingsController implements ApplicationListener<WebServer
         model.addAttribute("browserGroup", settingsData.getBrowserGroup());
         model.addAttribute("autocompleteKeys", settingsData.getAutocompleteKeys());
         model.addAttribute("overriddenKeys", settingsData.getOverriddenKeys());
+        model.addAttribute("hasApiKey", settingsService.hasConfiguredApiKey());
+        model.addAttribute("apiKeyWarningIgnored", settingsService.isApiKeyWarningIgnored());
+        model.addAttribute("projectId", settingsService.getProjectId());
         model.addAttribute("activeTab", (activeTab != null && !activeTab.isBlank()) ? activeTab : "general");
         model.addAttribute("isOpenModal", true);
 
@@ -261,8 +263,31 @@ public class AuraTestSettingsController implements ApplicationListener<WebServer
         return ResponseEntity.ok(map);
     }
 
+    @GetMapping("/api-key-status")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> getApiKeyStatus()
+    {
+        final Map<String, Object> response = new HashMap<>();
+        response.put("hasApiKey", settingsService.hasConfiguredApiKey());
+        response.put("warningIgnored", settingsService.isApiKeyWarningIgnored());
+        response.put("projectId", settingsService.getProjectId());
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/ignore-api-key-warning")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> ignoreApiKeyWarning()
+    {
+        settingsService.setApiKeyWarningIgnored(true);
+        final Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("warningIgnored", true);
+        response.put("projectId", settingsService.getProjectId());
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/save")
-    public String saveSettings(@RequestBody(required = false) final MultiValueMap<String, String> formData,
+    public String saveSettings(@RequestParam(required = false) final MultiValueMap<String, String> formData,
                                final Model model)
     {
         try
@@ -292,9 +317,10 @@ public class AuraTestSettingsController implements ApplicationListener<WebServer
                 for (final Map.Entry<String, List<String>> entry : formData.entrySet())
                 {
                     final String paramName = entry.getKey();
-                    if (paramName.startsWith("prop__"))
+                    final String delimiter = paramName.startsWith("prop--") ? "--" : (paramName.startsWith("prop__") ? "__" : null);
+                    if (delimiter != null)
                     {
-                        final String[] parts = paramName.split("__", 3);
+                        final String[] parts = paramName.split(delimiter, 3);
                         if (parts.length == 3)
                         {
                             final String fileName = parts[1];

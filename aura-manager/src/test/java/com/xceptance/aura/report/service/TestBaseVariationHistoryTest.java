@@ -1013,7 +1013,7 @@ public class TestBaseVariationHistoryTest
         Assertions.assertEquals(2, areaRatios.size());
 
         final DistributionRatioDto authRatio = areaRatios.stream()
-            .filter(r -> "@Authentication".equals(r.getName()))
+            .filter(r -> "Authentication".equals(r.getName()))
             .findFirst()
             .orElse(null);
         Assertions.assertNotNull(authRatio);
@@ -1021,7 +1021,7 @@ public class TestBaseVariationHistoryTest
         Assertions.assertEquals(50.0, authRatio.getPercentage(), 0.01);
 
         final DistributionRatioDto checkoutRatio = areaRatios.stream()
-            .filter(r -> "@Checkout".equals(r.getName()))
+            .filter(r -> "Checkout".equals(r.getName()))
             .findFirst()
             .orElse(null);
         Assertions.assertNotNull(checkoutRatio);
@@ -1104,7 +1104,7 @@ public class TestBaseVariationHistoryTest
         Assertions.assertEquals(3, areas.size());
 
         final TestBaseAreaDto checkoutArea = areas.stream()
-            .filter(a -> "@Checkout".equals(a.getAreaName()))
+            .filter(a -> "Checkout".equals(a.getAreaName()))
             .findFirst()
             .orElseThrow();
         Assertions.assertEquals("batchAreaCheckout", checkoutArea.getAreaPaneId());
@@ -1114,7 +1114,7 @@ public class TestBaseVariationHistoryTest
         Assertions.assertEquals(1, checkoutArea.getTestClasses().size());
 
         final TestBaseAreaDto searchArea = areas.stream()
-            .filter(a -> "@Search".equals(a.getAreaName()))
+            .filter(a -> "Search".equals(a.getAreaName()))
             .findFirst()
             .orElseThrow();
         Assertions.assertEquals("batchAreaSearch", searchArea.getAreaPaneId());
@@ -1611,7 +1611,7 @@ public class TestBaseVariationHistoryTest
         final List<BatchSummaryDto> batches = data.getBatches();
         Assertions.assertEquals(2, batches.size());
         final List<String> groupNames = batches.stream().map(BatchSummaryDto::getName).sorted().toList();
-        Assertions.assertEquals(List.of("@Cart", "@Checkout"), groupNames);
+        Assertions.assertEquals(List.of("Cart", "Checkout"), groupNames);
     }
 
     @Test

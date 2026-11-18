@@ -116,29 +116,29 @@ public class SelenideAddonsTest
     public void testMatchesAttributeCondition()
     {
         openBlogPage();
-        $("#masthead .search-toggle").click();
+        $("#btn-open-search").click();
 
-        $("#search-container .search-field").should(SelenideAddons.matchesAttribute("placeholder", "Search.*"));
+        $("#search-input-field").should(SelenideAddons.matchesAttribute("placeholder", "Search.*"));
     }
 
     @Test
     public void testMatchAttributeCondition()
     {
         openBlogPage();
-        $("#masthead .search-toggle").click();
+        $("#btn-open-search").click();
 
-        $("#search-container .search-field").should(SelenideAddons.matchAttribute("placeholder", "^S.a.c.\\s…"));
-        $("#search-container .search-field").should(SelenideAddons.matchAttribute("placeholder", "\\D+"));
+        $("#search-input-field").should(SelenideAddons.matchAttribute("placeholder", "^S.a.c.\\s.*"));
+        $("#search-input-field").should(SelenideAddons.matchAttribute("placeholder", "\\D+"));
     }
 
     @Test
     public void testMatchAttributeConditionError()
     {
         openBlogPage();
-        $("#masthead .search-toggle").click();
+        $("#btn-open-search").click();
 
         Assert.assertThrows(ElementShould.class, () -> {
-            $("#search-container .search-field").should(SelenideAddons.matchAttribute("placeholder", "\\d+"));
+            $("#search-input-field").should(SelenideAddons.matchAttribute("placeholder", "\\d+"));
         });
     }
 
@@ -146,10 +146,10 @@ public class SelenideAddonsTest
     public void testMatchAttributeConditionErrorMissingAttribute()
     {
         openBlogPage();
-        $("#masthead .search-toggle").click();
+        $("#btn-open-search").click();
 
         Assert.assertThrows(ElementShould.class, () -> {
-            $("#search-container .search-field").should(SelenideAddons.matchAttribute("bar", "bar"));
+            $("#search-input-field").should(SelenideAddons.matchAttribute("bar", "bar"));
         });
     }
 
@@ -157,32 +157,32 @@ public class SelenideAddonsTest
     public void testMatchesValueCondition()
     {
         openBlogPage();
-        $("#masthead .search-toggle").click();
-        $("#search-container .search-field").val("searchphrase").submit();
+        $("#btn-open-search").click();
+        $("#search-input-field").val("searchphrase");
 
-        $("#content .search-field").should(SelenideAddons.matchesValue("earchphras"));
+        $("#search-input-field").should(SelenideAddons.matchesValue("earchphras"));
     }
 
     @Test
     public void testMatchValueCondition()
     {
         openBlogPage();
-        $("#masthead .search-toggle").click();
-        $("#search-container .search-field").val("searchphrase").submit();
+        $("#btn-open-search").click();
+        $("#search-input-field").val("searchphrase");
 
-        $("#content .search-field").should(SelenideAddons.matchValue("^s.a.c.p.r.s.$"));
-        $("#content .search-field").should(SelenideAddons.matchValue("\\D+"));
+        $("#search-input-field").should(SelenideAddons.matchValue("^s.a.c.p.r.s.$"));
+        $("#search-input-field").should(SelenideAddons.matchValue("\\D+"));
     }
 
     @Test
     public void testMatchValueConditionError()
     {
         openBlogPage();
-        $("#masthead .search-toggle").click();
-        $("#search-container .search-field").val("searchphrase").submit();
+        $("#btn-open-search").click();
+        $("#search-input-field").val("searchphrase");
 
         Assert.assertThrows(ElementShould.class, () -> {
-            $("#content .search-field").should(SelenideAddons.matchValue("\\d+"));
+            $("#search-input-field").should(SelenideAddons.matchValue("\\d+"));
         });
     }
 
@@ -737,6 +737,15 @@ public class SelenideAddonsTest
 
     private static final String PRIVACY_DIALOG_SELECTOR = "#privacy-message";
 
+    private void openPrivacyDialogPage()
+    {
+        final String html = "<div id=\"privacy-message\" style=\"display:block;\">"
+                            + "<p>Privacy notice</p>"
+                            + "<button class=\"btn-link\" onclick=\"document.getElementById('privacy-message').style.display='none';\">Dismiss</button>"
+                            + "</div>";
+        SelenideAddons.openHtmlContentWithCurrentWebDriver(html);
+    }
+
     private void validateRuntimeIsExpected(Runnable runnable, long expectedTime, long pollingInterval)
     {
         final long startTime = new Date().getTime();
@@ -752,7 +761,7 @@ public class SelenideAddonsTest
     @Test
     public void testOptionalWaitUntil()
     {
-        openBlogPage();
+        openPrivacyDialogPage();
 
         validateRuntimeIsExpected(() -> {
             // wait until the optional privacy dialog is visible
@@ -775,7 +784,7 @@ public class SelenideAddonsTest
     @Test
     public void testOptionalWaitWhile()
     {
-        openBlogPage();
+        openPrivacyDialogPage();
 
         validateRuntimeIsExpected(() -> {
             // wait until the optional privacy dialog is not visible anymore, which will fail
@@ -801,7 +810,7 @@ public class SelenideAddonsTest
     @Test
     public void testOptionalWaitUntilWithDefaultTimeout()
     {
-        openBlogPage();
+        openPrivacyDialogPage();
 
         validateRuntimeIsExpected(() -> {
             // wait until the optional privacy dialog is visible
@@ -824,7 +833,7 @@ public class SelenideAddonsTest
     @Test
     public void testOptionalWaitWhileWithDefaultTimeout()
     {
-        openBlogPage();
+        openPrivacyDialogPage();
 
         validateRuntimeIsExpected(() -> {
             // wait until the optional privacy dialog is not visible anymore, which will fail
@@ -850,7 +859,7 @@ public class SelenideAddonsTest
     @Test
     public void testOptionalWaitUntilWithTimeoutAndPollingInterval()
     {
-        openBlogPage();
+        openPrivacyDialogPage();
 
         validateRuntimeIsExpected(() -> {
             // wait until the optional privacy dialog is visible
@@ -874,7 +883,7 @@ public class SelenideAddonsTest
     @Test
     public void testOptionalWaitWhileWithTimeoutAndPollingInterval()
     {
-        openBlogPage();
+        openPrivacyDialogPage();
 
         validateRuntimeIsExpected(() -> {
             // wait until the optional privacy dialog is not visible anymore, which will fail

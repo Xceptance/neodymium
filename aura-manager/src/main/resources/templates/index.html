@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Permissions-Policy" content="unload=*">
-    <title th:text="${title ?: 'Neodymium Aura Manager'}">Neodymium Aura Manager</title>
+    <title th:text="${pageTitle ?: (title ?: 'Neodymium AI Manager')}">Neodymium AI Manager</title>
 
     <!-- Google Fonts: Outfit, Inter & JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -26,6 +26,24 @@
     <link rel="stylesheet" th:href="@{/dashboard-styles.css?v=1.2.8}" href="dashboard-styles.css?v=1.2.8">
 </head>
 <body th:classappend="${theme == 'light' ? 'light-mode' : ''}">
+
+    <!-- Runtime Environment & Project Metadata -->
+    <div id="auraAppConfig"
+         th:data-has-api-key="${hasApiKey != null ? hasApiKey : false}"
+         th:data-api-key-warning-ignored="${apiKeyWarningIgnored != null ? apiKeyWarningIgnored : false}"
+         th:data-project-id="${projectId != null ? projectId : ''}"
+         style="display: none;"></div>
+
+    <!-- Global Server Offline / Disconnected Warning Banner -->
+    <div id="serverOfflineBanner" class="server-offline-banner" style="display: none;">
+        <div class="server-offline-banner-content">
+            <span class="material-symbols-outlined offline-icon">cloud_off</span>
+            <span id="serverOfflineMessage" class="offline-text">Neodymium AI Manager server is offline or unreachable. Reconnecting...</span>
+            <button type="button" class="btn btn-sm btn-outline-light offline-retry-btn" onclick="checkServerConnectivity(true)">
+                <span class="material-symbols-outlined offline-retry-icon">refresh</span> Retry Now
+            </button>
+        </div>
+    </div>
 
     <div class="toast-container" id="toastContainer"></div>
 
@@ -93,6 +111,7 @@
 
     <!-- MODALS FOR AURA TEST MANAGER -->
     <div th:replace="~{fragments/settings-modal :: settingsModal}"></div>
+    <div th:replace="~{fragments/modals :: apiKeyWarningModal}"></div>
     <div th:replace="~{fragments/modals :: createTestModal}"></div>
     <div th:replace="~{fragments/modals :: deleteTestModal}"></div>
     <div th:replace="~{fragments/modals :: renameTestModal}"></div>
@@ -113,8 +132,8 @@
     <script th:src="@{/js/report-manager.js?v=1.1.7}" src="js/report-manager.js?v=1.1.7"></script>
     <script th:src="@{/dashboard-core.js?v=1.2.8}" src="dashboard-core.js?v=1.2.8"></script>
     <script th:src="@{/dashboard-chat.js?v=1.2.8}" src="dashboard-chat.js?v=1.2.8"></script>
-    <script th:src="@{/dashboard-editor.js?v=1.2.7}" src="dashboard-editor.js?v=1.2.7"></script>
-    <script th:src="@{/dashboard-runner.js?v=1.2.8}" src="dashboard-runner.js?v=1.2.8"></script>
+    <script th:src="@{/dashboard-editor.js?v=1.2.8}" src="dashboard-editor.js?v=1.2.8"></script>
+    <script th:src="@{/dashboard-runner.js?v=1.2.9}" src="dashboard-runner.js?v=1.2.9"></script>
     <script th:src="@{/dashboard-settings.js?v=1.2.8}" src="dashboard-settings.js?v=1.2.8"></script>
 </body>
 </html>

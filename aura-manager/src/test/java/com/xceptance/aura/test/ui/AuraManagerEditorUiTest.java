@@ -33,11 +33,27 @@ import com.xceptance.aura.AuraManagerApplication;
 import com.xceptance.neodymium.aura.AuraFileService;
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.EnumSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.neodymium.ai.event.ExecutionEventBus;
+import org.neodymium.ai.event.structural.SessionFinishedEvent;
+import org.neodymium.ai.event.structural.StepFinishedEvent;
+import org.neodymium.ai.event.structural.StepStartedEvent;
+import org.neodymium.ai.model.Playbook;
+import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.PlaybookStepStatus;
+import org.neodymium.ai.playbook.YamlPlaybookParser;
+import org.neodymium.ai.report.DiskReportFormat;
+import org.neodymium.ai.report.PreliminaryReportListener;
 import org.openqa.selenium.Keys;
 import org.openqa.selenium.WebElement;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -101,7 +117,10 @@ public final class AuraManagerEditorUiTest
             "RawYamlPasteTest.yaml", "RawYamlSyncTest.yaml", "FoldedScalarTest.yaml", "CommentTypingTest.yaml", "InlineCommentTypingTest.yaml",
             "SubstepTypingTest.yaml", "EnterSubstepTest.yaml", "UndoSubstepTest.yaml", "FragmentStep.steps", "GrandChild.steps", "MultiChild.steps",
             "New Line Include Cursor Test.yaml", "ParentInclude.steps", "VariablePersistenceTest.yaml", "AuthFragment.steps", "SubstepNameTest.yaml",
-            "CleanStepsSaveTest.yaml", "PlaybookPropertiesTest.yaml", "PlaybookAddPropsTest.yaml"
+            "CleanStepsSaveTest.yaml", "PlaybookPropertiesTest.yaml", "PlaybookAddPropsTest.yaml",
+            "MarkerChipTest.yaml", "MetaPreservationTest.yaml",
+            "AllControlTagsTest.yaml", "AllActionChipsTest.yaml", "InsertSubstepRowTest.yaml", "EditorSubstepMockRunTest.yaml",
+            "UndoRedoFullTest.yaml", "UndoRedoIntegrityTest.yaml", "ScrollPaletteTest.yaml"
         };
 
         for (final String dirPath : dirPaths)
@@ -557,6 +576,27 @@ public final class AuraManagerEditorUiTest
 
         // Verify redirect to target dashboard completes
         Selenide.webdriver().shouldHave(WebDriverConditions.url(targetDashboardUrl));
+    }
+
+    @Test
+    public final void testCleanFileCloseDoesNotShowUnsavedPrompt()
+    {
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
+
+        // Create new test file to open editor panel
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("Clean Close Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+        $("#editorFileName").shouldHave(Condition.text("Clean Close Test.yaml"));
+
+        // Close editor directly via the UI Close button without modifying anything
+        $("#closeEditorBtn").shouldBe(Condition.visible).click();
+
+        // Verify the unsaved changes modal is NOT shown and editor closes cleanly
+        $("#unsavedChangesModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldNotBe(Condition.visible);
     }
 
     @Test
@@ -1033,9 +1073,11 @@ public final class AuraManagerEditorUiTest
         $("#openModalBtn").shouldBe(Condition.visible).click();
         $("#newTestName").shouldBe(Condition.visible).setValue("Hierarchical Test.yaml");
         $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
 
         final SelenideElement toggleBtn = $("#toggleEditorFragmentViewBtn");
-        toggleBtn.shouldBe(Condition.visible);
+        toggleBtn.scrollIntoView(true).shouldBe(Condition.visible);
 
         Selenide.executeJavaScript("setFileViewMode('hierarchical');");
 
@@ -2277,6 +2319,9 @@ public final class AuraManagerEditorUiTest
         propsPanel.shouldNotBe(Condition.visible);
         addPropsContainer.shouldBe(Condition.visible);
 
+        // Dismiss existing toast notifications to verify the next save generates a fresh toast
+        Selenide.executeJavaScript("document.querySelectorAll('.toast').forEach(t => t.remove());");
+
         // Save playbook again
         $("#saveYamlBtn").shouldBe(Condition.visible).click();
         $(".toast.success").shouldBe(Condition.visible);
@@ -2288,6 +2333,644 @@ public final class AuraManagerEditorUiTest
             "Saved YAML must not contain _properties block after removal: " + savedWithoutProps);
         Assertions.assertFalse(savedWithoutProps.contains("custom.test.timeout"),
             "Saved YAML must not contain custom property after removal: " + savedWithoutProps);
+    }
+
+    @Test
+    public final void testClickMarkerControlTagChipInsertsTagIntoActiveStep() throws Exception
+    {
+        final String playbookFile = "MarkerChipTest.yaml";
+        final String initialPlaybook = "# Neodymium YAML Test Data File\n\n"
+                                     + "steps: |\n"
+                                     + "  Click on shopping cart icon\n";
+
+        this.fileService.saveYamlFileContent(playbookFile, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/?file=" + playbookFile);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Verify step 1 exists and click into it to focus
+        final SelenideElement stepContent = $("#stepsList .step-row[data-line='1'] .step-content");
+        stepContent.shouldBe(Condition.visible).click();
+
+        // Click the '(marker)' control tag button in the sidebar palette
+        final SelenideElement markerBtn = $$(".sidebar-palette-right button").findBy(Condition.text("(marker)"));
+        markerBtn.shouldBe(Condition.visible).click();
+
+        // Verify that step 1 content now contains '(marker)'
+        stepContent.shouldHave(Condition.text("(marker)"));
+
+        // Save and verify on disk
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        final String savedContent = this.fileService.readYamlFileContent(playbookFile);
+        Assertions.assertNotNull(savedContent);
+        Assertions.assertTrue(savedContent.contains("Click on shopping cart icon (marker)"),
+            "Saved YAML must contain inserted (marker) tag: " + savedContent);
+    }
+
+    @Test
+    public final void testMetaBlockPreservedAcrossVisualEditorSave() throws Exception
+    {
+        final String playbookFile = "MetaPreservationTest.yaml";
+        final String initialPlaybook = "_meta:\n"
+                                     + "  author: Test Team\n"
+                                     + "  ticket: NEO-139\n\n"
+                                     + "steps: |\n"
+                                     + "  Open https://example.com/meta-test\n";
+
+        this.fileService.saveYamlFileContent(playbookFile, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/?file=" + playbookFile);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Modify step in visual mode
+        final SelenideElement stepContent = $("#stepsList .step-row[data-line='1'] .step-content");
+        stepContent.shouldBe(Condition.visible).click();
+        stepContent.sendKeys(" and verify title");
+
+        // Save playbook in visual mode
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        // Verify on disk that _meta block was preserved along with updated step
+        final String savedContent = this.fileService.readYamlFileContent(playbookFile);
+        Assertions.assertNotNull(savedContent);
+        Assertions.assertTrue(savedContent.contains("_meta:") || savedContent.contains("meta:"),
+            "Saved YAML must contain metadata block: " + savedContent);
+        Assertions.assertTrue(savedContent.contains("author: Test Team"),
+            "Saved YAML must preserve metadata author: " + savedContent);
+        Assertions.assertTrue(savedContent.contains("ticket: NEO-139"),
+            "Saved YAML must preserve metadata ticket: " + savedContent);
+        Assertions.assertTrue(savedContent.contains("and verify title"),
+            "Saved YAML must contain edited step: " + savedContent);
+    }
+
+    @Test
+    public final void testClickAllControlTagChipsInsertsCorrectSnippetsIntoActiveStep() throws Exception
+    {
+        final String playbookFile = "AllControlTagsTest.yaml";
+
+        final Map<String, String> controlTags = new LinkedHashMap<>();
+        controlTags.put("(optional)", "(optional)");
+        controlTags.put("(soft)", "(soft)");
+        controlTags.put("(continue-on-error)", "(continue-on-error)");
+        controlTags.put("(no-replay)", "(no-replay)");
+        controlTags.put("(no-healing)", "(no-healing)");
+        controlTags.put("(bug: ID)", "(bug: )");
+        controlTags.put("(hint: #)", "(hint: #)");
+        controlTags.put("(hint: java)", "(hint: use java method)");
+        controlTags.put("(marker)", "(marker)");
+        controlTags.put("(timeout: 10s)", "(timeout: 10s)");
+        controlTags.put("(threshold: 0.95)", "(threshold: 0.95)");
+        controlTags.put("(context: minimal)", "(context: minimal)");
+        controlTags.put("(visual)", "(visual)");
+        controlTags.put("(visual: full)", "(visual: full)");
+        controlTags.put("(layout)", "(layout)");
+        controlTags.put("(layout: full)", "(layout: full)");
+
+        final StringBuilder stepsBuilder = new StringBuilder();
+        int stepIdx = 1;
+        for (final String ignored : controlTags.keySet())
+        {
+            stepsBuilder.append("  Step ").append(String.format("%02d", stepIdx++)).append("\n");
+        }
+
+        final String initialPlaybook = "# Neodymium YAML Test Data File\n\n"
+                                     + "steps: |\n"
+                                     + stepsBuilder;
+
+        this.fileService.saveYamlFileContent(playbookFile, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/?file=" + playbookFile);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        int index = 0;
+        for (final Map.Entry<String, String> entry : controlTags.entrySet())
+        {
+            final String buttonText = entry.getKey();
+            final String expectedSnippet = entry.getValue();
+
+            final SelenideElement stepContent = $$("#stepsList .step-row .step-content").get(index++);
+            stepContent.shouldBe(Condition.visible).click();
+
+            final SelenideElement tagBtn = $$(".sidebar-palette-right button.tag-chip-btn").findBy(Condition.text(buttonText));
+            tagBtn.scrollIntoView(true).shouldBe(Condition.visible).click();
+
+            stepContent.shouldHave(Condition.text(expectedSnippet));
+            final String raw = stepContent.getAttribute("data-raw");
+            Assertions.assertNotNull(raw);
+            Assertions.assertTrue(raw.endsWith(expectedSnippet),
+                "Step data-raw should end with '" + expectedSnippet + "', but was: " + raw);
+        }
+
+        // Save and verify disk content contains all inserted control tags
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        final String savedContent = this.fileService.readYamlFileContent(playbookFile);
+        Assertions.assertNotNull(savedContent);
+        for (final String expectedSnippet : controlTags.values())
+        {
+            Assertions.assertTrue(savedContent.contains(expectedSnippet),
+                "Saved YAML must contain control tag: " + expectedSnippet + "\nFull content:\n" + savedContent);
+        }
+    }
+
+    @Test
+    public final void testClickAllActionAndTemplateChipsInsertsCorrectSnippets() throws Exception
+    {
+        final String playbookFile = "AllActionChipsTest.yaml";
+
+        final Map<String, String> actionChips = new LinkedHashMap<>();
+        actionChips.put("Open Base URL", "Open ${neodymium.url}");
+        actionChips.put("Type Text", "Type \"\"");
+        actionChips.put("Wait for Visible", "Wait for  to be visible");
+        actionChips.put("Assert Visible", "Assert  is visible");
+        actionChips.put("Assert Text", "Assert page contains \"\"");
+        actionChips.put("Select Option", "Select option \"\"");
+        actionChips.put("Click Element", "Click ");
+        actionChips.put("Store text from", "Store text from  as ");
+        actionChips.put("Store literal as", "Store \"\" as ");
+        actionChips.put("Substep", "");
+        actionChips.put("Call Java Method", "Execute Java method \"\"");
+        actionChips.put("Insert Variable", "${}");
+
+        final StringBuilder stepsBuilder = new StringBuilder();
+        int stepIdx = 1;
+        for (final String ignored : actionChips.keySet())
+        {
+            stepsBuilder.append("  Action ").append(String.format("%02d", stepIdx++)).append("\n");
+        }
+
+        final String initialPlaybook = "# Neodymium YAML Test Data File\n\n"
+                                     + "steps: |\n"
+                                     + stepsBuilder;
+
+        this.fileService.saveYamlFileContent(playbookFile, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/?file=" + playbookFile);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        final ElementsCollection chips = $$(".sidebar-palette-right .action-chip");
+        chips.shouldHave(CollectionCondition.size(actionChips.size()));
+
+        int index = 0;
+        for (final Map.Entry<String, String> entry : actionChips.entrySet())
+        {
+            final String chipLabel = entry.getKey();
+            final String expectedSnippet = entry.getValue();
+
+            final SelenideElement stepContent = $$("#stepsList .step-row .step-content").get(index);
+            stepContent.shouldBe(Condition.visible).click();
+
+            // Clear the existing text so the chip template is inserted into an empty step
+            Selenide.executeJavaScript("arguments[0].setAttribute('data-raw', ''); arguments[0].innerText = '';", stepContent);
+
+            final SelenideElement chipEl = chips.get(index++);
+            chipEl.scrollIntoView(true).shouldBe(Condition.visible).click();
+
+            if (chipLabel.equals("Substep"))
+            {
+                final SelenideElement row = stepContent.closest(".step-row");
+                Assertions.assertTrue(row.has(Condition.cssClass("step-row-substep")),
+                    "Row should have 'step-row-substep' class after clicking Substep chip");
+                // Type a micro-action so the substep contains actionable content for disk serialization
+                stepContent.sendKeys("Perform sub-action");
+            }
+            else
+            {
+                final String raw = stepContent.getAttribute("data-raw");
+                Assertions.assertNotNull(raw);
+                final String normalizedExpected = expectedSnippet.replaceAll("\\s+", " ").trim();
+                final String normalizedRaw = raw.replaceAll("\\s+", " ").trim();
+                Assertions.assertEquals(normalizedExpected, normalizedRaw,
+                    "Step data-raw should match inserted action snippet for " + chipLabel);
+            }
+        }
+
+        // Save and verify disk content contains inserted action snippets
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        final String savedContent = this.fileService.readYamlFileContent(playbookFile);
+        Assertions.assertNotNull(savedContent);
+        final String normalizedSaved = savedContent.replaceAll("\\s+", " ");
+        for (final String expectedSnippet : actionChips.values())
+        {
+            if (expectedSnippet.isBlank())
+            {
+                continue;
+            }
+            final String checkSnippet = expectedSnippet.replaceAll("\\s+", " ").trim();
+            Assertions.assertTrue(normalizedSaved.contains(checkSnippet),
+                "Saved YAML must contain action snippet: " + checkSnippet + "\nFull content:\n" + savedContent);
+        }
+        Assertions.assertTrue(savedContent.contains("- >-") || savedContent.contains("->-"),
+            "Saved YAML must contain substep list prefix: " + savedContent);
+        Assertions.assertTrue(savedContent.contains("Perform sub-action"),
+            "Saved YAML must contain substep action text: " + savedContent);
+    }
+
+    @Test
+    public final void testClickSubstepChipInsertsNewSubstepRowBelowActiveStep() throws Exception
+    {
+        final String playbookFile = "InsertSubstepRowTest.yaml";
+
+        final String initialPlaybook = "# Neodymium YAML Test Data File\n\n"
+                                     + "steps: |\n"
+                                     + "  Open Home Page\n"
+                                     + "  Verify Footer\n";
+
+        this.fileService.saveYamlFileContent(playbookFile, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/?file=" + playbookFile);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Steps should initially have 2 rows
+        $$("#stepsList .step-row").shouldHave(CollectionCondition.size(2));
+
+        // Focus the first step
+        final SelenideElement firstStep = $$("#stepsList .step-row .step-content").get(0);
+        firstStep.shouldBe(Condition.visible).click();
+
+        // Click the Substep action chip in the palette
+        final SelenideElement substepChip = $$(".sidebar-palette-right .action-chip").findBy(Condition.text("Substep"));
+        substepChip.scrollIntoView(true).shouldBe(Condition.visible).click();
+
+        // There should now be 3 rows
+        final ElementsCollection rows = $$("#stepsList .step-row");
+        rows.shouldHave(CollectionCondition.size(3));
+
+        // The newly inserted row (at index 1) must be a substep with fractional numbering 1.1
+        final SelenideElement insertedRow = rows.get(1);
+        insertedRow.shouldHave(Condition.cssClass("step-row-substep"));
+        insertedRow.$(".step-number").shouldHave(Condition.text("1.1"));
+
+        // Type action into the new substep
+        final SelenideElement substepContent = insertedRow.$(".step-content");
+        substepContent.sendKeys("Click navigation menu");
+
+        // Save and verify disk serialization contains the folded substep
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        final String savedContent = this.fileService.readYamlFileContent(playbookFile);
+        Assertions.assertNotNull(savedContent);
+        Assertions.assertTrue(savedContent.contains("Open Home Page"), "Saved YAML must contain first step");
+        Assertions.assertTrue(savedContent.contains("- >-") || savedContent.contains("->-"), "Saved YAML must contain substep list prefix");
+        Assertions.assertTrue(savedContent.contains("Click navigation menu"), "Saved YAML must contain substep action text");
+        Assertions.assertTrue(savedContent.contains("Verify Footer"), "Saved YAML must contain second step");
+    }
+
+    @Test
+    public final void testInsertSubstepInEditorAndExecuteMockedRun() throws Exception
+    {
+        final String playbookFile = "EditorSubstepMockRunTest.yaml";
+
+        final String initialPlaybook = "# Neodymium YAML Test Data File\n\n"
+                                     + "steps: |\n"
+                                     + "  Open Home Page\n";
+
+        this.fileService.saveYamlFileContent(playbookFile, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/?file=" + playbookFile);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // 1. In visual editor: focus the initial step and click the Substep action chip
+        final SelenideElement firstStep = $$("#stepsList .step-row .step-content").get(0);
+        firstStep.shouldBe(Condition.visible).click();
+
+        final SelenideElement substepChip = $$(".sidebar-palette-right .action-chip").findBy(Condition.text("Substep"));
+        substepChip.scrollIntoView(true).shouldBe(Condition.visible).click();
+
+        // 2. Type micro-action into the inserted substep row
+        final ElementsCollection rows = $$("#stepsList .step-row");
+        rows.shouldHave(CollectionCondition.size(2));
+        final SelenideElement insertedRow = rows.get(1);
+        insertedRow.shouldHave(Condition.cssClass("step-row-substep"));
+        insertedRow.$(".step-number").shouldHave(Condition.text("1.1"));
+
+        final SelenideElement substepContent = insertedRow.$(".step-content");
+        substepContent.sendKeys("Click navigation menu");
+
+        // 3. Save via editor button
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        final String savedContent = this.fileService.readYamlFileContent(playbookFile);
+        Assertions.assertNotNull(savedContent);
+
+        // 4. Parse saved YAML via Neodymium AI Playbook Parser
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parseString(savedContent);
+        Assertions.assertNotNull(playbook);
+
+        final PlaybookStep substepParent = playbook.getSteps().stream()
+                .filter(PlaybookStep::hasSubSteps)
+                .findFirst()
+                .orElse(null);
+        Assertions.assertNotNull(substepParent, "Must contain a parent step with substeps");
+        Assertions.assertEquals(1, substepParent.getSubSteps().size(), "Substep group must contain 1 child step");
+
+        final PlaybookStep subStep = substepParent.getSubSteps().get(0);
+        Assertions.assertEquals("Click navigation menu", subStep.getInstruction());
+        Assertions.assertEquals(substepParent, subStep.getParent(), "Sub-step parent reference must match");
+
+        // 5. Execute mocked run across the parsed step hierarchy
+        final File reportDir = new File("target/test-reports/editor-substep-mock-run").getAbsoluteFile();
+        reportDir.mkdirs();
+        final PreliminaryReportListener reportListener = new PreliminaryReportListener(reportDir.toPath(), EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(reportListener);
+
+        bus.dispatch(new StepStartedEvent(substepParent, 0));
+        bus.dispatch(new StepStartedEvent(subStep, 0));
+        bus.dispatch(new StepFinishedEvent(subStep, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new StepFinishedEvent(substepParent, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new SessionFinishedEvent(1000, true));
+
+        // 6. Verify executed step report details
+        final Path htmlPath = reportDir.toPath().resolve(reportListener.getLastBaseFileName() + ".html");
+        Assertions.assertTrue(Files.exists(htmlPath), "HTML report should be generated for mocked run");
+        final String htmlContent = Files.readString(htmlPath, StandardCharsets.UTF_8);
+        Assertions.assertTrue(htmlContent.contains("Click navigation menu"), "Report must contain substep instruction");
+    }
+
+    @Test
+    public final void testYamlEditorUndoRedoFullWorkflow()
+    {
+        final String testFile = "UndoRedoFullTest.yaml";
+        open("http://localhost:" + this.port + "/playbooks");
+
+        // Create new test file
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue(testFile);
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        final SelenideElement undoBtn = $("#undoBtn");
+        final SelenideElement redoBtn = $("#redoBtn");
+
+        // Initial state: both undo and redo should be disabled
+        undoBtn.shouldBe(Condition.disabled);
+        redoBtn.shouldBe(Condition.disabled);
+
+        // Action 1: Type in visual editor
+        final SelenideElement firstStep = $$("#stepsList .step-row").first().find(".step-content");
+        firstStep.click();
+        firstStep.sendKeys("Open https://example.com/undo-workflow");
+
+        // Undo button should become enabled
+        undoBtn.shouldBe(Condition.enabled);
+        redoBtn.shouldBe(Condition.disabled);
+
+        // Click Undo button
+        undoBtn.click();
+
+        // Verify typing is undone
+        firstStep.shouldHave(Condition.exactText(""));
+        undoBtn.shouldBe(Condition.disabled);
+        redoBtn.shouldBe(Condition.enabled);
+
+        // Click Redo button
+        redoBtn.click();
+
+        // Verify typing is restored
+        firstStep.shouldHave(Condition.exactText("Open https://example.com/undo-workflow"));
+        undoBtn.shouldBe(Condition.enabled);
+        redoBtn.shouldBe(Condition.disabled);
+
+        // Action 2: Click Side Panel Palette item (e.g. control tag '(optional)')
+        final SelenideElement optionalChip = $(".sidebar-palette-right").$$("button.btn-editor")
+            .findBy(Condition.exactText("(optional)"));
+        optionalChip.shouldBe(Condition.visible).click();
+
+        // Verify '(optional)' was appended to first step
+        firstStep.shouldHave(Condition.text("(optional)"));
+        undoBtn.shouldBe(Condition.enabled);
+
+        // Click Undo button
+        undoBtn.click();
+        firstStep.shouldNotHave(Condition.text("(optional)"));
+        redoBtn.shouldBe(Condition.enabled);
+
+        // Click Redo button
+        redoBtn.click();
+        firstStep.shouldHave(Condition.text("(optional)"));
+
+        // Action 3: Switch to Raw YAML mode
+        $("#btnModeRaw").shouldBe(Condition.visible).click();
+        $("#rawEditorPanel").shouldBe(Condition.visible);
+        undoBtn.shouldBe(Condition.enabled);
+
+        // Type in raw textarea
+        final SelenideElement rawYamlTextarea = $("#rawYamlTextarea");
+        rawYamlTextarea.sendKeys("\n  - Assert \"Welcome\" is visible");
+
+        // Undo raw typing via Undo button
+        undoBtn.shouldBe(Condition.enabled).click();
+        rawYamlTextarea.shouldNotHave(Condition.value("Assert \"Welcome\" is visible"));
+        redoBtn.shouldBe(Condition.enabled);
+
+        // Redo raw typing via Redo button
+        redoBtn.click();
+        rawYamlTextarea.shouldHave(Condition.value("Assert \"Welcome\" is visible"));
+    }
+
+    @Test
+    public final void testYamlEditorUndoRedoPreservesUnrelatedSectionsAndSteps() throws IOException
+    {
+        final String playbookFile = "UndoRedoIntegrityTest.yaml";
+        final String initialPlaybook = "name: Undo Redo Integrity Test\n"
+                                     + "before:\n"
+                                     + "  - Open \"https://example.com/login\"\n"
+                                     + "  - Enter \"admin\" into \"#username\"\n"
+                                     + "steps:\n"
+                                     + "  - Navigate to \"https://example.com/dashboard\"\n"
+                                     + "  - Click \"#profile-button\"\n"
+                                     + "  - Assert text \"Dashboard\" is visible\n"
+                                     + "after:\n"
+                                     + "  - Click \"#logout-button\"\n";
+        this.fileService.saveYamlFileContent(playbookFile, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/playbooks?file=" + playbookFile);
+
+        final SelenideElement editorPanel = $("#editorPanel").shouldBe(Condition.visible);
+        Assertions.assertEquals("visual", editorPanel.getAttribute("data-mode"));
+
+        final ElementsCollection beforeRows = $$("#beforeStepsList .step-row");
+        beforeRows.shouldHave(CollectionCondition.size(2));
+        beforeRows.get(0).find(".step-content").shouldHave(Condition.attribute("data-raw", "Open \"https://example.com/login\""));
+        beforeRows.get(1).find(".step-content").shouldHave(Condition.attribute("data-raw", "Enter \"admin\" into \"#username\""));
+
+        final ElementsCollection mainRows = $$("#stepsList .step-row");
+        mainRows.shouldHave(CollectionCondition.size(3));
+        mainRows.get(0).find(".step-content").shouldHave(Condition.attribute("data-raw", "Navigate to \"https://example.com/dashboard\""));
+        mainRows.get(1).find(".step-content").shouldHave(Condition.attribute("data-raw", "Click \"#profile-button\""));
+        mainRows.get(2).find(".step-content").shouldHave(Condition.attribute("data-raw", "Assert text \"Dashboard\" is visible"));
+
+        final ElementsCollection afterRows = $$("#afterStepsList .step-row");
+        afterRows.shouldHave(CollectionCondition.size(1));
+        afterRows.get(0).find(".step-content").shouldHave(Condition.attribute("data-raw", "Click \"#logout-button\""));
+
+        final SelenideElement undoBtn = $("#undoBtn").shouldBe(Condition.disabled);
+        final SelenideElement redoBtn = $("#redoBtn").shouldBe(Condition.disabled);
+
+        // Scenario A: Type "a" into the first step of before:
+        final SelenideElement beforeStep0 = beforeRows.get(0).find(".step-content");
+        beforeStep0.click();
+        beforeStep0.sendKeys("a");
+        undoBtn.shouldBe(Condition.enabled);
+
+        // Click Undo
+        undoBtn.click();
+
+        // Verify that before step 1 is strictly reverted to baseline without wiping or truncating
+        beforeRows.get(0).find(".step-content").shouldHave(Condition.attribute("data-raw", "Open \"https://example.com/login\""));
+        // Verify before step 2 remains untouched and intact
+        beforeRows.get(1).find(".step-content").shouldHave(Condition.attribute("data-raw", "Enter \"admin\" into \"#username\""));
+        // Verify main steps are completely untouched
+        mainRows.get(0).find(".step-content").shouldHave(Condition.attribute("data-raw", "Navigate to \"https://example.com/dashboard\""));
+        mainRows.get(1).find(".step-content").shouldHave(Condition.attribute("data-raw", "Click \"#profile-button\""));
+        mainRows.get(2).find(".step-content").shouldHave(Condition.attribute("data-raw", "Assert text \"Dashboard\" is visible"));
+        // Verify after step remains untouched
+        afterRows.get(0).find(".step-content").shouldHave(Condition.attribute("data-raw", "Click \"#logout-button\""));
+
+        redoBtn.shouldBe(Condition.enabled);
+        undoBtn.shouldBe(Condition.disabled);
+
+        // Click Redo and verify "a" is restored
+        redoBtn.click();
+        beforeRows.get(0).find(".step-content").shouldHave(Condition.attribute("data-raw", "Open \"https://example.com/login\"a"));
+        undoBtn.shouldBe(Condition.enabled);
+
+        // Undo again to return to clean baseline
+        undoBtn.click();
+        beforeRows.get(0).find(".step-content").shouldHave(Condition.attribute("data-raw", "Open \"https://example.com/login\""));
+
+        // Scenario B: Sequential editing across multiple steps (undoing second action then first action)
+        final SelenideElement mainStep0 = mainRows.get(0).find(".step-content");
+        mainStep0.click();
+        mainStep0.sendKeys("a");
+        undoBtn.shouldBe(Condition.enabled);
+
+        // Wait for debounce before second action to ensure separate snapshot
+        Selenide.sleep(400);
+
+        final SelenideElement mainStep1 = mainRows.get(1).find(".step-content");
+        mainStep1.click();
+        mainStep1.sendKeys("b");
+
+        // First Undo: only step 2 change should be reverted
+        undoBtn.shouldBe(Condition.enabled).click();
+        mainRows.get(1).find(".step-content").shouldHave(Condition.attribute("data-raw", "Click \"#profile-button\""));
+        mainRows.get(0).find(".step-content").shouldHave(Condition.attribute("data-raw", "Navigate to \"https://example.com/dashboard\"a"));
+
+        // Second Undo: step 1 change should be reverted
+        undoBtn.shouldBe(Condition.enabled).click();
+        mainRows.get(0).find(".step-content").shouldHave(Condition.attribute("data-raw", "Navigate to \"https://example.com/dashboard\""));
+
+        // Scenario C: Raw mode undo/redo preserves raw mode and does not flip to visual
+        $("#btnModeRaw").shouldBe(Condition.visible).click();
+        $("#rawEditorPanel").shouldBe(Condition.visible);
+        Assertions.assertEquals("raw", editorPanel.getAttribute("data-mode"));
+
+        final SelenideElement rawYamlTextarea = $("#rawYamlTextarea");
+        rawYamlTextarea.sendKeys("\n# Raw integrity comment");
+        undoBtn.shouldBe(Condition.enabled);
+
+        // Undo in raw mode: must stay in raw mode and revert raw text
+        undoBtn.click();
+        $("#rawEditorPanel").shouldBe(Condition.visible);
+        Assertions.assertEquals("raw", editorPanel.getAttribute("data-mode"));
+        rawYamlTextarea.shouldNotHave(Condition.value("# Raw integrity comment"));
+
+        // Redo in raw mode: must stay in raw mode and restore raw text
+        redoBtn.shouldBe(Condition.enabled).click();
+        $("#rawEditorPanel").shouldBe(Condition.visible);
+        Assertions.assertEquals("raw", editorPanel.getAttribute("data-mode"));
+        rawYamlTextarea.shouldHave(Condition.value("# Raw integrity comment"));
+    }
+
+    @Test
+    public final void testEditorSidebarPaletteScrollableAndFragmentsVisibleWhenCollapsed()
+    {
+        open("http://localhost:" + port + "/playbooks");
+
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("ScrollPaletteTest.yaml");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        final SelenideElement visualContainer = $("#visualEditorContainer");
+        visualContainer.shouldBe(Condition.visible);
+
+        final SelenideElement sidePalette = $(".sidebar-palette-right");
+        sidePalette.shouldBe(Condition.visible);
+
+        // Verify visualEditorContainer does not overflow editorPanel vertically (no height clipping)
+        final Number containerOverflowDiff = Selenide.executeJavaScript(
+            "const panel = document.getElementById('editorPanel').getBoundingClientRect();" +
+            "const container = document.getElementById('visualEditorContainer').getBoundingClientRect();" +
+            "return container.bottom - panel.bottom;"
+        );
+        Assertions.assertNotNull(containerOverflowDiff);
+        Assertions.assertTrue(containerOverflowDiff.doubleValue() <= 2.0,
+            "visualEditorContainer must not overflow editorPanel bottom (clipping bug), diff: " + containerOverflowDiff);
+
+        // Verify sidebar-palette-right does not overflow visualEditorContainer or editorPanel (no 100vh leakage)
+        final Number paletteOverflowDiff = Selenide.executeJavaScript(
+            "const container = document.getElementById('visualEditorContainer').getBoundingClientRect();" +
+            "const palette = document.querySelector('.sidebar-palette-right').getBoundingClientRect();" +
+            "return palette.bottom - container.bottom;"
+        );
+        Assertions.assertNotNull(paletteOverflowDiff);
+        Assertions.assertTrue(paletteOverflowDiff.doubleValue() <= 2.0,
+            "sidebar-palette-right must not overflow visualEditorContainer bottom (100vh leakage bug), diff: " + paletteOverflowDiff);
+
+        // Scroll palette all the way to bottom
+        Selenide.executeJavaScript(
+            "const palette = document.querySelector('.sidebar-palette-right');" +
+            "palette.scrollTop = palette.scrollHeight;"
+        );
+
+        final SelenideElement fragCategory = $("#editorFragmentCategory");
+        fragCategory.shouldBe(Condition.visible);
+
+        // Verify search input and last fragment element are fully within palette viewport when scrolled to bottom
+        final Boolean areFragmentsVisible = Selenide.executeJavaScript(
+            "const palette = document.querySelector('.sidebar-palette-right').getBoundingClientRect();" +
+            "const search = document.getElementById('editorFragmentSearchInput').getBoundingClientRect();" +
+            "const cards = Array.from(document.querySelectorAll('#fragmentCardsContainer .include-card'));" +
+            "const lastCard = cards.length > 0 ? cards[cards.length - 1].getBoundingClientRect() : null;" +
+            "const searchVisible = search.top >= palette.top && search.bottom <= palette.bottom + 2.0;" +
+            "const cardVisible = !lastCard || (lastCard.top >= palette.top && lastCard.bottom <= palette.bottom + 2.0);" +
+            "return searchVisible || cardVisible;"
+        );
+        Assertions.assertEquals(Boolean.TRUE, areFragmentsVisible,
+            "Step fragment search bar or cards must be visible within palette viewport when scrolled to bottom");
+
+        // Switch to hierarchical mode
+        Selenide.executeJavaScript("setFileViewMode('hierarchical');");
+
+        // If folder groups exist, collapse one and verify Category 4 remains visible
+        final ElementsCollection folderHeaders = $$("#fragmentCardsContainer .tree-folder-header");
+        if (!folderHeaders.isEmpty())
+        {
+            folderHeaders.first().click();
+            // Re-scroll to bottom to verify collapsed state does not disappear
+            fragCategory.shouldBe(Condition.visible);
+            final Boolean isCategoryVisible = Selenide.executeJavaScript(
+                "const cat = document.getElementById('editorFragmentCategory').getBoundingClientRect();" +
+                "const pal = document.querySelector('.sidebar-palette-right').getBoundingClientRect();" +
+                "return cat.top >= pal.top && cat.top < pal.bottom;"
+            );
+            Assertions.assertEquals(Boolean.TRUE, isCategoryVisible,
+                "Category 4 should remain visible in sidebar palette viewport after collapsing folder");
+        }
     }
 }
 

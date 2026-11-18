@@ -93,14 +93,26 @@ public final class AuraGlanceApp
                .result("{\"error\":\"Ignored telemetry\"}");
         });
 
-        // Aura Glance hub and sandbox routes
+        // AI Glance hub and sandbox routes (supporting both /AiGlanceTest and legacy /AuraGlanceTest)
         app.get("/AuraGlanceTest", controller::handleGet);
         app.get("/AuraGlanceTest/*", controller::handleGet);
         app.head("/AuraGlanceTest", controller::handleGet);
         app.head("/AuraGlanceTest/*", controller::handleGet);
+        app.get("/AiGlanceTest", controller::handleGet);
+        app.get("/AiGlanceTest/*", controller::handleGet);
+        app.head("/AiGlanceTest", controller::handleGet);
+        app.head("/AiGlanceTest/*", controller::handleGet);
 
-        // Simulation Control REST Endpoints
+        // Simulation Control REST Endpoints (supporting both /aiglance and legacy /auraglance)
         app.post("/api/test/sessions/{id}/auraglance/delay", ctx ->
+        {
+            final String id = ctx.pathParam("id");
+            final TestSession session = sessionManager.getOrCreateSession(id);
+            final int delayMs = ctx.queryParamAsClass("delayMs", Integer.class).getOrDefault(0);
+            session.getAuraGlanceState().setArtificialDelayMs(delayMs);
+            ctx.status(HttpStatus.OK).json(Map.of("sessionId", id, "delayMs", delayMs));
+        });
+        app.post("/api/test/sessions/{id}/aiglance/delay", ctx ->
         {
             final String id = ctx.pathParam("id");
             final TestSession session = sessionManager.getOrCreateSession(id);
@@ -117,8 +129,23 @@ public final class AuraGlanceApp
             session.getAuraGlanceState().setSimulateServerFailure(enabled);
             ctx.status(HttpStatus.OK).json(Map.of("sessionId", id, "simulateServerFailure", enabled));
         });
+        app.post("/api/test/sessions/{id}/aiglance/failure", ctx ->
+        {
+            final String id = ctx.pathParam("id");
+            final TestSession session = sessionManager.getOrCreateSession(id);
+            final boolean enabled = ctx.queryParamAsClass("enabled", Boolean.class).getOrDefault(true);
+            session.getAuraGlanceState().setSimulateServerFailure(enabled);
+            ctx.status(HttpStatus.OK).json(Map.of("sessionId", id, "simulateServerFailure", enabled));
+        });
 
         app.post("/api/test/sessions/{id}/auraglance/reset", ctx ->
+        {
+            final String id = ctx.pathParam("id");
+            final TestSession session = sessionManager.getOrCreateSession(id);
+            session.getAuraGlanceState().reset();
+            ctx.status(HttpStatus.OK).json(Map.of("sessionId", id, "status", "AuraGlanceState reset"));
+        });
+        app.post("/api/test/sessions/{id}/aiglance/reset", ctx ->
         {
             final String id = ctx.pathParam("id");
             final TestSession session = sessionManager.getOrCreateSession(id);

@@ -1733,5 +1733,32 @@ public class YamlPlaybookParserTest
         assertEquals(1, playbook.getSteps().get(0).getActions().size());
         assertEquals("NAVIGATE", playbook.getSteps().get(0).getActions().get(0).getType());
     }
+
+    @Test
+    public void testParsePlaybookStepsWithSquareBracketsAndColonHints() throws IOException
+    {
+        final String yamlContent = """
+            steps:
+              - Enter credit card (hint selector: [data-cse='encryptedCardNumber' iframe]) ${creditCardNumber}.
+              - [data-cse='encryptedCardNumber'] Click element
+              - Click button (hint: [id='submit'])
+              - "Already quoted step [data-test='btn']"
+              - Click submit
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("brackets-playbook.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("brackets-playbook.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(5, playbook.getSteps().size());
+        assertEquals("Enter credit card (hint selector: [data-cse='encryptedCardNumber' iframe]) ${creditCardNumber}.", playbook.getSteps().get(0).getInstruction());
+        assertEquals("[data-cse='encryptedCardNumber'] Click element", playbook.getSteps().get(1).getInstruction());
+        assertEquals("Click button (hint: [id='submit'])", playbook.getSteps().get(2).getInstruction());
+        assertEquals("Already quoted step [data-test='btn']", playbook.getSteps().get(3).getInstruction());
+        assertEquals("Click submit", playbook.getSteps().get(4).getInstruction());
+    }
 }
 

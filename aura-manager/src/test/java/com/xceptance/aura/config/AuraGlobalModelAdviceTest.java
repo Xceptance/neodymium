@@ -30,6 +30,7 @@ import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.ReportDashboardSettingService;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.AuraQueueService;
+import com.xceptance.neodymium.aura.AuraSettingsService;
 import com.xceptance.neodymium.aura.dto.DatasetSelection;
 import com.xceptance.neodymium.aura.dto.RunRequest;
 import java.util.List;
@@ -78,6 +79,9 @@ public final class AuraGlobalModelAdviceTest
         Assertions.assertEquals("", model.getAttribute("activeBatchName"));
         Assertions.assertEquals("", model.getAttribute("activeRunStatus"));
         Assertions.assertEquals("", model.getAttribute("activeRunReportUrl"));
+        Assertions.assertEquals(0, model.getAttribute("activeRunPassedCount"));
+        Assertions.assertEquals(0, model.getAttribute("activeRunFailedCount"));
+        Assertions.assertEquals(0, model.getAttribute("activeRunRunningCount"));
         Assertions.assertEquals(Boolean.FALSE, model.getAttribute("running"));
     }
 
@@ -102,6 +106,24 @@ public final class AuraGlobalModelAdviceTest
     }
 
     @Test
+    public final void testAddGlobalAttributesPopulatesApiKeyAndProjectMetadata()
+    {
+        final AuraSettingsService mockSettings = Mockito.mock(AuraSettingsService.class);
+        Mockito.when(mockSettings.hasConfiguredApiKey()).thenReturn(true);
+        Mockito.when(mockSettings.isApiKeyWarningIgnored()).thenReturn(false);
+        Mockito.when(mockSettings.getProjectId()).thenReturn("my-project-1234abcd");
+
+        final AuraGlobalModelAdvice customAdvice = new AuraGlobalModelAdvice(
+            this.queueService, null, null, null, mockSettings);
+        final Model model = new ConcurrentModel();
+        customAdvice.addGlobalAttributes(model);
+
+        Assertions.assertEquals(Boolean.TRUE, model.getAttribute("hasApiKey"));
+        Assertions.assertEquals(Boolean.FALSE, model.getAttribute("apiKeyWarningIgnored"));
+        Assertions.assertEquals("my-project-1234abcd", model.getAttribute("projectId"));
+    }
+
+    @Test
     public final void testExternalRunContextFallbackAndProgress()
     {
         final AuraQueueService mockQueueService = Mockito.mock(AuraQueueService.class);
@@ -115,6 +137,8 @@ public final class AuraGlobalModelAdviceTest
         runningRun.setStatus("IN_PROGRESS");
         runningRun.setTotalTests(10);
         runningRun.setRunningCount(2);
+        runningRun.setPassedCount(6);
+        runningRun.setFailedUnknownCount(2);
 
         Mockito.when(mockRunRepo.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of(runningRun));
 
@@ -130,6 +154,9 @@ public final class AuraGlobalModelAdviceTest
         Assertions.assertEquals(Boolean.TRUE, model.getAttribute("running"));
         Assertions.assertEquals(8, model.getAttribute("activeRunExecutedCount"));
         Assertions.assertEquals(10, model.getAttribute("activeRunScheduledCount"));
+        Assertions.assertEquals(6, model.getAttribute("activeRunPassedCount"));
+        Assertions.assertEquals(2, model.getAttribute("activeRunFailedCount"));
+        Assertions.assertEquals(2, model.getAttribute("activeRunRunningCount"));
         Assertions.assertEquals("8 of 10 tests (2 running)", model.getAttribute("activeRunProgress"));
     }
 
@@ -147,6 +174,8 @@ public final class AuraGlobalModelAdviceTest
         completedRun.setStatus("COMPLETED");
         completedRun.setTotalTests(5);
         completedRun.setRunningCount(0);
+        completedRun.setPassedCount(4);
+        completedRun.setFailedKnownCount(1);
 
         Mockito.when(mockRunRepo.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of(completedRun));
 
@@ -161,6 +190,9 @@ public final class AuraGlobalModelAdviceTest
         Assertions.assertEquals(Boolean.FALSE, model.getAttribute("running"));
         Assertions.assertEquals(5, model.getAttribute("activeRunExecutedCount"));
         Assertions.assertEquals(5, model.getAttribute("activeRunScheduledCount"));
+        Assertions.assertEquals(4, model.getAttribute("activeRunPassedCount"));
+        Assertions.assertEquals(1, model.getAttribute("activeRunFailedCount"));
+        Assertions.assertEquals(0, model.getAttribute("activeRunRunningCount"));
         Assertions.assertEquals("5 tests completed", model.getAttribute("activeRunProgress"));
     }
 
@@ -360,5 +392,32 @@ public final class AuraGlobalModelAdviceTest
         Assertions.assertNull(model.getAttribute("chatSessions"));
         Assertions.assertNull(model.getAttribute("pendingConfirmations"));
         Mockito.verifyNoInteractions(mockSessionService, mockChatService);
+    }
+
+    @Test
+    public final void testExternalRunContextWithNullFailureCountsDoesNotThrowNpe()
+    {
+        final AuraQueueService mockQueueService = Mockito.mock(AuraQueueService.class);
+        Mockito.when(mockQueueService.getCurrentRunId()).thenReturn("");
+        Mockito.when(mockQueueService.isRunningQueue()).thenReturn(false);
+
+        final TestRunRepository mockRunRepo = Mockito.mock(TestRunRepository.class);
+        final TestRunEntity runWithNullCounts = new TestRunEntity();
+        runWithNullCounts.setId("run_null_counts");
+        runWithNullCounts.setStatus("IN_PROGRESS");
+        runWithNullCounts.setTotalTests(3);
+        runWithNullCounts.setRunningCount(1);
+        runWithNullCounts.setPassedCount(null);
+        runWithNullCounts.setFailedKnownCount(null);
+        runWithNullCounts.setFailedUnknownCount(null);
+
+        Mockito.when(mockRunRepo.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of(runWithNullCounts));
+
+        final AuraGlobalModelAdvice advice = new AuraGlobalModelAdvice(mockQueueService, null, mockRunRepo, null);
+        final Model model = new ConcurrentModel();
+        Assertions.assertDoesNotThrow(() -> advice.addGlobalAttributes(model));
+
+        Assertions.assertEquals(0, model.getAttribute("activeRunPassedCount"));
+        Assertions.assertEquals(0, model.getAttribute("activeRunFailedCount"));
     }
 }

@@ -93,11 +93,14 @@ public final class AuraQueueService
     /** Wall-clock start time in ms of the current (or most recent) queue run. */
     private final AtomicLong runStartTimeMs = new AtomicLong(0);
 
+    /** Wall-clock duration in ms of the most recently completed queue run. */
+    private final AtomicLong lastRunDurationMs = new AtomicLong(0);
+
     /** The RunRequest that initiated the most recent queue execution, used for archiving metadata. */
     private final AtomicReference<RunRequest> lastRunRequest = new AtomicReference<>(null);
 
     private final Set<File> createdTempFiles = Collections.synchronizedSet(new HashSet<>());
-    private final Set<File> ingestedExecutionFiles = Collections.synchronizedSet(new HashSet<>());
+    private final Set<String> ingestedExecutionKeys = Collections.synchronizedSet(new HashSet<>());
 
     private final AuraInteractiveService interactiveService;
     private QueueRunProgressListener queueRunProgressListener;
@@ -228,6 +231,11 @@ public final class AuraQueueService
         return runStartTimeMs.get();
     }
 
+    public long getLastRunDurationMs()
+    {
+        return lastRunDurationMs.get();
+    }
+
     public RunRequest getLastRunRequest()
     {
         return lastRunRequest.get();
@@ -248,9 +256,20 @@ public final class AuraQueueService
             engine.abort();
             final String activeRunId = currentRunId.get() != null ? currentRunId.get() : engine.getRunId();
             final String activeFileStr = activeFile.get() != null ? activeFile.get() : "";
+            final String runnerClass;
+            if (!activeFileStr.isBlank())
+            {
+                final String safeName = activeFileStr.replaceAll("[^a-zA-Z0-9]", "_");
+                runnerClass = "Aura_" + safeName + "_Test";
+            }
+            else
+            {
+                runnerClass = "DefaultTestClass";
+            }
             final String cancelStateJson = String.format(
-                "{\"runId\":\"%s\",\"status\":\"skipped\",\"runnerStatus\":\"cancelled\",\"currentStepIndex\":0,\"testName\":\"%s\",\"message\":\"Test execution cancelled by user.\"}",
+                "{\"runId\":\"%s\",\"status\":\"skipped\",\"runnerStatus\":\"cancelled\",\"currentStepIndex\":0,\"testClass\":\"%s\",\"testName\":\"%s\",\"message\":\"Test execution cancelled by user.\"}",
                 activeRunId != null ? activeRunId : "",
+                runnerClass,
                 activeFileStr
             );
             engine.pushState(cancelStateJson);
@@ -280,34 +299,7 @@ public final class AuraQueueService
     {
         LOGGER.info("[Aura Server] Setting manuallyStopped=true.");
         manuallyStopped.set(true);
-        final InteractiveConsoleEngine engine = interactiveService.getCurrentConsoleEngine();
-        if (engine != null)
-        {
-            engine.abort();
-        }
-        final Process p = activeProcess.getAndSet(null);
-        if (p != null && p.isAlive())
-        {
-            p.destroy();
-            try
-            {
-                if (!p.waitFor(3, TimeUnit.SECONDS))
-                {
-                    LOGGER.warn("[Aura Server] Subprocess did not stop on destroy, forcing termination...");
-                    p.destroyForcibly();
-                }
-            }
-            catch (final InterruptedException e)
-            {
-                Thread.currentThread().interrupt();
-            }
-            LOGGER.info("[Aura Server] Subprocess terminated.");
-            broadcastLog("[INFO] Active Maven process terminated by user.");
-        }
-        else
-        {
-            LOGGER.info("[Aura Server] No active subprocess found to stop.");
-        }
+        stopCurrentTest();
         synchronized (createdTempFiles)
         {
             for (final File f : createdTempFiles)
@@ -439,10 +431,11 @@ public final class AuraQueueService
                 currentRunLogs.clear();
                 currentRunEvents.clear();
                 completedFiles.clear();
-                ingestedExecutionFiles.clear();
+                ingestedExecutionKeys.clear();
                 interactiveService.resetExecutionIndexes();
 
                 runStartTimeMs.set(System.currentTimeMillis());
+                lastRunDurationMs.set(0);
                 final String generatedRunId = (req.targetRunId != null && !req.targetRunId.isBlank())
                         ? req.targetRunId
                         : "run_" + new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date(runStartTimeMs.get()));
@@ -516,6 +509,11 @@ public final class AuraQueueService
 
                 for (int i = 0; i < batches.size(); i++)
                 {
+                    if (manuallyStopped.get())
+                    {
+                        break;
+                    }
+
                     final ExecutionBatch batch = batches.get(i);
                     final String file = batch.file;
                     final List<String> ids = batch.datasetIds;
@@ -526,6 +524,22 @@ public final class AuraQueueService
                     if ("true".equalsIgnoreCase(System.getProperty("neodymium.aura.test", "false")))
                     {
                         LOGGER.info("[Aura Server] Test mode active (neodymium.aura.test=true). Simulating queue execution for {} with profiles {}", file, targetProfiles);
+                        final long delayMs = Long.getLong("neodymium.aura.test.simulation.delayMs", 0L);
+                        if (delayMs > 0)
+                        {
+                            try
+                            {
+                                Thread.sleep(delayMs);
+                            }
+                            catch (final InterruptedException e)
+                            {
+                                Thread.currentThread().interrupt();
+                            }
+                        }
+                        if (manuallyStopped.get())
+                        {
+                            break;
+                        }
                         broadcastLog("[INFO] Test mode active: simulating Maven subprocess for " + file + " [Profiles: " + targetProfiles + "]");
                         final int simRuns = Math.max(1, ids.size()) * Math.max(1, targetProfiles.size());
                         broadcastLog("[INFO] Tests run: " + simRuns + ", Failures: 0, Errors: 0, Skipped: 0");
@@ -812,6 +826,7 @@ public final class AuraQueueService
                     int prevReportedFailed = 0;
                     int prevReportedSkipped = 0;
 
+                    final List<String> fileSubprocessLogs = new ArrayList<>();
                     try (final BufferedReader reader = new BufferedReader(
                             new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8)))
                     {
@@ -819,6 +834,7 @@ public final class AuraQueueService
                         while ((line = reader.readLine()) != null)
                         {
                             broadcastLog(line);
+                            fileSubprocessLogs.add(line);
                             LOGGER.info("[Aura Subprocess] {}", stripAnsi(line));
 
                             final String cleanLine = stripAnsi(line);
@@ -982,7 +998,7 @@ public final class AuraQueueService
                     activeProcess.set(null);
 
                     final boolean isFailedRun = exitCode != 0 || fileFailures.get() > 0 || fileErrors.get() > 0;
-                    final String extractedError = isFailedRun ? extractSubprocessErrorMessage(currentRunLogs) : null;
+                    final String extractedError = isFailedRun ? extractSubprocessErrorMessage(fileSubprocessLogs) : null;
                     updateExecutionSnapshotsAndFallbacks(
                             runId,
                             className,
@@ -1064,6 +1080,10 @@ public final class AuraQueueService
                     {
                         break;
                     }
+                }
+                if (runStartTimeMs.get() > 0)
+                {
+                    lastRunDurationMs.set(Math.max(0, System.currentTimeMillis() - runStartTimeMs.get()));
                 }
                 runningQueue.set(false);
                 activeFile.set("");
@@ -1364,13 +1384,14 @@ public final class AuraQueueService
                 {
                     payload.put("status", "passed");
                 }
-                synchronized (ingestedExecutionFiles)
+                final String canonicalKey = className + "/" + execFile.getName();
+                synchronized (ingestedExecutionKeys)
                 {
-                    if (ingestedExecutionFiles.contains(execFile.getAbsoluteFile()))
+                    if (ingestedExecutionKeys.contains(canonicalKey))
                     {
                         continue;
                     }
-                    ingestedExecutionFiles.add(execFile.getAbsoluteFile());
+                    ingestedExecutionKeys.add(canonicalKey);
 
                     final int newlyIngested = (batchIngestedRuns != null) ? batchIngestedRuns.incrementAndGet() : 1;
                     final int surefireReported = (batchReportedSurefireRuns != null) ? batchReportedSurefireRuns.get() : 0;
@@ -1624,6 +1645,8 @@ public final class AuraQueueService
                 }
                 final String line = stripAnsi(rawLine).trim();
                 final String upperLine = line.toUpperCase();
+
+                // 1. Ignore warnings, JVM option noise, and logging framework headers
                 if (upperLine.contains("WARN")
                         || upperLine.contains("WARNING")
                         || line.contains("Picked up _JAVA_OPTIONS")
@@ -1631,14 +1654,57 @@ public final class AuraQueueService
                 {
                     continue;
                 }
+
+                // 2. Ignore Maven / Surefire infrastructure boilerplate and diagnostics
+                if (line.contains("Failed to execute goal")
+                        || line.contains("surefire-reports")
+                        || line.contains("dump files")
+                        || line.contains("-> [Help")
+                        || line.contains("[Help 1]")
+                        || line.contains("To see the full stack trace")
+                        || line.contains("Re-run Maven using")
+                        || line.contains("For more information about the errors")
+                        || line.contains("cwiki.apache.org")
+                        || line.contains("<<< FAILURE!")
+                        || line.contains("<<< ERROR!")
+                        || line.matches(".*Tests run:\\s*\\d+.*")
+                        || line.equalsIgnoreCase("[ERROR] Errors:")
+                        || line.equalsIgnoreCase("[ERROR] Failures:")
+                        || line.equalsIgnoreCase("Errors:")
+                        || line.equalsIgnoreCase("Failures:")
+                        || line.contains("Spawning Maven Subprocess"))
+                {
+                    continue;
+                }
+
+                // 3. Match legitimate error lines, exception declarations, and root causes
                 if (line.contains("Failed to parse playbook")
                         || line.contains("Caused by:")
                         || line.contains("Exception:")
                         || line.contains("Error:")
                         || line.contains("Throwable:")
-                        || (line.startsWith("[ERROR]") && !line.contains("Spawning Maven Subprocess")))
+                        || line.contains("AssertionFailedError")
+                        || line.contains("ComparisonFailure")
+                        || line.startsWith("[ERROR]"))
                 {
-                    matchingLines.add(line);
+                    String cleaned = line;
+                    if (cleaned.startsWith("[Aura Subprocess] "))
+                    {
+                        cleaned = cleaned.substring("[Aura Subprocess] ".length()).trim();
+                    }
+                    if (cleaned.startsWith("[ERROR] "))
+                    {
+                        cleaned = cleaned.substring("[ERROR] ".length()).trim();
+                    }
+                    else if (cleaned.startsWith("[ERROR]"))
+                    {
+                        cleaned = cleaned.substring("[ERROR]".length()).trim();
+                    }
+
+                    if (!cleaned.isEmpty())
+                    {
+                        matchingLines.add(cleaned);
+                    }
                 }
             }
         }
@@ -1648,24 +1714,42 @@ public final class AuraQueueService
             return null;
         }
 
-        final StringBuilder sb = new StringBuilder();
-        for (final String match : matchingLines)
+        // 4. Deduplicate and filter redundant summary lines
+        final List<String> distinctLines = new ArrayList<>();
+        for (final String line : matchingLines)
         {
-            String cleaned = match;
-            if (cleaned.startsWith("[Aura Subprocess] "))
+            if (distinctLines.contains(line))
             {
-                cleaned = cleaned.substring("[Aura Subprocess] ".length()).trim();
-            }
-            if (cleaned.startsWith("[ERROR] "))
-            {
-                cleaned = cleaned.substring("[ERROR] ".length()).trim();
+                continue;
             }
 
+            // If it's a Surefire summary marker like "TestClass.method()[1] » IllegalState ...",
+            // skip it if the actual exception was already captured
+            if (line.contains(" » "))
+            {
+                final String[] parts = line.split(" » ", 2);
+                final String afterArrow = (parts.length > 1) ? parts[1].trim() : line;
+                final int firstSpace = afterArrow.indexOf(' ');
+                final String actualMessage = (firstSpace > 0) ? afterArrow.substring(firstSpace + 1).trim() : afterArrow;
+                final boolean alreadyCovered = distinctLines.stream().anyMatch(existing ->
+                        (!actualMessage.isEmpty() && existing.contains(actualMessage)) || existing.contains(afterArrow));
+                if (alreadyCovered)
+                {
+                    continue;
+                }
+            }
+
+            distinctLines.add(line);
+        }
+
+        final StringBuilder sb = new StringBuilder();
+        for (final String match : distinctLines)
+        {
             if (!sb.isEmpty())
             {
-                sb.append(" ");
+                sb.append("\n");
             }
-            sb.append(cleaned);
+            sb.append(match);
         }
 
         final String result = sb.toString().trim();

@@ -642,9 +642,137 @@ public final class StaticResourceSyntaxTest
             "    if (isAiLogLine(line, false)) {\n" +
             "        throw new Error('Expected noise line to be suppressed: ' + line);\n" +
             "    }\n" +
+            "}\n" +
+            "const formatLogLineForDisplay = sandbox.window.formatLogLineForDisplay;\n" +
+            "if (typeof formatLogLineForDisplay !== 'function') {\n" +
+            "    throw new Error('Expected window.formatLogLineForDisplay to be defined');\n" +
+            "}\n" +
+            "const rawLineWithDoubleDash = '15:20:49.742 [main] INFO org.neodymium.ai.pipeline.steps.AgentToolLoopStep -- 🚀 Starting Agent Tool Loop for instruction: \"Open https://posters.xceptance.io:8443/\" (milestones: 0)';\n" +
+            "const formattedDoubleDash = formatLogLineForDisplay(rawLineWithDoubleDash);\n" +
+            "if (formattedDoubleDash !== '15:20:49 🚀 Starting Agent Tool Loop for instruction: \"Open https://posters.xceptance.io:8443/\" (milestones: 0)') {\n" +
+            "    throw new Error('Unexpected formatted line: ' + formattedDoubleDash);\n" +
+            "}\n" +
+            "const rawLineWithSingleDash = '15:20:51.474 [main] INFO org.neodymium.ai.pipeline.steps.AgentToolLoopStep - 🔧 Tool Call: navigate(url=\"https://posters.xceptance.io:8443/\")';\n" +
+            "const formattedSingleDash = formatLogLineForDisplay(rawLineWithSingleDash);\n" +
+            "if (formattedSingleDash !== '15:20:51 🔧 Tool Call: navigate(url=\"https://posters.xceptance.io:8443/\")') {\n" +
+            "    throw new Error('Unexpected formatted line: ' + formattedSingleDash);\n" +
+            "}\n" +
+            "const rawLineWithColon = '15:20:49 [main] INFO org.neodymium.ai.pipeline.steps.AgentToolLoopStep: 🚀 Starting...';\n" +
+            "const formattedColon = formatLogLineForDisplay(rawLineWithColon);\n" +
+            "if (formattedColon !== '15:20:49 🚀 Starting...') {\n" +
+            "    throw new Error('Unexpected formatted line: ' + formattedColon);\n" +
+            "}\n" +
+            "const rawLineWithDate = '2026-11-16 15:20:49.742 [main] INFO org.neodymium.ai.pipeline.steps.AgentToolLoopStep -- 🚀 Starting...';\n" +
+            "const formattedDate = formatLogLineForDisplay(rawLineWithDate);\n" +
+            "if (formattedDate !== '15:20:49 🚀 Starting...') {\n" +
+            "    throw new Error('Unexpected formatted line with date: ' + formattedDate);\n" +
+            "}\n" +
+            "const rawLineWithHyphenatedLogger = '15:20:49.123 [main] INFO dev.langchain4j.http-client -- 🚀 Starting...';\n" +
+            "const formattedHyphen = formatLogLineForDisplay(rawLineWithHyphenatedLogger);\n" +
+            "if (formattedHyphen !== '15:20:49 🚀 Starting...') {\n" +
+            "    throw new Error('Unexpected formatted line with hyphenated logger: ' + formattedHyphen);\n" +
+            "}\n" +
+            "const rawLineCaseInsensitive = '15:20:49.123 [main] info org.neodymium.ai.pipeline.steps.AgentToolLoopStep -- 🚀 Starting...';\n" +
+            "const formattedCase = formatLogLineForDisplay(rawLineCaseInsensitive);\n" +
+            "if (formattedCase !== '15:20:49 🚀 Starting...') {\n" +
+            "    throw new Error('Unexpected formatted line with lowercase level: ' + formattedCase);\n" +
+            "}\n" +
+            "const alreadyCleanLine = '13:30:01 🤖 Agent Turn #1 (max: 25) | Step: \"Search for jeans\"';\n" +
+            "if (formatLogLineForDisplay(alreadyCleanLine) !== alreadyCleanLine) {\n" +
+            "    throw new Error('Already clean line should remain unchanged');\n" +
+            "}\n" +
+            "const indentedContinuation = '   • expectedTitle: \"The Poster Demo Store\"';\n" +
+            "if (formatLogLineForDisplay(indentedContinuation) !== indentedContinuation) {\n" +
+            "    throw new Error('Indented continuation line should remain unchanged');\n" +
+            "}\n" +
+            "// Verify refreshLogFiltering preserves .log-error elements even when [ERROR] text was stripped\n" +
+            "const mockErrorLine = {\n" +
+            "    classList: { contains: (cls) => cls === 'log-error' },\n" +
+            "    textContent: '15:20:49 Retrying connection failure',\n" +
+            "    style: {}\n" +
+            "};\n" +
+            "sandbox.document.getElementById = (id) => {\n" +
+            "    if (id === 'terminalConsole') {\n" +
+            "        return { querySelectorAll: () => [mockErrorLine] };\n" +
+            "    }\n" +
+            "    return null;\n" +
+            "};\n" +
+            "sandbox.window.toggleAiOnly(false);\n" +
+            "sandbox.window.toggleErrorsOnly(true);\n" +
+            "if (mockErrorLine.style.display !== 'block') {\n" +
+            "    throw new Error('Expected .log-error element to remain visible in Errors Only mode');\n" +
             "}\n";
 
         runNodeScript(nodeTestScript, "AI log filtering test failed");
+    }
+
+    /**
+     * Automated regression safety net verifying that dashboard-runner.js invokes startPolling()
+     * when prepareClientForExecution() is executed, preventing client disconnection and the
+     * "Connecting to run stream..." freeze.
+     *
+     * @throws Exception
+     *             if Node execution or verification fails
+     * @author AI-generated: Gemini 3.8 Flash
+     * @author Xceptance GmbH 2026
+     */
+    @Test
+    public void testPrepareClientForExecutionInitiatesPolling() throws Exception
+    {
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final Path runnerPath = Paths.get("src/main/resources/static/dashboard-runner.js");
+        Assertions.assertTrue(Files.exists(runnerPath), "dashboard-runner.js must exist: " + runnerPath.toAbsolutePath());
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const runnerCode = fs.readFileSync('" + runnerPath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "let pollingStarted = false;\n" +
+            "const makeMockElement = () => ({\n" +
+            "    innerHTML: '',\n" +
+            "    style: {},\n" +
+            "    classList: { add: () => {}, remove: () => {}, contains: () => false },\n" +
+            "    querySelectorAll: () => [],\n" +
+            "    insertAdjacentHTML: () => {}\n" +
+            "});\n" +
+            "const sandbox = {\n" +
+            "    console,\n" +
+            "    window: { addEventListener: () => {} },\n" +
+            "    document: {\n" +
+            "        getElementById: () => makeMockElement(),\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {}\n" +
+            "    },\n" +
+            "    localStorage: { getItem: () => null, setItem: () => {} },\n" +
+            "    setTimeout: () => {},\n" +
+            "    clearTimeout: () => {},\n" +
+            "    clientId: 'test-client-id',\n" +
+            "    disconnected: false,\n" +
+            "    fetch: () => { pollingStarted = true; return Promise.resolve({ ok: true, json: async () => ({}) }); },\n" +
+            "    activeRunStats: { running: false, tests: [] },\n" +
+            "    liveCompletedFiles: new Set(),\n" +
+            "    clearReportPromptTimer: () => {},\n" +
+            "    hideRunFinishedPrompt: () => {}\n" +
+            "};\n" +
+            "sandbox.window.document = sandbox.document;\n" +
+            "sandbox.window.localStorage = sandbox.localStorage;\n" +
+            "sandbox.window.activeRunStats = sandbox.activeRunStats;\n" +
+            "sandbox.window.liveCompletedFiles = sandbox.liveCompletedFiles;\n" +
+            "sandbox.window.clientId = sandbox.clientId;\n" +
+            "sandbox.window.disconnected = sandbox.disconnected;\n" +
+            "sandbox.window.fetch = sandbox.fetch;\n" +
+            "vm.runInNewContext(runnerCode, sandbox);\n" +
+            "sandbox.window.prepareClientForExecution();\n" +
+            "if (!pollingStarted) {\n" +
+            "    throw new Error('prepareClientForExecution must initiate polling to establish the live run stream');\n" +
+            "}\n";
+
+        runNodeScript(nodeTestScript, "prepareClientForExecution polling initiation test failed");
     }
 
     @Test
@@ -680,8 +808,8 @@ public final class StaticResourceSyntaxTest
             "sidebar.html must render brand label 'Neodymium'"
         );
         Assertions.assertTrue(
-            sidebarContent.contains("class=\"logo-title\">Aura Manager</span>"),
-            "sidebar.html must render title label 'Aura Manager'"
+            sidebarContent.contains("class=\"logo-title\">AI Manager</span>"),
+            "sidebar.html must render title label 'AI Manager'"
         );
 
         final String[] expectedIcons = {"play_circle"};
@@ -3895,6 +4023,79 @@ public final class StaticResourceSyntaxTest
     }
 
     @Test
+    public void testCopyDiagnosticsButtonLoadingLifecycle() throws Exception
+    {
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist: " + jsFilePath.toAbsolutePath());
+        final String jsContent = Files.readString(jsFilePath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(jsContent.contains("function setCopyDiagnosticsBtnLoading(isLoading)"),
+            "report-manager.js must define setCopyDiagnosticsBtnLoading helper");
+        Assertions.assertTrue(jsContent.contains("window.setCopyDiagnosticsBtnLoading = setCopyDiagnosticsBtnLoading;"),
+            "report-manager.js must export setCopyDiagnosticsBtnLoading on window");
+        Assertions.assertTrue(jsContent.contains("fetchId === activeStepFetchId || currentActiveRowId === rowId"),
+            "finally block must restore button when currentActiveRowId matches rowId even if timer incremented activeStepFetchId");
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const assert = require('assert');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const sandbox = {\n" +
+            "    console: console,\n" +
+            "    assert: assert,\n" +
+            "    window: {},\n" +
+            "    document: {\n" +
+            "        getElementById: () => null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {} }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "const testScript = code + '\\n' + `\n" +
+            "let buttonDisabled = false;\n" +
+            "let buttonTitle = '';\n" +
+            "let iconText = 'content_copy';\n" +
+            "let iconAnimation = '';\n" +
+            "const mockIcon = {\n" +
+            "    get textContent() { return iconText; },\n" +
+            "    set textContent(v) { iconText = v; },\n" +
+            "    style: {\n" +
+            "        get animation() { return iconAnimation; },\n" +
+            "        set animation(v) { iconAnimation = v; }\n" +
+            "    }\n" +
+            "};\n" +
+            "const mockBtn = {\n" +
+            "    get disabled() { return buttonDisabled; },\n" +
+            "    set disabled(v) { buttonDisabled = v; },\n" +
+            "    setAttribute: (name, val) => { if (name === 'title') buttonTitle = val; },\n" +
+            "    getAttribute: (name) => { if (name === 'title') return buttonTitle; return null; },\n" +
+            "    querySelector: (sel) => sel.includes('material-symbols-outlined') ? mockIcon : null,\n" +
+            "    style: {}\n" +
+            "};\n" +
+            "document.getElementById = (id) => id === 'copyFullTestDiagnosticsBtn' ? mockBtn : null;\n" +
+            "assert(typeof setCopyDiagnosticsBtnLoading === 'function', 'setCopyDiagnosticsBtnLoading must be a function');\n" +
+            "// Test loading state\n" +
+            "setCopyDiagnosticsBtnLoading(true);\n" +
+            "assert.strictEqual(buttonDisabled, true, 'Button must be disabled when loading');\n" +
+            "assert.strictEqual(buttonTitle, 'Loading diagnostics...', 'Title must indicate loading');\n" +
+            "assert.strictEqual(iconText, 'sync', 'Icon must switch to sync');\n" +
+            "assert(iconAnimation.includes('spin'), 'Icon must animate with spin');\n" +
+            "// Test reset to idle state\n" +
+            "setCopyDiagnosticsBtnLoading(false);\n" +
+            "assert.strictEqual(buttonDisabled, false, 'Button must be enabled when idle');\n" +
+            "assert.strictEqual(buttonTitle, 'Copy full test diagnostics (markdown format)', 'Title must indicate copy action');\n" +
+            "assert.strictEqual(iconText, 'content_copy', 'Icon must switch to content_copy');\n" +
+            "assert.strictEqual(iconAnimation, '', 'Icon animation must be cleared');\n" +
+            "`;\n" +
+            "vm.runInNewContext(testScript, sandbox);\n";
+
+        runNodeScript(nodeTestScript, "Copy diagnostics button lifecycle test failed");
+    }
+
+    @Test
     public void testUnitedContainerAiUsageKpiCrossFilteringSupport() throws Exception
     {
         final Path htmlPath = Paths.get("src/main/resources/templates/fragments/dashboard-widgets.html");
@@ -4618,6 +4819,313 @@ public final class StaticResourceSyntaxTest
         final String overlayBlock = css.substring(overlayStart, overlayEnd);
         Assertions.assertTrue(overlayBlock.contains("top: 72px;") && overlayBlock.contains("right: 24px;"),
             ".aura-chat-overlay must open below the top-right header");
+    }
+
+    @Test
+    public void testGenerateFullTestDiagnosticsMarkdownWithInlinedAttachmentsAndLocalArtifacts() throws Exception
+    {
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist: " + jsFilePath.toAbsolutePath());
+        final String jsContent = Files.readString(jsFilePath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(jsContent.contains("## Test Attachments & Local Artifacts"),
+            "report-manager.js must include section '## Test Attachments & Local Artifacts'");
+        Assertions.assertTrue(jsContent.contains("Workspace Path:"),
+            "report-manager.js must render workspace-relative paths for attachments");
+        Assertions.assertTrue(jsContent.contains("Local File URI:"),
+            "report-manager.js must render clickable local file URIs for attachments");
+        Assertions.assertTrue(jsContent.contains("### Inlined Attachment Contents"),
+            "report-manager.js must include section '### Inlined Attachment Contents' for text attachments");
+        Assertions.assertTrue(jsContent.contains("Aura MCP Quick Tip:"),
+            "report-manager.js must include Aura MCP Quick Tip guidance for AI agents");
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const assert = require('assert');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const sandbox = {\n" +
+            "    console: console,\n" +
+            "    assert: assert,\n" +
+            "    window: {},\n" +
+            "    document: {\n" +
+            "        getElementById: () => null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {} }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "vm.createContext(sandbox);\n" +
+            "vm.runInContext(code, sandbox);\n" +
+            "assert(typeof sandbox.generateFullTestDiagnosticsMarkdown === 'function', 'generateFullTestDiagnosticsMarkdown must be defined');\n" +
+            "const testDto = {\n" +
+            "    id: 'run-42-exec-1',\n" +
+            "    testName: 'SampleTest',\n" +
+            "    testClass: 'com.example.SampleTest',\n" +
+            "    testMethod: 'sampleMethod',\n" +
+            "    runId: 'run-42',\n" +
+            "    status: 'failed',\n" +
+            "    failureReason: 'Element not found',\n" +
+            "    playbookContent: 'steps: []',\n" +
+            "    attachments: [\n" +
+            "        {\n" +
+            "            name: 'video.mp4',\n" +
+            "            path: 'video.mp4',\n" +
+            "            type: 'video',\n" +
+            "            size: 2048000,\n" +
+            "            relativePath: 'storage/runs/run-42/video.mp4',\n" +
+            "            fileUri: 'file:///workspace/storage/runs/run-42/video.mp4'\n" +
+            "        },\n" +
+            "        {\n" +
+            "            name: 'execution.log',\n" +
+            "            path: 'execution.log',\n" +
+            "            type: 'log',\n" +
+            "            size: 1024,\n" +
+            "            relativePath: 'storage/runs/run-42/execution.log',\n" +
+            "            fileUri: 'file:///workspace/storage/runs/run-42/execution.log',\n" +
+            "            content: '[INFO] Test started\\n[ERROR] Step failed'\n" +
+            "        },\n" +
+            "        {\n" +
+            "            name: 'playbook.yaml',\n" +
+            "            path: 'playbook.yaml',\n" +
+            "            type: 'yaml',\n" +
+            "            size: 512,\n" +
+            "            relativePath: 'storage/runs/run-42/playbook.yaml',\n" +
+            "            fileUri: 'file:///workspace/storage/runs/run-42/playbook.yaml',\n" +
+            "            content: 'steps: []'\n" +
+            "        }\n" +
+            "    ]\n" +
+            "};\n" +
+            "const md = sandbox.generateFullTestDiagnosticsMarkdown(testDto, null);\n" +
+            "assert(md.includes('## Test Attachments & Local Artifacts'), 'Markdown must contain attachments header');\n" +
+            "assert(md.includes('- Workspace Path: `storage/runs/run-42/video.mp4`'), 'Must contain video workspace path');\n" +
+            "assert(md.includes('- Local File URI: [video.mp4](file:///workspace/storage/runs/run-42/video.mp4)'), 'Must contain video file URI link');\n" +
+            "assert(md.includes('### Inlined Attachment Contents'), 'Must contain inlined attachments header');\n" +
+            "assert(md.includes('<summary>Attached Content: execution.log'), 'Must contain execution.log summary details');\n" +
+            "assert(md.includes('[ERROR] Step failed'), 'Must contain execution log content');\n" +
+            "assert(!md.includes('<summary>Attached Content: playbook.yaml'), 'Must not duplicate playbook.yaml in details when already in playbook header');\n" +
+            "assert(md.includes('> **Aura MCP Quick Tip:**'), 'Must contain Aura MCP Quick Tip');\n" +
+            "assert(md.includes('get_execution_failure(executionId=\"run-42-exec-1\")'), 'Must contain execution ID in MCP tip');\n" +
+            "console.log('DIAGNOSTICS_MD_SUCCESS');\n";
+
+        runNodeScript(nodeTestScript, "Diagnostics markdown test failed");
+    }
+
+    @Test
+    public void testDashboardRunnerDoesNotRegisterBeforeunload() throws IOException
+    {
+        final Path runnerJsPath = Paths.get("src/main/resources/static/dashboard-runner.js");
+        Assertions.assertTrue(Files.exists(runnerJsPath), "dashboard-runner.js must exist: " + runnerJsPath.toAbsolutePath());
+        final String content = Files.readString(runnerJsPath, StandardCharsets.UTF_8);
+        Assertions.assertFalse(content.contains("beforeunload"),
+            "dashboard-runner.js must not register a beforeunload event listener as it causes misleading unsaved changes prompts in browsers");
+    }
+
+    @Test
+    public void testSidebarRunnerSegmentedProgressAndOutcomeChips() throws IOException
+    {
+        final Path sidebarPath = Paths.get("src/main/resources/templates/fragments/sidebar.html");
+        Assertions.assertTrue(Files.exists(sidebarPath), "sidebar.html must exist: " + sidebarPath.toAbsolutePath());
+        final String sidebarContent = Files.readString(sidebarPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(sidebarContent.contains("sidebar-runner-progress-box"),
+            "sidebar.html must wrap progress inside .sidebar-runner-progress-box");
+        Assertions.assertTrue(sidebarContent.contains("sidebar-progress-track"),
+            "sidebar.html must contain .sidebar-progress-track");
+        Assertions.assertTrue(sidebarContent.contains("sidebarProgressSegPassed"),
+            "sidebar.html must contain #sidebarProgressSegPassed");
+        Assertions.assertTrue(sidebarContent.contains("sidebarProgressSegFailed"),
+            "sidebar.html must contain #sidebarProgressSegFailed");
+        Assertions.assertTrue(sidebarContent.contains("sidebarProgressSegRunning"),
+            "sidebar.html must contain #sidebarProgressSegRunning");
+        Assertions.assertTrue(sidebarContent.contains("sidebar-progress-metrics"),
+            "sidebar.html must contain .sidebar-progress-metrics");
+        Assertions.assertTrue(sidebarContent.contains("sidebarOutcomeChips"),
+            "sidebar.html must contain #sidebarOutcomeChips");
+        Assertions.assertTrue(sidebarContent.contains("sidebarCollapsedFailIndicator"),
+            "sidebar.html must contain #sidebarCollapsedFailIndicator");
+        Assertions.assertTrue(sidebarContent.contains("th:style=\"${activeRunFailedCount != null and activeRunFailedCount > 0"),
+            "sidebar.html must conditionally show collapsed fail indicator via SSR when failures exist");
+
+        final Path cssPath = Paths.get("src/main/resources/static/css/report-manager.css");
+        Assertions.assertTrue(Files.exists(cssPath));
+        final String cssContent = Files.readString(cssPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(cssContent.contains(".sidebar-progress-track"),
+            "report-manager.css must define .sidebar-progress-track");
+        Assertions.assertTrue(cssContent.contains(".sidebar-progress-seg.seg-failed"),
+            "report-manager.css must define .sidebar-progress-seg.seg-failed");
+        Assertions.assertTrue(cssContent.contains("min-width: 4px"),
+            "report-manager.css must enforce min-width: 4px for failed segment to prevent sub-pixel rounding invisibility");
+
+        final Path jsPath = Paths.get("src/main/resources/static/dashboard-core.js");
+        Assertions.assertTrue(Files.exists(jsPath));
+        final String jsContent = Files.readString(jsPath, StandardCharsets.UTF_8);
+        Assertions.assertTrue(jsContent.contains("updateSidebarRunnerProgress"),
+            "dashboard-core.js must define updateSidebarRunnerProgress");
+    }
+
+    @Test
+    public void testSidebarRunnerProgressLogicEdgeCases() throws Exception
+    {
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final Path jsFilePath = Paths.get("src/main/resources/static/dashboard-core.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "dashboard-core.js must exist: " + jsFilePath.toAbsolutePath());
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const assert = require('assert');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "function createMockElement(id) {\n" +
+            "    return {\n" +
+            "        id: id,\n" +
+            "        textContent: '',\n" +
+            "        title: '',\n" +
+            "        style: { display: '', width: '' },\n" +
+            "        classList: {\n" +
+            "            classes: new Set(),\n" +
+            "            add: function(c) { this.classes.add(c); },\n" +
+            "            remove: function(c) { this.classes.delete(c); },\n" +
+            "            contains: function(c) { return this.classes.has(c); }\n" +
+            "        },\n" +
+            "        setAttribute: function(k, v) { this[k] = v; }\n" +
+            "    };\n" +
+            "}\n" +
+            "const elements = {\n" +
+            "    sidebarActiveProgressContainer: createMockElement('sidebarActiveProgressContainer'),\n" +
+            "    sidebarActiveProgress: createMockElement('sidebarActiveProgress'),\n" +
+            "    sidebarProgressTrack: createMockElement('sidebarProgressTrack'),\n" +
+            "    sidebarProgressSegPassed: createMockElement('sidebarProgressSegPassed'),\n" +
+            "    sidebarProgressSegFailed: createMockElement('sidebarProgressSegFailed'),\n" +
+            "    sidebarProgressSegRunning: createMockElement('sidebarProgressSegRunning'),\n" +
+            "    sidebarChipPassed: createMockElement('sidebarChipPassed'),\n" +
+            "    sidebarChipPassedVal: createMockElement('sidebarChipPassedVal'),\n" +
+            "    sidebarChipFailed: createMockElement('sidebarChipFailed'),\n" +
+            "    sidebarChipFailedVal: createMockElement('sidebarChipFailedVal'),\n" +
+            "    sidebarCollapsedFailIndicator: createMockElement('sidebarCollapsedFailIndicator')\n" +
+            "};\n" +
+            "const sandbox = {\n" +
+            "    document: {\n" +
+            "        documentElement: createMockElement('html'),\n" +
+            "        body: createMockElement('body'),\n" +
+            "        getElementById: (id) => elements[id] || null,\n" +
+            "        querySelector: () => null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        addEventListener: () => {}\n" +
+            "    },\n" +
+            "    addEventListener: () => {},\n" +
+            "    window: {\n" +
+            "        addEventListener: () => {}\n" +
+            "    },\n" +
+            "    localStorage: {\n" +
+            "        store: {},\n" +
+            "        setItem: function(k, v) { this.store[k] = v; },\n" +
+            "        getItem: function(k) { return this.store[k]; },\n" +
+            "        removeItem: function(k) { delete this.store[k]; }\n" +
+            "    },\n" +
+            "    Intl: Intl,\n" +
+            "    console: console\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "vm.runInNewContext(code, sandbox);\n" +
+            "const updateProgress = sandbox.updateSidebarRunnerProgress || sandbox.window.updateSidebarRunnerProgress;\n" +
+            "assert(typeof updateProgress === 'function', 'updateSidebarRunnerProgress must be a function');\n" +
+            "\n" +
+            "// 1. Single test queue: running (0 / 1)\n" +
+            "updateProgress({ running: true, runningCount: 1, scheduledCount: 1, executedCount: 0, passed: 0, failed: 0 });\n" +
+            "assert.strictEqual(elements.sidebarActiveProgress.textContent, '0 / 1');\n" +
+            "assert.strictEqual(elements.sidebarProgressSegRunning.style.display, 'block');\n" +
+            "assert.strictEqual(elements.sidebarChipFailed.style.display, 'none');\n" +
+            "assert.strictEqual(elements.sidebarChipPassed.style.display, 'none');\n" +
+            "assert.strictEqual(elements.sidebarCollapsedFailIndicator.style.display, 'none');\n" +
+            "\n" +
+            "// 2. Single test queue: passed (1 / 1)\n" +
+            "updateProgress({ running: false, scheduledCount: 1, executedCount: 1, passed: 1, failed: 0 });\n" +
+            "assert.strictEqual(elements.sidebarActiveProgress.textContent, '1 / 1');\n" +
+            "assert.strictEqual(elements.sidebarProgressSegPassed.style.display, 'block');\n" +
+            "assert.strictEqual(elements.sidebarProgressSegPassed.style.width, '100%');\n" +
+            "assert.strictEqual(elements.sidebarChipPassed.style.display, 'inline-flex');\n" +
+            "assert.strictEqual(elements.sidebarChipPassedVal.textContent, '1');\n" +
+            "assert.strictEqual(elements.sidebarChipFailed.style.display, 'none');\n" +
+            "\n" +
+            "// 3. 10,000 tests queue with 1 failure: formatting, segment display, min-width support\n" +
+            "updateProgress({ running: true, runningCount: 2, scheduledCount: 10000, executedCount: 4500, passed: 4499, failed: 1 });\n" +
+            "assert(elements.sidebarActiveProgress.textContent.includes('4,500') || elements.sidebarActiveProgress.textContent.includes('4500'), 'Formatted count');\n" +
+            "assert(elements.sidebarActiveProgress.textContent.includes('10,000') || elements.sidebarActiveProgress.textContent.includes('10000'), 'Formatted total');\n" +
+            "assert.strictEqual(elements.sidebarProgressSegFailed.style.display, 'block', 'Failed segment must be visible');\n" +
+            "assert.strictEqual(elements.sidebarChipFailed.style.display, 'inline-flex', 'Failed chip must be visible');\n" +
+            "assert.strictEqual(elements.sidebarChipFailedVal.textContent, '1');\n" +
+            "assert.strictEqual(elements.sidebarCollapsedFailIndicator.style.display, 'block', 'Collapsed fail indicator must be visible');\n" +
+            "\n" +
+            "// 4. Unknown/Dynamic discovery (total = 0, running = true): indeterminate shimmer\n" +
+            "updateProgress({ running: true, total: 0, scheduledCount: 0, executedCount: 0, progressText: 'Discovering...' });\n" +
+            "assert(elements.sidebarProgressTrack.classList.contains('is-indeterminate'), 'Track must have is-indeterminate class');\n" +
+            "\n" +
+            "// 5. Queued state (scheduledCount > 0, running = false, executedCount = 0): preserve container visibility\n" +
+            "updateProgress({ running: false, scheduledCount: 5, executedCount: 0, total: 0, progressText: '' });\n" +
+            "assert.strictEqual(elements.sidebarActiveProgressContainer.style.display, 'flex', 'Container must remain visible when scheduledCount > 0');\n" +
+            "assert.strictEqual(elements.sidebarActiveProgress.textContent, '0 / 5');\n" +
+            "console.log('SIDEBAR_PROGRESS_UNIT_TEST_SUCCESS');\n";
+
+        runNodeScript(nodeTestScript, "Sidebar runner progress unit test failed");
+    }
+
+    @Test
+    public void testCustomDashboardCompactHeaderAndNoRedundantWidgetsHeadline() throws Exception
+    {
+        final Path customPagePath = Paths.get("src/main/resources/templates/fragments/custom-dashboard-page.html");
+        Assertions.assertTrue(Files.exists(customPagePath), "custom-dashboard-page.html must exist");
+        final String customPageContent = Files.readString(customPagePath, StandardCharsets.UTF_8);
+
+        final Path dashboardWidgetsPath = Paths.get("src/main/resources/templates/fragments/dashboard-widgets.html");
+        Assertions.assertTrue(Files.exists(dashboardWidgetsPath), "dashboard-widgets.html must exist");
+        final String widgetsContent = Files.readString(dashboardWidgetsPath, StandardCharsets.UTF_8);
+
+        final Path cssPath = Paths.get("src/main/resources/static/css/report-manager.css");
+        Assertions.assertTrue(Files.exists(cssPath), "report-manager.css must exist");
+        final String cssContent = Files.readString(cssPath, StandardCharsets.UTF_8);
+
+        // 1. Verify custom-dashboard-page.html uses compact gap-3
+        Assertions.assertTrue(customPageContent.contains("class=\"d-flex flex-column gap-3\""),
+            "custom-dashboard-page.html must use gap-3 for compact footprint");
+        Assertions.assertFalse(customPageContent.contains("class=\"d-flex flex-column gap-4\""),
+            "custom-dashboard-page.html must not use excessive gap-4");
+
+        // 2. Verify dashboard-widgets.html has removed redundant headline and guarded #dashboardWidgetsHeader
+        Assertions.assertFalse(widgetsContent.contains("Dashboard Widgets</span>"),
+            "dashboard-widgets.html must not contain redundant 'Dashboard Widgets' headline");
+        Assertions.assertTrue(widgetsContent.contains("id=\"dashboardWidgetsHeader\" th:if=\"${customPage == null}\""),
+            "dashboard-widgets.html must guard #dashboardWidgetsHeader with th:if=\"${customPage == null}\"");
+
+        // 3. Verify report-manager.css styles #customDashboardPageToolbar as sticky, flush, and compact
+        Assertions.assertTrue(cssContent.contains("#customDashboardPageToolbar {"),
+            "report-manager.css must configure #customDashboardPageToolbar");
+        Assertions.assertTrue(cssContent.contains(".content-body:has(#pageCustomDashboard) {"),
+            "report-manager.css must declare .content-body:has(#pageCustomDashboard)");
+
+        // 4. Verify unified single top header bar on custom dashboards
+        Assertions.assertTrue(cssContent.contains("body:has(#pageCustomDashboard) #appHeader {"),
+            "report-manager.css must hide redundant #appHeader when #pageCustomDashboard is active");
+        Assertions.assertTrue(cssContent.contains(".custom-dashboard-body {"),
+            "report-manager.css must define .custom-dashboard-body for content padding");
+
+        // 5. Verify custom-dashboard-page.html toolbar integrates global actions and theme controls
+        Assertions.assertTrue(customPageContent.contains("class=\"custom-dashboard-body d-flex flex-column gap-3\""),
+            "custom-dashboard-page.html must wrap body sections in .custom-dashboard-body");
+        Assertions.assertTrue(customPageContent.contains("<span>Resync</span>")
+                && customPageContent.contains("<span>Refresh</span>"),
+            "custom-dashboard-page.html toolbar must provide Resync and Refresh actions");
+        Assertions.assertTrue(customPageContent.contains("onclick=\"changeTheme('light')\"")
+                && customPageContent.contains("onclick=\"changeTheme('dark')\"")
+                && customPageContent.contains("onclick=\"changeTheme('system')\""),
+            "custom-dashboard-page.html toolbar must include unified theme switcher");
     }
 }
 
