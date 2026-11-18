@@ -216,4 +216,124 @@
 			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<!-- 3. Direct in-memory unit tests -->
+		<profile>
+			<id>unit-tests</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<includes combine.self="override">
+								<include>org/neodymium/ai/model/**/*Test.java</include>
+								<include>org/neodymium/ai/unit/**/*Test.java</include>
+								<include>org/neodymium/ai/client/TokenUsageTest.java</include>
+								<include>org/neodymium/ai/telemetry/*Test.java</include>
+								<include>com/xceptance/neodymium/aura/manager/unit/*Test.java</include>
+							</includes>
+							<excludes combine.self="override">
+								<exclude>**/*UiTest.java</exclude>
+								<exclude>**/*BrowserTest.java</exclude>
+								<exclude>com/xceptance/neodymium/aura/interactive/**</exclude>
+							</excludes>
+							<excludedGroups>verla,AuraIntegration,LiveAPI,LiveLlm,ExternalSite,ui</excludedGroups>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!-- 6. AI mock tests -->
+		<profile>
+			<id>ai-mock-tests</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<includes combine.self="override">
+								<include>org/neodymium/ai/**/*Test.java</include>
+								<include>com/xceptance/neodymium/aura/**/*Test.java</include>
+								<include>com/xceptance/neodymium/ai/**/*Test.java</include>
+							</includes>
+							<excludedGroups>LiveAPI,LiveLlm,ExternalSite</excludedGroups>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!-- 10. Smoke suite subset in AI -->
+		<profile>
+			<id>smoke</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<includes combine.self="override">
+								<include>org/neodymium/ai/client/TokenUsageTest.java</include>
+								<include>org/neodymium/ai/model/ExecutionMetricsTest.java</include>
+							</includes>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!-- Skip profiles not relevant to neodymium-ai -->
+		<profile>
+			<id>neo-classic-junit4</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+		<profile>
+			<id>neo-classic-junit5</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+		<profile>
+			<id>verla-tests</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+		<profile>
+			<id>ai-live-tests</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+		<profile>
+			<id>ai-sandbox</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+		<profile>
+			<id>aura-sandbox</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+		<profile>
+			<id>ai-manager</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+		<profile>
+			<id>aura-manager</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+	</profiles>
 </project>

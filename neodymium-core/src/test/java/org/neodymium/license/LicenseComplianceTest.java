@@ -162,4 +162,80 @@ public class LicenseComplianceTest
             "Found compiled classes in forbidden AI/Aura packages under neodymium-core:\n" + String.join("\n", violations)
         );
     }
+
+    @Test
+    @DisplayName("Verify all Java sources in neodymium-core are MIT licensed and contain zero copyleft notices")
+    public void testZeroCopyleftHeadersAndFullMitCoverage() throws IOException
+    {
+        final Path coreRoot = Files.exists(Path.of("src/main/java")) ? Path.of(".") : Path.of("neodymium-core");
+        final Path mainJava = coreRoot.resolve("src/main/java");
+        final Path testJava = coreRoot.resolve("src/test/java");
+
+        final List<String> missingMitHeader = new ArrayList<>();
+        final List<String> copyleftContaminated = new ArrayList<>();
+
+        for (final Path srcDir : List.of(mainJava, testJava))
+        {
+            if (!Files.isDirectory(srcDir))
+            {
+                continue;
+            }
+            try (final Stream<Path> paths = Files.walk(srcDir))
+            {
+                paths.filter(p -> p.toString().endsWith(".java")).forEach(javaFile ->
+                {
+                    final String fileName = javaFile.getFileName().toString();
+                    if ("JdkHttpClient.java".equals(fileName))
+                    {
+                        // Verified upstream Selenium fork under Apache 2.0 with Section 4(b) modification notice
+                        return;
+                    }
+
+                    try
+                    {
+                        final String content = Files.readString(javaFile, StandardCharsets.UTF_8);
+                        final String trimmed = content.stripLeading();
+
+                        if (!trimmed.startsWith("/*\n * MIT License") && !trimmed.startsWith("/*\r\n * MIT License"))
+                        {
+                            missingMitHeader.add(javaFile.toString());
+                        }
+
+                        // Inspect the file header comment for any copyleft license notices
+                        final int headerEnd = content.indexOf("*/");
+                        final String header = (headerEnd > 0) ? content.substring(0, headerEnd) : "";
+
+                        if (header.contains("GNU Affero General Public License")
+                            || header.contains("AGPL")
+                            || header.contains("General Public License"))
+                        {
+                            copyleftContaminated.add(javaFile.toString());
+                        }
+
+                        // Also verify no other file in core contains copyleft references in its body
+                        if (!"LicenseComplianceTest.java".equals(fileName)
+                            && (content.contains("GNU Affero General Public License")
+                                || content.contains("General Public License")))
+                        {
+                            copyleftContaminated.add(javaFile.toString());
+                        }
+                    }
+                    catch (final IOException e)
+                    {
+                        throw new RuntimeException("Failed reading " + javaFile, e);
+                    }
+                });
+            }
+        }
+
+        Assertions.assertTrue(
+            missingMitHeader.isEmpty(),
+            "Found Java files in neodymium-core without standard MIT license header:\n" + String.join("\n", missingMitHeader)
+        );
+
+        Assertions.assertTrue(
+            copyleftContaminated.isEmpty(),
+            "Found copyleft (GPL/AGPL) license references inside neodymium-core:\n" + String.join("\n", copyleftContaminated)
+        );
+    }
 }

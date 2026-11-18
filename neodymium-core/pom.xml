@@ -304,10 +304,7 @@
 						<artifactId>maven-surefire-plugin</artifactId>
 						<configuration>
 							<includes combine.self="override">
-								<include>org/neodymium/ai/model/**/*Test.java</include>
-								<include>org/neodymium/ai/unit/**/*Test.java</include>
-								<include>org/neodymium/ai/client/TokenUsageTest.java</include>
-								<include>com/xceptance/neodymium/aura/manager/unit/*Test.java</include>
+								<include>org/neodymium/license/**/*Test.java</include>
 								<include>com/xceptance/neodymium/util/AllureAddonsTest.java</include>
 								<include>com/xceptance/neodymium/util/AssertionUtilsTest.java</include>
 								<include>com/xceptance/neodymium/util/DebugUtilsTest.java</include>
@@ -362,28 +359,12 @@
 			</properties>
 		</profile>
 
-		<!-- 6. AI mock tests: pipeline, replay, and core AI unit/mock tests -->
+		<!-- 6. Skip AI mock tests in core (run in neodymium-ai and e2e-tests) -->
 		<profile>
 			<id>ai-mock-tests</id>
-			<build>
-				<plugins>
-					<plugin>
-						<groupId>org.apache.maven.plugins</groupId>
-						<artifactId>maven-surefire-plugin</artifactId>
-						<configuration>
-							<includes combine.self="override">
-								<include>org/neodymium/ai/**/*Test.java</include>
-								<include>com/xceptance/neodymium/aura/**/*Test.java</include>
-							</includes>
-							<excludes combine.self="override">
-								<exclude>com/xceptance/neodymium/junit4/**</exclude>
-								<exclude>com/xceptance/neodymium/junit5/**</exclude>
-							</excludes>
-							<excludedGroups>LiveAPI,LiveLlm,ExternalSite</excludedGroups>
-						</configuration>
-					</plugin>
-				</plugins>
-			</build>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
 		</profile>
 
 		<!-- 7. Skip AI live tests in core (run in e2e-tests) -->
@@ -432,8 +413,7 @@
 						<artifactId>maven-surefire-plugin</artifactId>
 						<configuration>
 							<includes combine.self="override">
-								<include>org/neodymium/ai/client/TokenUsageTest.java</include>
-								<include>org/neodymium/ai/model/ExecutionMetricsTest.java</include>
+								<include>org/neodymium/license/**/*Test.java</include>
 								<include>com/xceptance/neodymium/junit5/tests/DataUtilsTest.java</include>
 							</includes>
 						</configuration>
