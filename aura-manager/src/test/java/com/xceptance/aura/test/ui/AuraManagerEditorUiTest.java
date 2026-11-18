@@ -120,7 +120,7 @@ public final class AuraManagerEditorUiTest
             "CleanStepsSaveTest.yaml", "PlaybookPropertiesTest.yaml", "PlaybookAddPropsTest.yaml",
             "MarkerChipTest.yaml", "MetaPreservationTest.yaml",
             "AllControlTagsTest.yaml", "AllActionChipsTest.yaml", "InsertSubstepRowTest.yaml", "EditorSubstepMockRunTest.yaml",
-            "UndoRedoFullTest.yaml", "UndoRedoIntegrityTest.yaml"
+            "UndoRedoFullTest.yaml", "UndoRedoIntegrityTest.yaml", "ScrollPaletteTest.yaml"
         };
 
         for (final String dirPath : dirPaths)
@@ -1073,9 +1073,11 @@ public final class AuraManagerEditorUiTest
         $("#openModalBtn").shouldBe(Condition.visible).click();
         $("#newTestName").shouldBe(Condition.visible).setValue("Hierarchical Test.yaml");
         $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
 
         final SelenideElement toggleBtn = $("#toggleEditorFragmentViewBtn");
-        toggleBtn.shouldBe(Condition.visible);
+        toggleBtn.scrollIntoView(true).shouldBe(Condition.visible);
 
         Selenide.executeJavaScript("setFileViewMode('hierarchical');");
 
@@ -2891,6 +2893,84 @@ public final class AuraManagerEditorUiTest
         $("#rawEditorPanel").shouldBe(Condition.visible);
         Assertions.assertEquals("raw", editorPanel.getAttribute("data-mode"));
         rawYamlTextarea.shouldHave(Condition.value("# Raw integrity comment"));
+    }
+
+    @Test
+    public final void testEditorSidebarPaletteScrollableAndFragmentsVisibleWhenCollapsed()
+    {
+        open("http://localhost:" + port + "/playbooks");
+
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("ScrollPaletteTest.yaml");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        final SelenideElement visualContainer = $("#visualEditorContainer");
+        visualContainer.shouldBe(Condition.visible);
+
+        final SelenideElement sidePalette = $(".sidebar-palette-right");
+        sidePalette.shouldBe(Condition.visible);
+
+        // Verify visualEditorContainer does not overflow editorPanel vertically (no height clipping)
+        final Number containerOverflowDiff = Selenide.executeJavaScript(
+            "const panel = document.getElementById('editorPanel').getBoundingClientRect();" +
+            "const container = document.getElementById('visualEditorContainer').getBoundingClientRect();" +
+            "return container.bottom - panel.bottom;"
+        );
+        Assertions.assertNotNull(containerOverflowDiff);
+        Assertions.assertTrue(containerOverflowDiff.doubleValue() <= 2.0,
+            "visualEditorContainer must not overflow editorPanel bottom (clipping bug), diff: " + containerOverflowDiff);
+
+        // Verify sidebar-palette-right does not overflow visualEditorContainer or editorPanel (no 100vh leakage)
+        final Number paletteOverflowDiff = Selenide.executeJavaScript(
+            "const container = document.getElementById('visualEditorContainer').getBoundingClientRect();" +
+            "const palette = document.querySelector('.sidebar-palette-right').getBoundingClientRect();" +
+            "return palette.bottom - container.bottom;"
+        );
+        Assertions.assertNotNull(paletteOverflowDiff);
+        Assertions.assertTrue(paletteOverflowDiff.doubleValue() <= 2.0,
+            "sidebar-palette-right must not overflow visualEditorContainer bottom (100vh leakage bug), diff: " + paletteOverflowDiff);
+
+        // Scroll palette all the way to bottom
+        Selenide.executeJavaScript(
+            "const palette = document.querySelector('.sidebar-palette-right');" +
+            "palette.scrollTop = palette.scrollHeight;"
+        );
+
+        final SelenideElement fragCategory = $("#editorFragmentCategory");
+        fragCategory.shouldBe(Condition.visible);
+
+        // Verify search input and last fragment element are fully within palette viewport when scrolled to bottom
+        final Boolean areFragmentsVisible = Selenide.executeJavaScript(
+            "const palette = document.querySelector('.sidebar-palette-right').getBoundingClientRect();" +
+            "const search = document.getElementById('editorFragmentSearchInput').getBoundingClientRect();" +
+            "const cards = Array.from(document.querySelectorAll('#fragmentCardsContainer .include-card'));" +
+            "const lastCard = cards.length > 0 ? cards[cards.length - 1].getBoundingClientRect() : null;" +
+            "const searchVisible = search.top >= palette.top && search.bottom <= palette.bottom + 2.0;" +
+            "const cardVisible = !lastCard || (lastCard.top >= palette.top && lastCard.bottom <= palette.bottom + 2.0);" +
+            "return searchVisible || cardVisible;"
+        );
+        Assertions.assertEquals(Boolean.TRUE, areFragmentsVisible,
+            "Step fragment search bar or cards must be visible within palette viewport when scrolled to bottom");
+
+        // Switch to hierarchical mode
+        Selenide.executeJavaScript("setFileViewMode('hierarchical');");
+
+        // If folder groups exist, collapse one and verify Category 4 remains visible
+        final ElementsCollection folderHeaders = $$("#fragmentCardsContainer .tree-folder-header");
+        if (!folderHeaders.isEmpty())
+        {
+            folderHeaders.first().click();
+            // Re-scroll to bottom to verify collapsed state does not disappear
+            fragCategory.shouldBe(Condition.visible);
+            final Boolean isCategoryVisible = Selenide.executeJavaScript(
+                "const cat = document.getElementById('editorFragmentCategory').getBoundingClientRect();" +
+                "const pal = document.querySelector('.sidebar-palette-right').getBoundingClientRect();" +
+                "return cat.top >= pal.top && cat.top < pal.bottom;"
+            );
+            Assertions.assertEquals(Boolean.TRUE, isCategoryVisible,
+                "Category 4 should remain visible in sidebar palette viewport after collapsing folder");
+        }
     }
 }
 
