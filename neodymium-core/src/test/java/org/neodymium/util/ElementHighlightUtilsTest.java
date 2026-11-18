@@ -18,7 +18,6 @@
  */
 package org.neodymium.util;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -39,13 +38,18 @@ import static com.codeborne.selenide.Selenide.$;
 /**
  * Unit and integration tests for {@link ElementHighlightUtils}.
  *
- * @author AI-generated: Gemini 3.6 Flash
+ * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
 @RunWith(NeodymiumRunner.class)
 @Browser("Chrome_1500x1000_headless")
 public class ElementHighlightUtilsTest
 {
+    private static final String TEST_PAGE_URL = "data:text/html;charset=utf-8,"
+        + "<!DOCTYPE html><html><head><title>ElementHighlightUtils Test</title></head><body>"
+        + "<h1 class='site-title'>Neodymium Highlight Test</h1>"
+        + "</body></html>";
+
     @Test
     public void testAbstractJavaScriptExecutor()
     {
@@ -67,7 +71,7 @@ public class ElementHighlightUtilsTest
         Neodymium.configuration().setProperty("neodymium.debugUtils.highlight.duration", "1000");
         Neodymium.configuration().setProperty("neodymium.debugUtils.highlight.headless.withoutVideo", "true");
 
-        Selenide.open("https://blog.xceptance.com/");
+        Selenide.open(TEST_PAGE_URL);
         $(".site-title").shouldBe(visible);
 
         ElementHighlightUtils.injectHighlightingJs();
