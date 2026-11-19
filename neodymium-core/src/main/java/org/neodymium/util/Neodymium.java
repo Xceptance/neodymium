@@ -46,6 +46,7 @@ import com.browserup.bup.BrowserUpProxy;
 import com.codeborne.selenide.AssertionMode;
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
+import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.common.model.ExecutionAttachment;
 import org.neodymium.common.TestStepListener;
 import org.neodymium.common.browser.WebDriverStateContainer;
@@ -91,6 +92,9 @@ public class Neodymium
     // our global configuration
     private NeodymiumConfiguration configuration;
 
+    // our AI configuration
+    private AiConfiguration aiConfiguration;
+
     // localization
     private final NeodymiumLocalization localization;
 
@@ -113,6 +117,7 @@ public class Neodymium
             ConfigFactory.setProperty(TEMPORARY_CONFIG_FILE_PROPERTY_NAME, "file:this/path/should/never/exist/noOneShouldCreateMe.properties");
         }
         configuration = ConfigFactory.create(NeodymiumConfiguration.class, System.getProperties(), System.getenv());
+        aiConfiguration = AiConfiguration.getInstance();
         localization = NeodymiumLocalization.build(configuration.localizationFile());
     }
 
@@ -266,6 +271,16 @@ public class Neodymium
     public static NeodymiumConfiguration configuration()
     {
         return getContext().configuration;
+    }
+
+    /**
+     * Get the current AiConfiguration instance
+     * 
+     * @return aiConfiguration
+     */
+    public static AiConfiguration aiConfiguration()
+    {
+        return getContext().aiConfiguration;
     }
 
 
@@ -1004,6 +1019,15 @@ public class Neodymium
         }
     }
 
+
+    /**
+     * Re-creates the thread-local AI configuration instance from the latest system properties and env.
+     */
+    public static void reloadAiConfiguration()
+    {
+        AiConfiguration.resetInstance();
+        getContext().aiConfiguration = AiConfiguration.getInstance();
+    }
 
     /**
      * Re-creates the thread-local main configuration instance from the latest system properties and env.
