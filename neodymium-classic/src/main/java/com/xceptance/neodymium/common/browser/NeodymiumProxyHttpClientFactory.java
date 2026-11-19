@@ -20,6 +20,12 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
+ *
+ * This class contains code derived from the Selenium project
+ * (org.openqa.selenium.remote.internal.OkHttpClient).
+ * Copyright (c) Software Freedom Conservancy, licensed under the Apache License, Version 2.0.
+ * In compliance with Section 4(b) of the Apache License, Version 2.0, modifications are
+ * documented inline.
  */
 package com.xceptance.neodymium.common.browser;
 

@@ -101,6 +101,22 @@ public class LicenseComplianceTest
     }
 
     @Test
+    @DisplayName("Assert that neodymium-e2e-tests declares dual-license in POM and all Java files")
+    public void testNeodymiumE2eTestsDeclaresDualLicenseAndCanonicalHeaders() throws IOException
+    {
+        assertPomDeclaresDualLicense(findRepoRoot().resolve("neodymium-e2e-tests/pom.xml"), "neodymium-e2e-tests");
+        assertDualLicenseHeadersInDirectory(findRepoRoot().resolve("neodymium-e2e-tests"), "neodymium-e2e-tests");
+    }
+
+    @Test
+    @DisplayName("Assert that neodymium-archetype declares dual-license in POM and template Java files")
+    public void testNeodymiumArchetypeDeclaresDualLicenseAndCanonicalHeaders() throws IOException
+    {
+        assertPomDeclaresDualLicense(findRepoRoot().resolve("neodymium-archetype/pom.xml"), "neodymium-archetype");
+        assertDualLicenseHeadersInDirectory(findRepoRoot().resolve("neodymium-archetype"), "neodymium-archetype");
+    }
+
+    @Test
     @DisplayName("Assert that root LICENSE covers all three licensing tiers: MIT, AGPLv3, and Commercial")
     public void testRootLicenseCoversAllThreeLicenseTiers() throws IOException
     {
@@ -192,20 +208,17 @@ public class LicenseComplianceTest
 
     private static void assertDualLicenseHeadersInDirectory(final Path rootDir, final String moduleName)
     {
-        final Path mainJava = rootDir.resolve("src/main/java");
-        final Path testJava = rootDir.resolve("src/test/java");
+        final Path src = rootDir.resolve("src");
+        if (!Files.isDirectory(src))
+        {
+            return;
+        }
 
         final List<String> missingDualLicenseHeader = new ArrayList<>();
         final List<String> missingCommercialClause = new ArrayList<>();
         final List<String> missingAgplClause = new ArrayList<>();
 
-        for (final Path srcDir : List.of(mainJava, testJava))
-        {
-            if (!Files.isDirectory(srcDir))
-            {
-                continue;
-            }
-            try (final Stream<Path> paths = Files.walk(srcDir))
+        try (final Stream<Path> paths = Files.walk(src))
             {
                 paths.filter(p -> p.toString().endsWith(".java")).forEach(javaFile ->
                 {
@@ -247,9 +260,8 @@ public class LicenseComplianceTest
             }
             catch (final IOException e)
             {
-                throw new RuntimeException("Failed walking directory " + srcDir, e);
+                throw new RuntimeException("Failed walking directory " + src, e);
             }
-        }
 
         Assertions.assertTrue(
             missingDualLicenseHeader.isEmpty(),

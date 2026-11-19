@@ -23,6 +23,7 @@
  */
 package org.neodymium.common.browser;
 
+import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.common.Data;
 import org.neodymium.junit5.NeodymiumTest;
 import org.neodymium.util.Neodymium;
@@ -34,7 +35,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
 import java.lang.annotation.Annotation;
-import java.lang.annotation.Repeatable;
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Method;
 import java.text.MessageFormat;
@@ -277,7 +277,7 @@ public class BrowserData extends Data
         BrowserMethodData browserMethodData = addKeepBrowserOpenInformationForBeforeOrAfter(browserTag, method);
         final boolean junit5 = NeodymiumAnnotationUtils.isAnnotationPresent(method, NeodymiumTest.class)
             || NeodymiumAnnotationUtils.isAnnotationPresent(testClass, NeodymiumTest.class)
-            || NeodymiumAnnotationUtils.isAnnotationPresent(testClass, "NeodymiumAiTest")
+            || NeodymiumAnnotationUtils.isAnnotationPresent(testClass, NeodymiumAiTest.class)
             || Stream.of(testClass.getMethods()).anyMatch(classMethod -> classMethod.isAnnotationPresent(AfterEach.class) || classMethod.isAnnotationPresent(BeforeEach.class));
         List<Method> afterMethodsWithTestBrowser = Stream.of(testClass.getMethods())
                                                          .filter(classMethod -> (junit5 ? classMethod.getAnnotation(AfterEach.class)

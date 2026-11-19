@@ -11,7 +11,7 @@ Neodymium Licensing Architecture
 1. Neodymium Classic (Module: neodymium-classic):
    Licensed under the permissive MIT License.
 
-2. Neodymium AI (Modules: neodymium-core, aura-manager):
+2. Neodymium AI (Modules: neodymium-core, aura-manager, neodymium-test-server, neodymium-e2e-tests, neodymium-archetype):
    Dual-licensed under:
    - GNU Affero General Public License, Version 3 (AGPLv3) (Community Edition)
    - Xceptance Commercial License (Enterprise / Commercial Edition)
@@ -21,8 +21,9 @@ Third-Party Software and Modification Attributions
 ========================================================================
 
 1. Selenium / Software Freedom Conservancy
-   This product includes software modified from the Selenium project
-   (org.openqa.selenium.remote.http.jdk.JdkHttpClient).
+   This product includes software modified from or derived from the Selenium project:
+   - org.openqa.selenium.remote.http.jdk.JdkHttpClient
+   - org.neodymium.common.browser.NeodymiumProxyHttpClientFactory (derived from OkHttpClient.Factory.Builder)
    Copyright (c) Software Freedom Conservancy.
    Licensed under the Apache License, Version 2.0.
    Prominent modification notices are preserved in the respective source files

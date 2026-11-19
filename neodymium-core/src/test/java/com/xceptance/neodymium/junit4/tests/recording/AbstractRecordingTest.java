@@ -36,6 +36,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import com.codeborne.selenide.Selenide;
+import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import org.neodymium.common.browser.Browser;
 import org.neodymium.common.recording.FilmTestExecution;
 import org.neodymium.common.recording.config.RecordingConfigurations;
@@ -85,31 +86,13 @@ public abstract class AbstractRecordingTest extends NeodymiumTest
         Selenide.sleep(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).oneImagePerMilliseconds());
     }
 
-    private static String resolveRunFolder()
-    {
-        try
-        {
-            final Class<?> engineClass = Class.forName("com.xceptance.neodymium.ai.console.InteractiveConsoleEngine");
-            final Object folder = engineClass.getMethod("getRunFolder").invoke(null);
-            return folder != null ? folder.toString() : "";
-        }
-        catch (final Throwable ignored)
-        {
-            return "";
-        }
-    }
-
     @AfterClass
     public static void assertRecordingFileExists()
     {
-        final String runFolder = resolveRunFolder();
-        File recordingFile = null;
-        if (!runFolder.isEmpty())
-        {
-            recordingFile = new File(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).tempFolderToStoreRecording() + runFolder + "/" + uuid.get(Thread.currentThread()) + "."
-                + FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).format());
-        }
-        if (recordingFile == null || !recordingFile.exists())
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        File recordingFile = new File(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).tempFolderToStoreRecording() + runFolder + "/" + uuid.get(Thread.currentThread()) + "."
+            + FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).format());
+        if (!recordingFile.exists())
         {
             recordingFile = new File(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).tempFolderToStoreRecording() + uuid.get(Thread.currentThread()) + "."
                 + FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).format());

@@ -67,7 +67,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.URI;
 import java.net.URLEncoder;
-import org.neodymium.common.model.ExecutionAttachment;
+import org.neodymium.ai.model.ExecutionAttachment;
 import org.neodymium.util.Neodymium;
 
 /**

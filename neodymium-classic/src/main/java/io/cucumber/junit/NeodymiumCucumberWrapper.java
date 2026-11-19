@@ -35,6 +35,12 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerScheduler;
 import org.junit.runners.model.Statement;
 
+/**
+ * Custom runner bridge placed in {@code io.cucumber.junit} to integrate Neodymium's execution
+ * lifecycle with Cucumber JUnit 4 protected members.
+ *
+ * @author Xceptance Software Technologies GmbH 2026
+ */
 public class NeodymiumCucumberWrapper extends ParentRunner<ParentRunner<?>>
 {
     private Cucumber cucumber;

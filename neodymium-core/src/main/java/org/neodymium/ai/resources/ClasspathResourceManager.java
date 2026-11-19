@@ -32,7 +32,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.util.Neodymium;
 
 /**
  * PlaybookResourceManager implementation that reads resources from the Java Classpath.
@@ -305,7 +305,7 @@ public final class ClasspathResourceManager implements PlaybookResourceManager
         // 2. Explicit configured directory if present and existing on disk
         try
         {
-            final String globalDir = AiConfiguration.getInstance().getProperty("playbook.directory.global", null);
+            final String globalDir = Neodymium.aiConfiguration().getProperty("playbook.directory.global", null);
             if (globalDir != null && !globalDir.trim().isEmpty())
             {
                 final Path configuredPath = Path.of(globalDir.trim());

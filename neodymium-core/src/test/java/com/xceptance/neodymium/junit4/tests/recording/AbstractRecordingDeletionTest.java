@@ -24,6 +24,7 @@
 package com.xceptance.neodymium.junit4.tests.recording;
 
 import com.codeborne.selenide.Selenide;
+import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import org.neodymium.common.browser.Browser;
 import org.neodymium.common.recording.FilmTestExecution;
 import org.neodymium.common.recording.config.RecordingConfigurations;
@@ -86,31 +87,14 @@ public abstract class AbstractRecordingDeletionTest extends NeodymiumTest
         Selenide.sleep(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).oneImagePerMilliseconds());
     }
 
-    private static String resolveRunFolder()
-    {
-        try
-        {
-            final Class<?> engineClass = Class.forName("com.xceptance.neodymium.ai.console.InteractiveConsoleEngine");
-            final Object folder = engineClass.getMethod("getRunFolder").invoke(null);
-            return folder != null ? folder.toString() : "";
-        }
-        catch (final Throwable ignored)
-        {
-            return "";
-        }
-    }
-
     @AfterClass
     public static void assertRecordingFileWasDeleted()
     {
-        final String runFolder = resolveRunFolder();
-        if (!runFolder.isEmpty())
-        {
-            final File recordingFile = new File(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).tempFolderToStoreRecording() + runFolder + "/" + uuid.get(Thread.currentThread()) + "."
-                + FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).format());
-            Assert.assertFalse("the recording file wasn't deleted", recordingFile.exists());
-        }
-        final File baseRecordingFile = new File(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).tempFolderToStoreRecording() + uuid.get(Thread.currentThread()) + "."
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        File recordingFile = new File(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).tempFolderToStoreRecording() + runFolder + "/" + uuid.get(Thread.currentThread()) + "."
+            + FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).format());
+        Assert.assertFalse("the recording file wasn't deleted", recordingFile.exists());
+        File baseRecordingFile = new File(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).tempFolderToStoreRecording() + uuid.get(Thread.currentThread()) + "."
             + FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).format());
         Assert.assertFalse("the base recording file wasn't deleted", baseRecordingFile.exists());
     }

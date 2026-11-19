@@ -38,7 +38,8 @@ import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
 import java.util.stream.Stream;
-import org.neodymium.util.NeodymiumAnnotationUtils;
+import org.neodymium.ai.junit.AiPlaybook;
+import org.neodymium.ai.junit.NeodymiumAiTest;
 
 public class NeodymiumRunner implements TestTemplateInvocationContextProvider
 {
@@ -92,9 +93,9 @@ public class NeodymiumRunner implements TestTemplateInvocationContextProvider
         }
         final Class<?> testClass = context.getRequiredTestClass();
         final Method method = context.getRequiredTestMethod();
-        if (NeodymiumAnnotationUtils.isAnnotationPresent(testClass, "NeodymiumAiTest")
-            || NeodymiumAnnotationUtils.isAnnotationPresent(testClass, "AiPlaybook")
-            || NeodymiumAnnotationUtils.isAnnotationPresent(method, "AiPlaybook"))
+        if (testClass.isAnnotationPresent(NeodymiumAiTest.class)
+            || testClass.isAnnotationPresent(AiPlaybook.class)
+            || method.isAnnotationPresent(AiPlaybook.class))
         {
             return false;
         }

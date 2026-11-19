@@ -41,11 +41,11 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 
 import com.codeborne.selenide.WebDriverRunner;
+import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import org.neodymium.util.Neodymium;
 import static org.openqa.selenium.support.ui.ExpectedConditions.alertIsPresent;
 
@@ -252,7 +252,7 @@ public class TakeScreenshotsThread extends Thread
                     File finalRecording = tempRecording;
                     if (tempRecording.exists())
                     {
-                        final String runFolder = resolveInteractiveConsoleRunFolder();
+                        final String runFolder = InteractiveConsoleEngine.getRunFolder();
                         if (runFolder != null && !runFolder.isEmpty())
                         {
                             final File runFolderDir = new File(recordingConfigurations.tempFolderToStoreRecording(), runFolder);
@@ -273,7 +273,13 @@ public class TakeScreenshotsThread extends Thread
                         }
                     }
 
-                    notifyInteractiveConsole(finalRecording, testName);
+                    try
+                    {
+                        InteractiveConsoleEngine.attachVideoToLatestExecutionLog(finalRecording, testName);
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
 
                     if (recordingConfigurations.appendAllRecordingsToAllureReport() || testFailed)
                     {
@@ -341,31 +347,4 @@ public class TakeScreenshotsThread extends Thread
         run = false;
     }
 
-    private static void notifyInteractiveConsole(final File finalRecording, final String testName)
-    {
-        try
-        {
-            final Class<?> consoleClass = Class.forName("com.xceptance.neodymium.ai.console.InteractiveConsoleEngine");
-            final Method attachMethod = consoleClass.getMethod("attachVideoToLatestExecutionLog", File.class, String.class);
-            attachMethod.invoke(null, finalRecording, testName);
-        }
-        catch (final Exception ignored)
-        {
-        }
-    }
-
-    private static String resolveInteractiveConsoleRunFolder()
-    {
-        try
-        {
-            final Class<?> consoleClass = Class.forName("com.xceptance.neodymium.ai.console.InteractiveConsoleEngine");
-            final Method getFolderMethod = consoleClass.getMethod("getRunFolder");
-            final Object result = getFolderMethod.invoke(null);
-            return result instanceof String ? (String) result : null;
-        }
-        catch (final Exception ignored)
-        {
-            return null;
-        }
-    }
 }

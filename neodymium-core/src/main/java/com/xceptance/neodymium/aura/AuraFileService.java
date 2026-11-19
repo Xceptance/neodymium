@@ -51,7 +51,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.neodymium.ai.util.AtomicFileUtils;
-import org.neodymium.common.testdata.util.YamlStepPreprocessor;
 import org.neodymium.util.TagUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,9 +67,17 @@ import org.yaml.snakeyaml.Yaml;
 public final class AuraFileService
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(AuraFileService.class);
+    private static final Pattern FOLDED_BLOCK_SCALAR_PATTERN = Pattern.compile(
+        "(?m)^([ \\t]*(?:-\\s+|(?:steps|_steps|before|beforeEach|_beforeEach|after|afterEach|_afterEach):\\s*))>(-\\s*(?:#.*)?|[ \\t]*(?:#.*)?)$"
+    );
+
     private static final Pattern STRUCTURED_AREA_TAG_PATTERN = Pattern.compile(
         "(?im)^[ \\t]*(?:tags|_tags)\\s*:\\s*\\r?\\n(?:[ \\t]+[^\\r\\n]*\\r?\\n)*?[ \\t]+(?:area|Area)\\s*:\\s*(?:\\r?\\n[ \\t]*-\\s*[\"']?@?([a-zA-Z0-9][a-zA-Z0-9_-]*)[\"']?|[ \\t]*[\"']?@?([a-zA-Z0-9][a-zA-Z0-9_-]*)[\"']?)"
     );
+
+    private static final Pattern STEP_LIST_ITEM_PATTERN = Pattern.compile("^(\\s*-\\s+)(.*)$");
+
+    private static final Pattern CONDITIONAL_INCLUDE_PATTERN = Pattern.compile("(?i)^if\\s+.*(?:_include|include):.*");
 
     /**
      * Normalizes folded block scalars ({@code >} and {@code >-}) to literal block scalars
@@ -87,20 +94,112 @@ public final class AuraFileService
      */
     public static String normalizeBlockScalars(final String content)
     {
-        return YamlStepPreprocessor.normalizeBlockScalars(content);
+        if (content == null || content.isEmpty())
+        {
+            return content;
+        }
+        return FOLDED_BLOCK_SCALAR_PATTERN.matcher(content).replaceAll("$1|$2");
     }
 
     /**
      * Preprocesses YAML script content to normalize block scalars and sanitize unquoted
      * step instructions containing YAML special characters (such as square brackets {@code [...]}
      * used in CSS attribute selectors or parameter hints, and inline conditional includes).
+     * <p>
+     * In the YAML 1.2 specification, square brackets {@code [...]} are reserved syntax designating
+     * flow sequences (inline arrays). When an unquoted step line in a list contains square brackets
+     * (e.g. {@code - Enter credit card (hint selector: [data-cse='...']) ${cardNumber}} or
+     * {@code - [data-testid='btn'] Click}), SnakeYAML interprets them as flow sequences and throws
+     * a {@code ParserException} due to trailing scalar characters on the same line.
+     * This preprocessor detects unquoted step lines containing square brackets and automatically
+     * quotes them, ensuring they are parsed cleanly as literal string steps.
+     * </p>
      *
      * @param content the raw YAML string content
      * @return the preprocessed YAML content safe for parsing
      */
     public static String preprocessYamlSteps(final String content)
     {
-        return YamlStepPreprocessor.preprocessYamlSteps(content);
+        if (content == null || content.isEmpty())
+        {
+            return content;
+        }
+
+        final String normalized = normalizeBlockScalars(content);
+        final String[] lines = normalized.split("\\r?\\n", -1);
+        final StringBuilder sb = new StringBuilder(normalized.length() + 64);
+
+        for (int i = 0; i < lines.length; i++)
+        {
+            final String line = lines[i];
+            final Matcher m = STEP_LIST_ITEM_PATTERN.matcher(line);
+            if (m.find())
+            {
+                final String prefix = m.group(1);
+                final String rawValue = m.group(2);
+                final String trimmed = rawValue.trim();
+
+                if (shouldQuoteStepLine(trimmed))
+                {
+                    final String escaped = trimmed.replace("\\", "\\\\").replace("\"", "\\\"");
+                    sb.append(prefix).append("\"").append(escaped).append("\"");
+                }
+                else
+                {
+                    sb.append(line);
+                }
+            }
+            else
+            {
+                sb.append(line);
+            }
+
+            if (i < lines.length - 1)
+            {
+                sb.append("\n");
+            }
+        }
+
+        return sb.toString();
+    }
+
+    private static boolean shouldQuoteStepLine(final String trimmed)
+    {
+        if (trimmed.isEmpty() || trimmed.startsWith("\"") || trimmed.startsWith("'")
+            || trimmed.startsWith("|") || trimmed.startsWith(">") || trimmed.startsWith("#"))
+        {
+            return false;
+        }
+
+        // Conditional include statements like: If ... _include: ...
+        if (CONDITIONAL_INCLUDE_PATTERN.matcher(trimmed).matches())
+        {
+            return true;
+        }
+
+        // Check for structural YAML keys in playbooks/steps/data
+        final String lower = trimmed.toLowerCase(Locale.ROOT);
+        if (lower.startsWith("_include:") || lower.startsWith("include:")
+            || lower.startsWith("instruction:") || lower.startsWith("promptline:")
+            || lower.startsWith("step:") || lower.startsWith("actions:")
+            || lower.startsWith("substeps:") || lower.startsWith("steps:")
+            || lower.startsWith("_steps:") || lower.startsWith("data:")
+            || lower.startsWith("_data:") || lower.startsWith("tags:")
+            || lower.startsWith("_tags:") || lower.startsWith("properties:")
+            || lower.startsWith("_properties:") || lower.startsWith("type:")
+            || lower.startsWith("target:") || lower.startsWith("value:"))
+        {
+            return false;
+        }
+
+        // Natural language steps containing square brackets (e.g. CSS attribute selectors [data-cse='...'])
+        // or starting with a bracketed selector (e.g. [data-test=...] click)
+        if (trimmed.contains("[") && (trimmed.contains("]") || trimmed.startsWith("[")))
+        {
+            return true;
+        }
+
+        return false;
     }
 
 

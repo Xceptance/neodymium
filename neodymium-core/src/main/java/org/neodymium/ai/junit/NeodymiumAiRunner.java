@@ -1487,7 +1487,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             }
 
             executionContext.getTransientData().put("playbook.resolvedPath", resolvedPlaybookPath);
-            executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_MODEL, AiConfiguration.getInstance().aiModel());
+            executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_MODEL, Neodymium.aiConfiguration().aiModel());
             executionContext.getTransientData().put(ExecutionContext.KEY_RESOURCE_MANAGER, manager);
             executionContext.getTransientData().put(ExecutionContext.KEY_PLAYBOOK_PARSER, parser);
             executionContext.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, this.effectiveMode);

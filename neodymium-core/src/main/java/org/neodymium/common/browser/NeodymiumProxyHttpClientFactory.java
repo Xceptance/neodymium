@@ -20,6 +20,12 @@
  *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * This class contains code derived from the Selenium project
+ * (org.openqa.selenium.remote.internal.OkHttpClient).
+ * Copyright (c) Software Freedom Conservancy, licensed under the Apache License, Version 2.0.
+ * In compliance with Section 4(b) of the Apache License, Version 2.0, modifications are
+ * documented inline.
  */
 package org.neodymium.common.browser;
 

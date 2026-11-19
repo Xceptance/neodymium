@@ -10,7 +10,7 @@ or feature set you are using:
    - Free to use, modify, distribute, and host for both commercial
      and non-commercial purposes without restriction.
 
-2. Neodymium AI (Modules: neodymium-core, aura-manager)
+2. Neodymium AI (Modules: neodymium-core, aura-manager, neodymium-test-server, neodymium-e2e-tests, neodymium-archetype)
    - Dual-licensed under:
      a) GNU Affero General Public License (AGPLv3) (see SECTION B below).
         Free for development, testing, and internal applications.

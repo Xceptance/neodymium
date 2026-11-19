@@ -47,7 +47,7 @@ import com.codeborne.selenide.AssertionMode;
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
 import org.neodymium.ai.config.AiConfiguration;
-import org.neodymium.common.model.ExecutionAttachment;
+import org.neodymium.ai.model.ExecutionAttachment;
 import org.neodymium.common.TestStepListener;
 import org.neodymium.common.browser.WebDriverStateContainer;
 import org.neodymium.common.browser.configuration.BrowserConfiguration;
