@@ -59,7 +59,6 @@ import com.xceptance.aura.report.repository.TestRunTagRepository;
 import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.ReportDashboardSettingService;
 import com.xceptance.aura.report.service.RunStorageSyncService;
-import java.io.ByteArrayOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -78,7 +77,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.core.io.Resource;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.web.servlet.MockMvc;
@@ -5816,16 +5815,18 @@ public class AuraReportViewControllerTest
 
         try
         {
-            final ResponseEntity<?> response = controller.serveRunFile(
+            final MockHttpServletResponse response = new MockHttpServletResponse();
+            controller.serveRunFile(
                 runId,
                 "com.xceptance.neodymium.aura.sandbox.SampleTestClass",
-                "video-1.mp4"
+                "video-1.mp4",
+                response
             );
 
-            Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
-            Assertions.assertNotNull(response.getBody());
-            Assertions.assertEquals("video/mp4", response.getHeaders().getContentType().toString());
-            Assertions.assertEquals("bytes", response.getHeaders().getFirst("Accept-Ranges"));
+            Assertions.assertEquals(HttpServletResponse.SC_OK, response.getStatus());
+            Assertions.assertEquals("video/mp4", response.getContentType());
+            Assertions.assertEquals("bytes", response.getHeader("Accept-Ranges"));
+            Assertions.assertEquals("dummy video data", response.getContentAsString());
         }
         finally
         {
@@ -5836,27 +5837,31 @@ public class AuraReportViewControllerTest
     }
 
     @Test
-    public void testServeRunFileNotFoundReturns404()
+    public void testServeRunFileNotFoundReturns404() throws Exception
     {
-        final ResponseEntity<?> response = controller.serveRunFile(
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        controller.serveRunFile(
             "non_existent_run",
             "com.xceptance.neodymium.aura.sandbox.NonExistentTest",
-            "video-1.mp4"
+            "video-1.mp4",
+            response
         );
 
-        Assertions.assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        Assertions.assertEquals(HttpServletResponse.SC_NOT_FOUND, response.getStatus());
     }
 
     @Test
-    public void testServeRunFilePathTraversalReturns404()
+    public void testServeRunFilePathTraversalReturns404() throws Exception
     {
-        final ResponseEntity<?> response = controller.serveRunFile(
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        controller.serveRunFile(
             "test_run",
             "../../etc",
-            "passwd"
+            "passwd",
+            response
         );
 
-        Assertions.assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        Assertions.assertEquals(HttpServletResponse.SC_NOT_FOUND, response.getStatus());
     }
 
     @Test
@@ -5874,18 +5879,21 @@ public class AuraReportViewControllerTest
 
         try
         {
-            final ResponseEntity<?> gifResp = controller.serveRunFile(runId, "MediaTestClass", "animation.gif");
-            Assertions.assertEquals(HttpStatus.OK, gifResp.getStatusCode());
-            Assertions.assertEquals("image/gif", gifResp.getHeaders().getContentType().toString());
+            final MockHttpServletResponse gifResp = new MockHttpServletResponse();
+            controller.serveRunFile(runId, "MediaTestClass", "animation.gif", gifResp);
+            Assertions.assertEquals(HttpServletResponse.SC_OK, gifResp.getStatus());
+            Assertions.assertEquals("image/gif", gifResp.getContentType());
 
-            final ResponseEntity<?> mp4Resp = controller.serveRunFile(runId, "MediaTestClass", "recording.MP4");
-            Assertions.assertEquals(HttpStatus.OK, mp4Resp.getStatusCode());
-            Assertions.assertEquals("video/mp4", mp4Resp.getHeaders().getContentType().toString());
-            Assertions.assertEquals("nosniff", mp4Resp.getHeaders().getFirst("X-Content-Type-Options"));
+            final MockHttpServletResponse mp4Resp = new MockHttpServletResponse();
+            controller.serveRunFile(runId, "MediaTestClass", "recording.MP4", mp4Resp);
+            Assertions.assertEquals(HttpServletResponse.SC_OK, mp4Resp.getStatus());
+            Assertions.assertEquals("video/mp4", mp4Resp.getContentType());
+            Assertions.assertEquals("nosniff", mp4Resp.getHeader("X-Content-Type-Options"));
 
-            final ResponseEntity<?> jpgResp = controller.serveRunFile(runId, "MediaTestClass", "snapshot.jpg");
-            Assertions.assertEquals(HttpStatus.OK, jpgResp.getStatusCode());
-            Assertions.assertEquals("image/jpeg", jpgResp.getHeaders().getContentType().toString());
+            final MockHttpServletResponse jpgResp = new MockHttpServletResponse();
+            controller.serveRunFile(runId, "MediaTestClass", "snapshot.jpg", jpgResp);
+            Assertions.assertEquals(HttpServletResponse.SC_OK, jpgResp.getStatus());
+            Assertions.assertEquals("image/jpeg", jpgResp.getContentType());
         }
         finally
         {
@@ -5908,15 +5916,17 @@ public class AuraReportViewControllerTest
 
         try
         {
-            final ResponseEntity<?> response = controller.serveRunFile(
+            final MockHttpServletResponse response = new MockHttpServletResponse();
+            controller.serveRunFile(
                 runId,
                 "com.xceptance.neodymium.CheckoutTest#testPaymentWithCreditCard",
-                "video-1.mp4"
+                "video-1.mp4",
+                response
             );
 
-            Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
-            Assertions.assertNotNull(response.getBody());
-            Assertions.assertEquals("video/mp4", response.getHeaders().getContentType().toString());
+            Assertions.assertEquals(HttpServletResponse.SC_OK, response.getStatus());
+            Assertions.assertEquals("video/mp4", response.getContentType());
+            Assertions.assertEquals("dummy video data", response.getContentAsString());
         }
         finally
         {
@@ -5936,13 +5946,15 @@ public class AuraReportViewControllerTest
 
         try
         {
-            final ResponseEntity<?> response = controller.serveRunFile(
+            final MockHttpServletResponse response = new MockHttpServletResponse();
+            controller.serveRunFile(
                 runId,
                 "SampleTestClass",
-                "subfolder"
+                "subfolder",
+                response
             );
 
-            Assertions.assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+            Assertions.assertEquals(HttpServletResponse.SC_NOT_FOUND, response.getStatus());
         }
         finally
         {
@@ -5963,23 +5975,21 @@ public class AuraReportViewControllerTest
 
         try
         {
-            final ResponseEntity<?> response = controller.serveRunFile(
+            final MockHttpServletResponse response = new MockHttpServletResponse();
+            controller.serveRunFile(
                 runId,
                 "SampleTestClass",
                 "video-1.mp4",
-                "bytes=0-4"
+                "bytes=0-4",
+                response
             );
 
-            Assertions.assertEquals(HttpStatus.PARTIAL_CONTENT, response.getStatusCode());
-            Assertions.assertEquals("video/mp4", response.getHeaders().getContentType().toString());
-            Assertions.assertEquals("bytes", response.getHeaders().getFirst("Accept-Ranges"));
-            Assertions.assertEquals("bytes 0-4/20", response.getHeaders().getFirst("Content-Range"));
-            Assertions.assertEquals(5L, response.getHeaders().getContentLength());
-            Assertions.assertInstanceOf(StreamingResponseBody.class, response.getBody());
-
-            final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            ((StreamingResponseBody) response.getBody()).writeTo(baos);
-            Assertions.assertEquals("01234", baos.toString());
+            Assertions.assertEquals(HttpServletResponse.SC_PARTIAL_CONTENT, response.getStatus());
+            Assertions.assertEquals("video/mp4", response.getContentType());
+            Assertions.assertEquals("bytes", response.getHeader("Accept-Ranges"));
+            Assertions.assertEquals("bytes 0-4/20", response.getHeader("Content-Range"));
+            Assertions.assertEquals(5L, response.getContentLengthLong());
+            Assertions.assertEquals("01234", response.getContentAsString());
         }
         finally
         {
@@ -6000,23 +6010,21 @@ public class AuraReportViewControllerTest
 
         try
         {
-            final ResponseEntity<?> response = controller.serveRunFile(
+            final MockHttpServletResponse response = new MockHttpServletResponse();
+            controller.serveRunFile(
                 runId,
                 "SampleTestClass",
                 "video-1.mp4",
-                "bytes=-5"
+                "bytes=-5",
+                response
             );
 
-            Assertions.assertEquals(HttpStatus.PARTIAL_CONTENT, response.getStatusCode());
-            Assertions.assertEquals("video/mp4", response.getHeaders().getContentType().toString());
-            Assertions.assertEquals("bytes", response.getHeaders().getFirst("Accept-Ranges"));
-            Assertions.assertEquals("bytes 15-19/20", response.getHeaders().getFirst("Content-Range"));
-            Assertions.assertEquals(5L, response.getHeaders().getContentLength());
-            Assertions.assertInstanceOf(StreamingResponseBody.class, response.getBody());
-
-            final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            ((StreamingResponseBody) response.getBody()).writeTo(baos);
-            Assertions.assertEquals("fghij", baos.toString());
+            Assertions.assertEquals(HttpServletResponse.SC_PARTIAL_CONTENT, response.getStatus());
+            Assertions.assertEquals("video/mp4", response.getContentType());
+            Assertions.assertEquals("bytes", response.getHeader("Accept-Ranges"));
+            Assertions.assertEquals("bytes 15-19/20", response.getHeader("Content-Range"));
+            Assertions.assertEquals(5L, response.getContentLengthLong());
+            Assertions.assertEquals("fghij", response.getContentAsString());
         }
         finally
         {
@@ -6037,16 +6045,18 @@ public class AuraReportViewControllerTest
 
         try
         {
-            final ResponseEntity<?> response = controller.serveRunFile(
+            final MockHttpServletResponse response = new MockHttpServletResponse();
+            controller.serveRunFile(
                 runId,
                 "SampleTestClass",
                 "video-1.mp4",
-                "bytes=100-200"
+                "bytes=100-200",
+                response
             );
 
-            Assertions.assertEquals(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE, response.getStatusCode());
-            Assertions.assertEquals("bytes", response.getHeaders().getFirst("Accept-Ranges"));
-            Assertions.assertEquals("bytes */20", response.getHeaders().getFirst("Content-Range"));
+            Assertions.assertEquals(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE, response.getStatus());
+            Assertions.assertEquals("bytes", response.getHeader("Accept-Ranges"));
+            Assertions.assertEquals("bytes */20", response.getHeader("Content-Range"));
         }
         finally
         {
@@ -6067,15 +6077,17 @@ public class AuraReportViewControllerTest
 
         try
         {
-            final ResponseEntity<?> response = controller.serveRunFile(
+            final MockHttpServletResponse response = new MockHttpServletResponse();
+            controller.serveRunFile(
                 runId,
                 "SampleTestClass",
                 "video-1.mp4",
-                "invalid-range-format"
+                "invalid-range-format",
+                response
             );
 
-            Assertions.assertEquals(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE, response.getStatusCode());
-            Assertions.assertEquals("bytes", response.getHeaders().getFirst("Accept-Ranges"));
+            Assertions.assertEquals(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE, response.getStatus());
+            Assertions.assertEquals("bytes", response.getHeader("Accept-Ranges"));
         }
         finally
         {
