@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.UUID;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,11 +34,11 @@ public class FilmTestExecutionSafetyNetTest
     }
 
     @Test
-    public void testVideoConfigurationsDefaultToFailureOnly()
+    public void testVideoConfigurationsDefaultToAppendAllRecordings()
     {
         final VideoRecordingConfigurations config = (VideoRecordingConfigurations) FilmTestExecution.getContext(VideoRecordingConfigurations.class);
-        Assertions.assertFalse(config.appendAllRecordingsToAllureReport(),
-            "video.appendAllRecordingsToAllureReport should default to false to prevent attaching unneeded passing test videos");
+        Assertions.assertTrue(config.appendAllRecordingsToAllureReport(),
+            "video.appendAllRecordingsToAllureReport should default to true so tagged recordings are retained");
     }
 
     @Test
@@ -52,6 +51,26 @@ public class FilmTestExecutionSafetyNetTest
         {
             Assertions.assertFalse(FilmTestExecution.getNamesOfAllCurrentVideoRecordings().contains(recordingId),
                 "No video recording thread should be started when enableFilming is false");
+        }
+        finally
+        {
+            FilmTestExecution.finishVideoFilming(recordingId, false);
+        }
+    }
+
+    @Test
+    public void testStartVideoRecordingSucceedsWhenFilmingEnabledBeforeDriverInit()
+    {
+        FilmTestExecution.getContextVideo().setProperty("video.enableFilming", "true");
+        Assertions.assertFalse(Neodymium.hasDriver(), "Driver must not be initialized yet (setUpTest state)");
+
+        final String recordingId = "test-filming-before-driver-" + UUID.randomUUID();
+        FilmTestExecution.startVideoRecording(recordingId);
+
+        try
+        {
+            Assertions.assertTrue(FilmTestExecution.getNamesOfAllCurrentVideoRecordings().contains(recordingId),
+                "Video recording thread should be started when enableFilming is true even before driver is initialized");
         }
         finally
         {
@@ -89,6 +108,7 @@ public class FilmTestExecutionSafetyNetTest
     @Test
     public void testPassingTestDeletesTemporaryRecordingWhenFailureOnlyConfigured() throws IOException
     {
+        FilmTestExecution.getContextVideo().setProperty("video.appendAllRecordingsToAllureReport", "false");
         final VideoRecordingConfigurations config = (VideoRecordingConfigurations) FilmTestExecution.getContext(VideoRecordingConfigurations.class);
         final File tempDir = new File(config.tempFolderToStoreRecording());
         if (!tempDir.exists())
@@ -103,8 +123,6 @@ public class FilmTestExecutionSafetyNetTest
 
         try
         {
-            // Verify that when appendAllRecordingsToAllureReport is false and testFailed is false,
-            // passing tests delete their recording files to reclaim disk space.
             Assertions.assertFalse(config.appendAllRecordingsToAllureReport());
             final boolean testFailed = false;
             final boolean shouldAttach = config.appendAllRecordingsToAllureReport() || testFailed;
@@ -117,6 +135,39 @@ public class FilmTestExecutionSafetyNetTest
             }
 
             Assertions.assertFalse(dummyVideo.exists(), "Temporary video should be deleted upon passing test execution");
+        }
+        finally
+        {
+            if (dummyVideo.exists())
+            {
+                dummyVideo.delete();
+            }
+        }
+    }
+
+    @Test
+    public void testPassingTestRetainsRecordingByDefault() throws IOException
+    {
+        final VideoRecordingConfigurations config = (VideoRecordingConfigurations) FilmTestExecution.getContext(VideoRecordingConfigurations.class);
+        final File tempDir = new File(config.tempFolderToStoreRecording());
+        if (!tempDir.exists())
+        {
+            tempDir.mkdirs();
+        }
+
+        final String recordingName = "dummy-retained-video-" + UUID.randomUUID();
+        final File dummyVideo = new File(tempDir, recordingName + "." + config.format());
+        Files.writeString(dummyVideo.toPath(), "dummy-retained-data");
+        Assertions.assertTrue(dummyVideo.exists(), "Dummy video file should exist");
+
+        try
+        {
+            Assertions.assertTrue(config.appendAllRecordingsToAllureReport(),
+                "Default configuration must attach all recordings");
+            final boolean testFailed = false;
+            final boolean shouldAttach = config.appendAllRecordingsToAllureReport() || testFailed;
+
+            Assertions.assertTrue(shouldAttach, "Should attach on passing test when default configuration is active");
         }
         finally
         {
