@@ -1,0 +1,681 @@
+/*
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package org.neodymium.ai.pipeline.steps;
+import java.util.List;
+import com.codeborne.selenide.Selenide;
+import com.codeborne.selenide.SelenideElement;
+import org.neodymium.ai.action.Action;
+import org.neodymium.ai.client.SutAttachment;
+import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.event.structural.StateCapturedEvent;
+import org.neodymium.ai.executor.SutState;
+import org.neodymium.ai.executor.TargetExecutor;
+import org.neodymium.ai.executor.selenide.SelenideElementFinder;
+import org.neodymium.ai.executor.selenide.plugins.ClickAction;
+import org.neodymium.ai.executor.selenide.plugins.ClickAction.CoordinateTarget;
+import org.neodymium.ai.model.ContextLevel;
+import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.pipeline.DivergenceException;
+import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.HealingRequiredException;
+import org.neodymium.ai.pipeline.PipelineException;
+import org.neodymium.ai.pipeline.PipelineStep;
+import org.neodymium.ai.report.TestExecutionReport;
+import org.neodymium.ai.session.AiSession;
+import org.neodymium.ai.util.ScreenshotHasher;
+import org.neodymium.ai.util.VisualStabilityDetector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Standalone pipeline step evaluating replay visual stability and SSIM gating thresholds.
+ * Compares live browser state against recorded SSIM matrices before replaying interactive actions.
+ *
+ * @author AI-generated: Gemini 3.7 Flash
+ * @author Xceptance GmbH 2026
+ */
+public final class VisualBaselineGateStep implements PipelineStep
+{
+    private static final Logger LOGGER = LoggerFactory.getLogger(VisualBaselineGateStep.class);
+
+    private final PlaybookStep step;
+    private final AiSession session;
+
+    /**
+     * Constructs a VisualBaselineGateStep.
+     *
+     * @param step the playbook step
+     * @param session the active AI session
+     */
+    public VisualBaselineGateStep(final PlaybookStep step, final AiSession session)
+    {
+        this.step = step;
+        this.session = session;
+    }
+
+    @Override
+    public void execute(final ExecutionContext context) throws PipelineException
+    {
+        executeGate(context);
+    }
+
+    /**
+     * Determines whether the current step is a pure verification step containing no interactive or mutating actions.
+     * Pure verification steps only contain assertions, NO-OPs, or no recorded actions/tool calls at all.
+     *
+     * @return true if the step has no recorded mutating actions or tool calls
+     */
+    public boolean isPureVerification()
+    {
+        if (this.step == null)
+        {
+            return true;
+        }
+
+        final boolean hasMutatingAction = this.step.getActions() != null && this.step.getActions().stream()
+            .anyMatch(a -> a != null && a.getType() != null
+                && !a.getType().toUpperCase().startsWith("ASSERT")
+                && !"NONE".equalsIgnoreCase(a.getType())
+                && !"VERIFY".equalsIgnoreCase(a.getType()));
+
+        if (hasMutatingAction)
+        {
+            return false;
+        }
+
+        if (this.step.getToolCalls() != null && !this.step.getToolCalls().isEmpty())
+        {
+            final boolean hasMutatingToolCall = this.step.getToolCalls().stream()
+                .anyMatch(tc -> tc != null && tc.toolName() != null
+                    && !tc.toolName().toLowerCase().startsWith("assert")
+                    && !"none".equalsIgnoreCase(tc.toolName())
+                    && !"verify".equalsIgnoreCase(tc.toolName()));
+            if (hasMutatingToolCall)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Executes the visual baseline gating check.
+     *
+     * @param context the execution context
+     * @return true if the step matched visually and has no further actions (short-circuiting subsequent steps)
+     * @throws PipelineException if visual baseline comparison fails in strict or healing mode
+     */
+    public boolean executeGate(final ExecutionContext context) throws PipelineException
+    {
+        if (this.step == null || context == null)
+        {
+            return false;
+        }
+
+        final Object currentInstructionObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
+        final String resolvedInstruction = currentInstructionObj instanceof String s && !s.isBlank()
+            ? s
+            : (context.getSessionData() != null && this.step.getInstruction() != null
+                ? context.getSessionData().resolveAvailableVariables(this.step.getInstruction())
+                : this.step.getInstruction());
+        final ExecutionMode mode = (ExecutionMode) context.getTransientData()
+            .computeIfAbsent(ExecutionContext.KEY_EXECUTION_MODE, k -> AiConfiguration.getInstance().getExecutionMode());
+
+        if (mode.isReplay() && !this.step.isNoReplay() && this.step.getScreenshotHash() != null && !this.step.getScreenshotHash().isEmpty())
+        {
+            final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
+            if (executor != null)
+            {
+                try
+                {
+                    if (AiConfiguration.getInstance().isUseRecordedDelays())
+                    {
+                        final Long recStepDelay = this.step.getDelayMs();
+                        if (recStepDelay != null && recStepDelay > 0)
+                        {
+                            final double scale = AiConfiguration.getInstance().getReplayDelayScale();
+                            final long sleepTime = Math.max(0L, (long) (recStepDelay * scale));
+                            if (sleepTime > 0)
+                            {
+                                try
+                                {
+                                    Thread.sleep(sleepTime);
+                                }
+                                catch (final InterruptedException e)
+                                {
+                                    Thread.currentThread().interrupt();
+                                }
+                            }
+                        }
+                    }
+
+                    CoordinateTarget coordinateTarget = null;
+                    if (this.step.getActions() != null)
+                    {
+                        for (final Action act : this.step.getActions())
+                        {
+                            if (act != null && act.getTarget() != null)
+                            {
+                                final CoordinateTarget parsed = ClickAction.parseCoordinateTarget(act.getTarget());
+                                if (parsed != null)
+                                {
+                                    coordinateTarget = parsed;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (coordinateTarget != null)
+                    {
+                        this.step.setFullPage(false);
+                    }
+
+                    final boolean pureVerification = isPureVerification();
+                    final boolean isMarkerCoordinateGate = this.step.isMarker() && coordinateTarget != null;
+                    if (!pureVerification && !isMarkerCoordinateGate)
+                    {
+                        LOGGER.debug("   Visual step contains recorded mutating actions; deferring visual baseline check to post-action for: \"{}\"",
+                            resolvedInstruction);
+                        return false;
+                    }
+
+                    if (coordinateTarget != null && coordinateTarget.anchorSelector() != null && !coordinateTarget.anchorSelector().isBlank())
+                    {
+                        try
+                        {
+                            final SelenideElement anchorEl = SelenideElementFinder.findElement(coordinateTarget.anchorSelector());
+                            if (anchorEl != null && anchorEl.exists())
+                            {
+                                SelenideElementFinder.scrollIntoViewIfNeeded(anchorEl);
+                            }
+                        }
+                        catch (final Exception | AssertionError ignored)
+                        {
+                        }
+                    }
+
+                    final String recordedHash = this.step.getScreenshotHash();
+                    final double minScore = this.step.getSsimMinScore() != null
+                        ? this.step.getSsimMinScore()
+                        : (coordinateTarget != null ? 0.95 : AiConfiguration.getInstance().getVisualSsimMinScore());
+
+                    final boolean isFullPageReq = coordinateTarget == null
+                        && (Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                            || (this.step != null && this.step.isFullPageVisualStep()));
+                    if (this.step.isLayoutStep())
+                    {
+                        executor.applyColorWireframe();
+                    }
+                    final SutState currentState;
+                    try
+                    {
+                        currentState = VisualStabilityDetector.captureSettledState(
+                            executor,
+                            isFullPageReq,
+                            coordinateTarget == null ? recordedHash : null,
+                            minScore);
+                    }
+                    finally
+                    {
+                        if (this.step.isLayoutStep())
+                        {
+                            executor.removeColorWireframe();
+                        }
+                    }
+                    context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, currentState);
+                    if (this.session != null && this.session.getEventBus() != null && currentState != null)
+                    {
+                        this.session.getEventBus().dispatch(new StateCapturedEvent(currentState));
+                    }
+
+                    String currentSsimMatrix = null;
+                    if (coordinateTarget != null)
+                    {
+                        // Micro-crop 64x64 luminance tile around centroid (x, y) with radius 32
+                        if (currentState != null && currentState.getAttachments() != null)
+                        {
+                            for (final SutAttachment attachment : currentState.getAttachments())
+                            {
+                                if (attachment.mediaType() != null && attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
+                                {
+                                    int cropX = coordinateTarget.x();
+                                    int cropY = coordinateTarget.y();
+                                    if (coordinateTarget.anchorSelector() != null && !coordinateTarget.anchorSelector().isBlank())
+                                    {
+                                        try
+                                        {
+                                            final SelenideElement anchorEl = SelenideElementFinder.findElement(coordinateTarget.anchorSelector());
+                                            if (anchorEl != null && anchorEl.exists())
+                                            {
+                                                final Object rectObj = Selenide.executeJavaScript(
+                                                    "var r = arguments[0].getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top)];",
+                                                    anchorEl);
+                                                if (rectObj instanceof List<?> list && list.size() >= 2)
+                                                {
+                                                    cropX = ((Number) list.get(0)).intValue() + coordinateTarget.x();
+                                                    cropY = ((Number) list.get(1)).intValue() + coordinateTarget.y();
+                                                }
+                                            }
+                                        }
+                                        catch (final Exception | AssertionError ignored)
+                                        {
+                                        }
+                                    }
+                                    currentSsimMatrix = ScreenshotHasher.computeTileSsimMatrix(attachment.base64Data(), cropX, cropY, 32);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    else if (this.step.isLayoutStep() || ScreenshotHasher.isColorMatrix(recordedHash))
+                    {
+                        if (currentState != null && currentState.getAttachments() != null)
+                        {
+                            for (final SutAttachment attachment : currentState.getAttachments())
+                            {
+                                if (attachment.mediaType() != null && attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
+                                {
+                                    currentSsimMatrix = ScreenshotHasher.computeColorSsimMatrix(attachment.base64Data());
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        currentSsimMatrix = VisualStabilityDetector.extractSsimMatrix(currentState);
+                    }
+
+                    if (this.step.getScreenshotHash() != null)
+                    {
+                        boolean isVisualMatch = false;
+                        Double currentSsimScore = null;
+
+                        if (currentSsimMatrix != null)
+                        {
+                            final double ssimScore = ScreenshotHasher.calculateSsim(recordedHash, currentSsimMatrix);
+                            currentSsimScore = ssimScore;
+                            this.step.setSsimScore(ssimScore);
+                            if (this.step.getSsimMinScore() != null)
+                            {
+                                this.step.setSsimMinScore(minScore);
+                            }
+                            this.step.setBaselineMatrixPng(ScreenshotHasher.matrixToDataUri(recordedHash));
+                            this.step.setReplayMatrixPng(ScreenshotHasher.matrixToDataUri(currentSsimMatrix));
+                            this.step.setScreenshotHashDim(coordinateTarget != null ? ScreenshotHasher.TILE_SSIM_MATRIX_DIM : (this.step.getScreenshotHashDim() != null ? this.step.getScreenshotHashDim() : ScreenshotHasher.DEFAULT_SSIM_MATRIX_DIM));
+
+                            String replayDims = null;
+                            if (currentState != null && currentState.getAttachments() != null)
+                            {
+                                for (final SutAttachment attachment : currentState.getAttachments())
+                                {
+                                    if (attachment != null && attachment.mediaType() != null && attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
+                                    {
+                                        final TestExecutionReport.ReportScreenshotEntry tempEntry = new TestExecutionReport.ReportScreenshotEntry(
+                                            "temp", 0, attachment.mediaType(), attachment.base64Data(), 0L);
+                                        replayDims = tempEntry.getDimensions();
+                                        break;
+                                    }
+                                }
+                            }
+
+                            LOGGER.debug("   🖼️ [Visual SSIM Check] Instruction: \"{}\" | Dimensions: {} | SSIM Score: {} | Required Min Score: {}",
+                                resolvedInstruction, replayDims != null ? replayDims : "unknown", String.format("%.4f", ssimScore), minScore);
+
+                            if (ssimScore >= minScore)
+                            {
+                                isVisualMatch = true;
+                                LOGGER.info("   ✅ Visual SSIM match (score: {} >= {}) for instruction: \"{}\" (Dimensions: {}). Bypassing LLM call/actions.",
+                                    String.format("%.4f", ssimScore), minScore, resolvedInstruction, replayDims != null ? replayDims : "unknown");
+                            }
+                            else
+                            {
+                                LOGGER.debug("   ⚠️ Visual SSIM score below threshold ({} < {}) for instruction: \"{}\" (Dimensions: {})",
+                                    String.format("%.4f", ssimScore), minScore, resolvedInstruction, replayDims != null ? replayDims : "unknown");
+                            }
+                        }
+
+                        if (isVisualMatch && pureVerification)
+                        {
+                            return true;
+                        }
+                        else
+                        {
+                            if (pureVerification && !isVisualMatch)
+                            {
+                                final String msg = String.format("%s SSIM score below threshold (score: %s < %.2f) for %s instruction: \"%s\".",
+                                    this.step.isLayoutStep() ? "Layout" : "Visual",
+                                    currentSsimScore != null ? String.format("%.4f", currentSsimScore) : "N/A",
+                                    minScore,
+                                    this.step.isLayoutStep() ? "layout" : "visual",
+                                    resolvedInstruction);
+                                LOGGER.warn("   ❌ " + msg);
+
+                                if (mode.supportsHealing())
+                                {
+                                    throw new HealingRequiredException(msg);
+                                }
+                                else
+                                {
+                                    throw new DivergenceException(msg);
+                                }
+                            }
+
+                            if (!pureVerification)
+                            {
+                                if (coordinateTarget != null && !isVisualMatch)
+                                {
+                                    final String msg = String.format("Coordinate SSIM tile mismatch (score: %s < %.2f) for instruction: \"%s\". Aborting coordinate click to prevent blind misclick.",
+                                        currentSsimScore != null ? String.format("%.4f", currentSsimScore) : "N/A", minScore, resolvedInstruction);
+                                    LOGGER.warn("   ❌ " + msg);
+
+                                    if (mode.supportsHealing())
+                                    {
+                                        throw new HealingRequiredException(msg);
+                                    }
+                                    else
+                                    {
+                                        throw new DivergenceException(msg);
+                                    }
+                                }
+
+                                if (isVisualMatch)
+                                {
+                                    LOGGER.info("   Visual match for interactive instruction: \"{}\". Executing actions anyway to guarantee state.",
+                                        resolvedInstruction);
+                                }
+                                else
+                                {
+                                    LOGGER.debug("   Visual mismatch for interactive instruction: \"{}\". Proceeding to execute actions.",
+                                        resolvedInstruction);
+                                }
+                            }
+                            else
+                            {
+                                final String msg = String.format("Visual mismatch for instruction: \"%s\".", resolvedInstruction);
+                                LOGGER.warn("   ❌ " + msg);
+
+                                if (mode.supportsHealing())
+                                {
+                                    throw new HealingRequiredException(msg);
+                                }
+                                else
+                                {
+                                    throw new DivergenceException(msg);
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (final PipelineException e)
+                {
+                    throw e;
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.warn("   ⚠️ Failed to capture state or compare visual dHash: {}", e.getMessage());
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Evaluates the post-action visual baseline check during replay for steps containing recorded actions.
+     * Compares the captured post-action browser state against the recorded SSIM baseline.
+     *
+     * @param context the execution context containing post-action state
+     * @throws PipelineException if post-action visual baseline comparison fails in strict or healing mode
+     */
+    public void executePostActionCheck(final ExecutionContext context) throws PipelineException
+    {
+        if (this.step == null || context == null)
+        {
+            return;
+        }
+
+        final String recordedHash = this.step.getScreenshotHash();
+        if (recordedHash == null || recordedHash.isEmpty())
+        {
+            return;
+        }
+
+        final ExecutionMode mode = (ExecutionMode) context.getTransientData()
+            .computeIfAbsent(ExecutionContext.KEY_EXECUTION_MODE, k -> AiConfiguration.getInstance().getExecutionMode());
+
+        if (!mode.isReplay() || this.step.isNoReplay())
+        {
+            return;
+        }
+
+        CoordinateTarget coordinateTarget = null;
+        if (this.step.getActions() != null)
+        {
+            for (final Action act : this.step.getActions())
+            {
+                if (act != null && act.getTarget() != null)
+                {
+                    final CoordinateTarget parsed = ClickAction.parseCoordinateTarget(act.getTarget());
+                    if (parsed != null)
+                    {
+                        coordinateTarget = parsed;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (coordinateTarget != null)
+        {
+            this.step.setFullPage(false);
+            if (this.step.isMarker() && !this.step.isVisualOrLayoutStep())
+            {
+                return;
+            }
+        }
+
+        SutState postState = (SutState) context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
+        if (this.step.isLayoutStep() || postState == null || postState.getAttachments() == null || postState.getAttachments().isEmpty())
+        {
+            final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
+            if (executor != null)
+            {
+                final boolean isFullPageReq = coordinateTarget == null
+                    && (Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                        || this.step.isFullPageVisualStep());
+                final ContextLevel cl = isFullPageReq ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL;
+                try
+                {
+                    if (this.step.isLayoutStep())
+                    {
+                        executor.applyColorWireframe();
+                    }
+                    try
+                    {
+                        postState = executor.captureState(cl, isFullPageReq);
+                        if (postState != null)
+                        {
+                            context.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, postState);
+                        }
+                    }
+                    finally
+                    {
+                        if (this.step.isLayoutStep())
+                        {
+                            executor.removeColorWireframe();
+                        }
+                    }
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.warn("Failed to capture post-action state for visual check: {}", e.getMessage());
+                }
+            }
+        }
+
+        if (postState == null)
+        {
+            LOGGER.debug("No post-action state captured for visual verification of: \"{}\"", this.step.getInstruction());
+            return;
+        }
+
+        context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, postState);
+
+        final String currentSsimMatrix;
+        if (this.step.isLayoutStep() || ScreenshotHasher.isColorMatrix(recordedHash))
+        {
+            String extracted = null;
+            if (postState.getAttachments() != null)
+            {
+                for (final SutAttachment attachment : postState.getAttachments())
+                {
+                    if (attachment.mediaType() != null && attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
+                    {
+                        extracted = ScreenshotHasher.computeColorSsimMatrix(attachment.base64Data());
+                        break;
+                    }
+                }
+            }
+            currentSsimMatrix = extracted;
+        }
+        else if (coordinateTarget != null)
+        {
+            String extracted = null;
+            if (postState.getAttachments() != null)
+            {
+                for (final SutAttachment attachment : postState.getAttachments())
+                {
+                    if (attachment.mediaType() != null && attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
+                    {
+                        int cropX = coordinateTarget.x();
+                        int cropY = coordinateTarget.y();
+                        if (coordinateTarget.anchorSelector() != null && !coordinateTarget.anchorSelector().isBlank())
+                        {
+                            try
+                            {
+                                final SelenideElement anchorEl = SelenideElementFinder.findElement(coordinateTarget.anchorSelector());
+                                if (anchorEl != null && anchorEl.exists())
+                                {
+                                    SelenideElementFinder.scrollIntoViewIfNeeded(anchorEl);
+                                    final Object rectObj = Selenide.executeJavaScript(
+                                        "var r = arguments[0].getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top)];",
+                                        anchorEl);
+                                    if (rectObj instanceof List<?> list && list.size() >= 2)
+                                    {
+                                        cropX = ((Number) list.get(0)).intValue() + coordinateTarget.x();
+                                        cropY = ((Number) list.get(1)).intValue() + coordinateTarget.y();
+                                    }
+                                }
+                            }
+                            catch (final Exception | AssertionError ignored)
+                            {
+                            }
+                        }
+                        extracted = ScreenshotHasher.computeTileSsimMatrix(attachment.base64Data(), cropX, cropY, 32);
+                        break;
+                    }
+                }
+            }
+            currentSsimMatrix = extracted;
+        }
+        else
+        {
+            currentSsimMatrix = VisualStabilityDetector.extractSsimMatrix(postState);
+        }
+        if (currentSsimMatrix == null)
+        {
+            LOGGER.warn("Failed to extract SSIM matrix from post-action state for: \"{}\"", this.step.getInstruction());
+            return;
+        }
+
+        final double minScore = this.step.getSsimMinScore() != null
+            ? this.step.getSsimMinScore()
+            : (coordinateTarget != null ? 0.95 : AiConfiguration.getInstance().getVisualSsimMinScore());
+        final double ssimScore = ScreenshotHasher.calculateSsim(recordedHash, currentSsimMatrix);
+        this.step.setSsimScore(ssimScore);
+        if (this.step.getSsimMinScore() != null)
+        {
+            this.step.setSsimMinScore(minScore);
+        }
+        this.step.setBaselineMatrixPng(ScreenshotHasher.matrixToDataUri(recordedHash));
+        this.step.setReplayMatrixPng(ScreenshotHasher.matrixToDataUri(currentSsimMatrix));
+        if (this.step.getScreenshotHashDim() == null)
+        {
+            this.step.setScreenshotHashDim(coordinateTarget != null ? ScreenshotHasher.TILE_SSIM_MATRIX_DIM : ScreenshotHasher.DEFAULT_SSIM_MATRIX_DIM);
+        }
+
+        final Object currentInstructionObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
+        final String resolvedInstruction = currentInstructionObj instanceof String s && !s.isBlank()
+            ? s
+            : (context.getSessionData() != null && this.step.getInstruction() != null
+                ? context.getSessionData().resolveAvailableVariables(this.step.getInstruction())
+                : this.step.getInstruction());
+
+        String replayDims = null;
+        if (postState.getAttachments() != null)
+        {
+            for (final SutAttachment attachment : postState.getAttachments())
+            {
+                if (attachment != null && attachment.mediaType() != null && attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
+                {
+                    final TestExecutionReport.ReportScreenshotEntry tempEntry = new TestExecutionReport.ReportScreenshotEntry(
+                        "temp", 0, attachment.mediaType(), attachment.base64Data(), 0L);
+                    replayDims = tempEntry.getDimensions();
+                    break;
+                }
+            }
+        }
+
+        LOGGER.debug("   🖼️ [Post-Action Visual SSIM Check] Instruction: \"{}\" | Dimensions: {} | SSIM Score: {} | Required Min Score: {}",
+            resolvedInstruction, replayDims != null ? replayDims : "unknown", String.format("%.4f", ssimScore), minScore);
+
+        if (ssimScore >= minScore)
+        {
+            LOGGER.info("   ✅ Post-action visual SSIM match (score: {} >= {}) for instruction: \"{}\" (Dimensions: {}).",
+                String.format("%.4f", ssimScore), minScore, resolvedInstruction, replayDims != null ? replayDims : "unknown");
+        }
+        else
+        {
+            final String msg = String.format("%s SSIM score below threshold (score: %s < %.2f) for %s instruction: \"%s\".",
+                this.step.isLayoutStep() ? "Layout" : "Visual",
+                String.format("%.4f", ssimScore),
+                minScore,
+                this.step.isLayoutStep() ? "layout" : "visual",
+                resolvedInstruction);
+            LOGGER.warn("   ❌ " + msg);
+
+            if (mode.supportsHealing())
+            {
+                throw new HealingRequiredException(msg);
+            }
+            else
+            {
+                throw new DivergenceException(msg);
+            }
+        }
+    }
+}

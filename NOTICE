@@ -5,6 +5,18 @@ This product includes software developed at
 Xceptance Software Technologies GmbH (https://www.xceptance.com/).
 
 ========================================================================
+Neodymium Licensing Architecture
+========================================================================
+
+1. Neodymium Classic (Module: neodymium-classic):
+   Licensed under the permissive MIT License.
+
+2. Neodymium AI (Modules: neodymium-core, aura-manager):
+   Dual-licensed under:
+   - GNU Affero General Public License, Version 3 (AGPLv3) (Community Edition)
+   - Xceptance Commercial License (Enterprise / Commercial Edition)
+
+========================================================================
 Third-Party Software and Modification Attributions
 ========================================================================
 

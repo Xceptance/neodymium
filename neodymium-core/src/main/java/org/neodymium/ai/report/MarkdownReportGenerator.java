@@ -1,0 +1,750 @@
+/*
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package org.neodymium.ai.report;
+
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import org.neodymium.ai.playbook.linter.LinterSeverity;
+import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
+import org.neodymium.ai.prompt.VerificationResult;
+import org.neodymium.ai.prompt.VisualRcaResult;
+
+/**
+ * Report generator producing GitHub-flavored Markdown documents from {@link TestExecutionReport}.
+ *
+ * @author AI-generated: Gemini 3.7 Flash
+ * @author Xceptance GmbH 2026
+ */
+public final class MarkdownReportGenerator
+{
+    private static final DecimalFormat COST_FORMAT = new DecimalFormat("$#,##0.0000", DecimalFormatSymbols.getInstance(Locale.US));
+    private static final DecimalFormat NUMBER_FORMAT = new DecimalFormat("#,###", DecimalFormatSymbols.getInstance(Locale.US));
+
+    /**
+     * Constructs a MarkdownReportGenerator.
+     */
+    public MarkdownReportGenerator()
+    {
+    }
+
+    /**
+     * Converts a test execution report to a Markdown string.
+     *
+     * @param report the test execution report
+     * @return markdown formatted string
+     */
+    public String generate(final TestExecutionReport report)
+    {
+        if (report == null)
+        {
+            return "# Test Execution Report\n\nNo report data available.\n";
+        }
+
+        final StringBuilder sb = new StringBuilder();
+
+        final String testTitle = report.getTestName() != null ? report.getTestName() : "AI Test Execution";
+        final String statusEmoji = report.isSuccess() ? "✅" : "❌";
+        final String statusBadge = report.isSuccess() ? "**PASSED**" : "**FAILED**";
+
+        sb.append("# ").append(statusEmoji).append(" Test Execution Report: ").append(testTitle).append("\n\n");
+
+        // 1. Metadata Table
+        sb.append("## Overview\n\n");
+        sb.append("| Property | Value |\n");
+        sb.append("| :--- | :--- |\n");
+        sb.append("| **Status** | ").append(statusBadge).append(" |\n");
+        sb.append("| **Duration** | ").append(NUMBER_FORMAT.format(report.getDurationMs())).append(" ms |\n");
+        if (report.getDatasetId() != null && !report.getDatasetId().isEmpty())
+        {
+            sb.append("| **Dataset** | `").append(report.getDatasetId()).append("` |\n");
+        }
+        if (report.getExecutionMode() != null)
+        {
+            final String markerTag = report.isMarker() ? " 🎯 `MARKER`" : "";
+            sb.append("| **Execution Mode** | `").append(report.getExecutionMode()).append("`").append(markerTag).append(" |\n");
+        }
+        if (report.getPlaybookFile() != null)
+        {
+            sb.append("| **Playbook File** | `").append(report.getPlaybookFile()).append("` |\n");
+        }
+        if (report.getTestClass() != null)
+        {
+            sb.append("| **Test Class** | `").append(report.getTestClass()).append("` |\n");
+        }
+        if (report.getTestMethod() != null)
+        {
+            sb.append("| **Test Method** | `").append(report.getTestMethod()).append("` |\n");
+        }
+        sb.append("\n");
+
+        // 2. Metrics & Token Accounting Summary
+        final TestExecutionReport.ReportMetrics m = report.getMetrics() != null ? report.getMetrics() : new TestExecutionReport.ReportMetrics();
+        sb.append("## AI Metrics & Token Usage\n\n");
+
+        // High-level execution stats
+        sb.append("| Metric | Count / Volume |\n");
+        final StringBuilder stepBreakdown = new StringBuilder();
+        stepBreakdown.append(" (Healed: ").append(m.getHealedSteps())
+            .append(", Failed: ").append(m.getFailedSteps())
+            .append(", Skipped: ").append(m.getSkippedSteps());
+        if (m.getNotRunSteps() > 0)
+        {
+            stepBreakdown.append(", Not Run: ").append(m.getNotRunSteps());
+        }
+        stepBreakdown.append(")");
+        sb.append("| **Total Steps** | ").append(m.getTotalSteps()).append(stepBreakdown).append(" |\n");
+        if (m.getTotalEscalations() > 0)
+        {
+            sb.append("| **Context Escalations** | ").append(m.getTotalEscalations()).append(" |\n");
+        }
+        if (m.getTotalReplays() > 0)
+        {
+            sb.append("| **Replayed Steps** | ").append(m.getTotalReplays()).append(" |\n");
+        }
+        if (m.getInternalCacheHits() > 0)
+        {
+            sb.append("| **Cache Hits** | ").append(m.getInternalCacheHits()).append(" |\n");
+        }
+        sb.append("| **Estimated Cost** | ").append(COST_FORMAT.format(m.getEstimatedCostUsd())).append(" |\n\n");
+
+        // Category breakdown table
+        sb.append("### LLM Responsibility Breakdown\n\n");
+        sb.append("| Category | Calls | Total Tokens | Input Tokens | Output Tokens | Cached Tokens | Est. Cost |\n");
+        sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
+
+        appendCategoryRow(sb, "**Total**", m.getTotal());
+        appendCategoryRow(sb, "├─ Linter (Pre-Flight)", m.getLinter());
+        appendCategoryRow(sb, "├─ Linter (Post-Flight)", m.getPostFlightLinter());
+        appendCategoryRow(sb, "├─ Action (Standard)", m.getAction());
+        appendCategoryRow(sb, "├─ Judge", m.getJudge());
+        appendCategoryRow(sb, "├─ Verification", m.getVerification());
+        appendCategoryRow(sb, "└─ Visual RCA", m.getVisualRca());
+        sb.append("\n");
+
+        // Context level distribution
+        if (!m.getContextLevelCounts().isEmpty())
+        {
+            sb.append("### Context Level Distribution\n\n");
+            sb.append("| Context Level | Invocations |\n");
+            sb.append("| :--- | :--- |\n");
+            for (final Map.Entry<String, Integer> entry : m.getContextLevelCounts().entrySet())
+            {
+                sb.append("| `").append(entry.getKey()).append("` | ").append(entry.getValue()).append(" |\n");
+            }
+            sb.append("\n");
+        }
+
+        // 3. Diagnostics & Errors (strictly if test failed)
+        if (!report.isSuccess() && (report.getFailureReason() != null || report.getVisualRcaResult() != null || report.getVisualRcaExplanation() != null || (report.getFailureStackTrace() != null && !report.getFailureStackTrace().isBlank())))
+        {
+            sb.append("## 🚨 Failure Diagnostics\n\n");
+            String failureReason = report.getFailureReason();
+            String embeddedRca = null;
+            if (failureReason != null)
+            {
+                final int rcaMarkerIdx = Math.max(
+                    failureReason.indexOf("Visual Root Cause Analysis (RCA):"),
+                    failureReason.indexOf("**Root Cause Analysis:**")
+                );
+                if (rcaMarkerIdx >= 0)
+                {
+                    embeddedRca = failureReason.substring(rcaMarkerIdx).trim();
+                    failureReason = failureReason.substring(0, rcaMarkerIdx).trim();
+                }
+            }
+
+            if (failureReason != null && !failureReason.isBlank())
+            {
+                sb.append("> **Error**: ").append(failureReason).append("\n\n");
+            }
+
+            VisualRcaResult vr = report.getVisualRcaResult();
+            if (vr == null)
+            {
+                final String rawRca = report.getVisualRcaExplanation() != null ? report.getVisualRcaExplanation() : embeddedRca;
+                if (rawRca != null && !rawRca.isBlank())
+                {
+                    vr = VisualRcaResult.fromFormattedDiagnosis(rawRca);
+                }
+            }
+
+            if (vr != null)
+            {
+                sb.append("### 🔍 Visual Root Cause Analysis (RCA)\n\n");
+                if (vr.getRootCause() != null && !vr.getRootCause().isBlank())
+                {
+                    sb.append("**Root Cause Diagnosis:**\n").append(vr.getRootCause().trim()).append("\n\n");
+                }
+                if (vr.getRubrics() != null)
+                {
+                    sb.append("#### Diagnostic Rubrics\n\n");
+                    final VisualRcaResult.Rubrics rubrics = vr.getRubrics();
+                    if (rubrics.targetPresence() != null)
+                    {
+                        sb.append("- **🎯 Target Presence:** `[").append(rubrics.targetPresence().score()).append("]` ")
+                          .append(rubrics.targetPresence().analysis()).append("\n");
+                    }
+                    if (rubrics.formValidation() != null)
+                    {
+                        sb.append("- **📝 Form & Validation:** `[").append(rubrics.formValidation().score()).append("]` ")
+                          .append(rubrics.formValidation().analysis()).append("\n");
+                    }
+                    if (rubrics.flowState() != null)
+                    {
+                        sb.append("- **🧭 Navigation & Flow:** `[").append(rubrics.flowState().score()).append("]` ")
+                          .append(rubrics.flowState().analysis()).append("\n");
+                    }
+                    if (rubrics.obstruction() != null)
+                    {
+                        sb.append("- **🚫 Action Obstruction:** `[").append(rubrics.obstruction().score()).append("]` ")
+                          .append(rubrics.obstruction().analysis()).append("\n");
+                    }
+                    sb.append("\n");
+                }
+            }
+            else if (report.getVisualRcaExplanation() != null || embeddedRca != null)
+            {
+                final String explanation = report.getVisualRcaExplanation() != null ? report.getVisualRcaExplanation() : embeddedRca;
+                sb.append("### 🔍 Visual Root Cause Analysis (RCA)\n\n");
+                sb.append("```\n").append(explanation).append("\n```\n\n");
+            }
+            if (report.getFailureStackTrace() != null && !report.getFailureStackTrace().isBlank())
+            {
+                sb.append("<details>\n<summary><b>Stack Trace</b></summary>\n\n");
+                sb.append("```java\n").append(report.getFailureStackTrace()).append("\n```\n");
+                sb.append("</details>\n\n");
+            }
+        }
+
+        // Warnings
+        if (!report.getWarnings().isEmpty())
+        {
+            sb.append("### ⚠️ Execution Warnings\n\n");
+            for (final String warning : report.getWarnings())
+            {
+                sb.append("- ").append(warning).append("\n");
+            }
+            sb.append("\n");
+        }
+
+        // Playbook Quality & Pre-Flight Findings
+        final List<PlaybookLinterFinding> linterFindings = report.getLinterFindings();
+        if (!linterFindings.isEmpty())
+        {
+            sb.append("## 📋 Playbook Quality & Pre-Flight Findings\n\n");
+            sb.append("| Step / Line | Category | Severity | Finding & Suggested Rewrite |\n");
+            sb.append("| :--- | :--- | :--- | :--- |\n");
+            for (final PlaybookLinterFinding f : linterFindings)
+            {
+                final String lineLabel = f.lineNumber() > 0 ? "L" + f.lineNumber() : "Step " + f.stepIndex();
+                final String sevEmoji = f.severity() == LinterSeverity.ERROR ? "🔴 ERROR"
+                    : f.severity() == LinterSeverity.WARNING ? "🟡 WARNING" : "ℹ️ INFO";
+                final String cat = f.category() != null ? f.category().name() : "GENERAL";
+
+                sb.append("| `").append(lineLabel).append("` | `").append(cat).append("` | ").append(sevEmoji).append(" | ")
+                    .append("**").append(escapeMarkdown(f.message())).append("**<br>");
+
+                if (f.rawInstruction() != null && !f.rawInstruction().equals(f.resolvedInstruction()))
+                {
+                    sb.append("<br><sub>**Template Step:**</sub><br>`").append(escapeMarkdown(f.rawInstruction())).append("`<br>");
+                    sb.append("<sub>**Resolved Step:**</sub><br>`").append(escapeMarkdown(f.resolvedInstruction())).append("`<br>");
+                }
+                else if (f.rawInstruction() != null && !f.rawInstruction().isBlank())
+                {
+                    sb.append("<br><sub>**Original Step:**</sub><br>`").append(escapeMarkdown(f.rawInstruction())).append("`<br>");
+                }
+
+                if (f.suggestedRewrite() != null && !f.suggestedRewrite().isBlank())
+                {
+                    sb.append("<br>💡 *Suggested Rewrite:*<br>`").append(escapeMarkdown(f.suggestedRewrite()).replace("\n", "`<br>`")).append("`");
+                }
+
+                sb.append(" |\n");
+            }
+            sb.append("\n");
+        }
+
+        // Empirical Playbook Findings (Post-Flight Telemetry)
+        final List<PlaybookLinterFinding> postFlightFindings = report.getPostFlightFindings();
+        if (!postFlightFindings.isEmpty())
+        {
+            sb.append("## 🔍 Empirical Playbook Findings (Post-Flight Telemetry)\n\n");
+            sb.append("| Step / Line | Category | Severity | Telemetry & Finding |\n");
+            sb.append("| :--- | :--- | :--- | :--- |\n");
+            for (final PlaybookLinterFinding f : postFlightFindings)
+            {
+                final String lineLabel = f.lineNumber() > 0 ? "L" + f.lineNumber() : "Step " + f.stepIndex();
+                final String sevEmoji = f.severity() == LinterSeverity.ERROR ? "🔴 ERROR"
+                    : f.severity() == LinterSeverity.WARNING ? "🟡 WARNING" : "ℹ️ INFO";
+                final String cat = f.category() != null ? f.category().name() : "GENERAL";
+
+                sb.append("| `").append(lineLabel).append("` | `").append(cat).append("` | ").append(sevEmoji).append(" | ")
+                    .append("**").append(escapeMarkdown(f.message())).append("**<br>");
+
+                if (f.rawInstruction() != null && !f.rawInstruction().equals(f.resolvedInstruction()))
+                {
+                    sb.append("<br><sub>**Template Step:**</sub><br>`").append(escapeMarkdown(f.rawInstruction())).append("`<br>");
+                    sb.append("<sub>**Resolved Step:**</sub><br>`").append(escapeMarkdown(f.resolvedInstruction())).append("`<br>");
+                }
+                else if (f.rawInstruction() != null && !f.rawInstruction().isBlank())
+                {
+                    sb.append("<br><sub>**Original Step:**</sub><br>`").append(escapeMarkdown(f.rawInstruction())).append("`<br>");
+                }
+
+                if (f.suggestedRewrite() != null && !f.suggestedRewrite().isBlank())
+                {
+                    sb.append("<br>💡 *Suggested Rewrite:*<br>`").append(escapeMarkdown(f.suggestedRewrite()).replace("\n", "`<br>`")).append("`");
+                }
+
+                sb.append(" |\n");
+            }
+            sb.append("\n");
+        }
+
+        // 4. Execution Steps
+        final List<TestExecutionReport.ReportStepEntry> steps = report.getSteps();
+        if (!steps.isEmpty())
+        {
+            sb.append("## Step Details\n\n");
+            final boolean hasMultipleBlocks = steps.stream().map(s -> s.getBlock() != null ? s.getBlock().toLowerCase() : "steps").distinct().count() > 1;
+            String currentBlock = null;
+            for (int i = 0; i < steps.size(); i++)
+            {
+                final TestExecutionReport.ReportStepEntry step = steps.get(i);
+                if (hasMultipleBlocks)
+                {
+                    final String effBlock = (step.getBlock() != null && !step.getBlock().isBlank()) ? step.getBlock().toLowerCase() : "steps";
+                    if (!effBlock.equals(currentBlock))
+                    {
+                        currentBlock = effBlock;
+                        final String icon = "before".equals(effBlock) ? "⚡" : "after".equals(effBlock) ? "🧹" : "🎯";
+                        final String title = "before".equals(effBlock) ? "Before Block" : "after".equals(effBlock) ? "After Block" : "Core Steps";
+                        sb.append("### ").append(icon).append(" ").append(title).append("\n\n");
+                    }
+                    renderStepMarkdown(sb, step, String.valueOf(i + 1), "####");
+                }
+                else
+                {
+                    renderStepMarkdown(sb, step, String.valueOf(i + 1), "###");
+                }
+            }
+        }
+
+        // 5. LLM Call Details (if present)
+        final List<TestExecutionReport.ReportLlmCallEntry> llmCalls = report.getLlmCalls();
+        if (!llmCalls.isEmpty())
+        {
+            final Map<Integer, TestExecutionReport.ReportStepEntry> stepMap = new HashMap<>();
+            for (final TestExecutionReport.ReportStepEntry s : report.getSteps())
+            {
+                stepMap.put(s.getStepIndex(), s);
+            }
+
+            sb.append("## LLM Interactions\n\n");
+            sb.append("| # | Step | Phase / Role | Model | Duration | In Tokens | Out Tokens | Cached | Cost |\n");
+            sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
+
+            int currentStepIndex = Integer.MIN_VALUE;
+            int turnInStep = 0;
+
+            for (int i = 0; i < llmCalls.size(); i++)
+            {
+                final TestExecutionReport.ReportLlmCallEntry call = llmCalls.get(i);
+                final int stepIdx = call.getStepIndex();
+                final boolean isNewStep = (stepIdx != currentStepIndex);
+
+                if (isNewStep)
+                {
+                    currentStepIndex = stepIdx;
+                    turnInStep = 0;
+                }
+
+                final int subIdx = call.getSubStepIndex();
+                final String stepNum = (stepIdx >= 0)
+                    ? (subIdx >= 0
+                        ? "Step #" + (stepIdx + 1) + "." + (subIdx + 1)
+                        : "Step #" + (stepIdx + 1))
+                    : ("POST_FLIGHT_LINTER".equalsIgnoreCase(call.getCapability()) ? "Post-Flight" : "Pre-Flight");
+                final String stepDisplay = isNewStep ? stepNum : "↳ " + stepNum;
+
+                final String cap = call.getCapability() != null ? call.getCapability().trim() : "";
+                final String phaseRole;
+                if ("VERIFICATION".equalsIgnoreCase(cap))
+                {
+                    phaseRole = "Verification";
+                }
+                else if ("JUDGE".equalsIgnoreCase(cap))
+                {
+                    phaseRole = "Quality Judge";
+                }
+                else if ("VISUAL_RCA".equalsIgnoreCase(cap))
+                {
+                    phaseRole = "Visual RCA";
+                }
+                else if ("LINTER".equalsIgnoreCase(cap))
+                {
+                    phaseRole = "Playbook Linter";
+                }
+                else if ("POST_FLIGHT_LINTER".equalsIgnoreCase(cap))
+                {
+                    phaseRole = "Post-Flight Linter";
+                }
+                else
+                {
+                    turnInStep++;
+                    final String modality = "VISION".equalsIgnoreCase(cap) ? "Vision 📸" : "Text";
+                    phaseRole = "Turn " + turnInStep + " (" + modality + ")";
+                }
+
+                sb.append("| ").append(i + 1).append(" | ")
+                    .append(stepDisplay).append(" | ")
+                    .append(phaseRole).append(" | `")
+                    .append(call.getModelName() != null ? call.getModelName() : "default").append("` | ")
+                    .append(call.getDurationMs()).append(" ms | ")
+                    .append(NUMBER_FORMAT.format(call.getInputTokens())).append(" | ")
+                    .append(NUMBER_FORMAT.format(call.getOutputTokens())).append(" | ")
+                    .append(NUMBER_FORMAT.format(call.getCachedTokens())).append(" | ")
+                    .append(COST_FORMAT.format(call.getEstimatedCostUsd())).append(" |\n");
+            }
+            sb.append("\n");
+        }
+
+        // Global Screenshots
+        final List<TestExecutionReport.ReportScreenshotEntry> screenshots = report.getScreenshots();
+        if (!screenshots.isEmpty())
+        {
+            sb.append("## 📸 Captured Visual Screenshots\n\n");
+            sb.append("| # | Step | Name | Format | Width | Height | Dimensions | Timestamp |\n");
+            sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
+            for (int i = 0; i < screenshots.size(); i++)
+            {
+                final TestExecutionReport.ReportScreenshotEntry sc = screenshots.get(i);
+                final int scSubIdx = sc.getSubStepIndex();
+                final String stepLabel = sc.getStepIndex() >= 0
+                    ? (scSubIdx >= 0
+                        ? "Step #" + (sc.getStepIndex() + 1) + "." + (scSubIdx + 1)
+                        : "Step #" + (sc.getStepIndex() + 1))
+                    : "Pre-Flight";
+                final String widthStr = sc.getWidth() != null ? sc.getWidth() + " px" : "-";
+                final String heightStr = sc.getHeight() != null ? sc.getHeight() + " px" : "-";
+                final String dims = sc.getDimensions() != null ? sc.getDimensions() : "-";
+                sb.append("| ").append(i + 1).append(" | ").append(stepLabel).append(" | `")
+                    .append(escapeMarkdown(sc.getName() != null ? sc.getName() : "-")).append("` | `")
+                    .append(sc.getMediaType() != null ? sc.getMediaType() : "image/png").append("` | `")
+                    .append(widthStr).append("` | `")
+                    .append(heightStr).append("` | `")
+                    .append(dims).append("` | ")
+                    .append(sc.getTimestamp() > 0 ? NUMBER_FORMAT.format(sc.getTimestamp()) : "-").append(" |\n");
+            }
+            sb.append("\n");
+        }
+
+        // Active Properties
+        final Map<String, String> activeProperties = report.getActiveProperties();
+        sb.append("## ⚙️ Active Properties\n\n");
+        if (activeProperties.isEmpty())
+        {
+            sb.append("_No active properties recorded._\n\n");
+        }
+        else
+        {
+            sb.append("| Property | Value |\n");
+            sb.append("| :--- | :--- |\n");
+            for (final Map.Entry<String, String> entry : activeProperties.entrySet())
+            {
+                sb.append("| `").append(escapeMarkdown(entry.getKey())).append("` | `")
+                  .append(escapeMarkdown(entry.getValue())).append("` |\n");
+            }
+            sb.append("\n");
+        }
+
+        return sb.toString();
+    }
+
+    private static void appendCategoryRow(final StringBuilder sb, final String label, final TestExecutionReport.CategoryTokenUsage cat)
+    {
+        final int calls = cat != null ? cat.getCalls() : 0;
+        final long total = cat != null ? cat.getTotalTokens() : 0;
+        final long in = cat != null ? cat.getInputTokens() : 0;
+        final long out = cat != null ? cat.getOutputTokens() : 0;
+        final long cached = cat != null ? cat.getCachedTokens() : 0;
+        final double cost = cat != null ? cat.getEstimatedCostUsd() : 0.0;
+
+        sb.append("| ").append(label).append(" | ").append(NUMBER_FORMAT.format(calls)).append(" | ")
+            .append(NUMBER_FORMAT.format(total)).append(" | ")
+            .append(NUMBER_FORMAT.format(in)).append(" | ")
+            .append(NUMBER_FORMAT.format(out)).append(" | ")
+            .append(NUMBER_FORMAT.format(cached)).append(" | ")
+            .append(COST_FORMAT.format(cost)).append(" |\n");
+    }
+
+    private static void renderStepMarkdown(final StringBuilder sb, final TestExecutionReport.ReportStepEntry step, final String stepLabel, final String headingPrefix)
+    {
+        final boolean isNotRun = step.isNotRun();
+        final String stepStatusEmoji = "PASSED".equalsIgnoreCase(step.getStatus()) || "SUCCESS".equalsIgnoreCase(step.getStatus()) ? "✅"
+            : "HEALED".equalsIgnoreCase(step.getStatus()) ? "✨"
+            : "FAILED".equalsIgnoreCase(step.getStatus()) ? "❌"
+            : isNotRun ? "⏹️"
+            : "SKIPPED".equalsIgnoreCase(step.getStatus()) ? "⏭️" : "⏳";
+
+        sb.append(headingPrefix).append(" Step ").append(stepLabel).append(": ").append(stepStatusEmoji).append(" ").append(escapeMarkdown(step.getInstruction())).append("\n\n");
+        sb.append("- **Status:** `").append(step.getStatus()).append("`\n");
+        if (step.getBlock() != null && !step.getBlock().isBlank())
+        {
+            sb.append("- **Block:** `").append(step.getBlock()).append("`\n");
+        }
+        if (step.getStepMode() != null)
+        {
+            sb.append("- **Step Mode:** `").append(step.getStepMode()).append("`\n");
+        }
+        if (step.isBug())
+        {
+            sb.append("- **Expected Bug:** `true`").append(step.getBugDetails() != null ? " (" + escapeMarkdown(step.getBugDetails()) + ")" : "").append("\n");
+        }
+        if (step.isOptional())
+        {
+            sb.append("- **Optional:** `true`\n");
+        }
+        if (step.isNoHealing())
+        {
+            sb.append("- **No Healing:** `true`\n");
+        }
+        if (step.isMarker())
+        {
+            sb.append("- **Visual Marker Step:** `🎯 true`\n");
+        }
+        if (step.isVisual())
+        {
+            sb.append("- **Visual Step:** `📸 true`\n");
+        }
+        if (step.isMultiStage())
+        {
+            sb.append("- **Multi-Stage Continuation:** `🔄 true (CONTINUE)`\n");
+        }
+        if (step.getSsimScore() != null)
+        {
+            final double score = step.getSsimScore();
+            final double min = step.getSsimMinScore() != null ? step.getSsimMinScore() : 0.99;
+            sb.append("- **Visual SSIM Score:** `").append(String.format("%.4f", score))
+                .append("` (Min Threshold: `").append(String.format("%.2f", min)).append("`")
+                .append(step.getScreenshotHashDim() != null ? ", Dim: `" + step.getScreenshotHashDim() + "x" + step.getScreenshotHashDim() + "`" : "")
+                .append(")\n");
+        }
+        if (!step.getScreenshots().isEmpty())
+        {
+            sb.append("- **Screenshots Captured:** ").append(step.getScreenshots().size()).append(" screenshot(s)");
+            final TestExecutionReport.ReportScreenshotEntry firstSc = step.getScreenshots().get(0);
+            if (firstSc.getWidth() != null && firstSc.getHeight() != null)
+            {
+                sb.append(" (Width: ").append(firstSc.getWidth()).append("px, Height: ").append(firstSc.getHeight()).append("px)");
+            }
+            else if (firstSc.getDimensions() != null)
+            {
+                sb.append(" (").append(firstSc.getDimensions()).append(")");
+            }
+            sb.append("\n");
+        }
+        if (step.getRawInstruction() != null && !step.getRawInstruction().equals(step.getInstruction()))
+        {
+            sb.append("- **Template:** `").append(escapeMarkdown(step.getRawInstruction())).append("`\n");
+        }
+        if (step.getDurationMs() > 0)
+        {
+            sb.append("- **Duration:** ").append(NUMBER_FORMAT.format(step.getDurationMs())).append(" ms\n");
+        }
+        if (step.getSourceFile() != null && step.getLineNumber() > 0)
+        {
+            sb.append("- **Source:** `").append(step.getSourceFile()).append(":").append(step.getLineNumber()).append("`\n");
+        }
+        if (step.getContextLevels() != null && !step.getContextLevels().isBlank())
+        {
+            sb.append("- **Context Level:** `").append(step.getContextLevels()).append("`");
+            if (step.getEscalations() > 0)
+            {
+                sb.append(" (Escalations: ").append(step.getEscalations()).append(")");
+            }
+            sb.append("\n");
+        }
+        if (step.getStandardCalls() > 0 || step.getVerificationCalls() > 0 || step.getRcaCalls() > 0)
+        {
+            sb.append("- **LLM Invocations:** ");
+            final List<String> callSummaries = new ArrayList<>();
+            if (step.getStandardCalls() > 0)
+            {
+                callSummaries.add("Action: " + step.getStandardCalls() + " calls (" + NUMBER_FORMAT.format(step.getStandardInputTokens() + step.getStandardOutputTokens()) + " tokens)");
+            }
+            if (step.getVerificationCalls() > 0)
+            {
+                callSummaries.add("Verification: " + step.getVerificationCalls() + " calls (" + NUMBER_FORMAT.format(step.getVerificationInputTokens() + step.getVerificationOutputTokens()) + " tokens)");
+            }
+            if (step.getRcaCalls() > 0)
+            {
+                callSummaries.add("Visual RCA: " + step.getRcaCalls() + " calls (" + NUMBER_FORMAT.format(step.getRcaInputTokens() + step.getRcaOutputTokens()) + " tokens)");
+            }
+            sb.append(String.join(" | ", callSummaries)).append("\n");
+        }
+        if (step.getVerificationResult() != null)
+        {
+            final VerificationResult vr = step.getVerificationResult();
+            final String vStatus = vr.passed() ? "✅ PASSED" : "❌ FAILED";
+            final String vSummary = vr.getOverallVerdict() != null && vr.getOverallVerdict().summary() != null ? vr.getOverallVerdict().summary() : "";
+            sb.append("- **Semantic Verification:** ").append(vStatus);
+            if (!vSummary.isBlank())
+            {
+                sb.append(" — _").append(escapeMarkdown(vSummary)).append("_");
+            }
+            sb.append("\n");
+            if (vr.getRubrics() != null)
+            {
+                final VerificationResult.Rubrics rubrics = vr.getRubrics();
+                if (rubrics.intentMatch() != null)
+                {
+                    sb.append("  - **Intent Check:** `[").append(rubrics.intentMatch().score()).append("]` ").append(escapeMarkdown(rubrics.intentMatch().analysis())).append("\n");
+                }
+                if (rubrics.visualDelta() != null)
+                {
+                    sb.append("  - **Visual Check:** `[").append(rubrics.visualDelta().score()).append("]` ").append(escapeMarkdown(rubrics.visualDelta().analysis())).append("\n");
+                }
+                if (rubrics.absenceOfErrors() != null)
+                {
+                    sb.append("  - **Error Check:** `[").append(rubrics.absenceOfErrors().score()).append("]` ").append(escapeMarkdown(rubrics.absenceOfErrors().analysis())).append("\n");
+                }
+            }
+        }
+        if (step.getReasonings() != null && !step.getReasonings().isEmpty())
+        {
+            if (step.getReasonings().size() == 1)
+            {
+                sb.append("- **AI Reasoning:** _").append(escapeMarkdown(step.getReasonings().get(0))).append("_\n");
+            }
+            else
+            {
+                sb.append("- **AI Reasoning:**\n");
+                for (int r = 0; r < step.getReasonings().size(); r++)
+                {
+                    final String rText = step.getReasonings().get(r);
+                    final String stageLabel = (r == 0 && step.isMultiStage()) ? "Prelude" : (r == step.getReasonings().size() - 1 && step.isMultiStage() ? "Continuation" : ("Stage " + (r + 1)));
+                    sb.append("  - **").append(stageLabel).append(":** _").append(escapeMarkdown(rText)).append("_\n");
+                }
+            }
+        }
+        else if (step.getReasoning() != null && !step.getReasoning().isBlank())
+        {
+            sb.append("- **AI Reasoning:** _").append(escapeMarkdown(step.getReasoning())).append("_\n");
+        }
+        if (step.getFailureReason() != null)
+        {
+            sb.append("- **Failure Reason:** `").append(step.getFailureReason()).append("`\n");
+        }
+        if (step.getNotRunReason() != null && !step.getNotRunReason().isBlank())
+        {
+            sb.append("- **Note:** *").append(escapeMarkdown(step.getNotRunReason())).append("*\n");
+        }
+
+        // Actions Table
+        if (!step.getActions().isEmpty())
+        {
+            final boolean hasPhases = step.getActions().stream().anyMatch(a -> a.getPhase() != null);
+            sb.append("\n**Executed Actions:**\n\n");
+            if (hasPhases)
+            {
+                sb.append("| # | Type | Phase | Target Selector | Value | Result |\n");
+                sb.append("| :--- | :--- | :--- | :--- | :--- | :--- |\n");
+            }
+            else
+            {
+                sb.append("| # | Type | Target Selector | Value | Result |\n");
+                sb.append("| :--- | :--- | :--- | :--- | :--- |\n");
+            }
+            for (int a = 0; a < step.getActions().size(); a++)
+            {
+                final TestExecutionReport.ReportActionEntry act = step.getActions().get(a);
+                final String actResult = act.isSuccess() ? "✅ Success" : "❌ Failed";
+
+                final String targetStr;
+                if (act.getResolvedTarget() != null && act.getTarget() != null && !act.getResolvedTarget().equals(act.getTarget()))
+                {
+                    targetStr = act.getResolvedTarget() + " (Tpl: " + act.getTarget() + ")";
+                }
+                else
+                {
+                    targetStr = act.getResolvedTarget() != null ? act.getResolvedTarget() : (act.getTarget() != null ? act.getTarget() : "-");
+                }
+
+                final String valueStr;
+                if (act.getResolvedValue() != null && act.getValue() != null && !act.getResolvedValue().equals(act.getValue()))
+                {
+                    valueStr = act.getResolvedValue() + " (Tpl: " + act.getValue() + ")";
+                }
+                else
+                {
+                    valueStr = act.getResolvedValue() != null ? act.getResolvedValue() : (act.getValue() != null ? act.getValue() : "-");
+                }
+
+                if (hasPhases)
+                {
+                    final String phaseStr = act.getPhase() != null ? "`" + act.getPhase() + "`" : "-";
+                    sb.append("| ").append(a + 1).append(" | `").append(act.getType() != null ? act.getType() : "").append("` | ")
+                        .append(phaseStr).append(" | `")
+                        .append(escapeMarkdown(targetStr)).append("` | `")
+                        .append(escapeMarkdown(valueStr)).append("` | ")
+                        .append(actResult).append(" |\n");
+                }
+                else
+                {
+                    sb.append("| ").append(a + 1).append(" | `").append(act.getType() != null ? act.getType() : "").append("` | `")
+                        .append(escapeMarkdown(targetStr)).append("` | `")
+                        .append(escapeMarkdown(valueStr)).append("` | ")
+                        .append(actResult).append(" |\n");
+                }
+            }
+        }
+
+        sb.append("\n");
+
+        // Sub-steps (if any)
+        if (!step.getSubSteps().isEmpty())
+        {
+            for (int s = 0; s < step.getSubSteps().size(); s++)
+            {
+                final TestExecutionReport.ReportStepEntry sub = step.getSubSteps().get(s);
+                renderStepMarkdown(sb, sub, stepLabel + "." + (s + 1), headingPrefix + "#");
+            }
+        }
+    }
+
+    private static String escapeMarkdown(final String text)
+    {
+        if (text == null)
+        {
+            return "";
+        }
+        return text.replace("|", "\\|").replace("\n", " ");
+    }
+}

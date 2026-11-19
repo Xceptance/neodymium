@@ -1,0 +1,4651 @@
+/*
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package org.neodymium.ai.pipeline.steps;
+
+import com.codeborne.selenide.WebDriverRunner;
+import com.codeborne.selenide.ex.ElementNotFound;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.neodymium.ai.action.Action;
+import org.neodymium.ai.client.ChatMessage;
+import org.neodymium.ai.client.ChatMessage.Role;
+import org.neodymium.ai.client.LlmCapability;
+import org.neodymium.ai.client.LlmProvider;
+import org.neodymium.ai.client.LlmRequest;
+import org.neodymium.ai.client.LlmResponse;
+import org.neodymium.ai.client.ReasoningEffort;
+import org.neodymium.ai.client.ResponseSchema;
+import org.neodymium.ai.client.SutAttachment;
+import org.neodymium.ai.client.TokenUsage;
+import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.event.ExecutionListener;
+import org.neodymium.ai.event.InteractiveConsoleListener;
+import org.neodymium.ai.event.llm.LlmRequestSentEvent;
+import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
+import org.neodymium.ai.event.structural.ActionExecutedEvent;
+import org.neodymium.ai.event.structural.StateCapturedEvent;
+import org.neodymium.ai.event.structural.StepFinishedEvent;
+import org.neodymium.ai.executor.SutState;
+import org.neodymium.ai.executor.TargetExecutor;
+import org.neodymium.ai.executor.selenide.BrowserSutState;
+import org.neodymium.ai.executor.selenide.plugins.ClickAction;
+import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.PlaybookStepStatus;
+import org.neodymium.ai.model.ContextLevel;
+import org.neodymium.ai.monitor.ConsoleLogEntry;
+import org.neodymium.ai.monitor.ConsoleLogMonitor;
+import org.neodymium.ai.monitor.NetworkFailure;
+import org.neodymium.ai.monitor.NetworkTrafficMonitor;
+import org.neodymium.ai.pipeline.AgentThrashingException;
+import org.neodymium.ai.pipeline.ConclusiveFailureException;
+import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.InvalidAgentResponseException;
+import org.neodymium.ai.pipeline.PipelineException;
+import org.neodymium.ai.pipeline.PipelineStep;
+import org.neodymium.ai.pipeline.StepStats;
+import org.neodymium.ai.pipeline.StepTimeoutExceededException;
+import org.neodymium.ai.pipeline.StepTurnLimitExceededException;
+import org.neodymium.ai.pipeline.TokenBudgetExceededException;
+import org.neodymium.ai.prompt.AiAgentPrompts;
+import org.neodymium.ai.prompt.DefaultActionSanitizer;
+import org.neodymium.ai.prompt.LlmResponseSanitizer;
+import org.neodymium.ai.prompt.LlmSanitizerHelper;
+import org.neodymium.ai.session.AiSession;
+import org.neodymium.ai.model.SessionData;
+import org.neodymium.ai.model.UnresolvableVariableException;
+import org.neodymium.ai.tool.AiTool;
+import org.neodymium.ai.tool.SimpleToolContext;
+import org.neodymium.ai.tool.ToolCall;
+import org.neodymium.ai.tool.ToolCallVariableResolver;
+import org.neodymium.ai.tool.ToolContext;
+import org.neodymium.ai.tool.ToolDefinition;
+import org.neodymium.ai.tool.ToolRegistry;
+import org.neodymium.ai.tool.ToolResult;
+import org.neodymium.ai.tool.browser.BrowserToolProvider;
+import org.neodymium.ai.tool.browser.VisualBadgeInjector;
+import org.neodymium.ai.tool.guard.CompositeToolInterceptor;
+import org.neodymium.ai.tool.guard.InterceptionVerdict;
+import org.neodymium.ai.tool.guard.NavigationProvenanceInterceptor;
+import org.neodymium.ai.tool.guard.QualityJudgeToolInterceptor;
+import org.neodymium.ai.tool.guard.ToolInterceptor;
+import org.neodymium.ai.util.DomQuiescenceWatcher;
+import org.openqa.selenium.ElementNotInteractableException;
+import org.openqa.selenium.InvalidElementStateException;
+import org.openqa.selenium.InvalidSelectorException;
+import org.openqa.selenium.JavascriptException;
+import org.openqa.selenium.NoSuchElementException;
+import org.openqa.selenium.StaleElementReferenceException;
+import org.openqa.selenium.TimeoutException;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebDriverException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+/**
+ * Pipeline step driving iterative agent tool execution (Think -&gt; ToolCall -&gt; Observe -&gt; Finish)
+ * until one of the six explicit stop criteria terminates the loop.
+ *
+ * @author AI-generated: Gemini 3.7 Flash
+ * @author Xceptance GmbH 2026
+ */
+public final class AgentToolLoopStep implements PipelineStep
+{
+    private static final Logger LOGGER = LoggerFactory.getLogger(AgentToolLoopStep.class);
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    private static final String TURN_DIVIDER =
+            "────────────────────────────────────────────────────────────────────────────────";
+
+    public static final String KEY_TOOL_LOOP_SUMMARY = "toolLoopSummary";
+    public static final String KEY_EXECUTED_TOOL_CALLS = "executedToolCalls";
+
+    private static final Pattern HINT_SELECTOR_PATTERN = Pattern.compile("(?i)\\(\\s*hint\\s*:\\s*([^)]+)\\)");
+    private static final Pattern IF_IS_VISIBLE_PATTERN = Pattern.compile("(?i)\\bif\\s+is\\s+visible\\b");
+
+    private final ToolRegistry toolRegistry;
+    private final ToolInterceptor interceptor;
+    private final AgentLoopLlmCaller llmCaller;
+    private final long timeoutSeconds;
+    private final int maxTurns;
+    private final int maxTokens;
+
+    /**
+     * Constructs a default AgentToolLoopStep with browser tools and standard navigation/locator guards.
+     */
+    public AgentToolLoopStep()
+    {
+        this(createDefaultRegistry(), createDefaultInterceptor(), createDefaultLlmCaller(), resolveDefaultTimeout(), resolveDefaultMaxTurns(), resolveDefaultMaxTokens());
+    }
+
+    private static ToolInterceptor createDefaultInterceptor()
+    {
+        return new CompositeToolInterceptor(
+                new NavigationProvenanceInterceptor(),
+                new QualityJudgeToolInterceptor());
+    }
+
+    /**
+     * Constructs an AgentToolLoopStep with custom dependencies (primarily for testing).
+     *
+     * @param registry tool registry
+     * @param interceptor pre-invocation tool interceptor/guard
+     * @param llmCaller LLM invoker
+     * @param timeoutSeconds wall-clock timeout in seconds
+     */
+    public AgentToolLoopStep(
+            final ToolRegistry registry,
+            final ToolInterceptor interceptor,
+            final AgentLoopLlmCaller llmCaller,
+            final long timeoutSeconds)
+    {
+        this(registry, interceptor, llmCaller, timeoutSeconds, resolveDefaultMaxTurns(), resolveDefaultMaxTokens());
+    }
+
+    /**
+     * Constructs an AgentToolLoopStep with custom dependencies and explicit step bounds.
+     *
+     * @param registry tool registry
+     * @param interceptor pre-invocation tool interceptor/guard
+     * @param llmCaller LLM invoker
+     * @param timeoutSeconds wall-clock timeout in seconds
+     * @param maxTurns maximum allowed turns per step
+     * @param maxTokens maximum allowed cumulative tokens per step
+     */
+    public AgentToolLoopStep(
+            final ToolRegistry registry,
+            final ToolInterceptor interceptor,
+            final AgentLoopLlmCaller llmCaller,
+            final long timeoutSeconds,
+            final int maxTurns,
+            final int maxTokens)
+    {
+        this.toolRegistry = registry != null ? registry : createDefaultRegistry();
+        this.interceptor = interceptor != null ? interceptor : createDefaultInterceptor();
+        this.llmCaller = llmCaller != null ? llmCaller : createDefaultLlmCaller();
+        this.timeoutSeconds = timeoutSeconds > 0 ? timeoutSeconds : resolveDefaultTimeout();
+        this.maxTurns = maxTurns > 0 ? maxTurns : resolveDefaultMaxTurns();
+        this.maxTokens = maxTokens > 0 ? maxTokens : resolveDefaultMaxTokens();
+    }
+
+    /**
+     * Gets the configured maximum turn limit per step.
+     *
+     * @return maximum turns per step
+     */
+    public int getMaxTurns()
+    {
+        return this.maxTurns;
+    }
+
+    /**
+     * Gets the configured cumulative token budget per step.
+     *
+     * @return maximum tokens per step
+     */
+    public int getMaxTokens()
+    {
+        return this.maxTokens;
+    }
+
+    @Override
+    public void execute(final ExecutionContext context) throws PipelineException
+    {
+        final ExecutionContext previousContext = ExecutionContext.getActiveContext();
+        try
+        {
+            ExecutionContext.setActiveContext(context);
+            executeLoop(context);
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(previousContext);
+        }
+    }
+
+    @SuppressWarnings("resource")
+    private void executeLoop(final ExecutionContext context) throws PipelineException
+    {
+        final long startTimeMs = System.currentTimeMillis();
+        final ToolContext toolContext = new SimpleToolContext(this.toolRegistry);
+        toolContext.setVariable("neodymium.executionContext", context);
+        final List<ToolCall> executedCalls = new ArrayList<>();
+        final List<Action> executedActions = new ArrayList<>();
+        long totalPauseDurationMs = 0L;
+        context.getTransientData().remove("KEY_STEP_EXECUTION_FINALIZED");
+        try
+        {
+            final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+        final PlaybookStep step = stepObj instanceof PlaybookStep ps ? ps : null;
+        String instruction = (String) context.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "");
+        String rawInstruction = (String) context.getTransientData().get("KEY_CURRENT_STEP_RAW_INSTRUCTION");
+        final boolean isVisual = (step != null && step.isVisualOrLayoutStep())
+                || (rawInstruction != null && (rawInstruction.toLowerCase().contains("(visual)") || rawInstruction.toLowerCase().contains("(layout)")))
+                || (instruction != null && (instruction.toLowerCase().contains("(visual)") || instruction.toLowerCase().contains("(layout)")));
+        final boolean isMarker = (step != null && step.isMarker())
+                || (rawInstruction != null && rawInstruction.toLowerCase(Locale.ROOT).contains("(marker)"))
+                || (instruction != null && instruction.toLowerCase(Locale.ROOT).contains("(marker)"));
+        final boolean hasInteractive = hasInteractiveMilestones(context);
+        final boolean isVisualAssertion = isVisual && !hasInteractive;
+
+        @SuppressWarnings("unchecked")
+        final List<String> milestones = (List<String>) context.getTransientData().get(ExecutionContext.KEY_INTERNAL_MILESTONES);
+
+        final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
+
+        final int effectiveMaxTurns = (milestones != null && !milestones.isEmpty())
+                ? this.maxTurns + (milestones.size() * 3)
+                : this.maxTurns;
+        Set<String> previousElementSignatures = new HashSet<>();
+        String lastSeenUrl = null;
+        String lastSeenWindowHandle = null;
+
+        final StringBuilder userPrompt = new StringBuilder();
+        if (step != null && step.getParent() != null && step.getParent().getInstruction() != null)
+        {
+            final String parentRaw = step.getParent().getInstruction();
+            final String parentResolved = context.getSessionData() != null
+                ? context.getSessionData().resolveAvailableVariables(parentRaw)
+                : parentRaw;
+            userPrompt.append("### Scoping Context:\n")
+                .append(parentResolved)
+                .append(" (Note: Scoping defines context for actions/assertions targeting this element or pronouns like 'it' / 'its'. Global page elements such as the header cart, page title, or notifications remain global and should be verified globally.)")
+                .append("\n\n");
+        }
+
+        final SessionData activeSessionData = context.getSessionData();
+        if (activeSessionData != null)
+        {
+            final Map<String, Object> guardedData = activeSessionData.getGuardedDataMap();
+            if (!guardedData.isEmpty())
+            {
+                final List<String> eligibleKeys = new ArrayList<>();
+                for (final String key : guardedData.keySet())
+                {
+                    if (key != null && !key.startsWith("_") && !key.startsWith("neodymium."))
+                    {
+                        eligibleKeys.add(key);
+                    }
+                }
+                if (!eligibleKeys.isEmpty())
+                {
+                    userPrompt.append("### Active Session Variables:\n");
+                    Collections.sort(eligibleKeys);
+                    for (final String key : eligibleKeys)
+                    {
+                        userPrompt.append("- ").append(key).append(": \"").append(escapeSessionVariableValue(guardedData.get(key))).append("\"\n");
+                    }
+                    userPrompt.append("When referencing session variables in tool calls, use ${variableName} syntax (e.g. ${").append(eligibleKeys.get(0)).append("}).\n\n");
+                }
+            }
+        }
+
+        String displayInstruction = instruction;
+        if (rawInstruction != null)
+        {
+            final Matcher hintMatcher = HINT_SELECTOR_PATTERN.matcher(rawInstruction);
+            if (hintMatcher.find())
+            {
+                final String selectorHint = hintMatcher.group(1).trim();
+                if (displayInstruction != null && displayInstruction.toLowerCase(Locale.ROOT).contains("if is visible"))
+                {
+                    displayInstruction = IF_IS_VISIBLE_PATTERN.matcher(displayInstruction).replaceAll("If " + selectorHint + " is visible");
+                }
+                userPrompt.append("### Target Selector Hint:\n")
+                        .append("Target element selector: `").append(selectorHint).append("`\n\n");
+            }
+        }
+
+        userPrompt.append("### Test Instruction:\n");
+        if (milestones != null && !milestones.isEmpty())
+        {
+            if (displayInstruction != null && !displayInstruction.isBlank())
+            {
+                String header = displayInstruction.trim();
+                final int firstNl = header.indexOf('\n');
+                if (firstNl > 0)
+                {
+                    header = header.substring(0, firstNl).trim();
+                }
+                userPrompt.append(header);
+                if (!header.endsWith(":"))
+                {
+                    userPrompt.append(":");
+                }
+                userPrompt.append("\n");
+            }
+            for (int i = 0; i < milestones.size(); i++)
+            {
+                userPrompt.append(i + 1).append(". ").append(milestones.get(i)).append("\n");
+            }
+            if (isVisual && displayInstruction != null && !displayInstruction.toLowerCase(Locale.ROOT).contains("(visual)") && !displayInstruction.toLowerCase(Locale.ROOT).contains("(layout)"))
+            {
+                userPrompt.append(" (visual)");
+            }
+            userPrompt.append("\nThis is a compound goal. You must execute tool calls to complete each of the following milestones before calling 'complete_step':\n");
+            userPrompt.append("Important: For any assertion or verification milestone (e.g. 'Assert that...', 'Verify that...'), invoke the commanded assertion tool ('assert_text', 'assert_element_state', 'assert_attribute', 'assert_count', etc.). If the target element or text is not found, execute the assertion tool directly to test the condition rather than retrying earlier action milestones.\n\n");
+        }
+        else
+        {
+            userPrompt.append(displayInstruction != null ? displayInstruction : "");
+            if (isVisual && displayInstruction != null && !displayInstruction.toLowerCase(Locale.ROOT).contains("(visual)") && !displayInstruction.toLowerCase(Locale.ROOT).contains("(layout)"))
+            {
+                userPrompt.append(" (visual)");
+            }
+            userPrompt.append("\n\n");
+        }
+
+        if (isVisual)
+        {
+            userPrompt.append("### Visual Inspection Directive:\n")
+                    .append("This instruction is marked for visual verification. A screenshot of the active page is attached. ")
+                    .append("Visually inspect the screenshot to verify whether the condition (appearance, layout, colors, elements, checkmarks, badges) is met on screen. ")
+                    .append("If the visual condition is satisfied, invoke tool 'complete_step' immediately. ")
+                    .append("If the visual condition is not met or expected elements are missing/off-screen, conclude the visual check with an appropriate summary or fail — do NOT repeatedly scroll or attempt DOM recovery.\n\n");
+        }
+
+        if (isMarker)
+        {
+            userPrompt.append("### Visual Marker Directive:\n")
+                    .append("This instruction is marked with (marker). Visual element markers [1..N] have been activated on screen. ")
+                    .append("A marked screenshot is attached. Target the intended element using its marker index (e.g. click(target: \"marker:3\")).\n\n");
+        }
+
+        List<SutAttachment> attachments = Collections.emptyList();
+
+        final ContextLevel configuredDefault = AiConfiguration.getInstance().getContextLevel();
+        final Object levelObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
+        final ContextLevel baseLevel = levelObj instanceof ContextLevel cl
+                ? cl
+                : configuredDefault;
+        ContextLevel activeContextLevel = ContextLevel.clean(baseLevel);
+
+        // Explicit step context level tag takes strict precedence
+        if (step != null && step.getContextLevel() != null && !step.getContextLevel().isBlank())
+        {
+            activeContextLevel = ContextLevel.fromString(step.getContextLevel(), activeContextLevel);
+        }
+        else if (rawInstruction != null)
+        {
+            final Matcher ctxMatcher = PlaybookStep.CONTEXT_LEVEL_PATTERN.matcher(rawInstruction);
+            if (ctxMatcher.find())
+            {
+                activeContextLevel = ContextLevel.fromString(ctxMatcher.group(1), activeContextLevel);
+            }
+        }
+
+        // Interactive Turn 1: Supply pierced DOM Light or configured context level
+        if (executor != null)
+        {
+            try
+            {
+                // Visual or marker tag check (only applied when step did not explicitly override context level)
+                if ((isVisual || isMarker) && (step == null || step.getContextLevel() == null || step.getContextLevel().isBlank() || ContextLevel.LEAN.name().equalsIgnoreCase(step.getContextLevel())))
+                {
+                    if (!activeContextLevel.includesScreenshot())
+                    {
+                        activeContextLevel = ContextLevel.VISUAL_LEAN;
+                    }
+                }
+
+                if (isMarker && WebDriverRunner.hasWebDriverStarted())
+                {
+                    VisualBadgeInjector.injectMarkers(WebDriverRunner.getWebDriver());
+                }
+
+                context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+                final boolean isFullPage = (step != null && step.isFullPageVisualStep())
+                        || Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                        || activeContextLevel.isFullPageScreenshot();
+                final SutState initialState = executor.captureState(activeContextLevel, isFullPage);
+                context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, initialState);
+                final Object statsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
+                if (statsObj instanceof final StepStats stats)
+                {
+                    stats.addContextLevel(activeContextLevel.name());
+                }
+                if (step != null)
+                {
+                    step.setContextLevel(activeContextLevel.name());
+                }
+                if (initialState.getTextContent() != null && !initialState.getTextContent().isBlank())
+                {
+                    previousElementSignatures = extractElementSignatures(initialState.getTextContent());
+                    userPrompt.append("### Current Page State & Interactive Elements:\n")
+                            .append(initialState.getTextContent())
+                            .append("\n\n");
+                }
+                if (initialState.getAttachments() != null)
+                {
+                    attachments = initialState.getAttachments();
+                }
+                if (isMarker && attachments != null && !attachments.isEmpty())
+                {
+                    final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+                    if (session != null && session.getEventBus() != null)
+                    {
+                        final String stepDesc = step != null ? step.getInstruction() : "step";
+                        final SutState markedState = new BrowserSutState("Visual Markers (proactive hint on " + stepDesc + ")", attachments, "screenshot");
+                        session.getEventBus().dispatch(new StateCapturedEvent(markedState));
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.debug("Could not capture initial SUT state for AgentToolLoopStep: {}", e.getMessage());
+            }
+        }
+
+        final WebDriver initialDriver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+        if (initialDriver != null)
+        {
+            try
+            {
+                lastSeenUrl = BrowserToolProvider.getSafeUrl(initialDriver);
+                lastSeenWindowHandle = initialDriver.getWindowHandle();
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        // Compile available tools
+        final List<ToolDefinition> availableTools = filterTools(isVisual, context);
+
+        final StringBuilder systemPrompt = new StringBuilder();
+        systemPrompt.append("You are a deterministic QA test automation executor, not an exploratory browsing assistant. Execute only what the test instruction specifies using available tools.\n\n");
+        systemPrompt.append("### OPERATING RULES:\n");
+        systemPrompt.append("1. SCOPE & FAIL-FAST DISCIPLINE: Execute only the explicit action or assertion described in the instruction or milestones. Do not anticipate subsequent steps, invent off-script 'navigate' URLs, or click unrelated menus/links when a target is missing. If the page displays an error (e.g. 404/500) or active CAPTCHA/bot challenge: execute normally if the instructed target or check is present on that page; otherwise, if the target is missing or blocked (ignoring passive footer badges), invoke 'fail_step' with a clear QA reason.\n");
+        systemPrompt.append("2. GROUNDING & EXECUTION: Selectors are evaluated via Selenide (standard CSS, XPath, or text matching). Selenide auto-scrolls elements into view during actions; use 'scroll' only to trigger lazy-loaded content or to reposition elements for visual verification. To inspect DOM, use 'query_dom'. Prior DOM snapshots are pruned after Turn 1 to minimize token context; if you need DOM details or element selectors in subsequent turns, invoke 'query_dom' (for specific element subtrees) or 'request_context' (for a fresh DOM snapshot). When querying DOM with 'query_dom', specify distinctive multi-word phrases or specific selectors from the instruction (rather than generic single words) to locate the exact target element directly. When targeting an element specified by an ordinal or position (e.g. 'the first item', 'second row', '3rd element', 'nth element', 'the last row', or checking order after sorting), you MUST preserve that positional targeting using parent-scoped positional selectors (such as `.myList > div:nth-of-type(3)` or `ul >> li >> nth=2`) rather than substituting an ID, text, or class of the element found at that position during recording. When targeting an element described by a dynamic name or parameter in a container (e.g. 'table row with item name X', 'the card for product Y'), you MUST scope the selector to the matching container (e.g. `tr[title=\"X\"] td.price` or `tr:has-text(\"X\") >> td.price`) rather than using an un-scoped selector (such as bare `tr td.price`) that matches multiple rows or relies on accidental row ordering. If target elements lack distinctive text, IDs, or stable classes (e.g. icon-only buttons, SVG/canvas controls, or CSS-in-JS obfuscated soup), invoke 'mark_elements' to overlay visual markers and target by marker index (e.g. click(target: \"marker:3\")). Never propose the exact same failing tool call without changing selector or state.\n");
+        systemPrompt.append("3. ACTION STEPS: For action instructions (such as clicking buttons or links, filling fields, selecting dropdowns, checking checkboxes/radios, or navigating), once all actions and field values explicitly requested by the instruction are executed, the step goal is completely satisfied. When interacting with form controls, use 'fill' for text inputs, 'select' for dropdown menus, and 'check' for checkboxes and radio buttons (which is idempotent and sets the target state) rather than 'click'. Propose [action, complete_step] in the same turn if only a single action was requested, or call 'complete_step' once all requested actions have succeeded. DO NOT execute uncommanded assertions, probe unrelated elements, or verify downstream side-effects that belong to subsequent steps. If an action fails (e.g., target element is disabled, missing, or non-interactable), DO NOT substitute uncommanded assertions (such as 'assert_element_state') and DO NOT call 'complete_step'; report the failure. Cohesive multi-field operations: When an instruction commands setting multiple form fields or values (e.g. entering card number, expiry date, and CVV), you may propose the sequential [fill/type, ..., complete_step] calls in the same turn to execute all requested fields cohesively. Do not batch actions across navigation or state-changing page transitions.\n");
+        systemPrompt.append("4. VERIFICATION STEPS: For verification or check instructions (such as asserting text, checking counts, validating attributes/values, or confirming expected state like visible, editable, readonly, checked, disabled), you MUST invoke an assertion tool ('assert_text', 'assert_element_state', 'assert_attribute', 'assert_count', 'assert_url', 'assert_title') before calling 'complete_step'. Propose [assertion, complete_step] in the same turn once the verification condition is satisfied. Directly assert the commanded property or content rather than splitting verification into separate intermediate visibility checks. To assert multiple states on the same element (e.g. 'displayed and enabled'), combine them into a single 'assert_element_state' call using compound states (e.g. state: 'visible, enabled' or states: ['visible', 'enabled']) rather than executing multiple separate tool calls. If 'query_dom' returns 0 matches for an expected verification element or text, DO NOT repeatedly re-execute previous action milestones (such as re-submitting forms). Immediately invoke the commanded assertion tool on the expected target/text so that any verification failure or expected defect is definitively asserted and recorded. When validating that an option, setting, country, language, or currency is selected, first check if the active trigger or header element reflects this (via text, title, or attributes like aria-label); assert on it directly without opening menus. If you perform temporary interactions (such as expanding dropdowns, opening modals/dialogs, or switching tabs) to reveal hidden content to verify, you MUST restore the initial page state before completing the step: close the opened modal/dialog/overlay (e.g. clicking the close button or pressing Escape) or collapse the dropdown so that ephemeral dialogs and backdrops do not leak into and block subsequent steps. Never invoke 'complete_step' while a temporary verification modal or overlay remains open on screen. Cohesive multi-assertion operations: When an instruction commands verifying multiple elements or conditions, you may propose all commanded [assert_*, ..., complete_step] calls in the same turn to execute all verifications cohesively.\n");
+        if (isVisual)
+        {
+            systemPrompt.append("5. VISUAL CHECKS: When verifying visual appearance or when a screenshot is provided, inspect the screenshot visually to verify whether the condition is met on screen, then invoke 'complete_step'. Do not query DOM or escalate context for visual checks.\n");
+        }
+        systemPrompt.append("6. CONDITIONAL & INCLUDE STEPS: When instructed to conditionally execute actions or playbooks (e.g. 'If (condition), Include fileA, else Include fileB'): First evaluate the condition using available tools (e.g. 'query_dom' or inspecting element presence). If the condition is satisfied, execute the matching action or invoke 'include' with the target playbook path. If the condition is not satisfied and an 'else' branch is provided, execute the 'else' action or invoke 'include'. If the condition is not satisfied and no 'else' branch is provided, call 'complete_step'. When invoking 'include', you may co-propose 'complete_step' in the same turn [include, complete_step], or call 'complete_step' once include succeeds.\n");
+        systemPrompt.append("\n### LOCATOR SYNTAX RULES:\n");
+        systemPrompt.append(AiAgentPrompts.getSelenideLocatorRule().trim()).append("\n");
+
+        final List<ChatMessage> conversation = new ArrayList<>();
+        conversation.add(ChatMessage.system(systemPrompt.toString()));
+        conversation.add(ChatMessage.user(userPrompt.toString(), attachments));
+
+        int stepCumulativeTokens = 0;
+        int turn = 0;
+        int invalidResponseCount = 0;
+
+        // Thrashing tracking
+        String lastToolName = null;
+        JsonNode lastArguments = null;
+        int consecutiveIdenticalCalls = 0;
+        boolean lastProposedToolWasCompleteStep = false;
+        boolean hasAutoEscalatedOnFailStep = false;
+        boolean hasActionToolFailed = false;
+        String lastFailedActionTarget = null;
+        String lastActionFailureMessage = null;
+        boolean hasUnresolvedAssertion = false;
+        String lastAssertionFailureMessage = null;
+        List<SutAttachment> pendingVisualAttachments = null;
+        String pendingVisualNote = null;
+        int visualScrollCount = 0;
+        boolean domAttachedToCurrentTurn = true;
+
+        LOGGER.info("🚀 Starting Agent Tool Loop for instruction: \"{}\" (milestones: {})",
+                instruction, milestones != null ? milestones.size() : 0);
+        if (LOGGER.isDebugEnabled())
+        {
+            LOGGER.debug("🛠️ Available Native Tools ({}): {}", availableTools.size(), ToolDefinition.formatToolsCompact(availableTools));
+            if (LOGGER.isTraceEnabled())
+            {
+                LOGGER.trace("Detailed Native Tool Schemas:\n{}", ToolDefinition.formatTools(availableTools));
+            }
+        }
+
+        ReasoningEffort reasoningEffort = AiConfiguration.getInstance().getReasoningEffort();
+        if (context.getSessionData() != null)
+        {
+            final Object dynamicEffort = context.getSessionData().get("neodymium.ai.execution.reasoningEffort") != null
+                ? context.getSessionData().get("neodymium.ai.execution.reasoningEffort")
+                : (context.getSessionData().get("neodymium.ai.reasoningEffort") != null
+                    ? context.getSessionData().get("neodymium.ai.reasoningEffort")
+                    : context.getSessionData().get("neodymium.ai.thinkingLevel"));
+            if (dynamicEffort != null)
+            {
+                final ReasoningEffort parsed = AiConfiguration.parseReasoningEffort(String.valueOf(dynamicEffort));
+                if (parsed != null)
+                {
+                    reasoningEffort = parsed;
+                }
+            }
+        }
+
+        turnLoop: while (true)
+        {
+            turn++;
+            LOGGER.info(TURN_DIVIDER);
+            LOGGER.info("🤖 Agent Turn #{} (max: {}) | Step: \"{}\"", turn, effectiveMaxTurns, instruction);
+
+            if (turn > effectiveMaxTurns)
+            {
+                throw new StepTurnLimitExceededException(instruction, turn, effectiveMaxTurns);
+            }
+
+            // Stop Criterion 5: Step Wall-Clock Timeout (compensated for interactive pause durations)
+            final long stepPauseMs = Math.max(totalPauseDurationMs, context.getStepInteractivePauseMs());
+            final long elapsedSeconds = Math.max(0L, (System.currentTimeMillis() - startTimeMs - stepPauseMs) / 1000);
+            final long baseTimeoutSeconds = (step != null && step.getTimeoutMs() != null && step.getTimeoutMs() > 0)
+                    ? (step.getTimeoutMs() + 999L) / 1000L
+                    : this.timeoutSeconds;
+            final long effectiveTimeoutSeconds = (step != null && step.hasSubSteps())
+                    ? baseTimeoutSeconds * step.getSubSteps().size()
+                    : baseTimeoutSeconds;
+            if (elapsedSeconds >= effectiveTimeoutSeconds)
+            {
+                throw new StepTimeoutExceededException(instruction, elapsedSeconds, (int) effectiveTimeoutSeconds);
+            }
+
+            if (LOGGER.isTraceEnabled())
+            {
+                LOGGER.trace("Conversation context for Turn #{}:\n{}\n\nRegistered Native Tools ({}):\n{}",
+                        turn,
+                        ChatMessage.formatConversation(conversation),
+                        availableTools.size(),
+                        ToolDefinition.formatTools(availableTools));
+            }
+
+            final int turnTimeoutSeconds = AiConfiguration.getInstance().getInt(
+                    "neodymium.ai.execution.timeoutSeconds",
+                    AiConfiguration.getInstance().getInt("neodymium.ai.execution.timeout", 30));
+
+            final LlmRequest request = new LlmRequest(
+                    conversation,
+                    availableTools,
+                    attachments,
+                    ResponseSchema.TEXT,
+                    0.0,
+                    turnTimeoutSeconds,
+                    reasoningEffort
+            );
+
+            // Query LLM
+            final LlmResponse response;
+            try
+            {
+                response = this.llmCaller.call(request, context);
+                recordTurnMetrics(context, response);
+                if (response != null && response.tokenUsage() != null)
+                {
+                    stepCumulativeTokens += response.tokenUsage().totalTokenCount();
+                }
+            }
+            catch (final TokenBudgetExceededException e)
+            {
+                throw e;
+            }
+            catch (final Exception e)
+            {
+                // Stop Criterion 6: Fatal Environment / Abort Failure
+                if (e instanceof WebDriverException)
+                {
+                    throw new ConclusiveFailureException("Fatal environment failure during LLM invocation: " + e.getMessage(), e);
+                }
+                throw new ConclusiveFailureException("Failed during agent LLM turn: " + e.getMessage(), e);
+            }
+
+            final String thought = extractThought(response);
+            if (thought != null && !thought.isBlank())
+            {
+                if (thought.contains("\n"))
+                {
+                    LOGGER.info("💭 Thought:\n{}", indent(thought, "   "));
+                }
+                else
+                {
+                    LOGGER.info("💭 Thought: {}", thought);
+                }
+            }
+
+            // Extract proposed tool calls (native first, then text JSON fallback)
+            List<ToolCall> proposedCalls = null;
+            boolean isSingleShotAction = false;
+            if (response != null && response.hasToolCalls())
+            {
+                proposedCalls = response.toolCalls();
+            }
+            else if (response != null && response.content() != null && !response.content().isBlank())
+            {
+                final ParsedCallsResult parsed = parseLlmToolCalls(response.content());
+                if (parsed != null && parsed.calls() != null && !parsed.calls().isEmpty())
+                {
+                    proposedCalls = parsed.calls();
+                    final String firstParsedTool = proposedCalls.get(0).toolName();
+                    isSingleShotAction = parsed.isSingleShotAction()
+                            && !"complete_step".equals(firstParsedTool)
+                            && !"fail_step".equals(firstParsedTool);
+                }
+            }
+
+            // Stop Criterion 5: Step Token Budget Enforcement (with 20% grace for completing turns)
+            if (this.maxTokens > 0 && stepCumulativeTokens > this.maxTokens)
+            {
+                final boolean proposesCompletion = isSingleShotAction
+                        || (proposedCalls != null && !proposedCalls.isEmpty() && (
+                                "complete_step".equals(proposedCalls.get(0).toolName())
+                                || "fail_step".equals(proposedCalls.get(0).toolName())
+                                || "include".equals(proposedCalls.get(0).toolName())
+                                || (proposedCalls.size() == 2 && ("complete_step".equals(proposedCalls.get(1).toolName()) || "fail_step".equals(proposedCalls.get(1).toolName())))
+                                || (isCohesiveBatch(proposedCalls) && "complete_step".equals(proposedCalls.get(proposedCalls.size() - 1).toolName()))
+                        ));
+                final long graceLimit = (long) (this.maxTokens * 1.20);
+                if (!proposesCompletion || stepCumulativeTokens > graceLimit)
+                {
+                    throw new TokenBudgetExceededException(
+                            TokenBudgetExceededException.BudgetType.TOTAL,
+                            stepCumulativeTokens,
+                            this.maxTokens
+                    );
+                }
+                LOGGER.warn("⚠️ Turn #{} exceeded token budget ({} / {} tokens), but proposes step completion. Granting grace completion execution (grace limit: {}).",
+                        turn, stepCumulativeTokens, this.maxTokens, graceLimit);
+            }
+
+            // If no tool call could be parsed
+            if (proposedCalls == null || proposedCalls.isEmpty())
+            {
+                if (hasUnresolvedAssertion)
+                {
+                    LOGGER.info("🛑 Assertion failed and agent concluded failure without tool calls: {}", lastAssertionFailureMessage);
+                    throw new ConclusiveFailureException("Cannot complete step: Pending assertion failed: "
+                            + lastAssertionFailureMessage);
+                }
+
+                if (hasActionToolFailed && !isVisual && isInteractiveActionInstruction(rawInstruction, instruction, step))
+                {
+                    final String detail = (lastActionFailureMessage != null && !lastActionFailureMessage.isBlank())
+                            ? lastActionFailureMessage
+                            : (response != null && response.content() != null && !response.content().isBlank()
+                                    ? response.content().trim()
+                                    : "Action failed");
+                    LOGGER.info("🛑 Action failed and agent concluded failure without tool calls: {}", detail);
+                    throw new ConclusiveFailureException("Cannot complete step: Action instruction '" + instruction
+                            + "' failed: " + detail);
+                }
+
+                LOGGER.warn("LLM turn did not produce a valid tool call: {}", response != null ? response.content() : "empty response");
+                if (response != null && response.tokenUsage() != null)
+                {
+                    final TokenUsage tu = response.tokenUsage();
+                    LOGGER.info("📊 Tokens: {} in ({} cached) → {} out (total: {}) | Turn {}",
+                            tu.inputTokenCount(), tu.cachedTokenCount(), tu.outputTokenCount(), tu.totalTokenCount(), turn);
+                }
+
+                if (invalidResponseCount == 0)
+                {
+                    invalidResponseCount++;
+                    conversation.add(ChatMessage.assistant(response != null && response.content() != null ? response.content() : ""));
+                    conversation.add(ChatMessage.user("Your response did not contain a valid tool call. If the step's goal is complete, invoke 'complete_step'. If the target is missing or blocked on screen, invoke 'fail_step'. Otherwise, invoke the next browser tool."));
+                    continue;
+                }
+                else
+                {
+                    throw new InvalidAgentResponseException(
+                            "Agent turn did not produce a valid tool call after warning",
+                            response != null ? response.content() : "",
+                            turn,
+                            invalidResponseCount + 1
+                    );
+                }
+            }
+
+            final List<ToolCall> sanitizedCalls = new ArrayList<>();
+            final List<Action> proposedActions = new ArrayList<>();
+            if (step != null)
+            {
+                final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+                final SessionData sessionData = context.getSessionData();
+                for (final ToolCall call : proposedCalls)
+                {
+                    if (!"complete_step".equals(call.toolName()) && !"fail_step".equals(call.toolName()) && !"screenshot".equals(call.toolName()) && !"browser_take_screenshot".equals(call.toolName()) && !isDiscoveryTool(call.toolName()))
+                    {
+                        final ToolCall sanitizedCall = sanitizeToolCall(call, sessionData, sanitizer);
+                        sanitizedCalls.add(sanitizedCall);
+                        Action mappedAction = mapToolCallToAction(call);
+                        if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
+                        {
+                            mappedAction = mappedAction.withReasoning(thought.trim());
+                        }
+                        final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
+                        proposedActions.add(canonicalAction);
+                    }
+                }
+                if (thought != null && !thought.isBlank())
+                {
+                    final String sanitizedThought = sessionData != null ? sanitizer.sanitizeText(thought.trim(), sessionData) : thought.trim();
+                    if (!step.getReasonings().contains(sanitizedThought))
+                    {
+                        step.addReasoning(sanitizedThought);
+                    }
+                    if (!proposedActions.isEmpty()
+                            || (response != null && response.hasThinking())
+                            || step.getReasoning() == null
+                            || step.getReasoning().isBlank())
+                    {
+                        step.setReasoning(sanitizedThought);
+                    }
+                }
+            }
+
+            InteractiveConsoleListener interactiveListener = null;
+            final AiSession activeSession = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+            if (activeSession != null && activeSession.getEventBus() != null)
+            {
+                for (final ExecutionListener listener : activeSession.getEventBus().getListeners())
+                {
+                    if (listener instanceof InteractiveConsoleListener icl && icl.isInteractive())
+                    {
+                        interactiveListener = icl;
+                        break;
+                    }
+                }
+            }
+
+            final boolean requireConfirmationOnce = Boolean.TRUE.equals(context.getTransientData().remove("KEY_REQUIRE_CONFIRMATION_ONCE"));
+            final boolean hasProposedActions = !proposedActions.isEmpty() || !sanitizedCalls.isEmpty();
+            if ((hasProposedActions || requireConfirmationOnce) && interactiveListener != null && !interactiveListener.isAutoRun())
+            {
+                final List<Action> origActions = step != null && step.getActions() != null
+                        ? new ArrayList<>(step.getActions())
+                        : new ArrayList<>();
+                final List<ToolCall> origCalls = step != null && step.getToolCalls() != null
+                        ? new ArrayList<>(step.getToolCalls())
+                        : new ArrayList<>();
+                if (step != null)
+                {
+                    step.setToolCalls(sanitizedCalls);
+                    step.setActions(proposedActions);
+                    if (step.hasSubSteps())
+                    {
+                        partitionToolCallsAndActions(step.getSubSteps(), executedCalls, executedActions, sanitizedCalls, proposedActions, true);
+                    }
+                }
+                String userAction = null;
+                final long pauseStart = System.currentTimeMillis();
+                try
+                {
+                    userAction = interactiveListener.pauseBeforeActionExecution(context, step);
+                }
+                finally
+                {
+                    final long pauseDuration = Math.max(0L, System.currentTimeMillis() - pauseStart);
+                    totalPauseDurationMs += pauseDuration;
+                    if (step != null && userAction != null && !("EDIT".equalsIgnoreCase(userAction) || "UPDATE_STEP".equalsIgnoreCase(userAction) || "SAVE_STEP".equalsIgnoreCase(userAction)))
+                    {
+                        step.setActions(new ArrayList<>(executedActions));
+                        step.setToolCalls(new ArrayList<>(executedCalls));
+                        if (step.hasSubSteps())
+                        {
+                            partitionToolCallsAndActions(step.getSubSteps(), executedCalls, executedActions, false);
+                        }
+                    }
+                }
+                if ("REWIND".equalsIgnoreCase(userAction))
+                {
+                    LOGGER.info("   ⏪ Execution rewound to previous step; yielding current step execution");
+                    return;
+                }
+                final boolean isRescheduled = "RESCHEDULE".equalsIgnoreCase(userAction)
+                    || Boolean.TRUE.equals(context.getTransientData().remove("KEY_STEP_RESCHEDULED"));
+                if (isRescheduled)
+                {
+                    LOGGER.info("   🔄 Step rescheduled due to newly inserted step; yielding execution to run newly inserted step first");
+                    finishLoop(context, executedCalls, "Rescheduled");
+                    return;
+                }
+                if ("SKIP".equalsIgnoreCase(userAction) || (step != null && step.getStatus() == PlaybookStepStatus.SKIPPED))
+                {
+                    if (step != null && step.getParent() != null)
+                    {
+                        LOGGER.warn("   ⏭️ Skipping sub-step execution per user request: \"{}\" (Parent include: \"{}\", includeFile={})",
+                            instruction, step.getParent().getInstruction(), step.getSourceFile());
+                    }
+                    else
+                    {
+                        LOGGER.info("   ⏭️ Skipping step execution per user request: \"{}\"", instruction);
+                    }
+                    if (activeSession != null && activeSession.getEventBus() != null && step != null)
+                    {
+                        activeSession.getEventBus().dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SKIPPED));
+                    }
+                    finishLoop(context, executedCalls, "Skipped by user");
+                    return;
+                }
+                if ("ABORT".equalsIgnoreCase(userAction))
+                {
+                    throw new ConclusiveFailureException("Step execution aborted by user in interactive console.");
+                }
+                final boolean isExplicitRun = "RUN".equalsIgnoreCase(userAction) || "AUTO".equalsIgnoreCase(userAction) || "CONTINUE".equalsIgnoreCase(userAction) || "RUN_ALL".equalsIgnoreCase(userAction);
+                final boolean bindingsEdited = Boolean.TRUE.equals(context.getTransientData().remove("KEY_BINDINGS_EDITED"));
+                final boolean isEdit = "EDIT".equalsIgnoreCase(userAction) || "UPDATE_STEP".equalsIgnoreCase(userAction) || "SAVE_STEP".equalsIgnoreCase(userAction);
+                if ((isEdit || bindingsEdited) && !isExplicitRun)
+                {
+                    LOGGER.info("   ✏️ Prompt or test data updated during interactive pause — re-evaluating instruction and re-querying LLM");
+                    final String updatedRaw = (step != null && step.getRawInstruction() != null)
+                        ? step.getRawInstruction()
+                        : (step != null ? step.getInstruction() : null);
+                    final String updatedInstruction = (context.getSessionData() != null && updatedRaw != null)
+                        ? context.getSessionData().resolveVariables(updatedRaw)
+                        : updatedRaw;
+                    final String preparedInstruction = ExecuteActionsStep.prepareInstruction(updatedInstruction);
+                    context.getTransientData().put("KEY_CURRENT_STEP_RAW_INSTRUCTION", updatedInstruction);
+                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, preparedInstruction);
+                    instruction = preparedInstruction;
+                    rawInstruction = updatedInstruction;
+
+                    if (step != null)
+                    {
+                        step.setInstruction(updatedInstruction);
+                        step.setStatus(PlaybookStepStatus.RUNNING);
+                        step.setFailed(false);
+                        step.setFailureReason(null);
+                        step.setRecordedStatus(null);
+                        step.setScreenshotHash(null);
+                        step.setNoReplay(true);
+                        try
+                        {
+                            step.getActions().clear();
+                        }
+                        catch (final UnsupportedOperationException e)
+                        {
+                            step.setActions(new ArrayList<>());
+                        }
+                        try
+                        {
+                            step.getToolCalls().clear();
+                        }
+                        catch (final UnsupportedOperationException e)
+                        {
+                            step.setToolCalls(new ArrayList<>());
+                        }
+                    }
+                    context.getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, true);
+                    context.getTransientData().put("KEY_CURRENT_STEP_NO_REPLAY", true);
+
+                    lastProposedToolWasCompleteStep = false;
+                    hasAutoEscalatedOnFailStep = false;
+                    toolContext.setVariable(NavigationProvenanceInterceptor.KEY_BLOCKED_NAV_ATTEMPTS, 0);
+                    hasActionToolFailed = false;
+                    lastFailedActionTarget = null;
+                    lastActionFailureMessage = null;
+                    consecutiveIdenticalCalls = 0;
+                    invalidResponseCount = 0;
+
+                    // Prune trailing unfulfilled assistant tool calls message to maintain valid LLM provider conversation schema
+                    if (!conversation.isEmpty())
+                    {
+                        final ChatMessage lastMsg = conversation.get(conversation.size() - 1);
+                        if (lastMsg.role() == Role.ASSISTANT && lastMsg.toolCalls() != null && !lastMsg.toolCalls().isEmpty())
+                        {
+                            conversation.remove(conversation.size() - 1);
+                        }
+                    }
+
+                    if (executor != null)
+                    {
+                        try
+                        {
+                            final boolean isFullPage = (step != null && step.isFullPageVisualStep())
+                                || Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                                || activeContextLevel.isFullPageScreenshot();
+                            final SutState freshState = executor.captureState(activeContextLevel, isFullPage);
+                            context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, freshState);
+                            if (freshState.getAttachments() != null && !freshState.getAttachments().isEmpty())
+                            {
+                                attachments = freshState.getAttachments();
+                            }
+                        }
+                        catch (final Exception e)
+                        {
+                            LOGGER.debug("Could not refresh SUT state upon step edit: {}", e.getMessage());
+                        }
+                    }
+
+                    conversation.add(ChatMessage.user("Updated Test Instruction:\n" + preparedInstruction, attachments));
+
+                    if (interactiveListener != null && step != null)
+                    {
+                        interactiveListener.pushCurrentState(context, step);
+                    }
+
+                    turn--;
+                    continue turnLoop;
+                }
+            }
+
+            if (isSingleShotAction)
+            {
+                for (final ToolCall singleShotCall : proposedCalls)
+                {
+                    logToolCall(singleShotCall);
+                    final InterceptionVerdict verdict = this.interceptor.intercept(singleShotCall, toolContext);
+                    final ToolCall rawEffectiveCall = verdict.getEffectiveCall(singleShotCall);
+                    final ToolCall effectiveCall = ToolCallVariableResolver.normalizePlaceholders(rawEffectiveCall, context.getSessionData());
+                    if (!verdict.isAllowed())
+                    {
+                        final ToolResult rejResult = verdict.rejectionResult();
+                        final String feedback = (rejResult != null && rejResult.content() != null && !rejResult.content().isBlank())
+                                ? rejResult.content()
+                                : verdict.reason();
+                        if (verdict.decision() == InterceptionVerdict.Decision.RETRY_WITH_FEEDBACK)
+                        {
+                            LOGGER.info("⚖️ Guard requested retry with feedback for single-shot action '{}'; falling back to interactive agent loop",
+                                    singleShotCall.toolName());
+                            conversation.add(ChatMessage.assistant(response != null && response.content() != null ? response.content() : ""));
+                            conversation.add(ChatMessage.user("Tool call '" + singleShotCall.toolName() + "' blocked by guard: " + feedback
+                                    + "\nRetry the remaining unexecuted part of the step using the available tools."));
+                            isSingleShotAction = false;
+                            break;
+                        }
+                        throw new AssertionError("Policy violation: " + feedback);
+                    }
+                    final Optional<AiTool> toolOpt = this.toolRegistry.getTool(effectiveCall.toolName());
+                    if (toolOpt.isPresent())
+                    {
+                        final ToolResult result;
+                        try
+                        {
+                            final ToolCall executableCall = ToolCallVariableResolver.resolveVariables(effectiveCall, context.getSessionData());
+                            result = toolOpt.get().execute(executableCall, toolContext);
+                        }
+                        catch (final UnresolvableVariableException e)
+                        {
+                            handleSingleShotUnresolvableVariable(e, effectiveCall, executedCalls, conversation, response);
+                            isSingleShotAction = false;
+                            break;
+                        }
+                        catch (final AssertionError e)
+                        {
+                            throw e;
+                        }
+                        catch (final Exception e)
+                        {
+                            throw new ConclusiveFailureException("Action execution failed: " + e.getMessage(), e);
+                        }
+                        if (result != null && result.status() == ToolResult.Status.ERROR)
+                        {
+                            if (result.content().startsWith("AssertionError"))
+                            {
+                                throw new AssertionError(result.content());
+                            }
+                            throw new ConclusiveFailureException("Action execution failed: " + result.content());
+                        }
+                        ToolCall callToRecord = effectiveCall;
+                        if (result != null && result.content() != null && !result.content().isBlank())
+                        {
+                            try
+                            {
+                                final JsonNode resJson = MAPPER.readTree(result.content());
+                                final ObjectNode updatedArgs = effectiveCall.arguments() instanceof ObjectNode on
+                                        ? on.deepCopy()
+                                        : MAPPER.createObjectNode();
+                                boolean updated = false;
+                                if (resJson.hasNonNull("domFeatureVector"))
+                                {
+                                    updatedArgs.set("domFeatureVector", resJson.path("domFeatureVector"));
+                                    updated = true;
+                                }
+                                if (resJson.hasNonNull("frame") && !resJson.path("frame").asText().isBlank())
+                                {
+                                    updatedArgs.put("frame", resJson.path("frame").asText().trim());
+                                    updated = true;
+                                }
+                                if (resJson.hasNonNull("target") && resJson.path("target").asText().startsWith("coord:"))
+                                {
+                                    updatedArgs.put("target", resJson.path("target").asText());
+                                    if (resJson.hasNonNull("x"))
+                                    {
+                                        updatedArgs.put("x", resJson.path("x").asInt());
+                                    }
+                                    if (resJson.hasNonNull("y"))
+                                    {
+                                        updatedArgs.put("y", resJson.path("y").asInt());
+                                    }
+                                    updatedArgs.remove("selector");
+                                    updated = true;
+                                }
+                                if (updated)
+                                {
+                                    callToRecord = new ToolCall(effectiveCall.callId(), effectiveCall.toolName(), updatedArgs);
+                                }
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+                        }
+                        executedCalls.add(callToRecord);
+                        if (!"complete_step".equals(effectiveCall.toolName()) && !"screenshot".equals(effectiveCall.toolName()) && !"browser_take_screenshot".equals(effectiveCall.toolName()))
+                        {
+                            final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+                            if (session != null && session.getEventBus() != null)
+                            {
+                                Action mappedAction = mapToolCallToAction(callToRecord);
+                                if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
+                                {
+                                    mappedAction = mappedAction.withReasoning(thought.trim());
+                                }
+                                final SessionData sessionData = context.getSessionData();
+                                final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+                                final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
+                                session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, true));
+                            }
+                        }
+                    }
+                    else if (executor != null)
+                    {
+                        final ToolCall executableCall;
+                        try
+                        {
+                            executableCall = ToolCallVariableResolver.resolveVariables(effectiveCall, context.getSessionData());
+                        }
+                        catch (final UnresolvableVariableException e)
+                        {
+                            handleSingleShotUnresolvableVariable(e, effectiveCall, executedCalls, conversation, response);
+                            isSingleShotAction = false;
+                            break;
+                        }
+
+                        Action mappedAction = mapToolCallToAction(executableCall);
+                        if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
+                        {
+                            mappedAction = mappedAction.withReasoning(thought.trim());
+                        }
+                        try
+                        {
+                            executor.execute(mappedAction);
+                        }
+                        catch (final AssertionError e)
+                        {
+                            throw e;
+                        }
+                        catch (final Exception e)
+                        {
+                            throw new ConclusiveFailureException("Action execution failed: " + e.getMessage(), e);
+                        }
+                        executedCalls.add(effectiveCall);
+                        final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+                        if (session != null && session.getEventBus() != null)
+                        {
+                            final SessionData sessionData = context.getSessionData();
+                            final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+                            final Action rawAction = mapToolCallToAction(effectiveCall);
+                            final Action canonicalAction = sessionData != null ? sanitizer.sanitize(rawAction, sessionData) : rawAction;
+                            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, true));
+                        }
+                    }
+                    else
+                    {
+                        throw new IllegalArgumentException("Unknown tool: " + effectiveCall.toolName());
+                    }
+                }
+                if (!isSingleShotAction)
+                {
+                    continue turnLoop;
+                }
+                final String summary = "Actions completed";
+                context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
+                finishLoop(context, executedCalls, summary);
+                LOGGER.info("🎯 Single-shot action goal accomplished (Executed Calls: {})", executedCalls.size());
+                LOGGER.info(TURN_DIVIDER);
+                break;
+            }
+
+            // Cohesive batch execution (form inputs and/or assertions) vs single action handling
+            final List<ToolCall> callsToExecute = new ArrayList<>();
+            final ToolCall coProposedComplete;
+
+            final boolean allCohesiveBatch = isCohesiveBatch(proposedCalls);
+            if (allCohesiveBatch)
+            {
+                final ToolCall last = proposedCalls.get(proposedCalls.size() - 1);
+                if ("complete_step".equals(last.toolName()))
+                {
+                    coProposedComplete = last;
+                    callsToExecute.addAll(proposedCalls.subList(0, proposedCalls.size() - 1));
+                }
+                else
+                {
+                    coProposedComplete = null;
+                    callsToExecute.addAll(proposedCalls);
+                }
+            }
+            else
+            {
+                final ToolCall firstProposed = proposedCalls.get(0);
+                final ToolCall proposedCall = ("complete_step".equals(firstProposed.toolName())
+                        && proposedCalls.size() > 1
+                        && "fail_step".equals(proposedCalls.get(1).toolName()))
+                        ? proposedCalls.get(1)
+                        : firstProposed;
+                callsToExecute.add(proposedCall);
+                coProposedComplete = (!"fail_step".equals(proposedCall.toolName())
+                        && proposedCalls.size() > 1
+                        && "complete_step".equals(proposedCalls.get(1).toolName()))
+                        ? proposedCalls.get(1)
+                        : null;
+                if (proposedCalls.size() > 1 && coProposedComplete == null)
+                {
+                    LOGGER.warn("⚠️ Model proposed {} tool calls in turn #{}. Executing first call '{}' and discarding remaining {} calls to prevent stale DOM errors.",
+                            proposedCalls.size(), turn, proposedCall.toolName(), proposedCalls.size() - 1);
+                }
+            }
+
+            // Append assistant response to multi-turn conversation
+            conversation.add(ChatMessage.assistant(
+                    response.content() != null ? response.content() : "",
+                    callsToExecute
+            ));
+
+            ToolCall lastEffectiveCall = null;
+            ToolResult lastResult = null;
+            boolean batchInterrupted = false;
+            int executedInBatchCount = 0;
+            boolean turnHadMutatingAction = false;
+
+            for (final ToolCall currentCall : callsToExecute)
+            {
+                executedInBatchCount++;
+                logToolCall(currentCall);
+
+                // Stop Criterion 3: Thrashing / Stagnation Breaker (3 consecutive identical calls, including complete_step)
+                if (currentCall.toolName().equals(lastToolName) && currentCall.arguments().equals(lastArguments))
+                {
+                    consecutiveIdenticalCalls++;
+                    if (consecutiveIdenticalCalls >= 3)
+                    {
+                        throw new AgentThrashingException(currentCall.toolName(), currentCall.arguments(), consecutiveIdenticalCalls);
+                    }
+                }
+                else
+                {
+                    lastToolName = currentCall.toolName();
+                    lastArguments = currentCall.arguments();
+                    consecutiveIdenticalCalls = 1;
+                }
+
+                // If complete_step called -> Stop Criterion 1: Goal Accomplished
+                if ("complete_step".equals(currentCall.toolName()))
+                {
+                    if (hasUnresolvedAssertion)
+                    {
+                        if (!lastProposedToolWasCompleteStep)
+                        {
+                            lastProposedToolWasCompleteStep = true;
+                            final String rejectMsg = "Cannot complete step yet: A pending assertion failed: "
+                                    + lastAssertionFailureMessage
+                                    + ". You must successfully verify the assertion or find the correct element before calling complete_step.";
+                            LOGGER.warn("Rejecting complete_step: pending assertion failed: {}", lastAssertionFailureMessage);
+                            conversation.add(ChatMessage.tool(currentCall.callId(), currentCall.toolName(), rejectMsg));
+                            continue turnLoop;
+                        }
+                        throw new ConclusiveFailureException("Cannot complete step: Pending assertion failed: "
+                                + lastAssertionFailureMessage);
+                    }
+
+                    if (!isVisual && isInteractiveActionInstruction(rawInstruction, instruction, step)
+                            && hasActionToolFailed)
+                    {
+                        throw new ConclusiveFailureException("Cannot complete step: Action instruction '" + instruction
+                                + "' failed: " + lastActionFailureMessage);
+                    }
+
+                    if (milestones != null && !milestones.isEmpty() && executedCalls.size() < milestones.size())
+                    {
+                        if (!lastProposedToolWasCompleteStep)
+                        {
+                            lastProposedToolWasCompleteStep = true;
+                            final String rejectMsg = "Cannot complete step yet: this compound instruction has "
+                                    + milestones.size() + " milestones: " + milestones
+                                    + ", but only " + executedCalls.size() + " tool call(s) have been executed so far. "
+                                    + "Please execute tool calls to complete the remaining milestones before calling complete_step. "
+                                    + "(If all milestones have genuinely been achieved already, invoke complete_step again to confirm.)";
+                            LOGGER.warn("Rejecting premature complete_step: compound instruction has {} milestones but only {} tool calls executed.",
+                                    milestones.size(), executedCalls.size());
+                            if (this.maxTokens > 0 && stepCumulativeTokens > this.maxTokens)
+                            {
+                                throw new TokenBudgetExceededException(
+                                        TokenBudgetExceededException.BudgetType.TOTAL,
+                                        stepCumulativeTokens,
+                                        this.maxTokens
+                                );
+                            }
+                            conversation.add(ChatMessage.tool(currentCall.callId(), currentCall.toolName(), rejectMsg));
+                            continue turnLoop;
+                        }
+                        LOGGER.info("Accepting confirmed complete_step despite executed calls ({}) < milestones ({})",
+                                executedCalls.size(), milestones.size());
+                    }
+
+                    final String summary = currentCall.arguments() != null && currentCall.arguments().hasNonNull("summary") && !currentCall.arguments().path("summary").asText().isBlank()
+                            ? currentCall.arguments().path("summary").asText().trim()
+                            : null;
+                    if (summary != null)
+                    {
+                        context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
+                    }
+                    finishLoop(context, executedCalls, summary);
+                    LOGGER.info("🎯 Goal Accomplished: {} (Turns: {}, Executed Calls: {})", summary != null ? summary : "Goal completed", turn, executedCalls.size());
+                    if (response != null && response.tokenUsage() != null)
+                    {
+                        final TokenUsage tu = response.tokenUsage();
+                        LOGGER.info("📊 Tokens: {} in ({} cached) → {} out (total: {}) | Turn {}",
+                                tu.inputTokenCount(), tu.cachedTokenCount(), tu.outputTokenCount(), tu.totalTokenCount(), turn);
+                    }
+                    LOGGER.info(TURN_DIVIDER);
+                    break turnLoop;
+                }
+
+                // If fail_step called -> Stop Criterion: Clean QA Failure (with 1-time RICH auto-escalation below RICH)
+                if ("fail_step".equals(currentCall.toolName()))
+                {
+                    lastProposedToolWasCompleteStep = false;
+                    final boolean belowRichDom = activeContextLevel != ContextLevel.RICH
+                            && activeContextLevel != ContextLevel.VISUAL_RICH;
+                    if (!hasAutoEscalatedOnFailStep
+                            && executor != null
+                            && !isVisualAssertion
+                            && belowRichDom
+                            && executedCalls.isEmpty()
+                            && !hasActionToolFailed
+                            && !hasUnresolvedAssertion)
+                    {
+                        hasAutoEscalatedOnFailStep = true;
+                        activeContextLevel = activeContextLevel.includesScreenshot()
+                                ? ContextLevel.VISUAL_RICH
+                                : ContextLevel.RICH;
+                        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+                        final String escalateJson = "{\"status\":\"ESCALATED\",\"contextLevel\":\""
+                                + activeContextLevel.name()
+                                + "\",\"message\":\"Escalated DOM context to "
+                                + activeContextLevel.name()
+                                + " because partial DOM filtering may omit non-semantic elements. Inspect the full DOM attached next; if the target is still missing or blocked, invoke fail_step again.\"}";
+                        lastEffectiveCall = currentCall;
+                        lastResult = new ToolResult(
+                                currentCall.callId(),
+                                ToolResult.Status.SUCCESS,
+                                escalateJson,
+                                Map.of("requestedContextLevel", activeContextLevel.name()),
+                                Collections.emptyMap());
+                        conversation.add(ChatMessage.tool(currentCall.callId(), currentCall.toolName(), escalateJson));
+                        logToolResult(currentCall.toolName(), escalateJson);
+                        LOGGER.info("🔍 fail_step proposed below RICH with 0 prior tools; auto-escalating context to {} for verification turn",
+                                activeContextLevel);
+                        break;
+                    }
+
+                    final String rawReason = extractFailStepReason(currentCall.arguments(), thought);
+                    final SessionData sessionData = context.getSessionData();
+                    final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+                    final String sanitizedReason = sessionData != null
+                            ? sanitizer.sanitizeText(rawReason, sessionData)
+                            : rawReason;
+
+                    if (step != null)
+                    {
+                        step.setReasoning(sanitizedReason);
+                        if (!step.getReasonings().contains(sanitizedReason))
+                        {
+                            step.addReasoning(sanitizedReason);
+                        }
+                    }
+                    finalizeStepExecution(context, executedCalls, sanitizedReason);
+
+                    // Ensure a failure screenshot is captured when failing on a text-only DOM turn (including optional/bug steps)
+                    if (!activeContextLevel.includesScreenshot() && executor != null)
+                    {
+                        try
+                        {
+                            final SutState failureVisualState = executor.captureState(ContextLevel.VISUAL, false);
+                            if (failureVisualState != null)
+                            {
+                                context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, failureVisualState);
+                                final AiSession failSession = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+                                if (failSession != null
+                                        && failSession.getEventBus() != null
+                                        && failureVisualState.getAttachments() != null
+                                        && !failureVisualState.getAttachments().isEmpty())
+                                {
+                                    failSession.getEventBus().dispatch(new StateCapturedEvent(failureVisualState));
+                                }
+                            }
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+
+                    LOGGER.error("🛑 Step failed via fail_step: {}", sanitizedReason);
+                    throw new ConclusiveFailureException("Step failed: " + sanitizedReason);
+                }
+
+                lastProposedToolWasCompleteStep = false;
+
+                // Pre-invocation Guard (Quality Judge & Journey Fidelity)
+                final InterceptionVerdict verdict = this.interceptor.intercept(currentCall, toolContext);
+                final ToolCall rawEffectiveCall = verdict.getEffectiveCall(currentCall);
+                final ToolCall effectiveCall = ToolCallVariableResolver.normalizePlaceholders(rawEffectiveCall, context.getSessionData());
+                lastEffectiveCall = effectiveCall;
+
+                final ToolResult result;
+                if (!verdict.isAllowed())
+                {
+                    if (verdict.decision() == InterceptionVerdict.Decision.RETRY_WITH_FEEDBACK)
+                    {
+                        result = verdict.rejectionResult() != null
+                                ? verdict.rejectionResult()
+                                : ToolResult.error(currentCall.callId(), verdict.reason());
+                        LOGGER.warn("⚠️ Guard advised retry with feedback for tool {}: {}",
+                                currentCall.toolName(), result.content());
+                    }
+                    else
+                    {
+                        final ToolResult rejResult = verdict.rejectionResult();
+                        final String rejContent = rejResult != null ? rejResult.content() : verdict.reason();
+                        LOGGER.error("❌ Guard rejected tool call {} due to policy violation: {}",
+                                currentCall.toolName(), rejContent);
+                        throw new AssertionError("Policy violation: " + rejContent);
+                    }
+                }
+                else
+                {
+                    if (isVisualAssertion && !hasInteractive && ("scroll".equals(effectiveCall.toolName()) || "browser_scroll".equals(effectiveCall.toolName())))
+                    {
+                        visualScrollCount++;
+                        if (visualScrollCount > 3)
+                        {
+                            throw new ConclusiveFailureException(String.format(
+                                    "Visual verification exceeded maximum scroll repositioning attempts (%d). Target visual condition could not be brought into view.",
+                                    visualScrollCount - 1));
+                        }
+                    }
+
+                    // Execute the tool
+                    ToolResult toolExecResult;
+                    try
+                    {
+                        final AiTool tool = this.toolRegistry.getTool(effectiveCall.toolName())
+                                .orElseThrow(() -> new IllegalArgumentException("Unknown tool: " + effectiveCall.toolName()));
+                        final ToolCall executableCall = ToolCallVariableResolver.resolveVariables(effectiveCall, context.getSessionData());
+                        toolExecResult = tool.execute(executableCall, toolContext);
+                    }
+                    catch (final AssertionError e)
+                    {
+                        final boolean isMissingElement = isElementNotFoundFailure(e);
+                        if (isAssertionTool(effectiveCall.toolName()))
+                        {
+                            if (isMissingElement && !domAttachedToCurrentTurn)
+                            {
+                                LOGGER.warn("⚠️ Assertion tool '{}' failed with missing element on omitted-DOM turn. Converting to tool error for JIT DOM recovery: {}",
+                                        effectiveCall.toolName(), e.getMessage());
+                                toolExecResult = ToolResult.error(effectiveCall.callId(),
+                                        "Target element not found: " + e.getMessage() + ". Prior DOM snapshot was omitted; refreshing ground-truth DOM for inspection.");
+                                if (activeContextLevel.escalate() != null)
+                                {
+                                    activeContextLevel = activeContextLevel.escalate();
+                                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+                                    LOGGER.warn("⚠️ Tool execution failed; escalating active context depth to: {}", activeContextLevel);
+                                }
+                            }
+                            else
+                            {
+                                // Stop Criterion 2: Immediate fail on real defects or when DOM was present!
+                                LOGGER.error("❌ Stop Criterion 2 triggered: Assertion failure: {}", e.getMessage());
+                                recordAssertionFailureAndDispatch(effectiveCall, thought, step, context, executedCalls, executedActions);
+                                throw e;
+                            }
+                        }
+                        else
+                        {
+                            LOGGER.warn("Tool execution failed in '{}': {}", effectiveCall.toolName(), e.getMessage());
+                            toolExecResult = ToolResult.error(effectiveCall.callId(), "Tool failed with error: " + e.getMessage());
+                            if (activeContextLevel.escalate() != null)
+                            {
+                                activeContextLevel = activeContextLevel.escalate();
+                                context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+                                LOGGER.warn("⚠️ Tool execution failed; escalating active context depth to: {}", activeContextLevel);
+                            }
+                        }
+                    }
+                    catch (final JavascriptException | InvalidSelectorException | InvalidElementStateException e)
+                    {
+                        LOGGER.warn("Tool syntax error in '{}': {}", effectiveCall.toolName(), e.getMessage());
+                        toolExecResult = ToolResult.error(effectiveCall.callId(), "Tool failed with syntax error: " + e.getMessage());
+                        if (activeContextLevel.escalate() != null)
+                        {
+                            activeContextLevel = activeContextLevel.escalate();
+                            context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+                            LOGGER.warn("⚠️ Tool syntax error; escalating active context depth to: {}", activeContextLevel);
+                        }
+                    }
+                    catch (final WebDriverException e)
+                    {
+                        // Stop Criterion 6: Fatal Environment Failure
+                        LOGGER.error("💀 Stop Criterion 6 triggered: Fatal environment failure: {}", e.getMessage());
+                        throw new ConclusiveFailureException("Fatal environment failure: " + e.getMessage(), e);
+                    }
+                    catch (final Throwable e)
+                    {
+                        if (e instanceof VirtualMachineError vme)
+                        {
+                            throw vme;
+                        }
+                        if (e instanceof ConclusiveFailureException cfe)
+                        {
+                            throw cfe;
+                        }
+                        if (e instanceof TokenBudgetExceededException tbe)
+                        {
+                            throw tbe;
+                        }
+
+                        final Throwable root = ExceptionUtils.getRootCause(e);
+                        final Throwable effectiveRoot = root != null ? root : e;
+                        if (effectiveRoot instanceof VirtualMachineError vme)
+                        {
+                            throw vme;
+                        }
+
+                        if (effectiveRoot instanceof AssertionError ae)
+                        {
+                            final boolean isMissingElement = isElementNotFoundFailure(ae);
+                            if (isAssertionTool(effectiveCall.toolName()))
+                            {
+                                if (isMissingElement && !domAttachedToCurrentTurn)
+                                {
+                                    LOGGER.warn("⚠️ Assertion tool '{}' failed with root missing element on omitted-DOM turn. Converting to tool error for JIT DOM recovery: {}",
+                                            effectiveCall.toolName(), ae.getMessage());
+                                    toolExecResult = ToolResult.error(effectiveCall.callId(),
+                                            "Target element not found: " + ae.getMessage() + ". Prior DOM snapshot was omitted; refreshing ground-truth DOM for inspection.");
+                                    if (activeContextLevel.escalate() != null)
+                                    {
+                                        activeContextLevel = activeContextLevel.escalate();
+                                        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+                                        LOGGER.warn("⚠️ Tool execution failed; escalating active context depth to: {}", activeContextLevel);
+                                    }
+                                }
+                                else
+                                {
+                                    LOGGER.error("❌ Stop Criterion 2 triggered: Root assertion failure: {}", ae.getMessage());
+                                    recordAssertionFailureAndDispatch(effectiveCall, thought, step, context, executedCalls, executedActions);
+                                    throw ae;
+                                }
+                            }
+                            else
+                            {
+                                LOGGER.warn("Tool execution failed in '{}': {}", effectiveCall.toolName(), ae.getMessage());
+                                toolExecResult = ToolResult.error(effectiveCall.callId(), "Tool failed with error: " + ae.getMessage());
+                                if (activeContextLevel.escalate() != null)
+                                {
+                                    activeContextLevel = activeContextLevel.escalate();
+                                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+                                    LOGGER.warn("⚠️ Tool execution failed; escalating active context depth to: {}", activeContextLevel);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            final String errorMsg = formatThrowableError(e, effectiveRoot);
+                            LOGGER.warn("Unexpected exception executing tool '{}': {}", effectiveCall.toolName(), errorMsg, e);
+                            toolExecResult = ToolResult.error(effectiveCall.callId(), "Tool error: " + errorMsg);
+                        }
+                    }
+                    result = toolExecResult;
+                }
+
+                lastResult = result;
+
+                if (isMutatingTool(effectiveCall.toolName()))
+                {
+                    turnHadMutatingAction = true;
+                    final String callSelector = effectiveCall.arguments() != null
+                            ? (effectiveCall.arguments().hasNonNull("selector") && !effectiveCall.arguments().path("selector").asText().isBlank()
+                                    ? effectiveCall.arguments().path("selector").asText()
+                                    : (effectiveCall.arguments().hasNonNull("text") && !effectiveCall.arguments().path("text").asText().isBlank()
+                                            ? effectiveCall.arguments().path("text").asText()
+                                            : (effectiveCall.arguments().hasNonNull("target") && !effectiveCall.arguments().path("target").asText().isBlank()
+                                                    ? effectiveCall.arguments().path("target").asText()
+                                                    : null)))
+                            : null;
+                    if (result != null && result.status() == ToolResult.Status.SUCCESS)
+                    {
+                        if (lastFailedActionTarget == null || matchesTarget(instruction, lastFailedActionTarget, callSelector))
+                        {
+                            hasActionToolFailed = false;
+                            lastActionFailureMessage = null;
+                            lastFailedActionTarget = null;
+                        }
+                        else
+                        {
+                            LOGGER.warn("Mutating tool '{}' on '{}' succeeded, but cannot satisfy step targeting '{}'",
+                                    effectiveCall.toolName(), callSelector, lastFailedActionTarget);
+                        }
+                    }
+                    else
+                    {
+                        hasActionToolFailed = true;
+                        lastActionFailureMessage = result != null ? result.content() : "Action failed";
+                        if (callSelector != null && !callSelector.isBlank())
+                        {
+                            lastFailedActionTarget = callSelector.trim();
+                        }
+                    }
+                }
+
+                if (isAssertionTool(effectiveCall.toolName()))
+                {
+                    if (result != null && result.status() == ToolResult.Status.SUCCESS)
+                    {
+                        hasUnresolvedAssertion = false;
+                        lastAssertionFailureMessage = null;
+                    }
+                    else
+                    {
+                        hasUnresolvedAssertion = true;
+                        lastAssertionFailureMessage = result != null ? result.content() : "Assertion failed";
+                    }
+                }
+
+                if (result != null && result.variables().containsKey("requestedContextLevel"))
+                {
+                    final String reqLevel = (String) result.variables().get("requestedContextLevel");
+                    try
+                    {
+                        final ContextLevel targetLevel = ContextLevel.valueOf(reqLevel);
+                        if (isVisualAssertion && !hasInteractive && !targetLevel.includesScreenshot())
+                        {
+                            LOGGER.warn("⚠️ Refusing context level escalation to '{}' for pure visual assertion step", targetLevel);
+                        }
+                        else
+                        {
+                            activeContextLevel = targetLevel;
+                            context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+                            LOGGER.info("🔄 Active context level updated to '{}' via tool request", activeContextLevel);
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
+
+                if (result != null && result.status() == ToolResult.Status.SUCCESS)
+                {
+                    ToolCall callToRecord = effectiveCall;
+                    if (result.content() != null && !result.content().isBlank())
+                    {
+                        try
+                        {
+                            final JsonNode resJson = MAPPER.readTree(result.content());
+                            final ObjectNode updatedArgs = effectiveCall.arguments() instanceof ObjectNode on
+                                    ? on.deepCopy()
+                                    : MAPPER.createObjectNode();
+                            boolean updated = false;
+                            if (resJson.hasNonNull("domFeatureVector"))
+                            {
+                                updatedArgs.set("domFeatureVector", resJson.path("domFeatureVector"));
+                                updated = true;
+                            }
+                            if (resJson.hasNonNull("target"))
+                            {
+                                final String resolvedTarget = resJson.path("target").asText();
+                                final String origSelector = updatedArgs.path("selector").asText("");
+                                final String origTarget = updatedArgs.path("target").asText("");
+                                final boolean wasMarker = origSelector.startsWith("marker:")
+                                        || origSelector.startsWith("badge:")
+                                        || origTarget.startsWith("marker:")
+                                        || origTarget.startsWith("badge:");
+                                if (resolvedTarget.startsWith("coord:"))
+                                {
+                                    updatedArgs.put("target", resolvedTarget);
+                                    if (resJson.hasNonNull("x"))
+                                    {
+                                        updatedArgs.put("x", resJson.path("x").asInt());
+                                    }
+                                    if (resJson.hasNonNull("y"))
+                                    {
+                                        updatedArgs.put("y", resJson.path("y").asInt());
+                                    }
+                                    if (resJson.hasNonNull("selector"))
+                                    {
+                                        updatedArgs.put("selector", resJson.path("selector").asText());
+                                    }
+                                    else
+                                    {
+                                        updatedArgs.remove("selector");
+                                    }
+                                    updated = true;
+                                }
+                                else if (wasMarker && !resolvedTarget.startsWith("marker:") && !resolvedTarget.startsWith("badge:"))
+                                {
+                                    updatedArgs.put("target", resolvedTarget);
+                                    updatedArgs.put("selector", resolvedTarget);
+                                    updated = true;
+                                }
+                                if (resJson.hasNonNull("frame") && !resJson.path("frame").asText().isBlank())
+                                {
+                                    updatedArgs.put("frame", resJson.path("frame").asText().trim());
+                                    updated = true;
+                                }
+                            }
+                            if (updated)
+                            {
+                                callToRecord = new ToolCall(effectiveCall.callId(), effectiveCall.toolName(), updatedArgs);
+                            }
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+                    executedCalls.add(callToRecord);
+                    if ("navigate".equals(effectiveCall.toolName()) || "browser_navigate".equals(effectiveCall.toolName()))
+                    {
+                        previousElementSignatures.clear();
+                    }
+                    if (!"complete_step".equals(effectiveCall.toolName()) && !"fail_step".equals(effectiveCall.toolName()) && !"screenshot".equals(effectiveCall.toolName()) && !"browser_take_screenshot".equals(effectiveCall.toolName()) && !isDiscoveryTool(effectiveCall.toolName()))
+                    {
+                        Action mappedAction = mapToolCallToAction(callToRecord);
+                        if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
+                        {
+                            mappedAction = mappedAction.withReasoning(thought.trim());
+                        }
+                        final SessionData sessionData = context.getSessionData();
+                        final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+                        final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
+                        executedActions.add(canonicalAction);
+                        if (step != null)
+                        {
+                            step.setToolCalls(new ArrayList<>(executedCalls));
+                            step.setActions(new ArrayList<>(executedActions));
+                            if (step.hasSubSteps())
+                            {
+                                partitionToolCallsAndActions(step.getSubSteps(), executedCalls, executedActions, false);
+                            }
+                        }
+                        final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+                        if (session != null && session.getEventBus() != null)
+                        {
+                            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, true));
+                        }
+                    }
+                    if ("screenshot".equals(effectiveCall.toolName()) || "browser_take_screenshot".equals(effectiveCall.toolName()))
+                    {
+                        final Object base64Obj = result.variables().get("screenshotBase64");
+                        if (base64Obj != null)
+                        {
+                            final String base64 = String.valueOf(base64Obj);
+                            final String rawBase64 = base64.startsWith("data:") ? base64.substring(base64.indexOf(',') + 1) : base64;
+                            final List<SutAttachment> newAttachments = List.of(new SutAttachment("image/png", "screenshot", rawBase64));
+                            pendingVisualAttachments = newAttachments;
+                            activeContextLevel = activeContextLevel == ContextLevel.RICH ? ContextLevel.VISUAL_RICH : ContextLevel.VISUAL_LEAN;
+                            context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+
+                            final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+                            if (session != null && session.getEventBus() != null)
+                            {
+                                final SutState screenshotState = new BrowserSutState("Screenshot", newAttachments, "screenshot");
+                                session.getEventBus().dispatch(new StateCapturedEvent(screenshotState));
+                            }
+                        }
+                    }
+                    else if ("inspect_visual".equals(effectiveCall.toolName()) || "browser_inspect_visual".equals(effectiveCall.toolName()))
+                    {
+                        final Object base64Obj = result.variables().get("cropBase64");
+                        if (base64Obj != null)
+                        {
+                            final String base64 = String.valueOf(base64Obj);
+                            final String rawBase64 = base64.startsWith("data:") ? base64.substring(base64.indexOf(',') + 1) : base64;
+                            final String selector = String.valueOf(result.variables().getOrDefault("cropSelector", "element"));
+                            final Object widthObj = result.variables().get("cropWidth");
+                            final Object heightObj = result.variables().get("cropHeight");
+                            final List<SutAttachment> cropAttachments = List.of(new SutAttachment("image/png", "crop_" + selector, rawBase64));
+                            pendingVisualAttachments = cropAttachments;
+                            activeContextLevel = activeContextLevel == ContextLevel.RICH ? ContextLevel.VISUAL_RICH : ContextLevel.VISUAL_LEAN;
+                            context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+
+                            final StringBuilder note = new StringBuilder();
+                            note.append("Visual crop of element `").append(selector).append("`");
+                            if (widthObj != null && heightObj != null)
+                            {
+                                note.append(" (dimensions: ").append(widthObj).append("x").append(heightObj).append("px)");
+                            }
+                            note.append(" is attached to this turn. Inspect the visual content to determine target coordinates or verify visual state. ");
+                            note.append("To click inside this element, use `click` with `selector`: \"")
+                                    .append(selector)
+                                    .append("\" and relative `x`, `y` coordinates within the element.");
+                            pendingVisualNote = note.toString();
+
+                            final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+                            if (session != null && session.getEventBus() != null)
+                            {
+                                final SutState cropState = new BrowserSutState("Visual Crop: " + selector, cropAttachments, "crop");
+                                session.getEventBus().dispatch(new StateCapturedEvent(cropState));
+                            }
+                        }
+                    }
+                    else if ("mark_elements".equals(effectiveCall.toolName()) || "browser_mark_elements".equals(effectiveCall.toolName()))
+                    {
+                        final Object base64Obj = result.variables().get("screenshotBase64");
+                        if (base64Obj != null)
+                        {
+                            final String base64 = String.valueOf(base64Obj);
+                            final String rawBase64 = base64.startsWith("data:") ? base64.substring(base64.indexOf(',') + 1) : base64;
+                            final int markedCount = result.variables().containsKey("markedCount")
+                                    ? ((Number) result.variables().get("markedCount")).intValue()
+                                    : 0;
+                            final List<SutAttachment> markAttachments = List.of(new SutAttachment("image/png", "marked_screenshot", rawBase64));
+                            pendingVisualAttachments = markAttachments;
+                            activeContextLevel = activeContextLevel == ContextLevel.RICH ? ContextLevel.VISUAL_RICH : ContextLevel.VISUAL_LEAN;
+                            context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+
+                            final PlaybookStep currentPbStep = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+                            if (currentPbStep != null)
+                            {
+                                currentPbStep.setMarker(true);
+                            }
+
+                            pendingVisualNote = "Visual markers [1.." + markedCount + "] are active on screen. "
+                                    + "A marked screenshot is attached. Target the intended element using its marker index (e.g. click(target: \"marker:3\")).";
+
+                            final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+                            if (session != null && session.getEventBus() != null)
+                            {
+                                final SutState markedState = new BrowserSutState("Visual Markers (" + markedCount + " elements marked)", markAttachments, "screenshot");
+                                session.getEventBus().dispatch(new StateCapturedEvent(markedState));
+                            }
+                        }
+                    }
+                }
+
+                // Check if tool result content signals an assertion failure
+                if (result != null && result.status() == ToolResult.Status.ERROR && result.content().startsWith("AssertionError"))
+                {
+                    throw new AssertionError(result.content());
+                }
+
+                if (isAssertionTool(effectiveCall.toolName()))
+                {
+                    if (result != null && result.status() == ToolResult.Status.SUCCESS)
+                    {
+                        hasUnresolvedAssertion = false;
+                        lastAssertionFailureMessage = null;
+                    }
+                    else
+                    {
+                        hasUnresolvedAssertion = true;
+                        lastAssertionFailureMessage = result != null ? result.content() : "Assertion failed";
+                    }
+                }
+
+                // Task 3.3: Append structured ToolResult JSON directly to role: "TOOL"
+                String toolContent = result != null ? result.content() : "{\"status\":\"SUCCESS\"}";
+                final SessionData sessionData = context.getSessionData();
+                final Map<String, String> sensitiveMap = sessionData != null ? sessionData.getRawSensitiveData() : null;
+                if (sensitiveMap != null && !sensitiveMap.isEmpty())
+                {
+                    toolContent = LlmSanitizerHelper.maskJsonOrTextContent(toolContent, sensitiveMap);
+                }
+                if (result == null || result.status() != ToolResult.Status.SUCCESS)
+                {
+                    final String alert = generatePassiveDiagnosticAlert(
+                        BrowserToolProvider.getNetworkTrafficMonitor(),
+                        BrowserToolProvider.getConsoleLogMonitor()
+                    );
+                    if (alert != null)
+                    {
+                        final String sanitizedAlert = (sensitiveMap != null && !sensitiveMap.isEmpty())
+                            ? LlmSanitizerHelper.maskSensitiveValues(alert, sensitiveMap)
+                            : alert;
+                        toolContent = toolContent + "\n\n" + sanitizedAlert;
+                    }
+                }
+                conversation.add(ChatMessage.tool(effectiveCall.callId(), effectiveCall.toolName(), toolContent));
+                logToolResult(effectiveCall.toolName(), toolContent);
+
+                if (result == null || result.status() != ToolResult.Status.SUCCESS)
+                {
+                    batchInterrupted = true;
+                    break;
+                }
+                if (isPageNavigatingAction(effectiveCall.toolName()))
+                {
+                    break;
+                }
+            }
+
+            if (batchInterrupted || executedInBatchCount < callsToExecute.size())
+            {
+                for (int i = executedInBatchCount; i < callsToExecute.size(); i++)
+                {
+                    final ToolCall skippedCall = callsToExecute.get(i);
+                    conversation.add(ChatMessage.tool(
+                            skippedCall.callId(),
+                            skippedCall.toolName(),
+                            "{\"status\":\"SKIPPED\",\"error\":\"Batch execution interrupted by prior tool failure or transition\"}"
+                    ));
+                }
+            }
+
+            // 1-Turn Atomic Step Completion
+            if (lastResult != null && lastResult.status() == ToolResult.Status.SUCCESS && !batchInterrupted)
+            {
+                // Case 1: Co-proposed complete_step alongside an action/assertion that succeeded
+                if (coProposedComplete != null)
+                {
+                    final boolean hasRemaining = milestones != null && !milestones.isEmpty() && executedCalls.size() < milestones.size();
+                    if (!hasRemaining)
+                    {
+                        final String summary = coProposedComplete.arguments() != null && coProposedComplete.arguments().hasNonNull("summary") && !coProposedComplete.arguments().path("summary").asText().isBlank()
+                                ? coProposedComplete.arguments().path("summary").asText().trim()
+                                : null;
+                        if (summary != null)
+                        {
+                            context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
+                        }
+                        finishLoop(context, executedCalls, summary);
+                        LOGGER.info("🎯 Goal Accomplished via co-proposed complete_step: {} (Turn: #{}, Executed Calls: {})", summary != null ? summary : "Goal completed", turn, executedCalls.size());
+                        if (response != null && response.tokenUsage() != null)
+                        {
+                            final TokenUsage tu = response.tokenUsage();
+                            LOGGER.info("📊 Tokens: {} in ({} cached) → {} out (total: {}) | Turn {}",
+                                    tu.inputTokenCount(), tu.cachedTokenCount(), tu.outputTokenCount(), tu.totalTokenCount(), turn);
+                        }
+                        LOGGER.info(TURN_DIVIDER);
+                        break turnLoop;
+                    }
+                }
+                // Case 2: Successful include tool execution immediately fulfills the inclusion/branching step
+                else if (lastEffectiveCall != null && "include".equals(lastEffectiveCall.toolName()))
+                {
+                    final String incPath = lastEffectiveCall.arguments() != null && lastEffectiveCall.arguments().hasNonNull("path")
+                            ? lastEffectiveCall.arguments().path("path").asText()
+                            : "playbook";
+                    final String summary = "Included playbook: " + incPath;
+                    context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
+                    finishLoop(context, executedCalls, summary);
+                    LOGGER.info("🎯 Goal Accomplished via include tool: {} (Turn: #{}, Executed Calls: {})", summary, turn, executedCalls.size());
+                    if (response != null && response.tokenUsage() != null)
+                    {
+                        final TokenUsage tu = response.tokenUsage();
+                        LOGGER.info("📊 Tokens: {} in ({} cached) → {} out (total: {}) | Turn {}",
+                                tu.inputTokenCount(), tu.cachedTokenCount(), tu.outputTokenCount(), tu.totalTokenCount(), turn);
+                    }
+                    LOGGER.info(TURN_DIVIDER);
+                    break turnLoop;
+                }
+            }
+
+            // Submit fresh ground-truth DOM from SUT for the next turn
+            final boolean hasRemainingMilestones = milestones != null && !milestones.isEmpty() && executedCalls.size() < milestones.size();
+            final boolean lastToolFailed = lastResult == null || lastResult.status() != ToolResult.Status.SUCCESS;
+            final boolean requestedContextEscalation = lastResult != null && lastResult.variables().containsKey("requestedContextLevel");
+            final boolean requireDomForNextTurn = hasRemainingMilestones
+                    || lastToolFailed
+                    || requestedContextEscalation;
+
+            // Update URL and Title in transient data without full DOM re-dump
+            if (lastEffectiveCall != null && isMutatingTool(lastEffectiveCall.toolName()))
+            {
+                if (!requireDomForNextTurn)
+                {
+                    DomQuiescenceWatcher.waitForDomQuiet();
+                }
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                if (driver != null)
+                {
+                    try
+                    {
+                        final SutState updatedState = new BrowserSutState("URL: " + BrowserToolProvider.getSafeUrl(driver) + "\nTitle: " + BrowserToolProvider.getSafeTitle(driver), Collections.emptyList(), "DOM_LIGHT");
+                        context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, updatedState);
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
+            }
+
+            if (consecutiveIdenticalCalls == 2 && lastEffectiveCall != null)
+            {
+                final String warn = "WARNING: Exact same tool call was executed twice in a row. Do NOT repeat tool '"
+                        + lastEffectiveCall.toolName() + "' with arguments " + lastEffectiveCall.arguments()
+                        + " again, or the step will terminate with a thrashing failure. Change your strategy or selector.";
+                conversation.add(ChatMessage.user(warn));
+                LOGGER.warn(warn);
+            }
+
+            if (isVisualAssertion && !hasInteractive && visualScrollCount == 3)
+            {
+                final String warn = "WARNING: Maximum scroll repositioning attempts reached for this visual verification step. Do NOT call 'scroll' again. Visually inspect the current viewport to evaluate the condition and invoke 'complete_step'.";
+                conversation.add(ChatMessage.user(warn));
+                LOGGER.warn(warn);
+            }
+
+            if (response != null && response.tokenUsage() != null)
+            {
+                final TokenUsage tu = response.tokenUsage();
+                LOGGER.info("📊 Tokens: {} in ({} cached) → {} out (total: {}) | Turn {}",
+                        tu.inputTokenCount(), tu.cachedTokenCount(), tu.outputTokenCount(), tu.totalTokenCount(), turn);
+            }
+
+            if (this.maxTokens > 0 && stepCumulativeTokens > this.maxTokens)
+            {
+                throw new TokenBudgetExceededException(
+                        TokenBudgetExceededException.BudgetType.TOTAL,
+                        stepCumulativeTokens,
+                        this.maxTokens
+                );
+            }
+
+            // Always prune expired DOM snapshots from prior turn(s) to minimize token context
+            pruneExpiredDomFromConversation(conversation);
+            attachments = Collections.emptyList();
+
+            if (requireDomForNextTurn)
+            {
+                final WebDriver currentDriver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                final boolean alertOpen = BrowserToolProvider.isAlertPresent(currentDriver);
+                if (!alertOpen)
+                {
+                    if (currentDriver != null)
+                    {
+                        BrowserToolProvider.ensureValidWindowFocus(currentDriver);
+                    }
+                    DomQuiescenceWatcher.waitForDomQuiet();
+                }
+                if (executor != null)
+                {
+                    try
+                    {
+                        if (currentDriver != null && !alertOpen)
+                        {
+                            BrowserToolProvider.ensureValidWindowFocus(currentDriver);
+                            try
+                            {
+                                final String currentHandle = currentDriver.getWindowHandle();
+                                final String currentUrl = BrowserToolProvider.getSafeUrl(currentDriver);
+                                final boolean urlChanged = lastSeenUrl != null && currentUrl != null && !currentUrl.equals(lastSeenUrl);
+                                final boolean windowChanged = lastSeenWindowHandle != null && currentHandle != null && !currentHandle.equals(lastSeenWindowHandle);
+                                if (urlChanged || windowChanged)
+                                {
+                                    previousElementSignatures.clear();
+                                }
+                                lastSeenUrl = currentUrl;
+                                lastSeenWindowHandle = currentHandle;
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+                        }
+
+                        final boolean isFullPage = (step != null && step.isFullPageVisualStep())
+                                || Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                                || activeContextLevel.isFullPageScreenshot();
+                        final SutState freshState = executor.captureState(activeContextLevel, isFullPage);
+                        context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, freshState);
+                        final Object statsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
+                        if (statsObj instanceof final StepStats stats)
+                        {
+                            stats.addContextLevel(activeContextLevel.name());
+                        }
+                        if (step != null)
+                        {
+                            step.setContextLevel(activeContextLevel.name());
+                        }
+
+                        final List<SutAttachment> freshAttachments = (pendingVisualAttachments != null && !pendingVisualAttachments.isEmpty())
+                                ? pendingVisualAttachments
+                                : (freshState.getAttachments() != null ? freshState.getAttachments() : Collections.emptyList());
+                        pendingVisualAttachments = null;
+
+                        final String textContent = freshState.getTextContent();
+                        if (requestedContextEscalation || (textContent != null && !textContent.isBlank()) || !freshAttachments.isEmpty())
+                        {
+                            final StringBuilder turnPrompt = new StringBuilder();
+                            if (textContent != null && !textContent.isBlank())
+                            {
+                                final String annotatedDom = alertOpen ? textContent : annotateNewElements(textContent, previousElementSignatures);
+                                if (!alertOpen)
+                                {
+                                    previousElementSignatures = extractElementSignatures(textContent);
+                                }
+                                turnPrompt.append("### Current Page State & Interactive Elements:\n")
+                                        .append(annotatedDom);
+                            }
+                            else
+                            {
+                                turnPrompt.append("### Current Page State:\n[DOM empty or omitted]");
+                            }
+
+                            if (pendingVisualNote != null)
+                            {
+                                turnPrompt.append("\n\n### Visual Inspection:\n").append(pendingVisualNote);
+                                pendingVisualNote = null;
+                            }
+
+                            if (milestones != null && !milestones.isEmpty())
+                            {
+                                turnPrompt.append("\n\n### Compound Milestones To Complete:\n");
+                                for (int i = 0; i < milestones.size(); i++)
+                                {
+                                    turnPrompt.append(i + 1).append(". ").append(milestones.get(i)).append("\n");
+                                }
+                            }
+                            else if (!executedCalls.isEmpty())
+                            {
+                                final String stepText = instruction != null && !instruction.isBlank() ? instruction : rawInstruction;
+                                final boolean isVerify = stepText != null && VERIFICATION_PREFIX_PATTERN.matcher(stepText.trim()).find();
+                                if (isVerify)
+                                {
+                                    turnPrompt.append("\n\nNote: If this is a verification step, invoke an assertion tool to verify expected content, and ensure any opened modal or dropdown is closed to restore initial page state before completing. Otherwise, invoke 'complete_step' if the step goal has been achieved.");
+                                }
+                                else
+                                {
+                                    turnPrompt.append("\n\nNote: If the step's requested action or goal has been executed and confirmed on screen, invoke 'complete_step' rather than repeating interactions.");
+                                }
+                            }
+                            conversation.add(ChatMessage.user(turnPrompt.toString(), freshAttachments));
+                            attachments = freshAttachments;
+                            domAttachedToCurrentTurn = true;
+                        }
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.debug("Could not capture fresh SUT state for next turn: {}", e.getMessage());
+                    }
+                }
+            }
+            else
+            {
+                final WebDriver currentDriver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                if (currentDriver != null || executor != null || pendingVisualNote != null)
+                {
+                    try
+                    {
+                        final StringBuilder turnPrompt = new StringBuilder();
+                        if (currentDriver != null)
+                        {
+                            final String currentUrl = BrowserToolProvider.getSafeUrl(currentDriver);
+                            final String currentTitle = BrowserToolProvider.getSafeTitle(currentDriver);
+                            try
+                            {
+                                final String currentHandle = currentDriver.getWindowHandle();
+                                final boolean urlChanged = lastSeenUrl != null && currentUrl != null && !currentUrl.equals(lastSeenUrl);
+                                final boolean windowChanged = lastSeenWindowHandle != null && currentHandle != null && !currentHandle.equals(lastSeenWindowHandle);
+                                if (urlChanged || windowChanged)
+                                {
+                                    previousElementSignatures.clear();
+                                }
+                                lastSeenUrl = currentUrl;
+                                lastSeenWindowHandle = currentHandle;
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+
+                            turnPrompt.append("### Current Page:\n")
+                                    .append("URL: ").append(currentUrl).append("\n")
+                                    .append("Title: ").append(currentTitle).append("\n\n");
+                        }
+                        if (pendingVisualNote != null)
+                        {
+                            turnPrompt.append("### Visual Inspection:\n").append(pendingVisualNote).append("\n\n");
+                            pendingVisualNote = null;
+                        }
+
+                        List<SutAttachment> nextAttachments = pendingVisualAttachments != null ? pendingVisualAttachments : null;
+                        pendingVisualAttachments = null;
+
+                        final boolean isVisualStep = isVisual
+                                || isVisualAssertion
+                                || (activeContextLevel != null && activeContextLevel.includesScreenshot())
+                                || Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
+
+                        final boolean shouldCaptureVisualState = isVisualStep || turnHadMutatingAction;
+
+                        if (shouldCaptureVisualState && (nextAttachments == null || nextAttachments.isEmpty()) && executor != null)
+                        {
+                            try
+                            {
+                                final boolean isFullPage = (step != null && step.isFullPageVisualStep())
+                                        || Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                                        || (activeContextLevel != null && activeContextLevel.isFullPageScreenshot());
+                                final SutState visualState = executor.captureState(ContextLevel.VISUAL, isFullPage);
+                                context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, visualState);
+                                if (visualState != null && visualState.getAttachments() != null && !visualState.getAttachments().isEmpty())
+                                {
+                                    nextAttachments = visualState.getAttachments();
+                                }
+                            }
+                            catch (final Exception e)
+                            {
+                                LOGGER.debug("Could not capture visual state for next turn observation: {}", e.getMessage());
+                            }
+                        }
+
+                        if (nextAttachments == null)
+                        {
+                            nextAttachments = Collections.emptyList();
+                        }
+
+                        if (milestones != null && !milestones.isEmpty())
+                        {
+                            if (turnHadMutatingAction)
+                            {
+                                turnPrompt.append("Note: An action has been executed. Attached is the current viewport screenshot (prior DOM snapshot omitted to minimize context). ");
+                            }
+                            else
+                            {
+                                turnPrompt.append("Note: Page visual state is unchanged after discovery/inspection tool execution (viewport screenshot omitted). ");
+                            }
+                            turnPrompt.append("This step contains multiple actions or milestones. Continue executing the remaining actions/milestones requested in the instruction. Do not invoke 'complete_step' until all requested actions and commanded verifications in this step have been fulfilled. For assertion milestones, invoke the commanded assertion tool directly (do not retry prior actions if text is absent). If you need DOM element selectors or structure to continue interacting or asserting, invoke 'request_context' or 'query_dom'. Do not perform uncommanded assertions or anticipate subsequent steps.");
+                        }
+                        else
+                        {
+                            if (turnHadMutatingAction)
+                            {
+                                turnPrompt.append("Note: The requested action has been executed. Attached is the current viewport screenshot (prior DOM snapshot omitted to minimize context). ");
+                            }
+                            else
+                            {
+                                turnPrompt.append("Note: Page visual state is unchanged after discovery/inspection tool execution (viewport screenshot omitted). ");
+                            }
+                            turnPrompt.append("If this was an action instruction and all actions/fields requested in the instruction have been executed, invoke 'complete_step' now without performing uncommanded assertions or anticipating subsequent steps. If the instruction explicitly requested additional fields or actions that have not yet been executed, continue executing the remaining actions. If the step explicitly requires verification, use an assertion tool before calling 'complete_step', and ensure any opened modal or dropdown is closed to restore initial page state before completing. If you need DOM element selectors or structure to continue interacting or asserting, invoke 'request_context' or 'query_dom'.");
+                        }
+
+                        conversation.add(ChatMessage.user(turnPrompt.toString(), nextAttachments));
+                        attachments = nextAttachments;
+                        domAttachedToCurrentTurn = false;
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
+            }
+        }
+    }
+    finally
+    {
+        finalizeStepExecution(context, executedCalls, null);
+    }
+    }
+
+    static void pruneExpiredDomFromConversation(final List<ChatMessage> conversation)
+    {
+        if (conversation == null || conversation.size() <= 1)
+        {
+            return;
+        }
+
+        final String domSectionHeader = "### Current Page State & Interactive Elements:\n";
+        final String replacement = "### Current Page State & Interactive Elements:\n"
+                + "[Initial page state omitted after Turn 1 — use browser tools for current page state]\n\n";
+
+        for (int i = 1; i < conversation.size(); i++)
+        {
+            final ChatMessage msg = conversation.get(i);
+            if (msg == null || msg.role() != Role.USER || msg.content() == null)
+            {
+                continue;
+            }
+
+            final String content = msg.content();
+            final int domIdx = content.indexOf(domSectionHeader);
+            final boolean isUnprunedDom = domIdx != -1 && !content.contains("[Initial page state omitted");
+
+            if (isUnprunedDom)
+            {
+                final int nextSectionIdx = content.indexOf("\n\n### ", domIdx + domSectionHeader.length());
+                final String prefix = content.substring(0, domIdx);
+                final String suffix = (nextSectionIdx != -1) ? content.substring(nextSectionIdx) : "";
+                final String prunedContent = prefix + replacement + suffix;
+                final int prunedChars = content.length() - prunedContent.length();
+
+                conversation.set(i, ChatMessage.user(prunedContent, Collections.emptyList()));
+                LOGGER.debug("✂️ Pruned expired DOM from message index {} (saved ~{} chars / ~{} tokens)",
+                        i, prunedChars, prunedChars / 4);
+            }
+            else if (msg.attachments() != null && !msg.attachments().isEmpty())
+            {
+                conversation.set(i, ChatMessage.user(content, Collections.emptyList()));
+            }
+        }
+    }
+
+    static void pruneExpiredDomFromConversation(final List<ChatMessage> conversation, final boolean hasFreshDomIncoming)
+    {
+        pruneExpiredDomFromConversation(conversation);
+    }
+
+    private void finishLoop(final ExecutionContext context, final List<ToolCall> executedCalls, final String summary)
+    {
+        finalizeStepExecution(context, executedCalls, summary);
+    }
+
+    private void finalizeStepExecution(final ExecutionContext context, final List<ToolCall> executedCalls, final String summary)
+    {
+        if (Boolean.TRUE.equals(context.getTransientData().put("KEY_STEP_EXECUTION_FINALIZED", Boolean.TRUE)))
+        {
+            return;
+        }
+        if (summary != null)
+        {
+            context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
+        }
+        final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+        if (stepObj instanceof final PlaybookStep currentStep)
+        {
+            final SessionData sessionData = context.getSessionData();
+            final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+
+            if (summary != null && !summary.isBlank())
+            {
+                final String cleanSummary = summary.trim();
+                final String sanitizedSummary = sessionData != null ? sanitizer.sanitizeText(cleanSummary, sessionData) : cleanSummary;
+                currentStep.setReasoning(sanitizedSummary);
+                if (!currentStep.getReasonings().contains(sanitizedSummary))
+                {
+                    currentStep.addReasoning(sanitizedSummary);
+                }
+            }
+            else if (currentStep.getReasoning() != null && sessionData != null)
+            {
+                currentStep.setReasoning(sanitizer.sanitizeText(currentStep.getReasoning(), sessionData));
+            }
+
+            final List<ToolCall> sanitizedCalls = new ArrayList<>();
+            for (final ToolCall call : executedCalls)
+            {
+                if (!"complete_step".equals(call.toolName()) && !"fail_step".equals(call.toolName()) && !"screenshot".equals(call.toolName()) && !"browser_take_screenshot".equals(call.toolName()) && !isDiscoveryTool(call.toolName()))
+                {
+                    sanitizedCalls.add(sanitizeToolCall(call, sessionData, sanitizer));
+                }
+            }
+            currentStep.setToolCalls(sanitizedCalls);
+
+            final List<Action> existingActions = currentStep.getActions();
+            final List<Action> actions = new ArrayList<>();
+            int actIdx = 0;
+            for (final ToolCall call : executedCalls)
+            {
+                if (!"complete_step".equals(call.toolName()) && !"fail_step".equals(call.toolName()) && !"screenshot".equals(call.toolName()) && !"browser_take_screenshot".equals(call.toolName()) && !isDiscoveryTool(call.toolName()))
+                {
+                    Action mapped = mapToolCallToAction(call);
+                    final Action existing = (existingActions != null && actIdx < existingActions.size()) ? existingActions.get(actIdx) : null;
+                    if (existing != null && existing.getReasoning() != null && !existing.getReasoning().isBlank())
+                    {
+                        mapped = mapped.withReasoning(existing.getReasoning());
+                    }
+                    else if ((mapped.getReasoning() == null || mapped.getReasoning().isBlank()) && currentStep.getReasoning() != null && !currentStep.getReasoning().isBlank() && (executedCalls.size() <= 1 || (existingActions != null && existingActions.stream().noneMatch(a -> a.getReasoning() != null && !a.getReasoning().isBlank()))))
+                    {
+                        mapped = mapped.withReasoning(currentStep.getReasoning());
+                    }
+                    actIdx++;
+                    final Action sanitizedAction = sanitizer.sanitize(mapped, sessionData);
+                    actions.add(sanitizedAction);
+                    if (currentStep.getDomFeatureVector() == null && sanitizedAction.getDomFeatureVector() != null)
+                    {
+                        currentStep.setDomFeatureVector(sanitizedAction.getDomFeatureVector());
+                    }
+                }
+            }
+            currentStep.setActions(actions);
+
+            if (currentStep.getStartTimeMs() != null)
+            {
+                final long elapsed = Math.max(1, System.currentTimeMillis() - currentStep.getStartTimeMs());
+                if (currentStep.getDurationMs() == null || currentStep.getDurationMs() <= 0)
+                {
+                    currentStep.setDurationMs(elapsed);
+                }
+            }
+
+            if (currentStep.hasSubSteps())
+            {
+                final List<PlaybookStep> children = currentStep.getSubSteps();
+                partitionToolCallsAndActions(children, currentStep.getToolCalls(), currentStep.getActions(), false);
+                for (final PlaybookStep child : children)
+                {
+                    if (child.getReasoning() != null && sessionData != null)
+                    {
+                        child.setReasoning(sanitizer.sanitizeText(child.getReasoning(), sessionData));
+                    }
+                    if (child.getParent() == null)
+                    {
+                        child.setParent(currentStep);
+                    }
+                    if (child.getStatus() == null || child.getStatus() == PlaybookStepStatus.PENDING)
+                    {
+                        child.setStatus(currentStep.getStatus() != null ? currentStep.getStatus() : PlaybookStepStatus.SUCCESS);
+                    }
+                }
+
+                final Long parentDuration = currentStep.getDurationMs();
+                if (parentDuration != null && parentDuration > 0 && !children.isEmpty())
+                {
+                    final long childDuration = Math.max(1, parentDuration / children.size());
+                    for (final PlaybookStep child : children)
+                    {
+                        if (child.getDurationMs() == null || child.getDurationMs() <= 0)
+                        {
+                            child.setDurationMs(childDuration);
+                        }
+                    }
+                }
+            }
+        }
+
+        context.getTransientData().remove(ExecutionContext.KEY_INTERNAL_MILESTONES);
+        context.getTransientData().put(KEY_EXECUTED_TOOL_CALLS, Collections.unmodifiableList(executedCalls));
+    }
+
+    /**
+     * Partitions executed tool calls and actions across child sub-steps of a compound step.
+     * When call count matches sub-steps 1:1, each child receives its direct call.
+     * When counts differ (e.g. conditional branches skipped or multi-action sub-steps),
+     * calls are matched sequentially to children based on instruction keywords,
+     * ensuring no child receives a cloned duplicate of the entire parent call list.
+     *
+     * @param subSteps the sub-steps to assign calls to
+     * @param toolCalls the executed tool calls
+     * @param actions the executed actions
+     */
+    public static void partitionToolCallsAndActions(
+            final List<PlaybookStep> subSteps,
+            final List<ToolCall> toolCalls,
+            final List<Action> actions)
+    {
+        partitionToolCallsAndActions(subSteps, toolCalls, actions, false);
+    }
+
+    /**
+     * Partitions executed or live tool calls and actions across child sub-steps of a compound step.
+     * When isLiveTurn is true, the active sub-step corresponding to the proposed action receives
+     * RUNNING status, while prior sub-steps receive SUCCESS and upcoming sub-steps remain PENDING.
+     *
+     * @param subSteps the sub-steps to assign calls to
+     * @param toolCalls the executed tool calls
+     * @param actions the executed actions
+     * @param isLiveTurn true if partitioning during an active live turn, false if completing
+     */
+    public static void partitionToolCallsAndActions(
+            final List<PlaybookStep> subSteps,
+            final List<ToolCall> toolCalls,
+            final List<Action> actions,
+            final boolean isLiveTurn)
+    {
+        partitionToolCallsAndActions(
+            subSteps,
+            isLiveTurn ? Collections.emptyList() : toolCalls,
+            isLiveTurn ? Collections.emptyList() : actions,
+            isLiveTurn ? toolCalls : Collections.emptyList(),
+            isLiveTurn ? actions : Collections.emptyList(),
+            isLiveTurn);
+    }
+
+    /**
+     * Partitions executed and proposed tool calls and actions across child sub-steps of a compound step.
+     * When isLiveTurn is true, a sub-step is marked SUCCESS only if its assigned actions/calls were already
+     * executed. The first sub-step with pending proposed actions is marked RUNNING, and upcoming sub-steps
+     * remain PENDING.
+     *
+     * @param subSteps the sub-steps to assign calls to
+     * @param executedCalls already executed tool calls
+     * @param executedActions already executed actions
+     * @param proposedCalls proposed tool calls waiting for execution
+     * @param proposedActions proposed actions waiting for execution
+     * @param isLiveTurn true if partitioning during an active live turn, false if completing
+     */
+    public static void partitionToolCallsAndActions(
+            final List<PlaybookStep> subSteps,
+            final List<ToolCall> executedCalls,
+            final List<Action> executedActions,
+            final List<ToolCall> proposedCalls,
+            final List<Action> proposedActions,
+            final boolean isLiveTurn)
+    {
+        if (subSteps == null || subSteps.isEmpty())
+        {
+            return;
+        }
+
+        final List<ToolCall> safeExecCalls = executedCalls != null ? executedCalls : Collections.emptyList();
+        final List<Action> safeExecActions = executedActions != null ? executedActions : Collections.emptyList();
+        final List<ToolCall> safePropCalls = proposedCalls != null ? proposedCalls : Collections.emptyList();
+        final List<Action> safePropActions = proposedActions != null ? proposedActions : Collections.emptyList();
+
+        final List<ToolCall> totalCalls = new ArrayList<>(safeExecCalls);
+        totalCalls.addAll(safePropCalls);
+        final List<Action> totalActions = new ArrayList<>(safeExecActions);
+        totalActions.addAll(safePropActions);
+
+        final int numChildren = subSteps.size();
+
+        if (totalCalls.isEmpty() && !totalActions.isEmpty())
+        {
+            if (totalActions.size() == numChildren)
+            {
+                for (int i = 0; i < numChildren; i++)
+                {
+                    final PlaybookStep child = subSteps.get(i);
+                    final Action act = totalActions.get(i);
+                    if (act != null)
+                    {
+                        act.setSubStepIndex(i);
+                        act.setSubStepInstruction(child.getInstruction());
+                        child.setActions(List.of(act));
+                    }
+                    else
+                    {
+                        child.setActions(Collections.emptyList());
+                    }
+                }
+                applySubStepStatuses(subSteps, safeExecCalls, safeExecActions, safePropCalls, safePropActions, isLiveTurn);
+                return;
+            }
+
+            final List<List<Action>> partitionedActions = new ArrayList<>();
+            for (int i = 0; i < numChildren; i++)
+            {
+                partitionedActions.add(new ArrayList<>());
+            }
+            int subIdx = 0;
+            for (int a = 0; a < totalActions.size(); a++)
+            {
+                final Action act = totalActions.get(a);
+                final String actType = act != null && act.getType() != null ? act.getType() : "";
+                int matchedIdx = -1;
+                for (int i = subIdx; i < numChildren; i++)
+                {
+                    if (matchesSubStep(subSteps.get(i), actType))
+                    {
+                        matchedIdx = i;
+                        break;
+                    }
+                }
+                final int targetIdx = matchedIdx >= 0 ? matchedIdx : Math.min(Math.max(0, subIdx), numChildren - 1);
+                if (act != null)
+                {
+                    act.setSubStepIndex(targetIdx);
+                    act.setSubStepInstruction(subSteps.get(targetIdx).getInstruction());
+                    partitionedActions.get(targetIdx).add(act);
+                }
+                if (matchedIdx >= 0)
+                {
+                    subIdx = matchedIdx + 1;
+                }
+                else if (subIdx < numChildren - 1)
+                {
+                    subIdx++;
+                }
+            }
+            for (int i = 0; i < numChildren; i++)
+            {
+                final PlaybookStep child = subSteps.get(i);
+                child.setActions(partitionedActions.get(i));
+            }
+            applySubStepStatuses(subSteps, safeExecCalls, safeExecActions, safePropCalls, safePropActions, isLiveTurn);
+            return;
+        }
+
+        if (totalCalls.size() == numChildren)
+        {
+            for (int i = 0; i < numChildren; i++)
+            {
+                final PlaybookStep child = subSteps.get(i);
+                child.setToolCalls(List.of(totalCalls.get(i)));
+                if (i < totalActions.size())
+                {
+                    final Action act = totalActions.get(i);
+                    if (act != null)
+                    {
+                        act.setSubStepIndex(i);
+                        act.setSubStepInstruction(child.getInstruction());
+                        child.setActions(List.of(act));
+                    }
+                    else
+                    {
+                        child.setActions(Collections.emptyList());
+                    }
+                }
+                else
+                {
+                    child.setActions(Collections.emptyList());
+                }
+            }
+            applySubStepStatuses(subSteps, safeExecCalls, safeExecActions, safePropCalls, safePropActions, isLiveTurn);
+            return;
+        }
+
+        final List<List<ToolCall>> partitionedCalls = new ArrayList<>();
+        final List<List<Action>> partitionedActions = new ArrayList<>();
+        for (int i = 0; i < numChildren; i++)
+        {
+            partitionedCalls.add(new ArrayList<>());
+            partitionedActions.add(new ArrayList<>());
+        }
+
+        int subIdx = 0;
+        final int maxIter = Math.max(totalCalls.size(), totalActions.size());
+        for (int c = 0; c < maxIter; c++)
+        {
+            final ToolCall call = c < totalCalls.size() ? totalCalls.get(c) : null;
+            final Action act = c < totalActions.size() ? totalActions.get(c) : null;
+            final String toolName = call != null && call.toolName() != null
+                ? call.toolName()
+                : (act != null && act.getType() != null ? act.getType() : "");
+
+            int matchedIdx = -1;
+            for (int i = subIdx; i < numChildren; i++)
+            {
+                if (matchesSubStep(subSteps.get(i), toolName))
+                {
+                    matchedIdx = i;
+                    break;
+                }
+            }
+
+            final int targetIdx = matchedIdx >= 0 ? matchedIdx : Math.min(Math.max(0, subIdx), numChildren - 1);
+            if (call != null)
+            {
+                partitionedCalls.get(targetIdx).add(call);
+            }
+            if (act != null)
+            {
+                act.setSubStepIndex(targetIdx);
+                act.setSubStepInstruction(subSteps.get(targetIdx).getInstruction());
+                partitionedActions.get(targetIdx).add(act);
+            }
+
+            if (matchedIdx >= 0)
+            {
+                subIdx = matchedIdx + 1;
+            }
+            else if (subIdx < numChildren - 1)
+            {
+                subIdx++;
+            }
+        }
+
+        for (int i = 0; i < numChildren; i++)
+        {
+            final PlaybookStep child = subSteps.get(i);
+            child.setToolCalls(partitionedCalls.get(i));
+            child.setActions(partitionedActions.get(i));
+        }
+        applySubStepStatuses(subSteps, safeExecCalls, safeExecActions, safePropCalls, safePropActions, isLiveTurn);
+    }
+
+    private static void applySubStepStatuses(
+            final List<PlaybookStep> subSteps,
+            final List<ToolCall> executedCalls,
+            final List<Action> executedActions,
+            final List<ToolCall> proposedCalls,
+            final List<Action> proposedActions,
+            final boolean isLiveTurn)
+    {
+        if (subSteps == null || subSteps.isEmpty())
+        {
+            return;
+        }
+        final int numChildren = subSteps.size();
+        if (!isLiveTurn)
+        {
+            for (int i = 0; i < numChildren; i++)
+            {
+                final PlaybookStep child = subSteps.get(i);
+                if (child.getStatus() == PlaybookStepStatus.FAILED)
+                {
+                    continue;
+                }
+                final boolean hasContent = (child.getToolCalls() != null && !child.getToolCalls().isEmpty())
+                        || (child.getActions() != null && !child.getActions().isEmpty());
+                if (hasContent)
+                {
+                    child.setStatus(PlaybookStepStatus.SUCCESS);
+                }
+            }
+            return;
+        }
+
+        // Identify which sub-steps have unexecuted proposed calls/actions vs already executed calls/actions
+        int firstProposedIdx = -1;
+        for (int i = 0; i < numChildren; i++)
+        {
+            final PlaybookStep child = subSteps.get(i);
+            final boolean hasProposed = (child.getToolCalls() != null && child.getToolCalls().stream().anyMatch(proposedCalls::contains))
+                    || (child.getActions() != null && child.getActions().stream().anyMatch(proposedActions::contains));
+            if (hasProposed)
+            {
+                firstProposedIdx = i;
+                break;
+            }
+        }
+
+        for (int i = 0; i < numChildren; i++)
+        {
+            final PlaybookStep child = subSteps.get(i);
+            if (child.getStatus() == PlaybookStepStatus.FAILED)
+            {
+                continue;
+            }
+            final boolean hasProposed = (child.getToolCalls() != null && child.getToolCalls().stream().anyMatch(proposedCalls::contains))
+                    || (child.getActions() != null && child.getActions().stream().anyMatch(proposedActions::contains));
+            final boolean hasExecuted = (child.getToolCalls() != null && child.getToolCalls().stream().anyMatch(executedCalls::contains))
+                    || (child.getActions() != null && child.getActions().stream().anyMatch(executedActions::contains));
+
+            if (!hasProposed && hasExecuted)
+            {
+                // Fully completed in a prior turn/action
+                child.setStatus(PlaybookStepStatus.SUCCESS);
+            }
+            else if (i == firstProposedIdx)
+            {
+                // Currently active sub-step waiting for approval/execution
+                child.setStatus(PlaybookStepStatus.RUNNING);
+            }
+            else
+            {
+                // Either upcoming proposed sub-step or not reached yet
+                child.setStatus(PlaybookStepStatus.PENDING);
+            }
+        }
+    }
+
+    static boolean matchesSubStep(final PlaybookStep subStep, final String rawToolName)
+    {
+        if (subStep == null || subStep.getInstruction() == null || rawToolName == null)
+        {
+            return false;
+        }
+
+        final String toolName = rawToolName.toLowerCase().replace("browser_", "").trim();
+        String inst = subStep.getInstruction().toLowerCase().trim();
+
+        if (inst.startsWith("when ") && inst.contains(","))
+        {
+            final int commaIdx = inst.indexOf(',');
+            inst = inst.substring(commaIdx + 1).trim();
+        }
+
+        if (toolName.contains("store"))
+        {
+            return inst.contains("capture") || inst.contains("store") || inst.contains("save");
+        }
+        if (toolName.contains("hover"))
+        {
+            return inst.contains("hover") || inst.contains("mouse");
+        }
+        if (toolName.contains("check"))
+        {
+            return inst.contains("check") || inst.contains("uncheck") || inst.contains("tick");
+        }
+        if (toolName.contains("select"))
+        {
+            return inst.contains("select") || inst.contains("choose");
+        }
+        if (toolName.contains("click"))
+        {
+            return inst.contains("click") || inst.contains("press") || inst.contains("choose") || inst.matches(".*\\badd\\b.*") || inst.contains("submit")
+                || (inst.contains("open") && !inst.contains("http") && !inst.contains("url") && !inst.contains("page") && !inst.contains("browser") && !inst.contains("site"))
+                || inst.contains("close") || inst.contains("toggle") || inst.contains("expand");
+        }
+        if (toolName.contains("type") || toolName.contains("fill") || toolName.contains("clear"))
+        {
+            return inst.contains("type") || inst.contains("enter") || inst.contains("fill") || inst.contains("write")
+                    || inst.contains("clear") || inst.contains("empty") || inst.contains("reset");
+        }
+        if (toolName.contains("assert") || toolName.contains("verify"))
+        {
+            return inst.contains("verify") || inst.contains("assert") || inst.contains("ensure");
+        }
+        if (toolName.contains("navigate") || toolName.contains("open"))
+        {
+            return inst.contains("open") || inst.contains("navigate") || inst.contains("go to");
+        }
+
+        return false;
+    }
+
+    private static boolean isFormInputAction(final String toolName)
+    {
+        if (toolName == null)
+        {
+            return false;
+        }
+        final String clean = toolName.startsWith("browser_") ? toolName.substring("browser_".length()) : toolName;
+        return "fill".equals(clean)
+                || "fill_form".equals(clean)
+                || "type".equals(clean)
+                || "select".equals(clean)
+                || "check".equals(clean)
+                || "clear".equals(clean);
+    }
+
+    private static boolean isPageNavigatingAction(final String toolName)
+    {
+        if (toolName == null)
+        {
+            return false;
+        }
+        final String clean = toolName.startsWith("browser_") ? toolName.substring("browser_".length()) : toolName;
+        return "navigate".equals(clean)
+                || "back".equals(clean)
+                || "forward".equals(clean)
+                || "refresh".equals(clean)
+                || "click".equals(clean);
+    }
+
+    private static boolean isDiscoveryTool(final String toolName)
+    {
+        if (toolName == null)
+        {
+            return false;
+        }
+        final String clean = toolName.startsWith("browser_") ? toolName.substring("browser_".length()) : toolName;
+        return "query_dom".equals(clean)
+                || "inspect".equals(clean)
+                || "inspect_visual".equals(clean)
+                || "mark_elements".equals(clean)
+                || "request_context".equals(clean);
+    }
+
+    private static boolean isBatchableTool(final String toolName)
+    {
+        return isFormInputAction(toolName) || isAssertionTool(toolName);
+    }
+
+    private static boolean isCohesiveBatch(final List<ToolCall> proposedCalls)
+    {
+        if (proposedCalls == null || proposedCalls.size() <= 1)
+        {
+            return false;
+        }
+        final int limit = "complete_step".equals(proposedCalls.get(proposedCalls.size() - 1).toolName())
+                ? proposedCalls.size() - 1
+                : proposedCalls.size();
+        if (limit <= 1)
+        {
+            return false;
+        }
+        for (int i = 0; i < limit; i++)
+        {
+            if (!isBatchableTool(proposedCalls.get(i).toolName()))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean isCohesiveFormInputBatch(final List<ToolCall> proposedCalls)
+    {
+        return isCohesiveBatch(proposedCalls);
+    }
+
+    private static ToolCall sanitizeToolCall(final ToolCall call, final SessionData sessionData, final DefaultActionSanitizer sanitizer)
+    {
+        if (call == null || sessionData == null || sanitizer == null)
+        {
+            return call;
+        }
+        final JsonNode args = call.arguments();
+        if (args == null || !args.isObject())
+        {
+            return call;
+        }
+
+        final Set<String> excludedVars;
+        final String variableKeyField;
+        if (call.toolName() != null && "store".equalsIgnoreCase(call.toolName().trim()))
+        {
+            if (args.hasNonNull("variableName") && !args.path("variableName").asText().isBlank())
+            {
+                variableKeyField = "variableName";
+            }
+            else if (args.hasNonNull("variable") && !args.path("variable").asText().isBlank())
+            {
+                variableKeyField = "variable";
+            }
+            else if (args.hasNonNull("name") && !args.path("name").asText().isBlank())
+            {
+                variableKeyField = "name";
+            }
+            else if (args.hasNonNull("key") && !args.path("key").asText().isBlank())
+            {
+                variableKeyField = "key";
+            }
+            else
+            {
+                variableKeyField = null;
+            }
+            final String targetVar = variableKeyField != null ? args.path(variableKeyField).asText().trim() : null;
+            excludedVars = targetVar != null && !targetVar.isEmpty() ? Collections.singleton(targetVar) : Collections.emptySet();
+        }
+        else
+        {
+            variableKeyField = null;
+            excludedVars = Collections.emptySet();
+        }
+
+        final ObjectNode sanitizedArgs = MAPPER.createObjectNode();
+        final Iterator<Map.Entry<String, JsonNode>> fields = args.fields();
+        while (fields.hasNext())
+        {
+            final Map.Entry<String, JsonNode> field = fields.next();
+            if (field.getValue().isTextual())
+            {
+                final String fieldName = field.getKey();
+                if (variableKeyField != null && variableKeyField.equals(fieldName))
+                {
+                    sanitizedArgs.put(fieldName, field.getValue().asText());
+                }
+                else
+                {
+                    final String rawText = field.getValue().asText();
+                    final String cleanText = sanitizer.sanitizeText(rawText, sessionData, excludedVars);
+                    sanitizedArgs.put(fieldName, cleanText);
+                }
+            }
+            else
+            {
+                sanitizedArgs.set(field.getKey(), field.getValue().deepCopy());
+            }
+        }
+        return new ToolCall(call.callId(), call.toolName(), sanitizedArgs);
+    }
+
+    public static Action mapToolCallToAction(final ToolCall call)
+    {
+        return Action.fromToolCall(call);
+    }
+
+    List<ToolDefinition> filterTools(
+        final boolean isVisual,
+        final ExecutionContext context
+    )
+    {
+        final List<ToolDefinition> defs = new ArrayList<>();
+        final boolean hasInteractive = hasInteractiveMilestones(context);
+        final boolean isVisualAssertion = isVisual && !hasInteractive;
+
+        final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+        final boolean hasMultipleTabs;
+        boolean alertPresent = false;
+        if (driver != null)
+        {
+            Set<String> handles = null;
+            try
+            {
+                handles = driver.getWindowHandles();
+            }
+            catch (final Exception ignored)
+            {
+            }
+            hasMultipleTabs = handles != null && handles.size() > 1;
+            alertPresent = BrowserToolProvider.isAlertPresent(driver);
+        }
+        else
+        {
+            hasMultipleTabs = false;
+        }
+
+        final String instruction = context != null
+                ? (String) context.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "")
+                : "";
+        final String rawInstruction = context != null
+                ? (String) context.getTransientData().get("KEY_CURRENT_STEP_RAW_INSTRUCTION")
+                : null;
+        final Object stepObj = context != null
+                ? context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP)
+                : null;
+        final PlaybookStep step = stepObj instanceof final PlaybookStep ps ? ps : null;
+        final String stepInstruction = step != null && step.getInstruction() != null ? step.getInstruction() : "";
+        final StringBuilder combinedBuilder = new StringBuilder();
+        if (instruction != null)
+        {
+            combinedBuilder.append(instruction).append(" ");
+        }
+        if (rawInstruction != null)
+        {
+            combinedBuilder.append(rawInstruction).append(" ");
+        }
+        combinedBuilder.append(stepInstruction);
+
+        if (context != null)
+        {
+            @SuppressWarnings("unchecked")
+            final List<String> milestones = (List<String>) context.getTransientData().get(ExecutionContext.KEY_INTERNAL_MILESTONES);
+            if (milestones != null)
+            {
+                for (final String milestone : milestones)
+                {
+                    if (milestone != null)
+                    {
+                        combinedBuilder.append(" ").append(milestone);
+                    }
+                }
+            }
+        }
+        final String effectiveInstructionText = combinedBuilder.toString().toLowerCase(Locale.ROOT);
+
+        for (final ToolDefinition def : this.toolRegistry.getDefinitions())
+        {
+            final String name = def.name();
+            final String clean = name.startsWith("browser_") ? name.substring("browser_".length()) : name;
+
+            // Pure visual assertions omit mutating tools (except scroll for viewport repositioning)
+            if (isVisualAssertion && !hasInteractive && isMutatingTool(name) && !"scroll".equals(clean))
+            {
+                continue;
+            }
+
+            // Pure visual assertions omit DOM querying/text matching tools, DOM context escalation, and fail_step
+            // so Stage 1 stays strictly viewport-prep and Stage 2 (VerifyOperationStep) always runs visual diagnostics
+            if (isVisualAssertion && !hasInteractive
+                    && (isDomMatchingTool(name) || "request_context".equals(clean) || "fail_step".equals(clean)))
+            {
+                continue;
+            }
+
+            // Omit tab/window tools if only 1 tab exists
+            if (!hasMultipleTabs && isTabOrWindowTool(clean))
+            {
+                continue;
+            }
+
+            // Omit alert tools if no alert is open
+            if (!alertPresent && "handle_alert".equals(clean))
+            {
+                continue;
+            }
+
+            // Omit exotic specialized tools on standard steps unless demanded by instruction
+            if (isExoticTool(clean) && !isExoticToolDemanded(clean, effectiveInstructionText))
+            {
+                continue;
+            }
+
+            defs.add(def);
+        }
+        return Collections.unmodifiableList(defs);
+    }
+
+    private static boolean isExoticToolDemanded(final String clean, final String instructionText)
+    {
+        return switch (clean)
+        {
+            case "clear_cookies" -> instructionText.contains("cookie") || instructionText.contains("cookies") || instructionText.contains("session");
+            case "clear" -> instructionText.contains("clear");
+            case "upload_file" -> instructionText.contains("upload") || instructionText.contains("file") || instructionText.contains("attach");
+            case "drag", "drag_to" -> instructionText.contains("drag") || instructionText.contains("drop");
+            case "execute_script" -> instructionText.contains("script") || instructionText.contains("javascript") || instructionText.contains("exec");
+            default -> false;
+        };
+    }
+
+    private static boolean isTabOrWindowTool(final String clean)
+    {
+        return "list_tabs".equals(clean)
+                || "switch_tab".equals(clean)
+                || "close_tab".equals(clean)
+                || "switch_window".equals(clean);
+    }
+
+    private static boolean isExoticTool(final String clean)
+    {
+        return "upload_file".equals(clean)
+                || "drag".equals(clean)
+                || "drag_to".equals(clean)
+                || "clear_cookies".equals(clean)
+                || "clear".equals(clean)
+                || "execute_script".equals(clean);
+    }
+
+    private static final Pattern VERIFICATION_PREFIX_PATTERN = Pattern.compile(
+            "(?i)^(assert|verify|confirm|validate|ensure|check\\s+that)\\b");
+
+    private static boolean isInteractiveActionInstruction(final String rawInstruction, final String instruction, final PlaybookStep step)
+    {
+        if (step != null && step.hasInteractiveSubSteps())
+        {
+            return true;
+        }
+        final String text = instruction != null && !instruction.isBlank() ? instruction : rawInstruction;
+        if (text == null || text.isBlank())
+        {
+            return false;
+        }
+        final String trimmed = text.trim();
+        if (VERIFICATION_PREFIX_PATTERN.matcher(trimmed).find())
+        {
+            return false;
+        }
+        return PlaybookStep.INTERACTIVE_ACTION_PATTERN.matcher(trimmed).find();
+    }
+
+    private static boolean matchesTarget(final String instruction, final String failedTarget, final String callSelector)
+    {
+        if (failedTarget == null || callSelector == null)
+        {
+            return true;
+        }
+        if (callSelector.startsWith("marker:") || callSelector.startsWith("coord:"))
+        {
+            return true;
+        }
+        if (failedTarget.equalsIgnoreCase(callSelector))
+        {
+            return true;
+        }
+        if (instruction != null && instruction.contains(failedTarget))
+        {
+            return callSelector.contains(failedTarget) || failedTarget.contains(callSelector);
+        }
+        return true;
+    }
+
+    private static boolean hasInteractiveMilestones(final ExecutionContext context)
+    {
+        if (context == null)
+        {
+            return false;
+        }
+        final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+        if (stepObj instanceof final PlaybookStep step && step.hasInteractiveSubSteps())
+        {
+            return true;
+        }
+        @SuppressWarnings("unchecked")
+        final List<String> milestones = (List<String>) context.getTransientData().get(ExecutionContext.KEY_INTERNAL_MILESTONES);
+        if (milestones != null)
+        {
+            for (final String ms : milestones)
+            {
+                if (ms != null && PlaybookStep.INTERACTIVE_ACTION_PATTERN.matcher(ms).find())
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean isMutatingTool(final String name)
+    {
+        if (name == null)
+        {
+            return false;
+        }
+        String clean = name;
+        if (clean.startsWith("browser_"))
+        {
+            clean = clean.substring("browser_".length());
+        }
+        else if (clean.startsWith("mock_"))
+        {
+            clean = clean.substring("mock_".length());
+        }
+        return "click".equals(clean)
+                || "hover".equals(clean)
+                || "fill".equals(clean)
+                || "fill_form".equals(clean)
+                || "type".equals(clean)
+                || "check".equals(clean)
+                || "upload_file".equals(clean)
+                || "handle_alert".equals(clean)
+                || "switch_window".equals(clean)
+                || "switch_tab".equals(clean)
+                || "close_tab".equals(clean)
+                || "select".equals(clean)
+                || "clear".equals(clean)
+                || "clear_cookies".equals(clean)
+                || "back".equals(clean)
+                || "forward".equals(clean)
+                || "refresh".equals(clean)
+                || "press_key".equals(clean)
+                || "execute_script".equals(clean)
+                || "drag".equals(clean)
+                || "drag_to".equals(clean)
+                || "scroll".equals(clean)
+                || "navigate".equals(clean);
+    }
+
+    private static boolean isDomMatchingTool(final String name)
+    {
+        if (name == null)
+        {
+            return false;
+        }
+        final String clean = name.startsWith("browser_") ? name.substring("browser_".length()) : name;
+        return "query_dom".equals(clean)
+                || "assert_text".equals(clean)
+                || "assert_count".equals(clean)
+                || "assert_element_state".equals(clean)
+                || "assert_attribute".equals(clean)
+                || "inspect".equals(clean);
+    }
+
+    private record ParsedCallsResult(List<ToolCall> calls, boolean isSingleShotAction) {}
+
+    private ToolCall parseToolCallFromCandidate(final JsonNode candidate)
+    {
+        if (candidate == null || !candidate.isObject())
+        {
+            return null;
+        }
+
+        String toolName = null;
+        JsonNode candidateArgs = null;
+        if (candidate.hasNonNull("name"))
+        {
+            toolName = normalizeToolName(candidate.path("name").asText());
+        }
+        else if (candidate.hasNonNull("tool"))
+        {
+            toolName = normalizeToolName(candidate.path("tool").asText());
+        }
+        else if (candidate.hasNonNull("toolName"))
+        {
+            toolName = normalizeToolName(candidate.path("toolName").asText());
+        }
+        else if (candidate.hasNonNull("action"))
+        {
+            final String rawAction = candidate.path("action").asText().trim();
+            final String rawLocator = candidate.hasNonNull("locator") ? candidate.path("locator").asText().trim()
+                    : (candidate.hasNonNull("target") ? candidate.path("target").asText().trim() : "");
+            if ("ASSERT".equalsIgnoreCase(rawAction))
+            {
+                if ("url".equalsIgnoreCase(rawLocator) || "currentUrl".equalsIgnoreCase(rawLocator) || "pageUrl".equalsIgnoreCase(rawLocator))
+                {
+                    toolName = "assert_url";
+                }
+                else if ("title".equalsIgnoreCase(rawLocator) || "pageTitle".equalsIgnoreCase(rawLocator))
+                {
+                    toolName = "assert_title";
+                }
+                else
+                {
+                    toolName = normalizeToolName(rawAction);
+                }
+            }
+            else
+            {
+                toolName = normalizeToolName(rawAction);
+            }
+        }
+        else if (candidate.isObject())
+        {
+            final Iterator<String> it = candidate.fieldNames();
+            while (it.hasNext())
+            {
+                final String field = it.next();
+                if (isKnownToolOrAction(field))
+                {
+                    toolName = normalizeToolName(field);
+                    candidateArgs = candidate.path(field);
+                    break;
+                }
+            }
+        }
+
+        if (toolName != null && !toolName.isBlank())
+        {
+            final JsonNode rawArgs;
+            if (candidateArgs != null && candidateArgs.isObject())
+            {
+                rawArgs = candidateArgs;
+            }
+            else if (candidate.hasNonNull("arguments"))
+            {
+                rawArgs = candidate.path("arguments");
+            }
+            else if (candidate.hasNonNull("parameters"))
+            {
+                rawArgs = candidate.path("parameters");
+            }
+            else if (candidate.hasNonNull("args"))
+            {
+                rawArgs = candidate.path("args");
+            }
+            else
+            {
+                final ObjectNode inlined = candidate.deepCopy();
+                inlined.remove("name");
+                inlined.remove("tool");
+                inlined.remove("toolName");
+                inlined.remove("thought");
+                inlined.remove("reasoning");
+                inlined.remove("tool_call");
+                inlined.remove("action");
+                rawArgs = inlined;
+            }
+
+            final JsonNode args;
+            if (rawArgs instanceof ObjectNode)
+            {
+                final ObjectNode obj = ((ObjectNode) rawArgs).deepCopy();
+                if (obj.hasNonNull("target") && !obj.hasNonNull("selector"))
+                {
+                    obj.put("selector", obj.path("target").asText());
+                }
+                if (obj.hasNonNull("locator") && !obj.hasNonNull("selector"))
+                {
+                    obj.put("selector", obj.path("locator").asText());
+                }
+                if (obj.hasNonNull("selector") && !obj.hasNonNull("target"))
+                {
+                    obj.put("target", obj.path("selector").asText());
+                }
+                if (obj.hasNonNull("locator") && !obj.hasNonNull("target"))
+                {
+                    obj.put("target", obj.path("locator").asText());
+                }
+                if (obj.hasNonNull("value") && !obj.path("value").asText().isBlank() && !obj.hasNonNull("text"))
+                {
+                    obj.put("text", obj.path("value").asText());
+                }
+                if (obj.hasNonNull("value") && !obj.path("value").asText().isBlank() && !obj.hasNonNull("expectedText"))
+                {
+                    obj.put("expectedText", obj.path("value").asText());
+                }
+                if (obj.hasNonNull("value") && !obj.path("value").asText().isBlank() && !obj.hasNonNull("url"))
+                {
+                    obj.put("url", obj.path("value").asText());
+                }
+                if ("assert_url".equals(toolName) || "browser_assert_url".equals(toolName))
+                {
+                    if (obj.hasNonNull("value") && !obj.path("value").asText().isBlank())
+                    {
+                        obj.put("expectedUrl", obj.path("value").asText());
+                    }
+                    else if (obj.hasNonNull("text") && !obj.path("text").asText().isBlank())
+                    {
+                        obj.put("expectedUrl", obj.path("text").asText());
+                    }
+                    else if (obj.hasNonNull("url") && !obj.path("url").asText().isBlank() && !"url".equalsIgnoreCase(obj.path("url").asText()))
+                    {
+                        obj.put("expectedUrl", obj.path("url").asText());
+                    }
+                }
+                if ("assert_title".equals(toolName) || "browser_assert_title".equals(toolName))
+                {
+                    if (obj.hasNonNull("value") && !obj.path("value").asText().isBlank())
+                    {
+                        obj.put("expectedTitle", obj.path("value").asText());
+                    }
+                    else if (obj.hasNonNull("text") && !obj.path("text").asText().isBlank())
+                    {
+                        obj.put("expectedTitle", obj.path("text").asText());
+                    }
+                    else if (obj.hasNonNull("title") && !obj.path("title").asText().isBlank())
+                    {
+                        obj.put("expectedTitle", obj.path("title").asText());
+                    }
+                }
+                final String targetStr = obj.hasNonNull("target") ? obj.path("target").asText()
+                        : (obj.hasNonNull("locator") ? obj.path("locator").asText() : "");
+                final ClickAction.CoordinateTarget coord = ClickAction.parseCoordinateTarget(targetStr);
+                if (coord != null)
+                {
+                    obj.put("x", coord.x());
+                    obj.put("y", coord.y());
+                    if (coord.anchorSelector() != null && !coord.anchorSelector().isBlank())
+                    {
+                        obj.put("selector", coord.anchorSelector());
+                    }
+                }
+                if (obj.hasNonNull("value") && !obj.path("value").asText().isBlank() && !obj.hasNonNull("filePath"))
+                {
+                    obj.put("filePath", obj.path("value").asText());
+                }
+                if (obj.hasNonNull("file") && !obj.hasNonNull("filePath"))
+                {
+                    obj.put("filePath", obj.path("file").asText());
+                }
+                if (obj.hasNonNull("path") && !obj.hasNonNull("filePath"))
+                {
+                    obj.put("filePath", obj.path("path").asText());
+                }
+                if (obj.hasNonNull("containerSelector") && !obj.hasNonNull("container"))
+                {
+                    obj.put("container", obj.path("containerSelector").asText());
+                }
+                if (obj.hasNonNull("scrollContainer") && !obj.hasNonNull("container"))
+                {
+                    obj.put("container", obj.path("scrollContainer").asText());
+                }
+                if ("browser_press_key".equals(toolName) || "press_key".equalsIgnoreCase(toolName) || "key_press".equalsIgnoreCase(toolName))
+                {
+                    if (obj.hasNonNull("value") && !obj.hasNonNull("key"))
+                    {
+                        obj.put("key", obj.path("value").asText());
+                    }
+                    if (obj.hasNonNull("keyName") && !obj.hasNonNull("key"))
+                    {
+                        obj.put("key", obj.path("keyName").asText());
+                    }
+                    if (obj.hasNonNull("key_name") && !obj.hasNonNull("key"))
+                    {
+                        obj.put("key", obj.path("key_name").asText());
+                    }
+                }
+                if ("browser_handle_alert".equals(toolName) || "handle_alert".equalsIgnoreCase(toolName) || "alert".equalsIgnoreCase(toolName))
+                {
+                    if (obj.hasNonNull("target") && !obj.hasNonNull("promptText"))
+                    {
+                        final String tVal = obj.path("target").asText().trim();
+                        if (!tVal.matches("(?i)^(accept|dismiss|ok|cancel|alert|confirm|prompt)$") && !tVal.isBlank())
+                        {
+                            obj.put("promptText", tVal);
+                        }
+                    }
+                    if (obj.hasNonNull("locator") && !obj.hasNonNull("promptText"))
+                    {
+                        final String lVal = obj.path("locator").asText().trim();
+                        if (!lVal.matches("(?i)^(accept|dismiss|ok|cancel|alert|confirm|prompt)$") && !lVal.isBlank())
+                        {
+                            obj.put("promptText", lVal);
+                        }
+                    }
+                    if (obj.hasNonNull("value"))
+                    {
+                        final String val = obj.path("value").asText().trim();
+                        if ("accept".equalsIgnoreCase(val) || "dismiss".equalsIgnoreCase(val) || "ok".equalsIgnoreCase(val) || "cancel".equalsIgnoreCase(val))
+                        {
+                            if (!obj.hasNonNull("action"))
+                            {
+                                obj.put("action", "cancel".equalsIgnoreCase(val) ? "dismiss" : val.toLowerCase());
+                            }
+                            obj.remove("text");
+                        }
+                        else if (!obj.hasNonNull("promptText") && !val.isBlank())
+                        {
+                            obj.put("promptText", val);
+                        }
+                    }
+                    if (obj.hasNonNull("text"))
+                    {
+                        final String textVal = obj.path("text").asText().trim();
+                        if ("accept".equalsIgnoreCase(textVal) || "dismiss".equalsIgnoreCase(textVal) || "ok".equalsIgnoreCase(textVal) || "cancel".equalsIgnoreCase(textVal))
+                        {
+                            if (!obj.hasNonNull("action"))
+                            {
+                                obj.put("action", "cancel".equalsIgnoreCase(textVal) ? "dismiss" : textVal.toLowerCase());
+                            }
+                            obj.remove("text");
+                        }
+                    }
+                    if (obj.hasNonNull("prompt") && !obj.hasNonNull("promptText"))
+                    {
+                        obj.put("promptText", obj.path("prompt").asText());
+                    }
+                    if (obj.hasNonNull("text") && !obj.hasNonNull("promptText"))
+                    {
+                        final String textVal = obj.path("text").asText().trim();
+                        if (!"accept".equalsIgnoreCase(textVal) && !"dismiss".equalsIgnoreCase(textVal) && !"ok".equalsIgnoreCase(textVal) && !"cancel".equalsIgnoreCase(textVal))
+                        {
+                            obj.put("promptText", textVal);
+                        }
+                    }
+                }
+                if ("browser_scroll".equals(toolName) || "scroll".equalsIgnoreCase(toolName))
+                {
+                    if (!obj.hasNonNull("container") && obj.hasNonNull("target") && !obj.path("target").asText().isBlank())
+                    {
+                        obj.put("container", obj.path("target").asText());
+                    }
+                    if (!obj.hasNonNull("direction") && obj.hasNonNull("value"))
+                    {
+                        final String val = obj.path("value").asText().trim().toLowerCase();
+                        if (val.matches("^(down|up|top|bottom|left|right)$"))
+                        {
+                            obj.put("direction", val);
+                        }
+                    }
+                    if (!obj.hasNonNull("yOffset") && obj.hasNonNull("value"))
+                    {
+                        final String val = obj.path("value").asText().trim();
+                        if (val.matches("^-?\\d+$"))
+                        {
+                            try
+                            {
+                                obj.put("yOffset", Integer.parseInt(val));
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+                        }
+                    }
+                }
+                if ("browser_drag".equals(toolName) || "drag".equalsIgnoreCase(toolName))
+                {
+                    if (obj.hasNonNull("target") && !obj.hasNonNull("selector"))
+                    {
+                        obj.put("selector", obj.path("target").asText());
+                    }
+                    if (obj.hasNonNull("source") && !obj.hasNonNull("selector"))
+                    {
+                        obj.put("selector", obj.path("source").asText());
+                    }
+                    if (obj.hasNonNull("offsetX") && !obj.hasNonNull("xOffset"))
+                    {
+                        obj.put("xOffset", obj.path("offsetX").asInt());
+                    }
+                    if (obj.hasNonNull("deltaX") && !obj.hasNonNull("xOffset"))
+                    {
+                        obj.put("xOffset", obj.path("deltaX").asInt());
+                    }
+                    if (obj.hasNonNull("offsetY") && !obj.hasNonNull("yOffset"))
+                    {
+                        obj.put("yOffset", obj.path("offsetY").asInt());
+                    }
+                    if (obj.hasNonNull("deltaY") && !obj.hasNonNull("yOffset"))
+                    {
+                        obj.put("yOffset", obj.path("deltaY").asInt());
+                    }
+                    if (obj.hasNonNull("value"))
+                    {
+                        final String val = obj.path("value").asText().trim();
+                        if (val.contains(","))
+                        {
+                            final String[] parts = val.split(",");
+                            try
+                            {
+                                if (!obj.hasNonNull("xOffset"))
+                                {
+                                    obj.put("xOffset", Integer.parseInt(parts[0].trim()));
+                                }
+                                if (!obj.hasNonNull("yOffset"))
+                                {
+                                    obj.put("yOffset", Integer.parseInt(parts[1].trim()));
+                                }
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+                        }
+                    }
+                }
+                if ("browser_drag_to".equals(toolName) || "drag_to".equalsIgnoreCase(toolName) || "drag_and_drop".equalsIgnoreCase(toolName))
+                {
+                    if (obj.hasNonNull("sourceSelector") && !obj.hasNonNull("source"))
+                    {
+                        obj.put("source", obj.path("sourceSelector").asText());
+                    }
+                    if (obj.hasNonNull("from") && !obj.hasNonNull("source"))
+                    {
+                        obj.put("source", obj.path("from").asText());
+                    }
+                    if (obj.hasNonNull("selector") && !obj.hasNonNull("source"))
+                    {
+                        obj.put("source", obj.path("selector").asText());
+                    }
+                    if (obj.hasNonNull("targetSelector") && !obj.hasNonNull("target"))
+                    {
+                        obj.put("target", obj.path("targetSelector").asText());
+                    }
+                    if (obj.hasNonNull("to") && !obj.hasNonNull("target"))
+                    {
+                        obj.put("target", obj.path("to").asText());
+                    }
+                    if (obj.hasNonNull("destination") && !obj.hasNonNull("target"))
+                    {
+                        obj.put("target", obj.path("destination").asText());
+                    }
+                    if (obj.hasNonNull("value") && !obj.hasNonNull("target"))
+                    {
+                        final String val = obj.path("value").asText().trim();
+                        if (!val.isBlank())
+                        {
+                            obj.put("target", val);
+                        }
+                    }
+                }
+                if ("browser_navigate".equals(toolName) || "navigate".equalsIgnoreCase(toolName))
+                {
+                    if (!obj.hasNonNull("url") || obj.path("url").asText().isBlank())
+                    {
+                        if (obj.hasNonNull("target") && !obj.path("target").asText().isBlank())
+                        {
+                            obj.put("url", obj.path("target").asText());
+                        }
+                        else if (obj.hasNonNull("locator") && !obj.path("locator").asText().isBlank())
+                        {
+                            obj.put("url", obj.path("locator").asText());
+                        }
+                        else if (obj.hasNonNull("value") && !obj.path("value").asText().isBlank())
+                        {
+                            obj.put("url", obj.path("value").asText());
+                        }
+                    }
+                }
+                if ("browser_store".equals(toolName) || "store".equalsIgnoreCase(toolName))
+                {
+                    if (!obj.hasNonNull("variableName") || obj.path("variableName").asText().isBlank())
+                    {
+                        if (obj.hasNonNull("variable") && !obj.path("variable").asText().isBlank())
+                        {
+                            obj.put("variableName", obj.path("variable").asText().trim());
+                        }
+                        else if (obj.hasNonNull("name") && !obj.path("name").asText().isBlank())
+                        {
+                            obj.put("variableName", obj.path("name").asText().trim());
+                        }
+                        else if (obj.hasNonNull("key") && !obj.path("key").asText().isBlank())
+                        {
+                            obj.put("variableName", obj.path("key").asText().trim());
+                        }
+                        else if (obj.hasNonNull("value") && !obj.path("value").asText().isBlank())
+                        {
+                            final boolean hasSelector = (obj.hasNonNull("selector") && !obj.path("selector").asText().isBlank())
+                                    || (obj.hasNonNull("locator") && !obj.path("locator").asText().isBlank())
+                                    || (obj.hasNonNull("target") && !obj.path("target").asText().isBlank());
+                            if (hasSelector)
+                            {
+                                obj.put("variableName", obj.path("value").asText().trim());
+                                obj.remove("value");
+                                obj.remove("text");
+                            }
+                        }
+                    }
+                }
+                args = obj;
+            }
+            else
+            {
+                args = rawArgs;
+            }
+            return new ToolCall(UUID.randomUUID().toString(), toolName, args);
+        }
+        return null;
+    }
+
+    private ParsedCallsResult parseLlmToolCalls(final String content)
+    {
+        if (content == null || content.isBlank())
+        {
+            return null;
+        }
+
+        try
+        {
+            final String json = LlmResponseSanitizer.extractJson(content);
+            if (json == null || json.isBlank())
+            {
+                return null;
+            }
+
+            final JsonNode root = MAPPER.readTree(json);
+
+            // Handle legacy actions array: { "actions": [ { ... } ] }
+            if (root.hasNonNull("actions") && root.path("actions").isArray() && root.path("actions").size() > 0)
+            {
+                final List<ToolCall> calls = new ArrayList<>();
+                for (final JsonNode actNode : root.path("actions"))
+                {
+                    final ToolCall call = parseToolCallFromCandidate(actNode);
+                    if (call != null)
+                    {
+                        calls.add(call);
+                    }
+                }
+                if (!calls.isEmpty())
+                {
+                    return new ParsedCallsResult(calls, true);
+                }
+            }
+
+            // Handle root with single "action" field
+            if (root.hasNonNull("action"))
+            {
+                final ToolCall call = parseToolCallFromCandidate(root);
+                if (call != null)
+                {
+                    return new ParsedCallsResult(List.of(call), true);
+                }
+            }
+
+            // Handle root array: [ { ... } ]
+            if (root.isArray() && root.size() > 0)
+            {
+                final List<ToolCall> calls = new ArrayList<>();
+                for (final JsonNode elem : root)
+                {
+                    final ToolCall call = parseToolCallFromCandidate(elem);
+                    if (call != null)
+                    {
+                        calls.add(call);
+                    }
+                }
+                if (!calls.isEmpty())
+                {
+                    return new ParsedCallsResult(calls, false);
+                }
+            }
+
+            if (root.hasNonNull("tool_calls") && root.path("tool_calls").isArray() && root.path("tool_calls").size() > 0)
+            {
+                final List<ToolCall> calls = new ArrayList<>();
+                for (final JsonNode elem : root.path("tool_calls"))
+                {
+                    final ToolCall call = parseToolCallFromCandidate(elem);
+                    if (call != null)
+                    {
+                        calls.add(call);
+                    }
+                }
+                if (!calls.isEmpty())
+                {
+                    return new ParsedCallsResult(calls, false);
+                }
+            }
+
+            if (root.hasNonNull("tool_call"))
+            {
+                final ToolCall call = parseToolCallFromCandidate(root.path("tool_call"));
+                if (call != null)
+                {
+                    return new ParsedCallsResult(List.of(call), false);
+                }
+            }
+
+            final ToolCall single = parseToolCallFromCandidate(root);
+            if (single != null)
+            {
+                return new ParsedCallsResult(List.of(single), false);
+            }
+        }
+        catch (final Exception e)
+        {
+            LOGGER.debug("Could not parse LLM output as structured tool call: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    ToolCall parseLlmToolCall(final String content)
+    {
+        final ParsedCallsResult res = parseLlmToolCalls(content);
+        return res != null && res.calls() != null && !res.calls().isEmpty() ? res.calls().get(0) : null;
+    }
+
+    private static String stripNamespacePrefix(final String toolName)
+    {
+        if (toolName == null)
+        {
+            return null;
+        }
+        final int colonIdx = toolName.indexOf(':');
+        return colonIdx >= 0 ? toolName.substring(colonIdx + 1) : toolName;
+    }
+
+    private boolean isKnownToolOrAction(final String rawName)
+    {
+        if (rawName == null || rawName.isBlank())
+        {
+            return false;
+        }
+        final String name = stripNamespacePrefix(rawName.trim()).toLowerCase(Locale.ROOT);
+        final String clean = name.startsWith("browser_") ? name.substring("browser_".length()) : name;
+        return "complete_step".equals(clean) || "fail_step".equals(clean) || "click".equals(clean)
+                || "fill".equals(clean) || "fill_form".equals(clean) || "type".equals(clean)
+                || "upload".equals(clean) || "upload_file".equals(clean)
+                || "handle_alert".equals(clean) || "alert".equals(clean)
+                || "switch_window".equals(clean) || "switch_tab".equals(clean)
+                || "close_window".equals(clean) || "close_tab".equals(clean)
+                || "list_tabs".equals(clean) || "tabs".equals(clean)
+                || "navigate".equals(clean) || "hover".equals(clean)
+                || "scroll".equals(clean) || "select".equals(clean) || "clear".equals(clean)
+                || "clear_cookies".equals(clean) || "back".equals(clean) || "forward".equals(clean)
+                || "refresh".equals(clean) || "wait".equals(clean) || "assert".equals(clean)
+                || "assert_text".equals(clean) || "assert_title".equals(clean) || "assert_url".equals(clean)
+                || "assert_count".equals(clean) || "assert_element_state".equals(clean) || "assert_state".equals(clean)
+                || "assert_attribute".equals(clean) || "assert_attr".equals(clean)
+                || "key_press".equals(clean) || "press_key".equals(clean)
+                || "drag".equals(clean) || "drag_to".equals(clean) || "drag_and_drop".equals(clean)
+                || "check".equals(clean) || "store".equals(clean) || "branch".equals(clean)
+                || "include".equals(clean) || "java_method".equals(clean)
+                || "screenshot".equals(clean) || "take_screenshot".equals(clean)
+                || "inspect_visual".equals(clean) || "mark_elements".equals(clean) || "request_context".equals(clean)
+                || "query_dom".equals(clean) || "inspect".equals(clean) || "execute_script".equals(clean)
+                || this.toolRegistry.hasTool(name) || this.toolRegistry.hasTool(rawName.trim())
+                || this.toolRegistry.hasTool(clean);
+    }
+
+    private static String normalizeToolName(final String rawName)
+    {
+        if (rawName == null)
+        {
+            return null;
+        }
+        final String name = stripNamespacePrefix(rawName.trim());
+        final String lower = name.toLowerCase(Locale.ROOT);
+        final String clean = lower.startsWith("browser_") ? lower.substring("browser_".length()) : lower;
+        return switch (clean)
+        {
+            case "click" -> "click";
+            case "check", "uncheck" -> "check";
+            case "fill" -> "fill";
+            case "fill_form" -> "fill_form";
+            case "type" -> "type";
+            case "upload", "upload_file" -> "upload_file";
+            case "handle_alert", "alert" -> "handle_alert";
+            case "switch_window", "switch_tab" -> "switch_tab";
+            case "close_window", "close_tab" -> "close_tab";
+            case "list_tabs", "tabs" -> "list_tabs";
+            case "navigate", "open", "goto" -> "navigate";
+            case "hover" -> "hover";
+            case "scroll" -> "scroll";
+            case "select" -> "select";
+            case "clear" -> "clear";
+            case "clear_cookies" -> "clear_cookies";
+            case "back" -> "back";
+            case "forward" -> "forward";
+            case "refresh" -> "refresh";
+            case "wait", "sleep" -> "wait";
+            case "assert", "assert_text" -> "assert_text";
+            case "assert_title" -> "assert_title";
+            case "assert_url" -> "assert_url";
+            case "assert_count" -> "assert_count";
+            case "assert_element_state", "assert_state" -> "assert_element_state";
+            case "assert_attribute", "assert_attr" -> "assert_attribute";
+            case "drag" -> "drag";
+            case "drag_to", "drag_and_drop" -> "drag_to";
+            case "key_press", "press_key" -> "press_key";
+            case "take_screenshot", "screenshot" -> "screenshot";
+            case "inspect_visual" -> "inspect_visual";
+            case "mark_elements", "mark" -> "mark_elements";
+            case "request_context" -> "request_context";
+            case "query_dom" -> "query_dom";
+            case "inspect" -> "inspect";
+            case "execute_script" -> "execute_script";
+            case "store" -> "store";
+            case "get_network_failures", "network_failures" -> "browser_get_network_failures";
+            case "get_console_errors", "console_errors" -> "browser_get_console_errors";
+            case "fail_step", "fail" -> "fail_step";
+            case "none" -> "complete_step";
+            default -> clean;
+        };
+    }
+
+    private static void recordAssertionFailureAndDispatch(
+            final ToolCall effectiveCall,
+            final String thought,
+            final PlaybookStep step,
+            final ExecutionContext context,
+            final List<ToolCall> executedCalls,
+            final List<Action> executedActions)
+    {
+        executedCalls.add(effectiveCall);
+        final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+        if (session != null && session.getEventBus() != null)
+        {
+            Action mappedAction = mapToolCallToAction(effectiveCall);
+            if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
+            {
+                mappedAction = mappedAction.withReasoning(thought.trim());
+            }
+            final SessionData sessionData = context.getSessionData();
+            final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+            final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
+            executedActions.add(canonicalAction);
+            if (step != null)
+            {
+                step.setToolCalls(new ArrayList<>(executedCalls));
+                step.setActions(new ArrayList<>(executedActions));
+                if (step.hasSubSteps())
+                {
+                    partitionToolCallsAndActions(step.getSubSteps(), executedCalls, executedActions, false);
+                }
+            }
+            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, false));
+        }
+    }
+
+    private static void handleSingleShotUnresolvableVariable(
+        final UnresolvableVariableException e,
+        final ToolCall effectiveCall,
+        final List<ToolCall> executedCalls,
+        final List<ChatMessage> conversation,
+        final LlmResponse response
+    )
+    {
+        LOGGER.warn("⚠️ Unresolvable variable '{}' in single-shot action '{}'; falling back to interactive agent loop", e.getVariableName(), effectiveCall.toolName());
+        final int executedBeforeFailure = executedCalls.size();
+        final String executedSummary = executedBeforeFailure > 0
+                ? executedCalls.stream().map(ToolCall::toolName).collect(Collectors.joining(", "))
+                : "";
+        final String priorInfo = executedBeforeFailure > 0
+                ? executedBeforeFailure + " preceding action(s) (" + executedSummary + ") in this single-shot batch were already executed in the browser. Do not repeat them. "
+                : "";
+        final String feedbackMsg = priorInfo + "Action '" + effectiveCall.toolName()
+                + "' execution failed: Unresolvable variable placeholder '${" + e.getVariableName()
+                + "}'. Please resolve or store the variable first, or proceed using interactive tools.";
+        conversation.add(ChatMessage.assistant(response != null && response.content() != null ? response.content() : ""));
+        conversation.add(ChatMessage.user(feedbackMsg));
+    }
+
+    private static boolean isAssertionTool(final String toolName)
+    {
+        if (toolName == null)
+        {
+            return false;
+        }
+        final String name = stripNamespacePrefix(toolName.trim()).toLowerCase();
+        return name.startsWith("assert") || name.startsWith("browser_assert");
+    }
+
+    private static boolean isElementNotFoundFailure(final Throwable t)
+    {
+        if (t == null)
+        {
+            return false;
+        }
+        if (t instanceof ElementNotFound
+                || t instanceof NoSuchElementException
+                || t instanceof StaleElementReferenceException
+                || t instanceof ElementNotInteractableException
+                || t instanceof TimeoutException)
+        {
+            return true;
+        }
+        if (t.getCause() != null && isElementNotFoundFailure(t.getCause()))
+        {
+            return true;
+        }
+        final String msg = t.getMessage();
+        if (msg != null)
+        {
+            final String lower = msg.toLowerCase(Locale.ROOT);
+            if (lower.contains("target element not found in dom")
+                    || lower.contains("no element exists matching this selector")
+                    || lower.contains("element not found {"))
+            {
+                return true;
+            }
+            if (lower.startsWith("element not found") || lower.contains("nosuchelementexception"))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String formatThrowableError(final Throwable cause, final Throwable root)
+    {
+        final String causeName = !cause.getClass().getSimpleName().isBlank()
+                ? cause.getClass().getSimpleName()
+                : cause.getClass().getName();
+        final String causeMsg = cause.getMessage();
+        final String causeDesc = causeName + (causeMsg != null && !causeMsg.isBlank() ? ": " + causeMsg : "");
+
+        if (root == null || root == cause)
+        {
+            return causeDesc;
+        }
+
+        final String rootName = !root.getClass().getSimpleName().isBlank()
+                ? root.getClass().getSimpleName()
+                : root.getClass().getName();
+        final String rootMsg = root.getMessage();
+        final String rootDesc = rootName + (rootMsg != null && !rootMsg.isBlank() ? ": " + rootMsg : "");
+
+        return causeDesc + " (Root cause: " + rootDesc + ")";
+    }
+
+    private static ToolRegistry createDefaultRegistry()
+    {
+        final ToolRegistry reg = new ToolRegistry();
+        BrowserToolProvider.registerBrowserTools(reg);
+
+        // Register built-in complete_step tool
+        final ObjectNode completeSchema = MAPPER.createObjectNode();
+        completeSchema.put("type", "object");
+        completeSchema.putObject("properties")
+                .putObject("summary")
+                .put("type", "string")
+                .put("description", "Summary of completed goal");
+        reg.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition(
+                    "complete_step",
+                    "Signals that the goal for this step has been successfully achieved",
+                    completeSchema
+            );
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                return ToolResult.success(call.callId(), call.arguments().path("summary").asText("Completed"));
+            }
+        });
+
+        // Register built-in fail_step tool
+        final ObjectNode failSchema = MAPPER.createObjectNode();
+        failSchema.put("type", "object");
+        failSchema.putObject("properties")
+                .putObject("reason")
+                .put("type", "string")
+                .put("description", "Clear QA explanation of why the step target is missing, unreachable, or blocked");
+        failSchema.putArray("required").add("reason");
+        reg.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition(
+                    "fail_step",
+                    "Signals that the step cannot be completed because the target element is missing, unreachable, or blocked by an error/challenge screen",
+                    failSchema
+            );
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                return ToolResult.error(call.callId(), call.arguments().path("reason").asText("Step failed"));
+            }
+        });
+
+        return reg;
+    }
+
+    private static String extractFailStepReason(final JsonNode args, final String thought)
+    {
+        if (args != null)
+        {
+            for (final String key : List.of("reason", "message", "summary", "error", "value"))
+            {
+                if (args.hasNonNull(key) && !args.path(key).asText().isBlank())
+                {
+                    return args.path(key).asText().trim();
+                }
+            }
+        }
+        if (thought != null && !thought.isBlank())
+        {
+            return thought.trim();
+        }
+        return "Target element or expected page state is missing or blocked";
+    }
+
+    @SuppressWarnings("resource")
+    private static AgentLoopLlmCaller createDefaultLlmCaller()
+    {
+        return (request, context) -> {
+            final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+            if (session == null)
+            {
+                throw new IllegalStateException("No active AiSession found in ExecutionContext.");
+            }
+            final LlmCapability cap = request.attachments() != null && !request.attachments().isEmpty()
+                    ? LlmCapability.VISION
+                    : LlmCapability.TEXT_ONLY;
+            final LlmProvider provider = session.getLlmRegistry().getProvider(cap);
+            final String capName = cap.name();
+
+            if (session.getEventBus() != null)
+            {
+                session.getEventBus().dispatch(new LlmRequestSentEvent(request, capName));
+            }
+            final long start = System.currentTimeMillis();
+            final LlmResponse response = provider.chat(request);
+            final long durationMs = System.currentTimeMillis() - start;
+            if (session.getEventBus() != null)
+            {
+                session.getEventBus().dispatch(new LlmResponseReceivedEvent(request, response, durationMs, capName));
+            }
+
+            return response;
+        };
+    }
+
+    private static void recordTurnMetrics(final ExecutionContext context, final LlmResponse response)
+    {
+        final Integer calls = (Integer) context.getTransientData().getOrDefault(ExecutionContext.KEY_TOTAL_LLM_CALLS, 0);
+        context.getTransientData().put(ExecutionContext.KEY_TOTAL_LLM_CALLS, calls + 1);
+        final Integer stdCalls = (Integer) context.getTransientData().getOrDefault(ExecutionContext.KEY_STANDARD_CALL_COUNT, 0);
+        context.getTransientData().put(ExecutionContext.KEY_STANDARD_CALL_COUNT, stdCalls + 1);
+
+        final TokenUsage newUsage = response != null ? response.tokenUsage() : null;
+        if (newUsage != null)
+        {
+            final TokenUsage existing = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_STANDARD_TOKEN_USAGE);
+            if (existing == null)
+            {
+                context.getTransientData().put(ExecutionContext.KEY_STANDARD_TOKEN_USAGE, newUsage);
+            }
+            else
+            {
+                context.getTransientData().put(ExecutionContext.KEY_STANDARD_TOKEN_USAGE, new TokenUsage(
+                        existing.inputTokenCount() + newUsage.inputTokenCount(),
+                        existing.outputTokenCount() + newUsage.outputTokenCount(),
+                        existing.totalTokenCount() + newUsage.totalTokenCount(),
+                        existing.cachedTokenCount() + newUsage.cachedTokenCount()));
+            }
+
+            final Object statsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
+            if (statsObj instanceof final StepStats stats)
+            {
+                stats.addStandardCall(newUsage.inputTokenCount(), newUsage.outputTokenCount(), newUsage.cachedTokenCount());
+            }
+        }
+    }
+
+    private static long resolveDefaultTimeout()
+    {
+        try
+        {
+            return AiConfiguration.getInstance().getStepTimeoutSeconds();
+        }
+        catch (final Exception e)
+        {
+            return 60L;
+        }
+    }
+
+    private static int resolveDefaultMaxTurns()
+    {
+        try
+        {
+            return AiConfiguration.getInstance().getStepMaxTurns();
+        }
+        catch (final Exception e)
+        {
+            return 15;
+        }
+    }
+
+    private static int resolveDefaultMaxTokens()
+    {
+        try
+        {
+            return AiConfiguration.getInstance().getStepTokenBudget();
+        }
+        catch (final Exception e)
+        {
+            return 100_000;
+        }
+    }
+
+    private static String prettyPrintJson(final JsonNode node)
+    {
+        if (node == null || node.isNull())
+        {
+            return "{}";
+        }
+        try
+        {
+            return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(node);
+        }
+        catch (final Exception e)
+        {
+            return node.toString();
+        }
+    }
+
+    private static String prettyPrintJson(final String rawJson)
+    {
+        if (rawJson == null || rawJson.isBlank())
+        {
+            return "{}";
+        }
+        try
+        {
+            final Object obj = MAPPER.readValue(rawJson, Object.class);
+            return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(obj);
+        }
+        catch (final Exception e)
+        {
+            return rawJson;
+        }
+    }
+
+    private static String indent(final String text, final String prefix)
+    {
+        if (text == null)
+        {
+            return "";
+        }
+        final String[] lines = text.split("\r?\n");
+        final StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < lines.length; i++)
+        {
+            sb.append(prefix).append(lines[i]);
+            if (i < lines.length - 1)
+            {
+                sb.append("\n");
+            }
+        }
+        return sb.toString();
+    }
+
+    private static String extractThought(final LlmResponse response)
+    {
+        if (response == null)
+        {
+            return null;
+        }
+        if (response.hasThinking())
+        {
+            return response.thinking().trim();
+        }
+        final String content = response.content();
+        if (content == null || content.isBlank())
+        {
+            return null;
+        }
+        final String trimmed = content.trim();
+        if (trimmed.startsWith("{") && trimmed.endsWith("}"))
+        {
+            try
+            {
+                final JsonNode node = MAPPER.readTree(trimmed);
+                if (node.has("thought") && !node.path("thought").asText().isBlank())
+                {
+                    return node.path("thought").asText().trim();
+                }
+                if (node.has("reasoning") && !node.path("reasoning").asText().isBlank())
+                {
+                    return node.path("reasoning").asText().trim();
+                }
+                if (node.has("tool_call") || node.has("name") || node.has("actions"))
+                {
+                    if (node.has("actions") && node.path("actions").isArray() && !node.path("actions").isEmpty())
+                    {
+                        final JsonNode firstAction = node.path("actions").get(0);
+                        if (firstAction.has("reasoning") && !firstAction.path("reasoning").asText().isBlank())
+                        {
+                            return firstAction.path("reasoning").asText().trim();
+                        }
+                    }
+                    return null;
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+        return trimmed;
+    }
+
+    private static void logToolCall(final ToolCall call)
+    {
+        final String toolName = call.toolName();
+        final JsonNode args = call.arguments();
+        if (args == null || args.isEmpty() || (args.isObject() && args.size() == 0))
+        {
+            LOGGER.info("🔧 Tool Call: {}()", toolName);
+            return;
+        }
+
+        if (args.isObject() && args.size() == 1)
+        {
+            final String key = args.fieldNames().next();
+            final JsonNode val = args.get(key);
+            final String valStr = formatJsonValue(val);
+            LOGGER.info("🔧 Tool Call: {}({}={})", toolName, key, valStr);
+            return;
+        }
+
+        if (args.isObject() && args.size() <= 5)
+        {
+            LOGGER.info("🔧 Tool Call: {}", toolName);
+            for (final Map.Entry<String, JsonNode> entry : args.properties())
+            {
+                final String valStr = formatJsonValue(entry.getValue());
+                LOGGER.info("   • {}: {}", entry.getKey(), valStr);
+            }
+            return;
+        }
+
+        LOGGER.info("🔧 Tool Call: {}\n{}", toolName, indent(prettyPrintJson(args), "   "));
+    }
+
+    private static String formatJsonValue(final JsonNode val)
+    {
+        if (val == null || val.isNull())
+        {
+            return "null";
+        }
+        if (val.isTextual())
+        {
+            return "\"" + val.asText() + "\"";
+        }
+        return val.toString();
+    }
+
+    private static void logToolResult(final String toolName, final String rawContent)
+    {
+        if (rawContent == null || rawContent.isBlank())
+        {
+            LOGGER.info("📥 Result [{}]: SUCCESS", toolName);
+            return;
+        }
+
+        final String trimmed = rawContent.trim();
+        if (trimmed.startsWith("{") && trimmed.endsWith("}"))
+        {
+            try
+            {
+                final JsonNode node = MAPPER.readTree(trimmed);
+                final String status = node.path("status").asText("SUCCESS");
+                final String icon = "SUCCESS".equalsIgnoreCase(status) ? "" : "❌ ";
+
+                if (node.has("message"))
+                {
+                    LOGGER.info("📥 Result [{}]: {}{} - {}", toolName, icon, status, node.path("message").asText());
+                    return;
+                }
+                if (node.has("error"))
+                {
+                    LOGGER.info("📥 Result [{}]: ❌ {} - {}", toolName, status, node.path("error").asText());
+                    return;
+                }
+                if (node.has("matches") && node.path("matches").isArray())
+                {
+                    final JsonNode matches = node.path("matches");
+                    final int count = matches.size();
+                    if (count == 0)
+                    {
+                        LOGGER.info("📥 Result [{}]: {}{} - no matching elements found", toolName, icon, status);
+                        return;
+                    }
+                    final StringBuilder sb = new StringBuilder();
+                    sb.append(icon).append(status).append(" - found ").append(count).append(" match").append(count == 1 ? "" : "es").append(":");
+                    for (int i = 0; i < Math.min(count, 5); i++)
+                    {
+                        final JsonNode m = matches.get(i);
+                        final String sel = m.path("selector").asText("");
+                        final String text = m.path("text").asText("");
+                        final String snippet = text.length() > 60 ? text.substring(0, 57) + "..." : text;
+                        sb.append("\n   • ").append(sel);
+                        if (!snippet.isBlank())
+                        {
+                            sb.append(" (\"").append(snippet.replace("\n", " ").trim()).append("\")");
+                        }
+                    }
+                    if (count > 5)
+                    {
+                        sb.append("\n   • ... and ").append(count - 5).append(" more");
+                    }
+                    LOGGER.info("📥 Result [{}]: {}", toolName, sb.toString());
+                    return;
+                }
+                if (node.has("text"))
+                {
+                    final String text = node.path("text").asText();
+                    final String targetInfo = node.has("target") ? " on '" + node.path("target").asText() + "'" : "";
+                    if (!text.contains("\n") && text.length() < 120)
+                    {
+                        LOGGER.info("📥 Result [{}]: {}{} - text{}: \"{}\"", toolName, icon, status, targetInfo, text);
+                    }
+                    else
+                    {
+                        LOGGER.info("📥 Result [{}]: {}{} - text{}:\n{}", toolName, icon, status, targetInfo, indent(text, "   "));
+                    }
+                    return;
+                }
+                if (node.has("action"))
+                {
+                    final String act = node.path("action").asText();
+                    if ("assert_text".equals(act) && node.has("target") && node.has("expected"))
+                    {
+                        final String tgt = node.path("target").asText();
+                        final String exp = node.path("expected").asText();
+                        LOGGER.info("📥 Result [{}]: {}{} - verified text \"{}\" on '{}'", toolName, icon, status, exp, tgt);
+                        return;
+                    }
+                    if ("assert_element_state".equals(act) && node.has("target") && node.has("state"))
+                    {
+                        final String tgt = node.path("target").asText();
+                        final String st = node.path("state").asText();
+                        LOGGER.info("📥 Result [{}]: {}{} - verified element state '{}' on '{}'", toolName, icon, status, st, tgt);
+                        return;
+                    }
+                    if ("assert_attribute".equals(act) && node.has("target") && node.has("attribute"))
+                    {
+                        final String tgt = node.path("target").asText();
+                        final String attr = node.path("attribute").asText();
+                        final String exp = node.has("expectedValue") ? "=\"" + node.path("expectedValue").asText() + "\"" : "";
+                        LOGGER.info("📥 Result [{}]: {}{} - verified attribute '{}{}' on '{}'", toolName, icon, status, attr, exp, tgt);
+                        return;
+                    }
+                    if ("navigate".equals(act) && node.has("url"))
+                    {
+                        final String url = node.path("url").asText();
+                        LOGGER.info("📥 Result [{}]: {}{} - navigated to {}", toolName, icon, status, url);
+                        return;
+                    }
+                    if ("screenshot".equals(act) && node.has("width") && node.has("height"))
+                    {
+                        final int w = node.path("width").asInt();
+                        final int h = node.path("height").asInt();
+                        final long bytes = node.path("sizeBytes").asLong(0);
+                        final String sizeKb = bytes > 0 ? ", " + (bytes / 1024) + " KB" : "";
+                        LOGGER.info("📥 Result [{}]: {}{} - captured screenshot ({}x{} px{})", toolName, icon, status, w, h, sizeKb);
+                        return;
+                    }
+                    if ("scroll".equals(act))
+                    {
+                        final int x = node.path("x").asInt(0);
+                        final int y = node.path("y").asInt(0);
+                        LOGGER.info("📥 Result [{}]: {}{} - scrolled (x={}, y={})", toolName, icon, status, x, y);
+                        return;
+                    }
+                    if ("click".equals(act) && node.has("target"))
+                    {
+                        LOGGER.info("📥 Result [{}]: {}{} - clicked '{}'", toolName, icon, status, node.path("target").asText());
+                        return;
+                    }
+                    if ("type".equals(act) && node.has("target"))
+                    {
+                        final String val = node.has("value") ? " \"" + node.path("value").asText() + "\"" : "";
+                        LOGGER.info("📥 Result [{}]: {}{} - typed{} into '{}'", toolName, icon, status, val, node.path("target").asText());
+                        return;
+                    }
+                    if ("select".equals(act) && node.has("target"))
+                    {
+                        final String val = node.has("value") ? " \"" + node.path("value").asText() + "\"" : "";
+                        LOGGER.info("📥 Result [{}]: {}{} - selected{} in '{}'", toolName, icon, status, val, node.path("target").asText());
+                        return;
+                    }
+                    if ("check".equals(act) && node.has("target"))
+                    {
+                        final boolean chk = !node.has("checked") || node.path("checked").asBoolean(true);
+                        LOGGER.info("📥 Result [{}]: {}{} - {} '{}'", toolName, icon, status, chk ? "checked" : "unchecked", node.path("target").asText());
+                        return;
+                    }
+                    if ("hover".equals(act) && node.has("target"))
+                    {
+                        LOGGER.info("📥 Result [{}]: {}{} - hovered over '{}'", toolName, icon, status, node.path("target").asText());
+                        return;
+                    }
+                    if ("press_key".equals(act) && node.has("key"))
+                    {
+                        LOGGER.info("📥 Result [{}]: {}{} - pressed key '{}'", toolName, icon, status, node.path("key").asText());
+                        return;
+                    }
+                    if ("execute_script".equals(act))
+                    {
+                        final String scriptRes = node.path("result").asText("");
+                        LOGGER.info("📥 Result [{}]: {}{} - executed script -> {}", toolName, icon, status, scriptRes);
+                        return;
+                    }
+                    if (node.has("target"))
+                    {
+                        final String tgt = node.path("target").asText();
+                        final String valInfo = node.has("value") ? " with value \"" + node.path("value").asText() + "\"" : "";
+                        LOGGER.info("📥 Result [{}]: {}{} - {} on '{}'{}", toolName, icon, status, act, tgt, valInfo);
+                        return;
+                    }
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        if (trimmed.startsWith("AssertionError"))
+        {
+            LOGGER.info("📥 Result [{}]: ❌ {}", toolName, trimmed);
+            return;
+        }
+
+        if (!trimmed.contains("\n") && trimmed.length() < 120)
+        {
+            LOGGER.info("📥 Result [{}]: SUCCESS - {}", toolName, trimmed);
+        }
+        else
+        {
+            LOGGER.info("📥 Result [{}]:\n{}", toolName, indent(prettyPrintJson(trimmed), "   "));
+        }
+    }
+
+    /**
+     * Extracts normalized element signatures from a simplified DOM text string.
+     *
+     * @param textContent the raw simplified DOM text
+     * @return set of unique normalized element signatures
+     */
+    static Set<String> extractElementSignatures(final String textContent)
+    {
+        if (textContent == null || textContent.isBlank())
+        {
+            return Collections.emptySet();
+        }
+        final Set<String> signatures = new HashSet<>();
+        final String[] lines = textContent.split("\r?\n");
+        for (final String line : lines)
+        {
+            final String trimmed = line.trim();
+            if (isElementLine(trimmed))
+            {
+                signatures.add(computeElementSignature(trimmed));
+            }
+        }
+        return signatures;
+    }
+
+    /**
+     * Annotates newly appeared elements in the simplified DOM text with {@code *[NEW] }.
+     *
+     * @param textContent the current simplified DOM text
+     * @param previousSignatures set of element signatures observed in prior turn(s)
+     * @return annotated simplified DOM text
+     */
+    static String annotateNewElements(final String textContent, final Set<String> previousSignatures)
+    {
+        if (textContent == null || textContent.isBlank() || previousSignatures == null || previousSignatures.isEmpty())
+        {
+            return textContent;
+        }
+        final String[] lines = textContent.split("\r?\n", -1);
+        final StringBuilder sb = new StringBuilder(textContent.length() + 256);
+        for (int i = 0; i < lines.length; i++)
+        {
+            final String line = lines[i];
+            final String trimmed = line.trim();
+            if (isElementLine(trimmed) && !trimmed.startsWith("*[NEW] "))
+            {
+                final String sig = computeElementSignature(trimmed);
+                if (!previousSignatures.contains(sig))
+                {
+                    final int tagIdx = line.indexOf('<');
+                    if (tagIdx >= 0)
+                    {
+                        sb.append(line, 0, tagIdx).append("*[NEW] ").append(line.substring(tagIdx));
+                    }
+                    else
+                    {
+                        sb.append("*[NEW] ").append(line);
+                    }
+                }
+                else
+                {
+                    sb.append(line);
+                }
+            }
+            else
+            {
+                sb.append(line);
+            }
+            if (i < lines.length - 1)
+            {
+                sb.append("\n");
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Determines whether a trimmed DOM text line represents an opening or leaf element node.
+     *
+     * @param trimmed the trimmed line
+     * @return true if the line represents an opening or leaf element
+     */
+    private static boolean isElementLine(final String trimmed)
+    {
+        return trimmed != null
+                && trimmed.startsWith("<")
+                && !trimmed.startsWith("</")
+                && !trimmed.startsWith("<!--")
+                && !trimmed.startsWith("<!");
+    }
+
+    /**
+     * Computes a normalized signature for an element line by stripping volatile attributes.
+     *
+     * @param line the element line
+     * @return normalized signature
+     */
+    static String computeElementSignature(final String line)
+    {
+        if (line == null)
+        {
+            return "";
+        }
+        String sig = line.trim();
+        if (sig.startsWith("*[NEW] "))
+        {
+            sig = sig.substring(7).trim();
+        }
+        sig = sig.replaceAll("\\s*data-ai=\"[^\"]*\"", "");
+        sig = sig.replaceAll("\\s*frameId=\"[^\"]*\"", "");
+        sig = sig.replaceAll("\\s+", " ");
+        return sig;
+    }
+
+    /**
+     * Safely escapes special characters in session variable values for single-line prompt rendering.
+     *
+     * @param value raw session variable value
+     * @return safely escaped string representation
+     */
+    static String escapeSessionVariableValue(final Object value)
+    {
+        if (value == null)
+        {
+            return "";
+        }
+        final String str = String.valueOf(value);
+        final StringBuilder sb = new StringBuilder(str.length() + 8);
+        for (int i = 0; i < str.length(); i++)
+        {
+            final char c = str.charAt(i);
+            switch (c)
+            {
+                case '\\' -> sb.append("\\\\");
+                case '"' -> sb.append("\\\"");
+                case '\n' -> sb.append("\\n");
+                case '\r' -> sb.append("\\r");
+                case '\t' -> sb.append("\\t");
+                default -> sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Generates a passive diagnostic alert string if any server-side HTTP 5xx failures or
+     * unhandled SEVERE JavaScript errors are present in the monitor buffers.
+     *
+     * @param netMonitor active network traffic monitor
+     * @param consoleMonitor active console log monitor
+     * @return concise diagnostic alert text, or null if buffers are clean or contain no severe errors
+     */
+    public static String generatePassiveDiagnosticAlert(
+        final NetworkTrafficMonitor netMonitor,
+        final ConsoleLogMonitor consoleMonitor)
+    {
+        final StringBuilder alert = new StringBuilder();
+
+        if (netMonitor != null)
+        {
+            final List<NetworkFailure> serverFailures = netMonitor.getFailures("5xx", 5, false);
+            if (!serverFailures.isEmpty())
+            {
+                final NetworkFailure first = serverFailures.get(0);
+                alert.append("[Diagnostic Alert]: Detected ")
+                     .append(serverFailures.size())
+                     .append(" HTTP ")
+                     .append(first.statusCode())
+                     .append(" on endpoint '")
+                     .append(first.url())
+                     .append("'. Avoid retrying selectors if the SUT state did not update due to application failure.");
+            }
+        }
+
+        if (consoleMonitor != null)
+        {
+            final List<ConsoleLogEntry> severeLogs = consoleMonitor.getLogs("SEVERE", 5, false);
+            if (!severeLogs.isEmpty())
+            {
+                if (alert.length() > 0)
+                {
+                    alert.append("\n");
+                }
+                final ConsoleLogEntry first = severeLogs.get(0);
+                alert.append("[Diagnostic Alert]: Detected unhandled JavaScript error: ")
+                     .append(first.message())
+                     .append(" in ")
+                     .append(first.source())
+                     .append(first.lineNumber() > 0 ? (":" + first.lineNumber()) : "")
+                     .append(". SUT state may not have updated due to application crash.");
+            }
+        }
+
+        return alert.length() > 0 ? alert.toString() : null;
+    }
+}

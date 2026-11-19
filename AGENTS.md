@@ -49,7 +49,7 @@
 ## Coding Standards
 - **TDD:** Write unit/integration tests before implementing new functionality. Ensure full coverage.
 - **Style:** Allman code style (new line braces), document non-obvious logic and all public API, JDK 21 features.
-- **Headers:** Add GNU AGPLv3 license header to all AI-related source files, but MIT license header for the rest.
+- **Headers:** Add GNU AGPLv3 + Commercial dual-license header to all AI-related source files, but MIT license header for Neodymium Classic / Core.
 - **Attribution:** Do not use inline comments like `// AI-generated: <Model>`. Use `@author` tags on class/interface Javadoc level instead (e.g., `@author AI-generated: <Model Name>`), and always add a second author tag for `Xceptance GmbH 2026`.
 - **Strict Java:** Aggressive `final` modifiers on method arguments, immutable fields, and non-reassigned local variables. Do NOT force `final` where variables are legitimately reassigned or mutated (e.g. accumulators, fallbacks, or try/catch recovery). NO inline FQCNs; use explicit top imports. Unused imports and variables are strictly prohibited.
 - **Documentation:** Write proper method comments, inline comments, class comments, and clearly document what fields are for. Make it as useful for a human as possible. Also keep in mind, that this is also documentation for AI to reconstruct decisions.

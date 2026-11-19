@@ -1,29 +1,28 @@
 /*
- * MIT License
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
  *
- * Copyright (c) 2026 Xceptance
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.neodymium.license;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -31,148 +30,174 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
-
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Architectural safety net enforcing strict module copyleft boundary and isolation.
- * Verifies that neodymium-core has zero compile-time or runtime dependencies on AI packages,
- * Langchain4j, or Aura components, ensuring neodymium-core remains pure MIT.
+ * Architectural safety net enforcing compliance across all license types in Neodymium:
+ * <ul>
+ *   <li>Dual Licensing (GNU AGPLv3 + Commercial) for AI modules ({@code neodymium-core}, {@code aura-manager}, {@code neodymium-test-server})</li>
+ *   <li>Apache 2.0 with Section 4(b) modification notices ({@code JdkHttpClient.java})</li>
+ *   <li>BSD 2-Clause (HTMX) and SIL Open Font License 1.1 third-party assets</li>
+ *   <li>Root multi-license governance ({@code LICENSE} and {@code NOTICE})</li>
+ * </ul>
  *
  * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
 public class LicenseComplianceTest
 {
-    private static final List<String> FORBIDDEN_PACKAGE_PREFIXES = List.of(
-        "org.neodymium.ai",
-        "com.xceptance.neodymium.ai",
-        "com.xceptance.neodymium.aura",
-        "dev.langchain4j"
-    );
+    private static final String EXPECTED_DUAL_LICENSE_PREFIX = "/*\n * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial";
+    private static final String EXPECTED_COMMERCIAL_NOTICE = "Alternatively, this program may be used under the terms of a commercial";
+    private static final String EXPECTED_AGPL_NOTICE = "GNU Affero General Public License";
 
     @Test
-    @DisplayName("Verify Langchain4j is not on classpath of neodymium-core")
-    public void testLangchain4jNotOnClasspath()
+    @DisplayName("Assert that all Java source and test files in neodymium-core carry canonical dual-license header")
+    public void testCoreJavaFilesHaveDualLicenseHeader()
     {
-        Assertions.assertThrows(
-            ClassNotFoundException.class,
-            () -> Class.forName("dev.langchain4j.model.chat.ChatLanguageModel"),
-            "dev.langchain4j.model.chat.ChatLanguageModel must not be present on neodymium-core classpath"
-        );
+        assertDualLicenseHeadersInDirectory(findRepoRoot().resolve("neodymium-core"), "neodymium-core");
     }
 
     @Test
-    @DisplayName("Verify AI facades and runners are not on classpath of neodymium-core")
-    public void testAiClassesNotOnClasspath()
+    @DisplayName("Assert that neodymium-core pom.xml explicitly declares both AGPLv3 and Commercial licenses")
+    public void testCorePomDeclaresDualLicense() throws IOException
     {
-        final List<String> aiClasses = List.of(
-            "org.neodymium.ai.NeodymiumAi",
-            "org.neodymium.ai.junit.NeodymiumAiRunner",
-            "org.neodymium.ai.junit.NeodymiumAiTest",
-            "com.xceptance.neodymium.ai.console.InteractiveConsoleEngine",
-            "com.xceptance.neodymium.aura.AuraFileService"
-        );
-
-        for (final String className : aiClasses)
-        {
-            Assertions.assertThrows(
-                ClassNotFoundException.class,
-                () -> Class.forName(className),
-                className + " must not be resolvable in neodymium-core"
-            );
-        }
+        assertPomDeclaresDualLicense(findRepoRoot().resolve("neodymium-core/pom.xml"), "neodymium-core");
     }
 
     @Test
-    @DisplayName("Verify neodymium-core main source tree contains zero AI or Langchain4j imports")
-    public void testZeroAiImportsInCoreMainSources() throws IOException
+    @DisplayName("Assert that JdkHttpClient preserves Apache 2.0 Section 4(b) modification notice")
+    public void testForkedSeleniumHttpClientPreservesApacheNotice() throws IOException
     {
-        final Path mainJavaDir = Path.of("src/main/java");
-        final Path targetDir = Files.exists(mainJavaDir) ? mainJavaDir : Path.of("neodymium-core/src/main/java");
-        Assertions.assertTrue(Files.isDirectory(targetDir), "Main source directory must exist: " + targetDir);
+        final Path jdkHttpClient = findRepoRoot().resolve("neodymium-core/src/main/java/org/openqa/selenium/remote/http/jdk/JdkHttpClient.java");
+        Assertions.assertTrue(Files.exists(jdkHttpClient), "JdkHttpClient.java must exist at: " + jdkHttpClient);
 
-        final List<String> violations = new ArrayList<>();
-        try (final Stream<Path> pathStream = Files.walk(targetDir))
-        {
-            pathStream.filter(p -> p.toString().endsWith(".java")).forEach(javaFile ->
-            {
-                try
-                {
-                    final List<String> lines = Files.readAllLines(javaFile, StandardCharsets.UTF_8);
-                    for (int i = 0; i < lines.size(); i++)
-                    {
-                        final String line = lines.get(i).trim();
-                        if (line.startsWith("import "))
-                        {
-                            for (final String forbidden : FORBIDDEN_PACKAGE_PREFIXES)
-                            {
-                                if (line.startsWith("import " + forbidden) || line.startsWith("import static " + forbidden))
-                                {
-                                    violations.add(javaFile + ":" + (i + 1) + " -> " + line);
-                                }
-                            }
-                        }
-                    }
-                }
-                catch (final IOException e)
-                {
-                    throw new RuntimeException("Failed reading file: " + javaFile, e);
-                }
-            });
-        }
-
+        final String content = Files.readString(jdkHttpClient, StandardCharsets.UTF_8);
         Assertions.assertTrue(
-            violations.isEmpty(),
-            "Found forbidden AI/Langchain4j imports in neodymium-core main sources:\n" + String.join("\n", violations)
+            content.contains("Apache License, Version 2.0"),
+            "JdkHttpClient.java must retain Apache 2.0 notice"
         );
-    }
-
-    @Test
-    @DisplayName("Verify neodymium-core built classes contain zero AI or Aura package artifacts")
-    public void testZeroAiClassesInTargetClasses() throws IOException
-    {
-        final Path targetClasses = Path.of("target/classes");
-        final Path classesDir = Files.exists(targetClasses) ? targetClasses : Path.of("neodymium-core/target/classes");
-        if (!Files.isDirectory(classesDir))
-        {
-            return;
-        }
-
-        final List<String> violations = new ArrayList<>();
-        try (final Stream<Path> stream = Files.walk(classesDir))
-        {
-            stream.filter(p -> p.toString().endsWith(".class")).forEach(classFile ->
-            {
-                final String relativePath = classesDir.relativize(classFile).toString().replace(File.separatorChar, '.');
-                for (final String forbidden : FORBIDDEN_PACKAGE_PREFIXES)
-                {
-                    if (relativePath.startsWith(forbidden))
-                    {
-                        violations.add(relativePath);
-                    }
-                }
-            });
-        }
-
         Assertions.assertTrue(
-            violations.isEmpty(),
-            "Found compiled classes in forbidden AI/Aura packages under neodymium-core:\n" + String.join("\n", violations)
+            content.contains("Section 4(b)") || content.contains("MODIFICATIONS NOTICE") || content.contains("prominent notices stating that You changed the files"),
+            "JdkHttpClient.java must contain Section 4(b) modification notice"
         );
     }
 
     @Test
-    @DisplayName("Verify all Java sources in neodymium-core are MIT licensed and contain zero copyleft notices")
-    public void testZeroCopyleftHeadersAndFullMitCoverage() throws IOException
+    @DisplayName("Assert that aura-manager declares dual-license in POM and all Java files")
+    public void testAuraManagerDeclaresDualLicenseAndCanonicalHeaders() throws IOException
     {
-        final Path coreRoot = Files.exists(Path.of("src/main/java")) ? Path.of(".") : Path.of("neodymium-core");
-        final Path mainJava = coreRoot.resolve("src/main/java");
-        final Path testJava = coreRoot.resolve("src/test/java");
+        assertPomDeclaresDualLicense(findRepoRoot().resolve("aura-manager/pom.xml"), "aura-manager");
+        assertDualLicenseHeadersInDirectory(findRepoRoot().resolve("aura-manager"), "aura-manager");
+    }
 
-        final List<String> missingMitHeader = new ArrayList<>();
-        final List<String> copyleftContaminated = new ArrayList<>();
+    @Test
+    @DisplayName("Assert that neodymium-test-server declares dual-license in POM and all Java files")
+    public void testNeodymiumTestServerDeclaresDualLicenseAndCanonicalHeaders() throws IOException
+    {
+        assertPomDeclaresDualLicense(findRepoRoot().resolve("neodymium-test-server/pom.xml"), "neodymium-test-server");
+        assertDualLicenseHeadersInDirectory(findRepoRoot().resolve("neodymium-test-server"), "neodymium-test-server");
+    }
+
+    @Test
+    @DisplayName("Assert that root LICENSE covers all three licensing tiers: MIT, AGPLv3, and Commercial")
+    public void testRootLicenseCoversAllThreeLicenseTiers() throws IOException
+    {
+        final Path licenseFile = findRepoRoot().resolve("LICENSE");
+        Assertions.assertTrue(Files.exists(licenseFile), "Root LICENSE file must exist");
+
+        final String content = Files.readString(licenseFile, StandardCharsets.UTF_8);
+        Assertions.assertTrue(
+            content.contains("SECTION A: MIT LICENSE (Neodymium Classic)"),
+            "Root LICENSE must contain Section A for Neodymium Classic (MIT)"
+        );
+        Assertions.assertTrue(
+            content.contains("SECTION B: GNU AFFERO GENERAL PUBLIC LICENSE (Neodymium AI)"),
+            "Root LICENSE must contain Section B for Neodymium AI (AGPLv3)"
+        );
+        Assertions.assertTrue(
+            content.contains("SECTION C: COMMERCIAL LICENSE (Neodymium AI)"),
+            "Root LICENSE must contain Section C for Neodymium AI (Commercial)"
+        );
+    }
+
+    @Test
+    @DisplayName("Assert that root NOTICE documents all third-party licenses and code provenance")
+    public void testRootNoticeDocumentsAllThirdPartyLicenses() throws IOException
+    {
+        final Path noticeFile = findRepoRoot().resolve("NOTICE");
+        Assertions.assertTrue(Files.exists(noticeFile), "Root NOTICE file must exist");
+
+        final String content = Files.readString(noticeFile, StandardCharsets.UTF_8);
+        Assertions.assertTrue(
+            content.contains("Selenium / Software Freedom Conservancy") && content.contains("Apache License, Version 2.0"),
+            "NOTICE must document Selenium Apache 2.0 attribution and Section 4(b) compliance"
+        );
+        Assertions.assertTrue(
+            content.contains("HTMX") && content.contains("BSD 2-Clause License"),
+            "NOTICE must document HTMX BSD 2-Clause attribution"
+        );
+        Assertions.assertTrue(
+            content.contains("Google Material Symbols") && content.contains("Apache License, Version 2.0"),
+            "NOTICE must document Google Material Symbols Apache 2.0 attribution"
+        );
+        Assertions.assertTrue(
+            content.contains("SIL Open Font License"),
+            "NOTICE must document SIL Open Font License attribution"
+        );
+        Assertions.assertTrue(
+            content.contains("Neodymium Classic") && content.contains("MIT License"),
+            "NOTICE must document Neodymium Classic MIT license"
+        );
+    }
+
+    @Test
+    @DisplayName("Assert that bundled third-party static assets preserve their upstream license notices")
+    public void testThirdPartyStaticAssetsPreserveLicenses() throws IOException
+    {
+        final Path testServerRoot = findRepoRoot().resolve("neodymium-test-server");
+
+        final Path htmxFile = testServerRoot.resolve("src/main/resources/ai-test-pages/shared/htmx.js");
+        Assertions.assertTrue(Files.exists(htmxFile), "htmx.js must exist at: " + htmxFile);
+        final String htmxContent = Files.readString(htmxFile, StandardCharsets.UTF_8);
+        Assertions.assertTrue(
+            htmxContent.contains("BSD 2-Clause License") && htmxContent.contains("Big Sky Software"),
+            "htmx.js must preserve BSD 2-Clause copyright and license header"
+        );
+
+        final Path oflFile = testServerRoot.resolve("src/main/resources/ai-test-pages/shared/fonts/OFL.txt");
+        Assertions.assertTrue(Files.exists(oflFile), "OFL.txt must exist at: " + oflFile);
+        final String oflContent = Files.readString(oflFile, StandardCharsets.UTF_8);
+        Assertions.assertTrue(
+            oflContent.contains("SIL OPEN FONT LICENSE (OFL-1.1)"),
+            "OFL.txt must specify SIL Open Font License (OFL-1.1)"
+        );
+    }
+
+    private static Path findRepoRoot()
+    {
+        final Path cwd = Path.of(".").toAbsolutePath().normalize();
+        if (Files.exists(cwd.resolve("LICENSE")) && Files.exists(cwd.resolve("NOTICE")))
+        {
+            return cwd;
+        }
+        final Path parent = cwd.getParent();
+        if (parent != null && Files.exists(parent.resolve("LICENSE")) && Files.exists(parent.resolve("NOTICE")))
+        {
+            return parent;
+        }
+        throw new IllegalStateException("Unable to locate Neodymium repository root from " + cwd);
+    }
+
+    private static void assertDualLicenseHeadersInDirectory(final Path rootDir, final String moduleName)
+    {
+        final Path mainJava = rootDir.resolve("src/main/java");
+        final Path testJava = rootDir.resolve("src/test/java");
+
+        final List<String> missingDualLicenseHeader = new ArrayList<>();
+        final List<String> missingCommercialClause = new ArrayList<>();
+        final List<String> missingAgplClause = new ArrayList<>();
 
         for (final Path srcDir : List.of(mainJava, testJava))
         {
@@ -187,37 +212,31 @@ public class LicenseComplianceTest
                     final String fileName = javaFile.getFileName().toString();
                     if ("JdkHttpClient.java".equals(fileName))
                     {
-                        // Verified upstream Selenium fork under Apache 2.0 with Section 4(b) modification notice
+                        // Forked Selenium HTTP client under Apache 2.0 with Section 4(b) modification notice
                         return;
                     }
 
                     try
                     {
                         final String content = Files.readString(javaFile, StandardCharsets.UTF_8);
-                        final String trimmed = content.stripLeading();
+                        final String normalized = content.replace("\r\n", "\n").stripLeading();
 
-                        if (!trimmed.startsWith("/*\n * MIT License") && !trimmed.startsWith("/*\r\n * MIT License"))
+                        if (!normalized.startsWith(EXPECTED_DUAL_LICENSE_PREFIX))
                         {
-                            missingMitHeader.add(javaFile.toString());
+                            missingDualLicenseHeader.add(javaFile.toString());
                         }
 
-                        // Inspect the file header comment for any copyleft license notices
-                        final int headerEnd = content.indexOf("*/");
-                        final String header = (headerEnd > 0) ? content.substring(0, headerEnd) : "";
+                        final int headerEnd = normalized.indexOf("*/");
+                        final String header = (headerEnd > 0) ? normalized.substring(0, headerEnd) : "";
 
-                        if (header.contains("GNU Affero General Public License")
-                            || header.contains("AGPL")
-                            || header.contains("General Public License"))
+                        if (!header.contains(EXPECTED_COMMERCIAL_NOTICE))
                         {
-                            copyleftContaminated.add(javaFile.toString());
+                            missingCommercialClause.add(javaFile.toString());
                         }
 
-                        // Also verify no other file in core contains copyleft references in its body
-                        if (!"LicenseComplianceTest.java".equals(fileName)
-                            && (content.contains("GNU Affero General Public License")
-                                || content.contains("General Public License")))
+                        if (!header.contains(EXPECTED_AGPL_NOTICE))
                         {
-                            copyleftContaminated.add(javaFile.toString());
+                            missingAgplClause.add(javaFile.toString());
                         }
                     }
                     catch (final IOException e)
@@ -226,16 +245,40 @@ public class LicenseComplianceTest
                     }
                 });
             }
+            catch (final IOException e)
+            {
+                throw new RuntimeException("Failed walking directory " + srcDir, e);
+            }
         }
 
         Assertions.assertTrue(
-            missingMitHeader.isEmpty(),
-            "Found Java files in neodymium-core without standard MIT license header:\n" + String.join("\n", missingMitHeader)
+            missingDualLicenseHeader.isEmpty(),
+            "Found Java files in " + moduleName + " missing canonical dual-license header:\n" + String.join("\n", missingDualLicenseHeader)
         );
 
         Assertions.assertTrue(
-            copyleftContaminated.isEmpty(),
-            "Found copyleft (GPL/AGPL) license references inside neodymium-core:\n" + String.join("\n", copyleftContaminated)
+            missingCommercialClause.isEmpty(),
+            "Found Java files in " + moduleName + " missing commercial license clause:\n" + String.join("\n", missingCommercialClause)
+        );
+
+        Assertions.assertTrue(
+            missingAgplClause.isEmpty(),
+            "Found Java files in " + moduleName + " missing AGPLv3 clause:\n" + String.join("\n", missingAgplClause)
+        );
+    }
+
+    private static void assertPomDeclaresDualLicense(final Path pomPath, final String moduleName) throws IOException
+    {
+        Assertions.assertTrue(Files.exists(pomPath), moduleName + " pom.xml must exist at: " + pomPath);
+
+        final String pomContent = Files.readString(pomPath, StandardCharsets.UTF_8);
+        Assertions.assertTrue(
+            pomContent.contains("GNU Affero General Public License, Version 3"),
+            moduleName + " pom.xml must declare GNU Affero General Public License, Version 3"
+        );
+        Assertions.assertTrue(
+            pomContent.contains("Xceptance Commercial License"),
+            moduleName + " pom.xml must declare Xceptance Commercial License"
         );
     }
 }
