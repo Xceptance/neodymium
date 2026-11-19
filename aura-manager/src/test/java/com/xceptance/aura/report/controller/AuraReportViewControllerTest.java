@@ -59,6 +59,7 @@ import com.xceptance.aura.report.repository.TestRunTagRepository;
 import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.ReportDashboardSettingService;
 import com.xceptance.aura.report.service.RunStorageSyncService;
+import java.io.ByteArrayOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -77,7 +78,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.support.ResourceRegion;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.web.servlet.MockMvc;
@@ -5972,7 +5973,80 @@ public class AuraReportViewControllerTest
             Assertions.assertEquals(HttpStatus.PARTIAL_CONTENT, response.getStatusCode());
             Assertions.assertEquals("video/mp4", response.getHeaders().getContentType().toString());
             Assertions.assertEquals("bytes", response.getHeaders().getFirst("Accept-Ranges"));
-            Assertions.assertInstanceOf(ResourceRegion.class, response.getBody());
+            Assertions.assertEquals("bytes 0-4/20", response.getHeaders().getFirst("Content-Range"));
+            Assertions.assertEquals(5L, response.getHeaders().getContentLength());
+            Assertions.assertInstanceOf(StreamingResponseBody.class, response.getBody());
+
+            final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ((StreamingResponseBody) response.getBody()).writeTo(baos);
+            Assertions.assertEquals("01234", baos.toString());
+        }
+        finally
+        {
+            Files.deleteIfExists(videoFile);
+            Files.deleteIfExists(dir);
+            Files.deleteIfExists(Paths.get("storage/runs", runId));
+        }
+    }
+
+    @Test
+    public void testServeRunFileWithSuffixByteRangeReturns206PartialContent() throws Exception
+    {
+        final String runId = "test_run_suffix_range_" + System.currentTimeMillis();
+        final Path dir = Paths.get("storage/runs", runId, "SampleTestClass");
+        Files.createDirectories(dir);
+        final Path videoFile = dir.resolve("video-1.mp4");
+        Files.writeString(videoFile, "0123456789abcdefghij");
+
+        try
+        {
+            final ResponseEntity<?> response = controller.serveRunFile(
+                runId,
+                "SampleTestClass",
+                "video-1.mp4",
+                "bytes=-5"
+            );
+
+            Assertions.assertEquals(HttpStatus.PARTIAL_CONTENT, response.getStatusCode());
+            Assertions.assertEquals("video/mp4", response.getHeaders().getContentType().toString());
+            Assertions.assertEquals("bytes", response.getHeaders().getFirst("Accept-Ranges"));
+            Assertions.assertEquals("bytes 15-19/20", response.getHeaders().getFirst("Content-Range"));
+            Assertions.assertEquals(5L, response.getHeaders().getContentLength());
+            Assertions.assertInstanceOf(StreamingResponseBody.class, response.getBody());
+
+            final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ((StreamingResponseBody) response.getBody()).writeTo(baos);
+            Assertions.assertEquals("fghij", baos.toString());
+        }
+        finally
+        {
+            Files.deleteIfExists(videoFile);
+            Files.deleteIfExists(dir);
+            Files.deleteIfExists(Paths.get("storage/runs", runId));
+        }
+    }
+
+    @Test
+    public void testServeRunFileOutOfBoundsByteRangeReturns416() throws Exception
+    {
+        final String runId = "test_run_range_oob_" + System.currentTimeMillis();
+        final Path dir = Paths.get("storage/runs", runId, "SampleTestClass");
+        Files.createDirectories(dir);
+        final Path videoFile = dir.resolve("video-1.mp4");
+        Files.writeString(videoFile, "0123456789abcdefghij");
+
+        try
+        {
+            final ResponseEntity<?> response = controller.serveRunFile(
+                runId,
+                "SampleTestClass",
+                "video-1.mp4",
+                "bytes=100-200"
+            );
+
+            Assertions.assertEquals(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE, response.getStatusCode());
+            Assertions.assertEquals("bytes", response.getHeaders().getFirst("Accept-Ranges"));
+            Assertions.assertEquals("bytes */20", response.getHeaders().getFirst("Content-Range"));
         }
         finally
         {

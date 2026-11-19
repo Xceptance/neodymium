@@ -60,6 +60,7 @@ import com.xceptance.aura.report.service.DashboardEvaluationService;
 import com.xceptance.aura.report.service.DashboardEvaluationService.EvaluatedDashboardPage;
 import com.xceptance.aura.report.service.ReportDashboardSettingService;
 import com.xceptance.aura.report.service.RunStorageSyncService;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
@@ -97,7 +98,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
-import org.springframework.core.io.support.ResourceRegion;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpRange;
@@ -106,6 +106,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.util.StreamUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -114,6 +115,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 /**
  * Spring MVC View Controller serving Aura Report Manager page views and HTMX partial routes backed 100% by database and JSON storage.
@@ -5420,13 +5422,34 @@ public class AuraReportViewController
                     if (!ranges.isEmpty())
                     {
                         final HttpRange range = ranges.get(0);
-                        final ResourceRegion region = range.toResourceRegion(resource);
+                        final long totalLength = Files.size(path);
+                        final long start = range.getRangeStart(totalLength);
+                        final long end = range.getRangeEnd(totalLength);
+
+                        if (start > end || start >= totalLength)
+                        {
+                            return ResponseEntity.status(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                                .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                                .header(HttpHeaders.CONTENT_RANGE, "bytes */" + totalLength)
+                                .build();
+                        }
+
+                        final long rangeLength = end - start + 1L;
+                        final StreamingResponseBody responseBody = outputStream -> {
+                            try (final InputStream in = Files.newInputStream(path))
+                            {
+                                StreamUtils.copyRange(in, outputStream, start, end);
+                            }
+                        };
+
                         return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
                             .contentType(MediaType.parseMediaType(contentType))
                             .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                             .header("X-Content-Type-Options", "nosniff")
                             .header(HttpHeaders.ACCEPT_RANGES, "bytes")
-                            .body(region);
+                            .header(HttpHeaders.CONTENT_RANGE, "bytes " + start + "-" + end + "/" + totalLength)
+                            .contentLength(rangeLength)
+                            .body(responseBody);
                     }
                 }
                 catch (final IllegalArgumentException e)
@@ -5446,6 +5469,7 @@ public class AuraReportViewController
         }
         catch (final Exception e)
         {
+            LOG.warn("Failed to serve run file path={}: {}", path, e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }

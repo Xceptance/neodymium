@@ -52,6 +52,7 @@ import org.neodymium.ai.config.AiConfiguration;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
@@ -594,20 +595,20 @@ public final class InteractiveConsoleEngine {
                 {
                     final String indexedLogName = "execution-" + index + ".log";
                     writeStringIfChanged(logText, new File(structuredDir, indexedLogName));
-                    writeStringIfChanged(logText, new File(reportsStructuredDir, indexedLogName));
+                    tryWrite(logText, new File(reportsStructuredDir, indexedLogName));
                     if (auraStructuredDir != null)
                     {
-                        writeStringIfChanged(logText, new File(auraStructuredDir, indexedLogName));
+                        tryWrite(logText, new File(auraStructuredDir, indexedLogName));
                     }
 
                     final File defaultLogFile = new File(structuredDir, "execution.log");
                     if (!defaultLogFile.exists() || index == 1)
                     {
                         writeStringIfChanged(logText, defaultLogFile);
-                        writeStringIfChanged(logText, new File(reportsStructuredDir, "execution.log"));
+                        tryWrite(logText, new File(reportsStructuredDir, "execution.log"));
                         if (auraStructuredDir != null)
                         {
-                            writeStringIfChanged(logText, new File(auraStructuredDir, "execution.log"));
+                            tryWrite(logText, new File(auraStructuredDir, "execution.log"));
                         }
                     }
                 }
@@ -619,20 +620,20 @@ public final class InteractiveConsoleEngine {
                     {
                         final String playbookIndexed = "playbook-" + index + ".yaml";
                         writeStringIfChanged(playbookYaml, new File(structuredDir, playbookIndexed));
-                        writeStringIfChanged(playbookYaml, new File(reportsStructuredDir, playbookIndexed));
+                        tryWrite(playbookYaml, new File(reportsStructuredDir, playbookIndexed));
                         if (auraStructuredDir != null)
                         {
-                            writeStringIfChanged(playbookYaml, new File(auraStructuredDir, playbookIndexed));
+                            tryWrite(playbookYaml, new File(auraStructuredDir, playbookIndexed));
                         }
 
                         final File defaultPb = new File(structuredDir, "playbook.yaml");
                         if (!defaultPb.exists() || index == 1)
                         {
                             writeStringIfChanged(playbookYaml, defaultPb);
-                            writeStringIfChanged(playbookYaml, new File(reportsStructuredDir, "playbook.yaml"));
+                            tryWrite(playbookYaml, new File(reportsStructuredDir, "playbook.yaml"));
                             if (auraStructuredDir != null)
                             {
-                                writeStringIfChanged(playbookYaml, new File(auraStructuredDir, "playbook.yaml"));
+                                tryWrite(playbookYaml, new File(auraStructuredDir, "playbook.yaml"));
                             }
                         }
                     }
@@ -767,11 +768,11 @@ public final class InteractiveConsoleEngine {
 
                 AtomicFileUtils.writeStringAtomic(executionJson, contentToSave);
                 AtomicFileUtils.writeStringAtomic(structuredJson, contentToSave);
-                AtomicFileUtils.writeStringAtomic(reportsStructuredJson, contentToSave);
+                tryWriteAtomic(reportsStructuredJson, contentToSave);
                 if (auraStructuredDir != null)
                 {
                     final File auraStructuredJson = new File(auraStructuredDir, "console-execution-" + index + ".json");
-                    AtomicFileUtils.writeStringAtomic(auraStructuredJson, contentToSave);
+                    tryWriteAtomic(auraStructuredJson, contentToSave);
                 }
             }
             catch (final Exception e)
@@ -786,6 +787,42 @@ public final class InteractiveConsoleEngine {
         if (!dest.exists() || dest.length() != src.length() || dest.lastModified() < src.lastModified())
         {
             Files.copy(src.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    private static void tryWrite(final String content, final File dest)
+    {
+        try
+        {
+            if (dest.getParentFile() != null && !dest.getParentFile().exists())
+            {
+                dest.getParentFile().mkdirs();
+            }
+            if (dest.getParentFile() != null && dest.getParentFile().exists())
+            {
+                writeStringIfChanged(content, dest);
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+    }
+
+    private static void tryWriteAtomic(final File dest, final String content)
+    {
+        try
+        {
+            if (dest.getParentFile() != null && !dest.getParentFile().exists())
+            {
+                dest.getParentFile().mkdirs();
+            }
+            if (dest.getParentFile() != null && dest.getParentFile().exists())
+            {
+                AtomicFileUtils.writeStringAtomic(dest, content);
+            }
+        }
+        catch (final Exception ignored)
+        {
         }
     }
 
@@ -889,9 +926,11 @@ public final class InteractiveConsoleEngine {
                     targetTestDir.mkdirs();
                 }
 
+                File targetJsonFile = null;
                 int index = 1;
                 if (jsonFiles != null && jsonFiles.length > 0)
                 {
+                    long newestMod = -1L;
                     for (final File f : jsonFiles)
                     {
                         final String name = f.getName();
@@ -899,12 +938,27 @@ public final class InteractiveConsoleEngine {
                         {
                             try
                             {
-                                index = Integer.parseInt(name.substring("console-execution-".length(), name.length() - ".json".length()));
+                                final int parsedIdx = Integer.parseInt(name.substring("console-execution-".length(), name.length() - ".json".length()));
+                                if (parsedIdx >= index)
+                                {
+                                    index = parsedIdx;
+                                    targetJsonFile = f;
+                                }
                             }
                             catch (final Exception ignored)
                             {
                             }
                         }
+                        else if (f.lastModified() > newestMod && targetJsonFile == null)
+                        {
+                            newestMod = f.lastModified();
+                            targetJsonFile = f;
+                        }
+                    }
+
+                    if (targetJsonFile == null)
+                    {
+                        targetJsonFile = jsonFiles[0];
                     }
                 }
 
@@ -919,23 +973,51 @@ public final class InteractiveConsoleEngine {
                     LOG.warn("[InteractiveConsole] Could not copy video file to {}: {}", destVideo.getAbsolutePath(), e.getMessage());
                 }
 
-                if (jsonFiles != null && jsonFiles.length > 0)
+                if (targetJsonFile != null && targetJsonFile.exists())
                 {
-                    for (final File jsonFileToUpdate : jsonFiles)
+                    try
                     {
-                        try
-                        {
-                            final String jsonContent = Files.readString(jsonFileToUpdate.toPath(), StandardCharsets.UTF_8);
-                            final JsonObject parsedState = JsonParser.parseString(jsonContent).getAsJsonObject();
-                            parsedState.addProperty("videoUrl", videoName);
-                            parsedState.addProperty("videoPath", videoName);
-                            final String updatedJson = parsedState.toString();
+                        final String jsonContent = Files.readString(targetJsonFile.toPath(), StandardCharsets.UTF_8);
+                        final JsonObject parsedState = JsonParser.parseString(jsonContent).getAsJsonObject();
+                        parsedState.addProperty("videoUrl", videoName);
+                        parsedState.addProperty("videoPath", videoName);
 
-                            AtomicFileUtils.writeStringAtomic(jsonFileToUpdate, updatedJson);
-                        }
-                        catch (final Exception ignored)
+                        if (parsedState.has("attachments") && parsedState.get("attachments").isJsonArray())
                         {
+                            final JsonArray atts = parsedState.getAsJsonArray("attachments");
+                            boolean found = false;
+                            for (int aIdx = 0; aIdx < atts.size(); aIdx++)
+                            {
+                                final JsonElement el = atts.get(aIdx);
+                                if (el.isJsonObject())
+                                {
+                                    final JsonObject obj = el.getAsJsonObject();
+                                    final String p = obj.has("path") ? obj.get("path").getAsString() : "";
+                                    final String n = obj.has("name") ? obj.get("name").getAsString() : "";
+                                    if (videoName.equals(p) || videoName.equals(n))
+                                    {
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (!found)
+                            {
+                                final JsonObject videoAtt = new JsonObject();
+                                videoAtt.addProperty("name", videoName);
+                                videoAtt.addProperty("path", videoName);
+                                videoAtt.addProperty("type", ext.endsWith("gif") ? "gif" : "video");
+                                videoAtt.addProperty("contentType", ext.endsWith("gif") ? "image/gif" : "video/mp4");
+                                videoAtt.addProperty("openByDefault", true);
+                                atts.add(videoAtt);
+                            }
                         }
+
+                        final String updatedJson = parsedState.toString();
+                        AtomicFileUtils.writeStringAtomic(targetJsonFile, updatedJson);
+                    }
+                    catch (final Exception ignored)
+                    {
                     }
                 }
             }

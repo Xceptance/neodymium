@@ -7068,7 +7068,7 @@ function renderStepsForExecution(activeRow) {
             (a.path && (a.path.endsWith('.mp4') || a.path.endsWith('.webm') || a.path.startsWith('video-')))
         );
     }
-    const videoUrlAttr = videoAttachment ? videoAttachment.path : (hasExecAttachments ? '' : rawVideoAttr);
+    const videoUrlAttr = videoAttachment ? videoAttachment.path : rawVideoAttr;
     const hasVideo = videoUrlAttr && videoUrlAttr.trim().length > 0 && videoUrlAttr !== 'null';
 
     if (hasVideo && videoContainer && videoPlayer) {
@@ -7079,9 +7079,19 @@ function renderStepsForExecution(activeRow) {
             ? videoUrlAttr
             : `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(videoUrlAttr)}`;
 
+        const existingNotice = videoContainer.querySelector('.side-panel-video-error-notice');
+        if (existingNotice) {
+            existingNotice.remove();
+        }
+
         videoPlayer.onerror = function() {
-            if (videoContainer) {
-                videoContainer.style.display = 'none';
+            console.warn('[Report] Video playback error for:', src);
+            if (!videoContainer.querySelector('.side-panel-video-error-notice')) {
+                const notice = document.createElement('div');
+                notice.className = 'side-panel-video-error-notice text-muted';
+                notice.style.cssText = 'padding: 0.35rem 0.5rem; background: var(--bg-surface); border-radius: 4px; margin-top: 0.35rem; font-size: 0.72rem; display: flex; align-items: center; justify-content: space-between;';
+                notice.innerHTML = '<span><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle; color: var(--status-warn);">info</span> Video preview unavailable in browser.</span> <a href="' + src + '" target="_blank" download style="color: var(--accent); text-decoration: underline; font-weight: 500;">Download</a>';
+                videoPlayer.parentElement.appendChild(notice);
             }
         };
 
@@ -7095,6 +7105,10 @@ function renderStepsForExecution(activeRow) {
         }
     } else if (videoContainer) {
         videoContainer.style.display = 'none';
+        const existingNotice = videoContainer.querySelector('.side-panel-video-error-notice');
+        if (existingNotice) {
+            existingNotice.remove();
+        }
         if (videoPlayer) {
             videoPlayer.pause();
             videoPlayer.removeAttribute('src');
