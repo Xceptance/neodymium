@@ -38,6 +38,7 @@ public class NeodymiumCucumberRunListener extends RunListener
     @Override
     public void testFinished(Description description) throws Exception
     {
+        Neodymium.clearThreadContext();
         LOGGER.debug("Test finished: " + description.toString());
     }
 

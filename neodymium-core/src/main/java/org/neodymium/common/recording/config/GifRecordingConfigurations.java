@@ -50,7 +50,7 @@ public interface GifRecordingConfigurations extends RecordingConfigurations
 
     @Override
     @Key("gif.appendAllRecordingsToAllureReport")
-    @DefaultValue("true")
+    @DefaultValue("false")
     public boolean appendAllRecordingsToAllureReport();
 
     @Override

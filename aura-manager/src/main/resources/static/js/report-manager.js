@@ -7059,15 +7059,16 @@ function renderStepsForExecution(activeRow) {
 
     const rawVideoAttr = activeRow.getAttribute('data-video-url') || activeRow.getAttribute('data-video') || '';
     let videoAttachment = null;
-    if (activeRow._execDto && activeRow._execDto.attachments) {
+    const hasExecAttachments = activeRow._execDto && Array.isArray(activeRow._execDto.attachments);
+    if (hasExecAttachments) {
         videoAttachment = activeRow._execDto.attachments.find(a =>
             a.type === 'video' ||
             (rawVideoAttr && (a.path === rawVideoAttr || a.name === rawVideoAttr)) ||
-            (a.name && a.name.startsWith('video-')) ||
-            (a.path && a.path.startsWith('video-'))
+            (a.name && (a.name.endsWith('.mp4') || a.name.endsWith('.webm') || a.name.startsWith('video-'))) ||
+            (a.path && (a.path.endsWith('.mp4') || a.path.endsWith('.webm') || a.path.startsWith('video-')))
         );
     }
-    const videoUrlAttr = videoAttachment ? videoAttachment.path : rawVideoAttr;
+    const videoUrlAttr = videoAttachment ? videoAttachment.path : (hasExecAttachments ? '' : rawVideoAttr);
     const hasVideo = videoUrlAttr && videoUrlAttr.trim().length > 0 && videoUrlAttr !== 'null';
 
     if (hasVideo && videoContainer && videoPlayer) {
@@ -7077,6 +7078,12 @@ function renderStepsForExecution(activeRow) {
         const src = (videoUrlAttr.startsWith('http') || videoUrlAttr.startsWith('/'))
             ? videoUrlAttr
             : `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(videoUrlAttr)}`;
+
+        videoPlayer.onerror = function() {
+            if (videoContainer) {
+                videoContainer.style.display = 'none';
+            }
+        };
 
         if (videoPlayer.getAttribute('src') !== src) {
             videoPlayer.src = src;
@@ -7091,6 +7098,7 @@ function renderStepsForExecution(activeRow) {
         if (videoPlayer) {
             videoPlayer.pause();
             videoPlayer.removeAttribute('src');
+            videoPlayer.onerror = null;
         }
     }
 

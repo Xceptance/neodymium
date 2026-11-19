@@ -104,8 +104,15 @@ public class BrowserRunner
             }
             finally
             {
-                // add the test data as JSON to the allure report
-                Neodymium.getData().addAttachmentJson();
+                try
+                {
+                    // add the test data as JSON to the allure report
+                    Neodymium.getData().addAttachmentJson();
+                }
+                finally
+                {
+                    FilmTestExecution.clearThreadContexts();
+                }
             }
         }
     }

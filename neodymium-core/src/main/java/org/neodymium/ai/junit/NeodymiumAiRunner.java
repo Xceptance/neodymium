@@ -2052,6 +2052,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             finally
             {
                 ExecutionContext.setActiveContext(prev);
+                FilmTestExecution.clearThreadContexts();
             }
         }
 

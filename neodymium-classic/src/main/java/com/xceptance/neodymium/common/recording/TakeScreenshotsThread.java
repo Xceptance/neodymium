@@ -187,14 +187,26 @@ public class TakeScreenshotsThread extends Thread
                 writer.stop();
                 try
                 {
-                    File tempRecording = new File(fileName);
-                    if (recordingConfigurations.appendAllRecordingsToAllureReport() || testFailed)
+                    final File tempRecording = new File(fileName);
+                    final boolean shouldAttach = recordingConfigurations.appendAllRecordingsToAllureReport() || testFailed;
+                    if (shouldAttach)
                     {
+                        final String type = isGif ? "image/gif" : "video/mp4";
+                        if (tempRecording.exists())
+                        {
+                            Allure.addAttachment(fileName, type, new FileInputStream(fileName), recordingConfigurations.format());
+                        }
 
-                        String type = isGif ? "image/gif" : "video/mp4";
-                        Allure.addAttachment(fileName, type, new FileInputStream(fileName), recordingConfigurations.format());
-
-                        if (recordingConfigurations.deleteRecordingsAfterAddingToAllureReport())
+                        if (recordingConfigurations.deleteRecordingsAfterAddingToAllureReport() && tempRecording.exists())
+                        {
+                            tempRecording.delete();
+                        }
+                    }
+                    else
+                    {
+                        // Recording not attached (e.g. test passed and failure-only attachment is configured)
+                        // Discard recording file to free up disk space and avoid leaking unattached video files.
+                        if (tempRecording.exists())
                         {
                             tempRecording.delete();
                         }

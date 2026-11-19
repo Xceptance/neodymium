@@ -247,16 +247,18 @@ public class TakeScreenshotsThread extends Thread
                         }
                     }
 
-                    try
-                    {
-                        InteractiveConsoleEngine.attachVideoToLatestExecutionLog(finalRecording, testName);
-                    }
-                    catch (final Exception ignored)
-                    {
-                    }
+                    final boolean shouldAttach = recordingConfigurations.appendAllRecordingsToAllureReport() || testFailed;
 
-                    if (recordingConfigurations.appendAllRecordingsToAllureReport() || testFailed)
+                    if (shouldAttach)
                     {
+                        try
+                        {
+                            InteractiveConsoleEngine.attachVideoToLatestExecutionLog(finalRecording, testName);
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+
                         final String type = isGif ? "image/gif" : "video/mp4";
                         if (finalRecording.exists())
                         {
@@ -264,6 +266,15 @@ public class TakeScreenshotsThread extends Thread
                         }
 
                         if (recordingConfigurations.deleteRecordingsAfterAddingToAllureReport() && finalRecording.exists())
+                        {
+                            finalRecording.delete();
+                        }
+                    }
+                    else
+                    {
+                        // Recording not attached (e.g. test passed and failure-only attachment is configured)
+                        // Discard recording file to free up disk space and avoid leaking unattached video files.
+                        if (finalRecording.exists())
                         {
                             finalRecording.delete();
                         }

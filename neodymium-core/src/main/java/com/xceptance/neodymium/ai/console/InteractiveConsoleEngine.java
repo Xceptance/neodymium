@@ -537,46 +537,6 @@ public final class InteractiveConsoleEngine {
                 final int index = getExecutionIndex(testClassFolder, executionKey);
                 String contentToSave = minified;
 
-                // Relocate video recording if generated in target/videos/
-                final File videosFolder = new File("target/videos");
-                if (videosFolder.exists() && videosFolder.isDirectory())
-                {
-                    final File[] videoFiles = videosFolder.listFiles((dir, name) -> name.endsWith(".mp4") || name.endsWith(".webm"));
-                    if (videoFiles != null && videoFiles.length > 0)
-                    {
-                        File newestVideo = videoFiles[0];
-                        for (final File vf : videoFiles)
-                        {
-                            if (vf.lastModified() > newestVideo.lastModified())
-                            {
-                                newestVideo = vf;
-                            }
-                        }
-                        final String videoName = "video-" + index + ".mp4";
-                        parsedState.addProperty("videoUrl", videoName);
-                        parsedState.addProperty("videoPath", videoName);
-                        contentToSave = parsedState.toString();
-
-                        final String configuredResultsDirPath = AiConfiguration.getInstance().getConsoleExecutionLogsDirectory();
-                        final String runFolder = getRunFolder();
-                        final File structuredDir = new File(configuredResultsDirPath, runFolder + "/" + testClassFolder);
-                        if (!structuredDir.exists())
-                        {
-                            structuredDir.mkdirs();
-                        }
-                        try
-                        {
-                            Files.copy(newestVideo.toPath(), new File(structuredDir, videoName).toPath(), StandardCopyOption.REPLACE_EXISTING);
-                            final File defaultVideoFile = new File(defaultResultsDir, videoName);
-                            Files.copy(newestVideo.toPath(), defaultVideoFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                        }
-                        catch (final Exception ve)
-                        {
-                            LOG.warn("[InteractiveConsole] Could not move video recording: {}", ve.getMessage());
-                        }
-                    }
-                }
-
                 // 1. Root file for compatibility in default allure.results.directory
                 final File executionJson = new File(defaultResultsDir, "console-execution-" + index + ".json");
 
