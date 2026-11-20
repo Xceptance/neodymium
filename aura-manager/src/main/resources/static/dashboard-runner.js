@@ -320,7 +320,9 @@ window.triggerRunQueue = triggerRunQueue;
 function triggerRunCurrentTest() {
     prepareClientForExecution();
     if (typeof htmx !== 'undefined') {
-        htmx.ajax('POST', '/api/run?runCurrent=true', { swap: 'none' });
+        const fileToRun = (typeof activeEditingFile !== 'undefined' && activeEditingFile) || window.activeEditingFile;
+        const vals = fileToRun ? { file: fileToRun } : {};
+        htmx.ajax('POST', '/api/run?runCurrent=true', { swap: 'none', values: vals });
     }
 }
 window.triggerRunCurrentTest = triggerRunCurrentTest;

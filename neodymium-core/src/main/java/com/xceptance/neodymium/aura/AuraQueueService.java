@@ -387,7 +387,7 @@ public final class AuraQueueService
                 {
                     for (final DatasetSelection selection : req.datasets)
                     {
-                        if (selection.file == null)
+                        if (selection.file == null || selection.file.isBlank())
                         {
                             continue;
                         }
@@ -1438,7 +1438,10 @@ public final class AuraQueueService
                     }
                 }
                 payload.put("runId", runId);
-                payload.put("testClass", className);
+                if (!payload.containsKey("testClass") || payload.get("testClass") == null || String.valueOf(payload.get("testClass")).isBlank())
+                {
+                    payload.put("testClass", className);
+                }
                 listener.onTestExecutionCompleted(runId, payload);
             }
         }
