@@ -5159,6 +5159,88 @@ public final class StaticResourceSyntaxTest
                 && customPageContent.contains("onclick=\"changeTheme('system')\""),
             "custom-dashboard-page.html toolbar must include unified theme switcher");
     }
+
+    /**
+     * Automated regression safety net verifying that all AI Manager pages consistently
+     * display "Neodymium AI Manager" in the browser tab title (both server-rendered Thymeleaf
+     * templates and client-side view synchronizations).
+     */
+    @Test
+    public void testAiManagerTabTitleNamingAndBrandingSafetyNet() throws Exception
+    {
+        // 1. Verify index.html <title> expression prepends Neodymium AI Manager
+        final Path indexPath = Paths.get("src/main/resources/templates/index.html");
+        Assertions.assertTrue(Files.exists(indexPath), "index.html must exist");
+        final String indexHtml = Files.readString(indexPath, StandardCharsets.UTF_8);
+        Assertions.assertTrue(
+            indexHtml.contains("<title th:text=\"${(pageTitle != null and !pageTitle.isEmpty()) ? (pageTitle.contains('Neodymium') ? pageTitle : ('Neodymium AI Manager - ' + pageTitle)) : ((title != null and !title.isEmpty()) ? (title.contains('Neodymium') ? title : ('Neodymium AI Manager - ' + title)) : 'Neodymium AI Manager')}\">Neodymium AI Manager</title>"),
+            "index.html <title> must format tab name with 'Neodymium AI Manager - <pageTitle>' while preserving existing Neodymium prefix");
+
+        // 2. Verify loading.html title and headline include Neodymium
+        final Path loadingPath = Paths.get("src/main/resources/loading.html");
+        Assertions.assertTrue(Files.exists(loadingPath), "loading.html must exist");
+        final String loadingHtml = Files.readString(loadingPath, StandardCharsets.UTF_8);
+        Assertions.assertTrue(
+            loadingHtml.contains("<title>Connecting to Neodymium AI Manager...</title>"),
+            "loading.html must have 'Connecting to Neodymium AI Manager...' as <title>");
+        Assertions.assertTrue(
+            loadingHtml.contains("<h2>Starting Neodymium AI Manager...</h2>"),
+            "loading.html must have 'Starting Neodymium AI Manager...' heading");
+
+        // 3. Verify report-manager.js defines syncDocumentTitle and integrates it across views
+        final Path jsPath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsPath), "report-manager.js must exist");
+        final String jsContent = Files.readString(jsPath, StandardCharsets.UTF_8);
+        Assertions.assertTrue(
+            jsContent.contains("function syncDocumentTitle(viewTitle)"),
+            "report-manager.js must define syncDocumentTitle function");
+        Assertions.assertTrue(
+            jsContent.contains("syncDocumentTitle('Runs overview');"),
+            "report-manager.js must sync document title on Runs overview");
+        Assertions.assertTrue(
+            jsContent.contains("syncDocumentTitle(`Run #${runIdLabel}`);"),
+            "report-manager.js must sync document title on Single Run report");
+        Assertions.assertTrue(
+            jsContent.contains("syncDocumentTitle('Comprehensive Test Base');"),
+            "report-manager.js must sync document title on Test Base");
+        Assertions.assertTrue(
+            jsContent.contains("syncDocumentTitle('Neodymium AI Manager Dashboard');"),
+            "report-manager.js must sync document title on Dashboard view");
+
+        // 4. Node behavioral test of syncDocumentTitle logic
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const assert = require('assert');\n" +
+            "const jsCode = fs.readFileSync('" + jsPath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const sandbox = {\n" +
+            "    document: { title: '', addEventListener: () => {} },\n" +
+            "    window: { addEventListener: () => {} },\n" +
+            "    console: console\n" +
+            "};\n" +
+            "sandbox.window.document = sandbox.document;\n" +
+            "const fnMatch = jsCode.match(/function syncDocumentTitle[\\s\\S]*?window\\.syncDocumentTitle\\s*=\\s*syncDocumentTitle;/);\n" +
+            "assert(fnMatch, 'syncDocumentTitle implementation must be found in report-manager.js');\n" +
+            "vm.runInNewContext(fnMatch[0], sandbox);\n" +
+            "const sync = sandbox.window.syncDocumentTitle;\n" +
+            "assert(typeof sync === 'function', 'syncDocumentTitle must be a function');\n" +
+            "sync('Runs overview');\n" +
+            "assert.strictEqual(sandbox.document.title, 'Neodymium AI Manager - Runs overview');\n" +
+            "sync('Neodymium AI Manager Dashboard');\n" +
+            "assert.strictEqual(sandbox.document.title, 'Neodymium AI Manager Dashboard');\n" +
+            "sync('Run #RUN-100');\n" +
+            "assert.strictEqual(sandbox.document.title, 'Neodymium AI Manager - Run #RUN-100');\n" +
+            "sync('');\n" +
+            "assert.strictEqual(sandbox.document.title, 'Neodymium AI Manager');\n" +
+            "sync(null);\n" +
+            "assert.strictEqual(sandbox.document.title, 'Neodymium AI Manager');\n";
+        runNodeScript(nodeTestScript, "syncDocumentTitle Node validation failed");
+    }
 }
 
 
