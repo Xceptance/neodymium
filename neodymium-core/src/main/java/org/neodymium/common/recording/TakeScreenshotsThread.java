@@ -247,7 +247,9 @@ public class TakeScreenshotsThread extends Thread
                         }
                     }
 
-                    final boolean shouldAttach = recordingConfigurations.appendAllRecordingsToAllureReport() || testFailed;
+                    final boolean attachOnlyOnFailure = recordingConfigurations.attachOnlyOnFailure()
+                        || !recordingConfigurations.appendAllRecordingsToAllureReport();
+                    final boolean shouldAttach = !attachOnlyOnFailure || testFailed;
 
                     if (shouldAttach)
                     {

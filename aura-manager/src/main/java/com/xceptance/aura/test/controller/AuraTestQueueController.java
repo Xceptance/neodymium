@@ -100,6 +100,8 @@ public class AuraTestQueueController
 
     private boolean video = false;
 
+    private boolean videoOnlyOnFailure = true;
+
     private String executionMode = ExecutionMode.AUTO.name();
 
     private boolean interactive = false;
@@ -177,6 +179,7 @@ public class AuraTestQueueController
         model.addAttribute("running", queueService.isRunningQueue());
         model.addAttribute("headless", headless);
         model.addAttribute("video", video);
+        model.addAttribute("videoOnlyOnFailure", videoOnlyOnFailure);
         model.addAttribute("interactive", interactive);
         model.addAttribute("executionMode", executionMode);
         model.addAttribute("selectedBrowser", "chrome");
@@ -699,6 +702,11 @@ public class AuraTestQueueController
     public boolean isVideo()
     {
         return this.video;
+    }
+
+    public boolean isVideoOnlyOnFailure()
+    {
+        return this.videoOnlyOnFailure;
     }
 
     public String getExecutionMode()
@@ -1420,6 +1428,7 @@ public class AuraTestQueueController
             {
                 case "headless" -> headless = !headless;
                 case "video" -> video = !video;
+                case "videoOnlyOnFailure" -> videoOnlyOnFailure = !videoOnlyOnFailure;
                 case "interactive" -> interactive = !interactive;
                 case "executionMode", "mode" -> setValidatedExecutionMode(modeParam);
             }
@@ -1650,6 +1659,7 @@ public class AuraTestQueueController
                 req.datasets = List.of(sel);
                 req.headless = headless;
                 req.video = video;
+                req.videoOnlyOnFailure = videoOnlyOnFailure;
                 req.executionMode = executionMode;
                 req.interactive = interactive;
             }
@@ -1679,6 +1689,7 @@ public class AuraTestQueueController
             req.datasets = new ArrayList<>(selectedQueue);
             req.headless = headless;
             req.video = video;
+            req.videoOnlyOnFailure = videoOnlyOnFailure;
             req.executionMode = executionMode;
             req.interactive = interactive;
         }
@@ -2050,6 +2061,7 @@ public class AuraTestQueueController
         state.put("executionInProgress", queueService.isRunningQueue());
         state.put("headless", headless);
         state.put("video", video);
+        state.put("videoOnlyOnFailure", videoOnlyOnFailure);
         state.put("executionMode", executionMode);
         state.put("selectedBrowser", "chrome");
         return ResponseEntity.ok(state);
@@ -2337,6 +2349,7 @@ public class AuraTestQueueController
         req.batchName = finalBatchName;
         req.headless = headless;
         req.video = video;
+        req.videoOnlyOnFailure = videoOnlyOnFailure;
         req.executionMode = executionMode;
         req.interactive = interactive;
         req.globalBrowserProfiles = new ArrayList<>(globalBrowserProfiles);

@@ -34,6 +34,7 @@ public final class RunRequest
     public boolean interactive;
     public boolean allure;
     public boolean video;
+    public boolean videoOnlyOnFailure = true;
     public String executionMode = "LLM_RECORDING";
     public List<String> globalBrowserProfiles;
     public String targetRunId;

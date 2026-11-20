@@ -141,6 +141,23 @@ public final class AuraTestQueueControllerTest
     }
 
     @Test
+    public final void testToggleConfigVideoOnlyOnFailure()
+    {
+        final HttpServletRequest req = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(req.getParameter("key")).thenReturn("videoOnlyOnFailure");
+        Mockito.when(req.getParameterNames()).thenAnswer(inv -> Collections.enumeration(List.of("key")));
+
+        final Model model = new ConcurrentModel();
+        Assertions.assertTrue(controller.isVideoOnlyOnFailure(), "videoOnlyOnFailure should default to true");
+
+        controller.toggleConfig(req, model);
+        Assertions.assertFalse(controller.isVideoOnlyOnFailure(), "videoOnlyOnFailure should toggle to false");
+
+        controller.toggleConfig(req, model);
+        Assertions.assertTrue(controller.isVideoOnlyOnFailure(), "videoOnlyOnFailure should toggle back to true");
+    }
+
+    @Test
     public final void testQueueTemplateContainsAllSevenExecutionModes()
     {
         final SpringTemplateEngine engine = new SpringTemplateEngine();
@@ -155,6 +172,7 @@ public final class AuraTestQueueControllerTest
         context.setVariable("executionMode", "AUTO");
         context.setVariable("headless", true);
         context.setVariable("video", false);
+        context.setVariable("videoOnlyOnFailure", true);
         context.setVariable("interactive", false);
         context.setVariable("queue", List.of());
         context.setVariable("totalRuns", 0);
@@ -163,6 +181,8 @@ public final class AuraTestQueueControllerTest
 
         final String html = engine.process("fragments/queue", Collections.singleton("configPanel"), context);
         Assertions.assertNotNull(html);
+        Assertions.assertTrue(html.contains("id=\"optVideoOnlyOnFailure\""),
+            "queue.html must contain switch id optVideoOnlyOnFailure");
         for (final ExecutionMode mode : ExecutionMode.values())
         {
             Assertions.assertTrue(html.contains("value=\"" + mode.name() + "\""),

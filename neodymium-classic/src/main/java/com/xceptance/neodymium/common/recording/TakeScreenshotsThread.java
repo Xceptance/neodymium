@@ -188,7 +188,9 @@ public class TakeScreenshotsThread extends Thread
                 try
                 {
                     final File tempRecording = new File(fileName);
-                    final boolean shouldAttach = recordingConfigurations.appendAllRecordingsToAllureReport() || testFailed;
+                    final boolean attachOnlyOnFailure = recordingConfigurations.attachOnlyOnFailure()
+                        || !recordingConfigurations.appendAllRecordingsToAllureReport();
+                    final boolean shouldAttach = !attachOnlyOnFailure || testFailed;
                     if (shouldAttach)
                     {
                         final String type = isGif ? "image/gif" : "video/mp4";

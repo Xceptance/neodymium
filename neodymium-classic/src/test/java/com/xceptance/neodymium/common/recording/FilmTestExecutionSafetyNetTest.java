@@ -36,11 +36,13 @@ public class FilmTestExecutionSafetyNetTest
     }
 
     @Test
-    public void testVideoConfigurationsDefaultToAppendAllRecordings()
+    public void testVideoConfigurationsDefaultToFailureOnly()
     {
         final VideoRecordingConfigurations config = (VideoRecordingConfigurations) FilmTestExecution.getContext(VideoRecordingConfigurations.class);
-        Assertions.assertTrue(config.appendAllRecordingsToAllureReport(),
-            "video.appendAllRecordingsToAllureReport should default to true so tagged recordings are retained");
+        Assertions.assertFalse(config.appendAllRecordingsToAllureReport(),
+            "video.appendAllRecordingsToAllureReport should default to false so videos are attached only on failure");
+        Assertions.assertFalse(config.attachOnlyOnFailure(),
+            "video.attachOnlyOnFailure should default to false");
     }
 
     @Test
@@ -110,7 +112,6 @@ public class FilmTestExecutionSafetyNetTest
     @Test
     public void testPassingTestDeletesTemporaryRecordingWhenFailureOnlyConfigured() throws IOException
     {
-        FilmTestExecution.getContextVideo().setProperty("video.appendAllRecordingsToAllureReport", "false");
         final VideoRecordingConfigurations config = (VideoRecordingConfigurations) FilmTestExecution.getContext(VideoRecordingConfigurations.class);
         final File tempDir = new File(config.tempFolderToStoreRecording());
         if (!tempDir.exists())
@@ -125,9 +126,11 @@ public class FilmTestExecutionSafetyNetTest
 
         try
         {
-            Assertions.assertFalse(config.appendAllRecordingsToAllureReport());
+            Assertions.assertFalse(config.appendAllRecordingsToAllureReport(), "appendAllRecordingsToAllureReport should default to false");
             final boolean testFailed = false;
-            final boolean shouldAttach = config.appendAllRecordingsToAllureReport() || testFailed;
+            final boolean attachOnlyOnFailure = config.attachOnlyOnFailure()
+                || !config.appendAllRecordingsToAllureReport();
+            final boolean shouldAttach = !attachOnlyOnFailure || testFailed;
 
             Assertions.assertFalse(shouldAttach, "Should not attach on passing test when failure-only is configured");
 
@@ -148,8 +151,9 @@ public class FilmTestExecutionSafetyNetTest
     }
 
     @Test
-    public void testPassingTestRetainsRecordingByDefault() throws IOException
+    public void testPassingTestRetainsRecordingWhenAppendAllConfigured() throws IOException
     {
+        FilmTestExecution.getContextVideo().setProperty("video.appendAllRecordingsToAllureReport", "true");
         final VideoRecordingConfigurations config = (VideoRecordingConfigurations) FilmTestExecution.getContext(VideoRecordingConfigurations.class);
         final File tempDir = new File(config.tempFolderToStoreRecording());
         if (!tempDir.exists())
@@ -165,11 +169,13 @@ public class FilmTestExecutionSafetyNetTest
         try
         {
             Assertions.assertTrue(config.appendAllRecordingsToAllureReport(),
-                "Default configuration must attach all recordings");
+                "appendAllRecordingsToAllureReport must be true when explicitly configured");
             final boolean testFailed = false;
-            final boolean shouldAttach = config.appendAllRecordingsToAllureReport() || testFailed;
+            final boolean attachOnlyOnFailure = config.attachOnlyOnFailure()
+                || !config.appendAllRecordingsToAllureReport();
+            final boolean shouldAttach = !attachOnlyOnFailure || testFailed;
 
-            Assertions.assertTrue(shouldAttach, "Should attach on passing test when default configuration is active");
+            Assertions.assertTrue(shouldAttach, "Should attach on passing test when appendAllRecordingsToAllureReport is active");
         }
         finally
         {
