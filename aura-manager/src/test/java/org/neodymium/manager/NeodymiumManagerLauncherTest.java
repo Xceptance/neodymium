@@ -21,7 +21,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.xceptance.aura;
+package org.neodymium.manager;
 
 import com.sun.net.httpserver.HttpServer;
 import java.io.InputStream;
@@ -33,13 +33,13 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit test for AuraLauncher verifying ephemeral port allocation, splash content delivery,
+ * Unit test for NeodymiumManagerLauncher verifying ephemeral port allocation, splash content delivery,
  * and DevTools re-entrancy bypass protection.
  *
  * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
-public final class AuraLauncherTest
+public final class NeodymiumManagerLauncherTest
 {
     private HttpServer server;
 
@@ -51,13 +51,13 @@ public final class AuraLauncherTest
             server.stop(0);
             server = null;
         }
-        System.clearProperty(AuraLauncher.SPLASH_ACTIVE_PROPERTY);
+        System.clearProperty(NeodymiumManagerLauncher.SPLASH_ACTIVE_PROPERTY);
     }
 
     @Test
     public void testStartSplashServerAllocatesEphemeralPortAndServesLoadingHtml() throws Exception
     {
-        server = AuraLauncher.startSplashServer();
+        server = NeodymiumManagerLauncher.startSplashServer();
         final int port = server.getAddress().getPort();
 
         Assertions.assertTrue(port > 0, "Server must be bound to a dynamic ephemeral port (> 0)");
@@ -82,8 +82,8 @@ public final class AuraLauncherTest
     @Test
     public void testReentrancyGuardSkipsSplashWhenPropertyAlreadySet()
     {
-        System.setProperty(AuraLauncher.SPLASH_ACTIVE_PROPERTY, "true");
-        Assertions.assertTrue(Boolean.getBoolean(AuraLauncher.SPLASH_ACTIVE_PROPERTY),
+        System.setProperty(NeodymiumManagerLauncher.SPLASH_ACTIVE_PROPERTY, "true");
+        Assertions.assertTrue(Boolean.getBoolean(NeodymiumManagerLauncher.SPLASH_ACTIVE_PROPERTY),
             "Active splash property must be recognized by guard");
     }
 

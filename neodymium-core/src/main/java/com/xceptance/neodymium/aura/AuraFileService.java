@@ -400,10 +400,10 @@ public final class AuraFileService
             return customResourcesDir.getAbsoluteFile();
         }
 
-        final String configuredPath = System.getProperty("neodymium.aura.tests.directory");
-        if (configuredPath != null && !configuredPath.isBlank())
+        final String sysProp = System.getProperty("neodymium.ai.tests.directory");
+        if (sysProp != null && !sysProp.isBlank())
         {
-            final File configuredDir = new File(configuredPath).getAbsoluteFile();
+            final File configuredDir = new File(sysProp).getAbsoluteFile();
             if (configuredDir.exists() && configuredDir.isDirectory())
             {
                 return configuredDir;

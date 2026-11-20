@@ -486,8 +486,8 @@ public interface NeodymiumConfiguration extends Mutable, Accessible
     @DefaultValue("true")
     public boolean enableStepLinks();
 
-    @Key("neodymium.aura.reportHistoryDir")
-    @DefaultValue("target/aura-history")
+    @Key("neodymium.ai.reportHistoryDir")
+    @DefaultValue("target/ai-history")
     public String reportHistoryDir();
 
     @Key("neodymium.url.excludeList")

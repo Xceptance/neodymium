@@ -546,7 +546,8 @@ public final class InteractiveConsoleEngine {
                 final File videosFolder = new File("target/videos");
                 if (videosFolder.exists() && videosFolder.isDirectory())
                 {
-                    final File[] videoFiles = videosFolder.listFiles((dir, name) -> name.endsWith(".mp4") || name.endsWith(".webm"));
+                    final File[] videoFiles = videosFolder.listFiles((dir, name) -> (name.endsWith(".mp4") || name.endsWith(".webm"))
+                        && dir.toPath().resolve(name).toFile().length() > 1024);
                     if (videoFiles != null && videoFiles.length > 0)
                     {
                         File newestVideo = videoFiles[0];
@@ -944,7 +945,8 @@ public final class InteractiveConsoleEngine {
                         {
                             try
                             {
-                                index = Integer.parseInt(name.substring("console-execution-".length(), name.length() - ".json".length()));
+                                final int parsed = Integer.parseInt(name.substring("console-execution-".length(), name.length() - ".json".length()));
+                                index = Math.max(index, parsed);
                             }
                             catch (final Exception ignored)
                             {

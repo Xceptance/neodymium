@@ -249,8 +249,8 @@ Thanks to Maven's reactor, you can target individual modules using `-pl` (projec
   ```
 
 #### 5. Convenience Scripts
-* Run AI Manager: `./run-ai.sh` (or `run-ai.bat` on Windows, legacy `./run-aura.sh` also supported).
-  * Automatically detects whether running inside the Neodymium aggregator repo (`mvn spring-boot:run -pl aura-manager`) or in an external project with AI manager imported as a dependency (`exec:java -Dexec.mainClass="com.xceptance.aura.AiLauncher"`).
+* Run AI Manager: `./run-neodymium.sh` (or `run-neodymium.bat` on Windows).
+  * Automatically detects whether running inside the Neodymium aggregator repo (`mvn spring-boot:run -pl aura-manager`) or in an external project with AI manager imported as a dependency (`exec:java -Dexec.mainClass="org.neodymium.manager.NeodymiumManagerLauncher"`).
 * Run a single test with a data file: `./run-neo-test.sh <path_to_yaml>`
 
 ---

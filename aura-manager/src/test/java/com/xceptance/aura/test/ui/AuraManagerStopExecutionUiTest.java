@@ -68,8 +68,8 @@ public final class AuraManagerStopExecutionUiTest
     @BeforeAll
     public static void beforeAll()
     {
-        System.setProperty("neodymium.aura.test", "true");
-        System.setProperty("neodymium.aura.test.simulation.delayMs", "2500");
+        System.setProperty("neodymium.ai.test", "true");
+        System.setProperty("neodymium.ai.test.simulation.delayMs", "2500");
     }
 
     @BeforeEach

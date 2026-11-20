@@ -1,6 +1,6 @@
 # Neodymium AI Direct Commands Reference Guide
 
-Neodymium Aura AI supports **Direct Commands**, which bypass LLM reasoning entirely. Direct commands execute 100% locally on the browser, offering extreme execution speed, cost-effectiveness (0 token usage), and complete determinism.
+Neodymium AI supports **Direct Commands**, which bypass LLM reasoning entirely. Direct commands execute 100% locally on the browser, offering extreme execution speed, cost-effectiveness (0 token usage), and complete determinism.
 
 ---
 

@@ -5898,15 +5898,15 @@ function generateFullTestDiagnosticsMarkdown(execDto, activeRow) {
         }
     }
 
-    // Aura MCP Guidance for AI Agents
+    // Neodymium AI MCP Guidance for AI Agents
     lines.push('');
     lines.push('---');
     lines.push('> [!TIP]');
     const executionId = dto.id || (row ? (row.getAttribute('data-execution-id') || row.getAttribute('id')) : '') || '';
     if (executionId) {
-        lines.push(`> **Aura MCP Quick Tip:** If you have access to Aura MCP tools, inspect detailed failure context via \`get_execution_failure(executionId="${executionId}")\` or read artifacts with \`get_test_content(path="...")\`.`);
+        lines.push(`> **Neodymium AI MCP Quick Tip:** If you have access to Neodymium AI tools, inspect detailed failure context via \`get_execution_failure(executionId="${executionId}")\` or read artifacts with \`get_test_content(path="...")\`.`);
     } else {
-        lines.push('> **Aura MCP Quick Tip:** If you have access to Aura MCP tools, inspect detailed failure context via `get_execution_failure(executionId="...")` or read artifacts with `get_test_content(path="...")`.');
+        lines.push('> **Neodymium AI MCP Quick Tip:** If you have access to Neodymium AI tools, inspect detailed failure context via `get_execution_failure(executionId="...")` or read artifacts with `get_test_content(path="...")`.');
     }
 
     return lines.join('\n');

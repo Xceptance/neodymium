@@ -62,7 +62,7 @@ public final class AuraGlobalModelAdviceTest
     @BeforeAll
     public static void beforeAll()
     {
-        System.setProperty("neodymium.aura.test", "true");
+        System.setProperty("neodymium.ai.test", "true");
     }
 
     @BeforeEach

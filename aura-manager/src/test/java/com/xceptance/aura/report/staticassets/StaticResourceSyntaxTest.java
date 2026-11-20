@@ -4868,8 +4868,8 @@ public final class StaticResourceSyntaxTest
             "report-manager.js must render clickable local file URIs for attachments");
         Assertions.assertTrue(jsContent.contains("### Inlined Attachment Contents"),
             "report-manager.js must include section '### Inlined Attachment Contents' for text attachments");
-        Assertions.assertTrue(jsContent.contains("Aura MCP Quick Tip:"),
-            "report-manager.js must include Aura MCP Quick Tip guidance for AI agents");
+        Assertions.assertTrue(jsContent.contains("Neodymium AI MCP Quick Tip:"),
+            "report-manager.js must include Neodymium AI MCP Quick Tip guidance for AI agents");
 
         final String nodeTestScript =
             "const fs = require('fs');\n" +
@@ -4938,7 +4938,7 @@ public final class StaticResourceSyntaxTest
             "assert(md.includes('<summary>Attached Content: execution.log'), 'Must contain execution.log summary details');\n" +
             "assert(md.includes('[ERROR] Step failed'), 'Must contain execution log content');\n" +
             "assert(!md.includes('<summary>Attached Content: playbook.yaml'), 'Must not duplicate playbook.yaml in details when already in playbook header');\n" +
-            "assert(md.includes('> **Aura MCP Quick Tip:**'), 'Must contain Aura MCP Quick Tip');\n" +
+            "assert(md.includes('> **Neodymium AI MCP Quick Tip:**'), 'Must contain Neodymium AI MCP Quick Tip');\n" +
             "assert(md.includes('get_execution_failure(executionId=\"run-42-exec-1\")'), 'Must contain execution ID in MCP tip');\n" +
             "console.log('DIAGNOSTICS_MD_SUCCESS');\n";
 

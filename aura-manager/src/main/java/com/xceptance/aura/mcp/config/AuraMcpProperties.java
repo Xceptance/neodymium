@@ -27,13 +27,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 /**
- * Configuration properties for Neodymium Aura MCP Server.
+ * Configuration properties for Neodymium AI MCP Server.
  *
  * @author AI-generated: Gemini 3.7 Flash
  * @author Xceptance GmbH 2026
  */
 @Component
-@ConfigurationProperties(prefix = "neodymium.aura.mcp")
+@ConfigurationProperties(prefix = "neodymium.ai.mcp")
 public class AuraMcpProperties
 {
     private boolean enabled = true;
