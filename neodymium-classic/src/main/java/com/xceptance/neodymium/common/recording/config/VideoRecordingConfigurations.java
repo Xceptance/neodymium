@@ -74,6 +74,11 @@ public interface VideoRecordingConfigurations extends RecordingConfigurations
     public boolean appendAllRecordingsToAllureReport();
 
     @Override
+    @Key("video.attachOnlyOnFailure")
+    @DefaultValue("false")
+    public boolean attachOnlyOnFailure();
+
+    @Override
     @Key("video.imageQuality")
     @DefaultValue("1.0")
     public double imageQuality();

@@ -273,16 +273,20 @@ public class TakeScreenshotsThread extends Thread
                         }
                     }
 
-                    try
-                    {
-                        InteractiveConsoleEngine.attachVideoToLatestExecutionLog(finalRecording, testName);
-                    }
-                    catch (final Exception ignored)
-                    {
-                    }
+                    final boolean attachOnlyOnFailure = recordingConfigurations.attachOnlyOnFailure()
+                        || !recordingConfigurations.appendAllRecordingsToAllureReport();
+                    final boolean shouldAttach = !attachOnlyOnFailure || testFailed;
 
-                    if (recordingConfigurations.appendAllRecordingsToAllureReport() || testFailed)
+                    if (shouldAttach)
                     {
+                        try
+                        {
+                            InteractiveConsoleEngine.attachVideoToLatestExecutionLog(finalRecording, testName);
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+
                         final String type = isGif ? "image/gif" : "video/mp4";
                         if (finalRecording.exists())
                         {

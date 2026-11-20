@@ -65,6 +65,9 @@ import com.xceptance.aura.report.service.DashboardEvaluationService;
 import com.xceptance.aura.report.service.DashboardEvaluationService.EvaluatedDashboardPage;
 import com.xceptance.aura.report.service.ReportDashboardSettingService;
 import com.xceptance.aura.report.service.RunStorageSyncService;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
@@ -100,17 +103,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
-import org.springframework.core.io.support.ResourceRegion;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpRange;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.util.StreamUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -5270,21 +5269,22 @@ public class AuraReportViewController
         this.runsBaseDir = runsBaseDir;
     }
 
-    public ResponseEntity<?> serveRunFile(
+    public void serveRunFile(
         final String runId,
         final String testClass,
-        final String filename)
+        final String filename,
+        final HttpServletResponse response) throws IOException
     {
-        return serveRunFile(runId, testClass, filename, null);
+        serveRunFile(runId, testClass, filename, null, response);
     }
 
     @GetMapping("/api/runs/{runId}/{testClass}/{filename:.+}")
-    @ResponseBody
-    public ResponseEntity<?> serveRunFile(
+    public void serveRunFile(
         @PathVariable("runId") final String runId,
         @PathVariable("testClass") final String testClass,
         @PathVariable("filename") final String filename,
-        @RequestHeader(value = HttpHeaders.RANGE, required = false) final String rangeHeader)
+        @RequestHeader(value = HttpHeaders.RANGE, required = false) final String rangeHeader,
+        final HttpServletResponse response) throws IOException
     {
         final String effectiveBaseDir = (runsBaseDir != null && !runsBaseDir.isBlank()) ? runsBaseDir : "storage/runs";
         final Path baseStoragePath = Paths.get(effectiveBaseDir).toAbsolutePath().normalize();
@@ -5292,7 +5292,8 @@ public class AuraReportViewController
         Path candidate = resolveSafePath(baseStoragePath, runId, testClass, filename);
         if (candidate != null)
         {
-            return servePath(candidate, filename, rangeHeader);
+            servePath(candidate, filename, rangeHeader, response);
+            return;
         }
 
         final String normalizedClass = normalizeClassName(testClass);
@@ -5301,7 +5302,8 @@ public class AuraReportViewController
             candidate = resolveSafePath(baseStoragePath, runId, normalizedClass, filename);
             if (candidate != null)
             {
-                return servePath(candidate, filename, rangeHeader);
+                servePath(candidate, filename, rangeHeader, response);
+                return;
             }
         }
 
@@ -5311,11 +5313,12 @@ public class AuraReportViewController
             final Path runLevelCandidate = baseStoragePath.resolve(Paths.get(runId, filename)).normalize();
             if (runLevelCandidate.startsWith(baseStoragePath) && Files.isRegularFile(runLevelCandidate) && Files.isReadable(runLevelCandidate))
             {
-                return servePath(runLevelCandidate, filename, rangeHeader);
+                servePath(runLevelCandidate, filename, rangeHeader, response);
+                return;
             }
         }
 
-        return ResponseEntity.notFound().build();
+        response.sendError(HttpServletResponse.SC_NOT_FOUND);
     }
 
     private String normalizeClassName(final String rawClass)
@@ -5357,65 +5360,23 @@ public class AuraReportViewController
         return (Files.isRegularFile(resolved) && Files.isReadable(resolved)) ? resolved : null;
     }
 
-    private ResponseEntity<?> servePath(final Path path, final String filename, final String rangeHeader)
+    private void servePath(
+        final Path path,
+        final String filename,
+        final String rangeHeader,
+        final HttpServletResponse response) throws IOException
     {
         try
         {
-            final Resource resource = new UrlResource(path.toUri());
-            final String lowerName = filename.toLowerCase();
-            String contentType = "application/octet-stream";
-            if (lowerName.endsWith(".mp4"))
-            {
-                contentType = "video/mp4";
-            }
-            else if (lowerName.endsWith(".webm"))
-            {
-                contentType = "video/webm";
-            }
-            else if (lowerName.endsWith(".png"))
-            {
-                contentType = "image/png";
-            }
-            else if (lowerName.endsWith(".gif"))
-            {
-                contentType = "image/gif";
-            }
-            else if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg"))
-            {
-                contentType = "image/jpeg";
-            }
-            else if (lowerName.endsWith(".html"))
-            {
-                contentType = "text/html";
-            }
-            else if (lowerName.endsWith(".json"))
-            {
-                contentType = "application/json";
-            }
-            else if (lowerName.endsWith(".yaml") || lowerName.endsWith(".yml"))
-            {
-                contentType = "text/yaml; charset=utf-8";
-            }
-            else if (lowerName.endsWith(".log") || lowerName.endsWith(".txt"))
-            {
-                contentType = "text/plain; charset=utf-8";
-            }
-            else if (lowerName.endsWith(".csv"))
-            {
-                contentType = "text/csv; charset=utf-8";
-            }
-            else if (lowerName.endsWith(".pdf"))
-            {
-                contentType = "application/pdf";
-            }
-            else if (lowerName.endsWith(".xml"))
-            {
-                contentType = "application/xml; charset=utf-8";
-            }
-
+            final long totalLength = Files.size(path);
+            final String contentType = resolveContentType(filename);
             final ContentDisposition disposition = ContentDisposition.inline()
                 .filename(filename, StandardCharsets.UTF_8)
                 .build();
+
+            response.setHeader(HttpHeaders.CONTENT_DISPOSITION, disposition.toString());
+            response.setHeader("X-Content-Type-Options", "nosniff");
+            response.setHeader(HttpHeaders.ACCEPT_RANGES, "bytes");
 
             if (rangeHeader != null && !rangeHeader.isBlank())
             {
@@ -5425,34 +5386,112 @@ public class AuraReportViewController
                     if (!ranges.isEmpty())
                     {
                         final HttpRange range = ranges.get(0);
-                        final ResourceRegion region = range.toResourceRegion(resource);
-                        return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
-                            .contentType(MediaType.parseMediaType(contentType))
-                            .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                            .header("X-Content-Type-Options", "nosniff")
-                            .header(HttpHeaders.ACCEPT_RANGES, "bytes")
-                            .body(region);
+                        final long start = range.getRangeStart(totalLength);
+                        final long end = range.getRangeEnd(totalLength);
+
+                        if (start > end || start >= totalLength)
+                        {
+                            response.setStatus(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE);
+                            response.setHeader(HttpHeaders.CONTENT_RANGE, "bytes */" + totalLength);
+                            return;
+                        }
+
+                        final long rangeLength = end - start + 1L;
+                        response.setStatus(HttpServletResponse.SC_PARTIAL_CONTENT);
+                        response.setContentType(contentType);
+                        response.setHeader(HttpHeaders.CONTENT_RANGE, "bytes " + start + "-" + end + "/" + totalLength);
+                        response.setContentLengthLong(rangeLength);
+
+                        try (final InputStream in = Files.newInputStream(path);
+                             final OutputStream out = response.getOutputStream())
+                        {
+                            StreamUtils.copyRange(in, out, start, end);
+                            out.flush();
+                        }
+                        return;
                     }
                 }
                 catch (final IllegalArgumentException e)
                 {
-                    return ResponseEntity.status(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
-                        .header(HttpHeaders.ACCEPT_RANGES, "bytes")
-                        .build();
+                    response.setStatus(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE);
+                    response.setHeader(HttpHeaders.CONTENT_RANGE, "bytes */" + totalLength);
+                    return;
                 }
             }
 
-            return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(contentType))
-                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                .header("X-Content-Type-Options", "nosniff")
-                .header(HttpHeaders.ACCEPT_RANGES, "bytes")
-                .body(resource);
+            response.setStatus(HttpServletResponse.SC_OK);
+            response.setContentType(contentType);
+            response.setContentLengthLong(totalLength);
+
+            try (final InputStream in = Files.newInputStream(path);
+                 final OutputStream out = response.getOutputStream())
+            {
+                in.transferTo(out);
+                out.flush();
+            }
         }
         catch (final Exception e)
         {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            LOG.warn("Failed to serve run file path={}: {}", path, e.getMessage());
+            if (!response.isCommitted())
+            {
+                response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            }
         }
+    }
+
+    private String resolveContentType(final String filename)
+    {
+        final String lowerName = filename.toLowerCase();
+        if (lowerName.endsWith(".mp4"))
+        {
+            return "video/mp4";
+        }
+        if (lowerName.endsWith(".webm"))
+        {
+            return "video/webm";
+        }
+        if (lowerName.endsWith(".png"))
+        {
+            return "image/png";
+        }
+        if (lowerName.endsWith(".gif"))
+        {
+            return "image/gif";
+        }
+        if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg"))
+        {
+            return "image/jpeg";
+        }
+        if (lowerName.endsWith(".html"))
+        {
+            return "text/html";
+        }
+        if (lowerName.endsWith(".json"))
+        {
+            return "application/json";
+        }
+        if (lowerName.endsWith(".yaml") || lowerName.endsWith(".yml"))
+        {
+            return "text/yaml; charset=utf-8";
+        }
+        if (lowerName.endsWith(".log") || lowerName.endsWith(".txt"))
+        {
+            return "text/plain; charset=utf-8";
+        }
+        if (lowerName.endsWith(".csv"))
+        {
+            return "text/csv; charset=utf-8";
+        }
+        if (lowerName.endsWith(".pdf"))
+        {
+            return "application/pdf";
+        }
+        if (lowerName.endsWith(".xml"))
+        {
+            return "application/xml; charset=utf-8";
+        }
+        return "application/octet-stream";
     }
 
     @GetMapping("/fragments/test-side-panel/bugs")

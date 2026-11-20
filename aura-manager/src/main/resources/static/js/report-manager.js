@@ -5992,9 +5992,15 @@ function renderStepsForExecution(activeRow) {
             // Pause and hide video player to prevent visual ghosting
             const sideVideoContainer = document.getElementById('sidePanelVideoContainer');
             const sideVideoPlayer = document.getElementById('sidePanelVideoPlayer');
+            const sideGifPlayer = document.getElementById('sidePanelGifPlayer');
             if (sideVideoPlayer) {
                 sideVideoPlayer.pause();
                 sideVideoPlayer.removeAttribute('src');
+                sideVideoPlayer.style.display = 'none';
+            }
+            if (sideGifPlayer) {
+                sideGifPlayer.removeAttribute('src');
+                sideGifPlayer.style.display = 'none';
             }
             if (sideVideoContainer) {
                 sideVideoContainer.style.display = 'none';
@@ -7052,45 +7058,117 @@ function renderStepsForExecution(activeRow) {
 
     stepListEl.innerHTML = html;
 
-    // Video handling: directly visible above steps list
+    // Video / GIF handling: directly visible above steps list
     const videoContainer = document.getElementById('sidePanelVideoContainer');
     const videoPlayer = document.getElementById('sidePanelVideoPlayer');
+    const gifPlayer = document.getElementById('sidePanelGifPlayer');
     const videoChip = document.getElementById('sidePanelVideoChip');
 
     const rawVideoAttr = activeRow.getAttribute('data-video-url') || activeRow.getAttribute('data-video') || '';
     let videoAttachment = null;
-    if (activeRow._execDto && activeRow._execDto.attachments) {
-        videoAttachment = activeRow._execDto.attachments.find(a =>
-            a.type === 'video' ||
-            (rawVideoAttr && (a.path === rawVideoAttr || a.name === rawVideoAttr)) ||
-            (a.name && a.name.startsWith('video-')) ||
-            (a.path && a.path.startsWith('video-'))
-        );
+    let gifAttachment = null;
+    const hasExecAttachments = activeRow._execDto && Array.isArray(activeRow._execDto.attachments);
+    if (hasExecAttachments) {
+        // Priority 1: True playable video file (.mp4, .webm, .ogg)
+        videoAttachment = activeRow._execDto.attachments.find(a => {
+            const p = ((a && (a.path || a.name)) || '').toLowerCase();
+            return (a && a.type === 'video' && !p.endsWith('.gif')) ||
+                   p.endsWith('.mp4') || p.endsWith('.webm') || p.endsWith('.ogg');
+        });
+        // Priority 2: Animated GIF recording (.gif)
+        gifAttachment = activeRow._execDto.attachments.find(a => {
+            const p = ((a && (a.path || a.name)) || '').toLowerCase();
+            return (a && a.type === 'gif') || p.endsWith('.gif');
+        });
     }
-    const videoUrlAttr = videoAttachment ? videoAttachment.path : rawVideoAttr;
-    const hasVideo = videoUrlAttr && videoUrlAttr.trim().length > 0 && videoUrlAttr !== 'null';
 
-    if (hasVideo && videoContainer && videoPlayer) {
+    let videoUrlAttr = videoAttachment ? videoAttachment.path : '';
+    if (!videoUrlAttr && rawVideoAttr && !rawVideoAttr.toLowerCase().endsWith('.gif')) {
+        videoUrlAttr = rawVideoAttr;
+    }
+    let gifUrlAttr = gifAttachment ? gifAttachment.path : '';
+    if (!gifUrlAttr && rawVideoAttr && rawVideoAttr.toLowerCase().endsWith('.gif')) {
+        gifUrlAttr = rawVideoAttr;
+    }
+
+    const hasVideo = videoUrlAttr && videoUrlAttr.trim().length > 0 && videoUrlAttr !== 'null';
+    const hasGif = !hasVideo && gifUrlAttr && gifUrlAttr.trim().length > 0 && gifUrlAttr !== 'null';
+
+    if ((hasVideo || hasGif) && videoContainer) {
         videoContainer.style.display = 'block';
         const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '');
         const testClass = resolveSimpleTestClassName(activeRow);
-        const src = (videoUrlAttr.startsWith('http') || videoUrlAttr.startsWith('/'))
-            ? videoUrlAttr
-            : `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(videoUrlAttr)}`;
 
-        if (videoPlayer.getAttribute('src') !== src) {
-            videoPlayer.src = src;
-            videoPlayer.preload = 'metadata';
-            videoPlayer.autoplay = false;
+        const existingNotice = videoContainer.querySelector('.side-panel-video-error-notice');
+        if (existingNotice) {
+            existingNotice.remove();
         }
-        if (videoChip) {
-            videoChip.textContent = videoUrlAttr;
+
+        if (hasVideo && videoPlayer) {
+            if (gifPlayer) {
+                gifPlayer.style.display = 'none';
+                gifPlayer.removeAttribute('src');
+            }
+            videoPlayer.style.display = 'block';
+
+            const src = (videoUrlAttr.startsWith('http') || videoUrlAttr.startsWith('/'))
+                ? videoUrlAttr
+                : `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(videoUrlAttr)}`;
+
+            videoPlayer.onerror = function() {
+                console.warn('[Report] Video playback error for:', src);
+                if (!videoContainer.querySelector('.side-panel-video-error-notice')) {
+                    const notice = document.createElement('div');
+                    notice.className = 'side-panel-video-error-notice text-muted';
+                    notice.style.cssText = 'padding: 0.35rem 0.5rem; background: var(--bg-surface); border-radius: 4px; margin-top: 0.35rem; font-size: 0.72rem; display: flex; align-items: center; justify-content: space-between;';
+                    notice.innerHTML = '<span><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle; color: var(--status-warn);">info</span> Video preview unavailable in browser.</span> <a href="' + src + '" target="_blank" download style="color: var(--accent); text-decoration: underline; font-weight: 500;">Download</a>';
+                    videoPlayer.parentElement.appendChild(notice);
+                }
+            };
+
+            if (videoPlayer.getAttribute('src') !== src) {
+                videoPlayer.src = src;
+                videoPlayer.preload = 'metadata';
+                videoPlayer.autoplay = false;
+            }
+            if (videoChip) {
+                videoChip.textContent = videoUrlAttr;
+            }
+        } else if (hasGif && gifPlayer) {
+            if (videoPlayer) {
+                videoPlayer.pause();
+                videoPlayer.removeAttribute('src');
+                videoPlayer.style.display = 'none';
+                videoPlayer.onerror = null;
+            }
+            gifPlayer.style.display = 'block';
+
+            const gifSrc = (gifUrlAttr.startsWith('http') || gifUrlAttr.startsWith('/'))
+                ? gifUrlAttr
+                : `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(gifUrlAttr)}`;
+
+            if (gifPlayer.getAttribute('src') !== gifSrc) {
+                gifPlayer.src = gifSrc;
+            }
+            if (videoChip) {
+                videoChip.textContent = gifUrlAttr;
+            }
         }
     } else if (videoContainer) {
         videoContainer.style.display = 'none';
+        const existingNotice = videoContainer.querySelector('.side-panel-video-error-notice');
+        if (existingNotice) {
+            existingNotice.remove();
+        }
         if (videoPlayer) {
             videoPlayer.pause();
             videoPlayer.removeAttribute('src');
+            videoPlayer.style.display = 'none';
+            videoPlayer.onerror = null;
+        }
+        if (gifPlayer) {
+            gifPlayer.removeAttribute('src');
+            gifPlayer.style.display = 'none';
         }
     }
 

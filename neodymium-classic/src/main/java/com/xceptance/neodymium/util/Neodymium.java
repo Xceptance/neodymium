@@ -146,6 +146,7 @@ public class Neodymium
     {
         CONTEXTS.remove(Thread.currentThread());
         TestStepListener.clearLastUrl();
+        FilmTestExecution.clearThreadContexts();
     }
 
     /**

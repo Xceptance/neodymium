@@ -5159,6 +5159,32 @@ public final class StaticResourceSyntaxTest
                 && customPageContent.contains("onclick=\"changeTheme('system')\""),
             "custom-dashboard-page.html toolbar must include unified theme switcher");
     }
+
+    @Test
+    public void testVideoAndGifAttachmentSeparationInSidePanel() throws Exception
+    {
+        final Path templatePath = Paths.get("src/main/resources/templates/fragments/side-panel-step-list.html");
+        Assertions.assertTrue(Files.exists(templatePath), "side-panel-step-list.html must exist: " + templatePath.toAbsolutePath());
+        final String templateContent = Files.readString(templatePath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(templateContent.contains("id=\"sidePanelVideoPlayer\""),
+            "side-panel-step-list.html must contain #sidePanelVideoPlayer");
+        Assertions.assertTrue(templateContent.contains("id=\"sidePanelGifPlayer\""),
+            "side-panel-step-list.html must contain dedicated #sidePanelGifPlayer for GIF recordings");
+
+        final Path jsPath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsPath), "report-manager.js must exist: " + jsPath.toAbsolutePath());
+        final String jsContent = Files.readString(jsPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(jsContent.contains("sidePanelGifPlayer"),
+            "report-manager.js must reference sidePanelGifPlayer element");
+        Assertions.assertTrue(jsContent.contains("!p.endsWith('.gif')"),
+            "report-manager.js videoAttachment filter must explicitly exclude .gif from video player");
+        Assertions.assertTrue(jsContent.contains("p.endsWith('.mp4') || p.endsWith('.webm') || p.endsWith('.ogg')"),
+            "report-manager.js videoAttachment filter must match true playable video extensions");
+        Assertions.assertTrue(jsContent.contains("(a && a.type === 'gif') || p.endsWith('.gif')"),
+            "report-manager.js must identify gif attachments separately");
+    }
 }
 
 

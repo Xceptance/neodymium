@@ -74,6 +74,11 @@ public interface GifRecordingConfigurations extends RecordingConfigurations
     public boolean appendAllRecordingsToAllureReport();
 
     @Override
+    @Key("gif.attachOnlyOnFailure")
+    @DefaultValue("false")
+    public boolean attachOnlyOnFailure();
+
+    @Override
     @Key("gif.imageQuality")
     @DefaultValue("0.2")
     public double imageQuality();
