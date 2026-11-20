@@ -17,6 +17,20 @@
     <name>Neodymium AI Manager</name>
     <description>Unified Neodymium AI Manager: Test Execution Hub, Visual Playbook Editor, and Reporting Dashboard.</description>
 
+    <licenses>
+        <license>
+            <name>GNU Affero General Public License, Version 3</name>
+            <url>https://www.gnu.org/licenses/agpl-3.0.html</url>
+            <distribution>repo</distribution>
+        </license>
+        <license>
+            <name>Xceptance Commercial License</name>
+            <url>https://www.xceptance.com/</url>
+            <distribution>repo</distribution>
+            <comments>Commercial license for enterprise customers, SaaS providers, or teams requiring proprietary terms without AGPLv3 copyleft obligations.</comments>
+        </license>
+    </licenses>
+
     <properties>
         <java.version>21</java.version>
         <surefire.failIfNoSpecifiedTests>false</surefire.failIfNoSpecifiedTests>

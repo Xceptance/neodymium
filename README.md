@@ -267,14 +267,15 @@ Thanks to Maven's reactor, you can target individual modules using `-pl` (projec
 
 ## 📄 License
 
-Neodymium is licensed under a dual-structure depending on which module is utilized:
+Neodymium operates under a dual-licensing model based on module boundaries:
 
-### 1. Neodymium Classic (Core Framework)
-Licensed under the permissive **[MIT License](LICENSE#section-a-mit-license-neodymium-classic)**. Free for use, modification, distribution, and commercial hosting without restriction.
+### 1. Neodymium Classic — MIT License
+The classic test automation framework (`neodymium-classic`) is fully open-source and licensed under the permissive **[MIT License](LICENSE#section-a-mit-license-neodymium-classic)**. You are free to use, modify, distribute, and commercially host Neodymium Classic without restriction.
 
-### 2. Neodymium AI (AI Integration Module)
-- **Community Edition:** Free for development, testing, and internal applications under the **[GNU Affero General Public License (AGPLv3)](LICENSE#section-b-gnu-affero-general-public-license-neodymium-ai)**.
-- **Commercial Edition:** For hosted SaaS offerings, commercial bundling, or proprietary integration without AGPLv3 copyleft terms, a Commercial License is required.
+### 2. Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
+The next-generation AI automation framework (`neodymium-core`, `aura-manager`, `neodymium-test-server`, `neodymium-e2e-tests`, and `neodymium-archetype`) is **dual-licensed** to support both open-source developers and enterprise deployments:
+- **Community Edition (GNU AGPLv3):** Free for development, testing, and internal applications under the **[GNU Affero General Public License (AGPLv3)](LICENSE#section-b-gnu-affero-general-public-license-neodymium-ai)**.
+- **Commercial Edition:** For hosted SaaS offerings, commercial bundling, proprietary integrations, or enterprise usage without AGPLv3 copyleft/network-disclosure terms, a **[Commercial License](LICENSE#section-c-commercial-license-neodymium-ai)** is required.
 - **Commercial Support & Inquiries:** Contact **[support@xceptance.com](mailto:support@xceptance.com)**.
 
 ---

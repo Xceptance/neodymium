@@ -1,3 +1,26 @@
+/*
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 package org.neodymium.common.recording;
 
 import java.awt.image.BufferedImage;
@@ -230,20 +253,23 @@ public class TakeScreenshotsThread extends Thread
                     if (tempRecording.exists())
                     {
                         final String runFolder = InteractiveConsoleEngine.getRunFolder();
-                        final File runFolderDir = new File(recordingConfigurations.tempFolderToStoreRecording(), runFolder);
-                        if (!runFolderDir.exists())
+                        if (runFolder != null && !runFolder.isEmpty())
                         {
-                            runFolderDir.mkdirs();
-                        }
-                        final File movedFile = new File(runFolderDir, tempRecording.getName());
-                        try
-                        {
-                            Files.move(tempRecording.toPath(), movedFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                            finalRecording = movedFile;
-                        }
-                        catch (final IOException e)
-                        {
-                            LOGGER.warn("Could not move recording file to run folder: {}", e.getMessage());
+                            final File runFolderDir = new File(recordingConfigurations.tempFolderToStoreRecording(), runFolder);
+                            if (!runFolderDir.exists())
+                            {
+                                runFolderDir.mkdirs();
+                            }
+                            final File movedFile = new File(runFolderDir, tempRecording.getName());
+                            try
+                            {
+                                Files.move(tempRecording.toPath(), movedFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                                finalRecording = movedFile;
+                            }
+                            catch (final IOException e)
+                            {
+                                LOGGER.warn("Could not move recording file to run folder: {}", e.getMessage());
+                            }
                         }
                     }
 
@@ -320,4 +346,5 @@ public class TakeScreenshotsThread extends Thread
         this.testFailed = testFailed;
         run = false;
     }
+
 }

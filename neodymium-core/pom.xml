@@ -37,8 +37,15 @@
 
 	<licenses>
 		<license>
-			<name>MIT License</name>
-			<url>http://www.opensource.org/licenses/mit-license.php</url>
+			<name>GNU Affero General Public License, Version 3</name>
+			<url>https://www.gnu.org/licenses/agpl-3.0.html</url>
+			<distribution>repo</distribution>
+		</license>
+		<license>
+			<name>Xceptance Commercial License</name>
+			<url>https://www.xceptance.com/</url>
+			<distribution>repo</distribution>
+			<comments>Commercial license for enterprise customers, SaaS providers, or teams requiring proprietary terms without AGPLv3 copyleft obligations.</comments>
 		</license>
 	</licenses>
 
@@ -305,6 +312,7 @@
 						<artifactId>maven-surefire-plugin</artifactId>
 						<configuration>
 							<includes combine.self="override">
+								<include>org/neodymium/license/**/*Test.java</include>
 								<include>org/neodymium/ai/model/**/*Test.java</include>
 								<include>org/neodymium/ai/unit/**/*Test.java</include>
 								<include>org/neodymium/ai/client/TokenUsageTest.java</include>
@@ -433,6 +441,7 @@
 						<artifactId>maven-surefire-plugin</artifactId>
 						<configuration>
 							<includes combine.self="override">
+								<include>org/neodymium/license/**/*Test.java</include>
 								<include>org/neodymium/ai/client/TokenUsageTest.java</include>
 								<include>org/neodymium/ai/model/ExecutionMetricsTest.java</include>
 								<include>com/xceptance/neodymium/junit5/tests/DataUtilsTest.java</include>
