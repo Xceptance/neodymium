@@ -1126,4 +1126,176 @@ public final class AuraTestQueueControllerTest
         Assertions.assertTrue(queueSpy.isManuallyStopped(), "queueService must be set to manuallyStopped");
         Mockito.verify(reportDataService).cancelRun("run-abort-123");
     }
+
+    @Test
+    public final void testStartExecutionRunCurrentWithActiveFileInFileService()
+    {
+        final AuraQueueService mockQueue = Mockito.mock(AuraQueueService.class);
+        final AuraFileService mockFileService = Mockito.mock(AuraFileService.class);
+        Mockito.when(mockFileService.getActiveEditingFile()).thenReturn("tests/activeTest.yaml");
+
+        final AuraTestQueueController testController = new AuraTestQueueController(
+            mockQueue, mockFileService, this.interactiveService, this.batchRepository, this.reportDataService
+        );
+
+        final HttpServletRequest runReq = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(runReq.getParameter("runCurrent")).thenReturn("true");
+        Mockito.when(runReq.getParameterNames()).thenReturn(Collections.enumeration(List.of("runCurrent")));
+
+        testController.startExecution(runReq, new ConcurrentModel());
+
+        final ArgumentCaptor<RunRequest> captor = ArgumentCaptor.forClass(RunRequest.class);
+        Mockito.verify(mockQueue).executeQueue(captor.capture(), Mockito.anyInt());
+
+        final RunRequest req = captor.getValue();
+        Assertions.assertNotNull(req);
+        Assertions.assertEquals(1, req.datasets.size());
+        Assertions.assertEquals("tests/activeTest.yaml", req.datasets.get(0).file);
+        Assertions.assertNull(req.datasets.get(0).id);
+    }
+
+    @Test
+    public final void testStartExecutionRunCurrentWithExplicitFileParameter()
+    {
+        final AuraQueueService mockQueue = Mockito.mock(AuraQueueService.class);
+        final AuraFileService mockFileService = Mockito.mock(AuraFileService.class);
+        Mockito.when(mockFileService.getActiveEditingFile()).thenReturn("tests/activeOld.yaml");
+
+        final AuraTestQueueController testController = new AuraTestQueueController(
+            mockQueue, mockFileService, this.interactiveService, this.batchRepository, this.reportDataService
+        );
+
+        final HttpServletRequest runReq = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(runReq.getParameter("runCurrent")).thenReturn("true");
+        Mockito.when(runReq.getParameter("file")).thenReturn("tests/explicitOverride.yaml");
+        Mockito.when(runReq.getParameterNames()).thenReturn(Collections.enumeration(List.of("runCurrent", "file")));
+
+        testController.startExecution(runReq, new ConcurrentModel());
+
+        final ArgumentCaptor<RunRequest> captor = ArgumentCaptor.forClass(RunRequest.class);
+        Mockito.verify(mockQueue).executeQueue(captor.capture(), Mockito.anyInt());
+
+        final RunRequest req = captor.getValue();
+        Assertions.assertNotNull(req);
+        Assertions.assertEquals(1, req.datasets.size());
+        Assertions.assertEquals("tests/explicitOverride.yaml", req.datasets.get(0).file);
+    }
+
+    @Test
+    public final void testStartExecutionRunCurrentWithBlankOrNullFileFailsSafely()
+    {
+        final AuraQueueService mockQueue = Mockito.mock(AuraQueueService.class);
+        final AuraFileService mockFileService = Mockito.mock(AuraFileService.class);
+        Mockito.when(mockFileService.getActiveEditingFile()).thenReturn("");
+
+        final AuraTestQueueController testController = new AuraTestQueueController(
+            mockQueue, mockFileService, this.interactiveService, this.batchRepository, this.reportDataService
+        );
+
+        final HttpServletRequest runReq = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(runReq.getParameter("runCurrent")).thenReturn("true");
+        Mockito.when(runReq.getParameterNames()).thenReturn(Collections.enumeration(List.of("runCurrent")));
+
+        testController.startExecution(runReq, new ConcurrentModel());
+
+        Mockito.verify(mockQueue, Mockito.never()).executeQueue(Mockito.any(), Mockito.anyInt());
+    }
+
+    @Test
+    public final void testStartExecutionRunCurrentExpandsMultipleDatasetsFromYamlFile()
+    {
+        final AuraQueueService mockQueue = Mockito.mock(AuraQueueService.class);
+        final AuraFileService mockFileService = Mockito.mock(AuraFileService.class);
+        Mockito.when(mockFileService.getActiveEditingFile()).thenReturn("tests/examples/wikipedia_search.yml");
+
+        final DatasetDto d1 = new DatasetDto("wikipedia_search_example_1", "wikipedia_search_example_1", true);
+        final DatasetDto d2 = new DatasetDto("wikipedia_search_example_2", "wikipedia_search_example_2", true);
+        final YamlFileDto yamlFile = new YamlFileDto("tests/examples/wikipedia_search.yml", List.of(d1, d2));
+        Mockito.when(mockFileService.getYamlFilesList()).thenReturn(List.of(yamlFile));
+
+        final AuraTestQueueController testController = new AuraTestQueueController(
+            mockQueue, mockFileService, this.interactiveService, this.batchRepository, this.reportDataService
+        );
+
+        final HttpServletRequest runReq = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(runReq.getParameter("runCurrent")).thenReturn("true");
+        Mockito.when(runReq.getParameterNames()).thenReturn(Collections.enumeration(List.of("runCurrent")));
+
+        testController.startExecution(runReq, new ConcurrentModel());
+
+        final ArgumentCaptor<RunRequest> captor = ArgumentCaptor.forClass(RunRequest.class);
+        Mockito.verify(mockQueue).executeQueue(captor.capture(), Mockito.anyInt());
+
+        final RunRequest req = captor.getValue();
+        Assertions.assertNotNull(req);
+        Assertions.assertEquals(2, req.datasets.size());
+        Assertions.assertEquals("tests/examples/wikipedia_search.yml", req.datasets.get(0).file);
+        Assertions.assertEquals("wikipedia_search_example_1", req.datasets.get(0).id);
+        Assertions.assertEquals("tests/examples/wikipedia_search.yml", req.datasets.get(1).file);
+        Assertions.assertEquals("wikipedia_search_example_2", req.datasets.get(1).id);
+    }
+
+    @Test
+    public final void testGetStatusStreamScheduledCountCalculatedWithProfilesAndDatasets()
+    {
+        final AuraQueueService mockQueue = Mockito.mock(AuraQueueService.class);
+        final AuraFileService mockFileService = Mockito.mock(AuraFileService.class);
+        final AuraReportDataService mockReportService = Mockito.mock(AuraReportDataService.class);
+
+        Mockito.when(mockQueue.isRunningQueue()).thenReturn(true);
+        Mockito.when(mockQueue.getCurrentRunId()).thenReturn("run_test_123");
+
+        final RunRequest req = new RunRequest();
+        final DatasetSelection s1 = new DatasetSelection();
+        s1.file = "tests/test.yaml";
+        s1.id = "d1";
+        final DatasetSelection s2 = new DatasetSelection();
+        s2.file = "tests/test.yaml";
+        s2.id = "d2";
+        req.datasets = List.of(s1, s2);
+        req.globalBrowserProfiles = List.of("Chrome_1024x768", "Firefox_1024x768");
+        Mockito.when(mockQueue.getLastRunRequest()).thenReturn(req);
+
+        final AuraTestQueueController testController = new AuraTestQueueController(
+            mockQueue, mockFileService, this.interactiveService, this.batchRepository, mockReportService
+        );
+
+        final ResponseEntity<Map<String, Object>> resp = testController.getStatusStream("client-1", 0, 0);
+        Assertions.assertNotNull(resp);
+        Assertions.assertNotNull(resp.getBody());
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> statusObj = (Map<String, Object>) resp.getBody().get("status");
+        Assertions.assertNotNull(statusObj);
+        // 2 datasets * 2 browser profiles = 4 scheduled runs
+        Assertions.assertEquals(4, statusObj.get("scheduledCount"));
+    }
+
+    @Test
+    public final void testQueueTemplateRunCurrentButtonConditionalHidesWhenBlank()
+    {
+        final SpringTemplateEngine engine = new SpringTemplateEngine();
+        final ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setPrefix("templates/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCharacterEncoding("UTF-8");
+        engine.setTemplateResolver(resolver);
+
+        final Context context = new Context();
+        context.setVariable("executionMode", "AUTO");
+        context.setVariable("headless", true);
+        context.setVariable("video", false);
+        context.setVariable("interactive", false);
+        context.setVariable("queue", Collections.emptyList());
+        context.setVariable("totalRuns", 0);
+        context.setVariable("running", false);
+        context.setVariable("activeEditingFile", "");
+        context.setVariable("runTags", Collections.emptyMap());
+
+        final String runControlsHtml = engine.process("fragments/queue", Collections.singleton("runControlsContent"), context);
+        Assertions.assertNotNull(runControlsHtml);
+        Assertions.assertTrue(runControlsHtml.contains("id=\"runCurrentTestBtn\""));
+        // When activeEditingFile is empty string, the button must carry d-none class and NOT d-flex
+        Assertions.assertTrue(runControlsHtml.contains("d-none"), "runCurrentTestBtn must be hidden via d-none when activeEditingFile is empty");
+    }
 }

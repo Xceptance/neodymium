@@ -266,7 +266,7 @@
             hx-swap="none"
             onclick="if (!checkApiKeyBeforeRun(event, () => triggerRunQueue())) return false; prepareClientForExecution();"
             th:disabled="${queue == null or queue.isEmpty()}"
-            th:classappend="${running ? 'd-none' : ((activeEditingFile != null or (queue == null or queue.isEmpty())) ? 'btn-muted d-flex' : 'd-flex')}">
+            th:classappend="${running ? 'd-none' : (((activeEditingFile != null and !activeEditingFile.isBlank()) or (queue == null or queue.isEmpty())) ? 'btn-muted d-flex' : 'd-flex')}">
         <span class="material-symbols-outlined">play_arrow</span> <span>Run Queue</span> 
         <span class="badge-count" th:text="${totalRuns != null ? totalRuns : (queue != null ? queue.size() : 0)}">0</span>
     </button>
@@ -275,9 +275,10 @@
     <button class="btn-primary" 
             id="runCurrentTestBtn" 
             hx-post="/api/run?runCurrent=true" 
+            hx-vals="js:{file: (typeof activeEditingFile !== 'undefined' &amp;&amp; activeEditingFile) || window.activeEditingFile || ''}"
             hx-swap="none"
             onclick="if (!checkApiKeyBeforeRun(event, () => triggerRunCurrentTest())) return false; prepareClientForExecution();"
-            th:classappend="${!running and activeEditingFile != null ? 'd-flex' : 'd-none'}">
+            th:classappend="${!running and (activeEditingFile != null and !activeEditingFile.isBlank()) ? 'd-flex' : 'd-none'}">
         <span class="material-symbols-outlined">play_arrow</span> Run Open Test
     </button>
 

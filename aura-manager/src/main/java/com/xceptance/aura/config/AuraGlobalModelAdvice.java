@@ -32,6 +32,8 @@ import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.ReportDashboardSettingService;
 import com.xceptance.neodymium.aura.AuraQueueService;
 import com.xceptance.neodymium.aura.AuraSettingsService;
+import com.xceptance.neodymium.aura.dto.DatasetSelection;
+import com.xceptance.neodymium.aura.dto.RunRequest;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -290,13 +292,28 @@ public class AuraGlobalModelAdvice
             Integer scheduledCount = null;
             if (isQueueRunning && queueService.getLastRunRequest() != null)
             {
-                if (queueService.getLastRunRequest().datasets != null)
+                final RunRequest lastReq = queueService.getLastRunRequest();
+                if (lastReq.datasets != null)
                 {
-                    scheduledCount = queueService.getLastRunRequest().datasets.size();
+                    int totalRuns = 0;
+                    final int defaultProfileCount = (lastReq.globalBrowserProfiles != null && !lastReq.globalBrowserProfiles.isEmpty())
+                            ? lastReq.globalBrowserProfiles.size()
+                            : 1;
+                    for (final DatasetSelection sel : lastReq.datasets)
+                    {
+                        if (sel != null)
+                        {
+                            final int profileCount = (sel.browserProfiles != null && !sel.browserProfiles.isEmpty())
+                                    ? sel.browserProfiles.size()
+                                    : defaultProfileCount;
+                            totalRuns += profileCount;
+                        }
+                    }
+                    scheduledCount = totalRuns > 0 ? totalRuns : lastReq.datasets.size();
                 }
                 if (currentBatch == null || !AuraReportDataService.isRealBatch(currentBatch))
                 {
-                    currentBatch = AuraReportDataService.resolveEffectiveBatchNameFromMap(currentBatch, queueService.getLastRunRequest().tags);
+                    currentBatch = AuraReportDataService.resolveEffectiveBatchNameFromMap(currentBatch, lastReq.tags);
                 }
             }
 

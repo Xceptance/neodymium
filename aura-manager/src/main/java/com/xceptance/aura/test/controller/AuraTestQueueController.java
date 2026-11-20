@@ -1645,18 +1645,63 @@ public class AuraTestQueueController
         RunRequest req = null;
         if (runCurrent)
         {
-            final String activeFile = fileService.getActiveEditingFile();
-            if (activeFile != null)
+            final String paramFile = (params.get("file") != null && !params.get("file").isBlank())
+                    ? params.get("file").trim()
+                    : (request != null && request.getParameter("file") != null && !request.getParameter("file").isBlank())
+                            ? request.getParameter("file").trim()
+                            : null;
+            final String activeFile = (paramFile != null && !paramFile.isBlank())
+                    ? paramFile
+                    : (fileService != null ? fileService.getActiveEditingFile() : null);
+
+            if (activeFile != null && !activeFile.isBlank())
             {
                 req = new RunRequest();
-                final DatasetSelection sel = new DatasetSelection();
-                sel.file = activeFile;
-                sel.id = null;
-                req.datasets = List.of(sel);
+                List<DatasetDto> datasets = null;
+                if (fileService != null)
+                {
+                    final List<YamlFileDto> files = fileService.getYamlFilesList();
+                    if (files != null)
+                    {
+                        for (final YamlFileDto f : files)
+                        {
+                            if (activeFile.equals(f.file))
+                            {
+                                datasets = f.datasets;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (datasets != null && !datasets.isEmpty())
+                {
+                    final List<DatasetSelection> selections = new ArrayList<>();
+                    for (final DatasetDto d : datasets)
+                    {
+                        final DatasetSelection sel = new DatasetSelection();
+                        sel.file = activeFile;
+                        sel.id = d.id;
+                        selections.add(sel);
+                    }
+                    req.datasets = selections;
+                }
+                else
+                {
+                    final DatasetSelection sel = new DatasetSelection();
+                    sel.file = activeFile;
+                    sel.id = null;
+                    req.datasets = List.of(sel);
+                }
                 req.headless = headless;
                 req.video = video;
                 req.executionMode = executionMode;
                 req.interactive = interactive;
+            }
+            else
+            {
+                LOGGER.error("[Aura Server] Run current test failed: No open test file in editor");
+                return renderExecutionStatePanels(model);
             }
         }
 
@@ -1765,7 +1810,25 @@ public class AuraTestQueueController
         int skippedCount = queueService.getGlobalSkipped();
 
         final RunRequest lastReq = queueService.getLastRunRequest();
-        Integer scheduledCount = (isQueueRunning && lastReq != null && lastReq.datasets != null) ? lastReq.datasets.size() : null;
+        Integer scheduledCount = null;
+        if (isQueueRunning && lastReq != null && lastReq.datasets != null)
+        {
+            int totalRuns = 0;
+            final int defaultProfileCount = (lastReq.globalBrowserProfiles != null && !lastReq.globalBrowserProfiles.isEmpty())
+                    ? lastReq.globalBrowserProfiles.size()
+                    : Math.max(1, globalBrowserProfiles.size());
+            for (final DatasetSelection sel : lastReq.datasets)
+            {
+                if (sel != null)
+                {
+                    final int profileCount = (sel.browserProfiles != null && !sel.browserProfiles.isEmpty())
+                            ? sel.browserProfiles.size()
+                            : defaultProfileCount;
+                    totalRuns += profileCount;
+                }
+            }
+            scheduledCount = totalRuns > 0 ? totalRuns : lastReq.datasets.size();
+        }
         if (isQueueRunning && lastReq != null && (currentBatch == null || !AuraReportDataService.isRealBatch(currentBatch)))
         {
             currentBatch = AuraReportDataService.resolveEffectiveBatchNameFromMap(currentBatch, lastReq.tags);
