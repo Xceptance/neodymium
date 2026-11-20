@@ -15,6 +15,19 @@
 	<name>neodymium-test-server</name>
 	<description>Embedded HTTP and HTTPS test server hosting the VÉRLA e-commerce storefronts, dynamic HTMX APIs, and AI Glance test sandboxes.</description>
 
+	<licenses>
+		<license>
+			<name>GNU Affero General Public License, Version 3</name>
+			<url>https://www.gnu.org/licenses/agpl-3.0.html</url>
+			<distribution>repo</distribution>
+		</license>
+		<license>
+			<name>Xceptance Commercial License</name>
+			<url>https://www.xceptance.com/</url>
+			<distribution>repo</distribution>
+		</license>
+	</licenses>
+
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<maven.compiler.source.version>21</maven.compiler.source.version>
