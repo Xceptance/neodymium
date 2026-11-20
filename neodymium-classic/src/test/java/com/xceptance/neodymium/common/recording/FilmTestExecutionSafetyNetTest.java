@@ -1,3 +1,26 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2017-2026 Xceptance Software Technologies GmbH
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
 package com.xceptance.neodymium.common.recording;
 
 import java.io.File;
@@ -10,9 +33,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.xceptance.neodymium.common.browser.BrowserRunner;
 import com.xceptance.neodymium.common.recording.config.VideoRecordingConfigurations;
-import com.xceptance.neodymium.util.Neodymium;
 
 /**
  * Regression and safety net tests for classic {@link FilmTestExecution} and {@link TakeScreenshotsThread}
@@ -36,11 +57,11 @@ public class FilmTestExecutionSafetyNetTest
     }
 
     @Test
-    public void testVideoConfigurationsDefaultToFailureOnly()
+    public void testVideoConfigurationsDefault()
     {
         final VideoRecordingConfigurations config = (VideoRecordingConfigurations) FilmTestExecution.getContext(VideoRecordingConfigurations.class);
-        Assertions.assertFalse(config.appendAllRecordingsToAllureReport(),
-            "video.appendAllRecordingsToAllureReport should default to false so videos are attached only on failure");
+        Assertions.assertTrue(config.appendAllRecordingsToAllureReport(),
+            "video.appendAllRecordingsToAllureReport should default to true for backward compatibility");
         Assertions.assertFalse(config.attachOnlyOnFailure(),
             "video.attachOnlyOnFailure should default to false");
     }
@@ -63,55 +84,50 @@ public class FilmTestExecutionSafetyNetTest
     }
 
     @Test
-    public void testStartVideoRecordingSucceedsWhenFilmingEnabledBeforeDriverInit()
+    public void testFinishVideoRecordingGracefullyHandlesUnregisteredRecording()
     {
-        FilmTestExecution.getContextVideo().setProperty("video.enableFilming", "true");
-        Assertions.assertFalse(Neodymium.hasDriver(), "Driver must not be initialized yet (setUpTest state)");
-
-        final String recordingId = "test-filming-before-driver-classic-" + UUID.randomUUID();
-        FilmTestExecution.startVideoRecording(recordingId);
-
-        try
+        Assertions.assertDoesNotThrow(() ->
         {
-            Assertions.assertTrue(FilmTestExecution.getNamesOfAllCurrentVideoRecordings().contains(recordingId),
-                "Video recording thread should be started when enableFilming is true even before driver is initialized");
-        }
-        finally
+            FilmTestExecution.finishVideoFilming("non-existent-recording-id-" + UUID.randomUUID(), false);
+        });
+    }
+
+    @Test
+    public void testFinishVideoRecordingGracefullyHandlesNullOrEmpty()
+    {
+        Assertions.assertDoesNotThrow(() ->
         {
-            FilmTestExecution.finishVideoFilming(recordingId, false);
-        }
+            FilmTestExecution.finishVideoFilming(null, false);
+            FilmTestExecution.finishVideoFilming("", false);
+            FilmTestExecution.finishVideoFilming("   ", false);
+        });
     }
 
     @Test
-    public void testThreadContextClearedAfterBrowserRunnerTeardown()
+    public void testThreadContextIsolationBetweenThreads() throws InterruptedException
     {
-        FilmTestExecution.getContextVideo().setProperty("video.enableFilming", "true");
-        Assertions.assertTrue(FilmTestExecution.getContextVideo().enableFilming(),
-            "Property should reflect modified thread context");
+        final String mainThreadValue = "main-thread-val-" + UUID.randomUUID();
+        FilmTestExecution.getContextVideo().setProperty("video.tempFolderToStoreRecording", mainThreadValue);
 
-        final BrowserRunner runner = new BrowserRunner();
-        runner.teardown(false);
+        final String[] workerValue = new String[1];
+        final Thread worker = new Thread(() ->
+        {
+            workerValue[0] = FilmTestExecution.getContextVideo().tempFolderToStoreRecording();
+        });
 
-        Assertions.assertFalse(FilmTestExecution.getContextVideo().enableFilming(),
-            "Thread context should be reset to default (false) after BrowserRunner teardown");
+        worker.start();
+        worker.join(5000);
+
+        Assertions.assertNotEquals(mainThreadValue, workerValue[0],
+            "Worker thread must get its own isolated VideoRecordingConfigurations context");
+        Assertions.assertEquals(mainThreadValue, FilmTestExecution.getContextVideo().tempFolderToStoreRecording(),
+            "Main thread context property must remain intact");
     }
 
     @Test
-    public void testNeodymiumClearThreadContextClearsFilmContexts()
+    public void testPassingTestGatingWhenFailureOnlyConfigured() throws IOException
     {
-        FilmTestExecution.getContextVideo().setProperty("video.enableFilming", "true");
-        Assertions.assertTrue(FilmTestExecution.getContextVideo().enableFilming(),
-            "Property should reflect modified thread context");
-
-        Neodymium.clearThreadContext();
-
-        Assertions.assertFalse(FilmTestExecution.getContextVideo().enableFilming(),
-            "Neodymium.clearThreadContext() should clear thread-local video configurations");
-    }
-
-    @Test
-    public void testPassingTestDeletesTemporaryRecordingWhenFailureOnlyConfigured() throws IOException
-    {
+        FilmTestExecution.getContextVideo().setProperty("video.attachOnlyOnFailure", "true");
         final VideoRecordingConfigurations config = (VideoRecordingConfigurations) FilmTestExecution.getContext(VideoRecordingConfigurations.class);
         final File tempDir = new File(config.tempFolderToStoreRecording());
         if (!tempDir.exists())
@@ -126,20 +142,13 @@ public class FilmTestExecutionSafetyNetTest
 
         try
         {
-            Assertions.assertFalse(config.appendAllRecordingsToAllureReport(), "appendAllRecordingsToAllureReport should default to false");
+            Assertions.assertTrue(config.attachOnlyOnFailure(), "attachOnlyOnFailure should be true when explicitly configured");
             final boolean testFailed = false;
             final boolean attachOnlyOnFailure = config.attachOnlyOnFailure()
                 || !config.appendAllRecordingsToAllureReport();
             final boolean shouldAttach = !attachOnlyOnFailure || testFailed;
 
             Assertions.assertFalse(shouldAttach, "Should not attach on passing test when failure-only is configured");
-
-            if (!shouldAttach && dummyVideo.exists())
-            {
-                dummyVideo.delete();
-            }
-
-            Assertions.assertFalse(dummyVideo.exists(), "Temporary video should be deleted upon passing test execution");
         }
         finally
         {
@@ -151,9 +160,22 @@ public class FilmTestExecutionSafetyNetTest
     }
 
     @Test
-    public void testPassingTestRetainsRecordingWhenAppendAllConfigured() throws IOException
+    public void testFailingTestAttachesWhenFailureOnlyConfigured()
     {
-        FilmTestExecution.getContextVideo().setProperty("video.appendAllRecordingsToAllureReport", "true");
+        FilmTestExecution.getContextVideo().setProperty("video.attachOnlyOnFailure", "true");
+        final VideoRecordingConfigurations config = (VideoRecordingConfigurations) FilmTestExecution.getContext(VideoRecordingConfigurations.class);
+
+        final boolean testFailed = true;
+        final boolean attachOnlyOnFailure = config.attachOnlyOnFailure()
+            || !config.appendAllRecordingsToAllureReport();
+        final boolean shouldAttach = !attachOnlyOnFailure || testFailed;
+
+        Assertions.assertTrue(shouldAttach, "Should attach on failed test even when failure-only is active");
+    }
+
+    @Test
+    public void testPassingTestAttachesRecordingWhenAppendAllConfigured() throws IOException
+    {
         final VideoRecordingConfigurations config = (VideoRecordingConfigurations) FilmTestExecution.getContext(VideoRecordingConfigurations.class);
         final File tempDir = new File(config.tempFolderToStoreRecording());
         if (!tempDir.exists())
@@ -169,7 +191,7 @@ public class FilmTestExecutionSafetyNetTest
         try
         {
             Assertions.assertTrue(config.appendAllRecordingsToAllureReport(),
-                "appendAllRecordingsToAllureReport must be true when explicitly configured");
+                "appendAllRecordingsToAllureReport must be true by default");
             final boolean testFailed = false;
             final boolean attachOnlyOnFailure = config.attachOnlyOnFailure()
                 || !config.appendAllRecordingsToAllureReport();

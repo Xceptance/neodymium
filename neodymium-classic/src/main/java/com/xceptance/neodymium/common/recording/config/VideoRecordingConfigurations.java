@@ -70,7 +70,7 @@ public interface VideoRecordingConfigurations extends RecordingConfigurations
 
     @Override
     @Key("video.appendAllRecordingsToAllureReport")
-    @DefaultValue("false")
+    @DefaultValue("true")
     public boolean appendAllRecordingsToAllureReport();
 
     @Override

@@ -298,15 +298,6 @@ public class TakeScreenshotsThread extends Thread
                             finalRecording.delete();
                         }
                     }
-                    else
-                    {
-                        // Recording not attached (e.g. test passed and failure-only attachment is configured)
-                        // Discard recording file to free up disk space and avoid leaking unattached video files.
-                        if (finalRecording.exists())
-                        {
-                            finalRecording.delete();
-                        }
-                    }
 
                     // delete the file when configured and only if it wasn't deleted already
                     if (recordingConfigurations.deleteTempRecordings() && finalRecording.exists())
