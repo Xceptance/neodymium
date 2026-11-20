@@ -1405,8 +1405,9 @@ public final class AuraQueueService
                         final String finalStatus = String.valueOf(payload.get("status"));
                         globalTestsRun.incrementAndGet();
                         if ("passed".equalsIgnoreCase(finalStatus) || "passed-clean".equalsIgnoreCase(finalStatus)
-                                || "passed-healed".equalsIgnoreCase(finalStatus) || "fixed-clean".equalsIgnoreCase(finalStatus)
-                                || "fixed-healed".equalsIgnoreCase(finalStatus))
+                                || "passed-healed".equalsIgnoreCase(finalStatus) || "passed-ai".equalsIgnoreCase(finalStatus)
+                                || "fixed-clean".equalsIgnoreCase(finalStatus) || "fixed-healed".equalsIgnoreCase(finalStatus)
+                                || "fixed-ai".equalsIgnoreCase(finalStatus) || "succeeded-fixed".equalsIgnoreCase(finalStatus))
                         {
                             globalPassed.incrementAndGet();
                         }

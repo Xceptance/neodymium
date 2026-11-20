@@ -377,7 +377,13 @@ public class AuraGlobalModelAdvice
                 {
                     scheduledCount = total;
                 }
-                passedCount = activeEntity.getPassedCleanCount() + activeEntity.getFixedCleanCount() + activeEntity.getPassedHealedCountSafe() + activeEntity.getFixedHealedCountSafe();
+                final int activePass = (activeEntity.getPassedCount() != null)
+                    ? activeEntity.getPassedCount()
+                    : (activeEntity.getPassedCleanCount() + activeEntity.getPassedHealedCountSafe() + activeEntity.getPassedAiCountSafe());
+                final int activeFixed = (activeEntity.getSucceededFixedCount() != null)
+                    ? activeEntity.getSucceededFixedCount()
+                    : (activeEntity.getFixedCleanCount() + activeEntity.getFixedHealedCountSafe() + activeEntity.getFixedAiCountSafe());
+                passedCount = activePass + activeFixed;
                 final int activeFailKnown = activeEntity.getFailedKnownCount() != null ? activeEntity.getFailedKnownCount() : 0;
                 final int activeFailUnknown = activeEntity.getFailedUnknownCount() != null ? activeEntity.getFailedUnknownCount() : 0;
                 failedCount = activeFailKnown + activeFailUnknown;
@@ -437,7 +443,13 @@ public class AuraGlobalModelAdvice
                 }
                 executedCount = latestRun.getTotalTestsSafe();
                 scheduledCount = latestRun.getTotalTestsSafe();
-                passedCount = latestRun.getPassedCleanCount() + latestRun.getFixedCleanCount() + latestRun.getPassedHealedCountSafe() + latestRun.getFixedHealedCountSafe();
+                final int latestPass = (latestRun.getPassedCount() != null)
+                    ? latestRun.getPassedCount()
+                    : (latestRun.getPassedCleanCount() + latestRun.getPassedHealedCountSafe() + latestRun.getPassedAiCountSafe());
+                final int latestFixed = (latestRun.getSucceededFixedCount() != null)
+                    ? latestRun.getSucceededFixedCount()
+                    : (latestRun.getFixedCleanCount() + latestRun.getFixedHealedCountSafe() + latestRun.getFixedAiCountSafe());
+                passedCount = latestPass + latestFixed;
                 final int latestFailKnown = latestRun.getFailedKnownCount() != null ? latestRun.getFailedKnownCount() : 0;
                 final int latestFailUnknown = latestRun.getFailedUnknownCount() != null ? latestRun.getFailedUnknownCount() : 0;
                 failedCount = latestFailKnown + latestFailUnknown;

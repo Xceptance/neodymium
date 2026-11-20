@@ -532,6 +532,41 @@ public final class AuraTestQueueControllerTest
     }
 
     @Test
+    public final void testGetStatusStreamIncludesAiDrivenPassedCount()
+    {
+        final AuraQueueService mockQueueService = Mockito.mock(AuraQueueService.class);
+        Mockito.when(mockQueueService.getCurrentRunId()).thenReturn("run_ai_test");
+        Mockito.when(mockQueueService.isRunningQueue()).thenReturn(false);
+
+        final AuraReportDataService mockReportService = Mockito.mock(AuraReportDataService.class);
+        final TestRunEntity activeEntity = new TestRunEntity();
+        activeEntity.setId("run_ai_test");
+        activeEntity.setStatus("COMPLETED");
+        activeEntity.setTotalTests(2);
+        activeEntity.setRunningCount(0);
+        activeEntity.setPassedCount(2);
+        activeEntity.setPassedAiCount(1);
+
+        Mockito.when(mockReportService.getAllRuns()).thenReturn(List.of(activeEntity));
+
+        final AuraTestQueueController testController = new AuraTestQueueController(
+            mockQueueService, this.fileService, this.interactiveService, this.batchRepository, mockReportService
+        );
+
+        final ResponseEntity<Map<String, Object>> response = testController.getStatusStream(null, 0, 0);
+        Assertions.assertEquals(200, response.getStatusCode().value());
+        final Map<String, Object> body = response.getBody();
+        Assertions.assertNotNull(body);
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> statusObj = (Map<String, Object>) body.get("status");
+        Assertions.assertNotNull(statusObj);
+        Assertions.assertEquals(2, statusObj.get("passed"));
+        Assertions.assertEquals(0, statusObj.get("failed"));
+        Assertions.assertEquals(2, statusObj.get("executedCount"));
+        Assertions.assertEquals(2, statusObj.get("scheduledCount"));
+    }
+
+    @Test
     public final void testQueueRunTagsAddRemoveClear()
     {
         final Model model = new ConcurrentModel();

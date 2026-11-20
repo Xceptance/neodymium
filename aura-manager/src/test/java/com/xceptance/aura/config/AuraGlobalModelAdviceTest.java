@@ -425,4 +425,37 @@ public final class AuraGlobalModelAdviceTest
         Assertions.assertEquals(0, model.getAttribute("activeRunPassedCount"));
         Assertions.assertEquals(0, model.getAttribute("activeRunFailedCount"));
     }
+
+    @Test
+    public final void testActiveRunContextIncludesAiDrivenPassedCount()
+    {
+        final AuraQueueService mockQueueService = Mockito.mock(AuraQueueService.class);
+        Mockito.when(mockQueueService.getCurrentRunId()).thenReturn("");
+        Mockito.when(mockQueueService.isRunningQueue()).thenReturn(false);
+
+        final TestRunRepository mockRunRepo = Mockito.mock(TestRunRepository.class);
+        final TestRunEntity completedRun = new TestRunEntity();
+        completedRun.setId("run_20261120_104813");
+        completedRun.setBatchName("Browse");
+        completedRun.setStatus("COMPLETED");
+        completedRun.setTotalTests(2);
+        completedRun.setRunningCount(0);
+        completedRun.setPassedCount(2);
+        completedRun.setPassedAiCount(1);
+
+        Mockito.when(mockRunRepo.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of(completedRun));
+
+        final AuraGlobalModelAdvice advice = new AuraGlobalModelAdvice(mockQueueService, null, mockRunRepo, null);
+        final Model model = new ConcurrentModel();
+        advice.addGlobalAttributes(model);
+
+        Assertions.assertEquals(Boolean.TRUE, model.getAttribute("hasRunContext"));
+        Assertions.assertEquals("run_20261120_104813", model.getAttribute("activeRunId"));
+        Assertions.assertEquals("finished", model.getAttribute("activeRunStatus"));
+        Assertions.assertEquals(2, model.getAttribute("activeRunExecutedCount"));
+        Assertions.assertEquals(2, model.getAttribute("activeRunScheduledCount"));
+        Assertions.assertEquals(2, model.getAttribute("activeRunPassedCount"));
+        Assertions.assertEquals(0, model.getAttribute("activeRunFailedCount"));
+        Assertions.assertEquals("2 tests completed", model.getAttribute("activeRunProgress"));
+    }
 }
