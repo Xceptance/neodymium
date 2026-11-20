@@ -1654,19 +1654,64 @@ public class AuraTestQueueController
         RunRequest req = null;
         if (runCurrent)
         {
-            final String activeFile = fileService.getActiveEditingFile();
-            if (activeFile != null)
+            final String paramFile = (params.get("file") != null && !params.get("file").isBlank())
+                    ? params.get("file").trim()
+                    : (request != null && request.getParameter("file") != null && !request.getParameter("file").isBlank())
+                            ? request.getParameter("file").trim()
+                            : null;
+            final String activeFile = (paramFile != null && !paramFile.isBlank())
+                    ? paramFile
+                    : (fileService != null ? fileService.getActiveEditingFile() : null);
+
+            if (activeFile != null && !activeFile.isBlank())
             {
                 req = new RunRequest();
-                final DatasetSelection sel = new DatasetSelection();
-                sel.file = activeFile;
-                sel.id = null;
-                req.datasets = List.of(sel);
+                List<DatasetDto> datasets = null;
+                if (fileService != null)
+                {
+                    final List<YamlFileDto> files = fileService.getYamlFilesList();
+                    if (files != null)
+                    {
+                        for (final YamlFileDto f : files)
+                        {
+                            if (activeFile.equals(f.file))
+                            {
+                                datasets = f.datasets;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (datasets != null && !datasets.isEmpty())
+                {
+                    final List<DatasetSelection> selections = new ArrayList<>();
+                    for (final DatasetDto d : datasets)
+                    {
+                        final DatasetSelection sel = new DatasetSelection();
+                        sel.file = activeFile;
+                        sel.id = d.id;
+                        selections.add(sel);
+                    }
+                    req.datasets = selections;
+                }
+                else
+                {
+                    final DatasetSelection sel = new DatasetSelection();
+                    sel.file = activeFile;
+                    sel.id = null;
+                    req.datasets = List.of(sel);
+                }
                 req.headless = headless;
                 req.video = video;
                 req.videoOnlyOnFailure = videoOnlyOnFailure;
                 req.executionMode = executionMode;
                 req.interactive = interactive;
+            }
+            else
+            {
+                LOGGER.error("[Aura Server] Run current test failed: No open test file in editor");
+                return renderExecutionStatePanels(model);
             }
         }
 
@@ -1776,7 +1821,25 @@ public class AuraTestQueueController
         int skippedCount = queueService.getGlobalSkipped();
 
         final RunRequest lastReq = queueService.getLastRunRequest();
-        Integer scheduledCount = (isQueueRunning && lastReq != null && lastReq.datasets != null) ? lastReq.datasets.size() : null;
+        Integer scheduledCount = null;
+        if (isQueueRunning && lastReq != null && lastReq.datasets != null)
+        {
+            int totalRuns = 0;
+            final int defaultProfileCount = (lastReq.globalBrowserProfiles != null && !lastReq.globalBrowserProfiles.isEmpty())
+                    ? lastReq.globalBrowserProfiles.size()
+                    : Math.max(1, globalBrowserProfiles.size());
+            for (final DatasetSelection sel : lastReq.datasets)
+            {
+                if (sel != null)
+                {
+                    final int profileCount = (sel.browserProfiles != null && !sel.browserProfiles.isEmpty())
+                            ? sel.browserProfiles.size()
+                            : defaultProfileCount;
+                    totalRuns += profileCount;
+                }
+            }
+            scheduledCount = totalRuns > 0 ? totalRuns : lastReq.datasets.size();
+        }
         if (isQueueRunning && lastReq != null && (currentBatch == null || !AuraReportDataService.isRealBatch(currentBatch)))
         {
             currentBatch = AuraReportDataService.resolveEffectiveBatchNameFromMap(currentBatch, lastReq.tags);
@@ -1840,7 +1903,13 @@ public class AuraTestQueueController
             activeRunningCount = runningCount;
             final int total = activeEntity.getTotalTestsSafe();
             final int entityExecuted = Math.max(0, total - runningCount);
-            final int entityPassed = activeEntity.getPassedCleanCount() + activeEntity.getFixedCleanCount() + activeEntity.getPassedHealedCountSafe() + activeEntity.getFixedHealedCountSafe();
+            final int entityPass = (activeEntity.getPassedCount() != null)
+                ? activeEntity.getPassedCount()
+                : (activeEntity.getPassedCleanCount() + activeEntity.getPassedHealedCountSafe() + activeEntity.getPassedAiCountSafe());
+            final int entityFixed = (activeEntity.getSucceededFixedCount() != null)
+                ? activeEntity.getSucceededFixedCount()
+                : (activeEntity.getFixedCleanCount() + activeEntity.getFixedHealedCountSafe() + activeEntity.getFixedAiCountSafe());
+            final int entityPassed = entityPass + entityFixed;
             final int activeFailKnown = activeEntity.getFailedKnownCount() != null ? activeEntity.getFailedKnownCount() : 0;
             final int activeFailUnknown = activeEntity.getFailedUnknownCount() != null ? activeEntity.getFailedUnknownCount() : 0;
             final int entityFailed = activeFailKnown + activeFailUnknown;
@@ -1911,7 +1980,13 @@ public class AuraTestQueueController
                 executedCount = entityTotal;
                 scheduledCount = entityTotal;
                 totalTestsRun = executedCount;
-                passedCount = latestRun.getPassedCleanCount() + latestRun.getFixedCleanCount() + latestRun.getPassedHealedCountSafe() + latestRun.getFixedHealedCountSafe();
+                final int latestPass = (latestRun.getPassedCount() != null)
+                    ? latestRun.getPassedCount()
+                    : (latestRun.getPassedCleanCount() + latestRun.getPassedHealedCountSafe() + latestRun.getPassedAiCountSafe());
+                final int latestFixed = (latestRun.getSucceededFixedCount() != null)
+                    ? latestRun.getSucceededFixedCount()
+                    : (latestRun.getFixedCleanCount() + latestRun.getFixedHealedCountSafe() + latestRun.getFixedAiCountSafe());
+                passedCount = latestPass + latestFixed;
                 final int latestFailKnown = latestRun.getFailedKnownCount() != null ? latestRun.getFailedKnownCount() : 0;
                 final int latestFailUnknown = latestRun.getFailedUnknownCount() != null ? latestRun.getFailedUnknownCount() : 0;
                 failedCount = latestFailKnown + latestFailUnknown;

@@ -100,6 +100,23 @@ if (document.readyState === 'loading') {
 
 document.addEventListener('htmx:afterSwap', formatAllOnPage);
 
+/**
+ * Synchronizes the browser tab title, ensuring "Neodymium AI Manager" branding
+ * is consistently present across all views.
+ *
+ * @param {string} viewTitle The active view or page title to display
+ */
+function syncDocumentTitle(viewTitle) {
+    if (!viewTitle || !viewTitle.trim()) {
+        document.title = 'Neodymium AI Manager';
+    } else if (viewTitle.includes('Neodymium')) {
+        document.title = viewTitle.trim();
+    } else {
+        document.title = `Neodymium AI Manager - ${viewTitle.trim()}`;
+    }
+}
+window.syncDocumentTitle = syncDocumentTitle;
+
 // Navigation & View Switches
 function toggleSidebarCollapse() {
     const sidebar = document.getElementById('mainSidebar');
@@ -117,6 +134,7 @@ function showRunsList() {
 
     const pageTitle = document.getElementById('pageTitle');
     if (pageTitle) pageTitle.innerHTML = '<span class="material-symbols-outlined text-accent">format_list_bulleted</span> Runs overview';
+    syncDocumentTitle('Runs overview');
     
     const breadcrumb = document.getElementById('headerBreadcrumb');
     if (breadcrumb) breadcrumb.style.display = 'none';
@@ -153,6 +171,7 @@ function openBatchHistoryOverview(batchName, latestRunId) {
 
     const titleEl = document.getElementById('pageTitle');
     if (titleEl) titleEl.innerHTML = `<span class="material-symbols-outlined text-accent">trending_up</span> Batch History Overview`;
+    syncDocumentTitle(activeBatchName ? activeBatchName : 'Batch History Overview');
     
     const breadcrumbEl = document.getElementById('headerBreadcrumb');
     if (breadcrumbEl) breadcrumbEl.style.display = 'flex';
@@ -5898,15 +5917,15 @@ function generateFullTestDiagnosticsMarkdown(execDto, activeRow) {
         }
     }
 
-    // Aura MCP Guidance for AI Agents
+    // Neodymium AI MCP Guidance for AI Agents
     lines.push('');
     lines.push('---');
     lines.push('> [!TIP]');
     const executionId = dto.id || (row ? (row.getAttribute('data-execution-id') || row.getAttribute('id')) : '') || '';
     if (executionId) {
-        lines.push(`> **Aura MCP Quick Tip:** If you have access to Aura MCP tools, inspect detailed failure context via \`get_execution_failure(executionId="${executionId}")\` or read artifacts with \`get_test_content(path="...")\`.`);
+        lines.push(`> **Neodymium AI MCP Quick Tip:** If you have access to Neodymium AI tools, inspect detailed failure context via \`get_execution_failure(executionId="${executionId}")\` or read artifacts with \`get_test_content(path="...")\`.`);
     } else {
-        lines.push('> **Aura MCP Quick Tip:** If you have access to Aura MCP tools, inspect detailed failure context via `get_execution_failure(executionId="...")` or read artifacts with `get_test_content(path="...")`.');
+        lines.push('> **Neodymium AI MCP Quick Tip:** If you have access to Neodymium AI tools, inspect detailed failure context via `get_execution_failure(executionId="...")` or read artifacts with `get_test_content(path="...")`.');
     }
 
     return lines.join('\n');
@@ -9149,10 +9168,12 @@ function bindGlobalListeners() {
             navRuns.classList.remove('active');
             navTest.classList.remove('active');
             if (navAura) navAura.classList.add('active');
+            syncDocumentTitle('Neodymium AI Manager Dashboard');
         } else if (isTestBase) {
             navRuns.classList.remove('active');
             navTest.classList.add('active');
             if (navAura) navAura.classList.remove('active');
+            syncDocumentTitle('Comprehensive Test Base');
         } else {
             navRuns.classList.add('active');
             navTest.classList.remove('active');
@@ -9180,6 +9201,7 @@ function bindGlobalListeners() {
         if (headerTitle) {
             if (isAllRuns) {
                 headerTitle.innerHTML = `<span class="material-symbols-outlined text-accent">format_list_bulleted</span> Runs overview`;
+                syncDocumentTitle('Runs overview');
                 if (breadcrumb) breadcrumb.style.display = 'none';
             } else {
                 let groupIcon = 'trending_up';
@@ -9192,6 +9214,7 @@ function bindGlobalListeners() {
                 else if (groupType === 'area') groupIcon = 'category';
 
                 headerTitle.innerHTML = `<span class="material-symbols-outlined text-accent">${groupIcon}</span> ${escapeHtml(activeBatchName)}`;
+                syncDocumentTitle(activeBatchName);
                 if (breadcrumb) breadcrumb.style.display = 'none';
             }
         }
@@ -9219,6 +9242,7 @@ function bindGlobalListeners() {
         const runIdLabel = document.querySelector('.run-id-label')?.innerText || '#RUN_ID';
         const headerTitle = document.getElementById('pageTitle');
         if (headerTitle) headerTitle.innerHTML = `<span class="material-symbols-outlined text-accent">science</span> Run #${runIdLabel}`;
+        syncDocumentTitle(`Run #${runIdLabel}`);
 
         const breadcrumb = document.getElementById('headerBreadcrumb');
         if (breadcrumb) breadcrumb.style.display = 'flex';
@@ -9336,7 +9360,13 @@ function bindGlobalListeners() {
         }
     }
 
-
+    const customPageEl = document.getElementById('pageCustomDashboard');
+    if (customPageEl) {
+        const pageName = customPageEl.getAttribute('data-page-name');
+        if (pageName) {
+            syncDocumentTitle(pageName);
+        }
+    }
 }
 
 function focusAndInspectExecution(targetExecId) {

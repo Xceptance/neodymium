@@ -1,12 +1,12 @@
-# Neodymium Aura AI v2: Offline Mocking & JUnit 5 Integration Testing Guide
+# Neodymium AI v2: Offline Mocking & JUnit 5 Integration Testing Guide
 
-This document serves as the comprehensive manual for test developers and framework maintainers testing **Neodymium Aura AI (v2)** features. It explains how to build, run, and verify AI playbook executions, test data resolutions, visual context escalations, self-healing, and event listeners 100% offline, deterministically, and with zero external LLM API costs.
+This document serves as the comprehensive manual for test developers and framework maintainers testing **Neodymium AI (v2)** features. It explains how to build, run, and verify AI playbook executions, test data resolutions, visual context escalations, self-healing, and event listeners 100% offline, deterministically, and with zero external LLM API costs.
 
 ---
 
 ## 1. Neodymium AI v2 Architecture Overview
 
-Neodymium Aura AI v2 transitions the engine from procedural loops to a **decoupled, event-driven state machine architecture**:
+Neodymium AI v2 transitions the engine from procedural loops to a **decoupled, event-driven state machine architecture**:
 
 * **JUnit 5 Extension (`NeodymiumAiRunner`)**: The `@NeodymiumAiTest` class annotation wires a JUnit 5 `TestTemplateInvocationContextProvider` that loads playbooks, iterates datasets, manages session lifecycles, and manages recordings.
 * **Orchestration (`StateMachineRunner` & `AiSession`)**: `AiSession` creates and manages the pipeline context (`ExecutionContext`). The `StateMachineRunner` drives pipeline states (`ResolveStepState`, `ExecuteActionsStep`, `VerifyOutcomeStep`, `SelfHealingStep`) in a deterministic, thread-isolated loop.
@@ -255,7 +255,7 @@ public final class SelfHealingTest
 
 ---
 
-## 5. Local Real-Browser Sandbox Testing (`Aura Test Suite Hub`)
+## 5. Local Real-Browser Sandbox Testing (`Neodymium AI Test Suite Hub`)
 
 For tests requiring a physical browser engine (Chrome, Firefox, Safari) to scan layout grids, test CSS contrast, or verify shadow DOM boundaries:
 

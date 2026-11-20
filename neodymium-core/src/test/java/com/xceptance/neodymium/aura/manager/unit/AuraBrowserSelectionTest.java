@@ -49,7 +49,7 @@ public final class AuraBrowserSelectionTest
     @BeforeAll
     public static void beforeAll()
     {
-        System.setProperty("neodymium.aura.test", "true");
+        System.setProperty("neodymium.ai.test", "true");
     }
 
     @BeforeEach

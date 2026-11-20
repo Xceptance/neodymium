@@ -168,7 +168,7 @@ public class NeodymiumAuraFileService
                 final int lastDot = classPath.lastIndexOf('.');
                 final String pkgName = lastDot > 0 ? classPath.substring(0, lastDot) : "default";
 
-                final String category = pkgName.contains("aura") ? "Aura Manager Tests" :
+                final String category = (pkgName.contains("aura") || pkgName.contains("manager")) ? "AI Manager Tests" :
                                          pkgName.contains("junit5") ? "Neodymium Framework Tests" : "Integration Tests";
 
                 results.add(new TestClassInfoDto(simpleName, classPath, pkgName, category));

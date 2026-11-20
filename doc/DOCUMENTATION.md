@@ -20,7 +20,7 @@ Neodymium AI (contained in `org.neodymium.ai.*`) is an intelligent, domain-neutr
    - [2.5 Dynamic Variable Parameterization & Outbound Secret Masking](#25-dynamic-variable-parameterization--outbound-secret-masking)
    - [2.6 Interactive Multi-Stage Instructions & Language-Agnostic `CONTINUE` Protocol](#26-interactive-multi-stage-instructions--language-agnostic-continue-protocol)
    - [2.7 Execution Timing Recording & Paced Replay Playback](#27-execution-timing-recording--paced-replay-playback)
-   - [2.8 Local Test Server & Aura Test Suite Hub (neodymium-test-server)](#28-local-test-server--aura-test-suite-hub-neodymium-test-server)
+   - [2.8 Local Test Server & Neodymium AI Test Suite Hub (neodymium-test-server)](#28-local-test-server--neodymium-ai-test-suite-hub-neodymium-test-server)
 3. [Unified Perception & 5-Tier Locator Engine](#3-unified-perception--5-tier-locator-engine)
    - [3.1 Unified Perception Model (UPM) & `DomFeatureVector`](#31-unified-perception-model-upm--domfeaturevector)
    - [3.2 The 5-Tier Cascading Locator Engine (`LocatorCascadeResolver`)](#32-the-5-tier-cascading-locator-engine-locatorcascaderesolver)
@@ -830,7 +830,7 @@ To ensure faithful replay execution for asynchronous Single Page Applications (S
 
 ---
 
-### 2.8 Local Test Server & Aura Test Suite Hub (neodymium-test-server)
+### 2.8 Local Test Server & Neodymium AI Test Suite Hub (neodymium-test-server)
 
 To enable 100% self-contained, deterministic integration testing without external web dependencies or live third-party sites, the repository provides the `neodymium-test-server` module.
 
@@ -854,7 +854,7 @@ To enable 100% self-contained, deterministic integration testing without externa
   - `getSandboxUrl(path)`: Resolves an HTTP URL targeting the dynamic local port.
   - `getSandboxHttpsUrl(path)`: Resolves an HTTPS URL targeting the secure local port.
 
-#### B. Aura Test Suite Hub
+#### B. Neodymium AI Test Suite Hub
 All sandbox pages are bundled in `neodymium-test-server/src/main/resources/ai-test-pages/AuraGlanceTest/`:
 * **Apparel Storefront (`shop/`)**: Multi-quality implementations (`homepage-perfect.html`, `homepage-normal.html`, `homepage-bad.html`, `plp-*.html`) to benchmark selector stability and self-healing locators.
 * **SaaS Dashboard (`dashboard/`)**: Dynamic SVG charts, iframe content, and metric widgets.
@@ -1562,7 +1562,7 @@ Layout steps use a default SSIM acceptance threshold of **`0.92`** (`PlaybookSte
 Authors can override the threshold per step:
 ```yaml
 steps: |
-  Open ${app.url}/catalog
+  Open ${neodymium.url}/catalog
   Verify product grid layout (layout: threshold=0.90)
   Verify checkout summary styling (layout: full, min-score=0.95)
 ```

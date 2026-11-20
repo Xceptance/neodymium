@@ -1086,7 +1086,7 @@ function init() {
                 pollStatus();
             }
             if (typeof showToast === 'function') {
-                showToast('Run status updated via Aura AI Assistant.');
+                showToast('Run status updated via Neodymium AI Assistant.');
             }
         }
     });

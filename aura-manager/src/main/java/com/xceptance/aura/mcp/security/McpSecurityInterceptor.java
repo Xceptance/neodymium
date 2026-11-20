@@ -80,7 +80,7 @@ public class McpSecurityInterceptor implements HandlerInterceptor
         if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX))
         {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setHeader("WWW-Authenticate", "Bearer realm=\"Aura MCP\"");
+            response.setHeader("WWW-Authenticate", "Bearer realm=\"Neodymium AI MCP\"");
             response.getWriter().write("{\"error\": \"Missing or invalid Authorization header\"}");
             return false;
         }

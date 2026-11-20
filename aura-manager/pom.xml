@@ -11,8 +11,8 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
 
-    <groupId>com.xceptance.aura</groupId>
-    <artifactId>aura-manager</artifactId>
+    <groupId>com.xceptance</groupId>
+    <artifactId>neodymium-manager</artifactId>
     <version>6.0.0-BETA</version>
     <name>Neodymium AI Manager</name>
     <description>Unified Neodymium AI Manager: Test Execution Hub, Visual Playbook Editor, and Reporting Dashboard.</description>
@@ -203,7 +203,7 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <mainClass>com.xceptance.aura.AiLauncher</mainClass>
+                    <mainClass>org.neodymium.manager.NeodymiumManagerLauncher</mainClass>
                     <classifier>exec</classifier>
                     <skip>false</skip>
                 </configuration>
@@ -239,7 +239,7 @@
                                 <exclude>**/*SpringContextTest.java</exclude>
                                 <exclude>**/*UiTest.java</exclude>
                                 <exclude>**/ui/**</exclude>
-                                <exclude>**/AuraLauncherTest.java</exclude>
+                                <exclude>**/NeodymiumManagerLauncherTest.java</exclude>
                                 <exclude>**/AiLauncherTest.java</exclude>
                                 <exclude>**/WikipediaSearchTest.java</exclude>
                             </excludes>

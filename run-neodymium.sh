@@ -12,5 +12,5 @@ if [ -d "aura-manager" ]; then
     mvn -U spring-boot:run -pl aura-manager -am
 else
     # Running inside external test project with AI manager dependency
-    mvn -U test-compile exec:java -Dexec.mainClass="com.xceptance.aura.AiLauncher" -Dexec.classpathScope="test"
+    mvn -U test-compile exec:java -Dexec.mainClass="org.neodymium.manager.NeodymiumManagerLauncher" -Dexec.classpathScope="test"
 fi

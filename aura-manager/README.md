@@ -1,6 +1,6 @@
-# Aura Report Manager
+# Neodymium AI Manager
 
-A standalone Spring Boot application providing a modern, clean, and interactive test report management hub built with **Bootstrap 5.3**, **HTMX 1.9**, and **Thymeleaf 3.x**.
+A standalone Spring Boot application providing a modern, clean, and interactive test report and execution management hub built with **Bootstrap 5.3**, **HTMX 1.9**, and **Thymeleaf 3.x**.
 
 ---
 
@@ -34,4 +34,4 @@ mvn clean package
 mvn spring-boot:run
 ```
 
-Once started, open **`http://localhost:8080/`** in your browser to access the Aura Report Manager!
+Once started, open **`http://localhost:8080/`** in your browser to access the Neodymium AI Manager!

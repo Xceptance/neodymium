@@ -176,7 +176,7 @@ To guarantee exact coordinate alignment across different developer machines, hea
 
 ## 7. Verification & Sandbox Hub
 
-The VLM Visual Grounding and Visual Marker engines are verified in the Neodymium Aura Test Suite:
+The VLM Visual Grounding and Visual Marker engines are verified in the Neodymium AI Test Suite:
 - **Direct Canvas Grounding Sandbox**:
   - Page: `src/test/resources/ai-test-pages/AuraGlanceTest/shop/sandbox/canvas-click.html`
   - Live Suite: [`CanvasClickSandboxLiveTest.java`](file:///home/rschwietzke/projects/GIT/neodymium-library/src/test/java/org/neodymium/ai/integration/sandbox/live/CanvasClickSandboxLiveTest.java)

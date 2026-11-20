@@ -543,6 +543,7 @@ public final class InteractiveConsoleEngine {
                 final int index = getExecutionIndex(testClassFolder, executionKey);
                 String contentToSave = minified;
 
+
                 // 1. Root file for compatibility in default allure.results.directory
                 final File executionJson = new File(defaultResultsDir, "console-execution-" + index + ".json");
 

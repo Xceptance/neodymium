@@ -528,6 +528,37 @@ public class InteractiveConsoleEngineTest
         assertTrue(updatedJsonContent.contains("\"videoPath\":\"video-1.mp4\""), "Custom execution JSON should contain videoPath attribute");
     }
 
+    /**
+     * Regression safety net for DEF-20261118-1335: Verifies that attachVideoToLatestExecutionLog resolves
+     * the highest execution index even when directory listings return files out of order, ensuring that
+     * subsequent test videos (e.g. video-3.mp4) do not overwrite previous videos (e.g. video-2.mp4).
+     */
+    @Test
+    public void testAttachVideoToLatestExecutionLogWithUnorderedJsonFiles(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File targetTestDir = new File(customDir.toFile(), runFolder + "/MultiDatasetTest");
+        targetTestDir.mkdirs();
+
+        // Create executions 1, 2, 3
+        Files.writeString(new File(targetTestDir, "console-execution-1.json").toPath(), "{\"testName\":\"ds1\"}");
+        Files.writeString(new File(targetTestDir, "console-execution-2.json").toPath(), "{\"testName\":\"ds2\"}");
+        Files.writeString(new File(targetTestDir, "console-execution-3.json").toPath(), "{\"testName\":\"ds3\"}");
+
+        final File dummyVideo3 = new File(tempResultsDir, "recording-dummy-3.mp4");
+        Files.writeString(dummyVideo3.toPath(), "dummy-mp4-data-3");
+
+        InteractiveConsoleEngine.attachVideoToLatestExecutionLog(dummyVideo3, "MultiDatasetTest");
+
+        final File targetVideo = new File(targetTestDir, "video-3.mp4");
+        assertTrue(targetVideo.exists(), "Video file should be copied as video-3.mp4 matching the highest execution index");
+        assertEquals("dummy-mp4-data-3", Files.readString(targetVideo.toPath()));
+    }
+
     @Test
     public void testAttachVideoToMultipleExecutionsMaintainsDistinctIndices(@TempDir final Path customDir) throws IOException
     {

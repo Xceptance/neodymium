@@ -387,7 +387,7 @@ public final class AuraQueueService
                 {
                     for (final DatasetSelection selection : req.datasets)
                     {
-                        if (selection.file == null)
+                        if (selection.file == null || selection.file.isBlank())
                         {
                             continue;
                         }
@@ -526,10 +526,11 @@ public final class AuraQueueService
 
                     activeFile.set(file);
 
-                    if ("true".equalsIgnoreCase(System.getProperty("neodymium.aura.test", "false")))
+                    final boolean isTestMode = Boolean.getBoolean("neodymium.ai.test");
+                    if (isTestMode)
                     {
-                        LOGGER.info("[Aura Server] Test mode active (neodymium.aura.test=true). Simulating queue execution for {} with profiles {}", file, targetProfiles);
-                        final long delayMs = Long.getLong("neodymium.aura.test.simulation.delayMs", 0L);
+                        LOGGER.info("[AI Manager Server] Test mode active. Simulating queue execution for {} with profiles {}", file, targetProfiles);
+                        final long delayMs = Long.getLong("neodymium.ai.test.simulation.delayMs", 0L);
                         if (delayMs > 0)
                         {
                             try
@@ -727,7 +728,7 @@ public final class AuraQueueService
                     }
                     command.add("-Dneodymium.ai.executionMode=" + (req.executionMode != null ? req.executionMode : "LLM_RECORDING"));
                     command.add("-Dneodymium.managerActive=true");
-                    command.add("-Dneodymium.aura.test=" + System.getProperty("neodymium.aura.test", "false"));
+                    command.add("-Dneodymium.ai.test=" + System.getProperty("neodymium.ai.test", "false"));
                     command.add("-Dneodymium.managerRunId=" + runId);
                     command.add("-Dneodymium.runId=" + runId);
                     command.add("-Dneodymium.managerUrl=http://localhost:" + serverPort);
@@ -1422,8 +1423,9 @@ public final class AuraQueueService
                         final String finalStatus = String.valueOf(payload.get("status"));
                         globalTestsRun.incrementAndGet();
                         if ("passed".equalsIgnoreCase(finalStatus) || "passed-clean".equalsIgnoreCase(finalStatus)
-                                || "passed-healed".equalsIgnoreCase(finalStatus) || "fixed-clean".equalsIgnoreCase(finalStatus)
-                                || "fixed-healed".equalsIgnoreCase(finalStatus))
+                                || "passed-healed".equalsIgnoreCase(finalStatus) || "passed-ai".equalsIgnoreCase(finalStatus)
+                                || "fixed-clean".equalsIgnoreCase(finalStatus) || "fixed-healed".equalsIgnoreCase(finalStatus)
+                                || "fixed-ai".equalsIgnoreCase(finalStatus) || "succeeded-fixed".equalsIgnoreCase(finalStatus))
                         {
                             globalPassed.incrementAndGet();
                         }
@@ -1453,7 +1455,10 @@ public final class AuraQueueService
                     }
                 }
                 payload.put("runId", runId);
-                payload.put("testClass", className);
+                if (!payload.containsKey("testClass") || payload.get("testClass") == null || String.valueOf(payload.get("testClass")).isBlank())
+                {
+                    payload.put("testClass", className);
+                }
                 listener.onTestExecutionCompleted(runId, payload);
             }
         }

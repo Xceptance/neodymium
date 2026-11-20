@@ -5286,14 +5286,24 @@ public class AuraReportViewController
         @RequestHeader(value = HttpHeaders.RANGE, required = false) final String rangeHeader,
         final HttpServletResponse response) throws IOException
     {
+        final Path targetPath = resolveRunFilePath(runId, testClass, filename);
+        if (targetPath == null)
+        {
+            response.sendError(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
+        servePath(targetPath, filename, rangeHeader, response);
+    }
+
+    private Path resolveRunFilePath(final String runId, final String testClass, final String filename)
+    {
         final String effectiveBaseDir = (runsBaseDir != null && !runsBaseDir.isBlank()) ? runsBaseDir : "storage/runs";
         final Path baseStoragePath = Paths.get(effectiveBaseDir).toAbsolutePath().normalize();
 
         Path candidate = resolveSafePath(baseStoragePath, runId, testClass, filename);
         if (candidate != null)
         {
-            servePath(candidate, filename, rangeHeader, response);
-            return;
+            return candidate;
         }
 
         final String normalizedClass = normalizeClassName(testClass);
@@ -5302,8 +5312,7 @@ public class AuraReportViewController
             candidate = resolveSafePath(baseStoragePath, runId, normalizedClass, filename);
             if (candidate != null)
             {
-                servePath(candidate, filename, rangeHeader, response);
-                return;
+                return candidate;
             }
         }
 
@@ -5313,12 +5322,11 @@ public class AuraReportViewController
             final Path runLevelCandidate = baseStoragePath.resolve(Paths.get(runId, filename)).normalize();
             if (runLevelCandidate.startsWith(baseStoragePath) && Files.isRegularFile(runLevelCandidate) && Files.isReadable(runLevelCandidate))
             {
-                servePath(runLevelCandidate, filename, rangeHeader, response);
-                return;
+                return runLevelCandidate;
             }
         }
 
-        response.sendError(HttpServletResponse.SC_NOT_FOUND);
+        return null;
     }
 
     private String normalizeClassName(final String rawClass)

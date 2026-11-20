@@ -7057,6 +7057,30 @@ public class AuraReportDataService
         }
     }
 
+    private static Map<String, List<TestExecutionDto>> groupByCanonicalClass(
+            final Collection<TestExecutionDto> executions,
+            final Map<String, String> displayClassNameByKey)
+    {
+        final Map<String, List<TestExecutionDto>> byClass = new LinkedHashMap<>();
+        for (final TestExecutionDto e : executions)
+        {
+            final String rawClass = (e.getTestClass() != null && !e.getTestClass().isBlank())
+                    ? e.getTestClass().trim()
+                    : "GeneralTest";
+            final String simpleName = extractSimpleClassName(rawClass);
+            final String canonicalKey = !simpleName.isEmpty() ? simpleName.toLowerCase(Locale.ROOT) : rawClass.toLowerCase(Locale.ROOT);
+
+            byClass.computeIfAbsent(canonicalKey, k -> new ArrayList<>()).add(e);
+
+            final String existingDisplay = displayClassNameByKey.get(canonicalKey);
+            if (existingDisplay == null || (rawClass.contains(".") && !existingDisplay.contains(".")))
+            {
+                displayClassNameByKey.put(canonicalKey, rawClass);
+            }
+        }
+        return byClass;
+    }
+
     public List<AreaSummaryDto> buildAreaSummaries(final List<TestExecutionDto> executions)
     {
         if (executions == null || executions.isEmpty())
@@ -7064,17 +7088,13 @@ public class AuraReportDataService
             return new ArrayList<>();
         }
 
-        final Map<String, List<TestExecutionDto>> byClass = executions.stream()
-            .collect(Collectors.groupingBy(
-                e -> (e.getTestClass() != null && !e.getTestClass().isEmpty()) ? e.getTestClass() : "GeneralTest",
-                LinkedHashMap::new,
-                Collectors.toList()
-            ));
+        final Map<String, String> displayClassNameByKey = new LinkedHashMap<>();
+        final Map<String, List<TestExecutionDto>> byClass = groupByCanonicalClass(executions, displayClassNameByKey);
 
         final List<TestClassSummaryDto> testClasses = new ArrayList<>();
         for (final Map.Entry<String, List<TestExecutionDto>> entry : byClass.entrySet())
         {
-            final String testClass = entry.getKey();
+            final String testClass = displayClassNameByKey.getOrDefault(entry.getKey(), entry.getKey());
             final List<TestExecutionDto> classExecs = entry.getValue();
 
             int cPass = 0, cFixed = 0, cKnown = 0, cUnknown = 0, cIgnored = 0, cRunning = 0;
@@ -7166,18 +7186,14 @@ public class AuraReportDataService
                     final String subName = subEntry.getKey();
                     final List<TestExecutionDto> subExecs = subEntry.getValue();
 
-                    final Map<String, List<TestExecutionDto>> subByClass = subExecs.stream()
-                        .collect(Collectors.groupingBy(
-                            e -> (e.getTestClass() != null && !e.getTestClass().isEmpty()) ? e.getTestClass() : "GeneralTest",
-                            LinkedHashMap::new,
-                            Collectors.toList()
-                        ));
+                    final Map<String, String> subDisplayClassNameByKey = new LinkedHashMap<>();
+                    final Map<String, List<TestExecutionDto>> subByClass = groupByCanonicalClass(subExecs, subDisplayClassNameByKey);
 
                     final List<TestClassSummaryDto> subClasses = new ArrayList<>();
                     int sPass = 0, sFixed = 0, sKnown = 0, sUnknown = 0, sIgnored = 0, sRunning = 0;
                     for (final Map.Entry<String, List<TestExecutionDto>> scEntry : subByClass.entrySet())
                     {
-                        final String scName = scEntry.getKey();
+                        final String scName = subDisplayClassNameByKey.getOrDefault(scEntry.getKey(), scEntry.getKey());
                         final List<TestExecutionDto> scExecs = scEntry.getValue();
 
                         int cPass = 0, cFixed = 0, cKnown = 0, cUnknown = 0, cIgnored = 0, cRunning = 0;

@@ -21,17 +21,17 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.xceptance.aura;
+package org.neodymium.manager;
+
+import com.xceptance.aura.AiLauncher;
 
 /**
- * Legacy launcher for Neodymium AI Manager.
+ * Canonical launcher for Neodymium AI Manager.
  *
- * @deprecated Use {@link AiLauncher} instead.
  * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
-@Deprecated
-public class AuraLauncher extends AiLauncher
+public class NeodymiumManagerLauncher extends AiLauncher
 {
     public static void main(final String[] args) throws Exception
     {

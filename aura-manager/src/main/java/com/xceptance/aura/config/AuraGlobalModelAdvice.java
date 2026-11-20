@@ -32,6 +32,8 @@ import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.ReportDashboardSettingService;
 import com.xceptance.neodymium.aura.AuraQueueService;
 import com.xceptance.neodymium.aura.AuraSettingsService;
+import com.xceptance.neodymium.aura.dto.DatasetSelection;
+import com.xceptance.neodymium.aura.dto.RunRequest;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -290,13 +292,28 @@ public class AuraGlobalModelAdvice
             Integer scheduledCount = null;
             if (isQueueRunning && queueService.getLastRunRequest() != null)
             {
-                if (queueService.getLastRunRequest().datasets != null)
+                final RunRequest lastReq = queueService.getLastRunRequest();
+                if (lastReq.datasets != null)
                 {
-                    scheduledCount = queueService.getLastRunRequest().datasets.size();
+                    int totalRuns = 0;
+                    final int defaultProfileCount = (lastReq.globalBrowserProfiles != null && !lastReq.globalBrowserProfiles.isEmpty())
+                            ? lastReq.globalBrowserProfiles.size()
+                            : 1;
+                    for (final DatasetSelection sel : lastReq.datasets)
+                    {
+                        if (sel != null)
+                        {
+                            final int profileCount = (sel.browserProfiles != null && !sel.browserProfiles.isEmpty())
+                                    ? sel.browserProfiles.size()
+                                    : defaultProfileCount;
+                            totalRuns += profileCount;
+                        }
+                    }
+                    scheduledCount = totalRuns > 0 ? totalRuns : lastReq.datasets.size();
                 }
                 if (currentBatch == null || !AuraReportDataService.isRealBatch(currentBatch))
                 {
-                    currentBatch = AuraReportDataService.resolveEffectiveBatchNameFromMap(currentBatch, queueService.getLastRunRequest().tags);
+                    currentBatch = AuraReportDataService.resolveEffectiveBatchNameFromMap(currentBatch, lastReq.tags);
                 }
             }
 
@@ -377,7 +394,13 @@ public class AuraGlobalModelAdvice
                 {
                     scheduledCount = total;
                 }
-                passedCount = activeEntity.getPassedCleanCount() + activeEntity.getFixedCleanCount() + activeEntity.getPassedHealedCountSafe() + activeEntity.getFixedHealedCountSafe();
+                final int activePass = (activeEntity.getPassedCount() != null)
+                    ? activeEntity.getPassedCount()
+                    : (activeEntity.getPassedCleanCount() + activeEntity.getPassedHealedCountSafe() + activeEntity.getPassedAiCountSafe());
+                final int activeFixed = (activeEntity.getSucceededFixedCount() != null)
+                    ? activeEntity.getSucceededFixedCount()
+                    : (activeEntity.getFixedCleanCount() + activeEntity.getFixedHealedCountSafe() + activeEntity.getFixedAiCountSafe());
+                passedCount = activePass + activeFixed;
                 final int activeFailKnown = activeEntity.getFailedKnownCount() != null ? activeEntity.getFailedKnownCount() : 0;
                 final int activeFailUnknown = activeEntity.getFailedUnknownCount() != null ? activeEntity.getFailedUnknownCount() : 0;
                 failedCount = activeFailKnown + activeFailUnknown;
@@ -437,7 +460,13 @@ public class AuraGlobalModelAdvice
                 }
                 executedCount = latestRun.getTotalTestsSafe();
                 scheduledCount = latestRun.getTotalTestsSafe();
-                passedCount = latestRun.getPassedCleanCount() + latestRun.getFixedCleanCount() + latestRun.getPassedHealedCountSafe() + latestRun.getFixedHealedCountSafe();
+                final int latestPass = (latestRun.getPassedCount() != null)
+                    ? latestRun.getPassedCount()
+                    : (latestRun.getPassedCleanCount() + latestRun.getPassedHealedCountSafe() + latestRun.getPassedAiCountSafe());
+                final int latestFixed = (latestRun.getSucceededFixedCount() != null)
+                    ? latestRun.getSucceededFixedCount()
+                    : (latestRun.getFixedCleanCount() + latestRun.getFixedHealedCountSafe() + latestRun.getFixedAiCountSafe());
+                passedCount = latestPass + latestFixed;
                 final int latestFailKnown = latestRun.getFailedKnownCount() != null ? latestRun.getFailedKnownCount() : 0;
                 final int latestFailUnknown = latestRun.getFailedUnknownCount() != null ? latestRun.getFailedUnknownCount() : 0;
                 failedCount = latestFailKnown + latestFailUnknown;
