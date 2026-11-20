@@ -12,6 +12,8 @@ assert !rawGitignore.exists() : "Temporary gitignore file must have been renamed
 File tokenGitignore = new File(projectDir, "__gitignore__")
 assert !tokenGitignore.exists() : "__gitignore__ token file must not exist in generated project"
 
-File runScript = new File(projectDir, "run-aura.sh")
-assert runScript.exists() : "run-aura.sh must exist"
-assert runScript.canExecute() : "run-aura.sh must be executable"
+File runScript = new File(projectDir, "run-neodymium.sh")
+assert runScript.exists() : "run-neodymium.sh must exist"
+assert runScript.canExecute() : "run-neodymium.sh must be executable"
+
+

@@ -9,21 +9,21 @@ ${h2} Prerequisites
 - **Java Development Kit (JDK 21+)**
 - **Apache Maven (3.9+)**
 - Supported browser (Google Chrome, Mozilla Firefox)
-- **Google Gemini API Key** exported as `GEMINI_API_KEY` (or configured via Aura Manager Settings / `config/ai.properties`)
+- **Google Gemini API Key** exported as `GEMINI_API_KEY` (or configured via AI Manager Settings / `config/ai.properties`)
 
-${h2} Neodymium Aura Manager (Web UI)
+${h2} Neodymium AI Manager (Web UI)
 
-Aura Manager provides an interactive local dashboard to inspect, manage, edit, and execute natural language playbooks without writing Java code.
+Neodymium AI Manager provides an interactive local dashboard to inspect, manage, edit, and execute natural language playbooks without writing Java code.
 
-Start the Aura Manager UI:
+Start the AI Manager UI:
 
 - **Linux / macOS:**
   ```bash
-  ./run-aura.sh
+  ./run-neodymium.sh
   ```
 - **Windows:**
   ```cmd
-  run-aura.bat
+  run-neodymium.bat
   ```
 
 Open your browser at `http://localhost:8080`.

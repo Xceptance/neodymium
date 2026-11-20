@@ -5273,18 +5273,48 @@ public class AuraReportViewController
     public ResponseEntity<?> serveRunFile(
         final String runId,
         final String testClass,
-        final String filename)
+        final String filename,
+        final String rangeHeader)
     {
-        return serveRunFile(runId, testClass, filename, null);
+        if (rangeHeader != null && !rangeHeader.isBlank())
+        {
+            return serveRunFileRange(runId, testClass, filename, rangeHeader);
+        }
+        return serveRunFile(runId, testClass, filename);
+    }
+
+    @GetMapping(value = "/api/runs/{runId}/{testClass}/{filename:.+}", headers = "Range")
+    @ResponseBody
+    public ResponseEntity<ResourceRegion> serveRunFileRange(
+        @PathVariable("runId") final String runId,
+        @PathVariable("testClass") final String testClass,
+        @PathVariable("filename") final String filename,
+        @RequestHeader(HttpHeaders.RANGE) final String rangeHeader)
+    {
+        final Path targetPath = resolveRunFilePath(runId, testClass, filename);
+        if (targetPath == null)
+        {
+            return ResponseEntity.notFound().build();
+        }
+        return serveResourceRegion(targetPath, filename, rangeHeader);
     }
 
     @GetMapping("/api/runs/{runId}/{testClass}/{filename:.+}")
     @ResponseBody
-    public ResponseEntity<?> serveRunFile(
+    public ResponseEntity<Resource> serveRunFile(
         @PathVariable("runId") final String runId,
         @PathVariable("testClass") final String testClass,
-        @PathVariable("filename") final String filename,
-        @RequestHeader(value = HttpHeaders.RANGE, required = false) final String rangeHeader)
+        @PathVariable("filename") final String filename)
+    {
+        final Path targetPath = resolveRunFilePath(runId, testClass, filename);
+        if (targetPath == null)
+        {
+            return ResponseEntity.notFound().build();
+        }
+        return serveResource(targetPath, filename);
+    }
+
+    private Path resolveRunFilePath(final String runId, final String testClass, final String filename)
     {
         final String effectiveBaseDir = (runsBaseDir != null && !runsBaseDir.isBlank()) ? runsBaseDir : "storage/runs";
         final Path baseStoragePath = Paths.get(effectiveBaseDir).toAbsolutePath().normalize();
@@ -5292,7 +5322,7 @@ public class AuraReportViewController
         Path candidate = resolveSafePath(baseStoragePath, runId, testClass, filename);
         if (candidate != null)
         {
-            return servePath(candidate, filename, rangeHeader);
+            return candidate;
         }
 
         final String normalizedClass = normalizeClassName(testClass);
@@ -5301,7 +5331,7 @@ public class AuraReportViewController
             candidate = resolveSafePath(baseStoragePath, runId, normalizedClass, filename);
             if (candidate != null)
             {
-                return servePath(candidate, filename, rangeHeader);
+                return candidate;
             }
         }
 
@@ -5311,11 +5341,11 @@ public class AuraReportViewController
             final Path runLevelCandidate = baseStoragePath.resolve(Paths.get(runId, filename)).normalize();
             if (runLevelCandidate.startsWith(baseStoragePath) && Files.isRegularFile(runLevelCandidate) && Files.isReadable(runLevelCandidate))
             {
-                return servePath(runLevelCandidate, filename, rangeHeader);
+                return runLevelCandidate;
             }
         }
 
-        return ResponseEntity.notFound().build();
+        return null;
     }
 
     private String normalizeClassName(final String rawClass)
@@ -5357,62 +5387,66 @@ public class AuraReportViewController
         return (Files.isRegularFile(resolved) && Files.isReadable(resolved)) ? resolved : null;
     }
 
-    private ResponseEntity<?> servePath(final Path path, final String filename, final String rangeHeader)
+    private String determineContentType(final String filename)
+    {
+        final String lowerName = filename.toLowerCase();
+        if (lowerName.endsWith(".mp4"))
+        {
+            return "video/mp4";
+        }
+        if (lowerName.endsWith(".webm"))
+        {
+            return "video/webm";
+        }
+        if (lowerName.endsWith(".png"))
+        {
+            return "image/png";
+        }
+        if (lowerName.endsWith(".gif"))
+        {
+            return "image/gif";
+        }
+        if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg"))
+        {
+            return "image/jpeg";
+        }
+        if (lowerName.endsWith(".html"))
+        {
+            return "text/html";
+        }
+        if (lowerName.endsWith(".json"))
+        {
+            return "application/json";
+        }
+        if (lowerName.endsWith(".yaml") || lowerName.endsWith(".yml"))
+        {
+            return "text/yaml; charset=utf-8";
+        }
+        if (lowerName.endsWith(".log") || lowerName.endsWith(".txt"))
+        {
+            return "text/plain; charset=utf-8";
+        }
+        if (lowerName.endsWith(".csv"))
+        {
+            return "text/csv; charset=utf-8";
+        }
+        if (lowerName.endsWith(".pdf"))
+        {
+            return "application/pdf";
+        }
+        if (lowerName.endsWith(".xml"))
+        {
+            return "application/xml; charset=utf-8";
+        }
+        return "application/octet-stream";
+    }
+
+    private ResponseEntity<ResourceRegion> serveResourceRegion(final Path path, final String filename, final String rangeHeader)
     {
         try
         {
             final Resource resource = new UrlResource(path.toUri());
-            final String lowerName = filename.toLowerCase();
-            String contentType = "application/octet-stream";
-            if (lowerName.endsWith(".mp4"))
-            {
-                contentType = "video/mp4";
-            }
-            else if (lowerName.endsWith(".webm"))
-            {
-                contentType = "video/webm";
-            }
-            else if (lowerName.endsWith(".png"))
-            {
-                contentType = "image/png";
-            }
-            else if (lowerName.endsWith(".gif"))
-            {
-                contentType = "image/gif";
-            }
-            else if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg"))
-            {
-                contentType = "image/jpeg";
-            }
-            else if (lowerName.endsWith(".html"))
-            {
-                contentType = "text/html";
-            }
-            else if (lowerName.endsWith(".json"))
-            {
-                contentType = "application/json";
-            }
-            else if (lowerName.endsWith(".yaml") || lowerName.endsWith(".yml"))
-            {
-                contentType = "text/yaml; charset=utf-8";
-            }
-            else if (lowerName.endsWith(".log") || lowerName.endsWith(".txt"))
-            {
-                contentType = "text/plain; charset=utf-8";
-            }
-            else if (lowerName.endsWith(".csv"))
-            {
-                contentType = "text/csv; charset=utf-8";
-            }
-            else if (lowerName.endsWith(".pdf"))
-            {
-                contentType = "application/pdf";
-            }
-            else if (lowerName.endsWith(".xml"))
-            {
-                contentType = "application/xml; charset=utf-8";
-            }
-
+            final String contentType = determineContentType(filename);
             final ContentDisposition disposition = ContentDisposition.inline()
                 .filename(filename, StandardCharsets.UTF_8)
                 .build();
@@ -5442,6 +5476,31 @@ public class AuraReportViewController
                 }
             }
 
+            final long contentLength = resource.contentLength();
+            final ResourceRegion fullRegion = new ResourceRegion(resource, 0, contentLength);
+            return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
+                .contentType(MediaType.parseMediaType(contentType))
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .header("X-Content-Type-Options", "nosniff")
+                .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                .body(fullRegion);
+        }
+        catch (final Exception e)
+        {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    private ResponseEntity<Resource> serveResource(final Path path, final String filename)
+    {
+        try
+        {
+            final Resource resource = new UrlResource(path.toUri());
+            final String contentType = determineContentType(filename);
+            final ContentDisposition disposition = ContentDisposition.inline()
+                .filename(filename, StandardCharsets.UTF_8)
+                .build();
+
             return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(contentType))
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
@@ -5451,7 +5510,7 @@ public class AuraReportViewController
         }
         catch (final Exception e)
         {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            return ResponseEntity.notFound().build();
         }
     }
 

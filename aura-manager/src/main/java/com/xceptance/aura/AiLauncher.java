@@ -49,9 +49,8 @@ import java.util.Locale;
  */
 public class AiLauncher
 {
-    static final String SPLASH_ACTIVE_PROPERTY = "ai.launcher.splash.active";
-    static final String OPEN_BROWSER_PROPERTY = "neodymium.ai.openBrowser";
-    static final String LEGACY_OPEN_BROWSER_PROPERTY = "neodymium.aura.openBrowser";
+    public static final String SPLASH_ACTIVE_PROPERTY = "ai.launcher.splash.active";
+    public static final String OPEN_BROWSER_PROPERTY = "neodymium.ai.openBrowser";
 
     public static void main(final String[] args) throws Exception
     {
@@ -184,14 +183,13 @@ public class AiLauncher
      */
     static boolean isBrowserOpenEnabled()
     {
-        final String openBrowserVal = System.getProperty(OPEN_BROWSER_PROPERTY, System.getProperty(LEGACY_OPEN_BROWSER_PROPERTY));
+        final String openBrowserVal = System.getProperty(OPEN_BROWSER_PROPERTY);
         if (openBrowserVal != null)
         {
             return Boolean.parseBoolean(openBrowserVal);
         }
-        final String envVal = System.getenv("AURA_NO_BROWSER");
         final String envAiVal = System.getenv("NEODYMIUM_AI_NO_BROWSER");
-        if ("true".equalsIgnoreCase(envVal) || "true".equalsIgnoreCase(envAiVal) || "1".equals(envVal) || "1".equals(envAiVal))
+        if ("true".equalsIgnoreCase(envAiVal) || "1".equals(envAiVal))
         {
             return false;
         }
@@ -204,7 +202,7 @@ public class AiLauncher
      * @return the running HttpServer instance
      * @throws IOException if server socket initialization fails
      */
-    static HttpServer startSplashServer() throws IOException
+    public static HttpServer startSplashServer() throws IOException
     {
         return startSplashServer(8080);
     }
@@ -216,7 +214,7 @@ public class AiLauncher
      * @return the running HttpServer instance
      * @throws IOException if server socket initialization fails
      */
-    static HttpServer startSplashServer(final int targetPort) throws IOException
+    public static HttpServer startSplashServer(final int targetPort) throws IOException
     {
         final HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         server.createContext("/loading.html", new LoadingHandler(targetPort));

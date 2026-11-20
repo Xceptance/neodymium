@@ -526,10 +526,11 @@ public final class AuraQueueService
 
                     activeFile.set(file);
 
-                    if ("true".equalsIgnoreCase(System.getProperty("neodymium.aura.test", "false")))
+                    final boolean isTestMode = Boolean.getBoolean("neodymium.ai.test");
+                    if (isTestMode)
                     {
-                        LOGGER.info("[Aura Server] Test mode active (neodymium.aura.test=true). Simulating queue execution for {} with profiles {}", file, targetProfiles);
-                        final long delayMs = Long.getLong("neodymium.aura.test.simulation.delayMs", 0L);
+                        LOGGER.info("[AI Manager Server] Test mode active. Simulating queue execution for {} with profiles {}", file, targetProfiles);
+                        final long delayMs = Long.getLong("neodymium.ai.test.simulation.delayMs", 0L);
                         if (delayMs > 0)
                         {
                             try
@@ -710,7 +711,7 @@ public final class AuraQueueService
                     command.add("-Dgif.filmAutomatically=" + req.video);
                     command.add("-Dneodymium.ai.executionMode=" + (req.executionMode != null ? req.executionMode : "LLM_RECORDING"));
                     command.add("-Dneodymium.managerActive=true");
-                    command.add("-Dneodymium.aura.test=" + System.getProperty("neodymium.aura.test", "false"));
+                    command.add("-Dneodymium.ai.test=" + System.getProperty("neodymium.ai.test", "false"));
                     command.add("-Dneodymium.managerRunId=" + runId);
                     command.add("-Dneodymium.runId=" + runId);
                     command.add("-Dneodymium.managerUrl=http://localhost:" + serverPort);

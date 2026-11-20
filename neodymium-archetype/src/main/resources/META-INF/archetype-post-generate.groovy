@@ -1,7 +1,7 @@
 File projectDir = new File(request.getOutputDirectory(), request.getArtifactId())
-File runScript = new File(projectDir, "run-aura.sh")
+File runScript = new File(projectDir, "run-neodymium.sh")
 if (!runScript.exists()) {
-    runScript = new File(request.getOutputDirectory(), "run-aura.sh")
+    runScript = new File(request.getOutputDirectory(), "run-neodymium.sh")
 }
 if (runScript.exists()) {
     boolean success = runScript.setExecutable(true, false)
@@ -9,6 +9,7 @@ if (runScript.exists()) {
         System.err.println("[WARN] Could not set executable permission on " + runScript.getAbsolutePath())
     }
 }
+
 
 File gitignore = new File(projectDir, "gitignore")
 if (!gitignore.exists()) {

@@ -103,7 +103,7 @@ public class McpSecurityInterceptorTest
 
         Assertions.assertFalse(allowed, "Requests without auth header must be rejected");
         Assertions.assertEquals(HttpServletResponse.SC_UNAUTHORIZED, response.getStatus());
-        Assertions.assertEquals("Bearer realm=\"Aura MCP\"", response.getHeader("WWW-Authenticate"));
+        Assertions.assertEquals("Bearer realm=\"Neodymium AI MCP\"", response.getHeader("WWW-Authenticate"));
         Assertions.assertTrue(response.getContentAsString().contains("Missing or invalid Authorization header"));
     }
 
