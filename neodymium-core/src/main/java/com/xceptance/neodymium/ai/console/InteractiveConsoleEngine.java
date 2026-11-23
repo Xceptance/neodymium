@@ -113,7 +113,7 @@ public final class InteractiveConsoleEngine {
 
     private static final long DEFAULT_TIMEOUT_MS = TimeUnit.HOURS.toMillis(1);
     private static final Gson GSON = new Gson();
-    private static final String RUN_FOLDER = initializeRunFolder();
+    private static volatile String activeRunFolder = initializeRunFolder();
 
     private static String initializeRunFolder()
     {
@@ -121,14 +121,51 @@ public final class InteractiveConsoleEngine {
             System.getProperty("neodymium.managerRunId", System.getProperty("aura.runId")));
         if (sysRunId != null && !sysRunId.isBlank())
         {
-            return (sysRunId.startsWith("run_") || sysRunId.startsWith("run-")) ? sysRunId : "run_" + sysRunId;
+            return normalizeRunFolder(sysRunId);
         }
         return "run_" + new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
     }
 
+    public static String normalizeRunFolder(final String runId)
+    {
+        if (runId == null || runId.isBlank())
+        {
+            return getRunFolder();
+        }
+        return (runId.startsWith("run_") || runId.startsWith("run-")) ? runId : "run_" + runId;
+    }
+
     public static String getRunFolder()
     {
-        return RUN_FOLDER;
+        final String sysRunId = System.getProperty("neodymium.runId",
+            System.getProperty("neodymium.managerRunId", System.getProperty("aura.runId")));
+        if (sysRunId != null && !sysRunId.isBlank())
+        {
+            return normalizeRunFolder(sysRunId);
+        }
+        return activeRunFolder;
+    }
+
+    public static void setRunFolder(final String runFolder)
+    {
+        if (runFolder != null && !runFolder.isBlank())
+        {
+            activeRunFolder = normalizeRunFolder(runFolder);
+        }
+    }
+
+    public static void resetRunFolder()
+    {
+        activeRunFolder = initializeRunFolder();
+    }
+
+    public String getEffectiveRunFolder()
+    {
+        if (this.runId != null && !this.runId.isBlank())
+        {
+            return normalizeRunFolder(this.runId);
+        }
+        return getRunFolder();
     }
 
     public static String extractTestClassFolder(final JsonObject json)
@@ -296,16 +333,25 @@ public final class InteractiveConsoleEngine {
      * @param runId a unique identifier for the test run (e.g.
      *              {@code "run_2026-06-29_10-00-00"})
      */
-    public InteractiveConsoleEngine(final String runId) {
+    public InteractiveConsoleEngine(final String runId)
+    {
         this.runId = runId;
+        if (runId != null && !runId.isBlank())
+        {
+            setRunFolder(runId);
+        }
 
         String detectedIp = "localhost";
-        try {
+        try
+        {
             final InetAddress addr = getActualLocalIP();
-            if (addr != null) {
+            if (addr != null)
+            {
                 detectedIp = addr.getHostAddress();
             }
-        } catch (final SocketException e) {
+        }
+        catch (final SocketException e)
+        {
             LOG.warn("Failed to detect LAN IP for Interactive Console: {}", e.getMessage());
         }
         this.lanIp = detectedIp;
@@ -320,12 +366,18 @@ public final class InteractiveConsoleEngine {
      *
      * @return the run ID
      */
-    public String getRunId() {
+    public String getRunId()
+    {
         return this.runId;
     }
 
-    public void setRunId(final String runId) {
+    public void setRunId(final String runId)
+    {
         this.runId = runId;
+        if (runId != null && !runId.isBlank())
+        {
+            setRunFolder(runId);
+        }
     }
 
     /**
@@ -549,7 +601,7 @@ public final class InteractiveConsoleEngine {
 
                 // 2. Structured run and test class folders in configured console logs directory
                 final String configuredResultsDirPath = AiConfiguration.getInstance().getConsoleExecutionLogsDirectory();
-                final String runFolder = getRunFolder();
+                final String runFolder = getEffectiveRunFolder();
                 final File structuredDir = new File(configuredResultsDirPath, runFolder + "/" + testClassFolder);
                 if (!structuredDir.exists())
                 {
@@ -1105,6 +1157,7 @@ public final class InteractiveConsoleEngine {
     {
         CLASS_EXECUTION_INDEX_MAP.clear();
         CLASS_EXECUTION_COUNTERS.clear();
+        resetRunFolder();
     }
     
     public String getCurrentStateJson() {

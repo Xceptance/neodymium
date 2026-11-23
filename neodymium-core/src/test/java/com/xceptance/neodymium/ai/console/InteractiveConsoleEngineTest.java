@@ -76,14 +76,26 @@ public class InteractiveConsoleEngineTest
 
     private String originalResultsDir;
     private String originalConsoleLogsSetting;
+    private String originalDiskReportDir;
+    private String originalStorageRunsDir;
+    private String originalConsoleLogsDir;
 
     @BeforeEach
     public void setUp()
     {
         originalResultsDir = System.getProperty("allure.results.directory");
         originalConsoleLogsSetting = System.getProperty("neodymium.ai.consoleExecutionLogs");
+        originalDiskReportDir = System.getProperty("neodymium.ai.report.disk.directory");
+        originalStorageRunsDir = System.getProperty("neodymium.ai.storageRuns.directory");
+        originalConsoleLogsDir = System.getProperty("neodymium.ai.consoleExecutionLogs.directory");
+
         System.setProperty("allure.results.directory", tempResultsDir.getAbsolutePath());
+        System.setProperty("neodymium.ai.report.disk.directory", new File(tempResultsDir, "ai-reports").getAbsolutePath());
+        System.setProperty("neodymium.ai.storageRuns.directory", new File(tempResultsDir, "storage-runs").getAbsolutePath());
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", new File(tempResultsDir, "console-logs").getAbsolutePath());
+
         InteractiveConsoleEngine.resetExecutionIndexes();
+        InteractiveConsoleEngine.resetRunFolder();
         AiConfiguration.resetInstance();
     }
 
@@ -91,6 +103,7 @@ public class InteractiveConsoleEngineTest
     public void tearDown()
     {
         InteractiveConsoleEngine.resetExecutionIndexes();
+        InteractiveConsoleEngine.resetRunFolder();
         if (originalResultsDir != null)
         {
             System.setProperty("allure.results.directory", originalResultsDir);
@@ -108,9 +121,35 @@ public class InteractiveConsoleEngineTest
         {
             System.clearProperty("neodymium.ai.consoleExecutionLogs");
         }
-        System.clearProperty("neodymium.ai.consoleExecutionLogs.directory");
+
+        if (originalDiskReportDir != null)
+        {
+            System.setProperty("neodymium.ai.report.disk.directory", originalDiskReportDir);
+        }
+        else
+        {
+            System.clearProperty("neodymium.ai.report.disk.directory");
+        }
+
+        if (originalStorageRunsDir != null)
+        {
+            System.setProperty("neodymium.ai.storageRuns.directory", originalStorageRunsDir);
+        }
+        else
+        {
+            System.clearProperty("neodymium.ai.storageRuns.directory");
+        }
+
+        if (originalConsoleLogsDir != null)
+        {
+            System.setProperty("neodymium.ai.consoleExecutionLogs.directory", originalConsoleLogsDir);
+        }
+        else
+        {
+            System.clearProperty("neodymium.ai.consoleExecutionLogs.directory");
+        }
+
         System.clearProperty("neodymium.ai.consoleExecutionLogs.captureGlobalLog");
-        System.clearProperty("neodymium.ai.storageRuns.directory");
         Neodymium.clearAttachments();
         AiConfiguration.resetInstance();
     }
@@ -1544,6 +1583,31 @@ public class InteractiveConsoleEngineTest
         {
             System.clearProperty("batchName");
         }
+    }
+
+    @Test
+    public void testPushStateWithDynamicRunIdDoesNotCreatePhantomTimestampFolder() throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        AiConfiguration.resetInstance();
+
+        final String customRunId = "run_target_custom_789";
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine(customRunId);
+        final String rawStateJson = "{\"testName\":\"WikipediaTest\",\"status\":\"passed\"}";
+        engine.pushState(rawStateJson);
+
+        final File storageRunsRoot = new File(tempResultsDir, "storage-runs");
+        final File expectedRunDir = new File(storageRunsRoot, customRunId);
+        assertTrue(expectedRunDir.exists(), "Storage run directory for custom runId must exist");
+
+        // Verify no phantom timestamped directory was created under storageRunsRoot
+        final File[] matchingDirs = storageRunsRoot.listFiles((dir, name) -> name.matches("^run_\\d{8}_\\d{6}$"));
+        assertTrue(matchingDirs == null || matchingDirs.length == 0,
+            "No phantom timestamped run folder should be created under storage-runs");
+
+        // Verify structured execution log file exists in the expected directory
+        final File logFile = new File(expectedRunDir, "WikipediaTest/console-execution-1.json");
+        assertTrue(logFile.exists(), "Execution log must be saved in expected target run directory");
     }
 
     @Test
