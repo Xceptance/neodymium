@@ -1,29 +1,102 @@
-[![Maven Central](https://img.shields.io/maven-central/v/com.xceptance/neodymium-library
-)](https://mvnrepository.com/artifact/com.xceptance/neodymium-library) 
+[![Maven Central](https://img.shields.io/maven-central/v/com.xceptance/neodymium-library)](https://mvnrepository.com/artifact/com.xceptance/neodymium-library)
 
 # Neodymium
 
-Neodymium solves modern web test automation challenges by combining JUnit, WebDriver, Selenide, BDD/Cucumber, and comprehensive reporting with **Neodymium AI** — an intelligent automation engine that turns natural language playbooks into robust, millisecond-fast offline test runs.
+**Neodymium** solves modern web test automation challenges by assembling state-of-the-art open-source libraries — **JUnit 5 / JUnit 4**, **Selenium WebDriver**, **Selenide**, **BDD/Cucumber**, and **Allure Reporting** — into a cohesive, rock-solid framework with the missing glue code built right in.
+
+Instead of hand-crafting brittle browser drivers, boilerplate waits, or disconnected reporting scripts, Neodymium provides ready-to-run project templates, intelligent abstractions, and seamless multi-browser execution matrices out of the box.
+
+Today, Neodymium offers two complementary ways to build and run test automation:
+
+1. **Neodymium Classic (Zero AI)**: Pure, reliable, code-first test automation in Java under the permissive MIT license.
+2. **Neodymium AI**: Next-generation multimodal AI test automation, natural language playbooks, autonomous self-healing, and a standalone No-Code Web UI.
+
+📚 [**Official Documentation**](https://docs.xceptance.com/neodymium) • 📖 [**Technical Architecture Manual**](doc/DOCUMENTATION.md) • 💬 [**Commercial Support**](mailto:support@xceptance.com)
 
 ---
 
-## 🌟 Two Automation Paradigms in One Framework
+## 🏛️ Ecosystem & Subproject Directory
 
-Neodymium offers two complementary ways to build test suites:
+Neodymium is organized as a multi-module Maven monorepo. Each subproject is self-contained and documented with its own dedicated guide:
 
-1. **Neodymium AI (AI-Powered Automation)**: Author tests in natural language playbooks. The AI records resilient actions and visual baselines once; subsequent runs replay in milliseconds with zero LLM API costs and auto-heal on UI drift.
-2. **Neodymium Classic (Code-First Automation)**: Build structured, programmatic tests in Java using JUnit 5, Selenide, Page Objects, Cucumber BDD, and multi-browser execution matrices.
+| Subproject | Directory | Role & Key Capabilities | Paradigm | License |
+| :--- | :--- | :--- | :--- | :--- |
+| **Neodymium Archetype** | [`neodymium-archetype/`](neodymium-archetype/README.md) | Turnkey Maven starter template to bootstrap ready-to-run projects in seconds. | Quickstart | GNU AGPLv3 + Commercial |
+| **Neodymium Classic** | [`neodymium-classic/`](neodymium-classic/README.md) | Mature, code-first Java automation (Selenide, JUnit 4/5, Page Objects, BDD). | Traditional (No AI) | MIT License |
+| **Neodymium Core** | [`neodymium-core/`](neodymium-core/README.md) | AI engine, Java AI tests, natural language playbooks, UPM, and self-healing. | AI-Powered | GNU AGPLv3 + Commercial |
+| **Neodymium AI Manager** | [`aura-manager/`](aura-manager/README.md) | Interactive local Web UI for visual playbook authoring, live runner, and reporting. | No-Code UI | GNU AGPLv3 + Commercial |
+| **Neodymium Test Server** | [`neodymium-test-server/`](neodymium-test-server/README.md) | Embedded Javalin server hosting the VÉRLA demo store and AI Glance sandbox. | Test Fixtures | GNU AGPLv3 + Commercial |
+| **Neodymium E2E Tests** | [`neodymium-e2e-tests/`](neodymium-e2e-tests/README.md) | Comprehensive integration suites, SUT benchmarks, and Maven test profiles. | Test Harness | GNU AGPLv3 + Commercial |
 
 ---
 
-## ⚡ Neodymium AI: AI-Powered Automation
+## 🚀 Choose Your Approach
 
-> **Record Once with AI. Replay at Native Browser Speed. Self-Heal on UI Drift.**
+### Path A: Bootstrap a New Project (Turnkey)
+
+The fastest way to get started is by generating a fresh test suite with `neodymium-archetype`:
+
+```bash
+mvn archetype:generate \
+  -DarchetypeGroupId=com.xceptance \
+  -DarchetypeArtifactId=neodymium-archetype \
+  -DarchetypeVersion=6.0.0-BETA \
+  -DgroupId=com.example \
+  -DartifactId=my-test-suite \
+  -DinteractiveMode=false
+```
+
+The generated project comes pre-configured with dependencies, sample playbooks, JUnit test runners, configuration files, and the bundled No-Code UI startup scripts.
+
+👉 *Read more in the [Neodymium Archetype Guide](neodymium-archetype/README.md).*
+
+---
+
+### Path B: Traditional Java Testing (Zero AI)
+
+If your team wants proven, programmatic test automation in Java without any LLM APIs, tokens, or AI dependencies, use **Neodymium Classic**:
+
+```xml
+<dependency>
+    <groupId>com.xceptance</groupId>
+    <artifactId>neodymium-classic</artifactId>
+    <version>6.0.0-BETA</version>
+    <scope>test</scope>
+</dependency>
+```
+
+```java
+import static com.codeborne.selenide.Condition.visible;
+import static com.codeborne.selenide.Selenide.$;
+import static com.codeborne.selenide.Selenide.open;
+
+import com.xceptance.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.junit5.NeodymiumTest;
+
+@Browser("Chrome_1024x768")
+public class StorefrontClassicTest
+{
+    @NeodymiumTest
+    public void testHomepage()
+    {
+        open("https://www.xceptance.com");
+        $("#navigation").shouldBe(visible);
+    }
+}
+```
+
+👉 *Read more in the [Neodymium Classic Guide](neodymium-classic/README.md).*
+
+---
+
+### Path C: AI-Powered Automation (Playbooks & Java AI)
+
+If you want to author tests in plain natural language or combine Java with AI perception, use **Neodymium Core**. The AI records resilient element locators and visual baselines once; subsequent CI/CD runs replay in milliseconds with **zero LLM API calls** and automatically heal when the UI drifts:
 
 ```mermaid
 flowchart TD
     subgraph Phase1["1. Record (AI Engine)"]
-        A["YAML Playbook<br/>(Natural Language)"] -->|FORCE_RECORDING| B["Multimodal LLM + UPM Engine"]
+        A["YAML Playbook / Java Test<br/>(Natural Language)"] -->|FORCE_RECORDING| B["Multimodal LLM + UPM Engine"]
         B -->|Extract Actions & SSIM Baselines| C["Companion JSON Recording<br/>(Structured Actions & Hashes)"]
     end
 
@@ -34,49 +107,17 @@ flowchart TD
 
     subgraph Phase3["3. Autonomous Healing (On Drift)"]
         D -->|Selector Drift / 404| F["LocatorCascadeResolver<br/>(5-Tier Fallback)"]
-        F -->|Tier 4: DomFeatureVector Proximity| D
+        F -->|Tier 4: Spatial Proximity| D
         F -->|Tier 5 / Mismatch| G["Multimodal Self-Healing<br/>(REPLAY_WITH_HEALING)"]
         G -->|Update Recording| C
     end
 ```
 
-### Why Neodymium AI?
-
-| Feature | Traditional Automation (Selenium/Playwright) | Pure AI Agents (Autonomous LLM Per Step) | **Neodymium AI (Hybrid Execution)** |
-| :--- | :--- | :--- | :--- |
-| **Authoring Speed** | ⚠️ Slow (handcrafting complex selectors) | ⚡ Instant (plain natural language) | ⚡ **Instant (plain natural language playbooks)** |
-| **Replay Speed** | ⚡ Milliseconds (native browser events) | ❌ 3–15 seconds per step (slow LLM latency) | ⚡ **Milliseconds (native Selenide execution)** |
-| **Cost & Token Usage** | 🟢 Zero recurring token costs | 🔴 High recurring cost on every CI run | 🟢 **Zero tokens during replay (`REPLAY_STRICT`)** |
-| **Determinism & Flakiness** | ❌ High flakiness on dynamic DOM changes | ❌ Non-deterministic LLM hallucinations | 🟢 **Deterministic replay with visual SSIM gating** |
-| **Maintenance** | 🔴 Expensive manual selector fixes | ⚠️ Re-executes prompts blindly | 🟢 **Autonomous self-healing on UI drift** |
-
-### 3-Minute Quickstart (Neodymium AI)
-
-#### 1. Set Your AI Provider & API Key
-Inject your API key via environment variable or JVM argument (never commit keys to source code):
-
-```bash
-export GEMINI_API_KEY="your-gemini-api-key"
-```
-
-#### 2. Write Your First Playbook Test
-Use the `@AiInlinePlaybook` annotation or an external `.yaml` playbook:
-
 ```java
-package com.xceptance.neodymium.test;
-
-import org.junit.jupiter.api.Test;
-import org.neodymium.ai.annotation.AiInlinePlaybook;
-import org.neodymium.ai.annotation.AiMode;
-import org.neodymium.ai.annotation.NeodymiumAiTest;
-import org.neodymium.ai.context.ExecutionMode;
-import org.neodymium.ai.session.AiSession;
-
 @NeodymiumAiTest
 public class StorefrontQuickstartTest
 {
-    @Test
-    @AiMode(ExecutionMode.FORCE_RECORDING)
+    @AiMode(ExecutionMode.REPLAY_WITH_HEALING)
     @AiInlinePlaybook("""
         steps: |
           Open ${baseUrl}/store/index.html in the browser
@@ -95,173 +136,75 @@ public class StorefrontQuickstartTest
 }
 ```
 
-#### 3. Record Baseline & Replay in CI
+👉 *Read more in the [Neodymium Core Guide](neodymium-core/README.md).*
+
+---
+
+### Path D: No-Code Web UI (Neodymium AI Manager)
+
+For visual playbook authoring, drag-and-drop step assembly, streaming execution logs, and interactive Allure reporting without touching code, launch the local Web UI:
+
 ```bash
-# 1. Record initial baseline (creates companion JSON file)
-mvn test -Dtest=StorefrontQuickstartTest
+# Linux / macOS
+./run-neodymium.sh
 
-# 2. Replay in CI at native speed (0 LLM calls)
-mvn test -Dtest=StorefrontQuickstartTest -Dneodymium.ai.executionMode=REPLAY_STRICT
+# Windows
+run-neodymium.bat
 ```
 
-### Full Technical Documentation Portal
+Open your browser at `http://localhost:8080/` to access the interactive dashboard.
 
-For the complete architectural manual, 5-tier locator formulas, prompt schemas, and configuration reference:
-
-👉 **[Read the Full Technical Documentation: `doc/DOCUMENTATION.md`](file:///home/rschwietzke/projects/GIT/neodymium-library/doc/DOCUMENTATION.md)**
+👉 *Read more in the [Neodymium AI Manager Guide](aura-manager/README.md).*
 
 ---
 
-## 🛠️ Neodymium Classic: Code-First Automation
-
-### Requirements
-* **Java**: JDK 21 or higher
-* **Build Tool**: Apache Maven 3.8+
-
-### Included Projects
-* [**JUnit 5**](https://junit.org/junit5/): Core test lifecycle framework.
-* [**WebDriver**](https://github.com/SeleniumHQ/selenium): W3C browser automation protocol.
-* [**Selenide**](https://github.com/codeborne/selenide): Fluent, compact UI automation on top of WebDriver.
-* [**Allure**](https://github.com/allure-framework/allure2): Lightweight, multi-language reporting tool with rich diagnostics.
-* [**BDD/Cucumber**](https://github.com/cucumber/cucumber-jvm): Behavior-Driven Development support.
-* [**Owner**](https://github.com/lviggiano/owner): Multi-stage configuration management.
-
-### Key Features
-* **Multi-Browser Support**: Run tests across browser matrices using `@Browser` annotations.
-* **Page & Component Objects**: Structured OOP patterns for reusable UI components.
-* **Data-Driven Testing**: External datasets (JSON/CSV/YAML) with automatic per-dataset test execution.
-* **Localization**: Multi-locale testing with externalized localization dictionaries.
-* **Concurrent Execution**: Thread-safe parallel test execution via Maven.
-
-### Classic Getting Started
-
-Add Neodymium to your `pom.xml`:
-
-```xml
-<dependency>
-    <groupId>com.xceptance</groupId>
-    <artifactId>neodymium-library</artifactId>
-    <version>INSERT_LATEST_VERSION_HERE</version>
-</dependency>
-```
-
-Write a standard JUnit test:
-
-```java
-import com.xceptance.neodymium.util.Neodymium;
-import org.junit.jupiter.api.Test;
-
-public class ClassicTest
-{
-    @Test
-    public void testMethod()
-    {
-        // Selenide / WebDriver test code
-    }
-}
-```
-
----
-
-## 🏗️ Building Neodymium
-
-Neodymium is organized as a standard Maven multi-module monorepo:
-* **`neodymium-core`**: The core automation framework (Classic + Neodymium AI engine).
-* **`neodymium-test-server`**: Embedded HTTP/HTTPS test server and web fixtures (`ai-test-pages`, SSL keystore).
-* **`neodymium-e2e-tests`**: End-to-end integration test suite, SUT scenarios, and VÉRLA storefront tests.
-* **`aura-manager`**: The unified Spring Boot Neodymium AI Manager (Execution Hub, Visual Playbook Editor, and Reporting Dashboard).
+## 🏗️ Monorepo Developer & Build Guide
 
 ### Prerequisites
-* **Java**: JDK 21 or higher
-* **Build Tool**: Apache Maven 3.8+
+* **Java Development Kit**: JDK 21 or higher
+* **Apache Maven**: Version 3.9+
 
-### Common Build Commands
+### Reactor Build Commands
 
-#### 1. Build the Entire Monorepo
-Compile all modules in one pass using Maven's reactor:
-```bash
-mvn clean compile
-```
-
-#### 2. Run All Tests
-```bash
-mvn clean test
-```
-
-#### 3. Test Profiles
-Neodymium organizes test suites into dedicated Maven profiles for fast, targeted execution without running into legacy tests or incurring live LLM costs:
-
-| Profile | Command | Description |
-| :--- | :--- | :--- |
-| **Non-LLM Modern** | `mvn test -Pnon-llm-tests` | Complete modern suite: Core AI, Server, VÉRLA UI/Mock, Sandbox Mock, Manager (0 LLM cost) |
-| **Direct Unit** | `mvn test -Punit-tests` | Fast in-memory unit tests only (< 5s, no browser/server/LLM) |
-| **Neo Classic JUnit 4** | `mvn test -Pneo-classic-junit4` | Legacy JUnit 4 Neodymium tests via Vintage engine |
-| **Neo Classic JUnit 5** | `mvn test -Pneo-classic-junit5` | Legacy JUnit 5 Neodymium tests via Jupiter engine |
-| **VÉRLA Storefront** | `mvn test -Pverla-tests` | VÉRLA storefront UI and mock AI integration flows |
-| **AI Mock** | `mvn test -Pai-mock-tests` | AI pipeline and integration tests using golden mock responses (0 tokens) |
-| **AI Live** | `mvn test -Pai-live-tests` | Real LLM verification tests requiring API keys (`LiveAPI`, `LiveLlm`) |
-| **AI Sandbox** | `mvn test -Pai-sandbox` | AI Glance visual defect & dHash baseline sandbox tests |
-| **AI Manager** | `mvn test -Pai-manager` | Neodymium AI Manager Spring Boot hub test suite |
-| **Smoke** | `mvn test -Psmoke` | Fast sanity verification suite (< 60s) |
-
-For complete documentation on profile configurations, scoping, and examples, refer to [doc/TEST_PROFILES.md](doc/TEST_PROFILES.md).
-
-#### 4. Fast Local Install (Skip Tests & Javadocs)
-To quickly compile and update all local JARs in `~/.m2/repository`:
-```bash
-mvn clean install -DskipTests -Dmaven.javadoc.skip=true
-```
-
-#### 4. Working with Specific Modules
-Thanks to Maven's reactor, you can target individual modules using `-pl` (project list) and `-am` (also-make) without having to install dependencies first:
-
-* **Run core library tests:**
+* **Compile the entire monorepo:**
   ```bash
+  mvn clean compile
+  ```
+* **Install all modules locally (skip tests & javadocs):**
+  ```bash
+  mvn clean install -DskipTests -Dmaven.javadoc.skip=true
+  ```
+* **Target a specific subproject (and required dependencies):**
+  ```bash
+  # Core AI engine
   mvn test -pl neodymium-core
-  ```
-* **Run test server unit tests:**
-  ```bash
-  mvn test -pl neodymium-test-server
-  ```
-* **Run end-to-end and SUT tests** (tests tagged `LiveAPI`, `LiveLlm` or `ExternalSite` are excluded by default):
-  ```bash
-  mvn test -pl neodymium-e2e-tests -am
-  ```
-* **Run end-to-end tests including live LLM / external-site tests** (needs network access and API keys such as `GEMINI_API_KEY`):
-  ```bash
-  mvn test -pl neodymium-e2e-tests -PLiveAPI -am
-  ```
-* **Run a single test in core library:**
-  ```bash
-  mvn test -pl neodymium-core -Dtest=TestDataTest
-  ```
-* **Compile AI Manager (resolves core in-memory):**
-  ```bash
-  mvn compile -pl aura-manager -am
-  ```
-* **Launch AI Manager locally (`http://localhost:8080`):**
-  ```bash
-  mvn spring-boot:run -pl aura-manager -am
-  ```
-* **Launch standalone interactive test execution (without manager):**
-  ```bash
-  mvn test -Dneodymium.ai.interactive=true
+
+  # Classic framework
+  mvn test -pl neodymium-classic
+
+  # Run standalone test server
+  mvn exec:java -pl neodymium-test-server
+
+  # Run AI Manager
+  mvn spring-boot:run -pl aura-manager
   ```
 
-#### 5. Convenience Scripts
-* Run AI Manager: `./run-neodymium.sh` (or `run-neodymium.bat` on Windows).
-  * Automatically detects whether running inside the Neodymium aggregator repo (`mvn spring-boot:run -pl aura-manager`) or in an external project with AI manager imported as a dependency (`exec:java -Dexec.mainClass="org.neodymium.manager.NeodymiumManagerLauncher"`).
-* Run a single test with a data file: `./run-neo-test.sh <path_to_yaml>`
+### Contributor Test Execution
+
+When contributing to Neodymium or testing local engine modifications:
+* Run fast in-memory unit tests: `mvn test -pl neodymium-core -Punit-tests`
+* For the full suite of internal integration and regression profiles, see the [Maven Test Profiles Guide](doc/TEST_PROFILES.md).
 
 ---
 
 ## 🔗 Quicklinks & Demos
 
-* [Neodymium Template](https://github.com/Xceptance/neodymium-template): Quickstart project template for Java or Cucumber.
-* [Neodymium Pure Java Example](https://github.com/Xceptance/neodymium-example): Demo test suite against the [Posters demo store](https://github.com/Xceptance/neodymium/wiki/Posters-demo-store).
-* [Neodymium Cucumber Example](https://github.com/Xceptance/neodymium-cucumber-example): BDD Cucumber showcase.
-* [Neodymium Showcase](https://github.com/Xceptance/neodymium-showcase): Dedicated feature demonstrations.
-* [Neodymium Wiki](https://github.com/Xceptance/neodymium/wiki/): Complete user guide and migration notes.
+* [**Documentation Portal**](https://docs.xceptance.com/neodymium): Complete user guide and migration notes.
+* [**Neodymium Template**](https://github.com/Xceptance/neodymium-template): Quickstart project template for Java and Cucumber.
+* [**Neodymium Pure Java Example**](https://github.com/Xceptance/neodymium-example): Reference test suite against the Posters demo store.
+* [**Neodymium Cucumber Example**](https://github.com/Xceptance/neodymium-cucumber-example): BDD-driven test suite.
+* [**Neodymium Showcase**](https://github.com/Xceptance/neodymium-showcase): Code snippets demonstrating individual features.
+* [**Neodymium Wiki**](https://github.com/Xceptance/neodymium/wiki/): Classic wiki and historical documentation.
 
 ---
 
@@ -270,10 +213,10 @@ Thanks to Maven's reactor, you can target individual modules using `-pl` (projec
 Neodymium operates under a dual-licensing model based on module boundaries:
 
 ### 1. Neodymium Classic — MIT License
-The classic test automation framework (`neodymium-classic`) is fully open-source and licensed under the permissive **[MIT License](LICENSE#section-a-mit-license-neodymium-classic)**. You are free to use, modify, distribute, and commercially host Neodymium Classic without restriction.
+The classic test automation framework ([`neodymium-classic`](neodymium-classic/README.md)) is fully open-source and licensed under the permissive **[MIT License](LICENSE#section-a-mit-license-neodymium-classic)**. You are free to use, modify, distribute, and commercially host Neodymium Classic without restriction.
 
 ### 2. Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
-The next-generation AI automation framework (`neodymium-core`, `aura-manager`, `neodymium-test-server`, `neodymium-e2e-tests`, and `neodymium-archetype`) is **dual-licensed** to support both open-source developers and enterprise deployments:
+The next-generation AI automation framework ([`neodymium-core`](neodymium-core/README.md), [`aura-manager`](aura-manager/README.md), [`neodymium-test-server`](neodymium-test-server/README.md), [`neodymium-e2e-tests`](neodymium-e2e-tests/README.md), and [`neodymium-archetype`](neodymium-archetype/README.md)) is **dual-licensed** to support both open-source developers and enterprise deployments:
 - **Community Edition (GNU AGPLv3):** Free for development, testing, and internal applications under the **[GNU Affero General Public License (AGPLv3)](LICENSE#section-b-gnu-affero-general-public-license-neodymium-ai)**.
 - **Commercial Edition:** For hosted SaaS offerings, commercial bundling, proprietary integrations, or enterprise usage without AGPLv3 copyleft/network-disclosure terms, a **[Commercial License](LICENSE#section-c-commercial-license-neodymium-ai)** is required.
 - **Commercial Support & Inquiries:** Contact **[support@xceptance.com](mailto:support@xceptance.com)**.
@@ -283,3 +226,7 @@ The next-generation AI automation framework (`neodymium-core`, `aura-manager`, `
 ## 🏢 About Xceptance
 
 We are [Xceptance](https://www.xceptance.com/en/) — software testing experts specializing in digital commerce and test automation. We also develop [Xceptance Load Test (XLT)](https://github.com/Xceptance/XLT), an open-source performance testing tool.
+
+---
+
+*This document was generated with the assistance of AI and reviewed by Xceptance experts.*
