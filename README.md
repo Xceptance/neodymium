@@ -192,20 +192,11 @@ Open your browser at `http://localhost:8080/` to access the interactive dashboar
   mvn spring-boot:run -pl aura-manager
   ```
 
-### Maven Test Profiles
+### Contributor Test Execution
 
-Neodymium uses fine-grained profiles defined in the root `pom.xml` to execute specific tiers:
-
-| Profile | Command | Scope |
-| :--- | :--- | :--- |
-| **Unit Tests** | `mvn test -pl neodymium-core -Punit-tests` | Fast in-memory unit tests (no browser, 0 tokens) |
-| **VÉRLA Storefront** | `mvn test -pl neodymium-e2e-tests -Pverla-tests` | Full customer journey UI tests against local test server |
-| **AI Mock** | `mvn test -pl neodymium-e2e-tests -Pai-mock-tests` | AI state machine replays using pre-recorded fixtures |
-| **AI Live** | `mvn test -pl neodymium-e2e-tests -Pai-live-tests` | Real LLM verification tests (requires `GEMINI_API_KEY`) |
-| **AI Sandbox** | `mvn test -pl neodymium-e2e-tests -Pai-sandbox` | AI Glance visual regression & dHash baseline audits |
-| **Smoke Suite** | `mvn test -Psmoke` | Fast sanity verification suite (< 60s) |
-
-👉 *For complete profile documentation, refer to [doc/TEST_PROFILES.md](doc/TEST_PROFILES.md).*
+When contributing to Neodymium or testing local engine modifications:
+* Run fast in-memory unit tests: `mvn test -pl neodymium-core -Punit-tests`
+* For the full suite of internal integration and regression profiles, see the [Maven Test Profiles Guide](doc/TEST_PROFILES.md).
 
 ---
 

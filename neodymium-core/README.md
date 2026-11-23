@@ -103,7 +103,6 @@ mvn test -pl neodymium-core -Punit-tests
 
 * [Comprehensive Neodymium Documentation](../doc/DOCUMENTATION.md)
 * [Neodymium AI Redesign V2 Specifications](../doc/redesign-v2/architecture.md)
-* [Maven Test Profiles Guide](../doc/TEST_PROFILES.md)
 
 ---
 
