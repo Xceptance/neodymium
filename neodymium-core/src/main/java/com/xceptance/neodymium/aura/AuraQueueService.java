@@ -709,6 +709,23 @@ public final class AuraQueueService
                     command.add("-Dvideo.filmAutomatically=" + req.video);
                     command.add("-Dgif.enableFilming=" + req.video);
                     command.add("-Dgif.filmAutomatically=" + req.video);
+                    if (req.video)
+                    {
+                        if (req.videoOnlyOnFailure)
+                        {
+                            command.add("-Dvideo.appendAllRecordingsToAllureReport=false");
+                            command.add("-Dvideo.attachOnlyOnFailure=true");
+                            command.add("-Dgif.appendAllRecordingsToAllureReport=false");
+                            command.add("-Dgif.attachOnlyOnFailure=true");
+                        }
+                        else
+                        {
+                            command.add("-Dvideo.appendAllRecordingsToAllureReport=true");
+                            command.add("-Dvideo.attachOnlyOnFailure=false");
+                            command.add("-Dgif.appendAllRecordingsToAllureReport=true");
+                            command.add("-Dgif.attachOnlyOnFailure=false");
+                        }
+                    }
                     command.add("-Dneodymium.ai.executionMode=" + (req.executionMode != null ? req.executionMode : "LLM_RECORDING"));
                     command.add("-Dneodymium.managerActive=true");
                     command.add("-Dneodymium.ai.test=" + System.getProperty("neodymium.ai.test", "false"));

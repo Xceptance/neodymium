@@ -560,6 +560,53 @@ public class InteractiveConsoleEngineTest
     }
 
     @Test
+    public void testAttachVideoToMultipleExecutionsMaintainsDistinctIndices(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-multi-video");
+
+        // First test execution
+        engine.pushState("{\"testName\":\"MultiTestClass · ds1\",\"testFile\":\"com.xceptance.MultiTestClass#execute\",\"datasetId\":\"ds1\",\"status\":\"passed\",\"steps\":[],\"attachments\":[]}");
+
+        final File dummyVideo1 = new File(tempResultsDir, "recording-dummy-1.mp4");
+        Files.writeString(dummyVideo1.toPath(), "dummy-mp4-data-1");
+
+        InteractiveConsoleEngine.attachVideoToLatestExecutionLog(dummyVideo1, "MultiTestClass");
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File testDir = new File(customDir.toFile(), runFolder + "/MultiTestClass");
+        final File video1 = new File(testDir, "video-1.mp4");
+        final File json1 = new File(testDir, "console-execution-1.json");
+
+        assertTrue(video1.exists(), "video-1.mp4 should exist for dataset 1");
+        assertEquals("dummy-mp4-data-1", Files.readString(video1.toPath()), "video-1.mp4 content should match dataset 1");
+        assertTrue(Files.readString(json1.toPath()).contains("\"videoUrl\":\"video-1.mp4\""), "json1 should link video-1.mp4");
+
+        // Second test execution
+        engine.pushState("{\"testName\":\"MultiTestClass · ds2\",\"testFile\":\"com.xceptance.MultiTestClass#execute\",\"datasetId\":\"ds2\",\"status\":\"passed\",\"steps\":[],\"attachments\":[]}");
+
+        final File dummyVideo2 = new File(tempResultsDir, "recording-dummy-2.mp4");
+        Files.writeString(dummyVideo2.toPath(), "dummy-mp4-data-2");
+
+        InteractiveConsoleEngine.attachVideoToLatestExecutionLog(dummyVideo2, "MultiTestClass");
+
+        final File video2 = new File(testDir, "video-2.mp4");
+        final File json2 = new File(testDir, "console-execution-2.json");
+
+        assertTrue(video2.exists(), "video-2.mp4 should exist for dataset 2");
+        assertEquals("dummy-mp4-data-2", Files.readString(video2.toPath()), "video-2.mp4 content should match dataset 2");
+        assertTrue(Files.readString(json2.toPath()).contains("\"videoUrl\":\"video-2.mp4\""), "json2 should link video-2.mp4");
+
+        // Verify dataset 1 was not overwritten
+        assertTrue(video1.exists(), "video-1.mp4 should still exist");
+        assertEquals("dummy-mp4-data-1", Files.readString(video1.toPath()), "video-1.mp4 should not be overwritten by dataset 2");
+        assertTrue(Files.readString(json1.toPath()).contains("\"videoUrl\":\"video-1.mp4\""), "json1 should still link video-1.mp4");
+    }
+
+    @Test
     public void testPlaybookYamlWrittenToExecutionDirectory(@TempDir final Path customDir) throws IOException
     {
         System.setProperty("neodymium.ai.consoleExecutionLogs", "true");

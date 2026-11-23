@@ -165,6 +165,7 @@ public class Neodymium
             context.attachments.clear();
         }
         TestStepListener.clearLastUrl();
+        FilmTestExecution.clearThreadContexts();
     }
 
     /**

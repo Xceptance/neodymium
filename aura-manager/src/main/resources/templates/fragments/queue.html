@@ -185,6 +185,22 @@
             <span class="neo-u-32">Records execution video and attaches it to the report.</span>
         </div>
 
+        <div class="config-row-wrapper neo-u-30" id="videoOnlyOnFailureRow" th:style="${video != null and video ? 'padding-left: 12px; border-left: 2px solid var(--accent); margin-left: 4px;' : 'display: none;'}">
+            <div class="config-row neo-u-31">
+                <span class="neo-u-2" style="font-size: 11.5px;">Only on Failure</span>
+                <label class="switch" for="optVideoOnlyOnFailure" style="transform: scale(0.9); transform-origin: right center;">
+                    <input type="checkbox" id="optVideoOnlyOnFailure" 
+                           th:checked="${videoOnlyOnFailure != null ? videoOnlyOnFailure : true}" 
+                           hx-post="/api/config/toggle?key=videoOnlyOnFailure" 
+                           hx-target="#configPanel" 
+                           hx-swap="outerHTML" 
+                           onclick="event.stopPropagation()"/>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <span class="neo-u-32" style="padding-left: 12px;">Only attaches video if test fails; passing tests discard recordings.</span>
+        </div>
+
         <div class="config-row-wrapper neo-u-30">
             <div class="config-row neo-u-31">
                 <span class="neo-u-2">Interactive Mode</span>

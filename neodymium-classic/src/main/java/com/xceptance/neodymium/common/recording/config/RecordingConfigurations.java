@@ -49,6 +49,8 @@ public abstract interface RecordingConfigurations extends Mutable
 
     public boolean appendAllRecordingsToAllureReport();
 
+    public boolean attachOnlyOnFailure();
+
     public double imageQuality();
 
     public double imageScaleFactor();

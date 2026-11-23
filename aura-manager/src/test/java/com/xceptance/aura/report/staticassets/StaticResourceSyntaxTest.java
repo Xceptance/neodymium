@@ -4844,11 +4844,11 @@ public final class StaticResourceSyntaxTest
         final String editorJsContent = Files.readString(editorJsPath, StandardCharsets.UTF_8);
 
         Assertions.assertTrue(
-            editorJsContent.contains("if (e.target.closest('.modal-overlay, .modal-card, #editorPanel, #auraChatOverlay, .aura-chat-overlay, .aura-chat-launcher')) return;"),
+            editorJsContent.contains("if (e.target.closest('.modal-overlay, .modal-card, #editorPanel, #auraChatOverlay, .aura-chat-overlay, .aura-chat-launcher, #runControls, #configPanel, .run-controls-container, #runCurrentTestBtn, #runQueueBtn, #stopQueueBtn')) return;"),
             "dashboard-editor.js navigation click interceptor must ignore clicks inside editor panel and Aura AI Assistant overlay/launcher"
         );
         Assertions.assertTrue(
-            editorJsContent.contains("if (link.closest('#editorPanel, #auraChatOverlay, .aura-chat-overlay, .aura-chat-launcher')) return;"),
+            editorJsContent.contains("if (link.closest('#editorPanel, #auraChatOverlay, .aura-chat-overlay, .aura-chat-launcher, #runControls, #configPanel, .run-controls-container')\n        || link.id === 'runCurrentTestBtn' || link.id === 'runQueueBtn' || link.id === 'stopQueueBtn') return;"),
             "dashboard-editor.js navigation click interceptor must not treat links or forms within editor panel or AI Assistant as navigating away"
         );
     }
@@ -5240,6 +5240,32 @@ public final class StaticResourceSyntaxTest
             "sync(null);\n" +
             "assert.strictEqual(sandbox.document.title, 'Neodymium AI Manager');\n";
         runNodeScript(nodeTestScript, "syncDocumentTitle Node validation failed");
+    }
+
+    @Test
+    public void testVideoAndGifAttachmentSeparationInSidePanel() throws Exception
+    {
+        final Path templatePath = Paths.get("src/main/resources/templates/fragments/side-panel-step-list.html");
+        Assertions.assertTrue(Files.exists(templatePath), "side-panel-step-list.html must exist: " + templatePath.toAbsolutePath());
+        final String templateContent = Files.readString(templatePath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(templateContent.contains("id=\"sidePanelVideoPlayer\""),
+            "side-panel-step-list.html must contain #sidePanelVideoPlayer");
+        Assertions.assertTrue(templateContent.contains("id=\"sidePanelGifPlayer\""),
+            "side-panel-step-list.html must contain dedicated #sidePanelGifPlayer for GIF recordings");
+
+        final Path jsPath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsPath), "report-manager.js must exist: " + jsPath.toAbsolutePath());
+        final String jsContent = Files.readString(jsPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(jsContent.contains("sidePanelGifPlayer"),
+            "report-manager.js must reference sidePanelGifPlayer element");
+        Assertions.assertTrue(jsContent.contains("!p.endsWith('.gif')"),
+            "report-manager.js videoAttachment filter must explicitly exclude .gif from video player");
+        Assertions.assertTrue(jsContent.contains("p.endsWith('.mp4') || p.endsWith('.webm') || p.endsWith('.ogg')"),
+            "report-manager.js videoAttachment filter must match true playable video extensions");
+        Assertions.assertTrue(jsContent.contains("(a && a.type === 'gif') || p.endsWith('.gif')"),
+            "report-manager.js must identify gif attachments separately");
     }
 }
 
