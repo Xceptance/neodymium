@@ -99,3 +99,7 @@ public class StorefrontClassicTest
 ## License & Attribution
 
 Neodymium Classic is licensed under the [MIT License](https://opensource.org/licenses/MIT). Developed and maintained by [Xceptance Software Technologies GmbH](https://www.xceptance.com).
+
+---
+
+*This document was generated with the assistance of AI and reviewed by Xceptance experts.*

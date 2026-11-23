@@ -283,3 +283,7 @@ The next-generation AI automation framework (`neodymium-core`, `aura-manager`, `
 ## 🏢 About Xceptance
 
 We are [Xceptance](https://www.xceptance.com/en/) — software testing experts specializing in digital commerce and test automation. We also develop [Xceptance Load Test (XLT)](https://github.com/Xceptance/XLT), an open-source performance testing tool.
+
+---
+
+*This document was generated with the assistance of AI and reviewed by Xceptance experts.*

@@ -63,3 +63,7 @@ mvn test -pl neodymium-e2e-tests -Dtest=VerlaCheckoutE2eTest -Dbrowserprofile.gl
 * **Commercial Edition**: For commercial SaaS offerings, proprietary bundling, or deployments without AGPLv3 copyleft/network-disclosure requirements, a commercial license is required.
 
 For inquiries and commercial licensing, contact **[support@xceptance.com](mailto:support@xceptance.com)**.
+
+---
+
+*This document was generated with the assistance of AI and reviewed by Xceptance experts.*
