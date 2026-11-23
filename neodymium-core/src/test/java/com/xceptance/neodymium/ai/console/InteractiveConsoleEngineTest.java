@@ -1994,5 +1994,54 @@ public class InteractiveConsoleEngineTest
         final JsonObject failedBlankState = JsonParser.parseString(engine.getCurrentStateJson()).getAsJsonObject();
         assertEquals("failed", failedBlankState.get("status").getAsString(), "Blank status must transition to failed when testPassed is false");
     }
+
+    @Test
+    public void testRunLifecycleMarksRunActiveBetweenTestsUntilMarkRunFinished(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final String runId = "run_from_console_lifecycle_test";
+        try
+        {
+            final InteractiveConsoleEngine engine1 = new InteractiveConsoleEngine(runId);
+            InteractiveConsoleEngine.markRunActive(runId, engine1);
+            assertTrue(InteractiveConsoleEngine.isJUnitRunActive(runId), "Run should be marked active after registration");
+
+            final String test1Passed = "{\"runId\":\"" + runId + "\",\"testName\":\"MultiDatasetTest · ds1\",\"testFile\":\"com.xceptance.MultiDatasetTest#execute\",\"datasetId\":\"ds1\",\"status\":\"passed\",\"steps\":[]}";
+            engine1.pushState(test1Passed);
+
+            final File exec1File = new File(customDir.toFile(), runId + "/MultiDatasetTest/console-execution-1.json");
+            assertTrue(exec1File.exists(), "console-execution-1.json should exist");
+            final JsonNode exec1Node = new ObjectMapper().readTree(exec1File);
+            assertEquals("passed", exec1Node.path("status").asText());
+            assertTrue(exec1Node.path("runActive").asBoolean(false), "runActive must remain true after Test 1 completes during active JUnit run");
+
+            // Simulate Test 2 starting; until Test 2 pushes state, engine1's state must not be overwritten by empty engine2
+            final InteractiveConsoleEngine engine2 = new InteractiveConsoleEngine(runId);
+            InteractiveConsoleEngine.markRunActive(runId, engine2);
+
+            final String test2Passed = "{\"runId\":\"" + runId + "\",\"testName\":\"MultiDatasetTest · ds2\",\"testFile\":\"com.xceptance.MultiDatasetTest#execute\",\"datasetId\":\"ds2\",\"status\":\"passed\",\"steps\":[]}";
+            engine2.pushState(test2Passed);
+
+            final File exec2File = new File(customDir.toFile(), runId + "/MultiDatasetTest/console-execution-2.json");
+            assertTrue(exec2File.exists(), "console-execution-2.json should exist");
+            final JsonNode exec2Node = new ObjectMapper().readTree(exec2File);
+            assertEquals("passed", exec2Node.path("status").asText());
+            assertTrue(exec2Node.path("runActive").asBoolean(false), "runActive must remain true until JUnit run finishes");
+
+            InteractiveConsoleEngine.markRunFinished(runId);
+            assertFalse(InteractiveConsoleEngine.isJUnitRunActive(runId), "Run should no longer be marked active after markRunFinished");
+
+            final JsonNode finishedExec2Node = new ObjectMapper().readTree(exec2File);
+            assertTrue(finishedExec2Node.has("runActive"), "console-execution-2.json must contain runActive flag");
+            assertFalse(finishedExec2Node.get("runActive").asBoolean(true), "runActive must become false once markRunFinished runs");
+        }
+        finally
+        {
+            InteractiveConsoleEngine.markRunFinished(runId);
+        }
+    }
 }
 

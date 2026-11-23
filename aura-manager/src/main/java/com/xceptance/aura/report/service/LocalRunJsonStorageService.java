@@ -195,11 +195,12 @@ public class LocalRunJsonStorageService
     }
 
     /**
-     * Efficiently checks whether the given run currently has active test executions on disk.
+     * Efficiently checks whether the given run currently has active test executions on disk,
+     * or is in a brief inter-test transition where the JUnit run is still active.
      * Uses file modification timestamps to avoid scanning or parsing older completed tests.
      *
      * @param runId the run identifier
-     * @return {@code true} if any test execution JSON was modified recently and reports an active status
+     * @return {@code true} if any test execution JSON is actively running or the run's latest lifecycle lease is still active
      */
     public boolean isRunCurrentlyActiveOnDisk(final String runId)
     {
@@ -216,13 +217,18 @@ public class LocalRunJsonStorageService
 
         final long now = System.currentTimeMillis();
         final long activeThresholdMs = 120_000L; // 2 minutes
+        final long interTestGraceThresholdMs = 30_000L; // 30 seconds inter-test lease
+        long latestRunActiveTrueMs = -1L;
+        long latestRunActiveFalseMs = -1L;
 
         final List<File> candidateFiles = new ArrayList<>();
         scanForTestExecJsonFiles(runDir.toFile(), candidateFiles);
 
         for (final File f : candidateFiles)
         {
-            if (now - f.lastModified() <= activeThresholdMs)
+            final long lastMod = f.lastModified();
+            final long ageMs = now - lastMod;
+            if (ageMs <= activeThresholdMs)
             {
                 try
                 {
@@ -236,6 +242,20 @@ public class LocalRunJsonStorageService
                     {
                         return true;
                     }
+                    if (node.has("runActive") && node.get("runActive").isBoolean())
+                    {
+                        if (node.get("runActive").asBoolean())
+                        {
+                            if (ageMs <= interTestGraceThresholdMs && lastMod > latestRunActiveTrueMs)
+                            {
+                                latestRunActiveTrueMs = lastMod;
+                            }
+                        }
+                        else if (lastMod > latestRunActiveFalseMs)
+                        {
+                            latestRunActiveFalseMs = lastMod;
+                        }
+                    }
                 }
                 catch (final Exception ignored)
                 {
@@ -243,7 +263,7 @@ public class LocalRunJsonStorageService
             }
         }
 
-        return false;
+        return latestRunActiveTrueMs > 0L && latestRunActiveTrueMs > latestRunActiveFalseMs;
     }
 
     public Path getRunJsonPath(final String runId)

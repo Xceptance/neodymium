@@ -42,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.apache.commons.lang3.StringUtils;
@@ -1012,8 +1013,26 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
             if (isInteractive || isManagerActive || isConsoleExecutionLogsEnabled)
             {
-                final String runId = config.getProperty("neodymium.managerRunId", "run_" + System.currentTimeMillis());
+                final String fallbackRunId = config.getProperty("neodymium.runId", InteractiveConsoleEngine.getRunFolder());
+                final String runId = config.getProperty("neodymium.managerRunId", fallbackRunId);
                 final InteractiveConsoleEngine consoleEngine = new InteractiveConsoleEngine(runId);
+                final ExtensionContext rootContext = context.getRoot();
+                if (rootContext != null)
+                {
+                    final ExtensionContext.Store rootStore = rootContext.getStore(
+                        ExtensionContext.Namespace.create(NeodymiumAiRunner.class, "JUnitRunLifecycle", runId));
+                    if (rootStore != null)
+                    {
+                        InteractiveConsoleEngine.markRunActive(runId, consoleEngine);
+                        synchronized (NeodymiumAiRunner.class)
+                        {
+                            if (rootStore.get(runId) == null)
+                            {
+                                rootStore.put(runId, new JUnitRunLifecycleResource(runId));
+                            }
+                        }
+                    }
+                }
 
                 if (isInteractive && !isManagerActive)
                 {
@@ -2156,6 +2175,58 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 return this.session.getExecutionContext();
             }
             return null;
+        }
+    }
+
+    /**
+     * Root-scoped JUnit lifecycle resource that notifies {@link InteractiveConsoleEngine}
+     * once the entire JUnit test plan completes, with a JVM shutdown hook fallback.
+     *
+     * @author AI-generated: Antigravity
+     * @author Xceptance GmbH 2026
+     */
+    @SuppressWarnings("deprecation")
+    private static final class JUnitRunLifecycleResource implements ExtensionContext.Store.CloseableResource, AutoCloseable
+    {
+        private final String runId;
+        private final AtomicBoolean closed = new AtomicBoolean(false);
+        private final Thread shutdownHook;
+
+        private JUnitRunLifecycleResource(final String runId)
+        {
+            this.runId = runId;
+            this.shutdownHook = new Thread(() -> finishRun(false), "neo-junit-run-lifecycle-" + runId);
+            try
+            {
+                Runtime.getRuntime().addShutdownHook(this.shutdownHook);
+            }
+            catch (final IllegalStateException | SecurityException ignored)
+            {
+            }
+        }
+
+        private void finishRun(final boolean removeHook)
+        {
+            if (this.closed.compareAndSet(false, true))
+            {
+                if (removeHook)
+                {
+                    try
+                    {
+                        Runtime.getRuntime().removeShutdownHook(this.shutdownHook);
+                    }
+                    catch (final IllegalStateException | SecurityException ignored)
+                    {
+                    }
+                }
+                InteractiveConsoleEngine.markRunFinished(this.runId);
+            }
+        }
+
+        @Override
+        public void close()
+        {
+            finishRun(true);
         }
     }
 

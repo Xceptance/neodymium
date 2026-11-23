@@ -113,6 +113,7 @@ public final class InteractiveConsoleEngine {
 
     private static final long DEFAULT_TIMEOUT_MS = TimeUnit.HOURS.toMillis(1);
     private static final Gson GSON = new Gson();
+    private static final Map<String, InteractiveConsoleEngine> ACTIVE_JUNIT_RUNS = new ConcurrentHashMap<>();
     private static volatile String activeRunFolder = initializeRunFolder();
 
     private static String initializeRunFolder()
@@ -157,6 +158,7 @@ public final class InteractiveConsoleEngine {
     public static void resetRunFolder()
     {
         activeRunFolder = initializeRunFolder();
+        ACTIVE_JUNIT_RUNS.clear();
     }
 
     public String getEffectiveRunFolder()
@@ -166,6 +168,101 @@ public final class InteractiveConsoleEngine {
             return normalizeRunFolder(this.runId);
         }
         return getRunFolder();
+    }
+
+    /**
+     * Registers an active JUnit test run so outgoing state snapshots indicate that the run
+     * is still in progress between individual test invocations.
+     *
+     * @param runId  the active test run identifier
+     * @param engine the console engine associated with the run
+     */
+    public static void markRunActive(final String runId, final InteractiveConsoleEngine engine)
+    {
+        registerRunEngine(runId, engine, false);
+    }
+
+    /**
+     * Checks whether a JUnit test run for the given run identifier is currently active in this JVM.
+     *
+     * @param runId the test run identifier
+     * @return {@code true} if the JUnit run is active, {@code false} otherwise
+     */
+    public static boolean isJUnitRunActive(final String runId)
+    {
+        if (runId == null || runId.isBlank())
+        {
+            return false;
+        }
+        final String trimmed = runId.trim();
+        final String normalized = normalizeRunFolder(trimmed);
+        return ACTIVE_JUNIT_RUNS.containsKey(trimmed) || ACTIVE_JUNIT_RUNS.containsKey(normalized);
+    }
+
+    /**
+     * Marks a JUnit test run as finished and pushes a final state update carrying
+     * {@code "runActive": false} using the most recent engine that pushed state.
+     *
+     * @param runId the test run identifier
+     */
+    public static void markRunFinished(final String runId)
+    {
+        if (runId == null || runId.isBlank())
+        {
+            return;
+        }
+        final String trimmed = runId.trim();
+        final String normalized = normalizeRunFolder(trimmed);
+        final InteractiveConsoleEngine primaryEngine = ACTIVE_JUNIT_RUNS.remove(trimmed);
+        final InteractiveConsoleEngine normalizedEngine = ACTIVE_JUNIT_RUNS.remove(normalized);
+        final InteractiveConsoleEngine engine = primaryEngine != null ? primaryEngine : normalizedEngine;
+        if (engine == null)
+        {
+            return;
+        }
+
+        final String currentJson = engine.getCurrentStateJson();
+        if (currentJson == null || currentJson.isBlank() || "{}".equals(currentJson.trim()))
+        {
+            return;
+        }
+
+        try
+        {
+            final JsonObject parsedState = JsonParser.parseString(currentJson).getAsJsonObject();
+            parsedState.addProperty("runActive", false);
+            engine.pushState(GSON.toJson(parsedState));
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("[InteractiveConsole] Failed to push run-finished marker for runId {}: {}", trimmed, e.getMessage());
+        }
+    }
+
+    private static void registerRunEngine(final String runId, final InteractiveConsoleEngine engine, final boolean replaceExisting)
+    {
+        if (runId == null || runId.isBlank() || engine == null)
+        {
+            return;
+        }
+        final String trimmed = runId.trim();
+        final String normalized = normalizeRunFolder(trimmed);
+        if (replaceExisting)
+        {
+            ACTIVE_JUNIT_RUNS.put(trimmed, engine);
+            if (!normalized.equals(trimmed))
+            {
+                ACTIVE_JUNIT_RUNS.put(normalized, engine);
+            }
+        }
+        else
+        {
+            ACTIVE_JUNIT_RUNS.putIfAbsent(trimmed, engine);
+            if (!normalized.equals(trimmed))
+            {
+                ACTIVE_JUNIT_RUNS.putIfAbsent(normalized, engine);
+            }
+        }
     }
 
     public static String extractTestClassFolder(final JsonObject json)
@@ -405,6 +502,13 @@ public final class InteractiveConsoleEngine {
 
             // Inject the LAN IP so the UI can use it for QR codes/links
             state.addProperty("lanIp", this.lanIp);
+
+            if (isJUnitRunActive(this.runId))
+            {
+                // Keep the run marked active across inter-test teardown/startup gaps until JUnit finishes all tests
+                registerRunEngine(this.runId, this, true);
+                state.addProperty("runActive", true);
+            }
 
             final String statusStr = (state.has("status") && !state.get("status").isJsonNull())
                 ? state.get("status").getAsString()

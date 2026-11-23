@@ -284,38 +284,15 @@ public class AuraReportStalenessRecoveryTest
     public void testInteractivePushStateAutomaticallyFinalizesMidRunReportAndDatabaseEntity(@TempDir final Path tempDir)
         throws IOException
     {
-        final String storageRootPath = storageService.getRunDir(TEST_RUN_ID).getParent().toAbsolutePath().toString();
-        final String prevStorageRunsDir = System.getProperty("neodymium.ai.storageRuns.directory");
-        final String prevConsoleLogsDir = System.getProperty("neodymium.ai.consoleExecutionLogs.directory");
-        final String prevDiskReportDir = System.getProperty("neodymium.ai.report.disk.directory");
-        final String prevAllureDir = System.getProperty("allure.results.directory");
-        final String prevConsoleLogs = System.getProperty("neodymium.ai.consoleExecutionLogs");
-        final String prevManagerActive = System.getProperty("neodymium.managerActive");
-
-        System.setProperty("neodymium.ai.storageRuns.directory", storageRootPath);
-        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", tempDir.resolve("console-logs").toString());
-        System.setProperty("neodymium.ai.report.disk.directory", tempDir.resolve("ai-reports").toString());
-        System.setProperty("allure.results.directory", tempDir.resolve("allure-results").toString());
-        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
-        System.clearProperty("neodymium.managerActive");
-        AiConfiguration.resetInstance();
-        InteractiveConsoleEngine.resetExecutionIndexes();
-        interactiveService.resetExecutionIndexes();
-        interactiveService.setCurrentConsoleEngine(null);
-
-        try
-        {
+        runWithPushStateEnvironment(tempDir, () -> {
             // 1. Push initial active ("running") execution state via AuraInteractiveService
-            final ObjectNode runningPayload = mapper.createObjectNode();
-            runningPayload.put("runId", TEST_RUN_ID);
-            runningPayload.put("testClass", "com.xceptance.neodymium.tests.PushStateRecoveryTest");
-            runningPayload.put("testMethod", "testPushLifecycle");
-            runningPayload.put("testFile", "com.xceptance.neodymium.tests.PushStateRecoveryTest#testPushLifecycle");
-            runningPayload.put("title", "dataset_1");
-            runningPayload.put("datasetId", "dataset_1");
-            runningPayload.put("browser", "Chrome_1500x1000");
-            runningPayload.put("status", "running");
-            runningPayload.put("duration", 0L);
+            final ObjectNode runningPayload = buildPushPayload(
+                "com.xceptance.neodymium.tests.PushStateRecoveryTest",
+                "testPushLifecycle",
+                "dataset_1",
+                "running",
+                0L
+            );
 
             final String pushResult1 = interactiveService.pushState(mapper.writeValueAsString(runningPayload), false);
             Assertions.assertEquals("ok", pushResult1);
@@ -358,6 +335,113 @@ public class AuraReportStalenessRecoveryTest
             final TestExecutionDto finalExec = finalReport.getExecutions().get(0);
             Assertions.assertEquals("failed-unknown", finalExec.getStatus(), "Execution status must be failed-unknown");
             Assertions.assertEquals(46090L, finalExec.getDurationMs(), "Execution durationMs must be 46090");
+        });
+    }
+
+    @Test
+    public void testMultiTestConsoleRunStaysActiveBetweenTestsUntilRunFinished(@TempDir final Path tempDir)
+        throws IOException
+    {
+        runWithPushStateEnvironment(tempDir, () -> {
+            // 1. Test 1 runs and completes with runActive=true while Test 2 has not started yet
+            final ObjectNode test1Running = buildPushPayload(
+                "com.xceptance.neodymium.tests.MultiDatasetConsoleTest",
+                "executeSearch",
+                "dataset_1",
+                "running",
+                0L
+            );
+            test1Running.put("runActive", true);
+            interactiveService.pushState(mapper.writeValueAsString(test1Running), false);
+
+            final ObjectNode test1Passed = test1Running.deepCopy();
+            test1Passed.put("status", "passed");
+            test1Passed.put("duration", 12000L);
+            interactiveService.pushState(mapper.writeValueAsString(test1Passed), false);
+
+            // During the inter-test transition gap (Test 1 passed, Test 2 not created yet), run must remain active
+            Assertions.assertTrue(storageService.isRunCurrentlyActiveOnDisk(TEST_RUN_ID),
+                "Run must stay active on disk during inter-test transition when runActive=true");
+            final TestRunEntity midRunEntity = runRepository.findById(TEST_RUN_ID).orElseThrow();
+            Assertions.assertEquals("IN_PROGRESS", midRunEntity.getStatus(),
+                "DB status must remain IN_PROGRESS between Test 1 and Test 2");
+
+            // 2. Test 2 executes and passes with runActive=true (still tearing down browser before root store closes)
+            final ObjectNode test2Running = buildPushPayload(
+                "com.xceptance.neodymium.tests.MultiDatasetConsoleTest",
+                "executeSearch",
+                "dataset_2",
+                "running",
+                0L
+            );
+            test2Running.put("runActive", true);
+            interactiveService.pushState(mapper.writeValueAsString(test2Running), false);
+
+            final ObjectNode test2Passed = test2Running.deepCopy();
+            test2Passed.put("status", "passed");
+            test2Passed.put("duration", 15000L);
+            interactiveService.pushState(mapper.writeValueAsString(test2Passed), false);
+
+            // 3. Entire JUnit run completes -> markRunFinished pushes runActive=false
+            final ObjectNode test2RunFinished = test2Passed.deepCopy();
+            test2RunFinished.put("runActive", false);
+            interactiveService.pushState(mapper.writeValueAsString(test2RunFinished), false);
+
+            Assertions.assertFalse(storageService.isRunCurrentlyActiveOnDisk(TEST_RUN_ID),
+                "Run must immediately become inactive once runActive=false is pushed");
+            final TestRunEntity completedEntity = runRepository.findById(TEST_RUN_ID).orElseThrow();
+            Assertions.assertEquals("COMPLETED", completedEntity.getStatus(),
+                "DB status must transition to COMPLETED once runActive=false is pushed");
+            Assertions.assertEquals(2, completedEntity.getPassedCount(), "Both datasets must be recorded as passed");
+            Assertions.assertEquals(0, completedEntity.getRunningCount(), "Running count must be 0");
+        });
+    }
+
+    private ObjectNode buildPushPayload(
+        final String testClass,
+        final String testMethod,
+        final String datasetId,
+        final String status,
+        final long durationMs
+    )
+    {
+        final ObjectNode payload = mapper.createObjectNode();
+        payload.put("runId", TEST_RUN_ID);
+        payload.put("testClass", testClass);
+        payload.put("testMethod", testMethod);
+        payload.put("testFile", testClass + "#" + testMethod);
+        payload.put("title", datasetId);
+        payload.put("datasetId", datasetId);
+        payload.put("browser", "Chrome_1500x1000");
+        payload.put("status", status);
+        payload.put("duration", durationMs);
+        return payload;
+    }
+
+    private void runWithPushStateEnvironment(final Path tempDir, final ThrowingIoAction action) throws IOException
+    {
+        final String storageRootPath = storageService.getRunDir(TEST_RUN_ID).getParent().toAbsolutePath().toString();
+        final String prevStorageRunsDir = System.getProperty("neodymium.ai.storageRuns.directory");
+        final String prevConsoleLogsDir = System.getProperty("neodymium.ai.consoleExecutionLogs.directory");
+        final String prevDiskReportDir = System.getProperty("neodymium.ai.report.disk.directory");
+        final String prevAllureDir = System.getProperty("allure.results.directory");
+        final String prevConsoleLogs = System.getProperty("neodymium.ai.consoleExecutionLogs");
+        final String prevManagerActive = System.getProperty("neodymium.managerActive");
+
+        System.setProperty("neodymium.ai.storageRuns.directory", storageRootPath);
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", tempDir.resolve("console-logs").toString());
+        System.setProperty("neodymium.ai.report.disk.directory", tempDir.resolve("ai-reports").toString());
+        System.setProperty("allure.results.directory", tempDir.resolve("allure-results").toString());
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.clearProperty("neodymium.managerActive");
+        AiConfiguration.resetInstance();
+        InteractiveConsoleEngine.resetExecutionIndexes();
+        interactiveService.resetExecutionIndexes();
+        interactiveService.setCurrentConsoleEngine(null);
+
+        try
+        {
+            action.run();
         }
         finally
         {
@@ -372,6 +456,12 @@ public class AuraReportStalenessRecoveryTest
             InteractiveConsoleEngine.resetExecutionIndexes();
             AiConfiguration.resetInstance();
         }
+    }
+
+    @FunctionalInterface
+    private interface ThrowingIoAction
+    {
+        void run() throws IOException;
     }
 
     private static void restoreSystemProperty(final String key, final String previousValue)
