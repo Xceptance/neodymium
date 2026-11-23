@@ -282,7 +282,11 @@ public final class DashboardWidgetConfigDto
         }
         this.overrideRunFilters = (overrideRunFilters != null) && overrideRunFilters;
         this.runFilters = (runFilters != null) ? runFilters : new WidgetFilterConfigDto();
-        this.colorPolarity = (colorPolarity != null) ? colorPolarity : WidgetColorPolarity.HIGHER_IS_GREEN;
+        this.colorPolarity = (colorPolarity != null)
+            ? colorPolarity
+            : ((this.metric == WidgetMetric.FLAKINESS || this.metric == WidgetMetric.TEST_TRANSITIONS)
+                ? WidgetColorPolarity.HIGHER_IS_RED
+                : WidgetColorPolarity.HIGHER_IS_GREEN);
         this.showDots = (showDots != null) && showDots;
         this.filled = (filled != null) && filled;
         this.children = (children != null && !children.isEmpty())
@@ -413,6 +417,10 @@ public final class DashboardWidgetConfigDto
                 else if (safeMetric == WidgetMetric.BUGS)
                 {
                     sb.append("Bug Breakdown List");
+                }
+                else if (safeMetric == WidgetMetric.TEST_TRANSITIONS)
+                {
+                    sb.append("Failures & Recoveries Triage List");
                 }
                 else if (safeMetric == WidgetMetric.AI_USAGE || safeMetric == WidgetMetric.FLAKINESS)
                 {

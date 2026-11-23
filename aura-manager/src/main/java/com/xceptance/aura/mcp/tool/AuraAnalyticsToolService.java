@@ -25,6 +25,7 @@ package com.xceptance.aura.mcp.tool;
 
 import com.xceptance.aura.report.dto.BatchSummaryDto;
 import com.xceptance.aura.report.dto.DistributionRatioDto;
+import com.xceptance.aura.report.dto.ReportDifferentialDto;
 import com.xceptance.aura.report.dto.widget.DashboardPageConfigDto;
 import com.xceptance.aura.report.dto.widget.DashboardWidgetConfigDto;
 import com.xceptance.aura.report.dto.widget.DashboardWidgetViewDto;
@@ -37,6 +38,7 @@ import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.DashboardEvaluationService;
 import com.xceptance.aura.report.service.DashboardEvaluationService.EvaluatedDashboardPage;
 import com.xceptance.aura.report.service.ReportDashboardSettingService;
+import com.xceptance.aura.report.service.ReportDifferentialService;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -70,6 +72,7 @@ public class AuraAnalyticsToolService
     private final DashboardEvaluationService dashboardEvaluationService;
     private final TestRunRepository runRepository;
     private final AuraReportDataService dataService;
+    private final ReportDifferentialService differentialService;
 
     /**
      * Constructs the analytics tool service.
@@ -79,17 +82,68 @@ public class AuraAnalyticsToolService
      * @param runRepository persisted run repository
      * @param dataService report data aggregation service
      */
+    public AuraAnalyticsToolService(
+        final ReportDashboardSettingService dashboardSettingService,
+        final DashboardEvaluationService dashboardEvaluationService,
+        final TestRunRepository runRepository,
+        final AuraReportDataService dataService)
+    {
+        this(dashboardSettingService, dashboardEvaluationService, runRepository, dataService, null);
+    }
+
+    /**
+     * Constructs the analytics tool service with all dependencies.
+     *
+     * @param dashboardSettingService dashboard configuration service
+     * @param dashboardEvaluationService shared dashboard evaluator
+     * @param runRepository persisted run repository
+     * @param dataService report data aggregation service
+     * @param differentialService multi-report differential service
+     */
     @Autowired
     public AuraAnalyticsToolService(
         @Autowired(required = false) final ReportDashboardSettingService dashboardSettingService,
         @Autowired(required = false) final DashboardEvaluationService dashboardEvaluationService,
         @Autowired(required = false) final TestRunRepository runRepository,
-        @Autowired(required = false) final AuraReportDataService dataService)
+        @Autowired(required = false) final AuraReportDataService dataService,
+        @Autowired(required = false) final ReportDifferentialService differentialService)
     {
         this.dashboardSettingService = dashboardSettingService;
         this.dashboardEvaluationService = dashboardEvaluationService;
         this.runRepository = runRepository;
         this.dataService = dataService;
+        this.differentialService = (differentialService != null) ? differentialService : new ReportDifferentialService();
+    }
+
+    /**
+     * Evaluates multi-report differential analysis across recent runs to identify turned-green tests,
+     * unticketed failures, known bugs, and regressions.
+     *
+     * @param batchName optional batch name filter
+     * @param limit maximum historical runs to inspect
+     * @return map containing differential transition metrics and test details
+     */
+    @McpTool(name = "analyze_report_differential", description = "Evaluate multi-report failure and recovery differential analysis across recent runs to identify turned-green (fixed) tests, unticketed failures (ticket gaps), known bugs, and regressions with distilled error categories.")
+    public Map<String, Object> analyzeReportDifferential(
+        @McpToolParam(required = false, description = "Optional batch name filter (or null/all)") final String batchName,
+        @McpToolParam(required = false, description = "Maximum historical runs to inspect (1..50, default 5)") final Integer limit)
+    {
+        final int effectiveLimit = (limit != null && limit > 0) ? Math.min(limit, MAX_RUN_LIMIT) : 5;
+        final ReportDifferentialDto diff = differentialService.computeBatchDifferential(batchName, effectiveLimit);
+
+        final Map<String, Object> result = new LinkedHashMap<>();
+        result.put("analyzedRunIds", diff.getAnalyzedRunIds());
+        result.put("totalEvaluatedTests", diff.getTotalEvaluatedTests());
+        result.put("turnedGreenCount", diff.getTurnedGreenCount());
+        result.put("unticketedFailureCount", diff.getUnticketedFailureCount());
+        result.put("knownFailureCount", diff.getKnownFailureCount());
+        result.put("regressionCount", diff.getRegressionCount());
+        result.put("stablePassCount", diff.getStablePassCount());
+        result.put("unticketedFailures", diff.getUnticketedFailures());
+        result.put("turnedGreen", diff.getTurnedGreen());
+        result.put("knownFailures", diff.getKnownFailures());
+        result.put("regressions", diff.getRegressions());
+        return result;
     }
 
     /**

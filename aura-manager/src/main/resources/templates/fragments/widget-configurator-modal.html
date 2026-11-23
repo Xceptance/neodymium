@@ -113,6 +113,14 @@
                             </div>
                         </label>
                         <label class="config-radio-tile">
+                            <input type="radio" name="metric" value="TEST_TRANSITIONS" th:checked="${widget != null && widget.metric != null && (widget.metric.name() == 'TEST_TRANSITIONS' || widget.metric.name() == 'TRANSITIONS' || widget.metric.name() == 'FAILURES_AND_RECOVERIES')}" onchange="onWidgetMetricChanged('TEST_TRANSITIONS')" />
+                            <div class="tile-content">
+                                <span class="material-symbols-outlined tile-icon">published_with_changes</span>
+                                <div class="tile-title">Failures & Recoveries</div>
+                                <div class="tile-desc">Multi-Report Failure Triage & Turned-Green Recovery</div>
+                            </div>
+                        </label>
+                        <label class="config-radio-tile">
                             <input type="radio" name="metric" value="NUMBER_OF_RUNS" th:checked="${widget != null && widget.metric != null && (widget.metric.name() == 'NUMBER_OF_RUNS' || widget.metric.name() == 'RUN_COUNT' || widget.metric.name() == 'RUNS_COUNT' || widget.metric.name() == 'EXECUTION_RUNS' || widget.metric.name() == 'RUN_VOLUME' || widget.metric.name() == 'RUN_FREQUENCY' || widget.metric.name() == 'NUMBER_OF_TEST_RUNS')}" onchange="onWidgetMetricChanged('NUMBER_OF_RUNS')" />
                             <div class="tile-content">
                                 <span class="material-symbols-outlined tile-icon">pin</span>
@@ -769,6 +777,8 @@
             metricLabel = 'AI Usage';
         } else if (metric === 'FLAKINESS') {
             metricLabel = 'Flakiness';
+        } else if (metric === 'TEST_TRANSITIONS' || metric === 'TRANSITIONS' || metric === 'FAILURES_AND_RECOVERIES') {
+            metricLabel = 'Failures & Recoveries';
         } else if (metric === 'NUMBER_OF_RUNS' || metric === 'RUN_COUNT' || metric === 'RUNS_COUNT' || metric === 'RUN_VOLUME' || metric === 'RUN_FREQUENCY' || metric === 'NUMBER_OF_TEST_RUNS') {
             metricLabel = 'Number of Runs';
         }
@@ -778,6 +788,8 @@
             case 'PIE_CHART':
                 if (metric === 'NUMBER_OF_RUNS') {
                     title = 'Number of Runs Distribution';
+                } else if (metric === 'TEST_TRANSITIONS' || metric === 'TRANSITIONS' || metric === 'FAILURES_AND_RECOVERIES') {
+                    title = 'Failure & Recovery Distribution';
                 } else {
                     title = metricLabel + ' Pie Chart';
                 }
@@ -787,6 +799,8 @@
                     title = 'Number of Runs Ratio Bar';
                 } else if (metric === 'BUGS') {
                     title = 'Bug Severity Ratio Bar';
+                } else if (metric === 'TEST_TRANSITIONS' || metric === 'TRANSITIONS' || metric === 'FAILURES_AND_RECOVERIES') {
+                    title = 'Failure & Recovery Ratio';
                 } else {
                     title = metricLabel + ' Ratio Bar';
                 }
@@ -795,13 +809,19 @@
                 title = metricLabel + ' String of Pearls';
                 break;
             case 'TREND_GRAPH':
-                title = metricLabel + ' Trend Graph';
+                if (metric === 'TEST_TRANSITIONS' || metric === 'TRANSITIONS' || metric === 'FAILURES_AND_RECOVERIES') {
+                    title = 'Failures & Recoveries Trend';
+                } else {
+                    title = metricLabel + ' Trend Graph';
+                }
                 break;
             case 'TEXT':
                 if (metric === 'NUMBER_OF_RUNS') {
                     title = 'Number of Runs KPI';
                 } else if (metric === 'BUGS') {
                     title = 'Active Bugs KPI';
+                } else if (metric === 'TEST_TRANSITIONS' || metric === 'TRANSITIONS' || metric === 'FAILURES_AND_RECOVERIES') {
+                    title = 'Failures & Recoveries KPI';
                 } else {
                     title = metricLabel + ' KPI';
                 }
@@ -814,6 +834,8 @@
                     title = 'Number of Runs Breakdown List';
                 } else if (metric === 'BUGS') {
                     title = 'Bug Breakdown List';
+                } else if (metric === 'TEST_TRANSITIONS' || metric === 'TRANSITIONS' || metric === 'FAILURES_AND_RECOVERIES') {
+                    title = 'Failures & Recoveries Triage List';
                 } else if (metric === 'AI_USAGE' || metric === 'FLAKINESS') {
                     title = metricLabel + ' List';
                 } else {
@@ -897,7 +919,7 @@
                 absoluteRadio.checked = true;
             }
         }
-        if (metric === 'FLAKINESS') {
+        if (metric === 'FLAKINESS' || metric === 'TEST_TRANSITIONS' || metric === 'TRANSITIONS' || metric === 'FAILURES_AND_RECOVERIES') {
             var higherIsRed = document.querySelector('input[name="colorPolarity"][value="HIGHER_IS_RED"]');
             if (higherIsRed) {
                 higherIsRed.checked = true;

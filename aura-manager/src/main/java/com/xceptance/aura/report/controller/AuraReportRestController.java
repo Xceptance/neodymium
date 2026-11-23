@@ -24,13 +24,17 @@
 package com.xceptance.aura.report.controller;
 
 import com.xceptance.aura.report.dto.BatchSummaryDto;
+import com.xceptance.aura.report.dto.ReportDifferentialDto;
 import com.xceptance.aura.report.dto.RunReportDto;
 import com.xceptance.aura.report.service.AuraReportDataService;
+import com.xceptance.aura.report.service.ReportDifferentialService;
 import java.util.List;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -43,10 +47,20 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuraReportRestController
 {
     private final AuraReportDataService dataService;
+    private final ReportDifferentialService differentialService;
 
     public AuraReportRestController(final AuraReportDataService dataService)
     {
+        this(dataService, null);
+    }
+
+    @Autowired
+    public AuraReportRestController(
+        final AuraReportDataService dataService,
+        @Autowired(required = false) final ReportDifferentialService differentialService)
+    {
         this.dataService = dataService;
+        this.differentialService = (differentialService != null) ? differentialService : new ReportDifferentialService();
     }
 
     @GetMapping("/report/batches")
@@ -59,6 +73,14 @@ public class AuraReportRestController
     public RunReportDto getRunReport(@PathVariable("runId") final String runId)
     {
         return dataService.getRunReport(runId);
+    }
+
+    @GetMapping("/report/differential")
+    public ReportDifferentialDto getReportDifferential(
+        @RequestParam(name = "batch", required = false) final String batch,
+        @RequestParam(name = "limit", defaultValue = "5") final int limit)
+    {
+        return differentialService.computeBatchDifferential(batch, limit);
     }
 
     @GetMapping("/v1/aura-manager/status")
