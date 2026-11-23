@@ -30,6 +30,8 @@ import com.xceptance.aura.report.dto.RunReportDto;
 import com.xceptance.aura.report.dto.TestExecutionDto;
 import com.xceptance.aura.report.entity.TestRunEntity;
 import com.xceptance.aura.report.repository.TestRunRepository;
+import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
+import com.xceptance.neodymium.aura.AuraInteractiveService;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -39,6 +41,8 @@ import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.neodymium.ai.config.AiConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
@@ -65,6 +69,9 @@ public class AuraReportStalenessRecoveryTest
 
     @Autowired
     private TestRunRepository runRepository;
+
+    @Autowired
+    private AuraInteractiveService interactiveService;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -271,5 +278,111 @@ public class AuraReportStalenessRecoveryTest
         Assertions.assertEquals("COMPLETED", updatedRun.getStatus(), "Run entity status should be COMPLETED");
         Assertions.assertEquals(0, updatedRun.getRunningCount(), "Run entity runningCount should be 0");
         Assertions.assertEquals(1, updatedRun.getPassedCount(), "Run entity passedCount should be 1");
+    }
+
+    @Test
+    public void testInteractivePushStateAutomaticallyFinalizesMidRunReportAndDatabaseEntity(@TempDir final Path tempDir)
+        throws IOException
+    {
+        final String storageRootPath = storageService.getRunDir(TEST_RUN_ID).getParent().toAbsolutePath().toString();
+        final String prevStorageRunsDir = System.getProperty("neodymium.ai.storageRuns.directory");
+        final String prevConsoleLogsDir = System.getProperty("neodymium.ai.consoleExecutionLogs.directory");
+        final String prevDiskReportDir = System.getProperty("neodymium.ai.report.disk.directory");
+        final String prevAllureDir = System.getProperty("allure.results.directory");
+        final String prevConsoleLogs = System.getProperty("neodymium.ai.consoleExecutionLogs");
+        final String prevManagerActive = System.getProperty("neodymium.managerActive");
+
+        System.setProperty("neodymium.ai.storageRuns.directory", storageRootPath);
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", tempDir.resolve("console-logs").toString());
+        System.setProperty("neodymium.ai.report.disk.directory", tempDir.resolve("ai-reports").toString());
+        System.setProperty("allure.results.directory", tempDir.resolve("allure-results").toString());
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.clearProperty("neodymium.managerActive");
+        AiConfiguration.resetInstance();
+        InteractiveConsoleEngine.resetExecutionIndexes();
+        interactiveService.resetExecutionIndexes();
+        interactiveService.setCurrentConsoleEngine(null);
+
+        try
+        {
+            // 1. Push initial active ("running") execution state via AuraInteractiveService
+            final ObjectNode runningPayload = mapper.createObjectNode();
+            runningPayload.put("runId", TEST_RUN_ID);
+            runningPayload.put("testClass", "com.xceptance.neodymium.tests.PushStateRecoveryTest");
+            runningPayload.put("testMethod", "testPushLifecycle");
+            runningPayload.put("testFile", "com.xceptance.neodymium.tests.PushStateRecoveryTest#testPushLifecycle");
+            runningPayload.put("title", "dataset_1");
+            runningPayload.put("datasetId", "dataset_1");
+            runningPayload.put("browser", "Chrome_1500x1000");
+            runningPayload.put("status", "running");
+            runningPayload.put("duration", 0L);
+
+            final String pushResult1 = interactiveService.pushState(mapper.writeValueAsString(runningPayload), false);
+            Assertions.assertEquals("ok", pushResult1);
+
+            final Optional<TestRunEntity> inProgressEntityOpt = runRepository.findById(TEST_RUN_ID);
+            Assertions.assertTrue(inProgressEntityOpt.isPresent(), "Run entity must be created on first running push");
+            final TestRunEntity inProgressEntity = inProgressEntityOpt.get();
+            Assertions.assertEquals("IN_PROGRESS", inProgressEntity.getStatus(), "Run status must initially be IN_PROGRESS");
+            Assertions.assertEquals(1, inProgressEntity.getRunningCount(), "Running count must be 1");
+
+            // 2. Fetch report mid-run to populate run.json and in-progress report state
+            final RunReportDto midRunReport = reportDataService.getRunReport(TEST_RUN_ID);
+            Assertions.assertNotNull(midRunReport, "Mid-run report must not be null");
+            Assertions.assertEquals(1, midRunReport.getRunningCount(), "Mid-run report should show 1 running execution");
+
+            // 3. Push terminal failed execution state for the same execution
+            final ObjectNode failedPayload = runningPayload.deepCopy();
+            failedPayload.put("status", "failed");
+            failedPayload.put("duration", 46090L);
+            failedPayload.put("failureReason", "Element not found");
+
+            final String pushResult2 = interactiveService.pushState(mapper.writeValueAsString(failedPayload), false);
+            Assertions.assertEquals("ok", pushResult2);
+
+            // 4. Verify DB entity automatically transitioned to COMPLETED with runningCount = 0
+            final Optional<TestRunEntity> completedEntityOpt = runRepository.findById(TEST_RUN_ID);
+            Assertions.assertTrue(completedEntityOpt.isPresent(), "Run entity must remain in DB");
+            final TestRunEntity completedEntity = completedEntityOpt.get();
+            Assertions.assertEquals("COMPLETED", completedEntity.getStatus(), "DB status must transition to COMPLETED");
+            Assertions.assertEquals(0, completedEntity.getRunningCount(), "DB running count must be 0");
+            Assertions.assertEquals(1, completedEntity.getFailedUnknownCount(), "DB failedUnknownCount must be 1");
+
+            // 5. Request report again and verify cache eviction + regenerated finalized state
+            final RunReportDto finalReport = reportDataService.getRunReport(TEST_RUN_ID);
+            Assertions.assertNotNull(finalReport, "Final report must not be null");
+            Assertions.assertEquals(0, finalReport.getRunningCount(), "Final report runningCount must be 0");
+            Assertions.assertEquals(1, finalReport.getUnknownCount(), "Final report unknownCount must be 1");
+            Assertions.assertEquals(1, finalReport.getExecutions().size(), "Final report must contain 1 execution");
+
+            final TestExecutionDto finalExec = finalReport.getExecutions().get(0);
+            Assertions.assertEquals("failed-unknown", finalExec.getStatus(), "Execution status must be failed-unknown");
+            Assertions.assertEquals(46090L, finalExec.getDurationMs(), "Execution durationMs must be 46090");
+        }
+        finally
+        {
+            restoreSystemProperty("neodymium.ai.storageRuns.directory", prevStorageRunsDir);
+            restoreSystemProperty("neodymium.ai.consoleExecutionLogs.directory", prevConsoleLogsDir);
+            restoreSystemProperty("neodymium.ai.report.disk.directory", prevDiskReportDir);
+            restoreSystemProperty("allure.results.directory", prevAllureDir);
+            restoreSystemProperty("neodymium.ai.consoleExecutionLogs", prevConsoleLogs);
+            restoreSystemProperty("neodymium.managerActive", prevManagerActive);
+            interactiveService.setCurrentConsoleEngine(null);
+            interactiveService.resetExecutionIndexes();
+            InteractiveConsoleEngine.resetExecutionIndexes();
+            AiConfiguration.resetInstance();
+        }
+    }
+
+    private static void restoreSystemProperty(final String key, final String previousValue)
+    {
+        if (previousValue == null)
+        {
+            System.clearProperty(key);
+        }
+        else
+        {
+            System.setProperty(key, previousValue);
+        }
     }
 }

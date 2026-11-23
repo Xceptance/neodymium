@@ -565,6 +565,14 @@ public final class InteractiveConsoleEngine {
 
             final String updatedJson = stateChanged ? parsedState.toString() : this.currentStateJson;
             this.currentStateJson = updatedJson;
+            if (AiConfiguration.getInstance().isManagerActive())
+            {
+                if (stateChanged)
+                {
+                    pushState(updatedJson);
+                }
+                return;
+            }
             saveLocalExecutionLog(updatedJson);
             if (stateChanged)
             {
