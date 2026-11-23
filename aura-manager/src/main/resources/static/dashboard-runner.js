@@ -1285,6 +1285,10 @@ async function pollStatus() {
                     updateRunButtons();
                     const runSpinner = document.getElementById('runSpinner');
                     if (isRunning) {
+                        const existingFinishedModal = document.getElementById('runFinishedModal');
+                        if (existingFinishedModal && existingFinishedModal.style && existingFinishedModal.style.display === 'flex') {
+                            existingFinishedModal.style.display = 'none';
+                        }
                         if (!wasRunning && !window._runAlreadyAutoOpened) {
                             // Test execution newly detected or just started -> automatically open console once
                             window._runAlreadyAutoOpened = true;

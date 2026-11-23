@@ -5403,6 +5403,10 @@ public final class StaticResourceSyntaxTest
             "    assert.strictEqual(c1.htmxCalls.length, 2, 'Run completion must trigger HTMX refresh of runs view');\n" +
             "    assert.strictEqual(c1.modalEl.style.display, 'flex', 'Run finished modal must display on /batch-history when run completes');\n" +
             "\n" +
+            "    c1.setNextStatus({ sessionId: 's1', runId: 'run_from_console_517613', running: true, runningCount: 1, total: 1, passed: 0, failed: 0, skipped: 0 });\n" +
+            "    await c1.sandbox.window.pollStatus();\n" +
+            "    assert.strictEqual(c1.modalEl.style.display, 'none', 'Run finished modal must automatically close when a run becomes active');\n" +
+            "\n" +
             "    // Case 2: On root dashboard (/), reloaded page with running state in localStorage still shows #runFinishedModal when finished\n" +
             "    const c2 = createSandbox('/', '', { aura_active_run_id: 'run_from_console_517612', aura_active_run_status: 'running' }, ['mainViewContainer', 'pageCustomDashboard']);\n" +
             "    c2.setNextStatus({ sessionId: 's1', runId: 'run_from_console_517612', running: false, runningCount: 0, total: 2, passed: 1, failed: 1, skipped: 0 });\n" +

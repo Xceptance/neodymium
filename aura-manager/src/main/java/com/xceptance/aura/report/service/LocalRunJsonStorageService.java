@@ -217,7 +217,7 @@ public class LocalRunJsonStorageService
 
         final long now = System.currentTimeMillis();
         final long activeThresholdMs = 120_000L; // 2 minutes
-        final long interTestGraceThresholdMs = 30_000L; // 30 seconds inter-test lease
+        final long interTestGraceThresholdMs = activeThresholdMs; // 2 minutes crash fallback lease (explicit runActive=false ends immediately)
         long latestRunActiveTrueMs = -1L;
         long latestRunActiveFalseMs = -1L;
 
