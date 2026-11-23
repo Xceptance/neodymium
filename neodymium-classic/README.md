@@ -57,14 +57,12 @@ import static com.codeborne.selenide.Condition.visible;
 import static com.codeborne.selenide.Selenide.$;
 import static com.codeborne.selenide.Selenide.open;
 
-import org.junit.jupiter.api.Test;
 import com.xceptance.neodymium.common.browser.Browser;
 import com.xceptance.neodymium.junit5.NeodymiumTest;
 
 @Browser("Chrome_1024x768")
 public class StorefrontClassicTest
 {
-    @Test
     @NeodymiumTest
     public void testHomepage()
     {

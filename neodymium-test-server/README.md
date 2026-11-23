@@ -39,17 +39,21 @@ Each test execution can supply a unique `X-Session-ID` header (or cookie) to int
 In automated tests, start and stop the server programmatically:
 
 ```java
+import java.io.IOException;
 import org.neodymium.ai.server.JavalinTestServer;
 
-// Start server on free random ports (HTTP & HTTPS)
-final JavalinTestServer server = new JavalinTestServer();
-server.start();
+public void runServer() throws IOException
+{
+    // Start server on free random ports (HTTP & HTTPS)
+    final JavalinTestServer server = new JavalinTestServer();
+    server.start();
 
-int httpPort = server.getPort();
-String baseUrl = server.getBaseUrl();
+    int httpPort = server.getPort();
+    String httpUrl = server.getHttpUrl();
 
-// Stop server after test suite
-server.stop();
+    // Stop server after test suite
+    server.stop();
+}
 ```
 
 ### 2. Standalone Manual Server Execution
@@ -65,7 +69,7 @@ mvn exec:java -pl neodymium-test-server -Dexec.args="--port 8080 --httpsPort 844
 ```
 
 Once running:
-- **VÉRLA Storefront**: Visit `http://localhost:8542/verla/`
+- **VÉRLA Storefront**: Visit `http://localhost:8542/verla-tailwind/`
 - **AI Glance Visual Sandbox**: Visit `http://localhost:8542/AuraGlanceTest/`
 
 ---

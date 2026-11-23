@@ -73,11 +73,11 @@ public class StorefrontPlaybookTest
     @AiMode(ExecutionMode.REPLAY_WITH_HEALING)
     @AiInlinePlaybook("""
         name: Search and Validate Product
-        steps:
-          - open: "https://my-store.local"
-          - type: "Search query" into: "input[name='query']"
-          - click: "button[type='submit']"
-          - assert: "Search results are displayed"
+        steps: |
+          Open https://my-store.local in the browser
+          Type "Search query" into input[name='query']
+          Click button[type='submit']
+          Verify that search results are displayed
         """)
     public void testSearchFlow(final AiSession session)
     {
