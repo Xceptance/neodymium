@@ -5267,6 +5267,157 @@ public final class StaticResourceSyntaxTest
         Assertions.assertTrue(jsContent.contains("(a && a.type === 'gif') || p.endsWith('.gif')"),
             "report-manager.js must identify gif attachments separately");
     }
+
+    /**
+     * Verifies that dashboard-runner.js displays #runFinishedModal on root (/) and /batch-history
+     * when a run finishes (including across page navigation where localStorage held the running state),
+     * suppresses the modal when already viewing that run's report, and triggers live HTMX refresh of
+     * #mainViewContainer when run stats change on Dashboard / Runs views.
+     *
+     * @throws Exception if Node execution or assertions fail
+     * @author AI-generated: Antigravity
+     * @author Xceptance GmbH 2026
+     */
+    @Test
+    public void testPollStatusShowsRunFinishedModalOnRootAndBatchHistoryAndRefreshesRunsTable() throws Exception
+    {
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final Path runnerPath = Paths.get("src/main/resources/static/dashboard-runner.js");
+        Assertions.assertTrue(Files.exists(runnerPath), "dashboard-runner.js must exist: " + runnerPath.toAbsolutePath());
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const assert = require('assert');\n" +
+            "const runnerCode = fs.readFileSync('" + runnerPath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "function createSandbox(pathname, search, initialStorage, initialElementIds) {\n" +
+            "    const storage = Object.assign({}, initialStorage || {});\n" +
+            "    const htmxCalls = [];\n" +
+            "    let nextStatus = null;\n" +
+            "    const elements = {};\n" +
+            "    const modalEl = {\n" +
+            "        id: 'runFinishedModal',\n" +
+            "        style: { display: 'none' },\n" +
+            "        querySelector: () => ({ onclick: null }),\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        classList: { add: () => {}, remove: () => {}, contains: () => false }\n" +
+            "    };\n" +
+            "    elements['runFinishedModal'] = modalEl;\n" +
+            "    for (const id of (initialElementIds || [])) {\n" +
+            "        elements[id] = {\n" +
+            "            id,\n" +
+            "            style: {},\n" +
+            "            innerText: '',\n" +
+            "            innerHTML: '',\n" +
+            "            textContent: '',\n" +
+            "            setAttribute: () => {},\n" +
+            "            querySelectorAll: () => [],\n" +
+            "            querySelector: () => null,\n" +
+            "            classList: { add: () => {}, remove: () => {}, contains: () => false }\n" +
+            "        };\n" +
+            "    }\n" +
+            "    const doc = {\n" +
+            "        getElementById: (id) => elements[id] || null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        createElement: () => ({\n" +
+            "            style: {},\n" +
+            "            classList: { add: () => {}, remove: () => {}, contains: () => false },\n" +
+            "            querySelector: () => ({ onclick: null })\n" +
+            "        }),\n" +
+            "        body: { appendChild: () => {} },\n" +
+            "        addEventListener: () => {}\n" +
+            "    };\n" +
+            "    const localStorageObj = {\n" +
+            "        getItem: (k) => (k in storage ? storage[k] : null),\n" +
+            "        setItem: (k, v) => { storage[k] = String(v); },\n" +
+            "        removeItem: (k) => { delete storage[k]; }\n" +
+            "    };\n" +
+            "    const htmxObj = {\n" +
+            "        ajax: (method, url, opts) => { htmxCalls.push({ method, url, opts }); }\n" +
+            "    };\n" +
+            "    const win = {\n" +
+            "        addEventListener: () => {},\n" +
+            "        location: { pathname, search },\n" +
+            "        htmx: htmxObj,\n" +
+            "        document: doc,\n" +
+            "        localStorage: localStorageObj\n" +
+            "    };\n" +
+            "    const sandbox = {\n" +
+            "        console,\n" +
+            "        URLSearchParams,\n" +
+            "        window: win,\n" +
+            "        document: doc,\n" +
+            "        localStorage: localStorageObj,\n" +
+            "        htmx: htmxObj,\n" +
+            "        navigator: { sendBeacon: () => {} },\n" +
+            "        setTimeout: () => 0,\n" +
+            "        clearTimeout: () => {},\n" +
+            "        clientId: 'test-client-id',\n" +
+            "        disconnected: false,\n" +
+            "        isRunning: false,\n" +
+            "        consoleCollapsed: true,\n" +
+            "        consoleOpened: false,\n" +
+            "        activeEditingFile: null,\n" +
+            "        liveLastActiveFile: null,\n" +
+            "        logFilterAiOnly: true,\n" +
+            "        logFilterErrorsOnly: false,\n" +
+            "        hasShownStartMessage: false,\n" +
+            "        activeRunStats: { running: false, tests: [] },\n" +
+            "        liveCompletedFiles: new Set(),\n" +
+            "        updateCenterLayout: () => {},\n" +
+            "        fetch: async () => ({\n" +
+            "            ok: true,\n" +
+            "            json: async () => ({ status: nextStatus, logs: [], events: [] })\n" +
+            "        })\n" +
+            "    };\n" +
+            "    win.activeRunStats = sandbox.activeRunStats;\n" +
+            "    win.liveCompletedFiles = sandbox.liveCompletedFiles;\n" +
+            "    win.fetch = sandbox.fetch;\n" +
+            "    vm.runInNewContext(runnerCode, sandbox);\n" +
+            "    return {\n" +
+            "        sandbox,\n" +
+            "        modalEl,\n" +
+            "        htmxCalls,\n" +
+            "        setNextStatus: (s) => { nextStatus = s; }\n" +
+            "    };\n" +
+            "}\n" +
+            "(async () => {\n" +
+            "    // Case 1: On /batch-history, changing run stats refreshes #mainViewContainer and run finish opens #runFinishedModal\n" +
+            "    const c1 = createSandbox('/batch-history', '', {}, ['mainViewContainer', 'pageBatchHistoryOverview']);\n" +
+            "    c1.setNextStatus({ sessionId: 's1', runId: 'run_old', running: false, runningCount: 0, total: 1, passed: 1, failed: 0, skipped: 0 });\n" +
+            "    await c1.sandbox.window.pollStatus();\n" +
+            "    assert.strictEqual(c1.htmxCalls.length, 0, 'Initial baseline poll should not trigger redundant table refresh');\n" +
+            "\n" +
+            "    c1.setNextStatus({ sessionId: 's1', runId: 'run_from_console_517612', running: true, runningCount: 1, total: 1, passed: 0, failed: 0, skipped: 0 });\n" +
+            "    await c1.sandbox.window.pollStatus();\n" +
+            "    assert.strictEqual(c1.htmxCalls.length, 1, 'New active run must immediately trigger HTMX refresh of runs view');\n" +
+            "    assert.strictEqual(c1.htmxCalls[0].url, '/batch-history');\n" +
+            "\n" +
+            "    c1.setNextStatus({ sessionId: 's1', runId: 'run_from_console_517612', running: false, runningCount: 0, total: 1, passed: 1, failed: 0, skipped: 0 });\n" +
+            "    await c1.sandbox.window.pollStatus();\n" +
+            "    assert.strictEqual(c1.htmxCalls.length, 2, 'Run completion must trigger HTMX refresh of runs view');\n" +
+            "    assert.strictEqual(c1.modalEl.style.display, 'flex', 'Run finished modal must display on /batch-history when run completes');\n" +
+            "\n" +
+            "    // Case 2: On root dashboard (/), reloaded page with running state in localStorage still shows #runFinishedModal when finished\n" +
+            "    const c2 = createSandbox('/', '', { aura_active_run_id: 'run_from_console_517612', aura_active_run_status: 'running' }, ['mainViewContainer', 'pageCustomDashboard']);\n" +
+            "    c2.setNextStatus({ sessionId: 's1', runId: 'run_from_console_517612', running: false, runningCount: 0, total: 2, passed: 1, failed: 1, skipped: 0 });\n" +
+            "    await c2.sandbox.window.pollStatus();\n" +
+            "    assert.strictEqual(c2.modalEl.style.display, 'flex', 'Run finished modal must display on root / after reload when run finishes');\n" +
+            "\n" +
+            "    // Case 3: Already viewing /run-report for that exact runId -> suppress duplicate modal\n" +
+            "    const c3 = createSandbox('/run-report', '?runId=run_from_console_517612', { aura_active_run_id: 'run_from_console_517612', aura_active_run_status: 'running' }, ['mainViewContainer']);\n" +
+            "    c3.setNextStatus({ sessionId: 's1', runId: 'run_from_console_517612', running: false, runningCount: 0, total: 2, passed: 1, failed: 1, skipped: 0 });\n" +
+            "    await c3.sandbox.window.pollStatus();\n" +
+            "    assert.strictEqual(c3.modalEl.style.display, 'none', 'Run finished modal must stay hidden when already on that run report');\n" +
+            "})().catch((err) => { console.error(err); process.exit(1); });\n";
+
+        runNodeScript(nodeTestScript, "pollStatus runFinishedModal & live refresh test failed");
+    }
 }
 
 

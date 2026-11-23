@@ -139,6 +139,7 @@ public final class AuraInteractiveService
     {
         classExecutionIndexMap.clear();
         classExecutionCounters.clear();
+        InteractiveConsoleEngine.resetExecutionIndexes();
     }
 
     /**

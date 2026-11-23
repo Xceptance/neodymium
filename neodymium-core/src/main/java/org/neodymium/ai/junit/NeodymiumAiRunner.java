@@ -89,6 +89,7 @@ import org.openqa.selenium.WebDriver;
 
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleServer;
+import com.xceptance.neodymium.ai.console.InteractiveStateBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1010,12 +1011,15 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final boolean isInteractive = config.isInteractive();
             final boolean isManagerActive = config.isManagerActive();
             final boolean isConsoleExecutionLogsEnabled = config.isConsoleExecutionLogsEnabled();
+            InteractiveConsoleEngine activeConsoleEngine = null;
+            InteractiveConsoleListener activeInteractiveListener = null;
 
             if (isInteractive || isManagerActive || isConsoleExecutionLogsEnabled)
             {
                 final String fallbackRunId = config.getProperty("neodymium.runId", InteractiveConsoleEngine.getRunFolder());
                 final String runId = config.getProperty("neodymium.managerRunId", fallbackRunId);
                 final InteractiveConsoleEngine consoleEngine = new InteractiveConsoleEngine(runId);
+                activeConsoleEngine = consoleEngine;
                 final ExtensionContext rootContext = context.getRoot();
                 if (rootContext != null)
                 {
@@ -1049,6 +1053,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 }
 
                 final InteractiveConsoleListener interactiveListener = new InteractiveConsoleListener(consoleEngine, this.session, isInteractive);
+                activeInteractiveListener = interactiveListener;
                 eventBus.registerListener(interactiveListener);
             }
 
@@ -1556,6 +1561,20 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final ExtensionContext.Store store = context.getStore(ExtensionContext.Namespace.create(context.getRequiredTestInstance()));
             store.put(AiSession.class, this.session);
             store.put(ExecutionContext.class, executionContext);
+
+            if (isManagerActive && activeConsoleEngine != null)
+            {
+                final String initialStateJson = InteractiveStateBuilder.buildStateJson(
+                    this.session,
+                    executionContext,
+                    activeConsoleEngine.getRunId(),
+                    0,
+                    "running",
+                    null,
+                    activeInteractiveListener != null ? activeInteractiveListener.getReport() : null
+                );
+                activeConsoleEngine.pushState(initialStateJson);
+            }
         }
 
         @Override

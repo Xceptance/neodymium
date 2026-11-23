@@ -1128,6 +1128,15 @@ async function pollStatus() {
                     window.liveCompletedFiles = liveCompletedFiles;
                 }
 
+                let prevStoredRunId = null;
+                let prevStoredStatus = null;
+                try {
+                    prevStoredRunId = localStorage.getItem('aura_active_run_id');
+                    prevStoredStatus = localStorage.getItem('aura_active_run_status');
+                } catch (e) {
+                    // ignore storage failure
+                }
+
                 const currentRunId = statusData.runId || activeRunStats.runId;
                 if (currentRunId) {
                     activeRunStats.runId = currentRunId;
@@ -1248,15 +1257,29 @@ async function pollStatus() {
                 if (statusData.running && !activeRunStats.startTime) {
                     activeRunStats.startTime = new Date();
                 }
-                const currentStatsStr = `${activeRunStats.running}:${activeRunStats.total}:${activeRunStats.passed}:${activeRunStats.failed}:${activeRunStats.skipped}`;
+                const currentStatsStr = `${currentRunId || ''}:${activeRunStats.running}:${statusData.runningCount || 0}:${activeRunStats.total}:${activeRunStats.passed}:${activeRunStats.failed}:${activeRunStats.skipped}`;
                 if (window._lastStatsStr !== currentStatsStr) {
+                    const hadPrevStats = window._lastStatsStr !== undefined;
                     window._lastStatsStr = currentStatsStr;
+                    const hasOpenContainerModal = typeof document.querySelectorAll === 'function'
+                        && Array.from(document.querySelectorAll('#mainViewContainer .modal-overlay'))
+                            .some(el => el && el.style && el.style.display === 'flex');
+                    if (hadPrevStats && !hasOpenContainerModal && window.htmx && typeof window.htmx.ajax === 'function'
+                            && document.getElementById('mainViewContainer')
+                            && (document.getElementById('pageCustomDashboard') || document.getElementById('pageBatchHistoryOverview'))) {
+                        const refreshUrl = (window.location && window.location.pathname ? window.location.pathname : '/')
+                            + (window.location && window.location.search ? window.location.search : '');
+                        window.htmx.ajax('GET', refreshUrl, {
+                            target: '#mainViewContainer',
+                            swap: 'innerHTML'
+                        });
+                    }
                 }
 
                 updateConsoleMinimizedSummary(statusData);
 
                 try {
-                    const wasRunning = lastKnownRunning;
+                    const wasRunning = lastKnownRunning || Boolean(prevStoredStatus === 'running' && prevStoredRunId && String(prevStoredRunId) === String(currentRunId));
                     isRunning = statusData.running;
                     window.isRunning = isRunning;
                     updateRunButtons();
@@ -1309,14 +1332,14 @@ async function pollStatus() {
 
                         if (wasRunning) {
                             if (typeof updateCenterLayout === 'function') updateCenterLayout();
-                            const isDashboardView = window.location.pathname.includes('/playbooks') ||
-                                                    window.location.pathname.includes('/dashboard') ||
-                                                    window.location.pathname.includes('/manager') ||
-                                                    window.location.pathname.includes('/aura-test-manager') ||
-                                                    document.getElementById('auraTestManagerWorkspace') !== null;
                             const runIdToRedirect = activeRunStats.runId || statusData.runId;
                             const handledRedirectId = localStorage.getItem('aura_last_redirected_run_id');
-                            if (isDashboardView && runIdToRedirect && handledRedirectId !== String(runIdToRedirect)) {
+                            const activeUrlRunId = (typeof URLSearchParams !== 'undefined' && window.location && window.location.search)
+                                ? new URLSearchParams(window.location.search).get('runId')
+                                : null;
+                            const pathname = (window.location && window.location.pathname) ? window.location.pathname : '';
+                            const isAlreadyOnThisRunReport = pathname.includes('/run-report') && activeUrlRunId === String(runIdToRedirect);
+                            if (!isAlreadyOnThisRunReport && runIdToRedirect && handledRedirectId !== String(runIdToRedirect)) {
                                 const reportUrl = `/run-report?runId=${encodeURIComponent(runIdToRedirect)}`;
                                 showRunFinishedPrompt(reportUrl, runIdToRedirect);
                             }
