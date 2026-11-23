@@ -1,6 +1,6 @@
 # Neodymium AI Manager
 
-**Neodymium AI Manager** (`aura-manager` / `neodymium-manager`) is a standalone Spring Boot web application providing an interactive management dashboard, visual YAML playbook editor, live test runner, and test report hub for the Neodymium ecosystem.
+**Neodymium AI Manager** is a standalone Spring Boot web application providing an interactive management dashboard, visual YAML playbook editor, live test runner, and test report hub for the Neodymium ecosystem.
 
 Built with **Spring Boot 3**, **Thymeleaf 3**, **HTMX 1.9**, and **Bootstrap 5.3**, Neodymium AI Manager delivers a responsive, dynamic user experience without heavy single-page application (SPA) build chains.
 
