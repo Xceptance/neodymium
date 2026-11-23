@@ -61,16 +61,15 @@ Add `neodymium-core` to your project dependencies:
 ```java
 package org.neodymium.ai.example;
 
-import org.junit.jupiter.api.Test;
-import org.neodymium.ai.annotation.AiInlinePlaybook;
-import org.neodymium.ai.annotation.AiMode;
-import org.neodymium.ai.annotation.NeodymiumAiTest;
-import org.neodymium.ai.context.ExecutionMode;
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.junit.AiInlinePlaybook;
+import org.neodymium.ai.junit.AiMode;
+import org.neodymium.ai.junit.NeodymiumAiTest;
+import org.neodymium.ai.session.AiSession;
 
 @NeodymiumAiTest
 public class StorefrontPlaybookTest
 {
-    @Test
     @AiMode(ExecutionMode.REPLAY_WITH_HEALING)
     @AiInlinePlaybook("""
         name: Search and Validate Product
@@ -80,9 +79,9 @@ public class StorefrontPlaybookTest
           - click: "button[type='submit']"
           - assert: "Search results are displayed"
         """)
-    public void testSearchFlow()
+    public void testSearchFlow(final AiSession session)
     {
-        // Handled automatically by StateMachineRunner
+        // Handled automatically by NeodymiumAiRunner
     }
 }
 ```

@@ -42,13 +42,14 @@ In automated tests, start and stop the server programmatically:
 import org.neodymium.ai.server.JavalinTestServer;
 
 // Start server on free random ports (HTTP & HTTPS)
-JavalinTestServer.start();
+final JavalinTestServer server = new JavalinTestServer();
+server.start();
 
-int httpPort = JavalinTestServer.getPort();
-String baseUrl = JavalinTestServer.getBaseUrl();
+int httpPort = server.getPort();
+String baseUrl = server.getBaseUrl();
 
 // Stop server after test suite
-JavalinTestServer.stop();
+server.stop();
 ```
 
 ### 2. Standalone Manual Server Execution

@@ -119,7 +119,6 @@ flowchart TD
 @NeodymiumAiTest
 public class StorefrontQuickstartTest
 {
-    @Test
     @AiMode(ExecutionMode.REPLAY_WITH_HEALING)
     @AiInlinePlaybook("""
         steps: |

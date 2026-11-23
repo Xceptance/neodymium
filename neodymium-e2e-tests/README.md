@@ -47,10 +47,10 @@ Run any individual test class using the `-Dtest` property:
 
 ```bash
 # Run a specific VÉRLA storefront test
-mvn test -pl neodymium-e2e-tests -Dtest=VerlaCheckoutE2eTest
+mvn test -pl neodymium-e2e-tests -Dtest=VerlaTailwindStorefrontTest
 
 # Run in headless browser mode
-mvn test -pl neodymium-e2e-tests -Dtest=VerlaCheckoutE2eTest -Dbrowserprofile.global.headless=true
+mvn test -pl neodymium-e2e-tests -Dtest=VerlaTailwindStorefrontTest -Dbrowserprofile.global.headless=true
 ```
 
 ---
