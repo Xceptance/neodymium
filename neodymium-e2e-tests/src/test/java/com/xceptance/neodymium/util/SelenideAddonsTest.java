@@ -152,7 +152,7 @@ public class SelenideAddonsTest
 
     private void openBlogPage()
     {
-        Selenide.open("https://blog.xceptance.com/");
+        Selenide.open("http://localhost:" + server.getPort() + "/SelenideAddonsTest/blog-mock.html");
     }
 
     @Test

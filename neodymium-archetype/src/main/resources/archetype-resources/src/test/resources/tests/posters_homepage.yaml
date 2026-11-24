@@ -1,5 +1,11 @@
 # Neodymium YAML Test Data File
 
+tags:
+  area: Storefront
+  feature: Homepage
+  type: Smoke
+  severity: Normal
+
 before: |
   Open https://posters.xceptance.io:8443/
   _include: fragments/cookie_consent.steps

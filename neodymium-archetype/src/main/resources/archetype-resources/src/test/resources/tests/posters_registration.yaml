@@ -1,5 +1,14 @@
 # Neodymium YAML Test Data File
 
+tags:
+  area: Account
+  feature: Registration
+  type:
+    - Smoke
+    - Regression
+    - E2E
+  severity: Critical
+
 before: |
   Open https://posters.xceptance.io:8443/
   _include: fragments/cookie_consent.steps

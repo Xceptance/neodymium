@@ -28,8 +28,11 @@ import static com.codeborne.selenide.Selenide.$;
 import static com.codeborne.selenide.Selenide.$$;
 import static com.codeborne.selenide.Selenide.open;
 
+import java.io.IOException;
 import java.time.Duration;
 
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.jupiter.api.Assertions;
 import org.junit.runner.RunWith;
@@ -47,13 +50,30 @@ import org.neodymium.junit4.NeodymiumRunner;
 @Browser("Chrome_headless")
 public class SelenideErrorDetailsFormatterTest
 {
+    private static LocalTestHttpServer server;
+
+    @BeforeClass
+    public static void startServer() throws IOException
+    {
+        server = LocalTestHttpServer.startWithHtml("<html><body><h1>Error Details Test</h1></body></html>");
+    }
+
+    @AfterClass
+    public static void stopServer()
+    {
+        if (server != null)
+        {
+            server.close();
+        }
+    }
+
     @Test
     public void testErrorDetailesDeactivated()
     {
         Neodymium.configuration().setProperty("neodymium.report.showSelenideErrorDetails", "false");
         Assertions.assertFalse(Neodymium.configuration().showSelenideErrorDetails());
 
-        open("http://www.xceptance.com");
+        open(server.url("/"));
         try
         {
             $("#someUnknownIDForThisSepcificTest").should(exist, Duration.ZERO);
@@ -96,7 +116,7 @@ public class SelenideErrorDetailsFormatterTest
         Neodymium.configuration().setProperty("neodymium.report.showSelenideErrorDetails", "false");
         Assertions.assertFalse(Neodymium.configuration().showSelenideErrorDetails());
 
-        open("http://www.xceptance.com");
+        open(server.url("/"));
         try
         {
             $$("#someUnknownIDForThisSepcificTest").shouldHave(CollectionCondition.sizeGreaterThan(5), Duration.ZERO);

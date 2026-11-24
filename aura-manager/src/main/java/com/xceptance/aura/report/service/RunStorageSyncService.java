@@ -141,8 +141,10 @@ public class RunStorageSyncService
                     if (localRunJsonStorageService.hasRunJsonFile(runId) && existingRunOpt.isPresent())
                     {
                         final TestRunEntity existingRun = existingRunOpt.get();
+                        final boolean isDeleted = Boolean.TRUE.equals(existingRun.getIsDeleted());
+                        final boolean isStale = localRunJsonStorageService.isRunJsonStale(runId);
                         final boolean isStillActive = "IN_PROGRESS".equalsIgnoreCase(existingRun.getStatus()) || localRunJsonStorageService.isRunCurrentlyActiveOnDisk(runId);
-                        if (!isStillActive && existingRun.getPassedHealedCount() != null && existingRun.getSucceededFixedHealedCount() != null
+                        if (!isDeleted && !isStale && !isStillActive && existingRun.getPassedHealedCount() != null && existingRun.getSucceededFixedHealedCount() != null
                             && existingRun.getFailedKnownHealedCount() != null && existingRun.getFailedUnknownHealedCount() != null)
                         {
                             LOG.debug("Skipping already initialized run report: runId={}", runId);
@@ -810,6 +812,7 @@ public class RunStorageSyncService
             runEntity.setTotalLlmTokens(sumLlmTokens);
             runEntity.setTotalLlmCost(Math.ceil(sumLlmCost * 1000000.0) / 1000000.0);
             runEntity.setAttachmentsSyncedToS3(true);
+            runEntity.setIsDeleted(false);
 
             runRepository.save(runEntity);
 

@@ -89,11 +89,118 @@ public class LocalRunJsonStorageService
     }
 
     /**
-     * Efficiently checks whether the given run currently has active test executions on disk.
+     * Checks whether the run.json report file for the given run is stale or missing compared to disk test executions.
+     * A run.json is considered stale if:
+     * 1. It does not exist on disk while test execution files are present.
+     * 2. Any test execution JSON file in the run directory has a newer lastModified timestamp than run.json.
+     * 3. The run.json contains in-progress status or running tests, but the run is no longer active on disk.
+     *
+     * @param runId the unique run identifier
+     * @return {@code true} if run.json is stale or missing and should be rebuilt, {@code false} otherwise
+     */
+    public boolean isRunJsonStale(final String runId)
+    {
+        if (runId == null || runId.isBlank())
+        {
+            return false;
+        }
+
+        final Path runDir = getRunDir(runId);
+        if (runDir == null || !Files.exists(runDir) || !Files.isDirectory(runDir))
+        {
+            return false;
+        }
+
+        final Path nestedRunJson = Paths.get(baseDir, runId, "run.json");
+        final Path flatRunJson = Paths.get(baseDir, "run-" + runId + ".json");
+        final Path runJsonPath = Files.exists(nestedRunJson) ? nestedRunJson : (Files.exists(flatRunJson) ? flatRunJson : null);
+
+        final List<File> candidateFiles = new ArrayList<>();
+        scanForTestExecJsonFiles(runDir.toFile(), candidateFiles);
+
+        if (runJsonPath == null)
+        {
+            return !candidateFiles.isEmpty();
+        }
+
+        if (candidateFiles.isEmpty())
+        {
+            return false;
+        }
+
+        final long runJsonLastMod = runJsonPath.toFile().lastModified();
+        for (final File f : candidateFiles)
+        {
+            if (f.lastModified() > runJsonLastMod)
+            {
+                return true;
+            }
+        }
+
+        if (!isRunCurrentlyActiveOnDisk(runId))
+        {
+            try
+            {
+                final JsonNode root = objectMapper.readTree(runJsonPath.toFile());
+                final String status = root.path("status").asText("");
+                if ("IN_PROGRESS".equalsIgnoreCase(status)
+                        || "running".equalsIgnoreCase(status)
+                        || "executing".equalsIgnoreCase(status))
+                {
+                    return true;
+                }
+                final int runningCount = root.path("summary").path("running").asInt(0);
+                if (runningCount > 0)
+                {
+                    return true;
+                }
+                final JsonNode executionsNode = root.path("executions");
+                if (executionsNode.isArray())
+                {
+                    for (final JsonNode execNode : executionsNode)
+                    {
+                        final String execStatus = execNode.path("status").asText("");
+                        if ("running".equalsIgnoreCase(execStatus)
+                                || "in_progress".equalsIgnoreCase(execStatus)
+                                || "executing".equalsIgnoreCase(execStatus))
+                        {
+                            return true;
+                        }
+                    }
+                }
+                final JsonNode execMetrics = root.path("executionMetrics");
+                if (execMetrics.isObject())
+                {
+                    final Iterator<JsonNode> elements = execMetrics.elements();
+                    while (elements.hasNext())
+                    {
+                        final JsonNode mNode = elements.next();
+                        final String execStatus = mNode.path("status").asText("");
+                        if ("running".equalsIgnoreCase(execStatus)
+                                || "in_progress".equalsIgnoreCase(execStatus)
+                                || "executing".equalsIgnoreCase(execStatus))
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Efficiently checks whether the given run currently has active test executions on disk,
+     * or is in a brief inter-test transition where the JUnit run is still active.
      * Uses file modification timestamps to avoid scanning or parsing older completed tests.
      *
      * @param runId the run identifier
-     * @return {@code true} if any test execution JSON was modified recently and reports an active status
+     * @return {@code true} if any test execution JSON is actively running or the run's latest lifecycle lease is still active
      */
     public boolean isRunCurrentlyActiveOnDisk(final String runId)
     {
@@ -110,13 +217,18 @@ public class LocalRunJsonStorageService
 
         final long now = System.currentTimeMillis();
         final long activeThresholdMs = 120_000L; // 2 minutes
+        final long interTestGraceThresholdMs = activeThresholdMs; // 2 minutes crash fallback lease (explicit runActive=false ends immediately)
+        long latestRunActiveTrueMs = -1L;
+        long latestRunActiveFalseMs = -1L;
 
         final List<File> candidateFiles = new ArrayList<>();
         scanForTestExecJsonFiles(runDir.toFile(), candidateFiles);
 
         for (final File f : candidateFiles)
         {
-            if (now - f.lastModified() <= activeThresholdMs)
+            final long lastMod = f.lastModified();
+            final long ageMs = now - lastMod;
+            if (ageMs <= activeThresholdMs)
             {
                 try
                 {
@@ -130,6 +242,20 @@ public class LocalRunJsonStorageService
                     {
                         return true;
                     }
+                    if (node.has("runActive") && node.get("runActive").isBoolean())
+                    {
+                        if (node.get("runActive").asBoolean())
+                        {
+                            if (ageMs <= interTestGraceThresholdMs && lastMod > latestRunActiveTrueMs)
+                            {
+                                latestRunActiveTrueMs = lastMod;
+                            }
+                        }
+                        else if (lastMod > latestRunActiveFalseMs)
+                        {
+                            latestRunActiveFalseMs = lastMod;
+                        }
+                    }
                 }
                 catch (final Exception ignored)
                 {
@@ -137,7 +263,7 @@ public class LocalRunJsonStorageService
             }
         }
 
-        return false;
+        return latestRunActiveTrueMs > 0L && latestRunActiveTrueMs > latestRunActiveFalseMs;
     }
 
     public Path getRunJsonPath(final String runId)
@@ -164,6 +290,12 @@ public class LocalRunJsonStorageService
 
     public Optional<String> readRunJson(final String runId)
     {
+        final Path runDir = Paths.get(baseDir, runId);
+        if (runDir != null && Files.exists(runDir) && Files.isDirectory(runDir) && isRunJsonStale(runId))
+        {
+            buildRunJsonContent(runDir.toFile(), runId, true);
+        }
+
         final Path nestedRunJson = Paths.get(baseDir, runId, "run.json");
 
         if (Files.exists(nestedRunJson))
@@ -191,7 +323,6 @@ public class LocalRunJsonStorageService
             }
         }
 
-        final Path runDir = Paths.get(baseDir, runId);
         if (Files.exists(runDir) && Files.isDirectory(runDir))
         {
             return buildRunJsonContent(runDir.toFile(), runId, true);

@@ -72,51 +72,58 @@ public class NoReplayIntegrationTest extends BaseAiTest
         session.data().putDynamic("noReplay.test.url", pageUrl, false);
 
         final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+        mock.clearResponses();
 
-        // --- Run 1: FORCE_RECORDING ---
-        // Step 1: Open SUT (NAVIGATE)
-        mock.addResponse(new LlmResponse("""
-            {
-              "actions": [
+        final ExecutionMode mode = (ExecutionMode) session.getExecutionContext().getTransientData().get("executionMode");
+        if (mode != null && mode.isReplay())
+        {
+            // --- Run 2: REPLAY_STRICT ---
+            // Step 1: Replayed offline (no LLM call)
+            // Step 2: Click button (no-replay) (CLICK) -> Bypasses cache, calls LLM live!
+            mock.addResponse(new LlmResponse("""
                 {
-                  "action": "NAVIGATE",
-                  "locator": "",
-                  "value": "%s",
-                  "reasoning": "Navigate to page"
+                  "actions": [
+                    {
+                      "action": "CLICK",
+                      "locator": "#btn-click",
+                      "value": "",
+                      "reasoning": "Click the button again"
+                    }
+                  ]
                 }
-              ]
-            }
-            """.formatted(pageUrl), null, "mock"));
+                """, null, "mock"));
+        }
+        else
+        {
+            // --- Run 1: FORCE_RECORDING ---
+            // Step 1: Open SUT (NAVIGATE)
+            mock.addResponse(new LlmResponse("""
+                {
+                  "actions": [
+                    {
+                      "action": "NAVIGATE",
+                      "locator": "",
+                      "value": "%s",
+                      "reasoning": "Navigate to page"
+                    }
+                  ]
+                }
+                """.formatted(pageUrl), null, "mock"));
 
-        // Step 2: Click button (no-replay) (CLICK)
-        mock.addResponse(new LlmResponse("""
-            {
-              "actions": [
+            // Step 2: Click button (no-replay) (CLICK)
+            mock.addResponse(new LlmResponse("""
                 {
-                  "action": "CLICK",
-                  "locator": "#btn-click",
-                  "value": "",
-                  "reasoning": "Click the button"
+                  "actions": [
+                    {
+                      "action": "CLICK",
+                      "locator": "#btn-click",
+                      "value": "",
+                      "reasoning": "Click the button"
+                    }
+                  ]
                 }
-              ]
-            }
-            """, null, "mock"));
-
-        // --- Run 2: REPLAY_STRICT ---
-        // Step 1: Replayed offline (no LLM call)
-        // Step 2: Click button (no-replay) (CLICK) -> Bypasses cache, calls LLM live!
-        mock.addResponse(new LlmResponse("""
-            {
-              "actions": [
-                {
-                  "action": "CLICK",
-                  "locator": "#btn-click",
-                  "value": "",
-                  "reasoning": "Click the button again"
-                }
-              ]
-            }
-            """, null, "mock"));
+                """, null, "mock"));
+        }
     }
 
     /**

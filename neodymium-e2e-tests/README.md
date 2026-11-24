@@ -17,10 +17,10 @@ Neodymium provides fine-grained Maven test profiles configured in the root `pom.
 | **AI Mock Tests** | `mvn test -pl neodymium-e2e-tests -Pai-mock-tests` | AI state machine and playbook replay validation using pre-recorded mock LLM fixtures. |
 | **AI Live Tests** | `mvn test -pl neodymium-e2e-tests -Pai-live-tests` | Real LLM tests communicating with live AI providers (requires `GEMINI_API_KEY`). |
 | **AI Sandbox** | `mvn test -pl neodymium-e2e-tests -Pai-sandbox` | Visual regression, dHash baseline, and injected visual defect audits. |
-| **Classic JUnit 5** | `mvn test -pl neodymium-e2e-tests -Pneo-classic-junit5` | Classic framework regressions running under JUnit 5 Jupiter engine. |
-| **Classic JUnit 4** | `mvn test -pl neodymium-e2e-tests -Pneo-classic-junit4` | Classic framework regressions running under JUnit 4 Vintage engine. |
+| **Classic JUnit 5** | `mvn test -pl neodymium-classic -Pneo-classic-junit5` | Classic framework regressions running under JUnit 5 Jupiter engine. |
+| **Classic JUnit 4** | `mvn test -pl neodymium-classic -Pneo-classic-junit4` | Classic framework regressions running under JUnit 4 Vintage engine. |
 
-For detailed profile definitions and Surefire filter patterns, refer to [doc/TEST_PROFILES.md](../doc/TEST_PROFILES.md).
+For detailed profile definitions and Surefire filter patterns, refer to the root [pom.xml](../pom.xml) and [neodymium-e2e-tests/pom.xml](pom.xml).
 
 ---
 
@@ -36,7 +36,7 @@ neodymium-e2e-tests/src/test/java/
 │   │   ├── executor/             # Playbook step executor validation
 │   │   └── tool/                 # Browser automation tool tests
 │   └── verla/                    # VÉRLA demo store end-to-end tests
-└── com/xceptance/neodymium/      # Neodymium Classic regression suites
+└── com/xceptance/neodymium/      # Selenide addon integration tests
 ```
 
 ---

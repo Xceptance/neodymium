@@ -31,7 +31,7 @@
 	<licenses>
 		<license>
 			<name>MIT License</name>
-			<url>http://www.opensource.org/licenses/mit-license.php</url>
+			<url>https://opensource.org/licenses/MIT</url>
 			<distribution>repo</distribution>
 			<comments>Applies to Neodymium Classic (neodymium-classic).</comments>
 		</license>
@@ -73,9 +73,58 @@
 
 		<!-- Safe root-level -Dtest filtering across modules -->
 		<surefire.failIfNoSpecifiedTests>false</surefire.failIfNoSpecifiedTests>
+
+		<!-- Overridden to true in internal non-publishable test modules -->
+		<skipPublishing>false</skipPublishing>
 	</properties>
 
 	<profiles>
+		<!-- Maven Central release signing & publishing profile (activated via -DsignArtifacts=true or -Prelease-neodymium) -->
+		<profile>
+			<id>release-neodymium</id>
+			<activation>
+				<property>
+					<name>signArtifacts</name>
+					<value>true</value>
+				</property>
+			</activation>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-gpg-plugin</artifactId>
+						<version>3.2.8</version>
+						<configuration>
+							<gpgArguments>
+								<arg>--pinentry-mode</arg>
+								<arg>loopback</arg>
+							</gpgArguments>
+						</configuration>
+						<executions>
+							<execution>
+								<id>sign-artifacts</id>
+								<phase>verify</phase>
+								<goals>
+									<goal>sign</goal>
+								</goals>
+							</execution>
+						</executions>
+					</plugin>
+					<plugin>
+						<groupId>org.sonatype.central</groupId>
+						<artifactId>central-publishing-maven-plugin</artifactId>
+						<version>0.12.0</version>
+						<extensions>true</extensions>
+						<configuration>
+							<publishingServerId>central</publishingServerId>
+							<autoPublish>true</autoPublish>
+							<waitUntil>published</waitUntil>
+							<skipPublishing>${skipPublishing}</skipPublishing>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
 		<!-- 1. Strictly classic JUnit 4 tests (Vintage engine) -->
 		<profile>
 			<id>neo-classic-junit4</id>

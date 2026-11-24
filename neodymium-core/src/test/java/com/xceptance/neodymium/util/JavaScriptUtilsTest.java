@@ -25,6 +25,11 @@ package com.xceptance.neodymium.util;
 
 import static org.junit.Assert.assertTrue;
 
+import java.io.IOException;
+
+import org.junit.AfterClass;
+import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -36,11 +41,35 @@ import org.neodymium.junit4.NeodymiumRunner;
 @Browser("Chrome_headless")
 public class JavaScriptUtilsTest
 {
+    private static LocalTestHttpServer server;
+
+    @BeforeClass
+    public static void startServer() throws IOException
+    {
+        server = LocalTestHttpServer.startWithHtml("<html><body><div id=\"main-content\">Content</div></body></html>");
+    }
+
+    @Before
+    public void resetConfiguration()
+    {
+        Neodymium.configuration().removeProperty("neodymium.javaScriptUtils.loading.animationSelector");
+        Neodymium.configuration().setProperty("neodymium.javaScriptUtils.loading.jQueryIsRequired", "false");
+    }
+
+    @AfterClass
+    public static void stopServer()
+    {
+        if (server != null)
+        {
+            server.close();
+        }
+    }
+
     @Test
     public void testWaitingAnimationSelectorUnconfigured()
     {
         Neodymium.configuration().setProperty("neodymium.javaScriptUtils.timeout", "10000");
-        Selenide.open("https://blog.xceptance.com/");
+        Selenide.open(server.url("/"));
         final long start = System.currentTimeMillis();
         JavaScriptUtils.waitForReady();
         final long end = System.currentTimeMillis();
@@ -54,7 +83,7 @@ public class JavaScriptUtilsTest
         Neodymium.configuration().setProperty("neodymium.javaScriptUtils.loading.animationSelector", "#main-content");
         Neodymium.configuration().setProperty("neodymium.javaScriptUtils.timeout", "10000");
 
-        Selenide.open("https://blog.xceptance.com/");
+        Selenide.open(server.url("/"));
         final long start = System.currentTimeMillis();
         JavaScriptUtils.waitForReady();
         final long end = System.currentTimeMillis();
@@ -69,7 +98,7 @@ public class JavaScriptUtilsTest
         Neodymium.configuration().setProperty("neodymium.javaScriptUtils.loading.animationSelector", ".cantFindThisClass");
         Neodymium.configuration().setProperty("neodymium.javaScriptUtils.timeout", "10000");
 
-        Selenide.open("https://blog.xceptance.com/");
+        Selenide.open(server.url("/"));
         final long start = System.currentTimeMillis();
         JavaScriptUtils.waitForReady();
         final long end = System.currentTimeMillis();
@@ -84,7 +113,7 @@ public class JavaScriptUtilsTest
         Neodymium.configuration().setProperty("neodymium.javaScriptUtils.loading.jQueryIsRequired", "true");
         Neodymium.configuration().setProperty("neodymium.javaScriptUtils.timeout", "20000");
 
-        Selenide.open("https://www.google.com/");
+        Selenide.open(server.url("/"));
         final long start = System.currentTimeMillis();
         JavaScriptUtils.waitForReady();
         final long end = System.currentTimeMillis();
@@ -99,7 +128,7 @@ public class JavaScriptUtilsTest
         Neodymium.configuration().setProperty("neodymium.javaScriptUtils.loading.jQueryIsRequired", "false");
         Neodymium.configuration().setProperty("neodymium.javaScriptUtils.timeout", "10000");
 
-        Selenide.open("https://www.google.com/");
+        Selenide.open(server.url("/"));
         final long start = System.currentTimeMillis();
         JavaScriptUtils.waitForReady();
         final long end = System.currentTimeMillis();

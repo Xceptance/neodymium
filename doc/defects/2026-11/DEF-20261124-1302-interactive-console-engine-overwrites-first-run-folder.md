@@ -14,8 +14,8 @@
 - **Detection Gap ("What did we miss?"):**
   Existing unit tests in `InteractiveConsoleEngineTest` and `AuraInteractiveServiceTest` pushed single-run payloads or omitted `"runId"` from state JSON on a shared `InteractiveConsoleEngine`, so sequential multi-run persistence into distinct `runId` folders was never exercised.
 - **Resolution:**
-  1. Extracted `normalizeRunFolder(String)` and `extractPayloadRunFolder(JsonObject)` in `InteractiveConsoleEngine`; updated `InteractiveConsoleEngine.saveLocalExecutionLog(...)` to resolve `runFolder` from `parsedState.get("runId")` when present (falling back to `getRunFolder()` when absent) and scope execution indexing by `payloadRunFolder + "::" + testClassFolder`.
-  2. Updated `AuraInteractiveService.resetExecutionIndexes()` to also invoke `InteractiveConsoleEngine.resetExecutionIndexes()`.
+  1. Trimmed raw IDs in `InteractiveConsoleEngine.normalizeRunFolder(String)` and extracted `extractPayloadRunFolder(JsonObject)`; updated `InteractiveConsoleEngine.saveLocalExecutionLog(...)` to resolve `runFolder` from `parsedState.get("runId")` when present (falling back to `getEffectiveRunFolder()` when absent) and scope execution indexing by `payloadRunFolder + "::" + testClassFolder`.
+  2. Synchronized `AuraInteractiveService.resetExecutionIndexes()` with `InteractiveConsoleEngine.resetExecutionIndexes()` (aligned with upstream multi-run lifecycle hardening from PR #574).
   3. Bumped `report-manager.js` cache-buster in `aura-manager/src/main/resources/templates/index.html` from `?v=1.1.7` to `?v=1.1.9` and updated the assertion in `StaticResourceSyntaxTest`.
 - **Safety Net Added:**
   - `InteractiveConsoleEngineTest#testPushStateWithDistinctRunIdsIsolatesRunFoldersAndPreservesEarlierRun`

@@ -9,8 +9,8 @@ echo "========================================================================"
 
 if [ -d "aura-manager" ]; then
     # Running inside Neodymium multi-module repository
-    mvn -U spring-boot:run -pl aura-manager -am
+    mvn spring-boot:run -pl aura-manager -am "$@"
 else
     # Running inside external test project with AI manager dependency
-    mvn -U test-compile exec:java -Dexec.mainClass="org.neodymium.manager.NeodymiumManagerLauncher" -Dexec.classpathScope="test"
+    mvn test-compile exec:java -Dexec.mainClass="org.neodymium.manager.NeodymiumManagerLauncher" -Dexec.classpathScope="test" "$@"
 fi

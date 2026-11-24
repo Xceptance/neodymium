@@ -1,4 +1,4 @@
-[![Maven Central](https://img.shields.io/maven-central/v/com.xceptance/neodymium-library)](https://mvnrepository.com/artifact/com.xceptance/neodymium-library)
+[![Maven Central](https://img.shields.io/maven-central/v/com.xceptance/neodymium-classic)](https://central.sonatype.com/artifact/com.xceptance/neodymium-classic)
 
 # Neodymium Classic
 

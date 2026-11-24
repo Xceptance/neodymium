@@ -24,6 +24,7 @@
 package com.xceptance.aura.report.config;
 
 import jakarta.servlet.Servlet;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.web.servlet.ServletRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -31,11 +32,13 @@ import org.springframework.context.annotation.Configuration;
 /**
  * Explicit Servlet configuration to register the H2 Web Console directly with Tomcat 11 (Jakarta Servlet API).
  * Uses reflection to instantiate H2 JakartaWebServlet because the h2 dependency is scoped as runtime in pom.xml.
+ * Disabled by default; only registered when {@code spring.h2.console.enabled=true} is explicitly configured.
  *
  * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
 @Configuration
+@ConditionalOnProperty(name = "spring.h2.console.enabled", havingValue = "true", matchIfMissing = false)
 public class H2ConsoleConfig
 {
     @Bean

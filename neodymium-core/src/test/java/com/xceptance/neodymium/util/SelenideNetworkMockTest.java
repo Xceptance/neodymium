@@ -28,6 +28,7 @@ import static com.codeborne.selenide.Condition.visible;
 import static com.codeborne.selenide.Selenide.$;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -53,9 +54,15 @@ public class SelenideNetworkMockTest extends NeodymiumTest
 {
     private static File tempConfigFile;
 
+    private static LocalTestHttpServer server;
+
     @BeforeClass
-    public static void enableProxy()
+    public static void enableProxy() throws IOException
     {
+        server = LocalTestHttpServer.startWithRoutesOnLocalHostAddress(Map.of(
+            "/neodymium", "<html><body>Original</body></html>",
+            "/blog", "<html><body><header id=\"masthead\"><button class=\"search-toggle\">Search</button></header></body></html>"));
+
         final String fileLocation = "config/temp-SelenideNetworkMockTest-neodymium.properties";
         tempConfigFile = new File("./" + fileLocation);
         Map<String, String> properties = new HashMap<>();
@@ -73,9 +80,9 @@ public class SelenideNetworkMockTest extends NeodymiumTest
         WebDriverRunner.getSelenideProxy().responseMocker()
                        .mockText("test mock", RequestMatchers.urlMatches(HttpMethod.GET, Pattern.compile(".*neodymium.*")),
                                  () -> textMock);
-        Selenide.open("https://github.com/Xceptance/neodymium");
+        Selenide.open(server.url("/neodymium"));
         $("body").shouldHave(exactText(textMock));
-        Selenide.open("https://blog.xceptance.com/");
+        Selenide.open(server.url("/blog"));
         $("#masthead .search-toggle").shouldBe(visible);
     }
 
@@ -84,5 +91,9 @@ public class SelenideNetworkMockTest extends NeodymiumTest
     {
         Configuration.proxyEnabled = false;
         NeodymiumTest.deleteTempFile(tempConfigFile);
+        if (server != null)
+        {
+            server.close();
+        }
     }
 }

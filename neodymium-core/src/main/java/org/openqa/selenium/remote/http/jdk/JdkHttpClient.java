@@ -169,7 +169,7 @@ public class JdkHttpClient implements HttpClient
                 @Override
                 public void connectFailed(URI uri, SocketAddress sa, IOException ioe)
                 {
-                    System.out.println();
+                    LOG.log(Level.FINE, "Proxy connection failed for " + uri + " via " + sa, ioe);
                 }
             };
             builder = builder.proxy(proxySelector);
