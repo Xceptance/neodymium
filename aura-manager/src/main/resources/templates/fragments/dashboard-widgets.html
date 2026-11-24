@@ -1448,7 +1448,7 @@
                         <div class="d-flex align-items-center gap-2" style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                             <span class="material-symbols-outlined" style="font-size: 0.9rem; flex-shrink: 0;" th:style="'color: ' + ${sub.color} + ';'" th:text="${sub.icon != null && !sub.icon.isEmpty() ? sub.icon : 'subdirectory_arrow_right'}">subdirectory_arrow_right</span>
                             <!-- Ticket badge if Bug -->
-                            <a th:if="${(w.metric.name() == 'BUGS' or (sub.badge != null and !sub.badge.isEmpty())) and sub.hasReportUrl()}"
+                            <a th:if="${w.metric.name() == 'BUGS' and sub.hasReportUrl()}"
                                class="badge-status font-mono widget-subitem-ticket-link d-inline-flex align-items-center gap-1"
                                style="font-size: 0.72rem; padding: 0.1rem 0.45rem; background: var(--bg-card, rgba(255,255,255,0.05)); border: 1px solid var(--border, rgba(255,255,255,0.1)); text-decoration: none;"
                                th:href="${sub.reportUrl}"
@@ -1460,11 +1460,11 @@
                                th:title="'Open execution details in run report'"
                                th:text="${sub.label}">BUG-12345</a>
                             <span class="badge-status font-mono"
-                                  th:if="${(w.metric.name() == 'BUGS' or (sub.badge != null and !sub.badge.isEmpty())) and !sub.hasReportUrl()}"
+                                  th:if="${w.metric.name() == 'BUGS' and !sub.hasReportUrl()}"
                                   style="font-size: 0.72rem; padding: 0.1rem 0.45rem; background: var(--bg-card, rgba(255,255,255,0.05)); border: 1px solid var(--border, rgba(255,255,255,0.1));"
                                   th:text="${sub.label}">BUG-12345</span>
                             <!-- Method name if Test -->
-                            <a th:if="${w.metric.name() != 'BUGS' and (sub.badge == null or sub.badge.isEmpty()) and sub.hasReportUrl()}"
+                            <a th:if="${w.metric.name() != 'BUGS' and sub.hasReportUrl()}"
                                class="widget-subitem-test-link text-truncate"
                                style="font-weight: 600; color: var(--text-main); font-size: 0.8rem; text-decoration: none;"
                                th:href="${sub.reportUrl}"
@@ -1475,9 +1475,15 @@
                                onclick="event.stopPropagation();"
                                th:title="'Open execution details in run report'"
                                th:text="${sub.label}">verifyPriceDisplayPerMarket</a>
-                            <span th:if="${w.metric.name() != 'BUGS' and (sub.badge == null or sub.badge.isEmpty()) and !sub.hasReportUrl()}"
+                            <span th:if="${w.metric.name() != 'BUGS' and !sub.hasReportUrl()}"
+                                  class="widget-subitem-test-link text-truncate"
                                   style="font-weight: 600; color: var(--text-main); font-size: 0.8rem;"
                                   th:text="${sub.label}">verifyPriceDisplayPerMarket</span>
+                            <!-- Status or Error badge next to test for transitions/status -->
+                            <span class="badge-status font-mono"
+                                  th:if="${w.metric.name() != 'BUGS' and sub.badge != null and !sub.badge.isEmpty()}"
+                                  style="font-size: 0.68rem; padding: 0.08rem 0.35rem; border-radius: 4px; background: var(--bg-card, rgba(255,255,255,0.05)); border: 1px solid var(--border, rgba(255,255,255,0.1));"
+                                  th:text="${sub.badge}">ELEMENT_NOT_FOUND</span>
                             <!-- Secondary class subtitle -->
                             <span class="text-muted text-truncate"
                                   style="font-size: 0.72rem; max-width: 320px;"
