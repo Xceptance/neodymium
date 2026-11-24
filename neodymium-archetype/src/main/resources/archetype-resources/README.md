@@ -72,7 +72,7 @@ mvn test -Dbrowserprofile.global.headless=true
 
 ${h2} Test Categorization and Reporting Tags
 
-Each test runner and YAML playbook includes tags to showcase test organization and reporting capabilities in the **Aura Dashboard** (area breakdown, feature metrics, and tag-filtered test runs):
+Each test runner and YAML playbook includes tags to showcase test organization and reporting capabilities in **Neodymium AI Manager** (area breakdown, feature metrics, and tag-filtered test runs):
 
 - **`PostersHomepageAiTest`** (`@Tag("smoke")`, `@Tag("browsing")`, `@Tag("homepage")`): Smoke validation for the storefront browsing area.
 - **`PostersSearchAiTest`** (`@Tag("regression")`, `@Tag("catalog")`, `@Tag("search")`): Regression suite covering the catalog search area with dataset-specific category tags (`art`, `outdoor`, `wildlife`, `vehicles`).
