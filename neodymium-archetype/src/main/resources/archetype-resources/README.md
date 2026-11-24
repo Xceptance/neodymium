@@ -33,7 +33,7 @@ ${h2} Included Neo AI YAML Playbooks (Posters Demo Store)
 The archetype includes showcase natural language test playbooks targeting the Posters Demo Store in `src/test/resources/tests/`:
 
 - **`tests/posters_homepage.yaml`**: Intensive homepage verification validating brand logo, navigation categories (*World of Nature*, *Dining*, *Transportation*, *Panoramas*), carousel, product grid, footer links, and visual element alignment.
-- **`tests/posters_search.yaml`**: Parameterized search across multiple terms (`"Modern"`, `"Nature"`, `"Ocean"`, `"Bamboo"`), asserting result counts, product prices, and a 3-column visual grid layout (`(visual)`).
+- **`tests/posters_search.yaml`**: Parameterized search across multiple terms (`"Modern"`, `"Nature"`, `"Bear"`, `"truck"`), asserting result counts, product prices, and a 3-column visual grid layout (`(visual)`).
 - **`tests/posters_registration.yaml`**: End-to-end customer registration generating a unique `@varmail.de` address, verifying green success banner styling, and cleaning up by deleting the account in the `after:` teardown phase.
 - **`tests/posters_negative_login.yaml`**: Negative authentication flow verifying invalid credential alerts and checking error banner color variation (reddish background and dark red text styling).
 - **`tests/fragments/cookie_consent.steps`**: Reusable step snippet demonstrating modular step inclusion (`_include:`).
@@ -68,6 +68,28 @@ Run headlessly (e.g. in CI pipelines or Docker):
 
 ```bash
 mvn test -Dbrowserprofile.global.headless=true
+```
+
+${h2} Test Categorization and Reporting Tags
+
+Each test runner and YAML playbook includes tags to showcase test organization and reporting capabilities in **Neodymium AI Manager** (area breakdown, feature metrics, and tag-filtered test runs):
+
+- **`PostersHomepageAiTest`** (`@Tag("smoke")`, `@Tag("browsing")`, `@Tag("homepage")`): Smoke validation for the storefront browsing area.
+- **`PostersSearchAiTest`** (`@Tag("regression")`, `@Tag("catalog")`, `@Tag("search")`): Regression suite covering the catalog search area with dataset-specific category tags (`art`, `outdoor`, `wildlife`, `vehicles`).
+- **`PostersRegistrationAiTest`** (`@Tag("e2e")`, `@Tag("account")`, `@Tag("registration")`): End-to-end critical user journey for account creation and cleanup.
+- **`PostersNegativeLoginAiTest`** (`@Tag("negative")`, `@Tag("account")`, `@Tag("login")`): Negative authentication tests with dataset-specific error classifications (`wrong_password`, `wrong_domain`, `nonexistent_user`).
+
+Filter test execution by JUnit tags using Maven:
+
+```bash
+# Run only smoke tests
+mvn test -Dgroups="smoke"
+
+# Run all tests in the account area
+mvn test -Dgroups="account"
+
+# Exclude negative tests from a standard run
+mvn test -DexcludedGroups="negative"
 ```
 
 ${h2} Configuration

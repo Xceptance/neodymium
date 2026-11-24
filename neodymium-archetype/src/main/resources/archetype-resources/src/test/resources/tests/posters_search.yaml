@@ -1,5 +1,11 @@
 # Neodymium YAML Test Data File
 
+tags:
+  area: Catalog
+  feature: Search
+  type: Regression
+  severity: Normal
+
 before: |
   Open https://posters.xceptance.io:8443/
   _include: fragments/cookie_consent.steps
@@ -16,12 +22,20 @@ data:
   -
     testId: "search_modern_posters"
     searchTerm: "Modern"
+    tags:
+      category: art
   -
     testId: "search_nature_posters"
     searchTerm: "Nature"
+    tags:
+      category: outdoor
   -
     testId: "search_bear_posters"
     searchTerm: "Bear"
+    tags:
+      category: wildlife
   -
     testId: "search_truck_posters"
     searchTerm: "truck"
+    tags:
+      category: vehicles

@@ -23,6 +23,7 @@
  */
 package ${package}.tests;
 
+import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.common.browser.Browser;
@@ -39,6 +40,9 @@ import org.neodymium.junit5.NeodymiumTest;
 @Browser("Chrome_1500x1000")
 @AiPlaybook("tests/posters_registration.yaml")
 @NeodymiumAiTest
+@Tag("e2e")
+@Tag("account")
+@Tag("registration")
 public class PostersRegistrationAiTest
 {
     /**
