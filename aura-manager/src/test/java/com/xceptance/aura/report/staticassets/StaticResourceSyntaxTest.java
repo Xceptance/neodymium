@@ -5089,8 +5089,10 @@ public final class StaticResourceSyntaxTest
             "\n" +
             "// 3. 10,000 tests queue with 1 failure: formatting, segment display, min-width support\n" +
             "updateProgress({ running: true, runningCount: 2, scheduledCount: 10000, executedCount: 4500, passed: 4499, failed: 1 });\n" +
-            "assert(elements.sidebarActiveProgress.textContent.includes('4,500') || elements.sidebarActiveProgress.textContent.includes('4500'), 'Formatted count');\n" +
-            "assert(elements.sidebarActiveProgress.textContent.includes('10,000') || elements.sidebarActiveProgress.textContent.includes('10000'), 'Formatted total');\n" +
+            "const expected4500 = new Intl.NumberFormat().format(4500);\n" +
+            "const expected10000 = new Intl.NumberFormat().format(10000);\n" +
+            "assert(elements.sidebarActiveProgress.textContent.includes(expected4500) || elements.sidebarActiveProgress.textContent.includes('4500'), 'Formatted count');\n" +
+            "assert(elements.sidebarActiveProgress.textContent.includes(expected10000) || elements.sidebarActiveProgress.textContent.includes('10000'), 'Formatted total');\n" +
             "assert.strictEqual(elements.sidebarProgressSegFailed.style.display, 'block', 'Failed segment must be visible');\n" +
             "assert.strictEqual(elements.sidebarChipFailed.style.display, 'inline-flex', 'Failed chip must be visible');\n" +
             "assert.strictEqual(elements.sidebarChipFailedVal.textContent, '1');\n" +

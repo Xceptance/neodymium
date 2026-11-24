@@ -60,6 +60,7 @@ import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.interactions.Interactive;
 
+import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
 
 /**
@@ -100,6 +101,41 @@ public class BrowserToolProviderStabilityTest
     {
     }
 
+    /**
+     * Creates a dynamic proxy that safely implements {@code Object.equals}, {@code hashCode},
+     * and {@code toString} so Selenide's driver registry cleanup never receives {@code null}
+     * for {@code equals()}.
+     *
+     * @param iface interface to proxy
+     * @param delegate handler for interface methods
+     * @param <T> interface type
+     * @return proxy instance
+     */
+    private static <T> T createProxy(final Class<T> iface, final InvocationHandler delegate)
+    {
+        return iface.cast(Proxy.newProxyInstance(
+            BrowserToolProviderStabilityTest.class.getClassLoader(),
+            new Class<?>[] { iface },
+            (proxy, method, args) ->
+            {
+                final String name = method.getName();
+                if ("equals".equals(name))
+                {
+                    return args != null && args.length == 1 && proxy == args[0];
+                }
+                if ("hashCode".equals(name))
+                {
+                    return System.identityHashCode(proxy);
+                }
+                if ("toString".equals(name))
+                {
+                    return iface.getSimpleName() + "@" + Integer.toHexString(System.identityHashCode(proxy));
+                }
+                return delegate.invoke(proxy, method, args);
+            }
+        ));
+    }
+
     @Test
     public void testAssertTextToolSchemaMakesSelectorOptional()
     {
@@ -129,9 +165,7 @@ public class BrowserToolProviderStabilityTest
     @Test
     public void testAssertTextTitleRegexWithMockDriver() throws Exception
     {
-        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                BrowserToolProviderStabilityTest.class.getClassLoader(),
-                new Class<?>[]{MockJsDriver.class},
+        final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                 (proxy, method, args) -> {
                     if ("getTitle".equals(method.getName()))
                     {
@@ -176,9 +210,7 @@ public class BrowserToolProviderStabilityTest
     @Test
     public void testAssertTextTitleMismatchThrowsAssertionError()
     {
-        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                BrowserToolProviderStabilityTest.class.getClassLoader(),
-                new Class<?>[]{MockJsDriver.class},
+        final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                 (proxy, method, args) -> {
                     if ("getTitle".equals(method.getName()))
                     {
@@ -217,9 +249,7 @@ public class BrowserToolProviderStabilityTest
     @Test
     public void testAssertTextPageWideWithoutSelectorMatchesTitleFallback() throws Exception
     {
-        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                BrowserToolProviderStabilityTest.class.getClassLoader(),
-                new Class<?>[]{MockJsDriver.class},
+        final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                 (proxy, method, args) -> {
                     if ("getTitle".equals(method.getName()))
                     {
@@ -334,9 +364,7 @@ public class BrowserToolProviderStabilityTest
                 }
         );
 
-        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                BrowserToolProviderStabilityTest.class.getClassLoader(),
-                new Class<?>[]{MockJsDriver.class},
+        final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                 (proxy, method, args) -> {
                     final String name = method.getName();
                     if ("getTitle".equals(name))
@@ -461,9 +489,7 @@ public class BrowserToolProviderStabilityTest
                     }
             );
 
-            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                    BrowserToolProviderStabilityTest.class.getClassLoader(),
-                    new Class<?>[]{MockJsDriver.class},
+            final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                     (proxy, method, args) -> {
                         final String name = method.getName();
                         if ("getTitle".equals(name))
@@ -589,9 +615,7 @@ public class BrowserToolProviderStabilityTest
                 }
         );
 
-        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                BrowserToolProviderStabilityTest.class.getClassLoader(),
-                new Class<?>[]{MockJsDriver.class},
+        final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                 (proxy, method, args) -> {
                     final String name = method.getName();
                     if ("getTitle".equals(name))
@@ -641,9 +665,7 @@ public class BrowserToolProviderStabilityTest
     {
         final AtomicBoolean scrolled = new AtomicBoolean(false);
 
-        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                BrowserToolProviderStabilityTest.class.getClassLoader(),
-                new Class<?>[]{MockJsDriver.class},
+        final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                 (proxy, method, args) -> {
                     final String name = method.getName();
                     if ("getTitle".equals(name))
@@ -904,9 +926,7 @@ public class BrowserToolProviderStabilityTest
                     }
             );
 
-            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                    BrowserToolProviderStabilityTest.class.getClassLoader(),
-                    new Class<?>[]{MockJsDriver.class},
+            final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                     (proxy, method, args) -> {
                         final String name = method.getName();
                         final Object arg0 = (args != null && args.length > 0) ? args[0] : null;
@@ -1075,9 +1095,7 @@ public class BrowserToolProviderStabilityTest
                     }
             );
 
-            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                    BrowserToolProviderStabilityTest.class.getClassLoader(),
-                    new Class<?>[]{MockJsDriver.class},
+            final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                     (proxy, method, args) ->
                     {
                         final String name = method.getName();
@@ -1287,9 +1305,7 @@ public class BrowserToolProviderStabilityTest
                     }
             );
 
-            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                    BrowserToolProviderStabilityTest.class.getClassLoader(),
-                    new Class<?>[]{MockJsDriver.class},
+            final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                     (proxy, method, args) -> {
                         final String name = method.getName();
                         if ("findElement".equals(name))
@@ -1331,9 +1347,7 @@ public class BrowserToolProviderStabilityTest
             });
 
             // 4. If driver only returns hidden elements, asserting 'visible' throws and 'hidden' succeeds
-            final MockJsDriver allHiddenDriver = (MockJsDriver) Proxy.newProxyInstance(
-                    BrowserToolProviderStabilityTest.class.getClassLoader(),
-                    new Class<?>[]{MockJsDriver.class},
+            final MockJsDriver allHiddenDriver = createProxy(MockJsDriver.class,
                     (proxy, method, args) -> {
                         final String name = method.getName();
                         if ("findElement".equals(name))
@@ -1401,9 +1415,7 @@ public class BrowserToolProviderStabilityTest
                     }
             );
 
-            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                    BrowserToolProviderStabilityTest.class.getClassLoader(),
-                    new Class<?>[]{MockJsDriver.class},
+            final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                     (proxy, method, args) -> {
                         final String name = method.getName();
                         if ("executeScript".equals(name))
@@ -1483,9 +1495,7 @@ public class BrowserToolProviderStabilityTest
                     }
             );
 
-            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                    BrowserToolProviderStabilityTest.class.getClassLoader(),
-                    new Class<?>[]{MockJsDriver.class},
+            final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                     (proxy, method, args) -> {
                         final String name = method.getName();
                         if ("executeScript".equals(name))
@@ -1564,9 +1574,7 @@ public class BrowserToolProviderStabilityTest
                     }
             );
 
-            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                    BrowserToolProviderStabilityTest.class.getClassLoader(),
-                    new Class<?>[]{MockJsDriver.class},
+            final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                     (proxy, method, args) -> {
                         final String name = method.getName();
                         if ("executeScript".equals(name))
@@ -1653,9 +1661,7 @@ public class BrowserToolProviderStabilityTest
                     }
             );
 
-            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                    BrowserToolProviderStabilityTest.class.getClassLoader(),
-                    new Class<?>[]{MockJsDriver.class},
+            final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                     (proxy, method, args) -> {
                         final String name = method.getName();
                         if ("findElement".equals(name))
@@ -1792,9 +1798,7 @@ public class BrowserToolProviderStabilityTest
                     }
             );
 
-            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                    BrowserToolProviderStabilityTest.class.getClassLoader(),
-                    new Class<?>[]{MockJsDriver.class},
+            final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                     (proxy, method, args) -> {
                         final String name = method.getName();
                         if ("executeScript".equals(name))
@@ -1868,9 +1872,7 @@ public class BrowserToolProviderStabilityTest
                     }
             );
 
-            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                    BrowserToolProviderStabilityTest.class.getClassLoader(),
-                    new Class<?>[]{MockJsDriver.class},
+            final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                     (proxy, method, args) -> {
                         final String name = method.getName();
                         if ("executeScript".equals(name))
@@ -1932,9 +1934,7 @@ public class BrowserToolProviderStabilityTest
                 }
         );
 
-        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                BrowserToolProviderStabilityTest.class.getClassLoader(),
-                new Class<?>[]{MockJsDriver.class},
+        final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                 (proxy, method, args) -> {
                     final String name = method.getName();
                     if ("executeScript".equals(name))
@@ -2007,9 +2007,7 @@ public class BrowserToolProviderStabilityTest
                 }
         );
 
-        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                BrowserToolProviderStabilityTest.class.getClassLoader(),
-                new Class<?>[]{MockJsDriver.class},
+        final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                 (proxy, method, args) -> {
                     final String name = method.getName();
                     if ("executeScript".equals(name))
@@ -2067,9 +2065,7 @@ public class BrowserToolProviderStabilityTest
     @Test
     public void testInspectToolReturnsErrorWhenElementNotFound() throws Exception
     {
-        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                BrowserToolProviderStabilityTest.class.getClassLoader(),
-                new Class<?>[]{MockJsDriver.class},
+        final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                 (proxy, method, args) -> {
                     final String name = method.getName();
                     if ("findElements".equals(name))
@@ -2132,9 +2128,7 @@ public class BrowserToolProviderStabilityTest
                 }
         );
 
-        final MockJsScreenshotDriver mockDriver = (MockJsScreenshotDriver) Proxy.newProxyInstance(
-                BrowserToolProviderStabilityTest.class.getClassLoader(),
-                new Class<?>[]{MockJsScreenshotDriver.class},
+        final MockJsScreenshotDriver mockDriver = createProxy(MockJsScreenshotDriver.class,
                 (proxy, method, args) -> {
                     final String name = method.getName();
                     if ("getScreenshotAs".equals(name))
@@ -2243,9 +2237,7 @@ public class BrowserToolProviderStabilityTest
                 }
         );
 
-        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                BrowserToolProviderStabilityTest.class.getClassLoader(),
-                new Class<?>[]{MockJsDriver.class},
+        final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                 (proxy, method, args) -> {
                     final String name = method.getName();
                     if ("findElements".equals(name))
@@ -2309,9 +2301,7 @@ public class BrowserToolProviderStabilityTest
                 }
         );
 
-        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                BrowserToolProviderStabilityTest.class.getClassLoader(),
-                new Class<?>[]{MockJsDriver.class},
+        final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                 (proxy, method, args) -> {
                     final String name = method.getName();
                     if ("executeScript".equals(name))
@@ -2382,9 +2372,7 @@ public class BrowserToolProviderStabilityTest
                 }
         );
 
-        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                BrowserToolProviderStabilityTest.class.getClassLoader(),
-                new Class<?>[]{MockJsDriver.class},
+        final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                 (proxy, method, args) -> {
                     final String name = method.getName();
                     if ("executeScript".equals(name))
@@ -2436,9 +2424,7 @@ public class BrowserToolProviderStabilityTest
     @Test
     public void testAssertTextReturnsErrorWhenElementNotFoundInDom() throws Exception
     {
-        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                BrowserToolProviderStabilityTest.class.getClassLoader(),
-                new Class<?>[]{MockJsDriver.class},
+        final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                 (proxy, method, args) -> {
                     final String name = method.getName();
                     if ("findElements".equals(name))
@@ -2478,9 +2464,7 @@ public class BrowserToolProviderStabilityTest
     @Test
     public void testAssertAttributeReturnsErrorWhenElementNotFoundInDom() throws Exception
     {
-        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                BrowserToolProviderStabilityTest.class.getClassLoader(),
-                new Class<?>[]{MockJsDriver.class},
+        final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                 (proxy, method, args) -> {
                     final String name = method.getName();
                     if ("findElements".equals(name))
@@ -2551,9 +2535,7 @@ public class BrowserToolProviderStabilityTest
                 }
         );
 
-        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                BrowserToolProviderStabilityTest.class.getClassLoader(),
-                new Class<?>[]{MockJsDriver.class},
+        final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                 (proxy, method, args) -> {
                     final String name = method.getName();
                     if ("findElements".equals(name))
@@ -2595,9 +2577,7 @@ public class BrowserToolProviderStabilityTest
     @Test
     public void testAssertElementStateReturnsErrorWhenElementNotFoundInDom() throws Exception
     {
-        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                BrowserToolProviderStabilityTest.class.getClassLoader(),
-                new Class<?>[]{MockJsDriver.class},
+        final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                 (proxy, method, args) -> {
                     final String name = method.getName();
                     if ("findElements".equals(name))
@@ -2662,9 +2642,7 @@ public class BrowserToolProviderStabilityTest
                 }
         );
 
-        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                BrowserToolProviderStabilityTest.class.getClassLoader(),
-                new Class<?>[]{MockJsDriver.class},
+        final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                 (proxy, method, args) -> {
                     final String name = method.getName();
                     if ("findElements".equals(name))
@@ -2740,9 +2718,7 @@ public class BrowserToolProviderStabilityTest
                 }
         );
 
-        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                BrowserToolProviderStabilityTest.class.getClassLoader(),
-                new Class<?>[]{MockJsDriver.class},
+        final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                 (proxy, method, args) ->
                 {
                     final String name = method.getName();
@@ -2868,9 +2844,7 @@ public class BrowserToolProviderStabilityTest
                 }
         );
 
-        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                BrowserToolProviderStabilityTest.class.getClassLoader(),
-                new Class<?>[]{MockJsDriver.class},
+        final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                 (proxy, method, args) ->
                 {
                     final String name = method.getName();
@@ -2977,9 +2951,7 @@ public class BrowserToolProviderStabilityTest
                     }
             );
 
-            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
-                    BrowserToolProviderStabilityTest.class.getClassLoader(),
-                    new Class<?>[]{MockJsDriver.class},
+            final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
                     (proxy, method, args) ->
                     {
                         final String name = method.getName();

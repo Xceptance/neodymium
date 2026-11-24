@@ -78,6 +78,7 @@ import org.openqa.selenium.WrapsDriver;
 import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.lang.reflect.InvocationHandler;
 
 /**
  * Unit test suite for {@link NeodymiumAiRunner} and associated JUnit 5 annotations.
@@ -198,6 +199,40 @@ public class NeodymiumAiRunnerTest
     private static ExtensionContext createMockExtensionContext(final Class<?> testClass, final Method method)
     {
         return createMockExtensionContext(testClass, method, null);
+    }
+
+    /**
+     * Creates a mock {@link WebDriver} proxy that safely implements {@code Object.equals},
+     * {@code hashCode}, and {@code toString} so Selenide's driver registry cleanup never receives
+     * {@code null} for {@code equals()}.
+     *
+     * @param interfaces interfaces to implement
+     * @param delegate handler for interface methods
+     * @return mock WebDriver proxy
+     */
+    private static WebDriver createWebDriverProxy(final Class<?>[] interfaces, final InvocationHandler delegate)
+    {
+        return (WebDriver) Proxy.newProxyInstance(
+            NeodymiumAiRunnerTest.class.getClassLoader(),
+            interfaces,
+            (proxy, m, args) ->
+            {
+                final String name = m.getName();
+                if ("equals".equals(name))
+                {
+                    return args != null && args.length == 1 && proxy == args[0];
+                }
+                if ("hashCode".equals(name))
+                {
+                    return System.identityHashCode(proxy);
+                }
+                if ("toString".equals(name))
+                {
+                    return "MockWebDriver@" + Integer.toHexString(System.identityHashCode(proxy));
+                }
+                return delegate.invoke(proxy, m, args);
+            }
+        );
     }
 
     private static ExtensionContext createMockExtensionContext(final Class<?> testClass, final Method method, final Throwable executionException)
@@ -871,11 +906,7 @@ public class NeodymiumAiRunnerTest
             Assertions.assertEquals(2, beforeCallbacks.size());
 
             // Simulate driver registration by BrowserExecutionCallback (first extension)
-            final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
-                WebDriver.class.getClassLoader(),
-                new Class<?>[]{WebDriver.class},
-                (proxy, m, args) -> null
-            );
+            final WebDriver mockDriver = createWebDriverProxy(new Class<?>[]{WebDriver.class}, (proxy, m, args) -> null);
             final WebDriverStateContainer container = new WebDriverStateContainer();
             container.setWebDriver(mockDriver);
             Neodymium.setWebDriverStateContainer(container);
@@ -980,8 +1011,7 @@ public class NeodymiumAiRunnerTest
     public void testAiInvocationExtensionPreservesCachedWebDriverAcrossAfterEach() throws Exception
     {
         final AtomicBoolean quitCalled = new AtomicBoolean(false);
-        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
-            WebDriver.class.getClassLoader(),
+        final WebDriver mockDriver = createWebDriverProxy(
             new Class<?>[]{WebDriver.class},
             (proxy, m, args) -> {
                 if ("quit".equals(m.getName()))
@@ -1051,8 +1081,7 @@ public class NeodymiumAiRunnerTest
     public void testAiInvocationExtensionCleansUpWhenNotCached() throws Exception
     {
         final AtomicBoolean quitCalled = new AtomicBoolean(false);
-        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
-            WebDriver.class.getClassLoader(),
+        final WebDriver mockDriver = createWebDriverProxy(
             new Class<?>[]{WebDriver.class},
             (proxy, m, args) -> {
                 if ("quit".equals(m.getName()))
@@ -1102,14 +1131,12 @@ public class NeodymiumAiRunnerTest
     @Test
     public void testWebDriverCacheContainsWebDriver()
     {
-        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
-            WebDriver.class.getClassLoader(),
+        final WebDriver mockDriver = createWebDriverProxy(
             new Class<?>[]{WebDriver.class},
             (proxy, m, args) -> null
         );
 
-        final WebDriver wrappedDriver = (WebDriver) Proxy.newProxyInstance(
-            NeodymiumAiRunnerTest.class.getClassLoader(),
+        final WebDriver wrappedDriver = createWebDriverProxy(
             new Class<?>[]{WebDriver.class, WrapsDriver.class},
             (proxy, m, args) -> {
                 if ("getWrappedDriver".equals(m.getName()))
@@ -1145,8 +1172,7 @@ public class NeodymiumAiRunnerTest
             // 4. Null and unknown drivers
             Assertions.assertFalse(WebDriverCache.instance.containsWebDriver(null), "Null driver must return false");
 
-            final WebDriver unknownDriver = (WebDriver) Proxy.newProxyInstance(
-                WebDriver.class.getClassLoader(),
+            final WebDriver unknownDriver = createWebDriverProxy(
                 new Class<?>[]{WebDriver.class},
                 (proxy, m, args) -> null
             );
