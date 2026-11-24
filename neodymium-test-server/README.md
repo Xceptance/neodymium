@@ -12,14 +12,10 @@ A modern, responsive e-commerce storefront designed specifically for benchmarkin
 - **Dual Rendering**: Server-side rendered (SSR) templates alongside a rich REST API (`/verla/api/*`).
 - **Configurable Determinism**: Controlled product generators and catalog seeding for reproducible test runs.
 
-For architectural and catalog details, see [doc/VERLA_DEMO_STORE.md](../doc/VERLA_DEMO_STORE.md).
-
 ### 2. AI Glance Visual Defect Sandbox (`/AuraGlanceTest/`)
 An interactive visual testing suite engineered to evaluate and stress-test visual regression engines, dHash baselines, and visual root-cause analysis (RCA):
 - **Dynamic Defect Injection**: On-the-fly toggles for layout shifts, missing elements, swapped typography, corrupted colors, and responsive viewport distortions.
 - **Baseline Management**: Serves reference states and parameterized defect mutations for testing SSIM and Hamming distance gating.
-
-For testing guides and defect injection parameters, see [doc/aura-visual-defect-sandbox.md](../doc/aura-visual-defect-sandbox.md).
 
 ### 3. Action Fixtures (`/actionfixtures/`)
 Dedicated micro-pages targeted at low-level browser interaction verification:

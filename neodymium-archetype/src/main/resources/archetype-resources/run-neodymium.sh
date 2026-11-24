@@ -7,6 +7,6 @@ echo "========================================================================"
 
 set -e
 
-mvn -U test-compile exec:java \
+mvn test-compile exec:java \
   -Dexec.mainClass="org.neodymium.manager.NeodymiumManagerLauncher" \
-  -Dexec.classpathScope="test"
+  -Dexec.classpathScope="test" "$@"

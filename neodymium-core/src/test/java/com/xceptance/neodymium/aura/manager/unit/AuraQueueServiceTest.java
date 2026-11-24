@@ -208,7 +208,7 @@ public final class AuraQueueServiceTest
             "[ERROR]   Aura_tests_posters_homepage_yaml_Test.executeYamlTest()[1] » IllegalState Failed to instantiate LLM provider class 'org.neodymium.ai.client.GeminiLlmProvider' for provider 'gemini' (role 'global'): Gemini API key is missing. Please configure neodymium.ai.gemini.apiKey or set GEMINI_API_KEY.",
             "[ERROR] Tests run: 1, Failures: 0, Errors: 1, Skipped: 0",
             "[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.5.2:test (default-test) on project archy_test:",
-            "[ERROR] See /home/weigel/Documents/projects/automation/archy_test/target/surefire-reports for the individual test results.",
+            "[ERROR] See /workspace/sample-project/target/surefire-reports for the individual test results.",
             "[ERROR] See dump files (if any exist) [date].dump, [date]-jvmRun].dump and [date].dumpstream. -> [Help 1]",
             "[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.",
             "[ERROR] Re-run Maven using the -X switch to enable full debug logging.",

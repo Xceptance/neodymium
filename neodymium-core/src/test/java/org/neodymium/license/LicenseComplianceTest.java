@@ -222,6 +222,12 @@ public class LicenseComplianceTest
             {
                 paths.filter(p -> p.toString().endsWith(".java")).forEach(javaFile ->
                 {
+                    final String normalizedPath = javaFile.toString().replace('\\', '/');
+                    if (normalizedPath.contains("/archetype-resources/"))
+                    {
+                        // User-generated project starter templates intentionally omit Xceptance AGPLv3 headers
+                        return;
+                    }
                     final String fileName = javaFile.getFileName().toString();
                     if ("JdkHttpClient.java".equals(fileName))
                     {

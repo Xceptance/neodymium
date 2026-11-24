@@ -38,6 +38,8 @@ import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Launcher for Neodymium AI Manager.
@@ -49,6 +51,8 @@ import java.util.Locale;
  */
 public class AiLauncher
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(AiLauncher.class);
+
     public static final String SPLASH_ACTIVE_PROPERTY = "ai.launcher.splash.active";
     public static final String OPEN_BROWSER_PROPERTY = "neodymium.ai.openBrowser";
 
@@ -64,14 +68,15 @@ public class AiLauncher
 
         System.setProperty(SPLASH_ACTIVE_PROPERTY, "true");
 
+        final int serverPort = resolveServerPort(args);
+
         if (!isBrowserOpenEnabled())
         {
-            System.out.println("[Neodymium AI Manager] Browser auto-open is disabled. Dashboard will be available at http://localhost:8080");
+            System.out.println("[Neodymium AI Manager] Browser auto-open is disabled. Dashboard will be available at http://localhost:" + serverPort);
             AuraManagerApplication.main(args);
             return;
         }
 
-        final int serverPort = resolveServerPort(args);
         final boolean clientDetected = probePortForClient(serverPort, 400);
 
         if (clientDetected)
@@ -388,7 +393,7 @@ public class AiLauncher
             }
             catch (final Exception e)
             {
-                e.printStackTrace();
+                LOGGER.warn("Failed to serve splash page request", e);
             }
         }
     }

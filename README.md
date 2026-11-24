@@ -1,4 +1,4 @@
-[![Maven Central](https://img.shields.io/maven-central/v/com.xceptance/neodymium-library)](https://mvnrepository.com/artifact/com.xceptance/neodymium-library)
+[![Maven Central](https://img.shields.io/maven-central/v/com.xceptance/neodymium-core)](https://central.sonatype.com/artifact/com.xceptance/neodymium-core)
 
 # Neodymium
 
@@ -11,7 +11,7 @@ Today, Neodymium offers two complementary ways to build and run test automation:
 1. **Neodymium Classic (Zero AI)**: Pure, reliable, code-first test automation in Java under the permissive MIT license.
 2. **Neodymium AI**: Next-generation multimodal AI test automation, natural language playbooks, autonomous self-healing, and a standalone No-Code Web UI.
 
-📚 [**Official Documentation**](https://docs.xceptance.com/neodymium) • 📖 [**Technical Architecture Manual**](doc/DOCUMENTATION.md) • 💬 [**Commercial Support**](mailto:support@xceptance.com)
+📚 [**Official Documentation**](https://docs.xceptance.com/neodymium) • 📋 [**Changelog & Migration Guide**](CHANGELOG.md) • 💬 [**Commercial Support**](mailto:support@xceptance.com)
 
 ---
 
@@ -193,7 +193,7 @@ Open your browser at `http://localhost:8080/` to access the interactive dashboar
 
 When contributing to Neodymium or testing local engine modifications:
 * Run fast in-memory unit tests: `mvn test -pl neodymium-core -Punit-tests`
-* For the full suite of internal integration and regression profiles, see the [Maven Test Profiles Guide](doc/TEST_PROFILES.md).
+* For the full suite of internal integration and regression profiles, see the [Neodymium E2E Tests Guide](neodymium-e2e-tests/README.md).
 
 ---
 
@@ -213,12 +213,12 @@ When contributing to Neodymium or testing local engine modifications:
 Neodymium operates under a dual-licensing model based on module boundaries:
 
 ### 1. Neodymium Classic — MIT License
-The classic test automation framework ([`neodymium-classic`](neodymium-classic/README.md)) is fully open-source and licensed under the permissive **[MIT License](LICENSE#section-a-mit-license-neodymium-classic)**. You are free to use, modify, distribute, and commercially host Neodymium Classic without restriction.
+The classic test automation framework ([`neodymium-classic`](neodymium-classic/README.md)) is fully open-source and licensed under the permissive **[MIT License](LICENSE)** (Section A). You are free to use, modify, distribute, and commercially host Neodymium Classic without restriction.
 
 ### 2. Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
 The next-generation AI automation framework ([`neodymium-core`](neodymium-core/README.md), [`aura-manager`](aura-manager/README.md), [`neodymium-test-server`](neodymium-test-server/README.md), [`neodymium-e2e-tests`](neodymium-e2e-tests/README.md), and [`neodymium-archetype`](neodymium-archetype/README.md)) is **dual-licensed** to support both open-source developers and enterprise deployments:
-- **Community Edition (GNU AGPLv3):** Free for development, testing, and internal applications under the **[GNU Affero General Public License (AGPLv3)](LICENSE#section-b-gnu-affero-general-public-license-neodymium-ai)**.
-- **Commercial Edition:** For hosted SaaS offerings, commercial bundling, proprietary integrations, or enterprise usage without AGPLv3 copyleft/network-disclosure terms, a **[Commercial License](LICENSE#section-c-commercial-license-neodymium-ai)** is required.
+- **Community Edition (GNU AGPLv3):** Free for development, testing, and internal applications under the **[GNU Affero General Public License (AGPLv3)](LICENSE)** (Section B).
+- **Commercial Edition:** For hosted SaaS offerings, commercial bundling, proprietary integrations, or enterprise usage without AGPLv3 copyleft/network-disclosure terms, a **[Commercial License](LICENSE)** (Section C) is required.
 - **Commercial Support & Inquiries:** Contact **[support@xceptance.com](mailto:support@xceptance.com)**.
 
 ---

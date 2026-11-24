@@ -66,8 +66,8 @@ public class NeodymiumRunner implements TestTemplateInvocationContextProvider
         {
             if (!AllureAddons.envFileExists())
             {
-                LOGGER.info("This test uses Neodymium Library (version: " + Neodymium.getNeodymiumVersion()
-                            + "), MIT License, more details on https://github.com/Xceptance/neodymium");
+                LOGGER.info("This test uses Neodymium Core (version: " + Neodymium.getNeodymiumVersion()
+                            + "), GNU AGPLv3 / Commercial License, more details on https://github.com/Xceptance/neodymium");
                 neoVersionLogged = true;
                 AllureAddons.addEnvironmentInformation(ImmutableMap.<String, String> builder()
                                                                    .put("Testing Framework", "Neodymium " + Neodymium.getNeodymiumVersion())
