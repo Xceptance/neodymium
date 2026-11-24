@@ -31,7 +31,9 @@ import java.io.InputStreamReader;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
+import org.junit.AfterClass;
 import org.junit.Assert;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.jupiter.api.Assertions;
 import org.junit.runner.RunWith;
@@ -45,6 +47,23 @@ import com.codeborne.selenide.Selenide;
 @Browser("Chrome_headless")
 public class LighthouseUtilsTest
 {
+    private static LocalTestHttpServer server;
+
+    @BeforeClass
+    public static void startServer() throws IOException
+    {
+        server = LocalTestHttpServer.startWithHtml("<html><body><h1>Lighthouse Test</h1></body></html>");
+    }
+
+    @AfterClass
+    public static void stopServer()
+    {
+        if (server != null)
+        {
+            server.close();
+        }
+    }
+
     @Test
     public void testLighthouseUtilsHappyPath() throws Exception
     {
@@ -55,7 +74,7 @@ public class LighthouseUtilsTest
 
         mockLighthouseBinary();
 
-        Selenide.open("https://blog.xceptance.com/");
+        Selenide.open(server.url("/"));
 
         LighthouseUtils.createLightHouseReport("lighthouseUtilsReport");
     }
@@ -67,7 +86,7 @@ public class LighthouseUtilsTest
 
         mockLighthouseBinary();
 
-        Selenide.open("https://blog.xceptance.com/");
+        Selenide.open(server.url("/"));
 
         LighthouseUtils.createLightHouseReport("lighthouseUtilsReport");
 
@@ -81,7 +100,7 @@ public class LighthouseUtilsTest
 
         mockLighthouseBinary();
 
-        Selenide.open("https://blog.xceptance.com/");
+        Selenide.open(server.url("/"));
 
         AssertionError auditAssertion = assertThrows(AssertionError.class, () -> {
             LighthouseUtils.createLightHouseReport("lighthouseUtilsReport");
@@ -100,7 +119,7 @@ public class LighthouseUtilsTest
 
         mockLighthouseBinary();
 
-        Selenide.open("https://blog.xceptance.com/");
+        Selenide.open(server.url("/"));
 
         AssertionError auditAssertion = Assert.assertThrows(AssertionError.class, () -> {
             LighthouseUtils.createLightHouseReport("lighthouseUtilsReport");
@@ -119,7 +138,7 @@ public class LighthouseUtilsTest
         Neodymium.configuration().setProperty("neodymium.lighthouse.assert.thresholdScore.bestPractices", "0.5");
         Neodymium.configuration().setProperty("neodymium.lighthouse.assert.thresholdScore.seo", "0.5");
         mockLighthouseBinary();
-        Selenide.open("https://blog.xceptance.com/");
+        Selenide.open(server.url("/"));
 
         try
         {
@@ -141,7 +160,7 @@ public class LighthouseUtilsTest
         Neodymium.configuration().setProperty("neodymium.lighthouse.assert.thresholdScore.bestPractices", "0.51");
         Neodymium.configuration().setProperty("neodymium.lighthouse.assert.thresholdScore.seo", "0.5");
         mockLighthouseBinary();
-        Selenide.open("https://blog.xceptance.com/");
+        Selenide.open(server.url("/"));
 
         try
         {
@@ -165,7 +184,7 @@ public class LighthouseUtilsTest
 
         mockLighthouseBinary();
 
-        Selenide.open("https://blog.xceptance.com/");
+        Selenide.open(server.url("/"));
 
         try
         {
@@ -183,7 +202,7 @@ public class LighthouseUtilsTest
     public void testLighthouseUtilsBinNotFound() throws Exception
     {
         mockLighthouseBinary();
-        Selenide.open("https://blog.xceptance.com/");
+        Selenide.open(server.url("/"));
 
         try
         {

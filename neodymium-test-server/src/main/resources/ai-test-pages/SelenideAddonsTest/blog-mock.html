@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Passionate Testing | Xceptance Blog</title>
+    <style>
+        #search-container { display: none; }
+        #search-container.visible { display: block; }
+    </style>
+</head>
+<body>
+<header id="masthead">
+    <button type="button" class="search-toggle" onclick="document.getElementById('search-container').classList.toggle('visible')">Search</button>
+    <div id="search-container">
+        <form id="search-form" onsubmit="event.preventDefault(); document.querySelector('#content .search-field').value = document.querySelector('#search-container .search-field').value;">
+            <input type="search" class="search-field" placeholder="Search …" value="">
+        </form>
+    </div>
+</header>
+<main id="content">
+    <input type="search" class="search-field" value="">
+</main>
+<div id="privacy-message">
+    <p>Privacy notice</p>
+    <button type="button" class="btn-link" onclick="document.getElementById('privacy-message').style.display = 'none'">Opt out</button>
+</div>
+</body>
+</html>

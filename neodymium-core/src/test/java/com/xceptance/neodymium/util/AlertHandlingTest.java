@@ -28,6 +28,7 @@ import org.neodymium.common.browser.Browser;
 import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import org.neodymium.junit5.NeodymiumTest;
 import com.xceptance.neodymium.junit5.tests.AbstractNeodymiumTest;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.openqa.selenium.Alert;
@@ -43,9 +44,13 @@ import static com.codeborne.selenide.Selenide.$;
 @Browser("Chrome_1500x1000_headless")
 public class AlertHandlingTest extends AbstractNeodymiumTest
 {
+    private static LocalTestHttpServer server;
+
     @BeforeAll
     public static void beforeClass() throws IOException
     {
+        server = LocalTestHttpServer.startWithHtml("<html><body><div id=\"introduction\">Introduction</div></body></html>");
+
         Map<String, String> properties = new HashMap<>();
         properties.put("video.enableFilming", "true");
 
@@ -58,10 +63,19 @@ public class AlertHandlingTest extends AbstractNeodymiumTest
         MultibrowserConfiguration.getInstance(tempConfigFile.getPath());
     }
 
+    @AfterAll
+    public static void stopServer()
+    {
+        if (server != null)
+        {
+            server.close();
+        }
+    }
+
     @NeodymiumTest
     public void test()
     {
-        Selenide.open("https://www.xceptance.com");
+        Selenide.open(server.url("/"));
         $("#introduction").shouldBe(visible);
 
         Selenide.executeJavaScript("alert('Hello! I am an alert box!');");
