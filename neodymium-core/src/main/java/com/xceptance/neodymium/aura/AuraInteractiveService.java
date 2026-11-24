@@ -1,5 +1,5 @@
 /*
- * GNU Affero General Public License (AGPLv3)
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
  *
  * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
@@ -7,6 +7,11 @@
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -24,9 +29,6 @@ import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine.ActionResult;
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,7 +36,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.neodymium.ai.config.AiConfiguration;
-import org.neodymium.ai.util.AtomicFileUtils;
 import org.neodymium.util.Neodymium;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -138,6 +139,7 @@ public final class AuraInteractiveService
     {
         classExecutionIndexMap.clear();
         classExecutionCounters.clear();
+        InteractiveConsoleEngine.resetExecutionIndexes();
     }
 
     /**
@@ -173,54 +175,6 @@ public final class AuraInteractiveService
         }
 
         engine.pushState(body);
-
-        try
-        {
-            final String testClassFolder = InteractiveConsoleEngine.extractTestClassFolder(json);
-            final String executionKey = extractExecutionKey(json);
-            final int index = getExecutionIndex(testClassFolder, executionKey);
-
-            final String runFolder = (engine.getRunId() != null && !engine.getRunId().isBlank())
-                ? (engine.getRunId().startsWith("run_") || engine.getRunId().startsWith("run-") ? engine.getRunId() : "run_" + engine.getRunId())
-                : InteractiveConsoleEngine.getRunFolder();
-
-            final List<File> baseDirs = List.of(
-                new File(AiConfiguration.getInstance().getAuraStorageRunsDirectory()),
-                new File(AiConfiguration.getInstance().getConsoleExecutionLogsDirectory())
-            );
-
-            for (final File baseDir : baseDirs)
-            {
-                try
-                {
-                    final File structuredDir = new File(baseDir, runFolder + "/" + testClassFolder);
-                    if (!structuredDir.exists())
-                    {
-                        structuredDir.mkdirs();
-                    }
-                    final File structuredJson = new File(structuredDir, "console-execution-" + index + ".json");
-                    AtomicFileUtils.writeStringAtomic(structuredJson.toPath(), body);
-
-                    final File runLevelDir = new File(baseDir, runFolder);
-                    if (!structuredDir.getCanonicalPath().equals(runLevelDir.getCanonicalPath()))
-                    {
-                        final File runLevelJson = new File(runLevelDir, "console-execution-" + index + ".json");
-                        if (runLevelJson.exists())
-                        {
-                            runLevelJson.delete();
-                        }
-                    }
-                }
-                catch (final Exception e)
-                {
-                    LOGGER.warn("[InteractiveService] Could not save execution snapshot in {}: {}", baseDir.getPath(), e.getMessage());
-                }
-            }
-        }
-        catch (final Exception e)
-        {
-            LOGGER.warn("[InteractiveService] Failed to save console execution snapshot: {}", e.getMessage());
-        }
 
         if (statePushListener != null && json != null && json.has("runId") && !json.get("runId").isJsonNull())
         {
@@ -359,67 +313,5 @@ public final class AuraInteractiveService
             return file.getCanonicalFile();
         }
         return new File(System.getProperty("user.dir"), rawPath).getCanonicalFile();
-    }
-
-    private static String extractExecutionKey(final JsonObject json)
-    {
-        if (json == null)
-        {
-            return "default";
-        }
-        String key = "";
-        if (json.has("testFile") && !json.get("testFile").isJsonNull())
-        {
-            key += json.get("testFile").getAsString();
-        }
-        else if (json.has("playbookFile") && !json.get("playbookFile").isJsonNull())
-        {
-            key += json.get("playbookFile").getAsString();
-        }
-        else if (json.has("testName") && !json.get("testName").isJsonNull())
-        {
-            final String testName = json.get("testName").getAsString();
-            if (testName != null && !testName.isEmpty() && !"Live Test Run".equals(testName))
-            {
-                key += testName;
-            }
-        }
-
-        String datasetKey = "";
-        if (json.has("datasetId") && !json.get("datasetId").isJsonNull())
-        {
-            datasetKey = json.get("datasetId").getAsString();
-        }
-        else if (json.has("testId") && !json.get("testId").isJsonNull())
-        {
-            datasetKey = json.get("testId").getAsString();
-        }
-        else if (json.has("title") && !json.get("title").isJsonNull())
-        {
-            datasetKey = json.get("title").getAsString();
-        }
-
-        if (datasetKey != null && !datasetKey.isBlank())
-        {
-            if (!key.isEmpty())
-            {
-                key += "::";
-            }
-            key += datasetKey;
-        }
-
-        if (json.has("browser") && !json.get("browser").isJsonNull())
-        {
-            final String browser = json.get("browser").getAsString();
-            if (browser != null && !browser.isEmpty())
-            {
-                if (!key.isEmpty())
-                {
-                    key += "::";
-                }
-                key += browser;
-            }
-        }
-        return key.isEmpty() ? "default" : key;
     }
 }

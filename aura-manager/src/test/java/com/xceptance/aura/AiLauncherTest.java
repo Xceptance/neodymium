@@ -1,5 +1,5 @@
 /*
- * GNU Affero General Public License (AGPLv3)
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
  *
  * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
@@ -7,6 +7,11 @@
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -52,7 +57,6 @@ public final class AiLauncherTest
         }
         System.clearProperty(AiLauncher.SPLASH_ACTIVE_PROPERTY);
         System.clearProperty(AiLauncher.OPEN_BROWSER_PROPERTY);
-        System.clearProperty(AiLauncher.LEGACY_OPEN_BROWSER_PROPERTY);
     }
 
     @Test
@@ -75,7 +79,7 @@ public final class AiLauncherTest
         try (final InputStream in = connection.getInputStream())
         {
             final String body = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-            Assertions.assertTrue(body.contains("Starting AI Manager"), "Response must contain splash screen text");
+            Assertions.assertTrue(body.contains("Starting Neodymium AI Manager"), "Response must contain splash screen text");
             Assertions.assertTrue(body.contains("http://localhost:8080"), "Splash script must poll target localhost:8080");
         }
     }
@@ -99,7 +103,6 @@ public final class AiLauncherTest
     public void testIsBrowserOpenEnabledDefaultIsTrue()
     {
         System.clearProperty(AiLauncher.OPEN_BROWSER_PROPERTY);
-        System.clearProperty(AiLauncher.LEGACY_OPEN_BROWSER_PROPERTY);
         Assertions.assertTrue(AiLauncher.isBrowserOpenEnabled(), "Browser open should default to true");
     }
 
@@ -111,14 +114,6 @@ public final class AiLauncherTest
 
         System.setProperty(AiLauncher.OPEN_BROWSER_PROPERTY, "true");
         Assertions.assertTrue(AiLauncher.isBrowserOpenEnabled(), "Browser open should be enabled when property is true");
-    }
-
-    @Test
-    public void testIsBrowserOpenEnabledHonorsLegacyProperty()
-    {
-        System.clearProperty(AiLauncher.OPEN_BROWSER_PROPERTY);
-        System.setProperty(AiLauncher.LEGACY_OPEN_BROWSER_PROPERTY, "false");
-        Assertions.assertFalse(AiLauncher.isBrowserOpenEnabled(), "Legacy browser property should be honored when modern property is unset");
     }
 
     @Test

@@ -1,5 +1,5 @@
 /*
- * GNU Affero General Public License (AGPLv3)
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
  *
  * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
@@ -7,6 +7,11 @@
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -35,6 +40,7 @@ import com.xceptance.aura.report.dto.SubAreaSummaryDto;
 import com.xceptance.aura.report.dto.TestBaseAreaDto;
 import com.xceptance.aura.report.dto.TestBaseClassDto;
 import com.xceptance.aura.report.dto.TestBaseSubAreaDto;
+import com.xceptance.aura.report.dto.TestClassSummaryDto;
 import com.xceptance.aura.report.dto.TestExecutionDto;
 import com.xceptance.aura.report.entity.TestBaseVariationEntity;
 
@@ -213,5 +219,49 @@ public class AuraReportSubAreaHierarchyTest
             .orElseThrow();
         assertFalse(accountArea.hasSubAreas());
         assertTrue(accountArea.getSubAreas().isEmpty());
+    }
+
+    @Test
+    public void testBuildAreaSummariesMergesSimpleAndFullyQualifiedClassNames() throws Exception
+    {
+        final String json1 = """
+            {
+                "id": "exec-1",
+                "testClass": "Aura_tests_examples_wikipedia_search_yml_Test",
+                "testMethod": "executeYamlTest",
+                "title": "wikipedia_search_example_1",
+                "areaName": "Browse",
+                "status": "passed"
+            }
+            """;
+        final String json2 = """
+            {
+                "id": "exec-2",
+                "testClass": "com.xceptance.neodymium.aura.sandbox.Aura_tests_examples_wikipedia_search_yml_Test",
+                "testMethod": "executeYamlTest",
+                "title": "wikipedia_search_example_2",
+                "areaName": "Browse",
+                "status": "running"
+            }
+            """;
+
+        final TestExecutionDto exec1 = objectMapper.readValue(json1, TestExecutionDto.class);
+        final TestExecutionDto exec2 = objectMapper.readValue(json2, TestExecutionDto.class);
+
+        final List<AreaSummaryDto> areaSummaries = dataService.buildAreaSummaries(List.of(exec1, exec2));
+        assertNotNull(areaSummaries);
+        assertEquals(1, areaSummaries.size(), "Should have exactly 1 area summary");
+
+        final AreaSummaryDto browseArea = areaSummaries.get(0);
+        assertEquals("Browse", browseArea.getAreaName());
+        assertEquals(1, browseArea.getTestClasses().size(), "Executions with simple and FQCN must be grouped into a single class summary");
+
+        final TestClassSummaryDto classSummary = browseArea.getTestClasses().get(0);
+        assertEquals("com.xceptance.neodymium.aura.sandbox.Aura_tests_examples_wikipedia_search_yml_Test", classSummary.getClassName(),
+            "Canonical grouping must prefer the fully qualified class name for display");
+        assertEquals(2, classSummary.getTotalCount());
+        assertEquals(1, classSummary.getPassCount());
+        assertEquals(1, classSummary.getRunningCount());
+        assertEquals(2, classSummary.getExecutions().size());
     }
 }

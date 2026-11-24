@@ -1,5 +1,5 @@
 /*
- * GNU Affero General Public License (AGPLv3)
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
  *
  * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
@@ -7,6 +7,11 @@
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -23,11 +28,13 @@ import com.xceptance.aura.report.dto.BatchLatestVariationDto;
 import com.xceptance.aura.report.dto.BatchSuiteEvolutionDto;
 import com.xceptance.aura.report.dto.BatchSuiteEvolutionPointDto;
 import com.xceptance.aura.report.dto.DistributionRatioDto;
+import com.xceptance.aura.report.dto.ReportDifferentialDto;
 import com.xceptance.aura.report.dto.RunReportDto;
 import com.xceptance.aura.report.dto.TagRatioCardDto;
 import com.xceptance.aura.report.dto.TestBaseAreaDto;
 import com.xceptance.aura.report.dto.TestBaseClassDto;
 import com.xceptance.aura.report.dto.TestExecutionDto;
+import com.xceptance.aura.report.dto.TestTransitionDto;
 import com.xceptance.aura.report.dto.TokenCostPointGroupDto;
 import com.xceptance.aura.report.dto.TokenCostTrendDto;
 import com.xceptance.aura.report.dto.widget.DashboardWidgetConfigDto;
@@ -75,6 +82,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -98,6 +106,27 @@ public class WidgetAggregationService
      * Half-width of a stacked column when displaying a single data point in a trend graph widget (100px total width).
      */
     private static final double TREND_SINGLE_COLUMN_HALF_WIDTH = 50.0;
+
+    private final ReportDifferentialService differentialService;
+
+    /**
+     * Default constructor creating a standalone differential service fallback.
+     */
+    public WidgetAggregationService()
+    {
+        this(null);
+    }
+
+    /**
+     * Constructs the widget aggregation service with an optional report differential service.
+     *
+     * @param differentialService report differential service
+     */
+    @Autowired
+    public WidgetAggregationService(@Autowired(required = false) final ReportDifferentialService differentialService)
+    {
+        this.differentialService = (differentialService != null) ? differentialService : new ReportDifferentialService();
+    }
 
     /**
      * Aggregates multiple widgets from their configuration definitions.
@@ -666,19 +695,19 @@ public class WidgetAggregationService
                     resolveContributingRunIds(config, runs, latestVariations)
                 );
             case PIE_CHART:
-                return buildPieChartWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs);
+                return buildPieChartWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs, dataService);
             case RATIO_BAR:
-                return buildRatioBarWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs);
+                return buildRatioBarWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs, dataService);
             case PERLENKETTE:
                 return buildPerlenketteWidget(config, runs, latestVariations, suiteEvolution, tokenCostTrend, bugs, browserRatios, tagRatioCards, dataService);
             case TREND_GRAPH:
                 return buildTrendGraphWidget(config, runs, latestVariations, browserRatios, tagRatioCards, suiteEvolution, tokenCostTrend, bugs, dataService);
             case TEXT:
-                return buildTextWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs);
+                return buildTextWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs, dataService);
             case TEXT_WITH_SMALL_TREND:
                 return buildTextWithSmallTrendWidget(config, runs, latestVariations, suiteEvolution, browserRatios, tagRatioCards, tokenCostTrend, bugs, dataService);
             case LIST:
-                return buildListWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs);
+                return buildListWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs, dataService);
             case CONTAINER:
                 final List<DashboardWidgetViewDto> childViews = new ArrayList<>();
                 if (config.getChildren() != null)
@@ -727,7 +756,7 @@ public class WidgetAggregationService
                         resolveContributingRunIds(config, runs, latestVariations)
                     );
                 }
-                return buildPieChartWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs);
+                return buildPieChartWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs, dataService);
         }
     }
 
@@ -809,6 +838,33 @@ public class WidgetAggregationService
         final List<TagRatioCardDto> tagRatioCards,
         final TokenCostTrendDto tokenCostTrend,
         final List<TestBaseBugEntity> bugs)
+    {
+        return buildPieChartWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs, null);
+    }
+
+    private DashboardWidgetViewDto buildPieChartWidget(
+        final DashboardWidgetConfigDto config,
+        final List<TestRunEntity> runs,
+        final List<BatchLatestVariationDto> latestVariations,
+        final List<DistributionRatioDto> browserRatios,
+        final List<TagRatioCardDto> tagRatioCards,
+        final TokenCostTrendDto tokenCostTrend,
+        final List<TestBaseBugEntity> bugs,
+        final AuraReportDataService dataService)
+    {
+        return buildPieChartWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs, dataService, null);
+    }
+
+    private DashboardWidgetViewDto buildPieChartWidget(
+        final DashboardWidgetConfigDto config,
+        final List<TestRunEntity> runs,
+        final List<BatchLatestVariationDto> latestVariations,
+        final List<DistributionRatioDto> browserRatios,
+        final List<TagRatioCardDto> tagRatioCards,
+        final TokenCostTrendDto tokenCostTrend,
+        final List<TestBaseBugEntity> bugs,
+        final AuraReportDataService dataService,
+        final ReportDifferentialDto precomputedDiff)
     {
         final List<WidgetPieSliceDto> slices = new ArrayList<>();
         String centerRate = "0%";
@@ -1355,6 +1411,59 @@ public class WidgetAggregationService
                 currentOffset -= pct;
             }
         }
+        else if (config.getMetric() == WidgetMetric.TEST_TRANSITIONS)
+        {
+            final ReportDifferentialDto diff = (precomputedDiff != null)
+                ? precomputedDiff
+                : differentialService.computeDifferential(runs, latestVariations, dataService);
+            final int total = diff.getTotalEvaluatedTests();
+            final int green = diff.getTurnedGreenCount();
+            final int unticketed = diff.getUnticketedFailureCount();
+            final int known = diff.getKnownFailureCount();
+            final int regressed = diff.getRegressionCount();
+            final int stable = diff.getStablePassCount();
+
+            final int runCount = (diff.getAnalyzedRunIds() != null) ? diff.getAnalyzedRunIds().size() : ((runs != null) ? runs.size() : 0);
+            summaryLabel = runCount + (runCount == 1 ? " Run (" : " Runs (") + green + " green, " + unticketed + " unticketed)";
+
+            final double unticketedPct = (total > 0) ? ((double) unticketed / total * 100.0) : 0.0;
+            centerRate = (config.getValueFormat() == WidgetValueFormat.ABSOLUTE)
+                ? String.valueOf(unticketed)
+                : String.format(Locale.ROOT, "%.0f%%", unticketedPct);
+            centerLabel = "UNTICKETED";
+
+            double currentOffset = 25.0;
+            if (green > 0)
+            {
+                final double pct = (total > 0) ? ((double) green / total * 100.0) : 0.0;
+                slices.add(new WidgetPieSliceDto("Turned Green (Fixed)", green, pct, "var(--status-pass, #10b981)", currentOffset, 0, 0));
+                currentOffset -= pct;
+            }
+            if (unticketed > 0)
+            {
+                final double pct = (total > 0) ? ((double) unticketed / total * 100.0) : 0.0;
+                slices.add(new WidgetPieSliceDto("Unticketed Failures", unticketed, pct, "var(--status-unknown-fail, #ef4444)", currentOffset, 0, 0));
+                currentOffset -= pct;
+            }
+            if (known > 0)
+            {
+                final double pct = (total > 0) ? ((double) known / total * 100.0) : 0.0;
+                slices.add(new WidgetPieSliceDto("Known Bug Failures", known, pct, "var(--status-flaky, #f59e0b)", currentOffset, 0, 0));
+                currentOffset -= pct;
+            }
+            if (regressed > 0)
+            {
+                final double pct = (total > 0) ? ((double) regressed / total * 100.0) : 0.0;
+                slices.add(new WidgetPieSliceDto("New Regressions", regressed, pct, "#ec4899", currentOffset, 0, 0));
+                currentOffset -= pct;
+            }
+            if (stable > 0)
+            {
+                final double pct = (total > 0) ? ((double) stable / total * 100.0) : 0.0;
+                slices.add(new WidgetPieSliceDto("Stable Pass", stable, pct, "var(--text-muted, #64748b)", currentOffset, 0, 0));
+                currentOffset -= pct;
+            }
+        }
 
         final String emptyMsg = (scope == WidgetPointScope.LATEST_TEST_STATUS)
             ? "No data available"
@@ -1379,13 +1488,26 @@ public class WidgetAggregationService
         final TokenCostTrendDto tokenCostTrend,
         final List<TestBaseBugEntity> bugs)
     {
+        return buildRatioBarWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs, null);
+    }
+
+    private DashboardWidgetViewDto buildRatioBarWidget(
+        final DashboardWidgetConfigDto config,
+        final List<TestRunEntity> runs,
+        final List<BatchLatestVariationDto> latestVariations,
+        final List<DistributionRatioDto> browserRatios,
+        final List<TagRatioCardDto> tagRatioCards,
+        final TokenCostTrendDto tokenCostTrend,
+        final List<TestBaseBugEntity> bugs,
+        final AuraReportDataService dataService)
+    {
         final List<DistributionRatioDto> segments = new ArrayList<>();
         String summaryLabel = "";
         final WidgetPointScope scope = (config.getPointScope() != null) ? config.getPointScope() : WidgetPointScope.LATEST_TEST_STATUS;
 
         if (config.getMetric() == WidgetMetric.STATUS)
         {
-            final DashboardWidgetViewDto pie = buildPieChartWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs);
+            final DashboardWidgetViewDto pie = buildPieChartWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs, dataService);
             summaryLabel = pie.getSummaryLabel();
             for (final WidgetPieSliceDto slice : pie.getPieSlices())
             {
@@ -1420,7 +1542,7 @@ public class WidgetAggregationService
         }
         else if (config.getMetric() == WidgetMetric.BUGS)
         {
-            final DashboardWidgetViewDto pie = buildPieChartWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs);
+            final DashboardWidgetViewDto pie = buildPieChartWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs, dataService);
             summaryLabel = pie.getSummaryLabel();
             for (final WidgetPieSliceDto slice : pie.getPieSlices())
             {
@@ -1471,7 +1593,7 @@ public class WidgetAggregationService
         }
         else if (config.getMetric() == WidgetMetric.AI_USAGE)
         {
-            final DashboardWidgetViewDto pie = buildPieChartWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs);
+            final DashboardWidgetViewDto pie = buildPieChartWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs, dataService);
             summaryLabel = pie.getSummaryLabel();
             for (final WidgetPieSliceDto slice : pie.getPieSlices())
             {
@@ -1480,9 +1602,9 @@ public class WidgetAggregationService
                 ));
             }
         }
-        else if (config.getMetric() == WidgetMetric.FLAKINESS || config.getMetric() == WidgetMetric.NUMBER_OF_RUNS)
+        else if (config.getMetric() == WidgetMetric.FLAKINESS || config.getMetric() == WidgetMetric.NUMBER_OF_RUNS || config.getMetric() == WidgetMetric.TEST_TRANSITIONS)
         {
-            final DashboardWidgetViewDto pie = buildPieChartWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs);
+            final DashboardWidgetViewDto pie = buildPieChartWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs, dataService);
             summaryLabel = pie.getSummaryLabel();
             for (final WidgetPieSliceDto slice : pie.getPieSlices())
             {
@@ -3434,6 +3556,10 @@ public class WidgetAggregationService
         {
             trendColor = "var(--status-flaky, #f59e0b)";
         }
+        else if (metric == WidgetMetric.TEST_TRANSITIONS)
+        {
+            trendColor = "var(--status-unknown-fail, #ef4444)";
+        }
         else if (metric == WidgetMetric.NUMBER_OF_RUNS)
         {
             trendColor = "#3b82f6";
@@ -4085,6 +4211,16 @@ public class WidgetAggregationService
                             ? String.format(Locale.ROOT, "%.1f%%", v)
                             : (((int) v) + " flaky");
                     }
+                    else if (metric == WidgetMetric.TEST_TRANSITIONS)
+                    {
+                        final int unticketed = (r.getFailedUnknownCount() != null ? r.getFailedUnknownCount() : 0);
+                        final int totalTests = (r.getTotalTests() != null ? r.getTotalTests() : 0);
+                        final double unticketedRate = (totalTests > 0) ? ((double) unticketed / totalTests * 100.0) : 0.0;
+                        v = (format == WidgetValueFormat.PERCENT) ? unticketedRate : unticketed;
+                        valFormatted = (format == WidgetValueFormat.PERCENT)
+                            ? String.format(Locale.ROOT, "%.1f%% unticketed", v)
+                            : (((int) v) + " unticketed");
+                    }
                     else if (metric == WidgetMetric.NUMBER_OF_RUNS)
                     {
                         if (format == WidgetValueFormat.PERCENT)
@@ -4192,6 +4328,15 @@ public class WidgetAggregationService
                             ? String.format(Locale.ROOT, "%.1f%%", v)
                             : (((int) v) + " flaky");
                     }
+                    else if (metric == WidgetMetric.TEST_TRANSITIONS)
+                    {
+                        final int unticketed = b.unknownFailCount;
+                        final double rate = (b.totalTests > 0) ? ((double) unticketed / b.totalTests * 100.0) : 0.0;
+                        v = (format == WidgetValueFormat.PERCENT) ? rate : unticketed;
+                        valFormatted = (format == WidgetValueFormat.PERCENT)
+                            ? String.format(Locale.ROOT, "%.1f%% unticketed", v)
+                            : (((int) v) + " unticketed");
+                    }
                     else if (metric == WidgetMetric.NUMBER_OF_RUNS)
                     {
                         if (format == WidgetValueFormat.PERCENT)
@@ -4297,6 +4442,16 @@ public class WidgetAggregationService
                         ? String.format(Locale.ROOT, "%.1f%%", v)
                         : (((int) v) + " flaky");
                 }
+                else if (metric == WidgetMetric.TEST_TRANSITIONS)
+                {
+                    final int unticketed = (r.getFailedUnknownCount() != null ? r.getFailedUnknownCount() : 0);
+                    final int totalTests = (r.getTotalTests() != null ? r.getTotalTests() : 0);
+                    final double unticketedRate = (totalTests > 0) ? ((double) unticketed / totalTests * 100.0) : 0.0;
+                    v = (format == WidgetValueFormat.PERCENT) ? unticketedRate : unticketed;
+                    valFormatted = (format == WidgetValueFormat.PERCENT)
+                        ? String.format(Locale.ROOT, "%.1f%% unticketed", v)
+                        : (((int) v) + " unticketed");
+                }
                 else if (metric == WidgetMetric.NUMBER_OF_RUNS)
                 {
                     if (format == WidgetValueFormat.PERCENT)
@@ -4385,7 +4540,7 @@ public class WidgetAggregationService
                 maxVal = 1.0;
             }
         }
-        else if (metric == WidgetMetric.FLAKINESS)
+        else if (metric == WidgetMetric.FLAKINESS || metric == WidgetMetric.TEST_TRANSITIONS)
         {
             if (format == WidgetValueFormat.PERCENT)
             {
@@ -4455,7 +4610,7 @@ public class WidgetAggregationService
             final double normalizedY = (pt.getValue() - minVal) / (maxVal - minVal);
             final double y = baselineY - (normalizedY * graphHeight);
             final String badgeText = pt.getValueFormatted();
-            final String badgeClass = (metric == WidgetMetric.BUGS || metric == WidgetMetric.FLAKINESS)
+            final String badgeClass = (metric == WidgetMetric.BUGS || metric == WidgetMetric.FLAKINESS || metric == WidgetMetric.TEST_TRANSITIONS)
                 ? (pt.getValue() == 0.0 ? "badge-pass" : "badge-fail")
                 : "badge-pass";
 
@@ -5153,6 +5308,11 @@ public class WidgetAggregationService
             final int latestFlaky = !points.isEmpty() ? (int) Math.round(points.get(points.size() - 1).getValue()) : 0;
             trendLayers.add(new WidgetTrendLayerDto("Flaky Tests", "var(--status-flaky, #f59e0b)", "", latestFlaky, ""));
         }
+        else if (metric == WidgetMetric.TEST_TRANSITIONS)
+        {
+            final int latestUnticketed = !points.isEmpty() ? (int) Math.round(points.get(points.size() - 1).getValue()) : 0;
+            trendLayers.add(new WidgetTrendLayerDto("Unticketed Failures", "var(--status-unknown-fail, #ef4444)", "", latestUnticketed, ""));
+        }
         else if (metric == WidgetMetric.NUMBER_OF_RUNS)
         {
             final int latestRuns = !points.isEmpty() ? (int) Math.round(points.get(points.size() - 1).getValue()) : 0;
@@ -5313,7 +5473,7 @@ public class WidgetAggregationService
         final double delta = lastVal - firstVal;
         final boolean isIncrease = delta >= 0.0;
         final boolean isPos;
-        if (metric == WidgetMetric.BUGS || metric == WidgetMetric.FLAKINESS || metric == WidgetMetric.COSTS)
+        if (metric == WidgetMetric.BUGS || metric == WidgetMetric.FLAKINESS || metric == WidgetMetric.COSTS || metric == WidgetMetric.TEST_TRANSITIONS)
         {
             isPos = delta <= 0.0;
         }
@@ -5343,6 +5503,17 @@ public class WidgetAggregationService
             else
             {
                 deltaLabel = String.format(Locale.ROOT, "%s%.0f flaky vs start", isIncrease ? "+" : "-", Math.abs(delta));
+            }
+        }
+        else if (metric == WidgetMetric.TEST_TRANSITIONS)
+        {
+            if (format == WidgetValueFormat.PERCENT)
+            {
+                deltaLabel = String.format(Locale.ROOT, "%s%.1f%% unticketed vs start", isIncrease ? "+" : "-", Math.abs(delta));
+            }
+            else
+            {
+                deltaLabel = String.format(Locale.ROOT, "%s%.0f unticketed vs start", isIncrease ? "+" : "-", Math.abs(delta));
             }
         }
         else if (metric == WidgetMetric.TAG)
@@ -5488,7 +5659,7 @@ public class WidgetAggregationService
             yAxisTicks.add(new WidgetAxisTickDto(baselineY - (0.5 * graphHeight), "50%", true));
             yAxisTicks.add(new WidgetAxisTickDto(padTop, "100%", true));
         }
-        else if (metric == WidgetMetric.FLAKINESS)
+        else if (metric == WidgetMetric.FLAKINESS || metric == WidgetMetric.TEST_TRANSITIONS)
         {
             if (format == WidgetValueFormat.PERCENT)
             {
@@ -5498,15 +5669,16 @@ public class WidgetAggregationService
             }
             else
             {
-                final int maxFlaky = (int) Math.round(Math.max(1.0, maxVal));
-                yAxisTicks.add(new WidgetAxisTickDto(baselineY, "0 flaky", false));
-                if (maxFlaky > 1)
+                final String unit = (metric == WidgetMetric.TEST_TRANSITIONS) ? " unticketed" : " flaky";
+                final int maxCount = (int) Math.round(Math.max(1.0, maxVal));
+                yAxisTicks.add(new WidgetAxisTickDto(baselineY, "0" + unit, false));
+                if (maxCount > 1)
                 {
-                    final int midFlaky = (int) Math.round(maxFlaky / 2.0);
-                    final double midY = baselineY - (((double) midFlaky / maxFlaky) * graphHeight);
-                    yAxisTicks.add(new WidgetAxisTickDto(midY, midFlaky + " flaky", true));
+                    final int midCount = (int) Math.round(maxCount / 2.0);
+                    final double midY = baselineY - (((double) midCount / maxCount) * graphHeight);
+                    yAxisTicks.add(new WidgetAxisTickDto(midY, midCount + unit, true));
                 }
-                yAxisTicks.add(new WidgetAxisTickDto(padTop, maxFlaky + " flaky", true));
+                yAxisTicks.add(new WidgetAxisTickDto(padTop, maxCount + unit, true));
             }
         }
         else if (metric == WidgetMetric.NUMBER_OF_RUNS)
@@ -5658,9 +5830,26 @@ public class WidgetAggregationService
         final TokenCostTrendDto tokenCostTrend,
         final List<TestBaseBugEntity> bugs)
     {
-        final DashboardWidgetViewDto pie = buildPieChartWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs);
+        return buildTextWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs, null);
+    }
+
+    private DashboardWidgetViewDto buildTextWidget(
+        final DashboardWidgetConfigDto config,
+        final List<TestRunEntity> runs,
+        final List<BatchLatestVariationDto> latestVariations,
+        final List<DistributionRatioDto> browserRatios,
+        final List<TagRatioCardDto> tagRatioCards,
+        final TokenCostTrendDto tokenCostTrend,
+        final List<TestBaseBugEntity> bugs,
+        final AuraReportDataService dataService)
+    {
         final WidgetValueFormat format = (config.getValueFormat() != null) ? config.getValueFormat() : WidgetValueFormat.PERCENT;
         final WidgetMetric metric = (config.getMetric() != null) ? config.getMetric() : WidgetMetric.STATUS;
+        final ReportDifferentialDto precomputedDiff = (metric == WidgetMetric.TEST_TRANSITIONS)
+            ? differentialService.computeDifferential(runs, latestVariations, dataService)
+            : null;
+        final DashboardWidgetViewDto pie = buildPieChartWidget(
+            config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs, dataService, precomputedDiff);
 
         String primaryVal = pie.getPieCenterRate();
         String secondaryVal = pie.getSummaryLabel();
@@ -5812,6 +6001,30 @@ public class WidgetAggregationService
                 ? "var(--status-pass, #10b981)"
                 : (passedRuns > 0 ? "var(--status-known-fail, #f97316)" : "var(--status-unknown-fail, #ef4444)");
         }
+        else if (metric == WidgetMetric.TEST_TRANSITIONS)
+        {
+            final ReportDifferentialDto diff = precomputedDiff;
+            final int unticketed = diff.getUnticketedFailureCount();
+            final int green = diff.getTurnedGreenCount();
+            final int known = diff.getKnownFailureCount();
+            final int regressions = diff.getRegressionCount();
+            final int total = diff.getTotalEvaluatedTests();
+
+            if (format == WidgetValueFormat.ABSOLUTE)
+            {
+                primaryVal = unticketed + (unticketed == 1 ? " Unticketed Fail" : " Unticketed Fails");
+                secondaryVal = green + " green · " + known + " known · " + regressions + " regressions";
+            }
+            else
+            {
+                final double rate = (total > 0) ? ((double) unticketed / total * 100.0) : 0.0;
+                primaryVal = String.format(Locale.ROOT, "%.0f%% UNTICKETED", rate);
+                secondaryVal = unticketed + " of " + total + " tests require bug tickets (" + green + " turned green)";
+            }
+            color = (unticketed == 0 && regressions == 0)
+                ? "var(--status-pass, #10b981)"
+                : (unticketed > 0 ? "var(--status-unknown-fail, #ef4444)" : "var(--status-known-fail, #f97316)");
+        }
 
         return new DashboardWidgetViewDto(
             config, pie.getSummaryLabel(), pie.getEmptyMessage(),
@@ -5888,7 +6101,7 @@ public class WidgetAggregationService
             ? config.withPointScope(effectiveScope)
             : config;
 
-        final DashboardWidgetViewDto textWidget = buildTextWidget(textConfig, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs);
+        final DashboardWidgetViewDto textWidget = buildTextWidget(textConfig, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs, dataService);
         final DashboardWidgetViewDto trendWidget = buildTrendGraphWidget(
             config, runs, latestVariations, browserRatios, tagRatioCards,
             suiteEvolution, tokenCostTrend, bugs, dataService
@@ -5929,9 +6142,26 @@ public class WidgetAggregationService
         final TokenCostTrendDto tokenCostTrend,
         final List<TestBaseBugEntity> bugs)
     {
-        final DashboardWidgetViewDto pie = buildPieChartWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs);
-        final List<WidgetListItemDto> items = new ArrayList<>();
+        return buildListWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs, null);
+    }
+
+    private DashboardWidgetViewDto buildListWidget(
+        final DashboardWidgetConfigDto config,
+        final List<TestRunEntity> runs,
+        final List<BatchLatestVariationDto> latestVariations,
+        final List<DistributionRatioDto> browserRatios,
+        final List<TagRatioCardDto> tagRatioCards,
+        final TokenCostTrendDto tokenCostTrend,
+        final List<TestBaseBugEntity> bugs,
+        final AuraReportDataService dataService)
+    {
         final WidgetMetric metric = (config.getMetric() != null) ? config.getMetric() : WidgetMetric.STATUS;
+        final ReportDifferentialDto precomputedDiff = (metric == WidgetMetric.TEST_TRANSITIONS)
+            ? differentialService.computeDifferential(runs, latestVariations, dataService)
+            : null;
+        final DashboardWidgetViewDto pie = buildPieChartWidget(
+            config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs, dataService, precomputedDiff);
+        final List<WidgetListItemDto> items = new ArrayList<>();
         final WidgetPointScope scope = (config.getPointScope() != null) ? config.getPointScope() : WidgetPointScope.LATEST_TEST_STATUS;
         final List<TestRunEntity> scopedRuns = (scope != WidgetPointScope.LATEST_TEST_STATUS)
             ? filterRunsByPointScope(runs, scope)
@@ -6488,6 +6718,221 @@ public class WidgetAggregationService
                 ));
             }
         }
+        else if (metric == WidgetMetric.TEST_TRANSITIONS)
+        {
+            final ReportDifferentialDto diff = precomputedDiff;
+
+            // Group 1: Unticketed Failures
+            if (diff.getUnticketedFailureCount() > 0)
+            {
+                final List<WidgetListItemDto> unticketedSubItems = new ArrayList<>();
+                for (final TestTransitionDto t : diff.getUnticketedFailures())
+                {
+                    final String badge = !t.getDistilledErrorCategory().isBlank()
+                        ? t.getDistilledErrorCategory()
+                        : "UNTICKETED";
+                    final String secondary = !t.getDistilledLocator().isBlank()
+                        ? ("Locator: " + t.getDistilledLocator())
+                        : (!t.getCleanedStackTrace().isBlank() ? t.getCleanedStackTrace() : t.getTestClass());
+                    final String runVal = (t.getLatestRunId() != null && !t.getLatestRunId().isBlank()) ? ("#" + t.getLatestRunId()) : "";
+
+                    unticketedSubItems.add(new WidgetListItemDto(
+                        t.getTestName(),
+                        runVal,
+                        1,
+                        100.0,
+                        "var(--status-unknown-fail, #ef4444)",
+                        "report_problem",
+                        0,
+                        0,
+                        badge,
+                        secondary,
+                        t.getTags(),
+                        Collections.emptyList(),
+                        t.getKey(),
+                        t.getVariationId(),
+                        t.getLatestRunId(),
+                        t.getLatestExecutionId()
+                    ));
+                }
+                final double pct = diff.getTotalEvaluatedTests() > 0 ? ((double) diff.getUnticketedFailureCount() / diff.getTotalEvaluatedTests() * 100.0) : 0.0;
+                items.add(new WidgetListItemDto(
+                    "Unticketed Failures",
+                    diff.getUnticketedFailureCount() + " (" + String.format(Locale.ROOT, "%.1f%%", pct) + ")",
+                    diff.getUnticketedFailureCount(),
+                    pct,
+                    "var(--status-unknown-fail, #ef4444)",
+                    "report_problem",
+                    0,
+                    0,
+                    "",
+                    "",
+                    Collections.emptyList(),
+                    unticketedSubItems
+                ));
+            }
+
+            // Group 2: Turned Green (Fixed)
+            if (diff.getTurnedGreenCount() > 0)
+            {
+                final List<WidgetListItemDto> greenSubItems = new ArrayList<>();
+                for (final TestTransitionDto t : diff.getTurnedGreen())
+                {
+                    final String badge = t.hasBugs() ? t.getBugTickets().get(0) : "RECOVERED";
+                    final String secondary = (!t.getPreviousRunId().isBlank())
+                        ? ("Fixed (was failing in #" + t.getPreviousRunId() + ")")
+                        : "Turned green in latest run";
+                    final String runVal = (t.getLatestRunId() != null && !t.getLatestRunId().isBlank()) ? ("#" + t.getLatestRunId()) : "";
+
+                    greenSubItems.add(new WidgetListItemDto(
+                        t.getTestName(),
+                        runVal,
+                        1,
+                        100.0,
+                        "var(--status-pass, #10b981)",
+                        "published_with_changes",
+                        0,
+                        0,
+                        badge,
+                        secondary,
+                        t.getTags(),
+                        Collections.emptyList(),
+                        t.getKey(),
+                        t.getVariationId(),
+                        t.getLatestRunId(),
+                        t.getLatestExecutionId()
+                    ));
+                }
+                final double pct = diff.getTotalEvaluatedTests() > 0 ? ((double) diff.getTurnedGreenCount() / diff.getTotalEvaluatedTests() * 100.0) : 0.0;
+                items.add(new WidgetListItemDto(
+                    "Turned Green (Fixed)",
+                    diff.getTurnedGreenCount() + " (" + String.format(Locale.ROOT, "%.1f%%", pct) + ")",
+                    diff.getTurnedGreenCount(),
+                    pct,
+                    "var(--status-pass, #10b981)",
+                    "published_with_changes",
+                    0,
+                    0,
+                    "",
+                    "",
+                    Collections.emptyList(),
+                    greenSubItems
+                ));
+            }
+
+            // Group 3: Known Bug Failures
+            if (diff.getKnownFailureCount() > 0)
+            {
+                final List<WidgetListItemDto> knownSubItems = new ArrayList<>();
+                for (final TestTransitionDto t : diff.getKnownFailures())
+                {
+                    final String badge = !t.getBugTickets().isEmpty() ? t.getBugTickets().get(0) : "KNOWN BUG";
+                    final String errorPart = !t.getDistilledErrorCategory().isBlank() ? (" · " + t.getDistilledErrorCategory()) : "";
+                    final String secondary = (!t.getBugTickets().isEmpty() ? String.join(", ", t.getBugTickets()) : "Tracked bug") + errorPart;
+                    final String runVal = (t.getLatestRunId() != null && !t.getLatestRunId().isBlank()) ? ("#" + t.getLatestRunId()) : "";
+
+                    knownSubItems.add(new WidgetListItemDto(
+                        t.getTestName(),
+                        runVal,
+                        1,
+                        100.0,
+                        "var(--status-flaky, #f59e0b)",
+                        "bug_report",
+                        0,
+                        0,
+                        badge,
+                        secondary,
+                        t.getTags(),
+                        Collections.emptyList(),
+                        t.getKey(),
+                        t.getVariationId(),
+                        t.getLatestRunId(),
+                        t.getLatestExecutionId()
+                    ));
+                }
+                final double pct = diff.getTotalEvaluatedTests() > 0 ? ((double) diff.getKnownFailureCount() / diff.getTotalEvaluatedTests() * 100.0) : 0.0;
+                items.add(new WidgetListItemDto(
+                    "Known Bug Failures",
+                    diff.getKnownFailureCount() + " (" + String.format(Locale.ROOT, "%.1f%%", pct) + ")",
+                    diff.getKnownFailureCount(),
+                    pct,
+                    "var(--status-flaky, #f59e0b)",
+                    "bug_report",
+                    0,
+                    0,
+                    "",
+                    "",
+                    Collections.emptyList(),
+                    knownSubItems
+                ));
+            }
+
+            // Group 4: New Regressions
+            if (diff.getRegressionCount() > 0)
+            {
+                final List<WidgetListItemDto> regressionSubItems = new ArrayList<>();
+                for (final TestTransitionDto t : diff.getRegressions())
+                {
+                    final String badge = !t.getDistilledErrorCategory().isBlank() ? t.getDistilledErrorCategory() : "REGRESSION";
+                    final String secondary = "Passed previously, failed in #" + t.getLatestRunId();
+                    final String runVal = (t.getLatestRunId() != null && !t.getLatestRunId().isBlank()) ? ("#" + t.getLatestRunId()) : "";
+
+                    regressionSubItems.add(new WidgetListItemDto(
+                        t.getTestName(),
+                        runVal,
+                        1,
+                        100.0,
+                        "#ec4899",
+                        "trending_down",
+                        0,
+                        0,
+                        badge,
+                        secondary,
+                        t.getTags(),
+                        Collections.emptyList(),
+                        t.getKey(),
+                        t.getVariationId(),
+                        t.getLatestRunId(),
+                        t.getLatestExecutionId()
+                    ));
+                }
+                final double pct = diff.getTotalEvaluatedTests() > 0 ? ((double) diff.getRegressionCount() / diff.getTotalEvaluatedTests() * 100.0) : 0.0;
+                items.add(new WidgetListItemDto(
+                    "New Regressions",
+                    diff.getRegressionCount() + " (" + String.format(Locale.ROOT, "%.1f%%", pct) + ")",
+                    diff.getRegressionCount(),
+                    pct,
+                    "#ec4899",
+                    "trending_down",
+                    0,
+                    0,
+                    "",
+                    "",
+                    Collections.emptyList(),
+                    regressionSubItems
+                ));
+            }
+
+            // Group 5: Stable Pass
+            if (diff.getStablePassCount() > 0)
+            {
+                final double pct = diff.getTotalEvaluatedTests() > 0 ? ((double) diff.getStablePassCount() / diff.getTotalEvaluatedTests() * 100.0) : 0.0;
+                items.add(new WidgetListItemDto(
+                    "Stable Pass",
+                    diff.getStablePassCount() + " (" + String.format(Locale.ROOT, "%.1f%%", pct) + ")",
+                    diff.getStablePassCount(),
+                    pct,
+                    "var(--text-muted, #64748b)",
+                    "check_circle",
+                    0,
+                    0,
+                    "",
+                    "",
+                    Collections.emptyList(),
+                    Collections.emptyList()
+                ));
+            }
+        }
 
         final String summary = items.size() + (items.size() == 1 ? " Item" : " Items");
         return new DashboardWidgetViewDto(
@@ -7037,6 +7482,15 @@ public class WidgetAggregationService
     private String resolveListIcon(final WidgetMetric metric, final String label)
     {
         final String l = (label != null) ? label.toLowerCase(Locale.ROOT) : "";
+        if (metric == WidgetMetric.TEST_TRANSITIONS)
+        {
+            if (l.contains("green") || l.contains("fix") || l.contains("recover")) return "published_with_changes";
+            if (l.contains("unticketed") || (l.contains("fail") && !l.contains("known"))) return "report_problem";
+            if (l.contains("known")) return "bug_report";
+            if (l.contains("regress")) return "trending_down";
+            if (l.contains("pass") || l.contains("clean")) return "check_circle";
+            return "rule";
+        }
         if (metric == WidgetMetric.FLAKINESS)
         {
             if (l.contains("flaky")) return "shuffle";
@@ -8102,6 +8556,14 @@ public class WidgetAggregationService
                             {
                                 return exec.isFlaky();
                             }
+                            if (metric == WidgetMetric.TEST_TRANSITIONS)
+                            {
+                                final boolean isFailed = (exec.getStatus() != null && (exec.getStatus().toUpperCase(Locale.ROOT).contains("FAIL") || exec.getStatus().toUpperCase(Locale.ROOT).contains("ERROR")))
+                                    || exec.getFailedStepsCount() > 0;
+                                final boolean hasBugs = (exec.getBugs() != null && !exec.getBugs().isEmpty())
+                                    || (exec.getPrimaryBug() != null && !exec.getPrimaryBug().isBlank());
+                                return isFailed || hasBugs || exec.isHealed();
+                            }
                             if (metric == WidgetMetric.TAG && config.getTagKey() != null && !config.getTagKey().isBlank())
                             {
                                 final String targetTag = config.getTagKey().trim();
@@ -8139,6 +8601,23 @@ public class WidgetAggregationService
                         filtered.sort(Comparator.comparingInt(TestExecutionDto::getFlakyFailureCount).reversed()
                             .thenComparing(Comparator.comparingInt(TestExecutionDto::getFlakyTotalRuns).reversed())
                             .thenComparing(TestExecutionDto::getTestClass, Comparator.nullsLast(Comparator.naturalOrder())));
+                    }
+                    else if (metric == WidgetMetric.TEST_TRANSITIONS)
+                    {
+                        filtered.sort(Comparator.comparing((TestExecutionDto e) -> {
+                            final boolean isFailed = (e.getStatus() != null && (e.getStatus().toUpperCase(Locale.ROOT).contains("FAIL") || e.getStatus().toUpperCase(Locale.ROOT).contains("ERROR")))
+                                || e.getFailedStepsCount() > 0;
+                            final boolean hasBugs = (e.getBugs() != null && !e.getBugs().isEmpty()) || (e.getPrimaryBug() != null && !e.getPrimaryBug().isBlank());
+                            if (isFailed && !hasBugs)
+                            {
+                                return 0;
+                            }
+                            if (isFailed)
+                            {
+                                return 1;
+                            }
+                            return 2;
+                        }).thenComparing(TestExecutionDto::getTestClass, Comparator.nullsLast(Comparator.naturalOrder())));
                     }
 
                     runExecutions = filtered;
@@ -8402,7 +8881,7 @@ public class WidgetAggregationService
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         }
 
-        if (config.getMetric() == WidgetMetric.NUMBER_OF_RUNS)
+        if (config.getMetric() == WidgetMetric.NUMBER_OF_RUNS || config.getMetric() == WidgetMetric.TEST_TRANSITIONS)
         {
             final List<TestRunEntity> runsForScope = (pointScope == WidgetPointScope.LATEST_TEST_STATUS)
                 ? sourceRuns

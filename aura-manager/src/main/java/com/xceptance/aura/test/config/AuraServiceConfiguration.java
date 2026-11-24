@@ -1,5 +1,5 @@
 /*
- * GNU Affero General Public License (AGPLv3)
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
  *
  * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
@@ -7,6 +7,11 @@
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -18,8 +23,11 @@
  */
 package com.xceptance.aura.test.config;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.RunStorageSyncService;
+import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.AuraQueueService;
@@ -28,6 +36,8 @@ import com.xceptance.neodymium.aura.AuraSettingsService;
 import com.xceptance.neodymium.aura.QueueRunProgressListener;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -144,6 +154,49 @@ public class AuraServiceConfiguration
                 {
                     LOGGER.warn("[Aura Server] Could not import run report for runId {}: {}", runId, e.getMessage());
                 }
+            }
+        });
+        final Set<String> syncedActiveRuns = ConcurrentHashMap.newKeySet();
+        interactiveService.setStatePushListener(runId -> {
+            if (runId == null || runId.isBlank() || applicationContext == null || !applicationContext.isActive())
+            {
+                return;
+            }
+            try
+            {
+                reportDataService.evictRunReportCache(runId);
+                boolean shouldSync = syncedActiveRuns.add(runId);
+                final InteractiveConsoleEngine engine = interactiveService.getCurrentConsoleEngine();
+                if (engine != null)
+                {
+                    final String currentJson = engine.getCurrentStateJson();
+                    if (currentJson != null && !currentJson.isBlank())
+                    {
+                        final JsonObject stateObj = JsonParser.parseString(currentJson).getAsJsonObject();
+                        final String status = (stateObj.has("status") && !stateObj.get("status").isJsonNull())
+                            ? stateObj.get("status").getAsString().trim()
+                            : "";
+                        final boolean isRunningStatus = "running".equalsIgnoreCase(status)
+                            || "in_progress".equalsIgnoreCase(status)
+                            || "executing".equalsIgnoreCase(status)
+                            || "pending".equalsIgnoreCase(status)
+                            || status.isEmpty();
+                        if (!isRunningStatus)
+                        {
+                            shouldSync = true;
+                            syncedActiveRuns.remove(runId);
+                        }
+                    }
+                }
+                if (shouldSync)
+                {
+                    runStorageSyncService.importOrUpdateRunReport(runId);
+                    reportDataService.evictRunReportCache(runId);
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.warn("[Aura Server] Could not sync state push for runId {}: {}", runId, e.getMessage());
             }
         });
         return queueService;

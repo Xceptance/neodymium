@@ -1,5 +1,5 @@
 /*
- * GNU Affero General Public License (AGPLv3)
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
  *
  * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
@@ -7,6 +7,11 @@
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -57,7 +62,7 @@ public final class AuraGlobalModelAdviceTest
     @BeforeAll
     public static void beforeAll()
     {
-        System.setProperty("neodymium.aura.test", "true");
+        System.setProperty("neodymium.ai.test", "true");
     }
 
     @BeforeEach
@@ -419,5 +424,38 @@ public final class AuraGlobalModelAdviceTest
 
         Assertions.assertEquals(0, model.getAttribute("activeRunPassedCount"));
         Assertions.assertEquals(0, model.getAttribute("activeRunFailedCount"));
+    }
+
+    @Test
+    public final void testActiveRunContextIncludesAiDrivenPassedCount()
+    {
+        final AuraQueueService mockQueueService = Mockito.mock(AuraQueueService.class);
+        Mockito.when(mockQueueService.getCurrentRunId()).thenReturn("");
+        Mockito.when(mockQueueService.isRunningQueue()).thenReturn(false);
+
+        final TestRunRepository mockRunRepo = Mockito.mock(TestRunRepository.class);
+        final TestRunEntity completedRun = new TestRunEntity();
+        completedRun.setId("run_20261120_104813");
+        completedRun.setBatchName("Browse");
+        completedRun.setStatus("COMPLETED");
+        completedRun.setTotalTests(2);
+        completedRun.setRunningCount(0);
+        completedRun.setPassedCount(2);
+        completedRun.setPassedAiCount(1);
+
+        Mockito.when(mockRunRepo.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of(completedRun));
+
+        final AuraGlobalModelAdvice advice = new AuraGlobalModelAdvice(mockQueueService, null, mockRunRepo, null);
+        final Model model = new ConcurrentModel();
+        advice.addGlobalAttributes(model);
+
+        Assertions.assertEquals(Boolean.TRUE, model.getAttribute("hasRunContext"));
+        Assertions.assertEquals("run_20261120_104813", model.getAttribute("activeRunId"));
+        Assertions.assertEquals("finished", model.getAttribute("activeRunStatus"));
+        Assertions.assertEquals(2, model.getAttribute("activeRunExecutedCount"));
+        Assertions.assertEquals(2, model.getAttribute("activeRunScheduledCount"));
+        Assertions.assertEquals(2, model.getAttribute("activeRunPassedCount"));
+        Assertions.assertEquals(0, model.getAttribute("activeRunFailedCount"));
+        Assertions.assertEquals("2 tests completed", model.getAttribute("activeRunProgress"));
     }
 }

@@ -1,5 +1,5 @@
 /*
- * GNU Affero General Public License (AGPLv3)
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
  *
  * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
@@ -7,6 +7,11 @@
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -71,14 +76,26 @@ public class InteractiveConsoleEngineTest
 
     private String originalResultsDir;
     private String originalConsoleLogsSetting;
+    private String originalDiskReportDir;
+    private String originalStorageRunsDir;
+    private String originalConsoleLogsDir;
 
     @BeforeEach
     public void setUp()
     {
         originalResultsDir = System.getProperty("allure.results.directory");
         originalConsoleLogsSetting = System.getProperty("neodymium.ai.consoleExecutionLogs");
+        originalDiskReportDir = System.getProperty("neodymium.ai.report.disk.directory");
+        originalStorageRunsDir = System.getProperty("neodymium.ai.storageRuns.directory");
+        originalConsoleLogsDir = System.getProperty("neodymium.ai.consoleExecutionLogs.directory");
+
         System.setProperty("allure.results.directory", tempResultsDir.getAbsolutePath());
+        System.setProperty("neodymium.ai.report.disk.directory", new File(tempResultsDir, "ai-reports").getAbsolutePath());
+        System.setProperty("neodymium.ai.storageRuns.directory", new File(tempResultsDir, "storage-runs").getAbsolutePath());
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", new File(tempResultsDir, "console-logs").getAbsolutePath());
+
         InteractiveConsoleEngine.resetExecutionIndexes();
+        InteractiveConsoleEngine.resetRunFolder();
         AiConfiguration.resetInstance();
     }
 
@@ -86,6 +103,7 @@ public class InteractiveConsoleEngineTest
     public void tearDown()
     {
         InteractiveConsoleEngine.resetExecutionIndexes();
+        InteractiveConsoleEngine.resetRunFolder();
         if (originalResultsDir != null)
         {
             System.setProperty("allure.results.directory", originalResultsDir);
@@ -103,9 +121,35 @@ public class InteractiveConsoleEngineTest
         {
             System.clearProperty("neodymium.ai.consoleExecutionLogs");
         }
-        System.clearProperty("neodymium.ai.consoleExecutionLogs.directory");
+
+        if (originalDiskReportDir != null)
+        {
+            System.setProperty("neodymium.ai.report.disk.directory", originalDiskReportDir);
+        }
+        else
+        {
+            System.clearProperty("neodymium.ai.report.disk.directory");
+        }
+
+        if (originalStorageRunsDir != null)
+        {
+            System.setProperty("neodymium.ai.storageRuns.directory", originalStorageRunsDir);
+        }
+        else
+        {
+            System.clearProperty("neodymium.ai.storageRuns.directory");
+        }
+
+        if (originalConsoleLogsDir != null)
+        {
+            System.setProperty("neodymium.ai.consoleExecutionLogs.directory", originalConsoleLogsDir);
+        }
+        else
+        {
+            System.clearProperty("neodymium.ai.consoleExecutionLogs.directory");
+        }
+
         System.clearProperty("neodymium.ai.consoleExecutionLogs.captureGlobalLog");
-        System.clearProperty("neodymium.ai.storageRuns.directory");
         Neodymium.clearAttachments();
         AiConfiguration.resetInstance();
     }
@@ -521,6 +565,84 @@ public class InteractiveConsoleEngineTest
         final String updatedJsonContent = Files.readString(customJson.toPath());
         assertTrue(updatedJsonContent.contains("\"videoUrl\":\"video-1.mp4\""), "Custom execution JSON should contain videoUrl attribute");
         assertTrue(updatedJsonContent.contains("\"videoPath\":\"video-1.mp4\""), "Custom execution JSON should contain videoPath attribute");
+    }
+
+    /**
+     * Regression safety net for DEF-20261118-1335: Verifies that attachVideoToLatestExecutionLog resolves
+     * the highest execution index even when directory listings return files out of order, ensuring that
+     * subsequent test videos (e.g. video-3.mp4) do not overwrite previous videos (e.g. video-2.mp4).
+     */
+    @Test
+    public void testAttachVideoToLatestExecutionLogWithUnorderedJsonFiles(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File targetTestDir = new File(customDir.toFile(), runFolder + "/MultiDatasetTest");
+        targetTestDir.mkdirs();
+
+        // Create executions 1, 2, 3
+        Files.writeString(new File(targetTestDir, "console-execution-1.json").toPath(), "{\"testName\":\"ds1\"}");
+        Files.writeString(new File(targetTestDir, "console-execution-2.json").toPath(), "{\"testName\":\"ds2\"}");
+        Files.writeString(new File(targetTestDir, "console-execution-3.json").toPath(), "{\"testName\":\"ds3\"}");
+
+        final File dummyVideo3 = new File(tempResultsDir, "recording-dummy-3.mp4");
+        Files.writeString(dummyVideo3.toPath(), "dummy-mp4-data-3");
+
+        InteractiveConsoleEngine.attachVideoToLatestExecutionLog(dummyVideo3, "MultiDatasetTest");
+
+        final File targetVideo = new File(targetTestDir, "video-3.mp4");
+        assertTrue(targetVideo.exists(), "Video file should be copied as video-3.mp4 matching the highest execution index");
+        assertEquals("dummy-mp4-data-3", Files.readString(targetVideo.toPath()));
+    }
+
+    @Test
+    public void testAttachVideoToMultipleExecutionsMaintainsDistinctIndices(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-multi-video");
+
+        // First test execution
+        engine.pushState("{\"testName\":\"MultiTestClass · ds1\",\"testFile\":\"com.xceptance.MultiTestClass#execute\",\"datasetId\":\"ds1\",\"status\":\"passed\",\"steps\":[],\"attachments\":[]}");
+
+        final File dummyVideo1 = new File(tempResultsDir, "recording-dummy-1.mp4");
+        Files.writeString(dummyVideo1.toPath(), "dummy-mp4-data-1");
+
+        InteractiveConsoleEngine.attachVideoToLatestExecutionLog(dummyVideo1, "MultiTestClass");
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File testDir = new File(customDir.toFile(), runFolder + "/MultiTestClass");
+        final File video1 = new File(testDir, "video-1.mp4");
+        final File json1 = new File(testDir, "console-execution-1.json");
+
+        assertTrue(video1.exists(), "video-1.mp4 should exist for dataset 1");
+        assertEquals("dummy-mp4-data-1", Files.readString(video1.toPath()), "video-1.mp4 content should match dataset 1");
+        assertTrue(Files.readString(json1.toPath()).contains("\"videoUrl\":\"video-1.mp4\""), "json1 should link video-1.mp4");
+
+        // Second test execution
+        engine.pushState("{\"testName\":\"MultiTestClass · ds2\",\"testFile\":\"com.xceptance.MultiTestClass#execute\",\"datasetId\":\"ds2\",\"status\":\"passed\",\"steps\":[],\"attachments\":[]}");
+
+        final File dummyVideo2 = new File(tempResultsDir, "recording-dummy-2.mp4");
+        Files.writeString(dummyVideo2.toPath(), "dummy-mp4-data-2");
+
+        InteractiveConsoleEngine.attachVideoToLatestExecutionLog(dummyVideo2, "MultiTestClass");
+
+        final File video2 = new File(testDir, "video-2.mp4");
+        final File json2 = new File(testDir, "console-execution-2.json");
+
+        assertTrue(video2.exists(), "video-2.mp4 should exist for dataset 2");
+        assertEquals("dummy-mp4-data-2", Files.readString(video2.toPath()), "video-2.mp4 content should match dataset 2");
+        assertTrue(Files.readString(json2.toPath()).contains("\"videoUrl\":\"video-2.mp4\""), "json2 should link video-2.mp4");
+
+        // Verify dataset 1 was not overwritten
+        assertTrue(video1.exists(), "video-1.mp4 should still exist");
+        assertEquals("dummy-mp4-data-1", Files.readString(video1.toPath()), "video-1.mp4 should not be overwritten by dataset 2");
+        assertTrue(Files.readString(json1.toPath()).contains("\"videoUrl\":\"video-1.mp4\""), "json1 should still link video-1.mp4");
     }
 
     @Test
@@ -1464,6 +1586,31 @@ public class InteractiveConsoleEngineTest
     }
 
     @Test
+    public void testPushStateWithDynamicRunIdDoesNotCreatePhantomTimestampFolder() throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        AiConfiguration.resetInstance();
+
+        final String customRunId = "run_target_custom_789";
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine(customRunId);
+        final String rawStateJson = "{\"testName\":\"WikipediaTest\",\"status\":\"passed\"}";
+        engine.pushState(rawStateJson);
+
+        final File storageRunsRoot = new File(tempResultsDir, "storage-runs");
+        final File expectedRunDir = new File(storageRunsRoot, customRunId);
+        assertTrue(expectedRunDir.exists(), "Storage run directory for custom runId must exist");
+
+        // Verify no phantom timestamped directory was created under storageRunsRoot
+        final File[] matchingDirs = storageRunsRoot.listFiles((dir, name) -> name.matches("^run_\\d{8}_\\d{6}$"));
+        assertTrue(matchingDirs == null || matchingDirs.length == 0,
+            "No phantom timestamped run folder should be created under storage-runs");
+
+        // Verify structured execution log file exists in the expected directory
+        final File logFile = new File(expectedRunDir, "WikipediaTest/console-execution-1.json");
+        assertTrue(logFile.exists(), "Execution log must be saved in expected target run directory");
+    }
+
+    @Test
     public void testPushStateLogsVariationTagsFromTransientData() throws IOException
     {
         System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
@@ -1846,6 +1993,55 @@ public class InteractiveConsoleEngineTest
         engine.reconcileTestOutcome(false, new RuntimeException("Blank status failure"));
         final JsonObject failedBlankState = JsonParser.parseString(engine.getCurrentStateJson()).getAsJsonObject();
         assertEquals("failed", failedBlankState.get("status").getAsString(), "Blank status must transition to failed when testPassed is false");
+    }
+
+    @Test
+    public void testRunLifecycleMarksRunActiveBetweenTestsUntilMarkRunFinished(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final String runId = "run_from_console_lifecycle_test";
+        try
+        {
+            final InteractiveConsoleEngine engine1 = new InteractiveConsoleEngine(runId);
+            InteractiveConsoleEngine.markRunActive(runId, engine1);
+            assertTrue(InteractiveConsoleEngine.isJUnitRunActive(runId), "Run should be marked active after registration");
+
+            final String test1Passed = "{\"runId\":\"" + runId + "\",\"testName\":\"MultiDatasetTest · ds1\",\"testFile\":\"com.xceptance.MultiDatasetTest#execute\",\"datasetId\":\"ds1\",\"status\":\"passed\",\"steps\":[]}";
+            engine1.pushState(test1Passed);
+
+            final File exec1File = new File(customDir.toFile(), runId + "/MultiDatasetTest/console-execution-1.json");
+            assertTrue(exec1File.exists(), "console-execution-1.json should exist");
+            final JsonNode exec1Node = new ObjectMapper().readTree(exec1File);
+            assertEquals("passed", exec1Node.path("status").asText());
+            assertTrue(exec1Node.path("runActive").asBoolean(false), "runActive must remain true after Test 1 completes during active JUnit run");
+
+            // Simulate Test 2 starting; until Test 2 pushes state, engine1's state must not be overwritten by empty engine2
+            final InteractiveConsoleEngine engine2 = new InteractiveConsoleEngine(runId);
+            InteractiveConsoleEngine.markRunActive(runId, engine2);
+
+            final String test2Passed = "{\"runId\":\"" + runId + "\",\"testName\":\"MultiDatasetTest · ds2\",\"testFile\":\"com.xceptance.MultiDatasetTest#execute\",\"datasetId\":\"ds2\",\"status\":\"passed\",\"steps\":[]}";
+            engine2.pushState(test2Passed);
+
+            final File exec2File = new File(customDir.toFile(), runId + "/MultiDatasetTest/console-execution-2.json");
+            assertTrue(exec2File.exists(), "console-execution-2.json should exist");
+            final JsonNode exec2Node = new ObjectMapper().readTree(exec2File);
+            assertEquals("passed", exec2Node.path("status").asText());
+            assertTrue(exec2Node.path("runActive").asBoolean(false), "runActive must remain true until JUnit run finishes");
+
+            InteractiveConsoleEngine.markRunFinished(runId);
+            assertFalse(InteractiveConsoleEngine.isJUnitRunActive(runId), "Run should no longer be marked active after markRunFinished");
+
+            final JsonNode finishedExec2Node = new ObjectMapper().readTree(exec2File);
+            assertTrue(finishedExec2Node.has("runActive"), "console-execution-2.json must contain runActive flag");
+            assertFalse(finishedExec2Node.get("runActive").asBoolean(true), "runActive must become false once markRunFinished runs");
+        }
+        finally
+        {
+            InteractiveConsoleEngine.markRunFinished(runId);
+        }
     }
 }
 

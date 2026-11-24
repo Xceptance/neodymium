@@ -1,12 +1,17 @@
 /*
- * GNU Affero General Public License (AGPLv3)
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
  *
- * Copyright (c) 2026 Xceptance
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -52,6 +57,7 @@ import org.neodymium.ai.config.AiConfiguration;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
@@ -107,7 +113,8 @@ public final class InteractiveConsoleEngine {
 
     private static final long DEFAULT_TIMEOUT_MS = TimeUnit.HOURS.toMillis(1);
     private static final Gson GSON = new Gson();
-    private static final String RUN_FOLDER = initializeRunFolder();
+    private static final Map<String, InteractiveConsoleEngine> ACTIVE_JUNIT_RUNS = new ConcurrentHashMap<>();
+    private static volatile String activeRunFolder = initializeRunFolder();
 
     private static String initializeRunFolder()
     {
@@ -115,14 +122,147 @@ public final class InteractiveConsoleEngine {
             System.getProperty("neodymium.managerRunId", System.getProperty("aura.runId")));
         if (sysRunId != null && !sysRunId.isBlank())
         {
-            return (sysRunId.startsWith("run_") || sysRunId.startsWith("run-")) ? sysRunId : "run_" + sysRunId;
+            return normalizeRunFolder(sysRunId);
         }
         return "run_" + new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
     }
 
+    public static String normalizeRunFolder(final String runId)
+    {
+        if (runId == null || runId.isBlank())
+        {
+            return getRunFolder();
+        }
+        return (runId.startsWith("run_") || runId.startsWith("run-")) ? runId : "run_" + runId;
+    }
+
     public static String getRunFolder()
     {
-        return RUN_FOLDER;
+        final String sysRunId = System.getProperty("neodymium.runId",
+            System.getProperty("neodymium.managerRunId", System.getProperty("aura.runId")));
+        if (sysRunId != null && !sysRunId.isBlank())
+        {
+            return normalizeRunFolder(sysRunId);
+        }
+        return activeRunFolder;
+    }
+
+    public static void setRunFolder(final String runFolder)
+    {
+        if (runFolder != null && !runFolder.isBlank())
+        {
+            activeRunFolder = normalizeRunFolder(runFolder);
+        }
+    }
+
+    public static void resetRunFolder()
+    {
+        activeRunFolder = initializeRunFolder();
+        ACTIVE_JUNIT_RUNS.clear();
+    }
+
+    public String getEffectiveRunFolder()
+    {
+        if (this.runId != null && !this.runId.isBlank())
+        {
+            return normalizeRunFolder(this.runId);
+        }
+        return getRunFolder();
+    }
+
+    /**
+     * Registers an active JUnit test run so outgoing state snapshots indicate that the run
+     * is still in progress between individual test invocations.
+     *
+     * @param runId  the active test run identifier
+     * @param engine the console engine associated with the run
+     */
+    public static void markRunActive(final String runId, final InteractiveConsoleEngine engine)
+    {
+        registerRunEngine(runId, engine, false);
+    }
+
+    /**
+     * Checks whether a JUnit test run for the given run identifier is currently active in this JVM.
+     *
+     * @param runId the test run identifier
+     * @return {@code true} if the JUnit run is active, {@code false} otherwise
+     */
+    public static boolean isJUnitRunActive(final String runId)
+    {
+        if (runId == null || runId.isBlank())
+        {
+            return false;
+        }
+        final String trimmed = runId.trim();
+        final String normalized = normalizeRunFolder(trimmed);
+        return ACTIVE_JUNIT_RUNS.containsKey(trimmed) || ACTIVE_JUNIT_RUNS.containsKey(normalized);
+    }
+
+    /**
+     * Marks a JUnit test run as finished and pushes a final state update carrying
+     * {@code "runActive": false} using the most recent engine that pushed state.
+     *
+     * @param runId the test run identifier
+     */
+    public static void markRunFinished(final String runId)
+    {
+        if (runId == null || runId.isBlank())
+        {
+            return;
+        }
+        final String trimmed = runId.trim();
+        final String normalized = normalizeRunFolder(trimmed);
+        final InteractiveConsoleEngine primaryEngine = ACTIVE_JUNIT_RUNS.remove(trimmed);
+        final InteractiveConsoleEngine normalizedEngine = ACTIVE_JUNIT_RUNS.remove(normalized);
+        final InteractiveConsoleEngine engine = primaryEngine != null ? primaryEngine : normalizedEngine;
+        if (engine == null)
+        {
+            return;
+        }
+
+        final String currentJson = engine.getCurrentStateJson();
+        if (currentJson == null || currentJson.isBlank() || "{}".equals(currentJson.trim()))
+        {
+            return;
+        }
+
+        try
+        {
+            final JsonObject parsedState = JsonParser.parseString(currentJson).getAsJsonObject();
+            parsedState.addProperty("runActive", false);
+            engine.pushState(GSON.toJson(parsedState));
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("[InteractiveConsole] Failed to push run-finished marker for runId {}: {}", trimmed, e.getMessage());
+        }
+    }
+
+    private static void registerRunEngine(final String runId, final InteractiveConsoleEngine engine, final boolean replaceExisting)
+    {
+        if (runId == null || runId.isBlank() || engine == null)
+        {
+            return;
+        }
+        final String trimmed = runId.trim();
+        final String normalized = normalizeRunFolder(trimmed);
+        if (replaceExisting)
+        {
+            ACTIVE_JUNIT_RUNS.put(trimmed, engine);
+            if (!normalized.equals(trimmed))
+            {
+                ACTIVE_JUNIT_RUNS.put(normalized, engine);
+            }
+        }
+        else
+        {
+            ACTIVE_JUNIT_RUNS.putIfAbsent(trimmed, engine);
+            if (!normalized.equals(trimmed))
+            {
+                ACTIVE_JUNIT_RUNS.putIfAbsent(normalized, engine);
+            }
+        }
     }
 
     public static String extractTestClassFolder(final JsonObject json)
@@ -290,16 +430,25 @@ public final class InteractiveConsoleEngine {
      * @param runId a unique identifier for the test run (e.g.
      *              {@code "run_2026-06-29_10-00-00"})
      */
-    public InteractiveConsoleEngine(final String runId) {
+    public InteractiveConsoleEngine(final String runId)
+    {
         this.runId = runId;
+        if (runId != null && !runId.isBlank())
+        {
+            setRunFolder(runId);
+        }
 
         String detectedIp = "localhost";
-        try {
+        try
+        {
             final InetAddress addr = getActualLocalIP();
-            if (addr != null) {
+            if (addr != null)
+            {
                 detectedIp = addr.getHostAddress();
             }
-        } catch (final SocketException e) {
+        }
+        catch (final SocketException e)
+        {
             LOG.warn("Failed to detect LAN IP for Interactive Console: {}", e.getMessage());
         }
         this.lanIp = detectedIp;
@@ -314,12 +463,18 @@ public final class InteractiveConsoleEngine {
      *
      * @return the run ID
      */
-    public String getRunId() {
+    public String getRunId()
+    {
         return this.runId;
     }
 
-    public void setRunId(final String runId) {
+    public void setRunId(final String runId)
+    {
         this.runId = runId;
+        if (runId != null && !runId.isBlank())
+        {
+            setRunFolder(runId);
+        }
     }
 
     /**
@@ -347,6 +502,13 @@ public final class InteractiveConsoleEngine {
 
             // Inject the LAN IP so the UI can use it for QR codes/links
             state.addProperty("lanIp", this.lanIp);
+
+            if (isJUnitRunActive(this.runId))
+            {
+                // Keep the run marked active across inter-test teardown/startup gaps until JUnit finishes all tests
+                registerRunEngine(this.runId, this, true);
+                state.addProperty("runActive", true);
+            }
 
             final String statusStr = (state.has("status") && !state.get("status").isJsonNull())
                 ? state.get("status").getAsString()
@@ -507,6 +669,14 @@ public final class InteractiveConsoleEngine {
 
             final String updatedJson = stateChanged ? parsedState.toString() : this.currentStateJson;
             this.currentStateJson = updatedJson;
+            if (AiConfiguration.getInstance().isManagerActive())
+            {
+                if (stateChanged)
+                {
+                    pushState(updatedJson);
+                }
+                return;
+            }
             saveLocalExecutionLog(updatedJson);
             if (stateChanged)
             {
@@ -537,52 +707,13 @@ public final class InteractiveConsoleEngine {
                 final int index = getExecutionIndex(testClassFolder, executionKey);
                 String contentToSave = minified;
 
-                // Relocate video recording if generated in target/videos/
-                final File videosFolder = new File("target/videos");
-                if (videosFolder.exists() && videosFolder.isDirectory())
-                {
-                    final File[] videoFiles = videosFolder.listFiles((dir, name) -> name.endsWith(".mp4") || name.endsWith(".webm"));
-                    if (videoFiles != null && videoFiles.length > 0)
-                    {
-                        File newestVideo = videoFiles[0];
-                        for (final File vf : videoFiles)
-                        {
-                            if (vf.lastModified() > newestVideo.lastModified())
-                            {
-                                newestVideo = vf;
-                            }
-                        }
-                        final String videoName = "video-" + index + ".mp4";
-                        parsedState.addProperty("videoUrl", videoName);
-                        parsedState.addProperty("videoPath", videoName);
-                        contentToSave = parsedState.toString();
-
-                        final String configuredResultsDirPath = AiConfiguration.getInstance().getConsoleExecutionLogsDirectory();
-                        final String runFolder = getRunFolder();
-                        final File structuredDir = new File(configuredResultsDirPath, runFolder + "/" + testClassFolder);
-                        if (!structuredDir.exists())
-                        {
-                            structuredDir.mkdirs();
-                        }
-                        try
-                        {
-                            Files.copy(newestVideo.toPath(), new File(structuredDir, videoName).toPath(), StandardCopyOption.REPLACE_EXISTING);
-                            final File defaultVideoFile = new File(defaultResultsDir, videoName);
-                            Files.copy(newestVideo.toPath(), defaultVideoFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                        }
-                        catch (final Exception ve)
-                        {
-                            LOG.warn("[InteractiveConsole] Could not move video recording: {}", ve.getMessage());
-                        }
-                    }
-                }
 
                 // 1. Root file for compatibility in default allure.results.directory
                 final File executionJson = new File(defaultResultsDir, "console-execution-" + index + ".json");
 
                 // 2. Structured run and test class folders in configured console logs directory
                 final String configuredResultsDirPath = AiConfiguration.getInstance().getConsoleExecutionLogsDirectory();
-                final String runFolder = getRunFolder();
+                final String runFolder = getEffectiveRunFolder();
                 final File structuredDir = new File(configuredResultsDirPath, runFolder + "/" + testClassFolder);
                 if (!structuredDir.exists())
                 {
@@ -634,20 +765,20 @@ public final class InteractiveConsoleEngine {
                 {
                     final String indexedLogName = "execution-" + index + ".log";
                     writeStringIfChanged(logText, new File(structuredDir, indexedLogName));
-                    writeStringIfChanged(logText, new File(reportsStructuredDir, indexedLogName));
+                    tryWrite(logText, new File(reportsStructuredDir, indexedLogName));
                     if (auraStructuredDir != null)
                     {
-                        writeStringIfChanged(logText, new File(auraStructuredDir, indexedLogName));
+                        tryWrite(logText, new File(auraStructuredDir, indexedLogName));
                     }
 
                     final File defaultLogFile = new File(structuredDir, "execution.log");
                     if (!defaultLogFile.exists() || index == 1)
                     {
                         writeStringIfChanged(logText, defaultLogFile);
-                        writeStringIfChanged(logText, new File(reportsStructuredDir, "execution.log"));
+                        tryWrite(logText, new File(reportsStructuredDir, "execution.log"));
                         if (auraStructuredDir != null)
                         {
-                            writeStringIfChanged(logText, new File(auraStructuredDir, "execution.log"));
+                            tryWrite(logText, new File(auraStructuredDir, "execution.log"));
                         }
                     }
                 }
@@ -659,20 +790,20 @@ public final class InteractiveConsoleEngine {
                     {
                         final String playbookIndexed = "playbook-" + index + ".yaml";
                         writeStringIfChanged(playbookYaml, new File(structuredDir, playbookIndexed));
-                        writeStringIfChanged(playbookYaml, new File(reportsStructuredDir, playbookIndexed));
+                        tryWrite(playbookYaml, new File(reportsStructuredDir, playbookIndexed));
                         if (auraStructuredDir != null)
                         {
-                            writeStringIfChanged(playbookYaml, new File(auraStructuredDir, playbookIndexed));
+                            tryWrite(playbookYaml, new File(auraStructuredDir, playbookIndexed));
                         }
 
                         final File defaultPb = new File(structuredDir, "playbook.yaml");
                         if (!defaultPb.exists() || index == 1)
                         {
                             writeStringIfChanged(playbookYaml, defaultPb);
-                            writeStringIfChanged(playbookYaml, new File(reportsStructuredDir, "playbook.yaml"));
+                            tryWrite(playbookYaml, new File(reportsStructuredDir, "playbook.yaml"));
                             if (auraStructuredDir != null)
                             {
-                                writeStringIfChanged(playbookYaml, new File(auraStructuredDir, "playbook.yaml"));
+                                tryWrite(playbookYaml, new File(auraStructuredDir, "playbook.yaml"));
                             }
                         }
                     }
@@ -807,11 +938,11 @@ public final class InteractiveConsoleEngine {
 
                 AtomicFileUtils.writeStringAtomic(executionJson, contentToSave);
                 AtomicFileUtils.writeStringAtomic(structuredJson, contentToSave);
-                AtomicFileUtils.writeStringAtomic(reportsStructuredJson, contentToSave);
+                tryWriteAtomic(reportsStructuredJson, contentToSave);
                 if (auraStructuredDir != null)
                 {
                     final File auraStructuredJson = new File(auraStructuredDir, "console-execution-" + index + ".json");
-                    AtomicFileUtils.writeStringAtomic(auraStructuredJson, contentToSave);
+                    tryWriteAtomic(auraStructuredJson, contentToSave);
                 }
             }
             catch (final Exception e)
@@ -826,6 +957,42 @@ public final class InteractiveConsoleEngine {
         if (!dest.exists() || dest.length() != src.length() || dest.lastModified() < src.lastModified())
         {
             Files.copy(src.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    private static void tryWrite(final String content, final File dest)
+    {
+        try
+        {
+            if (dest.getParentFile() != null && !dest.getParentFile().exists())
+            {
+                dest.getParentFile().mkdirs();
+            }
+            if (dest.getParentFile() != null && dest.getParentFile().exists())
+            {
+                writeStringIfChanged(content, dest);
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+    }
+
+    private static void tryWriteAtomic(final File dest, final String content)
+    {
+        try
+        {
+            if (dest.getParentFile() != null && !dest.getParentFile().exists())
+            {
+                dest.getParentFile().mkdirs();
+            }
+            if (dest.getParentFile() != null && dest.getParentFile().exists())
+            {
+                AtomicFileUtils.writeStringAtomic(dest, content);
+            }
+        }
+        catch (final Exception ignored)
+        {
         }
     }
 
@@ -929,9 +1096,11 @@ public final class InteractiveConsoleEngine {
                     targetTestDir.mkdirs();
                 }
 
+                File targetJsonFile = null;
                 int index = 1;
                 if (jsonFiles != null && jsonFiles.length > 0)
                 {
+                    long newestMod = -1L;
                     for (final File f : jsonFiles)
                     {
                         final String name = f.getName();
@@ -939,12 +1108,27 @@ public final class InteractiveConsoleEngine {
                         {
                             try
                             {
-                                index = Integer.parseInt(name.substring("console-execution-".length(), name.length() - ".json".length()));
+                                final int parsedIdx = Integer.parseInt(name.substring("console-execution-".length(), name.length() - ".json".length()));
+                                if (parsedIdx >= index)
+                                {
+                                    index = parsedIdx;
+                                    targetJsonFile = f;
+                                }
                             }
                             catch (final Exception ignored)
                             {
                             }
                         }
+                        else if (f.lastModified() > newestMod && targetJsonFile == null)
+                        {
+                            newestMod = f.lastModified();
+                            targetJsonFile = f;
+                        }
+                    }
+
+                    if (targetJsonFile == null)
+                    {
+                        targetJsonFile = jsonFiles[0];
                     }
                 }
 
@@ -959,23 +1143,51 @@ public final class InteractiveConsoleEngine {
                     LOG.warn("[InteractiveConsole] Could not copy video file to {}: {}", destVideo.getAbsolutePath(), e.getMessage());
                 }
 
-                if (jsonFiles != null && jsonFiles.length > 0)
+                if (targetJsonFile != null && targetJsonFile.exists())
                 {
-                    for (final File jsonFileToUpdate : jsonFiles)
+                    try
                     {
-                        try
-                        {
-                            final String jsonContent = Files.readString(jsonFileToUpdate.toPath(), StandardCharsets.UTF_8);
-                            final JsonObject parsedState = JsonParser.parseString(jsonContent).getAsJsonObject();
-                            parsedState.addProperty("videoUrl", videoName);
-                            parsedState.addProperty("videoPath", videoName);
-                            final String updatedJson = parsedState.toString();
+                        final String jsonContent = Files.readString(targetJsonFile.toPath(), StandardCharsets.UTF_8);
+                        final JsonObject parsedState = JsonParser.parseString(jsonContent).getAsJsonObject();
+                        parsedState.addProperty("videoUrl", videoName);
+                        parsedState.addProperty("videoPath", videoName);
 
-                            AtomicFileUtils.writeStringAtomic(jsonFileToUpdate, updatedJson);
-                        }
-                        catch (final Exception ignored)
+                        if (parsedState.has("attachments") && parsedState.get("attachments").isJsonArray())
                         {
+                            final JsonArray atts = parsedState.getAsJsonArray("attachments");
+                            boolean found = false;
+                            for (int aIdx = 0; aIdx < atts.size(); aIdx++)
+                            {
+                                final JsonElement el = atts.get(aIdx);
+                                if (el.isJsonObject())
+                                {
+                                    final JsonObject obj = el.getAsJsonObject();
+                                    final String p = obj.has("path") ? obj.get("path").getAsString() : "";
+                                    final String n = obj.has("name") ? obj.get("name").getAsString() : "";
+                                    if (videoName.equals(p) || videoName.equals(n))
+                                    {
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (!found)
+                            {
+                                final JsonObject videoAtt = new JsonObject();
+                                videoAtt.addProperty("name", videoName);
+                                videoAtt.addProperty("path", videoName);
+                                videoAtt.addProperty("type", ext.endsWith("gif") ? "gif" : "video");
+                                videoAtt.addProperty("contentType", ext.endsWith("gif") ? "image/gif" : "video/mp4");
+                                videoAtt.addProperty("openByDefault", true);
+                                atts.add(videoAtt);
+                            }
                         }
+
+                        final String updatedJson = parsedState.toString();
+                        AtomicFileUtils.writeStringAtomic(targetJsonFile, updatedJson);
+                    }
+                    catch (final Exception ignored)
+                    {
                     }
                 }
             }
@@ -1057,6 +1269,7 @@ public final class InteractiveConsoleEngine {
     {
         CLASS_EXECUTION_INDEX_MAP.clear();
         CLASS_EXECUTION_COUNTERS.clear();
+        resetRunFolder();
     }
     
     public String getCurrentStateJson() {

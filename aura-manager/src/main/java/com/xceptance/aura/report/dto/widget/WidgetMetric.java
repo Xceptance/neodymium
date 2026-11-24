@@ -1,5 +1,5 @@
 /*
- * GNU Affero General Public License (AGPLv3)
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
  *
  * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
@@ -7,6 +7,11 @@
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -72,7 +77,12 @@ public enum WidgetMetric
     /**
      * Quantitative volume, frequency, and pass rates of test execution runs.
      */
-    NUMBER_OF_RUNS("Number of Runs", "pin");
+    NUMBER_OF_RUNS("Number of Runs", "pin"),
+
+    /**
+     * Test lifecycle transitions and triage across multiple reports (Turned Green, Unticketed Failures, Known Bugs, Regressions).
+     */
+    TEST_TRANSITIONS("Failures & Recoveries", "published_with_changes");
 
     private final String displayName;
     private final String icon;
@@ -120,6 +130,12 @@ public enum WidgetMetric
             || "NUMBER_OF_TEST_RUNS".equals(normalized))
         {
             return NUMBER_OF_RUNS;
+        }
+        if ("TEST_TRANSITIONS".equals(normalized) || "TRANSITIONS".equals(normalized) || "FAILURES_AND_RECOVERIES".equals(normalized)
+            || "FAILURES_AND_FIXES".equals(normalized) || "TRIAGE".equals(normalized) || "TICKET_TRIAGE".equals(normalized)
+            || "TICKET_GAP".equals(normalized) || "TEST_LIFECYCLE".equals(normalized) || "RECOVERIES".equals(normalized))
+        {
+            return TEST_TRANSITIONS;
         }
         for (final WidgetMetric m : values())
         {

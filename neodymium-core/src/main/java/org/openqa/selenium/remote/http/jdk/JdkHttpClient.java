@@ -14,6 +14,14 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+//
+// Modifications copyright (c) 2024-2026 Xceptance Software Technologies GmbH
+//
+// Prominent Modification Notice (Apache License 2.0, Section 4(b)):
+// This file is modified from the upstream Selenium project:
+// 1. Added sendNative() and sendAsyncNative() methods to expose underlying HTTP client.
+// 2. Replaced BodyHandlers.ofByteArray() with BodyHandlers.ofInputStream() in execute0()
+//    to support streaming response handling.
 
 package org.openqa.selenium.remote.http.jdk;
 

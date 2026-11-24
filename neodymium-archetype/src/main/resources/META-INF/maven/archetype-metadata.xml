@@ -39,8 +39,8 @@
             <directory></directory>
             <includes>
                 <include>gitignore</include>
-                <include>run-aura.sh</include>
-                <include>run-aura.bat</include>
+                <include>run-neodymium.sh</include>
+                <include>run-neodymium.bat</include>
             </includes>
         </fileSet>
     </fileSets>

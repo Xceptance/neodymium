@@ -100,6 +100,23 @@ if (document.readyState === 'loading') {
 
 document.addEventListener('htmx:afterSwap', formatAllOnPage);
 
+/**
+ * Synchronizes the browser tab title, ensuring "Neodymium AI Manager" branding
+ * is consistently present across all views.
+ *
+ * @param {string} viewTitle The active view or page title to display
+ */
+function syncDocumentTitle(viewTitle) {
+    if (!viewTitle || !viewTitle.trim()) {
+        document.title = 'Neodymium AI Manager';
+    } else if (viewTitle.includes('Neodymium')) {
+        document.title = viewTitle.trim();
+    } else {
+        document.title = `Neodymium AI Manager - ${viewTitle.trim()}`;
+    }
+}
+window.syncDocumentTitle = syncDocumentTitle;
+
 // Navigation & View Switches
 function toggleSidebarCollapse() {
     const sidebar = document.getElementById('mainSidebar');
@@ -117,6 +134,7 @@ function showRunsList() {
 
     const pageTitle = document.getElementById('pageTitle');
     if (pageTitle) pageTitle.innerHTML = '<span class="material-symbols-outlined text-accent">format_list_bulleted</span> Runs overview';
+    syncDocumentTitle('Runs overview');
     
     const breadcrumb = document.getElementById('headerBreadcrumb');
     if (breadcrumb) breadcrumb.style.display = 'none';
@@ -153,6 +171,7 @@ function openBatchHistoryOverview(batchName, latestRunId) {
 
     const titleEl = document.getElementById('pageTitle');
     if (titleEl) titleEl.innerHTML = `<span class="material-symbols-outlined text-accent">trending_up</span> Batch History Overview`;
+    syncDocumentTitle(activeBatchName ? activeBatchName : 'Batch History Overview');
     
     const breadcrumbEl = document.getElementById('headerBreadcrumb');
     if (breadcrumbEl) breadcrumbEl.style.display = 'flex';
@@ -5898,15 +5917,15 @@ function generateFullTestDiagnosticsMarkdown(execDto, activeRow) {
         }
     }
 
-    // Aura MCP Guidance for AI Agents
+    // Neodymium AI MCP Guidance for AI Agents
     lines.push('');
     lines.push('---');
     lines.push('> [!TIP]');
     const executionId = dto.id || (row ? (row.getAttribute('data-execution-id') || row.getAttribute('id')) : '') || '';
     if (executionId) {
-        lines.push(`> **Aura MCP Quick Tip:** If you have access to Aura MCP tools, inspect detailed failure context via \`get_execution_failure(executionId="${executionId}")\` or read artifacts with \`get_test_content(path="...")\`.`);
+        lines.push(`> **Neodymium AI MCP Quick Tip:** If you have access to Neodymium AI tools, inspect detailed failure context via \`get_execution_failure(executionId="${executionId}")\` or read artifacts with \`get_test_content(path="...")\`.`);
     } else {
-        lines.push('> **Aura MCP Quick Tip:** If you have access to Aura MCP tools, inspect detailed failure context via `get_execution_failure(executionId="...")` or read artifacts with `get_test_content(path="...")`.');
+        lines.push('> **Neodymium AI MCP Quick Tip:** If you have access to Neodymium AI tools, inspect detailed failure context via `get_execution_failure(executionId="...")` or read artifacts with `get_test_content(path="...")`.');
     }
 
     return lines.join('\n');
@@ -5992,9 +6011,15 @@ function renderStepsForExecution(activeRow) {
             // Pause and hide video player to prevent visual ghosting
             const sideVideoContainer = document.getElementById('sidePanelVideoContainer');
             const sideVideoPlayer = document.getElementById('sidePanelVideoPlayer');
+            const sideGifPlayer = document.getElementById('sidePanelGifPlayer');
             if (sideVideoPlayer) {
                 sideVideoPlayer.pause();
                 sideVideoPlayer.removeAttribute('src');
+                sideVideoPlayer.style.display = 'none';
+            }
+            if (sideGifPlayer) {
+                sideGifPlayer.removeAttribute('src');
+                sideGifPlayer.style.display = 'none';
             }
             if (sideVideoContainer) {
                 sideVideoContainer.style.display = 'none';
@@ -7052,45 +7077,117 @@ function renderStepsForExecution(activeRow) {
 
     stepListEl.innerHTML = html;
 
-    // Video handling: directly visible above steps list
+    // Video / GIF handling: directly visible above steps list
     const videoContainer = document.getElementById('sidePanelVideoContainer');
     const videoPlayer = document.getElementById('sidePanelVideoPlayer');
+    const gifPlayer = document.getElementById('sidePanelGifPlayer');
     const videoChip = document.getElementById('sidePanelVideoChip');
 
     const rawVideoAttr = activeRow.getAttribute('data-video-url') || activeRow.getAttribute('data-video') || '';
     let videoAttachment = null;
-    if (activeRow._execDto && activeRow._execDto.attachments) {
-        videoAttachment = activeRow._execDto.attachments.find(a =>
-            a.type === 'video' ||
-            (rawVideoAttr && (a.path === rawVideoAttr || a.name === rawVideoAttr)) ||
-            (a.name && a.name.startsWith('video-')) ||
-            (a.path && a.path.startsWith('video-'))
-        );
+    let gifAttachment = null;
+    const hasExecAttachments = activeRow._execDto && Array.isArray(activeRow._execDto.attachments);
+    if (hasExecAttachments) {
+        // Priority 1: True playable video file (.mp4, .webm, .ogg)
+        videoAttachment = activeRow._execDto.attachments.find(a => {
+            const p = ((a && (a.path || a.name)) || '').toLowerCase();
+            return (a && a.type === 'video' && !p.endsWith('.gif')) ||
+                   p.endsWith('.mp4') || p.endsWith('.webm') || p.endsWith('.ogg');
+        });
+        // Priority 2: Animated GIF recording (.gif)
+        gifAttachment = activeRow._execDto.attachments.find(a => {
+            const p = ((a && (a.path || a.name)) || '').toLowerCase();
+            return (a && a.type === 'gif') || p.endsWith('.gif');
+        });
     }
-    const videoUrlAttr = videoAttachment ? videoAttachment.path : rawVideoAttr;
-    const hasVideo = videoUrlAttr && videoUrlAttr.trim().length > 0 && videoUrlAttr !== 'null';
 
-    if (hasVideo && videoContainer && videoPlayer) {
+    let videoUrlAttr = videoAttachment ? videoAttachment.path : '';
+    if (!videoUrlAttr && rawVideoAttr && !rawVideoAttr.toLowerCase().endsWith('.gif')) {
+        videoUrlAttr = rawVideoAttr;
+    }
+    let gifUrlAttr = gifAttachment ? gifAttachment.path : '';
+    if (!gifUrlAttr && rawVideoAttr && rawVideoAttr.toLowerCase().endsWith('.gif')) {
+        gifUrlAttr = rawVideoAttr;
+    }
+
+    const hasVideo = videoUrlAttr && videoUrlAttr.trim().length > 0 && videoUrlAttr !== 'null';
+    const hasGif = !hasVideo && gifUrlAttr && gifUrlAttr.trim().length > 0 && gifUrlAttr !== 'null';
+
+    if ((hasVideo || hasGif) && videoContainer) {
         videoContainer.style.display = 'block';
         const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '');
         const testClass = resolveSimpleTestClassName(activeRow);
-        const src = (videoUrlAttr.startsWith('http') || videoUrlAttr.startsWith('/'))
-            ? videoUrlAttr
-            : `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(videoUrlAttr)}`;
 
-        if (videoPlayer.getAttribute('src') !== src) {
-            videoPlayer.src = src;
-            videoPlayer.preload = 'metadata';
-            videoPlayer.autoplay = false;
+        const existingNotice = videoContainer.querySelector('.side-panel-video-error-notice');
+        if (existingNotice) {
+            existingNotice.remove();
         }
-        if (videoChip) {
-            videoChip.textContent = videoUrlAttr;
+
+        if (hasVideo && videoPlayer) {
+            if (gifPlayer) {
+                gifPlayer.style.display = 'none';
+                gifPlayer.removeAttribute('src');
+            }
+            videoPlayer.style.display = 'block';
+
+            const src = (videoUrlAttr.startsWith('http') || videoUrlAttr.startsWith('/'))
+                ? videoUrlAttr
+                : `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(videoUrlAttr)}`;
+
+            videoPlayer.onerror = function() {
+                console.warn('[Report] Video playback error for:', src);
+                if (!videoContainer.querySelector('.side-panel-video-error-notice')) {
+                    const notice = document.createElement('div');
+                    notice.className = 'side-panel-video-error-notice text-muted';
+                    notice.style.cssText = 'padding: 0.35rem 0.5rem; background: var(--bg-surface); border-radius: 4px; margin-top: 0.35rem; font-size: 0.72rem; display: flex; align-items: center; justify-content: space-between;';
+                    notice.innerHTML = '<span><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle; color: var(--status-warn);">info</span> Video preview unavailable in browser.</span> <a href="' + src + '" target="_blank" download style="color: var(--accent); text-decoration: underline; font-weight: 500;">Download</a>';
+                    videoPlayer.parentElement.appendChild(notice);
+                }
+            };
+
+            if (videoPlayer.getAttribute('src') !== src) {
+                videoPlayer.src = src;
+                videoPlayer.preload = 'metadata';
+                videoPlayer.autoplay = false;
+            }
+            if (videoChip) {
+                videoChip.textContent = videoUrlAttr;
+            }
+        } else if (hasGif && gifPlayer) {
+            if (videoPlayer) {
+                videoPlayer.pause();
+                videoPlayer.removeAttribute('src');
+                videoPlayer.style.display = 'none';
+                videoPlayer.onerror = null;
+            }
+            gifPlayer.style.display = 'block';
+
+            const gifSrc = (gifUrlAttr.startsWith('http') || gifUrlAttr.startsWith('/'))
+                ? gifUrlAttr
+                : `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(gifUrlAttr)}`;
+
+            if (gifPlayer.getAttribute('src') !== gifSrc) {
+                gifPlayer.src = gifSrc;
+            }
+            if (videoChip) {
+                videoChip.textContent = gifUrlAttr;
+            }
         }
     } else if (videoContainer) {
         videoContainer.style.display = 'none';
+        const existingNotice = videoContainer.querySelector('.side-panel-video-error-notice');
+        if (existingNotice) {
+            existingNotice.remove();
+        }
         if (videoPlayer) {
             videoPlayer.pause();
             videoPlayer.removeAttribute('src');
+            videoPlayer.style.display = 'none';
+            videoPlayer.onerror = null;
+        }
+        if (gifPlayer) {
+            gifPlayer.removeAttribute('src');
+            gifPlayer.style.display = 'none';
         }
     }
 
@@ -9071,10 +9168,12 @@ function bindGlobalListeners() {
             navRuns.classList.remove('active');
             navTest.classList.remove('active');
             if (navAura) navAura.classList.add('active');
+            syncDocumentTitle('Neodymium AI Manager Dashboard');
         } else if (isTestBase) {
             navRuns.classList.remove('active');
             navTest.classList.add('active');
             if (navAura) navAura.classList.remove('active');
+            syncDocumentTitle('Comprehensive Test Base');
         } else {
             navRuns.classList.add('active');
             navTest.classList.remove('active');
@@ -9102,6 +9201,7 @@ function bindGlobalListeners() {
         if (headerTitle) {
             if (isAllRuns) {
                 headerTitle.innerHTML = `<span class="material-symbols-outlined text-accent">format_list_bulleted</span> Runs overview`;
+                syncDocumentTitle('Runs overview');
                 if (breadcrumb) breadcrumb.style.display = 'none';
             } else {
                 let groupIcon = 'trending_up';
@@ -9114,6 +9214,7 @@ function bindGlobalListeners() {
                 else if (groupType === 'area') groupIcon = 'category';
 
                 headerTitle.innerHTML = `<span class="material-symbols-outlined text-accent">${groupIcon}</span> ${escapeHtml(activeBatchName)}`;
+                syncDocumentTitle(activeBatchName);
                 if (breadcrumb) breadcrumb.style.display = 'none';
             }
         }
@@ -9141,6 +9242,7 @@ function bindGlobalListeners() {
         const runIdLabel = document.querySelector('.run-id-label')?.innerText || '#RUN_ID';
         const headerTitle = document.getElementById('pageTitle');
         if (headerTitle) headerTitle.innerHTML = `<span class="material-symbols-outlined text-accent">science</span> Run #${runIdLabel}`;
+        syncDocumentTitle(`Run #${runIdLabel}`);
 
         const breadcrumb = document.getElementById('headerBreadcrumb');
         if (breadcrumb) breadcrumb.style.display = 'flex';
@@ -9258,7 +9360,13 @@ function bindGlobalListeners() {
         }
     }
 
-
+    const customPageEl = document.getElementById('pageCustomDashboard');
+    if (customPageEl) {
+        const pageName = customPageEl.getAttribute('data-page-name');
+        if (pageName) {
+            syncDocumentTitle(pageName);
+        }
+    }
 }
 
 function focusAndInspectExecution(targetExecId) {

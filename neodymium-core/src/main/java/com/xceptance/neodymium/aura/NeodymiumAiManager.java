@@ -1,5 +1,5 @@
 /*
- * GNU Affero General Public License (AGPLv3)
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
  *
  * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
@@ -7,6 +7,11 @@
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -99,13 +104,13 @@ public final class NeodymiumAiManager
             + "[ERROR] Neodymium AI Manager could not be started!\n"
             + "========================================================================================\n"
             + "Cause:\n"
-            + "  The unified Spring Boot AI Manager artifact ('com.xceptance.aura:aura-manager')\n"
+            + "  The unified Spring Boot AI Manager artifact ('com.xceptance:neodymium-manager')\n"
             + "  was not found on the runtime classpath.\n\n"
             + "Resolution:\n"
             + "  Add the following dependency to your project's pom.xml:\n\n"
             + "  <dependency>\n"
-            + "      <groupId>com.xceptance.aura</groupId>\n"
-            + "      <artifactId>aura-manager</artifactId>\n"
+            + "      <groupId>com.xceptance</groupId>\n"
+            + "      <artifactId>neodymium-manager</artifactId>\n"
             + "      <version>${neodymium.version}</version>\n"
             + "      <scope>test</scope>\n"
             + "  </dependency>\n\n"

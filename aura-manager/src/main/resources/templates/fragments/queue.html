@@ -185,6 +185,22 @@
             <span class="neo-u-32">Records execution video and attaches it to the report.</span>
         </div>
 
+        <div class="config-row-wrapper neo-u-30" id="videoOnlyOnFailureRow" th:style="${video != null and video ? 'padding-left: 12px; border-left: 2px solid var(--accent); margin-left: 4px;' : 'display: none;'}">
+            <div class="config-row neo-u-31">
+                <span class="neo-u-2" style="font-size: 11.5px;">Only on Failure</span>
+                <label class="switch" for="optVideoOnlyOnFailure" style="transform: scale(0.9); transform-origin: right center;">
+                    <input type="checkbox" id="optVideoOnlyOnFailure" 
+                           th:checked="${videoOnlyOnFailure != null ? videoOnlyOnFailure : true}" 
+                           hx-post="/api/config/toggle?key=videoOnlyOnFailure" 
+                           hx-target="#configPanel" 
+                           hx-swap="outerHTML" 
+                           onclick="event.stopPropagation()"/>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <span class="neo-u-32" style="padding-left: 12px;">Only attaches video if test fails; passing tests discard recordings.</span>
+        </div>
+
         <div class="config-row-wrapper neo-u-30">
             <div class="config-row neo-u-31">
                 <span class="neo-u-2">Interactive Mode</span>
@@ -266,7 +282,7 @@
             hx-swap="none"
             onclick="if (!checkApiKeyBeforeRun(event, () => triggerRunQueue())) return false; prepareClientForExecution();"
             th:disabled="${queue == null or queue.isEmpty()}"
-            th:classappend="${running ? 'd-none' : ((activeEditingFile != null or (queue == null or queue.isEmpty())) ? 'btn-muted d-flex' : 'd-flex')}">
+            th:classappend="${running ? 'd-none' : (((activeEditingFile != null and !activeEditingFile.isBlank()) or (queue == null or queue.isEmpty())) ? 'btn-muted d-flex' : 'd-flex')}">
         <span class="material-symbols-outlined">play_arrow</span> <span>Run Queue</span> 
         <span class="badge-count" th:text="${totalRuns != null ? totalRuns : (queue != null ? queue.size() : 0)}">0</span>
     </button>
@@ -275,9 +291,10 @@
     <button class="btn-primary" 
             id="runCurrentTestBtn" 
             hx-post="/api/run?runCurrent=true" 
+            hx-vals="js:{file: (typeof activeEditingFile !== 'undefined' &amp;&amp; activeEditingFile) || window.activeEditingFile || ''}"
             hx-swap="none"
             onclick="if (!checkApiKeyBeforeRun(event, () => triggerRunCurrentTest())) return false; prepareClientForExecution();"
-            th:classappend="${!running and activeEditingFile != null ? 'd-flex' : 'd-none'}">
+            th:classappend="${!running and (activeEditingFile != null and !activeEditingFile.isBlank()) ? 'd-flex' : 'd-none'}">
         <span class="material-symbols-outlined">play_arrow</span> Run Open Test
     </button>
 

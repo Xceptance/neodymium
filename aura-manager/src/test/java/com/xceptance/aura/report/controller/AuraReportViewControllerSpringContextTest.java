@@ -1,5 +1,5 @@
 /*
- * GNU Affero General Public License (AGPLv3)
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
  *
  * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
@@ -7,6 +7,11 @@
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -39,6 +44,9 @@ import com.xceptance.aura.report.dto.widget.WidgetTrendLayerDto;
 import com.xceptance.aura.report.dto.widget.WidgetTrendMode;
 import com.xceptance.aura.report.dto.widget.WidgetTrendPointDto;
 import com.xceptance.aura.report.dto.widget.WidgetValueFormat;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -50,6 +58,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
+import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.MockMvc;
@@ -763,5 +772,67 @@ public class AuraReportViewControllerSpringContextTest
             datasourceUrl.contains(";DB_CLOSE_ON_EXIT=FALSE"),
             "spring.datasource.url must contain ';DB_CLOSE_ON_EXIT=FALSE' to prevent premature H2 shutdown during JVM exit"
         );
+    }
+
+    /**
+     * Regression safety net for DEF-20261118-1335: Verifies that byte-range requests for video recordings
+     * (HTTP Range: bytes=0-) are successfully handled and serialized by Spring MVC's
+     * ResourceRegionHttpMessageConverter as HTTP 206 Partial Content, returning the video/mp4 payload
+     * and Content-Range header rather than failing with HTTP 500.
+     */
+    @Test
+    public void testServeRunFileWithByteRangeHeaderStreamsVideoThroughSpringMvc() throws Exception
+    {
+        final String runId = "test_run_mvc_range_" + System.currentTimeMillis();
+        final Path dir = Paths.get("storage/runs", runId, "SampleTestClass");
+        Files.createDirectories(dir);
+        final Path videoFile = dir.resolve("video-1.mp4");
+        Files.writeString(videoFile, "0123456789abcdefghij");
+
+        try
+        {
+            mockMvc.perform(MockMvcRequestBuilders.get("/api/runs/" + runId + "/SampleTestClass/video-1.mp4")
+                .header(HttpHeaders.RANGE, "bytes=0-9"))
+                .andExpect(MockMvcResultMatchers.status().isPartialContent())
+                .andExpect(MockMvcResultMatchers.header().string(HttpHeaders.CONTENT_TYPE, "video/mp4"))
+                .andExpect(MockMvcResultMatchers.header().string(HttpHeaders.ACCEPT_RANGES, "bytes"))
+                .andExpect(MockMvcResultMatchers.header().string(HttpHeaders.CONTENT_RANGE, "bytes 0-9/20"))
+                .andExpect(MockMvcResultMatchers.content().string("0123456789"));
+        }
+        finally
+        {
+            Files.deleteIfExists(videoFile);
+            Files.deleteIfExists(dir);
+            Files.deleteIfExists(Paths.get("storage/runs", runId));
+        }
+    }
+
+    /**
+     * Regression safety net for DEF-20261118-1335: Verifies that full requests without Range header
+     * are served as HTTP 200 OK with ResourceHttpMessageConverter.
+     */
+    @Test
+    public void testServeRunFileWithoutRangeHeaderStreamsFullVideoThroughSpringMvc() throws Exception
+    {
+        final String runId = "test_run_mvc_full_" + System.currentTimeMillis();
+        final Path dir = Paths.get("storage/runs", runId, "SampleTestClass");
+        Files.createDirectories(dir);
+        final Path videoFile = dir.resolve("video-1.mp4");
+        Files.writeString(videoFile, "0123456789abcdefghij");
+
+        try
+        {
+            mockMvc.perform(MockMvcRequestBuilders.get("/api/runs/" + runId + "/SampleTestClass/video-1.mp4"))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.header().string(HttpHeaders.CONTENT_TYPE, "video/mp4"))
+                .andExpect(MockMvcResultMatchers.header().string(HttpHeaders.ACCEPT_RANGES, "bytes"))
+                .andExpect(MockMvcResultMatchers.content().string("0123456789abcdefghij"));
+        }
+        finally
+        {
+            Files.deleteIfExists(videoFile);
+            Files.deleteIfExists(dir);
+            Files.deleteIfExists(Paths.get("storage/runs", runId));
+        }
     }
 }

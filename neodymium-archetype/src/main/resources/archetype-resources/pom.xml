@@ -16,7 +16,6 @@
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<maven.compiler.release>21</maven.compiler.release>
 		<neodymium.version>${neodymiumVersion}</neodymium.version>
-		<aura-manager.version>1.0.0-SNAPSHOT</aura-manager.version>
 		<surefire.version>3.5.2</surefire.version>
 	</properties>
 
@@ -67,9 +66,9 @@
 			<version>${d}{neodymium.version}</version>
 		</dependency>
 		<dependency>
-			<groupId>com.xceptance.aura</groupId>
-			<artifactId>aura-manager</artifactId>
-			<version>${d}{aura-manager.version}</version>
+			<groupId>com.xceptance</groupId>
+			<artifactId>neodymium-manager</artifactId>
+			<version>${d}{neodymium.version}</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

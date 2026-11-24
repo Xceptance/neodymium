@@ -1,5 +1,5 @@
 /*
- * GNU Affero General Public License (AGPLv3)
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
  *
  * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
@@ -7,6 +7,11 @@
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -90,6 +95,45 @@ public final class AuraInteractiveServiceTest
 
         final String stoppedStatus = interactiveService.pushState(validStateJson, true);
         Assertions.assertEquals("stopped", stoppedStatus);
+    }
+
+    @Test
+    public void testPushStateWritesSingleExecutionFolderWithoutPhantomDirectory(@TempDir final File tempDir)
+    {
+        final String runId = "run_single_test_555";
+        final File storageRuns = new File(tempDir, "storage-runs");
+        System.setProperty("neodymium.ai.storageRuns.directory", storageRuns.getAbsolutePath());
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", new File(tempDir, "console-logs").getAbsolutePath());
+        System.setProperty("neodymium.ai.report.disk.directory", new File(tempDir, "ai-reports").getAbsolutePath());
+        System.setProperty("allure.results.directory", new File(tempDir, "allure-results").getAbsolutePath());
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        try
+        {
+            interactiveService.resetExecutionIndexes();
+            final String validStateJson = "{\"runId\":\"" + runId + "\",\"testName\":\"TestLogin\",\"status\":\"running\"}";
+            final String status = interactiveService.pushState(validStateJson, false);
+            Assertions.assertEquals("ok", status);
+
+            final File runDir = new File(storageRuns, runId);
+            Assertions.assertTrue(runDir.exists(), "Target run directory must exist under storage-runs");
+
+            final File[] phantomDirs = storageRuns.listFiles((dir, name) -> name.matches("^run_\\d{8}_\\d{6}$"));
+            Assertions.assertTrue(phantomDirs == null || phantomDirs.length == 0,
+                "No phantom timestamped directory should be created in storage-runs");
+
+            final File[] allRunDirs = storageRuns.listFiles(File::isDirectory);
+            Assertions.assertNotNull(allRunDirs);
+            Assertions.assertEquals(1, allRunDirs.length, "Exactly one run directory must be created under storage-runs");
+            Assertions.assertEquals(runId, allRunDirs[0].getName());
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.storageRuns.directory");
+            System.clearProperty("neodymium.ai.consoleExecutionLogs.directory");
+            System.clearProperty("neodymium.ai.report.disk.directory");
+            System.clearProperty("allure.results.directory");
+            System.clearProperty("neodymium.ai.consoleExecutionLogs");
+        }
     }
 
     @Test

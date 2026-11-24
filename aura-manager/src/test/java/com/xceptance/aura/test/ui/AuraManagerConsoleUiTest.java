@@ -1,5 +1,5 @@
 /*
- * GNU Affero General Public License (AGPLv3)
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
  *
  * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
@@ -7,6 +7,11 @@
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -66,8 +71,8 @@ public final class AuraManagerConsoleUiTest
     @BeforeAll
     public static void beforeAll()
     {
-        System.setProperty("neodymium.aura.test", "true");
-        System.setProperty("neodymium.aura.test.simulation.delayMs", "3000");
+        System.setProperty("neodymium.ai.test", "true");
+        System.setProperty("neodymium.ai.test.simulation.delayMs", "3000");
     }
 
     private void stopAndAwaitQueue()

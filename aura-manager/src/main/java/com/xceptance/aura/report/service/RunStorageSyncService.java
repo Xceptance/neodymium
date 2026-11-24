@@ -1,5 +1,5 @@
 /*
- * GNU Affero General Public License (AGPLv3)
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
  *
  * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
@@ -7,6 +7,11 @@
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -136,8 +141,10 @@ public class RunStorageSyncService
                     if (localRunJsonStorageService.hasRunJsonFile(runId) && existingRunOpt.isPresent())
                     {
                         final TestRunEntity existingRun = existingRunOpt.get();
+                        final boolean isDeleted = Boolean.TRUE.equals(existingRun.getIsDeleted());
+                        final boolean isStale = localRunJsonStorageService.isRunJsonStale(runId);
                         final boolean isStillActive = "IN_PROGRESS".equalsIgnoreCase(existingRun.getStatus()) || localRunJsonStorageService.isRunCurrentlyActiveOnDisk(runId);
-                        if (!isStillActive && existingRun.getPassedHealedCount() != null && existingRun.getSucceededFixedHealedCount() != null
+                        if (!isDeleted && !isStale && !isStillActive && existingRun.getPassedHealedCount() != null && existingRun.getSucceededFixedHealedCount() != null
                             && existingRun.getFailedKnownHealedCount() != null && existingRun.getFailedUnknownHealedCount() != null)
                         {
                             LOG.debug("Skipping already initialized run report: runId={}", runId);
@@ -804,6 +811,7 @@ public class RunStorageSyncService
             runEntity.setTotalLlmTokens(sumLlmTokens);
             runEntity.setTotalLlmCost(Math.ceil(sumLlmCost * 1000000.0) / 1000000.0);
             runEntity.setAttachmentsSyncedToS3(true);
+            runEntity.setIsDeleted(false);
 
             runRepository.save(runEntity);
 

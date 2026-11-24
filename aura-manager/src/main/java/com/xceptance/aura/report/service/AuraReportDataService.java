@@ -1,5 +1,5 @@
 /*
- * GNU Affero General Public License (AGPLv3)
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
  *
  * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
@@ -7,6 +7,11 @@
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -4181,8 +4186,9 @@ public class AuraReportDataService
         final Optional<TestRunEntity> runOpt = runRepository.findById(effectiveRunId);
         final boolean isActiveOnDisk = localRunJsonStorageService.isRunCurrentlyActiveOnDisk(effectiveRunId);
         final boolean isInProgress = liveRunBuffer.containsKey(effectiveRunId) || isActiveOnDisk;
+        final boolean isStale = localRunJsonStorageService.isRunJsonStale(effectiveRunId);
 
-        if (!isInProgress && runReportCache.containsKey(effectiveRunId))
+        if (!isInProgress && !isStale && runReportCache.containsKey(effectiveRunId))
         {
             LOG.debug("[PERF] getRunReport cache HIT for runId={}", effectiveRunId);
             return runReportCache.get(effectiveRunId);
@@ -4190,7 +4196,7 @@ public class AuraReportDataService
 
         synchronized (effectiveRunId.intern())
         {
-            if (!isInProgress && runReportCache.containsKey(effectiveRunId))
+            if (!isInProgress && !isStale && runReportCache.containsKey(effectiveRunId))
             {
                 LOG.debug("[PERF] getRunReport cache HIT (after sync lock) for runId={}", effectiveRunId);
                 return runReportCache.get(effectiveRunId);
@@ -4200,7 +4206,7 @@ public class AuraReportDataService
 
             final Path runDir = localRunJsonStorageService.getRunDir(effectiveRunId);
             final Path runJsonFile = (runDir != null) ? runDir.resolve("run.json") : null;
-            if (runDir != null && Files.exists(runDir) && Files.isDirectory(runDir) && (isInProgress || runJsonFile == null || !Files.exists(runJsonFile)))
+            if (runDir != null && Files.exists(runDir) && Files.isDirectory(runDir) && (isInProgress || isStale || runJsonFile == null || !Files.exists(runJsonFile)))
             {
                 localRunJsonStorageService.buildRunJsonContent(runDir.toFile(), effectiveRunId, true, isInProgress);
             }
@@ -4408,7 +4414,9 @@ public class AuraReportDataService
             final RunReportDto report = buildRunReportDto(runEntity, executions);
             if (!isInProgress)
             {
-                if (runOpt.isPresent() && "IN_PROGRESS".equalsIgnoreCase(runOpt.get().getStatus()))
+                if (runOpt.isPresent() && ("IN_PROGRESS".equalsIgnoreCase(runOpt.get().getStatus())
+                        || isStale
+                        || (runOpt.get().getRunningCount() != null && runOpt.get().getRunningCount() > 0)))
                 {
                     final TestRunEntity finishedRun = runOpt.get();
                     finishedRun.setStatus("COMPLETED");
@@ -7052,6 +7060,30 @@ public class AuraReportDataService
         }
     }
 
+    private static Map<String, List<TestExecutionDto>> groupByCanonicalClass(
+            final Collection<TestExecutionDto> executions,
+            final Map<String, String> displayClassNameByKey)
+    {
+        final Map<String, List<TestExecutionDto>> byClass = new LinkedHashMap<>();
+        for (final TestExecutionDto e : executions)
+        {
+            final String rawClass = (e.getTestClass() != null && !e.getTestClass().isBlank())
+                    ? e.getTestClass().trim()
+                    : "GeneralTest";
+            final String simpleName = extractSimpleClassName(rawClass);
+            final String canonicalKey = !simpleName.isEmpty() ? simpleName.toLowerCase(Locale.ROOT) : rawClass.toLowerCase(Locale.ROOT);
+
+            byClass.computeIfAbsent(canonicalKey, k -> new ArrayList<>()).add(e);
+
+            final String existingDisplay = displayClassNameByKey.get(canonicalKey);
+            if (existingDisplay == null || (rawClass.contains(".") && !existingDisplay.contains(".")))
+            {
+                displayClassNameByKey.put(canonicalKey, rawClass);
+            }
+        }
+        return byClass;
+    }
+
     public List<AreaSummaryDto> buildAreaSummaries(final List<TestExecutionDto> executions)
     {
         if (executions == null || executions.isEmpty())
@@ -7059,17 +7091,13 @@ public class AuraReportDataService
             return new ArrayList<>();
         }
 
-        final Map<String, List<TestExecutionDto>> byClass = executions.stream()
-            .collect(Collectors.groupingBy(
-                e -> (e.getTestClass() != null && !e.getTestClass().isEmpty()) ? e.getTestClass() : "GeneralTest",
-                LinkedHashMap::new,
-                Collectors.toList()
-            ));
+        final Map<String, String> displayClassNameByKey = new LinkedHashMap<>();
+        final Map<String, List<TestExecutionDto>> byClass = groupByCanonicalClass(executions, displayClassNameByKey);
 
         final List<TestClassSummaryDto> testClasses = new ArrayList<>();
         for (final Map.Entry<String, List<TestExecutionDto>> entry : byClass.entrySet())
         {
-            final String testClass = entry.getKey();
+            final String testClass = displayClassNameByKey.getOrDefault(entry.getKey(), entry.getKey());
             final List<TestExecutionDto> classExecs = entry.getValue();
 
             int cPass = 0, cFixed = 0, cKnown = 0, cUnknown = 0, cIgnored = 0, cRunning = 0;
@@ -7161,18 +7189,14 @@ public class AuraReportDataService
                     final String subName = subEntry.getKey();
                     final List<TestExecutionDto> subExecs = subEntry.getValue();
 
-                    final Map<String, List<TestExecutionDto>> subByClass = subExecs.stream()
-                        .collect(Collectors.groupingBy(
-                            e -> (e.getTestClass() != null && !e.getTestClass().isEmpty()) ? e.getTestClass() : "GeneralTest",
-                            LinkedHashMap::new,
-                            Collectors.toList()
-                        ));
+                    final Map<String, String> subDisplayClassNameByKey = new LinkedHashMap<>();
+                    final Map<String, List<TestExecutionDto>> subByClass = groupByCanonicalClass(subExecs, subDisplayClassNameByKey);
 
                     final List<TestClassSummaryDto> subClasses = new ArrayList<>();
                     int sPass = 0, sFixed = 0, sKnown = 0, sUnknown = 0, sIgnored = 0, sRunning = 0;
                     for (final Map.Entry<String, List<TestExecutionDto>> scEntry : subByClass.entrySet())
                     {
-                        final String scName = scEntry.getKey();
+                        final String scName = subDisplayClassNameByKey.getOrDefault(scEntry.getKey(), scEntry.getKey());
                         final List<TestExecutionDto> scExecs = scEntry.getValue();
 
                         int cPass = 0, cFixed = 0, cKnown = 0, cUnknown = 0, cIgnored = 0, cRunning = 0;

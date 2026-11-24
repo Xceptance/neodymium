@@ -1,5 +1,5 @@
 /*
- * GNU Affero General Public License (AGPLv3)
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
  *
  * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
@@ -7,6 +7,11 @@
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -7085,6 +7090,206 @@ public class WidgetAggregationServiceTest
         Assertions.assertEquals("Default", view.getPieSlices().get(0).getLabel());
         Assertions.assertEquals(2, view.getPieSlices().get(0).getCount());
         Assertions.assertFalse(view.getPieSlices().stream().anyMatch(s -> s.getLabel().contains("Browsing")));
+    }
+
+    @Test
+    public void testTransitionsPieChartAggregation()
+    {
+        final DashboardWidgetConfigDto config = new DashboardWidgetConfigDto(
+            "w-trans-pie", "Failure & Recovery Distribution", WidgetMetric.TEST_TRANSITIONS, "",
+            WidgetPresentation.PIE_CHART, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.PERCENT, "half", 0
+        );
+
+        final List<BatchLatestVariationDto> variations = List.of(
+            new BatchLatestVariationDto("k1", "succeeded-fixed", true, "JAVA", "run-1", "Default", "Chrome", "US", null, "Default", Collections.emptyMap(), 0.0, 0L),
+            new BatchLatestVariationDto("k2", "failed-unknown", false, "JAVA", "run-1", "Default", "Chrome", "US", null, "Default", Collections.emptyMap(), 0.0, 0L),
+            new BatchLatestVariationDto("k3", "k3", "failed-known", false, "JAVA", "run-1", "Default", "Chrome", "US", null, "Default", Collections.emptyMap(), 0.0, 0L, "exec-3", List.of("BUG-123")),
+            new BatchLatestVariationDto("k4", "passed-clean", false, "JAVA", "run-1", "Default", "Chrome", "US", null, "Default", Collections.emptyMap(), 0.0, 0L)
+        );
+
+        final DashboardWidgetViewDto view = service.aggregateWidget(
+            config, Collections.emptyList(), variations, Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+
+        Assertions.assertNotNull(view);
+        Assertions.assertEquals(WidgetPresentation.PIE_CHART, view.getPresentation());
+        Assertions.assertEquals(4, view.getPieSlices().size());
+
+        Assertions.assertTrue(view.getPieSlices().stream().anyMatch(s -> "Unticketed Failures".equals(s.getLabel()) && s.getCount() == 1));
+        Assertions.assertTrue(view.getPieSlices().stream().anyMatch(s -> "Known Bug Failures".equals(s.getLabel()) && s.getCount() == 1));
+        Assertions.assertTrue(view.getPieSlices().stream().anyMatch(s -> s.getLabel().startsWith("Turned Green") && s.getCount() == 1));
+        Assertions.assertTrue(view.getPieSlices().stream().anyMatch(s -> "Stable Pass".equals(s.getLabel()) && s.getCount() == 1));
+
+        Assertions.assertEquals("25%", view.getPieCenterRate());
+        Assertions.assertTrue(view.getSummaryLabel().contains("green"));
+        Assertions.assertTrue(view.getSummaryLabel().contains("unticketed"));
+    }
+
+    @Test
+    public void testTransitionsRatioBarAggregation()
+    {
+        final DashboardWidgetConfigDto config = new DashboardWidgetConfigDto(
+            "w-trans-ratio", "Failure & Recovery Ratio", WidgetMetric.TEST_TRANSITIONS, "",
+            WidgetPresentation.RATIO_BAR, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.PERCENT, "half", 0
+        );
+
+        final List<BatchLatestVariationDto> variations = List.of(
+            new BatchLatestVariationDto("k1", "succeeded-fixed", true, "JAVA", "run-1", "Default", "Chrome", "US", null, "Default", Collections.emptyMap(), 0.0, 0L),
+            new BatchLatestVariationDto("k2", "failed-unknown", false, "JAVA", "run-1", "Default", "Chrome", "US", null, "Default", Collections.emptyMap(), 0.0, 0L),
+            new BatchLatestVariationDto("k3", "k3", "failed-known", false, "JAVA", "run-1", "Default", "Chrome", "US", null, "Default", Collections.emptyMap(), 0.0, 0L, "exec-3", List.of("BUG-123")),
+            new BatchLatestVariationDto("k4", "passed-clean", false, "JAVA", "run-1", "Default", "Chrome", "US", null, "Default", Collections.emptyMap(), 0.0, 0L)
+        );
+
+        final DashboardWidgetViewDto view = service.aggregateWidget(
+            config, Collections.emptyList(), variations, Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+
+        Assertions.assertNotNull(view);
+        Assertions.assertEquals(WidgetPresentation.RATIO_BAR, view.getPresentation());
+        Assertions.assertEquals(4, view.getRatioSegments().size());
+        Assertions.assertTrue(view.getRatioSegments().stream().anyMatch(s -> "Unticketed Failures".equals(s.getName()) && s.getCount() == 1));
+        Assertions.assertTrue(view.getRatioSegments().stream().anyMatch(s -> s.getName().startsWith("Turned Green") && s.getCount() == 1));
+    }
+
+    @Test
+    public void testTransitionsListWidgetAggregation()
+    {
+        final DashboardWidgetConfigDto config = new DashboardWidgetConfigDto(
+            "w-trans-list", "Failures & Recoveries Triage List", WidgetMetric.TEST_TRANSITIONS, "",
+            WidgetPresentation.LIST, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.ABSOLUTE, "half", 0
+        );
+
+        final List<BatchLatestVariationDto> variations = List.of(
+            new BatchLatestVariationDto("k1", "succeeded-fixed", true, "JAVA", "run-1", "Default", "Chrome", "US", null, "Default", Collections.emptyMap(), 0.0, 0L),
+            new BatchLatestVariationDto("k2", "failed-unknown", false, "JAVA", "run-1", "Default", "Chrome", "US", null, "Default", Collections.emptyMap(), 0.0, 0L),
+            new BatchLatestVariationDto("k3", "k3", "failed-known", false, "JAVA", "run-1", "Default", "Chrome", "US", null, "Default", Collections.emptyMap(), 0.0, 0L, "exec-3", List.of("BUG-123")),
+            new BatchLatestVariationDto("k4", "passed-clean", false, "JAVA", "run-1", "Default", "Chrome", "US", null, "Default", Collections.emptyMap(), 0.0, 0L)
+        );
+
+        final DashboardWidgetViewDto view = service.aggregateWidget(
+            config, Collections.emptyList(), variations, Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+
+        Assertions.assertNotNull(view);
+        Assertions.assertEquals(WidgetPresentation.LIST, view.getPresentation());
+        Assertions.assertNotNull(view.getListItems());
+        Assertions.assertFalse(view.getListItems().isEmpty());
+
+        Assertions.assertTrue(view.getListItems().stream().anyMatch(item -> item.getLabel().startsWith("Unticketed Failures")));
+        Assertions.assertTrue(view.getListItems().stream().anyMatch(item -> item.getLabel().startsWith("Turned Green")));
+        Assertions.assertTrue(view.getListItems().stream().anyMatch(item -> item.getLabel().startsWith("Known Bug Failures")));
+        Assertions.assertTrue(view.getListItems().stream().anyMatch(item -> item.getLabel().startsWith("Stable Pass")));
+
+        final WidgetListItemDto unticketedGroup = view.getListItems().stream()
+            .filter(item -> item.getLabel().startsWith("Unticketed Failures"))
+            .findFirst()
+            .orElseThrow();
+        Assertions.assertEquals(1, unticketedGroup.getSubItems().size());
+        Assertions.assertEquals("UNTICKETED", unticketedGroup.getSubItems().get(0).getBadge());
+    }
+
+    @Test
+    public void testTransitionsTextWidgetAggregation()
+    {
+        final DashboardWidgetConfigDto configAbs = new DashboardWidgetConfigDto(
+            "w-trans-text-abs", "Unticketed Failures KPI", WidgetMetric.TEST_TRANSITIONS, "",
+            WidgetPresentation.TEXT, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.ABSOLUTE, "quarter", 0
+        );
+
+        final DashboardWidgetConfigDto configPct = new DashboardWidgetConfigDto(
+            "w-trans-text-pct", "Unticketed Failures KPI", WidgetMetric.TEST_TRANSITIONS, "",
+            WidgetPresentation.TEXT, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.PERCENT, "quarter", 0
+        );
+
+        final List<BatchLatestVariationDto> variations = List.of(
+            new BatchLatestVariationDto("k1", "succeeded-fixed", true, "JAVA", "run-1", "Default", "Chrome", "US", null, "Default", Collections.emptyMap(), 0.0, 0L),
+            new BatchLatestVariationDto("k2", "failed-unknown", false, "JAVA", "run-1", "Default", "Chrome", "US", null, "Default", Collections.emptyMap(), 0.0, 0L),
+            new BatchLatestVariationDto("k3", "k3", "failed-known", false, "JAVA", "run-1", "Default", "Chrome", "US", null, "Default", Collections.emptyMap(), 0.0, 0L, "exec-3", List.of("BUG-123")),
+            new BatchLatestVariationDto("k4", "passed-clean", false, "JAVA", "run-1", "Default", "Chrome", "US", null, "Default", Collections.emptyMap(), 0.0, 0L)
+        );
+
+        final DashboardWidgetViewDto viewAbs = service.aggregateWidget(
+            configAbs, Collections.emptyList(), variations, Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+
+        final DashboardWidgetViewDto viewPct = service.aggregateWidget(
+            configPct, Collections.emptyList(), variations, Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+
+        Assertions.assertNotNull(viewAbs);
+        Assertions.assertEquals("1 Unticketed Fail", viewAbs.getPrimaryTextValue());
+        Assertions.assertTrue(viewAbs.getSecondaryTextValue().contains("green"));
+
+        Assertions.assertNotNull(viewPct);
+        Assertions.assertEquals("25% UNTICKETED", viewPct.getPrimaryTextValue());
+        Assertions.assertTrue(viewPct.getSecondaryTextValue().contains("turned green"));
+    }
+
+    @Test
+    public void testTransitionsContributingExecutions()
+    {
+        final DashboardWidgetConfigDto config = new DashboardWidgetConfigDto(
+            "w-trans-contrib", "Contributing Executions", WidgetMetric.TEST_TRANSITIONS, "",
+            WidgetPresentation.LIST, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.ABSOLUTE, "half", 0
+        );
+
+        final TestRunEntity r1 = new TestRunEntity();
+        r1.setId("run-trans-1");
+        r1.setStartTimeMs(1000L);
+
+        final TestExecutionDto ePass = new TestExecutionDto(
+            "row-pass", "run-trans-1", "com.example.OrderTest", "testPass", "testPass", "PASSED", "US", "Chrome", 0.0, 0L, Collections.emptyMap()
+        );
+
+        final TestExecutionDto eFail = new TestExecutionDto(
+            "row-fail", "run-trans-1", "com.example.OrderTest", "testFail", "testFail", "FAILED", "US", "Chrome", 0.0, 0L, Collections.emptyMap()
+        );
+
+        final RunReportDto mockReport = Mockito.mock(RunReportDto.class);
+        Mockito.when(mockReport.getExecutions()).thenReturn(List.of(ePass, eFail));
+
+        final AuraReportDataService mockDataService = Mockito.mock(AuraReportDataService.class);
+        Mockito.when(mockDataService.getRunReport("run-trans-1")).thenReturn(mockReport);
+
+        final WidgetContributingExecutionsDto result = service.resolveContributingExecutions(
+            config, List.of(r1), Collections.emptyList(), mockDataService
+        );
+
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals(1, result.getTotalExecutionsCount());
+        Assertions.assertEquals("com.example.OrderTest testFail", result.getRunGroups().get(0).getExecutions().get(0).getTestName());
+    }
+
+    @Test
+    public void testTransitionsListAndTextInvokeDifferentialServiceOnce()
+    {
+        final ReportDifferentialService spyDiffService = Mockito.spy(new ReportDifferentialService());
+        final WidgetAggregationService aggregationService = new WidgetAggregationService(spyDiffService);
+
+        final List<BatchLatestVariationDto> variations = List.of(
+            new BatchLatestVariationDto("k1", "failed-unknown", false, "JAVA", "run-1", "Default", "Chrome", "US", null, "Default", Collections.emptyMap(), 0.0, 0L)
+        );
+
+        final DashboardWidgetConfigDto listConfig = new DashboardWidgetConfigDto(
+            "w-once-list", "List", WidgetMetric.TEST_TRANSITIONS, "",
+            WidgetPresentation.LIST, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.ABSOLUTE, "half", 0
+        );
+        final DashboardWidgetConfigDto textConfig = new DashboardWidgetConfigDto(
+            "w-once-text", "Text", WidgetMetric.TEST_TRANSITIONS, "",
+            WidgetPresentation.TEXT, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.ABSOLUTE, "quarter", 0
+        );
+
+        aggregationService.aggregateWidget(
+            listConfig, Collections.emptyList(), variations, Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+        Mockito.verify(spyDiffService, Mockito.times(1))
+            .computeDifferential(Mockito.anyList(), Mockito.anyList(), Mockito.nullable(AuraReportDataService.class));
+
+        aggregationService.aggregateWidget(
+            textConfig, Collections.emptyList(), variations, Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+        Mockito.verify(spyDiffService, Mockito.times(2))
+            .computeDifferential(Mockito.anyList(), Mockito.anyList(), Mockito.nullable(AuraReportDataService.class));
     }
 }
 

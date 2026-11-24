@@ -1,12 +1,17 @@
 /*
- * GNU Affero General Public License (AGPLv3)
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
  *
- * Copyright (c) 2026 Xceptance
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -37,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.apache.commons.lang3.StringUtils;
@@ -83,6 +89,7 @@ import org.openqa.selenium.WebDriver;
 
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleServer;
+import com.xceptance.neodymium.ai.console.InteractiveStateBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1004,11 +1011,32 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final boolean isInteractive = config.isInteractive();
             final boolean isManagerActive = config.isManagerActive();
             final boolean isConsoleExecutionLogsEnabled = config.isConsoleExecutionLogsEnabled();
+            InteractiveConsoleEngine activeConsoleEngine = null;
+            InteractiveConsoleListener activeInteractiveListener = null;
 
             if (isInteractive || isManagerActive || isConsoleExecutionLogsEnabled)
             {
-                final String runId = config.getProperty("neodymium.managerRunId", "run_" + System.currentTimeMillis());
+                final String fallbackRunId = config.getProperty("neodymium.runId", InteractiveConsoleEngine.getRunFolder());
+                final String runId = config.getProperty("neodymium.managerRunId", fallbackRunId);
                 final InteractiveConsoleEngine consoleEngine = new InteractiveConsoleEngine(runId);
+                activeConsoleEngine = consoleEngine;
+                final ExtensionContext rootContext = context.getRoot();
+                if (rootContext != null)
+                {
+                    final ExtensionContext.Store rootStore = rootContext.getStore(
+                        ExtensionContext.Namespace.create(NeodymiumAiRunner.class, "JUnitRunLifecycle", runId));
+                    if (rootStore != null)
+                    {
+                        InteractiveConsoleEngine.markRunActive(runId, consoleEngine);
+                        synchronized (NeodymiumAiRunner.class)
+                        {
+                            if (rootStore.get(runId) == null)
+                            {
+                                rootStore.put(runId, new JUnitRunLifecycleResource(runId));
+                            }
+                        }
+                    }
+                }
 
                 if (isInteractive && !isManagerActive)
                 {
@@ -1025,6 +1053,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 }
 
                 final InteractiveConsoleListener interactiveListener = new InteractiveConsoleListener(consoleEngine, this.session, isInteractive);
+                activeInteractiveListener = interactiveListener;
                 eventBus.registerListener(interactiveListener);
             }
 
@@ -1532,6 +1561,20 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final ExtensionContext.Store store = context.getStore(ExtensionContext.Namespace.create(context.getRequiredTestInstance()));
             store.put(AiSession.class, this.session);
             store.put(ExecutionContext.class, executionContext);
+
+            if (isManagerActive && activeConsoleEngine != null)
+            {
+                final String initialStateJson = InteractiveStateBuilder.buildStateJson(
+                    this.session,
+                    executionContext,
+                    activeConsoleEngine.getRunId(),
+                    0,
+                    "running",
+                    null,
+                    activeInteractiveListener != null ? activeInteractiveListener.getReport() : null
+                );
+                activeConsoleEngine.pushState(initialStateJson);
+            }
         }
 
         @Override
@@ -2052,6 +2095,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             finally
             {
                 ExecutionContext.setActiveContext(prev);
+                FilmTestExecution.clearThreadContexts();
             }
         }
 
@@ -2150,6 +2194,58 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 return this.session.getExecutionContext();
             }
             return null;
+        }
+    }
+
+    /**
+     * Root-scoped JUnit lifecycle resource that notifies {@link InteractiveConsoleEngine}
+     * once the entire JUnit test plan completes, with a JVM shutdown hook fallback.
+     *
+     * @author AI-generated: Antigravity
+     * @author Xceptance GmbH 2026
+     */
+    @SuppressWarnings("deprecation")
+    private static final class JUnitRunLifecycleResource implements ExtensionContext.Store.CloseableResource, AutoCloseable
+    {
+        private final String runId;
+        private final AtomicBoolean closed = new AtomicBoolean(false);
+        private final Thread shutdownHook;
+
+        private JUnitRunLifecycleResource(final String runId)
+        {
+            this.runId = runId;
+            this.shutdownHook = new Thread(() -> finishRun(false), "neo-junit-run-lifecycle-" + runId);
+            try
+            {
+                Runtime.getRuntime().addShutdownHook(this.shutdownHook);
+            }
+            catch (final IllegalStateException | SecurityException ignored)
+            {
+            }
+        }
+
+        private void finishRun(final boolean removeHook)
+        {
+            if (this.closed.compareAndSet(false, true))
+            {
+                if (removeHook)
+                {
+                    try
+                    {
+                        Runtime.getRuntime().removeShutdownHook(this.shutdownHook);
+                    }
+                    catch (final IllegalStateException | SecurityException ignored)
+                    {
+                    }
+                }
+                InteractiveConsoleEngine.markRunFinished(this.runId);
+            }
+        }
+
+        @Override
+        public void close()
+        {
+            finishRun(true);
         }
     }
 

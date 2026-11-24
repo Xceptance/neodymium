@@ -1,5 +1,5 @@
 /*
- * GNU Affero General Public License (AGPLv3)
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
  *
  * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
@@ -7,6 +7,11 @@
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -277,7 +282,11 @@ public final class DashboardWidgetConfigDto
         }
         this.overrideRunFilters = (overrideRunFilters != null) && overrideRunFilters;
         this.runFilters = (runFilters != null) ? runFilters : new WidgetFilterConfigDto();
-        this.colorPolarity = (colorPolarity != null) ? colorPolarity : WidgetColorPolarity.HIGHER_IS_GREEN;
+        this.colorPolarity = (colorPolarity != null)
+            ? colorPolarity
+            : ((this.metric == WidgetMetric.FLAKINESS || this.metric == WidgetMetric.TEST_TRANSITIONS)
+                ? WidgetColorPolarity.HIGHER_IS_RED
+                : WidgetColorPolarity.HIGHER_IS_GREEN);
         this.showDots = (showDots != null) && showDots;
         this.filled = (filled != null) && filled;
         this.children = (children != null && !children.isEmpty())
@@ -408,6 +417,10 @@ public final class DashboardWidgetConfigDto
                 else if (safeMetric == WidgetMetric.BUGS)
                 {
                     sb.append("Bug Breakdown List");
+                }
+                else if (safeMetric == WidgetMetric.TEST_TRANSITIONS)
+                {
+                    sb.append("Failures & Recoveries Triage List");
                 }
                 else if (safeMetric == WidgetMetric.AI_USAGE || safeMetric == WidgetMetric.FLAKINESS)
                 {

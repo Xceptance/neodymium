@@ -1,5 +1,5 @@
 /*
- * GNU Affero General Public License (AGPLv3)
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
  *
  * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
@@ -7,6 +7,11 @@
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -4839,11 +4844,11 @@ public final class StaticResourceSyntaxTest
         final String editorJsContent = Files.readString(editorJsPath, StandardCharsets.UTF_8);
 
         Assertions.assertTrue(
-            editorJsContent.contains("if (e.target.closest('.modal-overlay, .modal-card, #editorPanel, #auraChatOverlay, .aura-chat-overlay, .aura-chat-launcher')) return;"),
+            editorJsContent.contains("if (e.target.closest('.modal-overlay, .modal-card, #editorPanel, #auraChatOverlay, .aura-chat-overlay, .aura-chat-launcher, #runControls, #configPanel, .run-controls-container, #runCurrentTestBtn, #runQueueBtn, #stopQueueBtn')) return;"),
             "dashboard-editor.js navigation click interceptor must ignore clicks inside editor panel and Aura AI Assistant overlay/launcher"
         );
         Assertions.assertTrue(
-            editorJsContent.contains("if (link.closest('#editorPanel, #auraChatOverlay, .aura-chat-overlay, .aura-chat-launcher')) return;"),
+            editorJsContent.contains("if (link.closest('#editorPanel, #auraChatOverlay, .aura-chat-overlay, .aura-chat-launcher, #runControls, #configPanel, .run-controls-container')\n        || link.id === 'runCurrentTestBtn' || link.id === 'runQueueBtn' || link.id === 'stopQueueBtn') return;"),
             "dashboard-editor.js navigation click interceptor must not treat links or forms within editor panel or AI Assistant as navigating away"
         );
     }
@@ -4863,8 +4868,8 @@ public final class StaticResourceSyntaxTest
             "report-manager.js must render clickable local file URIs for attachments");
         Assertions.assertTrue(jsContent.contains("### Inlined Attachment Contents"),
             "report-manager.js must include section '### Inlined Attachment Contents' for text attachments");
-        Assertions.assertTrue(jsContent.contains("Aura MCP Quick Tip:"),
-            "report-manager.js must include Aura MCP Quick Tip guidance for AI agents");
+        Assertions.assertTrue(jsContent.contains("Neodymium AI MCP Quick Tip:"),
+            "report-manager.js must include Neodymium AI MCP Quick Tip guidance for AI agents");
 
         final String nodeTestScript =
             "const fs = require('fs');\n" +
@@ -4933,7 +4938,7 @@ public final class StaticResourceSyntaxTest
             "assert(md.includes('<summary>Attached Content: execution.log'), 'Must contain execution.log summary details');\n" +
             "assert(md.includes('[ERROR] Step failed'), 'Must contain execution log content');\n" +
             "assert(!md.includes('<summary>Attached Content: playbook.yaml'), 'Must not duplicate playbook.yaml in details when already in playbook header');\n" +
-            "assert(md.includes('> **Aura MCP Quick Tip:**'), 'Must contain Aura MCP Quick Tip');\n" +
+            "assert(md.includes('> **Neodymium AI MCP Quick Tip:**'), 'Must contain Neodymium AI MCP Quick Tip');\n" +
             "assert(md.includes('get_execution_failure(executionId=\"run-42-exec-1\")'), 'Must contain execution ID in MCP tip');\n" +
             "console.log('DIAGNOSTICS_MD_SUCCESS');\n";
 
@@ -5084,8 +5089,10 @@ public final class StaticResourceSyntaxTest
             "\n" +
             "// 3. 10,000 tests queue with 1 failure: formatting, segment display, min-width support\n" +
             "updateProgress({ running: true, runningCount: 2, scheduledCount: 10000, executedCount: 4500, passed: 4499, failed: 1 });\n" +
-            "assert(elements.sidebarActiveProgress.textContent.includes('4,500') || elements.sidebarActiveProgress.textContent.includes('4500'), 'Formatted count');\n" +
-            "assert(elements.sidebarActiveProgress.textContent.includes('10,000') || elements.sidebarActiveProgress.textContent.includes('10000'), 'Formatted total');\n" +
+            "const expected4500 = new Intl.NumberFormat().format(4500);\n" +
+            "const expected10000 = new Intl.NumberFormat().format(10000);\n" +
+            "assert(elements.sidebarActiveProgress.textContent.includes(expected4500) || elements.sidebarActiveProgress.textContent.includes('4500'), 'Formatted count');\n" +
+            "assert(elements.sidebarActiveProgress.textContent.includes(expected10000) || elements.sidebarActiveProgress.textContent.includes('10000'), 'Formatted total');\n" +
             "assert.strictEqual(elements.sidebarProgressSegFailed.style.display, 'block', 'Failed segment must be visible');\n" +
             "assert.strictEqual(elements.sidebarChipFailed.style.display, 'inline-flex', 'Failed chip must be visible');\n" +
             "assert.strictEqual(elements.sidebarChipFailedVal.textContent, '1');\n" +
@@ -5153,6 +5160,269 @@ public final class StaticResourceSyntaxTest
                 && customPageContent.contains("onclick=\"changeTheme('dark')\"")
                 && customPageContent.contains("onclick=\"changeTheme('system')\""),
             "custom-dashboard-page.html toolbar must include unified theme switcher");
+    }
+
+    /**
+     * Automated regression safety net verifying that all AI Manager pages consistently
+     * display "Neodymium AI Manager" in the browser tab title (both server-rendered Thymeleaf
+     * templates and client-side view synchronizations).
+     */
+    @Test
+    public void testAiManagerTabTitleNamingAndBrandingSafetyNet() throws Exception
+    {
+        // 1. Verify index.html <title> expression prepends Neodymium AI Manager
+        final Path indexPath = Paths.get("src/main/resources/templates/index.html");
+        Assertions.assertTrue(Files.exists(indexPath), "index.html must exist");
+        final String indexHtml = Files.readString(indexPath, StandardCharsets.UTF_8);
+        Assertions.assertTrue(
+            indexHtml.contains("<title th:text=\"${(pageTitle != null and !pageTitle.isEmpty()) ? (pageTitle.contains('Neodymium') ? pageTitle : ('Neodymium AI Manager - ' + pageTitle)) : ((title != null and !title.isEmpty()) ? (title.contains('Neodymium') ? title : ('Neodymium AI Manager - ' + title)) : 'Neodymium AI Manager')}\">Neodymium AI Manager</title>"),
+            "index.html <title> must format tab name with 'Neodymium AI Manager - <pageTitle>' while preserving existing Neodymium prefix");
+
+        // 2. Verify loading.html title and headline include Neodymium
+        final Path loadingPath = Paths.get("src/main/resources/loading.html");
+        Assertions.assertTrue(Files.exists(loadingPath), "loading.html must exist");
+        final String loadingHtml = Files.readString(loadingPath, StandardCharsets.UTF_8);
+        Assertions.assertTrue(
+            loadingHtml.contains("<title>Connecting to Neodymium AI Manager...</title>"),
+            "loading.html must have 'Connecting to Neodymium AI Manager...' as <title>");
+        Assertions.assertTrue(
+            loadingHtml.contains("<h2>Starting Neodymium AI Manager...</h2>"),
+            "loading.html must have 'Starting Neodymium AI Manager...' heading");
+
+        // 3. Verify report-manager.js defines syncDocumentTitle and integrates it across views
+        final Path jsPath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsPath), "report-manager.js must exist");
+        final String jsContent = Files.readString(jsPath, StandardCharsets.UTF_8);
+        Assertions.assertTrue(
+            jsContent.contains("function syncDocumentTitle(viewTitle)"),
+            "report-manager.js must define syncDocumentTitle function");
+        Assertions.assertTrue(
+            jsContent.contains("syncDocumentTitle('Runs overview');"),
+            "report-manager.js must sync document title on Runs overview");
+        Assertions.assertTrue(
+            jsContent.contains("syncDocumentTitle(`Run #${runIdLabel}`);"),
+            "report-manager.js must sync document title on Single Run report");
+        Assertions.assertTrue(
+            jsContent.contains("syncDocumentTitle('Comprehensive Test Base');"),
+            "report-manager.js must sync document title on Test Base");
+        Assertions.assertTrue(
+            jsContent.contains("syncDocumentTitle('Neodymium AI Manager Dashboard');"),
+            "report-manager.js must sync document title on Dashboard view");
+
+        // 4. Node behavioral test of syncDocumentTitle logic
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const assert = require('assert');\n" +
+            "const jsCode = fs.readFileSync('" + jsPath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const sandbox = {\n" +
+            "    document: { title: '', addEventListener: () => {} },\n" +
+            "    window: { addEventListener: () => {} },\n" +
+            "    console: console\n" +
+            "};\n" +
+            "sandbox.window.document = sandbox.document;\n" +
+            "const fnMatch = jsCode.match(/function syncDocumentTitle[\\s\\S]*?window\\.syncDocumentTitle\\s*=\\s*syncDocumentTitle;/);\n" +
+            "assert(fnMatch, 'syncDocumentTitle implementation must be found in report-manager.js');\n" +
+            "vm.runInNewContext(fnMatch[0], sandbox);\n" +
+            "const sync = sandbox.window.syncDocumentTitle;\n" +
+            "assert(typeof sync === 'function', 'syncDocumentTitle must be a function');\n" +
+            "sync('Runs overview');\n" +
+            "assert.strictEqual(sandbox.document.title, 'Neodymium AI Manager - Runs overview');\n" +
+            "sync('Neodymium AI Manager Dashboard');\n" +
+            "assert.strictEqual(sandbox.document.title, 'Neodymium AI Manager Dashboard');\n" +
+            "sync('Run #RUN-100');\n" +
+            "assert.strictEqual(sandbox.document.title, 'Neodymium AI Manager - Run #RUN-100');\n" +
+            "sync('');\n" +
+            "assert.strictEqual(sandbox.document.title, 'Neodymium AI Manager');\n" +
+            "sync(null);\n" +
+            "assert.strictEqual(sandbox.document.title, 'Neodymium AI Manager');\n";
+        runNodeScript(nodeTestScript, "syncDocumentTitle Node validation failed");
+    }
+
+    @Test
+    public void testVideoAndGifAttachmentSeparationInSidePanel() throws Exception
+    {
+        final Path templatePath = Paths.get("src/main/resources/templates/fragments/side-panel-step-list.html");
+        Assertions.assertTrue(Files.exists(templatePath), "side-panel-step-list.html must exist: " + templatePath.toAbsolutePath());
+        final String templateContent = Files.readString(templatePath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(templateContent.contains("id=\"sidePanelVideoPlayer\""),
+            "side-panel-step-list.html must contain #sidePanelVideoPlayer");
+        Assertions.assertTrue(templateContent.contains("id=\"sidePanelGifPlayer\""),
+            "side-panel-step-list.html must contain dedicated #sidePanelGifPlayer for GIF recordings");
+
+        final Path jsPath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsPath), "report-manager.js must exist: " + jsPath.toAbsolutePath());
+        final String jsContent = Files.readString(jsPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(jsContent.contains("sidePanelGifPlayer"),
+            "report-manager.js must reference sidePanelGifPlayer element");
+        Assertions.assertTrue(jsContent.contains("!p.endsWith('.gif')"),
+            "report-manager.js videoAttachment filter must explicitly exclude .gif from video player");
+        Assertions.assertTrue(jsContent.contains("p.endsWith('.mp4') || p.endsWith('.webm') || p.endsWith('.ogg')"),
+            "report-manager.js videoAttachment filter must match true playable video extensions");
+        Assertions.assertTrue(jsContent.contains("(a && a.type === 'gif') || p.endsWith('.gif')"),
+            "report-manager.js must identify gif attachments separately");
+    }
+
+    /**
+     * Verifies that dashboard-runner.js displays #runFinishedModal on root (/) and /batch-history
+     * when a run finishes (including across page navigation where localStorage held the running state),
+     * suppresses the modal when already viewing that run's report, and triggers live HTMX refresh of
+     * #mainViewContainer when run stats change on Dashboard / Runs views.
+     *
+     * @throws Exception if Node execution or assertions fail
+     * @author AI-generated: Antigravity
+     * @author Xceptance GmbH 2026
+     */
+    @Test
+    public void testPollStatusShowsRunFinishedModalOnRootAndBatchHistoryAndRefreshesRunsTable() throws Exception
+    {
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final Path runnerPath = Paths.get("src/main/resources/static/dashboard-runner.js");
+        Assertions.assertTrue(Files.exists(runnerPath), "dashboard-runner.js must exist: " + runnerPath.toAbsolutePath());
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const assert = require('assert');\n" +
+            "const runnerCode = fs.readFileSync('" + runnerPath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "function createSandbox(pathname, search, initialStorage, initialElementIds) {\n" +
+            "    const storage = Object.assign({}, initialStorage || {});\n" +
+            "    const htmxCalls = [];\n" +
+            "    let nextStatus = null;\n" +
+            "    const elements = {};\n" +
+            "    const modalEl = {\n" +
+            "        id: 'runFinishedModal',\n" +
+            "        style: { display: 'none' },\n" +
+            "        querySelector: () => ({ onclick: null }),\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        classList: { add: () => {}, remove: () => {}, contains: () => false }\n" +
+            "    };\n" +
+            "    elements['runFinishedModal'] = modalEl;\n" +
+            "    for (const id of (initialElementIds || [])) {\n" +
+            "        elements[id] = {\n" +
+            "            id,\n" +
+            "            style: {},\n" +
+            "            innerText: '',\n" +
+            "            innerHTML: '',\n" +
+            "            textContent: '',\n" +
+            "            setAttribute: () => {},\n" +
+            "            querySelectorAll: () => [],\n" +
+            "            querySelector: () => null,\n" +
+            "            classList: { add: () => {}, remove: () => {}, contains: () => false }\n" +
+            "        };\n" +
+            "    }\n" +
+            "    const doc = {\n" +
+            "        getElementById: (id) => elements[id] || null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        createElement: () => ({\n" +
+            "            style: {},\n" +
+            "            classList: { add: () => {}, remove: () => {}, contains: () => false },\n" +
+            "            querySelector: () => ({ onclick: null })\n" +
+            "        }),\n" +
+            "        body: { appendChild: () => {} },\n" +
+            "        addEventListener: () => {}\n" +
+            "    };\n" +
+            "    const localStorageObj = {\n" +
+            "        getItem: (k) => (k in storage ? storage[k] : null),\n" +
+            "        setItem: (k, v) => { storage[k] = String(v); },\n" +
+            "        removeItem: (k) => { delete storage[k]; }\n" +
+            "    };\n" +
+            "    const htmxObj = {\n" +
+            "        ajax: (method, url, opts) => { htmxCalls.push({ method, url, opts }); }\n" +
+            "    };\n" +
+            "    const win = {\n" +
+            "        addEventListener: () => {},\n" +
+            "        location: { pathname, search },\n" +
+            "        htmx: htmxObj,\n" +
+            "        document: doc,\n" +
+            "        localStorage: localStorageObj\n" +
+            "    };\n" +
+            "    const sandbox = {\n" +
+            "        console,\n" +
+            "        URLSearchParams,\n" +
+            "        window: win,\n" +
+            "        document: doc,\n" +
+            "        localStorage: localStorageObj,\n" +
+            "        htmx: htmxObj,\n" +
+            "        navigator: { sendBeacon: () => {} },\n" +
+            "        setTimeout: () => 0,\n" +
+            "        clearTimeout: () => {},\n" +
+            "        clientId: 'test-client-id',\n" +
+            "        disconnected: false,\n" +
+            "        isRunning: false,\n" +
+            "        consoleCollapsed: true,\n" +
+            "        consoleOpened: false,\n" +
+            "        activeEditingFile: null,\n" +
+            "        liveLastActiveFile: null,\n" +
+            "        logFilterAiOnly: true,\n" +
+            "        logFilterErrorsOnly: false,\n" +
+            "        hasShownStartMessage: false,\n" +
+            "        activeRunStats: { running: false, tests: [] },\n" +
+            "        liveCompletedFiles: new Set(),\n" +
+            "        updateCenterLayout: () => {},\n" +
+            "        fetch: async () => ({\n" +
+            "            ok: true,\n" +
+            "            json: async () => ({ status: nextStatus, logs: [], events: [] })\n" +
+            "        })\n" +
+            "    };\n" +
+            "    win.activeRunStats = sandbox.activeRunStats;\n" +
+            "    win.liveCompletedFiles = sandbox.liveCompletedFiles;\n" +
+            "    win.fetch = sandbox.fetch;\n" +
+            "    vm.runInNewContext(runnerCode, sandbox);\n" +
+            "    return {\n" +
+            "        sandbox,\n" +
+            "        modalEl,\n" +
+            "        htmxCalls,\n" +
+            "        setNextStatus: (s) => { nextStatus = s; }\n" +
+            "    };\n" +
+            "}\n" +
+            "(async () => {\n" +
+            "    // Case 1: On /batch-history, changing run stats refreshes #mainViewContainer and run finish opens #runFinishedModal\n" +
+            "    const c1 = createSandbox('/batch-history', '', {}, ['mainViewContainer', 'pageBatchHistoryOverview']);\n" +
+            "    c1.setNextStatus({ sessionId: 's1', runId: 'run_old', running: false, runningCount: 0, total: 1, passed: 1, failed: 0, skipped: 0 });\n" +
+            "    await c1.sandbox.window.pollStatus();\n" +
+            "    assert.strictEqual(c1.htmxCalls.length, 0, 'Initial baseline poll should not trigger redundant table refresh');\n" +
+            "\n" +
+            "    c1.setNextStatus({ sessionId: 's1', runId: 'run_from_console_517612', running: true, runningCount: 1, total: 1, passed: 0, failed: 0, skipped: 0 });\n" +
+            "    await c1.sandbox.window.pollStatus();\n" +
+            "    assert.strictEqual(c1.htmxCalls.length, 1, 'New active run must immediately trigger HTMX refresh of runs view');\n" +
+            "    assert.strictEqual(c1.htmxCalls[0].url, '/batch-history');\n" +
+            "\n" +
+            "    c1.setNextStatus({ sessionId: 's1', runId: 'run_from_console_517612', running: false, runningCount: 0, total: 1, passed: 1, failed: 0, skipped: 0 });\n" +
+            "    await c1.sandbox.window.pollStatus();\n" +
+            "    assert.strictEqual(c1.htmxCalls.length, 2, 'Run completion must trigger HTMX refresh of runs view');\n" +
+            "    assert.strictEqual(c1.modalEl.style.display, 'flex', 'Run finished modal must display on /batch-history when run completes');\n" +
+            "\n" +
+            "    c1.setNextStatus({ sessionId: 's1', runId: 'run_from_console_517613', running: true, runningCount: 1, total: 1, passed: 0, failed: 0, skipped: 0 });\n" +
+            "    await c1.sandbox.window.pollStatus();\n" +
+            "    assert.strictEqual(c1.modalEl.style.display, 'none', 'Run finished modal must automatically close when a run becomes active');\n" +
+            "\n" +
+            "    // Case 2: On root dashboard (/), reloaded page with running state in localStorage still shows #runFinishedModal when finished\n" +
+            "    const c2 = createSandbox('/', '', { aura_active_run_id: 'run_from_console_517612', aura_active_run_status: 'running' }, ['mainViewContainer', 'pageCustomDashboard']);\n" +
+            "    c2.setNextStatus({ sessionId: 's1', runId: 'run_from_console_517612', running: false, runningCount: 0, total: 2, passed: 1, failed: 1, skipped: 0 });\n" +
+            "    await c2.sandbox.window.pollStatus();\n" +
+            "    assert.strictEqual(c2.modalEl.style.display, 'flex', 'Run finished modal must display on root / after reload when run finishes');\n" +
+            "\n" +
+            "    // Case 3: Already viewing /run-report for that exact runId -> suppress duplicate modal\n" +
+            "    const c3 = createSandbox('/run-report', '?runId=run_from_console_517612', { aura_active_run_id: 'run_from_console_517612', aura_active_run_status: 'running' }, ['mainViewContainer']);\n" +
+            "    c3.setNextStatus({ sessionId: 's1', runId: 'run_from_console_517612', running: false, runningCount: 0, total: 2, passed: 1, failed: 1, skipped: 0 });\n" +
+            "    await c3.sandbox.window.pollStatus();\n" +
+            "    assert.strictEqual(c3.modalEl.style.display, 'none', 'Run finished modal must stay hidden when already on that run report');\n" +
+            "})().catch((err) => { console.error(err); process.exit(1); });\n";
+
+        runNodeScript(nodeTestScript, "pollStatus runFinishedModal & live refresh test failed");
     }
 }
 
