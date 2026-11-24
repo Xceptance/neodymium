@@ -470,7 +470,13 @@ public final class PreliminaryReportListener implements ExecutionListener
                     this.report.setStatus("FAILED");
                     this.report.setSuccess(false);
                 }
-                final boolean isStepSuccess = "SUCCESS".equalsIgnoreCase(targetStep.getStatus()) || "PASSED".equalsIgnoreCase(targetStep.getStatus());
+                final boolean isStepSuccess = "SUCCESS".equalsIgnoreCase(targetStep.getStatus())
+                        || "PASSED".equalsIgnoreCase(targetStep.getStatus())
+                        || "HEALED".equalsIgnoreCase(targetStep.getStatus());
+                if (isStepSuccess)
+                {
+                    targetStep.setFailureReason(null);
+                }
                 if (targetStep.getStartTimeMs() > 0)
                 {
                     targetStep.setDurationMs(System.currentTimeMillis() - targetStep.getStartTimeMs());
@@ -945,6 +951,10 @@ public final class PreliminaryReportListener implements ExecutionListener
                 if (action.getSubStepInstruction() != null)
                 {
                     actionEntry.setSubStepInstruction(action.getSubStepInstruction());
+                }
+                if (actionExecuted.isHealed() && actionExecuted.isSuccess())
+                {
+                    this.currentStep.removeActionIf(a -> a != null && !a.isSuccess());
                 }
                 this.currentStep.addAction(actionEntry);
                 if (action.getSubStepIndex() != null && !this.currentStep.getSubSteps().isEmpty())
@@ -1697,7 +1707,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                     this.report.setVisualRcaExplanation(rca);
                 }
             }
-            if (this.report.getFailureReason() == null)
+            if (this.report.getFailureReason() == null && !this.report.isSuccess())
             {
                 final Object lastErr = ctx.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
                 if (lastErr instanceof Throwable t)
@@ -1907,7 +1917,7 @@ public final class PreliminaryReportListener implements ExecutionListener
         for (final TestExecutionReport.ReportStepEntry step : steps)
         {
             final String st = step.getStatus() != null ? step.getStatus().toUpperCase() : "";
-            if ("HEALED".equals(st))
+            if (step.isHealed())
             {
                 healed++;
             }

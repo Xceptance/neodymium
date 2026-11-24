@@ -111,6 +111,7 @@ public class InteractiveConsoleEngineTest
         System.clearProperty("neodymium.ai.consoleExecutionLogs.directory");
         System.clearProperty("neodymium.ai.consoleExecutionLogs.captureGlobalLog");
         System.clearProperty("neodymium.ai.storageRuns.directory");
+        System.clearProperty("neodymium.ai.report.disk.directory");
         Neodymium.clearAttachments();
         AiConfiguration.resetInstance();
     }
@@ -1929,6 +1930,149 @@ public class InteractiveConsoleEngineTest
         engine.reconcileTestOutcome(false, new RuntimeException("Blank status failure"));
         final JsonObject failedBlankState = JsonParser.parseString(engine.getCurrentStateJson()).getAsJsonObject();
         assertEquals("failed", failedBlankState.get("status").getAsString(), "Blank status must transition to failed when testPassed is false");
+
+        // When test has healed status but later fails in JUnit, it should transition to failed
+        final String healedJson = "{\"testName\":\"HealedStatusTest · ds1\",\"testFile\":\"com.xceptance.HealedStatusTest#execute\",\"status\":\"healed\",\"steps\":[]}";
+        engine.pushState(healedJson);
+        engine.reconcileTestOutcome(false, new RuntimeException("Post-healing JUnit assertion failure"));
+        final JsonObject failedHealedState = JsonParser.parseString(engine.getCurrentStateJson()).getAsJsonObject();
+        assertEquals("failed", failedHealedState.get("status").getAsString(), "Healed status must transition to failed when testPassed is false");
+    }
+
+    /**
+     * Verifies that {@link InteractiveStateBuilder} does not copy {@code llmCalls} from an earlier
+     * core step (whose global index equals a later core step's block-local index due to preceding
+     * {@code before} hooks) onto a subsequent zero-LLM replay step.
+     */
+    @Test
+    public void testBuildStateJsonDoesNotDuplicateFallbackLlmCallsAcrossBlockIndices() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(null);
+
+        final PlaybookStep before0 = new PlaybookStep();
+        before0.setInstruction("Before 1");
+        before0.setStatus(PlaybookStepStatus.SUCCESS);
+
+        final PlaybookStep before1 = new PlaybookStep();
+        before1.setInstruction("Before 2");
+        before1.setStatus(PlaybookStepStatus.SUCCESS);
+
+        final PlaybookStep step0Healed = new PlaybookStep();
+        step0Healed.setInstruction("Type query into search field");
+        step0Healed.setStatus(PlaybookStepStatus.HEALED);
+
+        final PlaybookStep step1Replay = new PlaybookStep();
+        step1Replay.setInstruction("Wait for suggestions");
+        step1Replay.setStatus(PlaybookStepStatus.SUCCESS);
+
+        final PlaybookStep step2Replay = new PlaybookStep();
+        step2Replay.setInstruction("Click search button");
+        step2Replay.setStatus(PlaybookStepStatus.SUCCESS);
+
+        context.getTransientData().put("playbook.beforeSteps", List.of(before0, before1));
+        context.getTransientData().put("playbook.steps", List.of(step0Healed, step1Replay, step2Replay));
+        context.getTransientData().put("playbook.flatSteps", List.of(before0, before1, step0Healed, step1Replay, step2Replay));
+
+        final TestExecutionReport report = new TestExecutionReport();
+        final ReportStepEntry repBefore0 = new ReportStepEntry(0, "Before 1");
+        repBefore0.setBlock("before");
+        repBefore0.setStatus("SUCCESS");
+        final ReportStepEntry repBefore1 = new ReportStepEntry(1, "Before 2");
+        repBefore1.setBlock("before");
+        repBefore1.setStatus("SUCCESS");
+
+        final ReportStepEntry repStep0 = new ReportStepEntry(2, "Type query into search field");
+        repStep0.setBlock("steps");
+        repStep0.setStatus("HEALED");
+
+        final ReportLlmCallEntry healedCall = new ReportLlmCallEntry();
+        healedCall.setStepIndex(2);
+        healedCall.setBlock("steps");
+        healedCall.setCapability("TEXT");
+        healedCall.setModelName("mock-healer-model");
+        healedCall.setUserPrompt("Heal search selector");
+        healedCall.setResponseContent("{\"selector\":\"#searchInput\"}");
+        repStep0.addLlmCall(healedCall);
+
+        final ReportStepEntry repStep1 = new ReportStepEntry(3, "Wait for suggestions");
+        repStep1.setBlock("steps");
+        repStep1.setStatus("SUCCESS");
+
+        final ReportStepEntry repStep2 = new ReportStepEntry(4, "Click search button");
+        repStep2.setBlock("steps");
+        repStep2.setStatus("SUCCESS");
+
+        report.addStep(repBefore0);
+        report.addStep(repBefore1);
+        report.addStep(repStep0);
+        report.addStep(repStep1);
+        report.addStep(repStep2);
+        report.addLlmCall(healedCall);
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "test-run-no-dup-llm", 4, "passed", null, report);
+        final JsonNode root = new ObjectMapper().readTree(stateJson);
+        final JsonNode stepsBlock = root.path("blocks").path("steps");
+        assertEquals(3, stepsBlock.size());
+
+        assertEquals(1, stepsBlock.get(0).path("llmCalls").size(), "Healed step at globalIndex=2 must have its own LLM call");
+        assertFalse(stepsBlock.get(2).has("llmCalls") && !stepsBlock.get(2).path("llmCalls").isEmpty(),
+            "Subsequent replay step (blockIndex=2, globalIndex=4) must NOT inherit LLM calls from step at globalIndex=2");
+    }
+
+    @Test
+    public void testPushStateWithDistinctRunIdsIsolatesRunFoldersAndPreservesEarlierRun(@TempDir final Path customDir) throws IOException
+    {
+        final Path logsDir = customDir.resolve("console-logs");
+        final Path reportsDir = customDir.resolve("ai-reports");
+        final Path storageDir = customDir.resolve("storage-runs");
+
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", logsDir.toString());
+        System.setProperty("neodymium.ai.report.disk.directory", reportsDir.toString());
+        System.setProperty("neodymium.ai.storageRuns.directory", storageDir.toString());
+        AiConfiguration.resetInstance();
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("run_20261124_100001");
+        final String runOneState = "{"
+            + "\"runId\":\"run_20261124_100001\","
+            + "\"testClass\":\"com.xceptance.WikipediaSearchTest\","
+            + "\"testName\":\"WikipediaSearchTest :: search · ds1\","
+            + "\"status\":\"healed\","
+            + "\"llmCalls\":[{\"id\":\"heal-call-1\",\"model\":\"mock-healer\"}],"
+            + "\"blocks\":{\"steps\":[{\"instruction\":\"Type query\",\"status\":\"healed\",\"llmCalls\":[{\"id\":\"heal-call-1\"}]}]}"
+            + "}";
+        final String runTwoState = "{"
+            + "\"runId\":\"run_20261124_100002\","
+            + "\"testClass\":\"com.xceptance.WikipediaSearchTest\","
+            + "\"testName\":\"WikipediaSearchTest :: search · ds1\","
+            + "\"status\":\"healed\","
+            + "\"llmCalls\":[],"
+            + "\"blocks\":{\"steps\":[{\"instruction\":\"Type query\",\"status\":\"healed\",\"llmCalls\":[]}]}"
+            + "}";
+
+        engine.pushState(runOneState);
+        engine.setRunId("run_20261124_100002");
+        engine.pushState(runTwoState);
+
+        final List<Path> roots = List.of(logsDir, reportsDir, storageDir);
+        for (final Path root : roots)
+        {
+            final Path runOneFile = root.resolve("run_20261124_100001/WikipediaSearchTest/console-execution-1.json");
+            final Path runTwoFile = root.resolve("run_20261124_100002/WikipediaSearchTest/console-execution-1.json");
+            assertTrue(Files.exists(runOneFile), "First run execution JSON must exist under " + root);
+            assertTrue(Files.exists(runTwoFile), "Second run execution JSON must exist under " + root);
+
+            final String runOneJson = Files.readString(runOneFile);
+            final String runTwoJson = Files.readString(runTwoFile);
+            assertTrue(runOneJson.contains("\"runId\":\"run_20261124_100001\""), "First run JSON must keep its own runId");
+            assertTrue(runOneJson.contains("heal-call-1"), "First run LLM call must not be overwritten by second run");
+            assertFalse(runOneJson.contains("run_20261124_100002"), "First run JSON must not contain second runId");
+
+            assertTrue(runTwoJson.contains("\"runId\":\"run_20261124_100002\""), "Second run JSON must keep its own runId");
+            assertFalse(runTwoJson.contains("heal-call-1"), "Second run JSON must not contain first run LLM call");
+            assertFalse(Files.exists(root.resolve(InteractiveConsoleEngine.getRunFolder())),
+                "Static JVM run folder must not be used when payload provides runId");
+        }
     }
 }
 

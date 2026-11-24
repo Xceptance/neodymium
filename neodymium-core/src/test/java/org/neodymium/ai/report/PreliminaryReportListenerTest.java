@@ -70,6 +70,7 @@ import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.HealingRequiredException;
 import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.playbook.linter.LinterCategory;
 import org.neodymium.ai.playbook.linter.LinterSeverity;
@@ -3562,5 +3563,40 @@ public class PreliminaryReportListenerTest
         final TestExecutionReport.ReportStepEntry reportStep4 = report.getSteps().get(3);
         assertEquals("FAILED", reportStep4.getStatus(), "Step 4 must remain FAILED and not be clobbered by downstream Step 6");
         assertEquals("Token budget exceeded", reportStep4.getFailureReason(), "Step 4 failureReason must be preserved");
+    }
+
+    @Test
+    @DisplayName("Verify passing SessionFinishedEvent does not repopulate failureReason from stale KEY_LAST_EXECUTION_ERROR")
+    public void testSessionFinishedSuccessDoesNotRepopulateFailureFromStaleLastExecutionError(@TempDir final Path tempDir)
+    {
+        final PreliminaryReportListener listener = new PreliminaryReportListener(tempDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final PlaybookStep healedStep = new PlaybookStep("Search on Wikipedia");
+        bus.dispatch(new StepStartedEvent(healedStep, 0));
+        healedStep.setStatus(PlaybookStepStatus.HEALED);
+        bus.dispatch(new StepFinishedEvent(healedStep, PlaybookStepStatus.HEALED));
+
+        final ExecutionContext ctx = new ExecutionContext(new SessionData());
+        ctx.getTransientData().put(
+            ExecutionContext.KEY_LAST_EXECUTION_ERROR,
+            new HealingRequiredException("Replay step execution failed against SUT: Element not found {PlaywrightBy: #legacyQueryBox}"));
+        ExecutionContext.setActiveContext(ctx);
+        try
+        {
+            bus.dispatch(new SessionFinishedEvent(2500L, true));
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertTrue(report.isSuccess(), "Passing session report must remain successful");
+        assertEquals("PASSED", report.getStatus(), "Passing session report status must be PASSED");
+        assertNull(report.getFailureReason(), "Passing session report must not repopulate failureReason from stale KEY_LAST_EXECUTION_ERROR");
+        assertNull(report.getFailureStackTrace(), "Passing session report must not repopulate failureStackTrace from stale KEY_LAST_EXECUTION_ERROR");
     }
 }

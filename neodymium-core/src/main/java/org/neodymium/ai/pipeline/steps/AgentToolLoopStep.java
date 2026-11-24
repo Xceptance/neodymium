@@ -141,6 +141,7 @@ public final class AgentToolLoopStep implements PipelineStep
     private static final Pattern IF_IS_VISIBLE_PATTERN = Pattern.compile("(?i)\\bif\\s+is\\s+visible\\b");
 
     private final ToolRegistry toolRegistry;
+    private final boolean defaultToolRegistry;
     private final ToolInterceptor interceptor;
     private final AgentLoopLlmCaller llmCaller;
     private final long timeoutSeconds;
@@ -152,7 +153,7 @@ public final class AgentToolLoopStep implements PipelineStep
      */
     public AgentToolLoopStep()
     {
-        this(createDefaultRegistry(), createDefaultInterceptor(), createDefaultLlmCaller(), resolveDefaultTimeout(), resolveDefaultMaxTurns(), resolveDefaultMaxTokens());
+        this(null, createDefaultInterceptor(), createDefaultLlmCaller(), resolveDefaultTimeout(), resolveDefaultMaxTurns(), resolveDefaultMaxTokens());
     }
 
     private static ToolInterceptor createDefaultInterceptor()
@@ -197,6 +198,7 @@ public final class AgentToolLoopStep implements PipelineStep
             final int maxTurns,
             final int maxTokens)
     {
+        this.defaultToolRegistry = registry == null;
         this.toolRegistry = registry != null ? registry : createDefaultRegistry();
         this.interceptor = interceptor != null ? interceptor : createDefaultInterceptor();
         this.llmCaller = llmCaller != null ? llmCaller : createDefaultLlmCaller();
@@ -985,7 +987,7 @@ public final class AgentToolLoopStep implements PipelineStep
                         }
                         throw new AssertionError("Policy violation: " + feedback);
                     }
-                    final Optional<AiTool> toolOpt = this.toolRegistry.getTool(effectiveCall.toolName());
+                    final Optional<AiTool> toolOpt = resolveTool(context, effectiveCall.toolName());
                     if (toolOpt.isPresent())
                     {
                         final ToolResult result;
@@ -1059,22 +1061,11 @@ public final class AgentToolLoopStep implements PipelineStep
                             {
                             }
                         }
+                        final int actionIdx = countNonControlCalls(executedCalls);
                         executedCalls.add(callToRecord);
                         if (!"complete_step".equals(effectiveCall.toolName()) && !"screenshot".equals(effectiveCall.toolName()) && !"browser_take_screenshot".equals(effectiveCall.toolName()))
                         {
-                            final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
-                            if (session != null && session.getEventBus() != null)
-                            {
-                                Action mappedAction = mapToolCallToAction(callToRecord);
-                                if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
-                                {
-                                    mappedAction = mappedAction.withReasoning(thought.trim());
-                                }
-                                final SessionData sessionData = context.getSessionData();
-                                final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
-                                final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
-                                session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, true));
-                            }
+                            dispatchActionExecutedEvent(context, callToRecord, null, thought, actionIdx);
                         }
                     }
                     else if (executor != null)
@@ -1108,16 +1099,9 @@ public final class AgentToolLoopStep implements PipelineStep
                         {
                             throw new ConclusiveFailureException("Action execution failed: " + e.getMessage(), e);
                         }
+                        final int actionIdx = countNonControlCalls(executedCalls);
                         executedCalls.add(effectiveCall);
-                        final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
-                        if (session != null && session.getEventBus() != null)
-                        {
-                            final SessionData sessionData = context.getSessionData();
-                            final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
-                            final Action rawAction = mapToolCallToAction(effectiveCall);
-                            final Action canonicalAction = sessionData != null ? sanitizer.sanitize(rawAction, sessionData) : rawAction;
-                            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, true));
-                        }
+                        dispatchActionExecutedEvent(context, effectiveCall, executableCall, thought, actionIdx);
                     }
                     else
                     {
@@ -1409,7 +1393,7 @@ public final class AgentToolLoopStep implements PipelineStep
                     ToolResult toolExecResult;
                     try
                     {
-                        final AiTool tool = this.toolRegistry.getTool(effectiveCall.toolName())
+                        final AiTool tool = resolveTool(context, effectiveCall.toolName())
                                 .orElseThrow(() -> new IllegalArgumentException("Unknown tool: " + effectiveCall.toolName()));
                         final ToolCall executableCall = ToolCallVariableResolver.resolveVariables(effectiveCall, context.getSessionData());
                         toolExecResult = tool.execute(executableCall, toolContext);
@@ -1688,14 +1672,10 @@ public final class AgentToolLoopStep implements PipelineStep
                     }
                     if (!"complete_step".equals(effectiveCall.toolName()) && !"fail_step".equals(effectiveCall.toolName()) && !"screenshot".equals(effectiveCall.toolName()) && !"browser_take_screenshot".equals(effectiveCall.toolName()) && !isDiscoveryTool(effectiveCall.toolName()))
                     {
-                        Action mappedAction = mapToolCallToAction(callToRecord);
-                        if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
-                        {
-                            mappedAction = mappedAction.withReasoning(thought.trim());
-                        }
-                        final SessionData sessionData = context.getSessionData();
-                        final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
-                        final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
+                        final List<Action> existingStepActions = step != null ? step.getActions() : null;
+                        final int actionIdx = executedActions.size();
+                        final boolean healedStep = isHealedStep(context);
+                        final Action canonicalAction = buildCanonicalAction(callToRecord, thought, context, healedStep, existingStepActions, actionIdx);
                         executedActions.add(canonicalAction);
                         if (step != null)
                         {
@@ -1709,7 +1689,8 @@ public final class AgentToolLoopStep implements PipelineStep
                         final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
                         if (session != null && session.getEventBus() != null)
                         {
-                            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, true));
+                            final Action resolvedAction = buildResolvedAction(callToRecord, null, canonicalAction, context, healedStep, existingStepActions, actionIdx);
+                            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, resolvedAction, true, null, healedStep));
                         }
                     }
                     if ("screenshot".equals(effectiveCall.toolName()) || "browser_take_screenshot".equals(effectiveCall.toolName()))
@@ -2308,6 +2289,7 @@ public final class AgentToolLoopStep implements PipelineStep
 
             final List<Action> existingActions = currentStep.getActions();
             final List<Action> actions = new ArrayList<>();
+            final boolean healedStep = isHealedStep(context);
             int actIdx = 0;
             for (final ToolCall call : executedCalls)
             {
@@ -2323,8 +2305,9 @@ public final class AgentToolLoopStep implements PipelineStep
                     {
                         mapped = mapped.withReasoning(currentStep.getReasoning());
                     }
-                    actIdx++;
                     final Action sanitizedAction = sanitizer.sanitize(mapped, sessionData);
+                    applyHealedMetadata(sanitizedAction, healedStep, context, existingActions, actIdx);
+                    actIdx++;
                     actions.add(sanitizedAction);
                     if (currentStep.getDomFeatureVector() == null && sanitizedAction.getDomFeatureVector() != null)
                     {
@@ -2379,7 +2362,237 @@ public final class AgentToolLoopStep implements PipelineStep
         }
 
         context.getTransientData().remove(ExecutionContext.KEY_INTERNAL_MILESTONES);
+        context.getTransientData().remove(ExecutionContext.KEY_PRE_HEALING_TARGETS);
         context.getTransientData().put(KEY_EXECUTED_TOOL_CALLS, Collections.unmodifiableList(executedCalls));
+    }
+
+    /**
+     * Resolves a tool by name, consulting a caller-supplied context {@code KEY_TOOL_REGISTRY}
+     * override first when this step uses the default built-in registry.
+     *
+     * @param context the current execution context
+     * @param toolName the requested tool name
+     * @return matching {@link AiTool} if registered
+     */
+    private Optional<AiTool> resolveTool(final ExecutionContext context, final String toolName)
+    {
+        if (this.defaultToolRegistry
+                && context != null
+                && context.getTransientData().get("KEY_TOOL_REGISTRY") instanceof final ToolRegistry ctxRegistry)
+        {
+            final Optional<AiTool> customTool = ctxRegistry.getTool(toolName);
+            if (customTool.isPresent())
+            {
+                return customTool;
+            }
+        }
+        return this.toolRegistry.getTool(toolName);
+    }
+
+    /**
+     * Returns whether the current step in {@link ExecutionContext} was escalated to online healing.
+     *
+     * @param context the execution context
+     * @return true if the step is marked as healed
+     */
+    private static boolean isHealedStep(final ExecutionContext context)
+    {
+        return context != null && Boolean.TRUE.equals(context.getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP));
+    }
+
+    /**
+     * Counts non-control, non-discovery tool calls already recorded in the given list.
+     *
+     * @param calls the recorded tool call list
+     * @return count of actionable executed tool calls
+     */
+    private static int countNonControlCalls(final List<ToolCall> calls)
+    {
+        if (calls == null || calls.isEmpty())
+        {
+            return 0;
+        }
+        int count = 0;
+        for (final ToolCall tc : calls)
+        {
+            if (tc != null
+                && !"complete_step".equals(tc.toolName())
+                && !"fail_step".equals(tc.toolName())
+                && !"screenshot".equals(tc.toolName())
+                && !"browser_take_screenshot".equals(tc.toolName())
+                && !isDiscoveryTool(tc.toolName()))
+            {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Maps, sanitizes, marks healing metadata, and dispatches an {@link ActionExecutedEvent}
+     * for single-shot tool or executor calls.
+     *
+     * @param sourceCall the recorded/canonical tool call
+     * @param preResolvedCall optional pre-resolved tool call with session variables expanded
+     * @param thought optional model reasoning text
+     * @param context the current execution context
+     * @param actionIndex 0-based index of the action within the step
+     */
+    private void dispatchActionExecutedEvent(
+            final ExecutionContext context,
+            final ToolCall sourceCall,
+            final ToolCall preResolvedCall,
+            final String thought,
+            final int actionIndex)
+    {
+        final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+        if (session == null || session.getEventBus() == null)
+        {
+            return;
+        }
+        final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+        final List<Action> existingActions = stepObj instanceof final PlaybookStep ps ? ps.getActions() : null;
+        final boolean healedStep = isHealedStep(context);
+        final Action canonicalAction = buildCanonicalAction(sourceCall, thought, context, healedStep, existingActions, actionIndex);
+        final Action resolvedAction = buildResolvedAction(sourceCall, preResolvedCall, canonicalAction, context, healedStep, existingActions, actionIndex);
+        session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, resolvedAction, true, null, healedStep));
+    }
+
+    /**
+     * Maps and sanitizes a {@link ToolCall} into a canonical {@link Action} and applies healing metadata.
+     */
+    private Action buildCanonicalAction(
+            final ToolCall sourceCall,
+            final String thought,
+            final ExecutionContext context,
+            final boolean healedStep,
+            final List<Action> existingActions,
+            final int actionIndex)
+    {
+        Action mappedAction = mapToolCallToAction(sourceCall);
+        if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
+        {
+            mappedAction = mappedAction.withReasoning(thought.trim());
+        }
+        final SessionData sessionData = context.getSessionData();
+        final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+        final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
+        applyHealedMetadata(canonicalAction, healedStep, context, existingActions, actionIndex);
+        return canonicalAction;
+    }
+
+    /**
+     * Builds the runtime-resolved {@link Action} (preserving expanded variables alongside healing metadata)
+     * for {@link ActionExecutedEvent} telemetry.
+     */
+    private Action buildResolvedAction(
+            final ToolCall sourceCall,
+            final ToolCall preResolvedCall,
+            final Action canonicalAction,
+            final ExecutionContext context,
+            final boolean healedStep,
+            final List<Action> existingActions,
+            final int actionIndex)
+    {
+        final SessionData sessionData = context.getSessionData();
+        final ToolCall resolvedCall;
+        if (preResolvedCall != null)
+        {
+            resolvedCall = preResolvedCall;
+        }
+        else if (sessionData != null)
+        {
+            try
+            {
+                resolvedCall = ToolCallVariableResolver.resolveVariables(sourceCall, sessionData);
+            }
+            catch (final UnresolvableVariableException e)
+            {
+                return canonicalAction;
+            }
+        }
+        else
+        {
+            resolvedCall = sourceCall;
+        }
+
+        Action resolvedAction = mapToolCallToAction(resolvedCall);
+        if ((resolvedAction.getReasoning() == null || resolvedAction.getReasoning().isBlank())
+            && canonicalAction != null
+            && canonicalAction.getReasoning() != null
+            && !canonicalAction.getReasoning().isBlank())
+        {
+            resolvedAction = resolvedAction.withReasoning(canonicalAction.getReasoning());
+        }
+        applyHealedMetadata(resolvedAction, healedStep, context, existingActions, actionIndex);
+        return resolvedAction;
+    }
+
+    /**
+     * Marks an {@link Action} as healed and populates its pre-healing original/expected target when applicable.
+     */
+    private static void applyHealedMetadata(
+            final Action action,
+            final boolean healedStep,
+            final ExecutionContext context,
+            final List<Action> existingActions,
+            final int actionIndex)
+    {
+        if (action == null || !healedStep)
+        {
+            return;
+        }
+        action.setHealed(true);
+        final String originalTarget = resolveHealedOriginalTarget(context, existingActions, actionIndex, action.getTarget());
+        if (originalTarget != null && !originalTarget.isBlank())
+        {
+            action.setExpectedTarget(originalTarget);
+            action.setOriginalTarget(originalTarget);
+        }
+    }
+
+    /**
+     * Resolves the original pre-healing target selector for the given action index from captured
+     * pre-healing context targets or prior step actions, falling back to {@code newTarget}.
+     */
+    private static String resolveHealedOriginalTarget(
+            final ExecutionContext context,
+            final List<Action> existingActions,
+            final int actionIndex,
+            final String newTarget)
+    {
+        if (context != null)
+        {
+            final Object preTargetsObj = context.getTransientData().get(ExecutionContext.KEY_PRE_HEALING_TARGETS);
+            if (preTargetsObj instanceof final List<?> preTargets && actionIndex >= 0 && actionIndex < preTargets.size())
+            {
+                final Object candidate = preTargets.get(actionIndex);
+                if (candidate instanceof final String targetStr && !targetStr.isBlank())
+                {
+                    return targetStr;
+                }
+            }
+        }
+        if (existingActions != null && actionIndex >= 0 && actionIndex < existingActions.size())
+        {
+            final Action existing = existingActions.get(actionIndex);
+            if (existing != null)
+            {
+                if (existing.getExpectedTarget() != null && !existing.getExpectedTarget().isBlank())
+                {
+                    return existing.getExpectedTarget();
+                }
+                if (existing.getOriginalTarget() != null && !existing.getOriginalTarget().isBlank())
+                {
+                    return existing.getOriginalTarget();
+                }
+                if (existing.getTarget() != null && !existing.getTarget().isBlank())
+                {
+                    return existing.getTarget();
+                }
+            }
+        }
+        return newTarget;
     }
 
     /**

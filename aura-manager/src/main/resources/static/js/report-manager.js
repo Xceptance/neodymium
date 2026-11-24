@@ -3450,7 +3450,7 @@ function recalculateRunReportMetrics() {
                 else if (cat === 'FAILED_UNKNOWN') aUnknownHealed++;
             }
 
-            const isAi = r.getAttribute('data-ai') === 'true' || (r.getAttribute('data-mode') || '').toUpperCase() === 'AI' || Number(r.getAttribute('data-llm-calls') || 0) > 0;
+            const isAi = !isHealed && (r.getAttribute('data-ai') === 'true' || (r.getAttribute('data-mode') || '').toUpperCase() === 'AI' || Number(r.getAttribute('data-llm-calls') || 0) > 0);
             if (isAi) {
                 if (cat === 'PASSED') aPassAi++;
                 else if (cat === 'SUCCEEDED_FIXED') aFixedAi++;
@@ -6412,12 +6412,17 @@ function renderStepsForExecution(activeRow) {
             if (subsList.length > 0) {
                 const executedSubs = subsList.filter(sub => sub.status && String(sub.status).toUpperCase() !== 'PENDING' && String(sub.status).toUpperCase() !== 'SKIPPED' && String(sub.status).toUpperCase() !== 'NOT RUN' && String(sub.status).toUpperCase() !== 'NOT_RUN');
                 const hasFailedSub = subsList.some(sub => String(sub.status || '').toUpperCase() === 'FAILED' || sub.failureReason || sub.error || sub.failure);
+                const hasHealedSub = subsList.some(sub => String(sub.status || '').toUpperCase() === 'HEALED' || sub.healed === true || (Array.isArray(sub.actions) && sub.actions.some(a => a && a.healed)));
                 if (hasFailedSub) {
                     rawStatus = 'failed';
+                } else if (hasHealedSub) {
+                    rawStatus = 'healed';
                 } else if (executedSubs.length > 0) {
                     const lastSub = executedSubs[executedSubs.length - 1];
                     const lastSubStatus = String(lastSub.status || '').toUpperCase();
-                    if (lastSubStatus === 'PASSED' || lastSubStatus === 'SUCCESS' || lastSubStatus === 'HEALED') {
+                    if (lastSubStatus === 'HEALED') {
+                        rawStatus = 'healed';
+                    } else if (lastSubStatus === 'PASSED' || lastSubStatus === 'SUCCESS') {
                         rawStatus = 'passed';
                     } else if (lastSubStatus === 'FAILED') {
                         rawStatus = 'failed';
@@ -6426,10 +6431,25 @@ function renderStepsForExecution(activeRow) {
                     }
                 }
             }
-            if (hasEncounteredFailure && !isRunningState) {
+            const hasRecordedExecution = rawStatus === 'passed'
+                || rawStatus === 'passed-clean'
+                || rawStatus === 'success'
+                || rawStatus === 'healed'
+                || rawStatus === 'succeeded-fixed'
+                || rawStatus === 'fixed'
+                || s.passed === true
+                || s.healed === true
+                || (Array.isArray(s.actions) && s.actions.length > 0)
+                || (Array.isArray(s.llmCalls) && s.llmCalls.length > 0);
+            if (hasEncounteredFailure && !isRunningState && !hasRecordedExecution && rawStatus !== 'failed') {
                 rawStatus = 'not_run';
             }
-            if (rawStatus === 'failed' || s.passed === false || s.error || s.failure) {
+            const isExplicitlyHealed = rawStatus === 'healed'
+                || rawStatus === 'succeeded-fixed'
+                || rawStatus === 'fixed'
+                || s.healed === true
+                || (Array.isArray(s.actions) && s.actions.some(a => a && a.healed));
+            if (!isExplicitlyHealed && (rawStatus === 'failed' || s.passed === false || s.error || s.failure)) {
                 if (!s.optional && !s.continueOnError) {
                     hasEncounteredFailure = true;
                     if (!firstFailedStepIndex) {
@@ -6438,15 +6458,15 @@ function renderStepsForExecution(activeRow) {
                 }
             }
             const status = rawStatus;
-            const isHealed = status === 'healed' || status === 'succeeded-fixed' || status === 'fixed' || s.healed === true || (Array.isArray(s.actions) && s.actions.some(a => a.healed));
+            const isHealed = status === 'healed' || status === 'succeeded-fixed' || status === 'fixed' || s.healed === true || (Array.isArray(s.actions) && s.actions.some(a => a && a.healed));
             const isPassed = !isHealed && (status === 'passed' || status === 'passed-clean' || status === 'success' || s.passed === true);
-            const isFailed = status === 'failed' || status === 'failed-unknown' || status === 'failed-known' || s.passed === false;
+            const isFailed = !isHealed && (status === 'failed' || status === 'failed-unknown' || status === 'failed-known' || s.passed === false);
             const isNotRun = status === 'not_run' || status === 'not run' || status === 'unreached' || (!isPassed && !isFailed && !isHealed && hasEncounteredFailure && !isRunningState);
             
             const stepClass = isHealed ? 'step-healed' : (isPassed ? 'step-passed' : (isFailed ? 'step-failed' : (isNotRun ? 'step-not-run' : 'step-ignored')));
             const stepId = `stepCard_${sectionClass}_${idx}`;
             const rawContextLevel = s.contextLevel || s.contextLevels || s.stats?.contextLevels || s.stats?.contextLevel || 'PENDING';
-            const isUnexecutedOrSkipped = !isPassed && !isFailed && status !== 'running';
+            const isUnexecutedOrSkipped = !isPassed && !isFailed && !isHealed && status !== 'running';
             const contextLevel = isUnexecutedOrSkipped ? 'PENDING' : rawContextLevel;
 
             // Format Timing
@@ -6515,9 +6535,18 @@ function renderStepsForExecution(activeRow) {
                         });
                     }
                 });
-            } else if (isFailed && subsList.length > 0 && subsList.some(sub => Array.isArray(sub.screenshots) && sub.screenshots.length > 0)) {
-                const failedSubsWithSc = subsList.filter(sub => (String(sub.status || '').toUpperCase() === 'FAILED' || sub.failureReason || sub.error || sub.failure) && Array.isArray(sub.screenshots) && sub.screenshots.length > 0);
-                const targetSubs = failedSubsWithSc.length > 0 ? failedSubsWithSc : subsList;
+            } else if ((isFailed || isHealed) && subsList.length > 0 && subsList.some(sub => Array.isArray(sub.screenshots) && sub.screenshots.length > 0)) {
+                const preferredSubsWithSc = subsList.filter(sub => {
+                    const hasSc = Array.isArray(sub.screenshots) && sub.screenshots.length > 0;
+                    if (!hasSc) {
+                        return false;
+                    }
+                    if (isFailed) {
+                        return String(sub.status || '').toUpperCase() === 'FAILED' || sub.failureReason || sub.error || sub.failure;
+                    }
+                    return String(sub.status || '').toUpperCase() === 'HEALED' || sub.healed === true || (Array.isArray(sub.actions) && sub.actions.some(a => a && a.healed));
+                });
+                const targetSubs = preferredSubsWithSc.length > 0 ? preferredSubsWithSc : subsList;
                 targetSubs.forEach((sub, subIdx) => {
                     if (Array.isArray(sub.screenshots)) {
                         sub.screenshots.forEach((sc, scIdx) => {

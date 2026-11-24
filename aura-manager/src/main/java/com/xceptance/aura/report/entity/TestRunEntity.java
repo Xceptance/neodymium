@@ -976,24 +976,43 @@ public class TestRunEntity
         return playbookCount != null ? playbookCount : 0;
     }
 
+    /**
+     * Clamps a category's AI-driven count so that healed + AI sub-counts never exceed
+     * the category's total count when a persisted row contains legacy double-counting.
+     *
+     * @param rawAiCount persisted AI-driven count
+     * @param categoryTotal total executions in the category
+     * @param healedCount healed executions in the category
+     * @return non-negative, non-overlapping AI-driven count
+     */
+    private static int clampAiCount(final Integer rawAiCount, final Integer categoryTotal, final int healedCount)
+    {
+        final int rawAi = rawAiCount != null ? rawAiCount : 0;
+        if (categoryTotal != null && categoryTotal > 0)
+        {
+            return Math.max(0, Math.min(rawAi, Math.max(0, categoryTotal - healedCount)));
+        }
+        return Math.max(0, rawAi);
+    }
+
     public int getPassedAiCountSafe()
     {
-        return passedAiCount != null ? passedAiCount : 0;
+        return clampAiCount(passedAiCount, passedCount, getPassedHealedCountSafe());
     }
 
     public int getFixedAiCountSafe()
     {
-        return succeededFixedAiCount != null ? succeededFixedAiCount : 0;
+        return clampAiCount(succeededFixedAiCount, succeededFixedCount, getFixedHealedCountSafe());
     }
 
     public int getKnownAiCountSafe()
     {
-        return failedKnownAiCount != null ? failedKnownAiCount : 0;
+        return clampAiCount(failedKnownAiCount, failedKnownCount, getKnownHealedCountSafe());
     }
 
     public int getUnknownAiCountSafe()
     {
-        return failedUnknownAiCount != null ? failedUnknownAiCount : 0;
+        return clampAiCount(failedUnknownAiCount, failedUnknownCount, getUnknownHealedCountSafe());
     }
 
     public int getPassAiCountSafe()

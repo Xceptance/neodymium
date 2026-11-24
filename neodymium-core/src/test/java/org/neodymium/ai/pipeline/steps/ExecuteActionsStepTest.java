@@ -62,6 +62,7 @@ import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.event.InteractiveConsoleListener;
+import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.executor.ActionDefinition;
 import org.neodymium.ai.executor.MockSutState;
@@ -83,6 +84,9 @@ import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.structural.TryCatchStep;
 import org.neodymium.ai.report.DiskReportFormat;
 import org.neodymium.ai.report.PreliminaryReportListener;
+import org.neodymium.ai.report.TestExecutionReport;
+import org.neodymium.ai.report.TestExecutionReport.ReportActionEntry;
+import org.neodymium.ai.report.TestExecutionReport.ReportStepEntry;
 import org.neodymium.ai.runner.StateMachineRunner;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.tool.AiTool;
@@ -2182,6 +2186,165 @@ public final class ExecuteActionsStepTest
 
         assertNotNull(capturedStateRef.get(),
             "Visual step must capture post-action visual state and dispatch StateCapturedEvent even during replay");
+    }
+
+    /**
+     * Verifies that when {@code REPLAY_WITH_HEALING} fails initial tool replay (which pre-mutates
+     * the step to {@link PlaybookStepStatus#FAILED}) and escalates to online LLM healing,
+     * the step recovers cleanly to {@link PlaybookStepStatus#HEALED}, clears {@code failed} and
+     * {@code failureReason}, preserves the original selector as {@code expectedTarget}, removes the
+     * failed replay attempt from the report actions, and captures post-step visual state.
+     */
+    @Test
+    public void testOnlineLlmHealingResetsPreMutatedFailedStatusAndReportsHealedOutcome() throws Exception
+    {
+        final BufferedImage postImg = new BufferedImage(10, 10, BufferedImage.TYPE_INT_RGB);
+        final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageIO.write(postImg, "png", baos);
+        final String base64Png = Base64.getEncoder().encodeToString(baos.toByteArray());
+
+        final MockSutState initialState = new MockSutState(
+            "<html><body><input id=\"searchInput\" name=\"search\"/></body></html>",
+            List.of(new SutAttachment("image/png", "initial.png", base64Png)),
+            "dom_initial");
+        final MockSutState healedPostState = new MockSutState(
+            "<html><body><input id=\"searchInput\" name=\"search\" value=\"Neodymium\"/></body></html>",
+            List.of(new SutAttachment("image/png", "healed.png", base64Png)),
+            "dom_healed");
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        executor.enqueueState(initialState);
+        executor.enqueueState(healedPostState);
+        executor.enqueueState(healedPostState);
+        executor.enqueueState(healedPostState);
+
+        final ObjectNode healedTypeArgs = JsonNodeFactory.instance.objectNode();
+        healedTypeArgs.put("selector", "#searchInput");
+        healedTypeArgs.put("text", "${searchPhrase}");
+        final ObjectNode completeArgs = JsonNodeFactory.instance.objectNode();
+        completeArgs.put("summary", "Healed selector from #legacyQueryBox to #searchInput");
+
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        mockProvider.addResponse(new LlmResponse(
+            "",
+            new TokenUsage(100, 30, 130, 0),
+            "mock-model",
+            List.of(new ToolCall("heal-type-1", "type", healedTypeArgs))));
+        mockProvider.addResponse(new LlmResponse(
+            "",
+            new TokenUsage(80, 20, 100, 0),
+            "mock-model",
+            List.of(new ToolCall("heal-complete-1", "complete_step", completeArgs))));
+
+        final LlmRegistry llmRegistry = new LlmRegistry();
+        llmRegistry.setDefaultProvider(mockProvider);
+
+        final SessionData sessionData = new SessionData();
+        sessionData.set("searchPhrase", "Neodymium");
+
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final Path tempDir = Files.createTempDirectory("online-healing-status-test-");
+        final PreliminaryReportListener reportListener = new PreliminaryReportListener(
+            tempDir,
+            EnumSet.of(DiskReportFormat.JSON),
+            true);
+        reportListener.getReport().setTestClass("OnlineHealingStatusTest");
+        reportListener.getReport().setTestMethod("testOnlineHealingRecovery");
+        eventBus.registerListener(reportListener);
+
+        final AiSession session = AiSession.mock(
+            ExecutionMode.REPLAY_WITH_HEALING,
+            sessionData,
+            llmRegistry,
+            eventBus,
+            executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        final AtomicReference<String> executedHealedText = new AtomicReference<>();
+        final ToolRegistry toolRegistry = new ToolRegistry();
+        toolRegistry.register(new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return new ToolDefinition("type", "Type text into input", JsonNodeFactory.instance.objectNode());
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                final String selector = call.arguments().path("selector").asText("");
+                if ("#legacyQueryBox".equals(selector))
+                {
+                    throw new RuntimeException("Element not found {PlaywrightBy: #legacyQueryBox}");
+                }
+                executedHealedText.set(call.arguments().path("text").asText(null));
+                return ToolResult.success(call.callId(), "{\"status\":\"ok\",\"target\":\"#searchInput\"}");
+            }
+        });
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_WITH_HEALING);
+        context.getTransientData().put("KEY_TOOL_REGISTRY", toolRegistry);
+
+        final PlaybookStep step = new PlaybookStep("type '${searchPhrase}' into search box");
+        final ObjectNode recordedArgs = JsonNodeFactory.instance.objectNode();
+        recordedArgs.put("selector", "#legacyQueryBox");
+        recordedArgs.put("text", "${searchPhrase}");
+        step.setToolCalls(List.of(new ToolCall("rec-type-1", "type", recordedArgs)));
+        step.setActions(List.of(new Action("type", "#legacyQueryBox", List.of("${searchPhrase}"), "Type search query", "Recorded", false)));
+
+        context.getTransientData().put("playbook.steps", List.of(step));
+        context.getTransientData().put("playbook.flatSteps", List.of(step));
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, session, context);
+        context.pushStep(pipelineStep);
+
+        ExecutionContext.setActiveContext(context);
+        try
+        {
+            final StateMachineRunner runner = new StateMachineRunner(session);
+            runner.run();
+            assertNull(
+                context.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR),
+                "Recovered HealingRequiredException must be cleared from KEY_LAST_EXECUTION_ERROR");
+
+            eventBus.dispatch(new SessionFinishedEvent(100L, true));
+            reportListener.flushReport();
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
+
+        assertEquals("Neodymium", executedHealedText.get(), "Healed online action must execute with resolved variable text");
+        assertEquals(PlaybookStepStatus.HEALED, step.getStatus(), "PlaybookStep must finalize with HEALED status after online healing recovery");
+        assertFalse(step.isFailed(), "PlaybookStep must clear failed=true set by initial replay failure");
+        assertNull(step.getFailureReason(), "PlaybookStep must clear failureReason set by initial replay failure");
+        assertEquals(1, step.getActions().size(), "PlaybookStep must retain the healed action");
+        assertTrue(step.getActions().get(0).isHealed(), "Healed PlaybookStep action must be marked healed=true");
+        assertEquals("#legacyQueryBox", step.getActions().get(0).getExpectedTarget(), "Healed action must preserve #legacyQueryBox as expectedTarget");
+        assertNull(context.getTransientData().get(ExecutionContext.KEY_PRE_HEALING_TARGETS), "Temporary pre-healing targets must be cleaned up");
+
+        final TestExecutionReport report = reportListener.getReport();
+        assertTrue(report.isSuccess(), "Report must remain successful after online healing");
+        assertNull(report.getFailureReason(), "Report top-level failureReason must remain null after online healing");
+        assertNull(report.getFailureStackTrace(), "Report top-level failureStackTrace must remain null after online healing");
+        assertEquals(1, report.getSteps().size());
+        final ReportStepEntry repStep = report.getSteps().get(0);
+        assertEquals("HEALED", repStep.getStatus(), "Report step status must be HEALED");
+        assertNull(repStep.getFailureReason(), "Report step failureReason must be cleared when healed");
+        assertFalse(repStep.getScreenshots().isEmpty(), "Post-step visual capture must attach screenshot after online healing");
+        assertEquals(1, repStep.getActions().size(), "Aborted failed replay action must be removed once healed action succeeds");
+
+        final ReportActionEntry repAction = repStep.getActions().get(0);
+        assertTrue(repAction.isSuccess(), "Retained report action must be the successful healed action");
+        assertTrue(repAction.isHealed(), "Report action must be flagged healed=true");
+        assertEquals("#searchInput", repAction.getTarget(), "Report action target must reflect healed selector");
+        assertEquals("#legacyQueryBox", repAction.getExpectedTarget(), "Report action expectedTarget must preserve #legacyQueryBox");
+        assertEquals("${searchPhrase}", repAction.getValue(), "Report action canonical value must keep parameterized placeholder");
+        assertEquals("Neodymium", repAction.getResolvedValue(), "Report action resolvedValue must capture runtime text");
     }
 }
 

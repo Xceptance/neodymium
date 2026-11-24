@@ -168,7 +168,7 @@ public final class PlaybookToolReplayer
             ? targetExecutor
             : effectiveContext.getVariable("neodymium.targetExecutor", TargetExecutor.class).orElse(null);
 
-        final List<ToolCall> toolCalls = step.getToolCalls();
+        final List<ToolCall> toolCalls = new ArrayList<>(step.getToolCalls());
         if (toolCalls.isEmpty())
         {
             LOGGER.debug("No tool calls recorded for step: {}", step.getInstruction());
@@ -244,7 +244,7 @@ public final class PlaybookToolReplayer
                 {
                     result = toolOpt.get().execute(finalCall, effectiveContext);
                     dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, true);
-                    syncStepActionOnSuccess(step, i, variableResolvedCall, finalCall, isToolHealed);
+                    syncStepActionOnSuccess(step, i, rawCall, variableResolvedCall, finalCall, isToolHealed);
                 }
                 catch (final AssertionError e)
                 {
@@ -284,7 +284,7 @@ public final class PlaybookToolReplayer
                             {
                                 retryResult = toolOpt.get().execute(reactiveHealedCall, effectiveContext);
                                 dispatchActionEvent(session, variableResolvedCall, reactiveHealedCall, true, true);
-                                syncStepActionOnSuccess(step, i, variableResolvedCall, reactiveHealedCall, true);
+                                syncStepActionOnSuccess(step, i, rawCall, variableResolvedCall, reactiveHealedCall, true);
                                 anyHealed = true;
                             }
                             catch (final Exception retryEx)
@@ -320,7 +320,7 @@ public final class PlaybookToolReplayer
                     effectiveExecutor.execute(mapped);
                     result = ToolResult.success(finalCall.callId(), "Action executed via TargetExecutor");
                     dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, true);
-                    syncStepActionOnSuccess(step, i, variableResolvedCall, finalCall, isToolHealed);
+                    syncStepActionOnSuccess(step, i, rawCall, variableResolvedCall, finalCall, isToolHealed);
                 }
                 catch (final AssertionError e)
                 {
@@ -361,7 +361,7 @@ public final class PlaybookToolReplayer
                                 effectiveExecutor.execute(reactiveMapped);
                                 retryResult = ToolResult.success(reactiveHealedCall.callId(), "Action executed via TargetExecutor after reactive self-healing");
                                 dispatchActionEvent(session, variableResolvedCall, reactiveHealedCall, true, true);
-                                syncStepActionOnSuccess(step, i, variableResolvedCall, reactiveHealedCall, true);
+                                syncStepActionOnSuccess(step, i, rawCall, variableResolvedCall, reactiveHealedCall, true);
                                 anyHealed = true;
                             }
                             catch (final Exception retryEx)
@@ -463,27 +463,131 @@ public final class PlaybookToolReplayer
     private static void syncStepActionOnSuccess(
         final PlaybookStep step,
         final int callIndex,
+        final ToolCall rawCall,
         final ToolCall canonicalCall,
         final ToolCall finalCall,
         final boolean isHealed
     )
     {
-        if (step != null && step.getActions() != null && callIndex >= 0 && callIndex < step.getActions().size())
+        if (step == null)
         {
-            final Action act = step.getActions().get(callIndex);
-            if (act != null && isHealed && canonicalCall != null)
+            return;
+        }
+
+        if (isHealed)
+        {
+            syncHealedToolCall(step, callIndex, rawCall, finalCall);
+        }
+
+        if (step.getActions() == null || callIndex < 0 || callIndex >= step.getActions().size())
+        {
+            return;
+        }
+
+        final Action act = step.getActions().get(callIndex);
+        if (act == null)
+        {
+            return;
+        }
+
+        if (isHealed && canonicalCall != null)
+        {
+            final Action canonicalAction = AgentToolLoopStep.mapToolCallToAction(canonicalCall);
+            final Action resolvedAction = AgentToolLoopStep.mapToolCallToAction(finalCall);
+            final String origTarget = canonicalAction.getExpectedTarget() != null && !canonicalAction.getExpectedTarget().isBlank()
+                ? canonicalAction.getExpectedTarget()
+                : canonicalAction.getTarget();
+            final Action updated = act.withTarget(resolvedAction.getTarget());
+            updated.setExpectedTarget(origTarget);
+            updated.setOriginalTarget(origTarget);
+            updated.setHealedFrom(origTarget);
+            updated.setHealed(true);
+            final DomFeatureVector healedVector = parseDomFeatureVector(finalCall);
+            if (healedVector != null)
             {
-                final Action canonicalAction = AgentToolLoopStep.mapToolCallToAction(canonicalCall);
-                final Action resolvedAction = AgentToolLoopStep.mapToolCallToAction(finalCall);
-                final String origTarget = canonicalAction.getExpectedTarget() != null && !canonicalAction.getExpectedTarget().isBlank()
-                    ? canonicalAction.getExpectedTarget()
-                    : canonicalAction.getTarget();
-                final Action updated = act.withTarget(resolvedAction.getTarget());
-                updated.setExpectedTarget(origTarget);
-                updated.setOriginalTarget(origTarget);
-                updated.setHealed(true);
-                step.getActions().set(callIndex, updated);
+                updated.setDomFeatureVector(healedVector);
             }
+            step.getActions().set(callIndex, updated);
+            if (healedVector != null && step.getDomFeatureVector() != null)
+            {
+                step.setDomFeatureVector(healedVector);
+            }
+        }
+        else if (!isHealed && act.isHealed())
+        {
+            // Converge cleanly replayed steps back to unhealed metadata on disk
+            act.setHealed(false);
+            act.setExpectedTarget(null);
+            act.setOriginalTarget(null);
+            act.setHealedFrom(null);
+        }
+    }
+
+    private static void syncHealedToolCall(
+        final PlaybookStep step,
+        final int callIndex,
+        final ToolCall rawCall,
+        final ToolCall finalCall
+    )
+    {
+        final List<ToolCall> updatedCalls = new ArrayList<>(step.getToolCalls());
+        if (callIndex < 0 || callIndex >= updatedCalls.size() || rawCall == null || finalCall == null)
+        {
+            return;
+        }
+
+        // Preserve variable placeholders in rawCall (e.g. ${searchPhrase}) while syncing only locator/DOM identity
+        final ObjectNode updatedRawArgs = rawCall.arguments() != null
+            ? rawCall.arguments().deepCopy()
+            : MAPPER.createObjectNode();
+        final JsonNode finalArgs = finalCall.arguments();
+        if (finalArgs != null)
+        {
+            if (finalArgs.hasNonNull("selector"))
+            {
+                updatedRawArgs.set("selector", finalArgs.get("selector").deepCopy());
+            }
+            if (finalArgs.hasNonNull("target"))
+            {
+                updatedRawArgs.set("target", finalArgs.get("target").deepCopy());
+            }
+            syncOptionalArg(finalArgs, updatedRawArgs, "x");
+            syncOptionalArg(finalArgs, updatedRawArgs, "y");
+            if (finalArgs.hasNonNull("domFeatureVector"))
+            {
+                updatedRawArgs.set("domFeatureVector", finalArgs.get("domFeatureVector").deepCopy());
+            }
+        }
+
+        updatedCalls.set(callIndex, new ToolCall(rawCall.callId(), rawCall.toolName(), updatedRawArgs));
+        step.setToolCalls(updatedCalls);
+    }
+
+    private static void syncOptionalArg(final JsonNode finalArgs, final ObjectNode updatedRawArgs, final String field)
+    {
+        if (finalArgs.hasNonNull(field))
+        {
+            updatedRawArgs.set(field, finalArgs.get(field).deepCopy());
+        }
+        else
+        {
+            updatedRawArgs.remove(field);
+        }
+    }
+
+    private static DomFeatureVector parseDomFeatureVector(final ToolCall call)
+    {
+        if (call == null || call.arguments() == null || !call.arguments().hasNonNull("domFeatureVector"))
+        {
+            return null;
+        }
+        try
+        {
+            return MAPPER.treeToValue(call.arguments().get("domFeatureVector"), DomFeatureVector.class);
+        }
+        catch (final Exception ignored)
+        {
+            return null;
         }
     }
 
@@ -668,7 +772,7 @@ public final class PlaybookToolReplayer
                         updatedArgs.remove("x");
                         updatedArgs.remove("y");
                     }
-                    return new ToolCall(call.callId(), call.toolName(), updatedArgs);
+                    return buildHealedToolCall(call, updatedArgs, best);
                 }
                 else if (isCoordinateTarget)
                 {
@@ -693,19 +797,32 @@ public final class PlaybookToolReplayer
                         updatedArgs.put("selector", origAnchor);
                         updatedArgs.put("x", relX);
                         updatedArgs.put("y", relY);
-                        return new ToolCall(call.callId(), call.toolName(), updatedArgs);
+                        return buildHealedToolCall(call, updatedArgs, best);
                     }
                     final String newTarget = "coord: " + newX + "," + newY;
                     LOGGER.info("🧬 Relocated coordinate target '{}' -> '{}' using DomFeatureVector similarity", currentTarget, newTarget);
                     updatedArgs.put("target", newTarget);
                     updatedArgs.put("x", newX);
                     updatedArgs.put("y", newY);
-                    return new ToolCall(call.callId(), call.toolName(), updatedArgs);
+                    return buildHealedToolCall(call, updatedArgs, best);
                 }
             }
         }
 
         return null;
+    }
+
+    private static ToolCall buildHealedToolCall(
+        final ToolCall original,
+        final ObjectNode updatedArgs,
+        final DomFeatureVector healedCandidate
+    )
+    {
+        if (healedCandidate != null)
+        {
+            updatedArgs.set("domFeatureVector", MAPPER.valueToTree(healedCandidate));
+        }
+        return new ToolCall(original.callId(), original.toolName(), updatedArgs);
     }
 
     private static int[] resolveAnchorTopLeft(final String anchorSelector, final ToolContext context)

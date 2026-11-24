@@ -121,9 +121,34 @@ public final class InteractiveConsoleEngine {
             System.getProperty("neodymium.managerRunId", System.getProperty("aura.runId")));
         if (sysRunId != null && !sysRunId.isBlank())
         {
-            return (sysRunId.startsWith("run_") || sysRunId.startsWith("run-")) ? sysRunId : "run_" + sysRunId;
+            return normalizeRunFolder(sysRunId);
         }
         return "run_" + new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+    }
+
+    /**
+     * Normalizes a raw run identifier into the canonical run folder name ({@code run_*} or {@code run-*}).
+     *
+     * @param rawRunId the raw run identifier
+     * @return the normalized run folder name
+     */
+    public static String normalizeRunFolder(final String rawRunId)
+    {
+        final String trimmed = rawRunId.trim();
+        return (trimmed.startsWith("run_") || trimmed.startsWith("run-")) ? trimmed : "run_" + trimmed;
+    }
+
+    private static String extractPayloadRunFolder(final JsonObject parsedState)
+    {
+        if (parsedState != null && parsedState.has("runId") && !parsedState.get("runId").isJsonNull())
+        {
+            final String payloadRunId = parsedState.get("runId").getAsString();
+            if (payloadRunId != null && !payloadRunId.isBlank())
+            {
+                return normalizeRunFolder(payloadRunId);
+            }
+        }
+        return null;
     }
 
     public static String getRunFolder()
@@ -487,6 +512,7 @@ public final class InteractiveConsoleEngine {
             else
             {
                 final boolean wasPassed = "passed".equalsIgnoreCase(currentStatus)
+                    || "healed".equalsIgnoreCase(currentStatus)
                     || "passed-clean".equalsIgnoreCase(currentStatus)
                     || "succeeded".equalsIgnoreCase(currentStatus)
                     || "succeeded-fixed".equalsIgnoreCase(currentStatus);
@@ -540,16 +566,18 @@ public final class InteractiveConsoleEngine {
                 final JsonObject parsedState = JsonParser.parseString(minified).getAsJsonObject();
                 final String executionKey = extractExecutionKey(parsedState);
                 final String testClassFolder = extractTestClassFolder(parsedState);
-                final int index = getExecutionIndex(testClassFolder, executionKey);
+                final String payloadRunFolder = extractPayloadRunFolder(parsedState);
+                final String runFolder = payloadRunFolder != null ? payloadRunFolder : getRunFolder();
+                final int index = (payloadRunFolder != null)
+                    ? getExecutionIndex(payloadRunFolder + "::" + testClassFolder, executionKey)
+                    : getExecutionIndex(testClassFolder, executionKey);
                 String contentToSave = minified;
-
 
                 // 1. Root file for compatibility in default allure.results.directory
                 final File executionJson = new File(defaultResultsDir, "console-execution-" + index + ".json");
 
                 // 2. Structured run and test class folders in configured console logs directory
                 final String configuredResultsDirPath = AiConfiguration.getInstance().getConsoleExecutionLogsDirectory();
-                final String runFolder = getRunFolder();
                 final File structuredDir = new File(configuredResultsDirPath, runFolder + "/" + testClassFolder);
                 if (!structuredDir.exists())
                 {

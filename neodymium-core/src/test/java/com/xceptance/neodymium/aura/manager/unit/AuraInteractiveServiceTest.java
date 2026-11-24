@@ -23,17 +23,21 @@
  */
 package com.xceptance.neodymium.aura.manager.unit;
 
+import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine.ActionResult;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.neodymium.ai.config.AiConfiguration;
 
 /**
  * Unit tests for {@link AuraInteractiveService} verifying state management,
@@ -144,6 +148,90 @@ public final class AuraInteractiveServiceTest
         finally
         {
             System.clearProperty("neodymium.ai.console.screenshotsDir");
+        }
+    }
+
+    @Test
+    public void testPushStateAcrossDistinctRunIdsIsolatesRunFoldersAndPreservesEarlierRun(@TempDir final Path tempDir) throws IOException
+    {
+        final Path allureDir = tempDir.resolve("allure-results");
+        final Path logsDir = tempDir.resolve("console-logs");
+        final Path reportsDir = tempDir.resolve("ai-reports");
+        final Path storageDir = tempDir.resolve("storage-runs");
+
+        final String origAllure = System.getProperty("allure.results.directory");
+        final String origEnabled = System.getProperty("neodymium.ai.consoleExecutionLogs");
+        final String origLogsDir = System.getProperty("neodymium.ai.consoleExecutionLogs.directory");
+        final String origReportsDir = System.getProperty("neodymium.ai.report.disk.directory");
+        final String origStorageDir = System.getProperty("neodymium.ai.storageRuns.directory");
+
+        System.setProperty("allure.results.directory", allureDir.toString());
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", logsDir.toString());
+        System.setProperty("neodymium.ai.report.disk.directory", reportsDir.toString());
+        System.setProperty("neodymium.ai.storageRuns.directory", storageDir.toString());
+        InteractiveConsoleEngine.resetExecutionIndexes();
+        AiConfiguration.resetInstance();
+
+        try
+        {
+            final String runAState = "{"
+                + "\"runId\":\"run_20261124_200001\","
+                + "\"testClass\":\"com.xceptance.WikipediaSearchTest\","
+                + "\"testName\":\"WikipediaSearchTest :: search · ds1\","
+                + "\"status\":\"healed\","
+                + "\"llmCalls\":[{\"id\":\"heal-call-a\"}],"
+                + "\"blocks\":{\"steps\":[{\"instruction\":\"Type query\",\"status\":\"healed\",\"llmCalls\":[{\"id\":\"heal-call-a\"}]}]}"
+                + "}";
+            final String runBState = "{"
+                + "\"runId\":\"run_20261124_200002\","
+                + "\"testClass\":\"com.xceptance.WikipediaSearchTest\","
+                + "\"testName\":\"WikipediaSearchTest :: search · ds1\","
+                + "\"status\":\"healed\","
+                + "\"llmCalls\":[],"
+                + "\"blocks\":{\"steps\":[{\"instruction\":\"Type query\",\"status\":\"healed\",\"llmCalls\":[]}]}"
+                + "}";
+
+            Assertions.assertEquals("ok", interactiveService.pushState(runAState, false));
+            Assertions.assertEquals("ok", interactiveService.pushState(runBState, false));
+            Assertions.assertEquals("run_20261124_200002", interactiveService.getLastProcessedRunId());
+
+            for (final Path root : List.of(storageDir, logsDir, reportsDir))
+            {
+                final Path runAFile = root.resolve("run_20261124_200001/WikipediaSearchTest/console-execution-1.json");
+                final Path runBFile = root.resolve("run_20261124_200002/WikipediaSearchTest/console-execution-1.json");
+                Assertions.assertTrue(Files.exists(runAFile), "Run A JSON must remain in its own folder under " + root);
+                Assertions.assertTrue(Files.exists(runBFile), "Run B JSON must be written to its own folder under " + root);
+
+                final String runAContent = Files.readString(runAFile);
+                final String runBContent = Files.readString(runBFile);
+                Assertions.assertTrue(runAContent.contains("heal-call-a"), "Run A LLM call must remain intact");
+                Assertions.assertFalse(runAContent.contains("run_20261124_200002"), "Run A file must not be overwritten by Run B");
+                Assertions.assertTrue(runBContent.contains("run_20261124_200002"), "Run B file must contain Run B state");
+                Assertions.assertFalse(runBContent.contains("heal-call-a"), "Run B file must not inherit Run A LLM calls");
+            }
+        }
+        finally
+        {
+            InteractiveConsoleEngine.resetExecutionIndexes();
+            restoreOrClearProperty("allure.results.directory", origAllure);
+            restoreOrClearProperty("neodymium.ai.consoleExecutionLogs", origEnabled);
+            restoreOrClearProperty("neodymium.ai.consoleExecutionLogs.directory", origLogsDir);
+            restoreOrClearProperty("neodymium.ai.report.disk.directory", origReportsDir);
+            restoreOrClearProperty("neodymium.ai.storageRuns.directory", origStorageDir);
+            AiConfiguration.resetInstance();
+        }
+    }
+
+    private static void restoreOrClearProperty(final String key, final String originalValue)
+    {
+        if (originalValue != null)
+        {
+            System.setProperty(key, originalValue);
+        }
+        else
+        {
+            System.clearProperty(key);
         }
     }
 }

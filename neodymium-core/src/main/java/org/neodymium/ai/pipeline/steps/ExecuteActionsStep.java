@@ -57,6 +57,7 @@ import org.neodymium.ai.replay.IncompatiblePlaybookSchemaException;
 import org.neodymium.ai.replay.PlaybookToolReplayer;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.tool.SimpleToolContext;
+import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.tool.browser.BrowserToolProvider;
 import org.neodymium.ai.util.DomQuiescenceWatcher;
@@ -544,6 +545,11 @@ public final class ExecuteActionsStep
                     }
                     step.setFailed(false);
                     step.setFailureReason(null);
+                    if (c.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR) instanceof HealingRequiredException)
+                    {
+                        // Clear recovered healing error so later report/runner checks do not mistake it for an unhandled failure
+                        c.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+                    }
                 }
 
                 if (step.getStartTimeMs() != null)
@@ -566,7 +572,7 @@ public final class ExecuteActionsStep
                     {
                         for (final PlaybookStep sub : step.getSubSteps())
                         {
-                            if (sub.getStatus() == null || sub.getStatus() == PlaybookStepStatus.PENDING)
+                            if (sub.getStatus() == null || sub.getStatus() == PlaybookStepStatus.PENDING || sub.getStatus() == PlaybookStepStatus.RUNNING)
                             {
                                 sub.setStatus(step.getStatus());
                             }
@@ -676,11 +682,80 @@ public final class ExecuteActionsStep
 
                 c.getTransientData().remove(ExecutionContext.KEY_POST_ACTION_STATE);
                 c.getTransientData().remove(ExecutionContext.KEY_PRE_ACTION_STATE);
+                c.getTransientData().remove(ExecutionContext.KEY_PRE_HEALING_TARGETS);
                 c.getTransientData().remove("KEY_IS_FULL_PAGE_SCREENSHOT");
 
                 if (session != null && session.getEventBus() != null)
                 {
                     session.getEventBus().dispatch(new StepFinishedEvent(step, step.getStatus()));
+                }
+            };
+
+            final PipelineStep postStepVisualCaptureStep = c ->
+            {
+                final TargetExecutor executor = (TargetExecutor) c.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
+                if (executor != null && session != null && session.getEventBus() != null)
+                {
+                    try
+                    {
+                        final boolean hasMutatingAction = step != null && (
+                            (step.getActions() != null && step.getActions().stream()
+                                .anyMatch(a -> a != null && a.getType() != null
+                                    && !a.getType().toUpperCase().startsWith("ASSERT")
+                                    && !"NONE".equalsIgnoreCase(a.getType())
+                                    && !"VERIFY".equalsIgnoreCase(a.getType())))
+                            || (step.getToolCalls() != null && step.getToolCalls().stream()
+                                .anyMatch(tc -> tc != null && tc.toolName() != null
+                                    && !tc.toolName().toLowerCase().startsWith("assert")
+                                    && !"none".equalsIgnoreCase(tc.toolName())
+                                    && !"verify".equalsIgnoreCase(tc.toolName())))
+                        );
+
+                        final long settleMs = AiConfiguration.getInstance().getVisualPostActionSettleMs();
+                        if (settleMs > 0 && hasMutatingAction)
+                        {
+                            final boolean isVisualRequired = step != null && step.isVisualOrLayoutStep();
+                            if (isVisualRequired)
+                            {
+                                try
+                                {
+                                    Thread.sleep(settleMs);
+                                }
+                                catch (final InterruptedException e)
+                                {
+                                    Thread.currentThread().interrupt();
+                                }
+                            }
+                            else
+                            {
+                                DomQuiescenceWatcher.waitForDomQuiet(Duration.ofMillis(Math.min(settleMs, 200L)), Duration.ofMillis(50L));
+                            }
+                        }
+
+                        final boolean isVisualRequired = (step != null && step.isVisualOrLayoutStep())
+                                || AiConfiguration.getInstance().isSemanticVerificationEnabled()
+                                || !isReplay
+                                || Boolean.TRUE.equals(c.getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP))
+                                || AiConfiguration.getInstance().isReplayScreenshotCaptureEnabled(mode);
+
+                        if (isVisualRequired)
+                        {
+                            final boolean isFullPageReq = !hasCoordinateAction(step)
+                                    && (Boolean.TRUE.equals(c.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                                            || (step != null && step.isFullPageVisualStep()));
+                            final ContextLevel cl = isFullPageReq ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL;
+                            final SutState postStepState = executor.captureState(cl, isFullPageReq);
+                            if (postStepState != null)
+                            {
+                                c.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, postStepState);
+                                session.getEventBus().dispatch(new StateCapturedEvent(postStepState));
+                            }
+                        }
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.debug("Failed to capture post-step visual state: {}", e.getMessage());
+                    }
                 }
             };
 
@@ -694,7 +769,7 @@ public final class ExecuteActionsStep
             {
                 if (mode.supportsHealing() && !step.isNoHealing())
                 {
-                    contextState.getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, true);
+                    prepareStepForOnlineHealing(step, contextState);
                     LOGGER.warn("⚠️ Visual gate requires online healing — launching AgentToolLoopStep for: \"{}\"", step.getInstruction());
                     final TargetExecutor executor = (TargetExecutor) contextState.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
                     if (executor != null && contextState.getTransientData().get(ExecutionContext.KEY_LAST_STATE) == null)
@@ -713,6 +788,7 @@ public final class ExecuteActionsStep
                     {
                         contextState.pushStep(verifyStep);
                     }
+                    contextState.pushStep(postStepVisualCaptureStep);
                     contextState.pushStep(new AgentToolLoopStep());
                     return;
                 }
@@ -908,73 +984,7 @@ public final class ExecuteActionsStep
             }
 
             // Post-step visual state capture for outcome verification & report
-            standardFlow.add(c ->
-            {
-                final TargetExecutor executor = (TargetExecutor) c.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
-                if (executor != null && session != null && session.getEventBus() != null)
-                {
-                    try
-                    {
-                        final boolean hasMutatingAction = step != null && (
-                            (step.getActions() != null && step.getActions().stream()
-                                .anyMatch(a -> a != null && a.getType() != null
-                                    && !a.getType().toUpperCase().startsWith("ASSERT")
-                                    && !"NONE".equalsIgnoreCase(a.getType())
-                                    && !"VERIFY".equalsIgnoreCase(a.getType())))
-                            || (step.getToolCalls() != null && step.getToolCalls().stream()
-                                .anyMatch(tc -> tc != null && tc.toolName() != null
-                                    && !tc.toolName().toLowerCase().startsWith("assert")
-                                    && !"none".equalsIgnoreCase(tc.toolName())
-                                    && !"verify".equalsIgnoreCase(tc.toolName())))
-                        );
-
-                        final long settleMs = AiConfiguration.getInstance().getVisualPostActionSettleMs();
-                        if (settleMs > 0 && hasMutatingAction)
-                        {
-                            final boolean isVisualRequired = step != null && step.isVisualOrLayoutStep();
-                            if (isVisualRequired)
-                            {
-                                try
-                                {
-                                    Thread.sleep(settleMs);
-                                }
-                                catch (final InterruptedException e)
-                                {
-                                    Thread.currentThread().interrupt();
-                                }
-                            }
-                            else
-                            {
-                                DomQuiescenceWatcher.waitForDomQuiet(Duration.ofMillis(Math.min(settleMs, 200L)), Duration.ofMillis(50L));
-                            }
-                        }
-
-                        final boolean isVisualRequired = (step != null && step.isVisualOrLayoutStep())
-                                || AiConfiguration.getInstance().isSemanticVerificationEnabled()
-                                || !isReplay
-                                || Boolean.TRUE.equals(c.getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP))
-                                || AiConfiguration.getInstance().isReplayScreenshotCaptureEnabled(mode);
-
-                        if (isVisualRequired)
-                        {
-                            final boolean isFullPageReq = !hasCoordinateAction(step)
-                                    && (Boolean.TRUE.equals(c.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
-                                            || (step != null && step.isFullPageVisualStep()));
-                            final ContextLevel cl = isFullPageReq ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL;
-                            final SutState postStepState = executor.captureState(cl, isFullPageReq);
-                            if (postStepState != null)
-                            {
-                                c.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, postStepState);
-                                session.getEventBus().dispatch(new StateCapturedEvent(postStepState));
-                            }
-                        }
-                    }
-                    catch (final Exception e)
-                    {
-                        LOGGER.debug("Failed to capture post-step visual state: {}", e.getMessage());
-                    }
-                }
-            });
+            standardFlow.add(postStepVisualCaptureStep);
 
             if (isReplay && step != null && step.isVisualOrLayoutStep() && !visualBaselineGateStep.isPureVerification())
             {
@@ -998,7 +1008,7 @@ public final class ExecuteActionsStep
             {
                 handlers.put(HealingRequiredException.class, c ->
                 {
-                    c.getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, true);
+                    prepareStepForOnlineHealing(step, c);
                     LOGGER.warn("⚠️ Replay step requires online healing — launching AgentToolLoopStep for: \"{}\"", step.getInstruction());
                     final TargetExecutor executor = (TargetExecutor) c.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
                     if (executor != null && c.getTransientData().get(ExecutionContext.KEY_LAST_STATE) == null)
@@ -1021,6 +1031,7 @@ public final class ExecuteActionsStep
                             verifyStep.execute(ctx);
                         }
                     });
+                    c.pushStep(postStepVisualCaptureStep);
                     c.pushStep(new AgentToolLoopStep());
                 });
             }
@@ -1038,6 +1049,95 @@ public final class ExecuteActionsStep
             return step;
         }
     };
+    }
+
+    /**
+     * Captures pre-healing action targets and resets any failed replay status on the step
+     * (and its sub-steps) before escalating to online LLM healing via {@link AgentToolLoopStep}.
+     *
+     * @param step the playbook step entering online healing
+     * @param contextState the current pipeline execution context
+     */
+    private static void prepareStepForOnlineHealing(final PlaybookStep step, final ExecutionContext contextState)
+    {
+        contextState.getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, true);
+        if (step == null)
+        {
+            return;
+        }
+
+        final List<String> preHealingTargets = collectPreHealingTargets(step);
+        if (!preHealingTargets.isEmpty())
+        {
+            contextState.getTransientData().put(ExecutionContext.KEY_PRE_HEALING_TARGETS, preHealingTargets);
+        }
+
+        step.setFailed(false);
+        step.setFailureReason(null);
+        step.setStatus(PlaybookStepStatus.RUNNING);
+        if (step.hasSubSteps())
+        {
+            for (final PlaybookStep sub : step.getSubSteps())
+            {
+                if (sub != null)
+                {
+                    sub.setFailed(false);
+                    sub.setFailureReason(null);
+                    if (sub.getStatus() == PlaybookStepStatus.FAILED)
+                    {
+                        sub.setStatus(PlaybookStepStatus.PENDING);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Extracts target selectors or coordinates from a step's recorded actions or tool calls
+     * prior to online healing so healed actions can preserve what failed during replay.
+     *
+     * @param step the playbook step being healed
+     * @return ordered list of pre-healing target strings (may be empty, never null)
+     */
+    private static List<String> collectPreHealingTargets(final PlaybookStep step)
+    {
+        final List<String> targets = new ArrayList<>();
+        if (step.getActions() != null && !step.getActions().isEmpty())
+        {
+            for (final Action action : step.getActions())
+            {
+                if (action == null)
+                {
+                    continue;
+                }
+                if (action.getTarget() != null && !action.getTarget().isBlank())
+                {
+                    targets.add(action.getTarget());
+                }
+                else if (action.getExpectedTarget() != null && !action.getExpectedTarget().isBlank())
+                {
+                    targets.add(action.getExpectedTarget());
+                }
+            }
+        }
+        else if (step.getToolCalls() != null)
+        {
+            for (final ToolCall tc : step.getToolCalls())
+            {
+                if (tc == null || tc.arguments() == null)
+                {
+                    continue;
+                }
+                final String sel = tc.arguments().hasNonNull("selector")
+                    ? tc.arguments().get("selector").asText(null)
+                    : (tc.arguments().hasNonNull("target") ? tc.arguments().get("target").asText(null) : null);
+                if (sel != null && !sel.isBlank())
+                {
+                    targets.add(sel);
+                }
+            }
+        }
+        return targets;
     }
 
     private static StepStats getOrCreateStatsForStep(

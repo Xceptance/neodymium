@@ -492,11 +492,12 @@ public class RunStorageSyncService
 
                     final String execMode = exec.path("executionMode").asText(exec.path("mode").asText("")).trim();
                     final int llmCalls = exec.path("llmCallsCount").asInt(exec.path("llmCalls").asInt(0));
-                    final boolean isAi = "AI".equalsIgnoreCase(execMode)
-                                      || "LLM_RECORDING".equalsIgnoreCase(execMode)
-                                      || "LLM_ONLY".equalsIgnoreCase(execMode)
-                                      || "FORCE_RECORDING".equalsIgnoreCase(execMode)
-                                      || llmCalls > 0;
+                    final boolean isAi = !isHealed
+                                      && ("AI".equalsIgnoreCase(execMode)
+                                          || "LLM_RECORDING".equalsIgnoreCase(execMode)
+                                          || "LLM_ONLY".equalsIgnoreCase(execMode)
+                                          || "FORCE_RECORDING".equalsIgnoreCase(execMode)
+                                          || llmCalls > 0);
 
                     final String varId = generateVariationId(testClass, testMethod, dataSet, location, browser);
                     final String varIdNoMethod = generateVariationId(testClass, null, dataSet, location, browser);
@@ -582,7 +583,7 @@ public class RunStorageSyncService
                         {
                             calcKnownHealed++;
                         }
-                        if (isAi)
+                        else if (isAi)
                         {
                             calcKnownAi++;
                         }
@@ -594,7 +595,7 @@ public class RunStorageSyncService
                         {
                             calcUnknownHealed++;
                         }
-                        if (isAi)
+                        else if (isAi)
                         {
                             calcUnknownAi++;
                         }
@@ -606,7 +607,7 @@ public class RunStorageSyncService
                         {
                             calcFixedHealed++;
                         }
-                        if (isAi)
+                        else if (isAi)
                         {
                             calcFixedAi++;
                         }
@@ -618,7 +619,7 @@ public class RunStorageSyncService
                         {
                             calcPassHealed++;
                         }
-                        if (isAi)
+                        else if (isAi)
                         {
                             calcPassAi++;
                         }
@@ -638,7 +639,7 @@ public class RunStorageSyncService
                         {
                             calcUnknownHealed++;
                         }
-                        if (isAi)
+                        else if (isAi)
                         {
                             calcUnknownAi++;
                         }
@@ -673,13 +674,13 @@ public class RunStorageSyncService
                         }
 
                         final String calculatedMode;
-                        if (isAi)
-                        {
-                            calculatedMode = "AI";
-                        }
-                        else if (isHealed)
+                        if (isHealed)
                         {
                             calculatedMode = "HEALED";
+                        }
+                        else if (isAi)
+                        {
+                            calculatedMode = "AI";
                         }
                         else if ("PLAYBOOK".equalsIgnoreCase(execMode) || "REPLAY_STRICT".equalsIgnoreCase(execMode) || "REPLAY_WITH_HEALING".equalsIgnoreCase(execMode) || testClass.contains("_yaml_") || testClass.contains("_yml_"))
                         {

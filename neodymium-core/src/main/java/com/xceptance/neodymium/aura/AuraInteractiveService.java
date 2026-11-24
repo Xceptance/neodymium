@@ -143,6 +143,7 @@ public final class AuraInteractiveService
     {
         classExecutionIndexMap.clear();
         classExecutionCounters.clear();
+        InteractiveConsoleEngine.resetExecutionIndexes();
     }
 
     /**
@@ -186,7 +187,7 @@ public final class AuraInteractiveService
             final int index = getExecutionIndex(testClassFolder, executionKey);
 
             final String runFolder = (engine.getRunId() != null && !engine.getRunId().isBlank())
-                ? (engine.getRunId().startsWith("run_") || engine.getRunId().startsWith("run-") ? engine.getRunId() : "run_" + engine.getRunId())
+                ? InteractiveConsoleEngine.normalizeRunFolder(engine.getRunId())
                 : InteractiveConsoleEngine.getRunFolder();
 
             final List<File> baseDirs = List.of(
