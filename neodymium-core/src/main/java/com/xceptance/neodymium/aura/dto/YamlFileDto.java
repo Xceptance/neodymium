@@ -113,11 +113,11 @@ public final class YamlFileDto
             {
                 continue;
             }
-            final List<String> rootValues = rootTags.getOrDefault(key, Collections.emptyList());
+            final List<String> rootValues = rootTags.get(key);
             final List<String> extraValues = new ArrayList<>();
             for (final String val : allValues)
             {
-                if (!rootValues.contains(val))
+                if (rootValues == null || !rootValues.contains(val))
                 {
                     extraValues.add(val);
                 }

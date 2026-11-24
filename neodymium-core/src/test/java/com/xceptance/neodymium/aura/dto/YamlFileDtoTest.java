@@ -88,4 +88,16 @@ public class YamlFileDtoTest
         Assertions.assertEquals(2, dto.getDatasetOnlyTagCount());
         Assertions.assertEquals(List.of("wrong_password", "wrong_domain"), dto.getDatasetOnlyTags().get("errorType"));
     }
+
+    @Test
+    public void testDatasetOnlyTagsHandlesNullRootValueEntry()
+    {
+        final Map<String, List<String>> rootTags = new LinkedHashMap<>();
+        rootTags.put("category", null);
+        final Map<String, List<String>> allTags = Map.of("category", List.of("art"));
+        final YamlFileDto dto = new YamlFileDto("search.yaml", List.of(), false, null, false, allTags, rootTags);
+
+        Assertions.assertEquals(List.of("art"), dto.getDatasetOnlyTags().get("category"));
+        Assertions.assertEquals(1, dto.getDatasetOnlyTagCount());
+    }
 }

@@ -1220,6 +1220,9 @@ function setInlineTagsMode(enabled) {
     try {
         localStorage.setItem('aura_show_inline_tags', enabled ? 'true' : 'false');
     } catch (e) {}
+    if (typeof closeTagPopover === 'function') {
+        closeTagPopover();
+    }
     applyInlineTagsMode();
 }
 window.setInlineTagsMode = setInlineTagsMode;
@@ -1661,7 +1664,7 @@ function updateActiveTagFilterUI() {
 window.updateActiveTagFilterUI = updateActiveTagFilterUI;
 
 document.addEventListener('htmx:afterSwap', function(evt) {
-    if (evt.target && (evt.target.id === 'yamlFileList' || evt.target.closest('#yamlFileList'))) {
+    if (evt.target && (evt.target.id === 'yamlFileList' || evt.target.closest('#yamlFileList') || (evt.target.querySelector && evt.target.querySelector('#yamlFileList')))) {
         if (typeof closeTagPopover === 'function') {
             closeTagPopover();
         }
