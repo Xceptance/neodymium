@@ -1594,36 +1594,6 @@ function updateActiveTagFilterUI() {
 
     const hasActiveTokens = activeTokens.length > 0;
 
-    const quickBtns = document.querySelectorAll('.quick-tag-btn');
-    quickBtns.forEach(btn => {
-        const btnTag = (btn.getAttribute('data-tag') || '').trim().toLowerCase();
-        let isActive = false;
-        if (!btnTag) {
-            // "All" button
-            isActive = !hasActiveTokens;
-        } else if (hasActiveTokens) {
-            isActive = activeTokens.some(token => token === btnTag || btnTag.startsWith(token) || token.startsWith(btnTag));
-        }
-
-        if (isActive) {
-            btn.classList.add('active');
-            btn.style.background = 'var(--accent, #3b82f6)';
-            btn.style.color = '#ffffff';
-            btn.style.borderColor = 'var(--accent, #3b82f6)';
-        } else {
-            btn.classList.remove('active');
-            if (btnTag) {
-                btn.style.background = 'rgba(59, 130, 246, 0.1)';
-                btn.style.color = '#3b82f6';
-                btn.style.borderColor = 'rgba(59, 130, 246, 0.35)';
-            } else {
-                btn.style.background = 'var(--bg-card)';
-                btn.style.color = 'var(--text-main)';
-                btn.style.borderColor = 'var(--border)';
-            }
-        }
-    });
-
     const matchesActiveToken = (el) => {
         if (!hasActiveTokens) return false;
         const tag = (el.getAttribute('data-tag') || '').toLowerCase();

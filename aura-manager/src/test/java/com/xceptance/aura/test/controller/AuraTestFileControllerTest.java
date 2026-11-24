@@ -194,9 +194,9 @@ public class AuraTestFileControllerTest
 
         final String html = engine.process("fragments/test-selection", Collections.singleton("testSelectionContent"), context);
         Assertions.assertNotNull(html);
-        Assertions.assertTrue(html.contains("id=\"quickTagFiltersBar\""), "Must contain quick tag filters bar");
-        Assertions.assertTrue(html.contains("data-tag=\"feature:checkout\""), "Must contain feature:checkout quick tag button");
-        Assertions.assertTrue(html.contains("data-tag=\"smoke:true\""), "Must contain smoke:true quick tag button");
+        Assertions.assertFalse(html.contains("id=\"quickTagFiltersBar\""), "Must not render removed quick tag filters bar");
+        Assertions.assertTrue(html.contains("data-tag=\"feature:checkout\""), "Must contain feature:checkout tag chip");
+        Assertions.assertTrue(html.contains("data-tag=\"smoke:true\""), "Must contain smoke:true tag chip");
         Assertions.assertTrue(html.contains("filterTestsByTag(this.getAttribute('data-tag'))"), "Must use data-tag in event handler without Thymeleaf string restriction error");
     }
 
