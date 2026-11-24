@@ -565,7 +565,9 @@ public final class AuraFileService
             }
             @SuppressWarnings("unchecked")
             final Map<String, List<String>> fileTags = (Map<String, List<String>>) details.getOrDefault("tags", Collections.emptyMap());
-            final YamlFileDto dto = new YamlFileDto(file, enrichedDatasets, hasError, error, fileHasPlaybook, fileTags);
+            @SuppressWarnings("unchecked")
+            final Map<String, List<String>> rootTags = (Map<String, List<String>>) details.getOrDefault("rootTags", Collections.emptyMap());
+            final YamlFileDto dto = new YamlFileDto(file, enrichedDatasets, hasError, error, fileHasPlaybook, fileTags, rootTags);
             yamlFilesCache.put(file, new CachedYamlEntry(lastModified, length, dto));
             responseList.add(dto);
         }

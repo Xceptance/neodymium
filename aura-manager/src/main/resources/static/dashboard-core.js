@@ -1203,8 +1203,331 @@ window.addEventListener('pageshow', function() {
 initTheme();
 document.addEventListener('DOMContentLoaded', function() {
     init();
+    applyInlineTagsMode();
     updateActiveTagFilterUI();
 });
+
+function getInlineTagsMode() {
+    try {
+        return localStorage.getItem('aura_show_inline_tags') === 'true';
+    } catch (e) {
+        return false;
+    }
+}
+window.getInlineTagsMode = getInlineTagsMode;
+
+function setInlineTagsMode(enabled) {
+    try {
+        localStorage.setItem('aura_show_inline_tags', enabled ? 'true' : 'false');
+    } catch (e) {}
+    applyInlineTagsMode();
+}
+window.setInlineTagsMode = setInlineTagsMode;
+
+function toggleInlineTagsMode() {
+    setInlineTagsMode(!getInlineTagsMode());
+}
+window.toggleInlineTagsMode = toggleInlineTagsMode;
+
+function applyInlineTagsMode() {
+    const showTags = getInlineTagsMode();
+    const listEl = document.getElementById('yamlFileList');
+    const toggleBtn = document.getElementById('toggleInlineTagsBtn');
+
+    if (listEl) {
+        listEl.classList.toggle('tags-expanded', showTags);
+    }
+    if (toggleBtn) {
+        toggleBtn.classList.toggle('btn-view-mode-active', showTags);
+        toggleBtn.setAttribute('aria-pressed', showTags ? 'true' : 'false');
+        toggleBtn.title = showTags ? 'Hide Inline Tags (Compact View)' : 'Show Inline Tags';
+    }
+}
+window.applyInlineTagsMode = applyInlineTagsMode;
+
+const _tagPopoverState = {
+    el: null,
+    trigger: null,
+    pinned: false,
+    openTimer: null,
+    closeTimer: null
+};
+
+function _ensureTagPopoverElement() {
+    if (_tagPopoverState.el && document.body.contains(_tagPopoverState.el)) {
+        return _tagPopoverState.el;
+    }
+    const pop = document.createElement('div');
+    pop.id = 'tagInspectorPopover';
+    pop.className = 'tag-inspector-popover';
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-label', 'Test case tags');
+    pop.style.display = 'none';
+
+    pop.addEventListener('mouseenter', function() {
+        if (_tagPopoverState.closeTimer) {
+            clearTimeout(_tagPopoverState.closeTimer);
+            _tagPopoverState.closeTimer = null;
+        }
+    });
+    pop.addEventListener('mouseleave', function() {
+        if (!_tagPopoverState.pinned) {
+            scheduleTagPopoverClose();
+        }
+    });
+    pop.addEventListener('click', function(e) {
+        e.stopPropagation();
+    });
+
+    document.body.appendChild(pop);
+    _tagPopoverState.el = pop;
+    return pop;
+}
+
+function _extractGroupedTagsFromScope(containerEl, scopeSelector) {
+    const groups = [];
+    if (!containerEl) return groups;
+    const chipEls = containerEl.querySelectorAll(scopeSelector);
+    chipEls.forEach(groupEl => {
+        const key = groupEl.getAttribute('data-key') || '';
+        const values = [];
+        groupEl.querySelectorAll('.tag-group-val').forEach(valEl => {
+            const val = valEl.getAttribute('data-value') || valEl.textContent.trim();
+            const fullTag = valEl.getAttribute('data-tag') || (key ? key + ':' + val : val);
+            if (val) {
+                values.push({ value: val, tag: fullTag, key: key });
+            }
+        });
+        if (key && values.length > 0) {
+            groups.push({ key: key, values: values });
+        }
+    });
+    return groups;
+}
+
+function _renderPopoverSection(parentEl, titleText, groups) {
+    if (!groups || groups.length === 0) return;
+
+    const section = document.createElement('div');
+    section.className = 'tag-popover-section';
+
+    const title = document.createElement('div');
+    title.className = 'tag-popover-section-title';
+    title.textContent = titleText;
+    section.appendChild(title);
+
+    groups.forEach(group => {
+        const row = document.createElement('div');
+        row.className = 'tag-popover-row';
+
+        const keyEl = document.createElement('span');
+        keyEl.className = 'tag-popover-key';
+        keyEl.textContent = group.key;
+        row.appendChild(keyEl);
+
+        const valsWrap = document.createElement('div');
+        valsWrap.className = 'tag-popover-vals';
+
+        group.values.forEach(item => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'tag-popover-val';
+            btn.setAttribute('data-tag', item.tag);
+            btn.setAttribute('data-key', item.key);
+            btn.setAttribute('data-value', item.value);
+            btn.title = 'Click to filter by ' + item.tag;
+            btn.textContent = item.value;
+            btn.addEventListener('click', function(ev) {
+                ev.stopPropagation();
+                if (typeof filterTestsByTag === 'function') {
+                    filterTestsByTag(item.tag);
+                }
+            });
+            valsWrap.appendChild(btn);
+        });
+
+        row.appendChild(valsWrap);
+        section.appendChild(row);
+    });
+
+    parentEl.appendChild(section);
+}
+
+function _positionTagPopover(pop, triggerEl) {
+    const rect = triggerEl.getBoundingClientRect();
+    const margin = 8;
+
+    pop.style.visibility = 'hidden';
+    pop.style.display = 'block';
+    const popRect = pop.getBoundingClientRect();
+
+    let top = rect.bottom + 6;
+    if (top + popRect.height > window.innerHeight - margin) {
+        const aboveTop = rect.top - popRect.height - 6;
+        top = aboveTop >= margin ? aboveTop : Math.max(margin, window.innerHeight - popRect.height - margin);
+    }
+
+    let left = rect.right - popRect.width;
+    if (left < margin) {
+        left = Math.min(rect.left, window.innerWidth - popRect.width - margin);
+    }
+    if (left < margin) {
+        left = margin;
+    }
+
+    pop.style.top = Math.round(top) + 'px';
+    pop.style.left = Math.round(left) + 'px';
+    pop.style.visibility = 'visible';
+}
+
+function openTagPopover(triggerEl, pinned) {
+    if (!triggerEl) return;
+    if (_tagPopoverState.openTimer) {
+        clearTimeout(_tagPopoverState.openTimer);
+        _tagPopoverState.openTimer = null;
+    }
+    if (_tagPopoverState.closeTimer) {
+        clearTimeout(_tagPopoverState.closeTimer);
+        _tagPopoverState.closeTimer = null;
+    }
+
+    const isDatasetTrigger = triggerEl.classList.contains('dataset-tag-count-badge');
+    const datasetItem = isDatasetTrigger ? triggerEl.closest('.dataset-item') : null;
+    const fileContainer = triggerEl.closest('.file-container');
+
+    let headerLabel = '';
+    let fileGroups = [];
+    let datasetGroups = [];
+
+    if (datasetItem) {
+        const dsLabelEl = datasetItem.querySelector('.dataset-label-text');
+        headerLabel = dsLabelEl ? dsLabelEl.textContent.trim() : (datasetItem.getAttribute('data-id') || 'Dataset');
+        datasetGroups = _extractGroupedTagsFromScope(datasetItem, '.dataset-tags-row > .tag-group-chip[data-tag-scope="dataset"]');
+    } else if (fileContainer) {
+        const fileLabelEl = fileContainer.querySelector('.file-name-label');
+        headerLabel = fileLabelEl ? fileLabelEl.textContent.trim() : (fileContainer.getAttribute('data-file') || 'Test');
+        fileGroups = _extractGroupedTagsFromScope(fileContainer, '.file-tags-row > .tag-group-chip[data-tag-scope="file"]');
+        datasetGroups = _extractGroupedTagsFromScope(fileContainer, '.dataset-only-tags-data > .tag-group-chip[data-tag-scope="dataset"]');
+    }
+
+    if (fileGroups.length === 0 && datasetGroups.length === 0) {
+        closeTagPopover();
+        return;
+    }
+
+    const pop = _ensureTagPopoverElement();
+    pop.textContent = '';
+
+    const header = document.createElement('div');
+    header.className = 'tag-popover-header';
+
+    const titleEl = document.createElement('span');
+    titleEl.className = 'tag-popover-title';
+    titleEl.textContent = headerLabel;
+    titleEl.title = headerLabel;
+    header.appendChild(titleEl);
+
+    const hintEl = document.createElement('span');
+    hintEl.className = 'tag-popover-hint';
+    hintEl.textContent = 'Click to filter';
+    header.appendChild(hintEl);
+
+    pop.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'tag-popover-body';
+    _renderPopoverSection(body, 'File Tags', fileGroups);
+    _renderPopoverSection(body, 'Dataset Tags', datasetGroups);
+    pop.appendChild(body);
+
+    _tagPopoverState.trigger = triggerEl;
+    _tagPopoverState.pinned = Boolean(pinned);
+
+    updateActiveTagFilterUI();
+    _positionTagPopover(pop, triggerEl);
+}
+
+function toggleTagPopover(triggerEl, event) {
+    if (event) event.stopPropagation();
+    if (_tagPopoverState.el && _tagPopoverState.el.style.display !== 'none' && _tagPopoverState.trigger === triggerEl && _tagPopoverState.pinned) {
+        closeTagPopover();
+        return;
+    }
+    openTagPopover(triggerEl, true);
+}
+window.toggleTagPopover = toggleTagPopover;
+
+function scheduleTagPopoverOpen(triggerEl) {
+    if (_tagPopoverState.pinned) return;
+    if (_tagPopoverState.closeTimer) {
+        clearTimeout(_tagPopoverState.closeTimer);
+        _tagPopoverState.closeTimer = null;
+    }
+    if (_tagPopoverState.openTimer) {
+        clearTimeout(_tagPopoverState.openTimer);
+    }
+    _tagPopoverState.openTimer = setTimeout(function() {
+        _tagPopoverState.openTimer = null;
+        if (!_tagPopoverState.pinned) {
+            openTagPopover(triggerEl, false);
+        }
+    }, 160);
+}
+window.scheduleTagPopoverOpen = scheduleTagPopoverOpen;
+
+function scheduleTagPopoverClose() {
+    if (_tagPopoverState.openTimer) {
+        clearTimeout(_tagPopoverState.openTimer);
+        _tagPopoverState.openTimer = null;
+    }
+    if (_tagPopoverState.pinned) return;
+    if (_tagPopoverState.closeTimer) {
+        clearTimeout(_tagPopoverState.closeTimer);
+    }
+    _tagPopoverState.closeTimer = setTimeout(function() {
+        _tagPopoverState.closeTimer = null;
+        if (!_tagPopoverState.pinned) {
+            closeTagPopover();
+        }
+    }, 180);
+}
+window.scheduleTagPopoverClose = scheduleTagPopoverClose;
+
+function closeTagPopover() {
+    if (_tagPopoverState.openTimer) {
+        clearTimeout(_tagPopoverState.openTimer);
+        _tagPopoverState.openTimer = null;
+    }
+    if (_tagPopoverState.closeTimer) {
+        clearTimeout(_tagPopoverState.closeTimer);
+        _tagPopoverState.closeTimer = null;
+    }
+    if (_tagPopoverState.el) {
+        _tagPopoverState.el.style.display = 'none';
+    }
+    _tagPopoverState.trigger = null;
+    _tagPopoverState.pinned = false;
+}
+window.closeTagPopover = closeTagPopover;
+
+document.addEventListener('click', function(e) {
+    if (!_tagPopoverState.el || _tagPopoverState.el.style.display === 'none') return;
+    if (_tagPopoverState.el.contains(e.target)) return;
+    if (_tagPopoverState.trigger && _tagPopoverState.trigger.contains(e.target)) return;
+    closeTagPopover();
+});
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && _tagPopoverState.el && _tagPopoverState.el.style.display !== 'none') {
+        closeTagPopover();
+    }
+});
+
+document.addEventListener('scroll', function(e) {
+    if (!_tagPopoverState.el || _tagPopoverState.el.style.display === 'none') return;
+    if (e.target && _tagPopoverState.el.contains(e.target)) return;
+    closeTagPopover();
+}, true);
 
 function filterTestsByTag(tagString) {
     const searchInput = document.getElementById('testSearchInput');
@@ -1301,45 +1624,80 @@ function updateActiveTagFilterUI() {
         }
     });
 
-    const chips = document.querySelectorAll('.test-tag-chip, .dataset-tag-chip');
-    chips.forEach(chip => {
-        const tag = (chip.getAttribute('data-tag') || '').toLowerCase();
-        const key = (chip.getAttribute('data-key') || '').toLowerCase();
-        const tagVal = (chip.getAttribute('data-value') || '').toLowerCase();
+    const matchesActiveToken = (el) => {
+        if (!hasActiveTokens) return false;
+        const tag = (el.getAttribute('data-tag') || '').toLowerCase();
+        const key = (el.getAttribute('data-key') || '').toLowerCase();
+        const tagVal = (el.getAttribute('data-value') || '').toLowerCase();
         const chipCombined = key ? (key + ':' + tagVal) : tag;
+        return activeTokens.some(token =>
+            tag === token || key === token || tagVal === token || chipCombined === token
+        );
+    };
 
-        let chipActive = false;
-        if (hasActiveTokens) {
-            chipActive = activeTokens.some(token =>
-                tag === token || key === token || tagVal === token || chipCombined === token
-            );
+    const chips = document.querySelectorAll('#yamlFileList .test-tag-chip, #yamlFileList .dataset-tag-chip, #tagInspectorPopover .tag-popover-val');
+    chips.forEach(chip => {
+        chip.classList.toggle('tag-chip-active', matchesActiveToken(chip));
+    });
+
+    document.querySelectorAll('#yamlFileList .file-container').forEach(fileContainer => {
+        const badge = fileContainer.querySelector('.file-tag-count-badge');
+        if (badge) {
+            let hasMatch = false;
+            if (hasActiveTokens) {
+                const allFileTagVals = fileContainer.querySelectorAll('.file-tags-row .tag-group-val');
+                for (let i = 0; i < allFileTagVals.length; i++) {
+                    if (matchesActiveToken(allFileTagVals[i])) {
+                        hasMatch = true;
+                        break;
+                    }
+                }
+            }
+            badge.classList.toggle('tag-count-badge-active', hasMatch);
         }
 
-        if (chipActive) {
-            chip.classList.add('tag-chip-active');
-            chip.style.background = '#2563eb';
-            chip.style.color = '#ffffff';
-            chip.style.borderColor = '#1d4ed8';
-            chip.style.fontWeight = '600';
-        } else {
-            chip.classList.remove('tag-chip-active');
-            chip.style.fontWeight = 'normal';
-            if (chip.classList.contains('dataset-tag-chip')) {
-                chip.style.background = 'rgba(14, 165, 233, 0.12)';
-                chip.style.color = '#0284c7';
-                chip.style.borderColor = 'rgba(14, 165, 233, 0.3)';
-            } else {
-                chip.style.background = 'rgba(59, 130, 246, 0.12)';
-                chip.style.color = '#3b82f6';
-                chip.style.borderColor = 'rgba(59, 130, 246, 0.3)';
+        const dsHintChip = fileContainer.querySelector('.tag-dataset-hint-chip');
+        if (dsHintChip) {
+            let hasDsOnlyMatch = false;
+            if (hasActiveTokens) {
+                const dsOnlyVals = fileContainer.querySelectorAll('.dataset-only-tags-data .tag-group-val');
+                for (let i = 0; i < dsOnlyVals.length; i++) {
+                    if (matchesActiveToken(dsOnlyVals[i])) {
+                        hasDsOnlyMatch = true;
+                        break;
+                    }
+                }
+            }
+            dsHintChip.classList.toggle('tag-count-badge-active', hasDsOnlyMatch);
+        }
+    });
+
+    document.querySelectorAll('#yamlFileList .dataset-item').forEach(dsItem => {
+        const badge = dsItem.querySelector('.dataset-tag-count-badge');
+        if (!badge) return;
+        let hasMatch = false;
+        if (hasActiveTokens) {
+            const allDsTagVals = dsItem.querySelectorAll('.dataset-tags-row .tag-group-val');
+            for (let i = 0; i < allDsTagVals.length; i++) {
+                if (matchesActiveToken(allDsTagVals[i])) {
+                    hasMatch = true;
+                    break;
+                }
             }
         }
+        badge.classList.toggle('tag-count-badge-active', hasMatch);
     });
 }
 window.updateActiveTagFilterUI = updateActiveTagFilterUI;
 
 document.addEventListener('htmx:afterSwap', function(evt) {
     if (evt.target && (evt.target.id === 'yamlFileList' || evt.target.closest('#yamlFileList'))) {
+        if (typeof closeTagPopover === 'function') {
+            closeTagPopover();
+        }
+        if (typeof applyInlineTagsMode === 'function') {
+            applyInlineTagsMode();
+        }
         updateActiveTagFilterUI();
         if (typeof applyFileViewMode === 'function') {
             applyFileViewMode();

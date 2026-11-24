@@ -68,6 +68,24 @@ public final class DatasetDto
         return tags;
     }
 
+    /**
+     * Returns the total number of tag key-value entries attached to this dataset.
+     *
+     * @return total tag value count across all keys
+     */
+    public int getTotalTagCount()
+    {
+        int count = 0;
+        for (final List<String> values : tags.values())
+        {
+            if (values != null)
+            {
+                count += values.size();
+            }
+        }
+        return count;
+    }
+
     public boolean isHasPlaybook()
     {
         return hasPlaybook;

@@ -23,6 +23,7 @@
  */
 package com.xceptance.neodymium.aura.dto;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -41,24 +42,32 @@ public final class YamlFileDto
     public final boolean hasError;
     public final String errorMessage;
     public final boolean hasPlaybook;
+    /** Aggregated tags combining file-level tags and all dataset-level tags. */
     public final Map<String, List<String>> tags;
+    /** File-level (root) tags declared directly on the YAML test file, excluding dataset-only tags. */
+    public final Map<String, List<String>> rootTags;
 
     public YamlFileDto(final String file, final List<DatasetDto> datasets)
     {
-        this(file, datasets, false, null, false, Collections.emptyMap());
+        this(file, datasets, false, null, false, Collections.emptyMap(), Collections.emptyMap());
     }
 
     public YamlFileDto(final String file, final List<DatasetDto> datasets, final boolean hasError, final String errorMessage)
     {
-        this(file, datasets, hasError, errorMessage, false, Collections.emptyMap());
+        this(file, datasets, hasError, errorMessage, false, Collections.emptyMap(), Collections.emptyMap());
     }
 
     public YamlFileDto(final String file, final List<DatasetDto> datasets, final boolean hasError, final String errorMessage, final boolean hasPlaybook)
     {
-        this(file, datasets, hasError, errorMessage, hasPlaybook, Collections.emptyMap());
+        this(file, datasets, hasError, errorMessage, hasPlaybook, Collections.emptyMap(), Collections.emptyMap());
     }
 
     public YamlFileDto(final String file, final List<DatasetDto> datasets, final boolean hasError, final String errorMessage, final boolean hasPlaybook, final Map<String, List<String>> tags)
+    {
+        this(file, datasets, hasError, errorMessage, hasPlaybook, tags, tags);
+    }
+
+    public YamlFileDto(final String file, final List<DatasetDto> datasets, final boolean hasError, final String errorMessage, final boolean hasPlaybook, final Map<String, List<String>> tags, final Map<String, List<String>> rootTags)
     {
         this.file = file;
         this.datasets = datasets;
@@ -66,11 +75,92 @@ public final class YamlFileDto
         this.errorMessage = errorMessage;
         this.hasPlaybook = hasPlaybook;
         this.tags = tags != null ? Collections.unmodifiableMap(new LinkedHashMap<>(tags)) : Collections.emptyMap();
+        this.rootTags = rootTags != null ? Collections.unmodifiableMap(new LinkedHashMap<>(rootTags)) : Collections.emptyMap();
     }
 
     public Map<String, List<String>> getTags()
     {
         return tags;
+    }
+
+    /**
+     * Returns the file-level (root) tags declared directly on the YAML file.
+     *
+     * @return unmodifiable map of root tags
+     */
+    public Map<String, List<String>> getRootTags()
+    {
+        return rootTags;
+    }
+
+    /**
+     * Returns tags present on this file's datasets that are not already declared in {@link #rootTags}.
+     *
+     * @return unmodifiable map of dataset-only tag keys to their unique values
+     */
+    public Map<String, List<String>> getDatasetOnlyTags()
+    {
+        if (tags.isEmpty())
+        {
+            return Collections.emptyMap();
+        }
+        final Map<String, List<String>> result = new LinkedHashMap<>();
+        for (final Map.Entry<String, List<String>> entry : tags.entrySet())
+        {
+            final String key = entry.getKey();
+            final List<String> allValues = entry.getValue();
+            if (allValues == null || allValues.isEmpty())
+            {
+                continue;
+            }
+            final List<String> rootValues = rootTags.getOrDefault(key, Collections.emptyList());
+            final List<String> extraValues = new ArrayList<>();
+            for (final String val : allValues)
+            {
+                if (!rootValues.contains(val))
+                {
+                    extraValues.add(val);
+                }
+            }
+            if (!extraValues.isEmpty())
+            {
+                result.put(key, Collections.unmodifiableList(extraValues));
+            }
+        }
+        return Collections.unmodifiableMap(result);
+    }
+
+    /**
+     * Returns the total number of unique tag key-value entries across file and datasets.
+     *
+     * @return total tag value count
+     */
+    public int getTotalTagCount()
+    {
+        return countTagValues(tags);
+    }
+
+    /**
+     * Returns the number of unique dataset-only tag key-value entries not already present in {@link #rootTags}.
+     *
+     * @return dataset-only tag value count
+     */
+    public int getDatasetOnlyTagCount()
+    {
+        return countTagValues(getDatasetOnlyTags());
+    }
+
+    private static int countTagValues(final Map<String, List<String>> tagMap)
+    {
+        int count = 0;
+        for (final List<String> values : tagMap.values())
+        {
+            if (values != null)
+            {
+                count += values.size();
+            }
+        }
+        return count;
     }
 
     public boolean isHasPlaybook()
