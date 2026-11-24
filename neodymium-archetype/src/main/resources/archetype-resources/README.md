@@ -75,3 +75,7 @@ ${h2} Configuration
 - `config/neodymium.properties`: Base URLs, timeouts, screenshot capture behavior, and debugging flags.
 - `config/browser.properties`: Browser definitions, resolutions, and execution profiles.
 - `config/ai.properties`: AI provider settings, Gemini model selection, and agent execution parameters.
+
+---
+
+*This document was generated with the assistance of AI and reviewed by Xceptance experts.*
