@@ -2,7 +2,7 @@
 
 tags:
   area: Account
-  feature: Authentication
+  feature: Login
   type: Negative
   severity: Major
 

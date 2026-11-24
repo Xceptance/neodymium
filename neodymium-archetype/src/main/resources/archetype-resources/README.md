@@ -33,7 +33,7 @@ ${h2} Included Neo AI YAML Playbooks (Posters Demo Store)
 The archetype includes showcase natural language test playbooks targeting the Posters Demo Store in `src/test/resources/tests/`:
 
 - **`tests/posters_homepage.yaml`**: Intensive homepage verification validating brand logo, navigation categories (*World of Nature*, *Dining*, *Transportation*, *Panoramas*), carousel, product grid, footer links, and visual element alignment.
-- **`tests/posters_search.yaml`**: Parameterized search across multiple terms (`"Modern"`, `"Nature"`, `"Ocean"`, `"Bamboo"`), asserting result counts, product prices, and a 3-column visual grid layout (`(visual)`).
+- **`tests/posters_search.yaml`**: Parameterized search across multiple terms (`"Modern"`, `"Nature"`, `"Bear"`, `"truck"`), asserting result counts, product prices, and a 3-column visual grid layout (`(visual)`).
 - **`tests/posters_registration.yaml`**: End-to-end customer registration generating a unique `@varmail.de` address, verifying green success banner styling, and cleaning up by deleting the account in the `after:` teardown phase.
 - **`tests/posters_negative_login.yaml`**: Negative authentication flow verifying invalid credential alerts and checking error banner color variation (reddish background and dark red text styling).
 - **`tests/fragments/cookie_consent.steps`**: Reusable step snippet demonstrating modular step inclusion (`_include:`).
@@ -89,7 +89,7 @@ mvn test -Dgroups="smoke"
 mvn test -Dgroups="account"
 
 # Exclude negative tests from a standard run
-mvn test -Dgroups="!negative"
+mvn test -DexcludedGroups="negative"
 ```
 
 ${h2} Configuration
