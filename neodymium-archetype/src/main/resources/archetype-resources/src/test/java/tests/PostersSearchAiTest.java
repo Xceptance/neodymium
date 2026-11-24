@@ -15,7 +15,7 @@ import org.neodymium.junit5.NeodymiumTest;
 @AiPlaybook("tests/posters_search.yaml")
 @NeodymiumAiTest
 @Tag("regression")
-@Tag("catalog")
+@Tag("storefront")
 @Tag("search")
 public class PostersSearchAiTest
 {

@@ -3,7 +3,9 @@
 tags:
   area: Account
   feature: Login
-  type: Negative
+  type:
+    - Regression
+    - Negative
   severity: Major
 
 before: |

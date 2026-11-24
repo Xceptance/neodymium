@@ -15,7 +15,7 @@ import org.neodymium.junit5.NeodymiumTest;
 @AiPlaybook("tests/posters_homepage.yaml")
 @NeodymiumAiTest
 @Tag("smoke")
-@Tag("browsing")
+@Tag("storefront")
 @Tag("homepage")
 public class PostersHomepageAiTest
 {

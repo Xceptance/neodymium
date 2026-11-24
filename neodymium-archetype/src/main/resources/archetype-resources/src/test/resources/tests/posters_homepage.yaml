@@ -1,7 +1,7 @@
 # Neodymium YAML Test Data File
 
 tags:
-  area: Browsing
+  area: Storefront
   feature: Homepage
   type: Smoke
   severity: Normal

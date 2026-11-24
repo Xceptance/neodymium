@@ -3,7 +3,10 @@
 tags:
   area: Account
   feature: Registration
-  type: E2E
+  type:
+    - Smoke
+    - Regression
+    - E2E
   severity: Critical
 
 before: |

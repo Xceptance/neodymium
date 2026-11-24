@@ -1,7 +1,7 @@
 # Neodymium YAML Test Data File
 
 tags:
-  area: Catalog
+  area: Storefront
   feature: Search
   type: Regression
   severity: Normal
@@ -28,12 +28,12 @@ data:
     testId: "search_nature_posters"
     searchTerm: "Nature"
     tags:
-      category: outdoor
+      category: nature
   -
     testId: "search_bear_posters"
     searchTerm: "Bear"
     tags:
-      category: wildlife
+      category: nature
   -
     testId: "search_truck_posters"
     searchTerm: "truck"

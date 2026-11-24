@@ -14,6 +14,8 @@ import org.neodymium.junit5.NeodymiumTest;
 @Browser("Chrome_1500x1000")
 @AiPlaybook("tests/posters_registration.yaml")
 @NeodymiumAiTest
+@Tag("smoke")
+@Tag("regression")
 @Tag("e2e")
 @Tag("account")
 @Tag("registration")

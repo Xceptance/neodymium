@@ -14,6 +14,7 @@ import org.neodymium.junit5.NeodymiumTest;
 @Browser("Chrome_1500x1000")
 @AiPlaybook("tests/posters_negative_login.yaml")
 @NeodymiumAiTest
+@Tag("regression")
 @Tag("negative")
 @Tag("account")
 @Tag("login")

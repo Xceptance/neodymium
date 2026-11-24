@@ -74,22 +74,25 @@ ${h2} Test Categorization and Reporting Tags
 
 Each test runner and YAML playbook includes tags to showcase test organization and reporting capabilities in **Neodymium AI Manager** (area breakdown, feature metrics, and tag-filtered test runs):
 
-- **`PostersHomepageAiTest`** (`@Tag("smoke")`, `@Tag("browsing")`, `@Tag("homepage")`): Smoke validation for the storefront browsing area.
-- **`PostersSearchAiTest`** (`@Tag("regression")`, `@Tag("catalog")`, `@Tag("search")`): Regression suite covering the catalog search area with dataset-specific category tags (`art`, `outdoor`, `wildlife`, `vehicles`).
-- **`PostersRegistrationAiTest`** (`@Tag("e2e")`, `@Tag("account")`, `@Tag("registration")`): End-to-end critical user journey for account creation and cleanup.
-- **`PostersNegativeLoginAiTest`** (`@Tag("negative")`, `@Tag("account")`, `@Tag("login")`): Negative authentication tests with dataset-specific error classifications (`wrong_password`, `wrong_domain`, `nonexistent_user`).
+- **`PostersHomepageAiTest`** (`@Tag("smoke")`, `@Tag("storefront")`, `@Tag("homepage")`): Smoke validation for the storefront area.
+- **`PostersSearchAiTest`** (`@Tag("regression")`, `@Tag("storefront")`, `@Tag("search")`): Regression suite covering the storefront search feature with shared (`nature`) and unique (`art`, `vehicles`) dataset category tags.
+- **`PostersRegistrationAiTest`** (`@Tag("smoke")`, `@Tag("regression")`, `@Tag("e2e")`, `@Tag("account")`, `@Tag("registration")`): Critical end-to-end user journey for account creation and cleanup.
+- **`PostersNegativeLoginAiTest`** (`@Tag("regression")`, `@Tag("negative")`, `@Tag("account")`, `@Tag("login")`): Negative authentication tests with dataset-specific error classifications (`wrong_password`, `wrong_domain`, `nonexistent_user`).
 
 Filter test execution by JUnit tags using Maven:
 
 ```bash
-# Run only smoke tests
+# Run smoke tests across storefront and account areas (Homepage + Registration)
 mvn test -Dgroups="smoke"
 
-# Run all tests in the account area
-mvn test -Dgroups="account"
+# Run all tests in the storefront area (Homepage + Search)
+mvn test -Dgroups="storefront"
 
-# Exclude negative tests from a standard run
-mvn test -DexcludedGroups="negative"
+# Combine tags: run smoke tests in the account area (Registration only)
+mvn test -Dgroups="account & smoke"
+
+# Exclude negative tests from a regression run (Search + Registration)
+mvn test -Dgroups="regression" -DexcludedGroups="negative"
 ```
 
 ${h2} Configuration
