@@ -23,6 +23,8 @@
  */
 package com.xceptance.aura.report.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xceptance.aura.mcp.service.SeleniumErrorDistiller;
 import com.xceptance.aura.report.dto.BatchLatestVariationDto;
 import com.xceptance.aura.report.dto.ReportDifferentialDto;
@@ -191,6 +193,144 @@ public class ReportDifferentialServiceTest
         Assertions.assertEquals(TransitionType.UNTICKETED_FAIL, diff.getUnticketedFailures().get(0).getTransition());
         Assertions.assertEquals(TransitionType.KNOWN_FAIL, diff.getKnownFailures().get(0).getTransition());
         Assertions.assertEquals("BUG-555", diff.getKnownFailures().get(0).getBugTickets().get(0));
+    }
+
+    @Test
+    public void testPrimaryBugFallbackPreservedInKnownFailure()
+    {
+        final String runId = "run-20261124-100000";
+        final TestRunEntity run = createRun(runId, 1732438800000L);
+        final TestExecutionDto exec = Mockito.spy(createExecution(
+            "e-p1", runId, "com.example.OrderTest", "testPrimaryBug", "Primary Bug Test",
+            "failed", "AssertionError: mismatch", Collections.emptyList()
+        ));
+        Mockito.doReturn("BUG-999").when(exec).getPrimaryBug();
+        Mockito.when(mockDataService.getRunReport(runId)).thenReturn(createRunReport(runId, List.of(exec)));
+
+        final ReportDifferentialDto diff = service.computeDifferential(List.of(run));
+
+        Assertions.assertEquals(1, diff.getKnownFailureCount());
+        final TestTransitionDto known = diff.getKnownFailures().get(0);
+        Assertions.assertEquals(TransitionType.KNOWN_FAIL, known.getTransition());
+        Assertions.assertEquals(List.of("BUG-999"), known.getBugs());
+    }
+
+    @Test
+    public void testSameRunRetryNotMisclassifiedAsMultiRunTurnedGreen()
+    {
+        final String runId = "run-20261124-100100";
+        final TestRunEntity run = createRun(runId, 1732438860000L);
+        final List<TestExecutionDto> execs = List.of(
+            createExecution("e-1a", runId, "com.example.RetryTest", "testRetry", "Retry Test", "failed",
+                "org.openqa.selenium.TimeoutException: slow load", Collections.emptyList()),
+            createExecution("e-1b", runId, "com.example.RetryTest", "testRetry", "Retry Test", "passed",
+                null, Collections.emptyList())
+        );
+        Mockito.when(mockDataService.getRunReport(runId)).thenReturn(createRunReport(runId, execs));
+
+        final ReportDifferentialDto diff = service.computeDifferential(List.of(run));
+
+        Assertions.assertEquals(1, diff.getTotalEvaluatedTests());
+        Assertions.assertEquals(0, diff.getTurnedGreenCount());
+        Assertions.assertEquals(1, diff.getStablePassCount());
+        Assertions.assertEquals("", diff.getAllTransitions().get(0).getPreviousFailedRunId());
+    }
+
+    @Test
+    public void testRegressionPrecedenceAndHealedWithFailureText()
+    {
+        final String run1 = "run-1";
+        final String run2 = "run-2";
+        final String run3 = "run-3";
+
+        Mockito.when(mockDataService.getRunReport(run1)).thenReturn(createRunReport(run1, List.of(
+            createExecution("e1-known", run1, "com.example.T", "mKnown", "Known", "passed", null, Collections.emptyList()),
+            createExecution("e1-flap", run1, "com.example.T", "mFlap", "Flap", "failed", "err1", Collections.emptyList()),
+            createExecution("e1-heal", run1, "com.example.T", "mHeal", "Heal", "failed", "err2", Collections.emptyList())
+        )));
+        Mockito.when(mockDataService.getRunReport(run2)).thenReturn(createRunReport(run2, List.of(
+            createExecution("e2-known", run2, "com.example.T", "mKnown", "Known", "passed", null, Collections.emptyList()),
+            createExecution("e2-flap", run2, "com.example.T", "mFlap", "Flap", "passed", null, Collections.emptyList()),
+            createExecution("e2-heal", run2, "com.example.T", "mHeal", "Heal", "passed", null, Collections.emptyList())
+        )));
+        Mockito.when(mockDataService.getRunReport(run3)).thenReturn(createRunReport(run3, List.of(
+            createExecution("e3-known", run3, "com.example.T", "mKnown", "Known", "failed", "err", List.of("BUG-42")),
+            createExecution("e3-flap", run3, "com.example.T", "mFlap", "Flap", "failed", "err3", Collections.emptyList()),
+            createExecution("e3-heal", run3, "com.example.T", "mHeal", "Heal", "succeeded-fixed", "prior failure note", Collections.emptyList())
+        )));
+
+        final ReportDifferentialDto diff = service.computeDifferential(List.of(
+            createRun(run1, 1000L), createRun(run2, 2000L), createRun(run3, 3000L)
+        ));
+
+        Assertions.assertEquals(1, diff.getKnownFailureCount());
+        Assertions.assertEquals("mKnown", diff.getKnownFailures().get(0).getTestMethod());
+        Assertions.assertEquals(1, diff.getRegressionCount());
+        Assertions.assertEquals("mFlap", diff.getRegressions().get(0).getTestMethod());
+        Assertions.assertEquals(1, diff.getTurnedGreenCount());
+        Assertions.assertEquals("mHeal", diff.getTurnedGreen().get(0).getTestMethod());
+    }
+
+    @Test
+    public void testJsonSerializationHasNoDuplicateAliasFields() throws Exception
+    {
+        final TestTransitionDto item = new TestTransitionDto(
+            "k1", "v1", "com.example.Test", "m1", "Title", "Chrome", "US",
+            TransitionType.UNTICKETED_FAIL, "failed", "run-2", "exec-2", "run-1", "failed",
+            List.of("BUG-1"), List.of("HIGH"), "TIMEOUT", "trace", "#btn", List.of("Chrome")
+        );
+        final ReportDifferentialDto dto = new ReportDifferentialDto(
+            List.of("run-1", "run-2"), 1, 0, 1, 0, 0, 0,
+            Collections.emptyList(), List.of(item), Collections.emptyList(), Collections.emptyList(), List.of(item)
+        );
+
+        final JsonNode root = new ObjectMapper().valueToTree(dto);
+        Assertions.assertTrue(root.has("analyzedRunIds"));
+        Assertions.assertFalse(root.has("runIds"));
+        Assertions.assertTrue(root.has("totalEvaluatedTests"));
+        Assertions.assertFalse(root.has("totalVariations"));
+        Assertions.assertFalse(root.has("totalTransitions"));
+        Assertions.assertTrue(root.has("unticketedFailureCount"));
+        Assertions.assertFalse(root.has("unticketedFailCount"));
+        Assertions.assertTrue(root.has("knownFailureCount"));
+        Assertions.assertFalse(root.has("knownFailCount"));
+
+        final JsonNode child = root.get("unticketedFailures").get(0);
+        Assertions.assertTrue(child.has("previousFailedRunId"));
+        Assertions.assertFalse(child.has("previousRunId"));
+        Assertions.assertFalse(child.has("priorFailedRunId"));
+        Assertions.assertTrue(child.has("bugs"));
+        Assertions.assertFalse(child.has("bugTickets"));
+        Assertions.assertTrue(child.has("errorCategory"));
+        Assertions.assertFalse(child.has("distilledErrorCategory"));
+        Assertions.assertTrue(child.has("distilledError"));
+        Assertions.assertFalse(child.has("cleanedStackTrace"));
+        Assertions.assertTrue(child.has("locator"));
+        Assertions.assertFalse(child.has("distilledLocator"));
+    }
+
+    @Test
+    public void testComputeBatchDifferentialDataServiceFallbackFiltersByBatchAndDeleted()
+    {
+        final TestRunEntity deleted = createRun("run-del", 3000L);
+        deleted.setBatchName("BatchA");
+        deleted.setIsDeleted(true);
+
+        final TestRunEntity batchB = createRun("run-b", 2000L);
+        batchB.setBatchName("BatchB");
+
+        final TestRunEntity batchA = createRun("run-a", 1000L);
+        batchA.setBatchName("BatchA");
+
+        Mockito.when(mockDataService.getAllRuns()).thenReturn(List.of(deleted, batchB, batchA));
+        Mockito.when(mockDataService.getRunReport("run-a")).thenReturn(createRunReport("run-a", List.of(
+            createExecution("e-a", "run-a", "com.example.T", "mA", "A", "passed", null, Collections.emptyList())
+        )));
+
+        final ReportDifferentialDto diff = service.computeBatchDifferential("BatchA", 5);
+
+        Assertions.assertEquals(List.of("run-a"), diff.getAnalyzedRunIds());
+        Assertions.assertEquals(1, diff.getStablePassCount());
     }
 
     private TestRunEntity createRun(final String runId, final long startTimeMs)

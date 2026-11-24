@@ -852,6 +852,20 @@ public class WidgetAggregationService
         final List<TestBaseBugEntity> bugs,
         final AuraReportDataService dataService)
     {
+        return buildPieChartWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs, dataService, null);
+    }
+
+    private DashboardWidgetViewDto buildPieChartWidget(
+        final DashboardWidgetConfigDto config,
+        final List<TestRunEntity> runs,
+        final List<BatchLatestVariationDto> latestVariations,
+        final List<DistributionRatioDto> browserRatios,
+        final List<TagRatioCardDto> tagRatioCards,
+        final TokenCostTrendDto tokenCostTrend,
+        final List<TestBaseBugEntity> bugs,
+        final AuraReportDataService dataService,
+        final ReportDifferentialDto precomputedDiff)
+    {
         final List<WidgetPieSliceDto> slices = new ArrayList<>();
         String centerRate = "0%";
         String centerLabel = "TOTAL";
@@ -1399,7 +1413,9 @@ public class WidgetAggregationService
         }
         else if (config.getMetric() == WidgetMetric.TEST_TRANSITIONS)
         {
-            final ReportDifferentialDto diff = differentialService.computeDifferential(runs, latestVariations, dataService);
+            final ReportDifferentialDto diff = (precomputedDiff != null)
+                ? precomputedDiff
+                : differentialService.computeDifferential(runs, latestVariations, dataService);
             final int total = diff.getTotalEvaluatedTests();
             final int green = diff.getTurnedGreenCount();
             final int unticketed = diff.getUnticketedFailureCount();
@@ -5827,9 +5843,13 @@ public class WidgetAggregationService
         final List<TestBaseBugEntity> bugs,
         final AuraReportDataService dataService)
     {
-        final DashboardWidgetViewDto pie = buildPieChartWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs, dataService);
         final WidgetValueFormat format = (config.getValueFormat() != null) ? config.getValueFormat() : WidgetValueFormat.PERCENT;
         final WidgetMetric metric = (config.getMetric() != null) ? config.getMetric() : WidgetMetric.STATUS;
+        final ReportDifferentialDto precomputedDiff = (metric == WidgetMetric.TEST_TRANSITIONS)
+            ? differentialService.computeDifferential(runs, latestVariations, dataService)
+            : null;
+        final DashboardWidgetViewDto pie = buildPieChartWidget(
+            config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs, dataService, precomputedDiff);
 
         String primaryVal = pie.getPieCenterRate();
         String secondaryVal = pie.getSummaryLabel();
@@ -5983,7 +6003,7 @@ public class WidgetAggregationService
         }
         else if (metric == WidgetMetric.TEST_TRANSITIONS)
         {
-            final ReportDifferentialDto diff = differentialService.computeDifferential(runs, latestVariations, dataService);
+            final ReportDifferentialDto diff = precomputedDiff;
             final int unticketed = diff.getUnticketedFailureCount();
             final int green = diff.getTurnedGreenCount();
             final int known = diff.getKnownFailureCount();
@@ -6135,9 +6155,13 @@ public class WidgetAggregationService
         final List<TestBaseBugEntity> bugs,
         final AuraReportDataService dataService)
     {
-        final DashboardWidgetViewDto pie = buildPieChartWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs, dataService);
-        final List<WidgetListItemDto> items = new ArrayList<>();
         final WidgetMetric metric = (config.getMetric() != null) ? config.getMetric() : WidgetMetric.STATUS;
+        final ReportDifferentialDto precomputedDiff = (metric == WidgetMetric.TEST_TRANSITIONS)
+            ? differentialService.computeDifferential(runs, latestVariations, dataService)
+            : null;
+        final DashboardWidgetViewDto pie = buildPieChartWidget(
+            config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs, dataService, precomputedDiff);
+        final List<WidgetListItemDto> items = new ArrayList<>();
         final WidgetPointScope scope = (config.getPointScope() != null) ? config.getPointScope() : WidgetPointScope.LATEST_TEST_STATUS;
         final List<TestRunEntity> scopedRuns = (scope != WidgetPointScope.LATEST_TEST_STATUS)
             ? filterRunsByPointScope(runs, scope)
@@ -6696,7 +6720,7 @@ public class WidgetAggregationService
         }
         else if (metric == WidgetMetric.TEST_TRANSITIONS)
         {
-            final ReportDifferentialDto diff = differentialService.computeDifferential(runs, latestVariations, dataService);
+            final ReportDifferentialDto diff = precomputedDiff;
 
             // Group 1: Unticketed Failures
             if (diff.getUnticketedFailureCount() > 0)

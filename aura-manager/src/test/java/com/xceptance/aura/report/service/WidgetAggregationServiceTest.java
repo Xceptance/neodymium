@@ -7259,6 +7259,38 @@ public class WidgetAggregationServiceTest
         Assertions.assertEquals(1, result.getTotalExecutionsCount());
         Assertions.assertEquals("com.example.OrderTest testFail", result.getRunGroups().get(0).getExecutions().get(0).getTestName());
     }
+
+    @Test
+    public void testTransitionsListAndTextInvokeDifferentialServiceOnce()
+    {
+        final ReportDifferentialService spyDiffService = Mockito.spy(new ReportDifferentialService());
+        final WidgetAggregationService aggregationService = new WidgetAggregationService(spyDiffService);
+
+        final List<BatchLatestVariationDto> variations = List.of(
+            new BatchLatestVariationDto("k1", "failed-unknown", false, "JAVA", "run-1", "Default", "Chrome", "US", null, "Default", Collections.emptyMap(), 0.0, 0L)
+        );
+
+        final DashboardWidgetConfigDto listConfig = new DashboardWidgetConfigDto(
+            "w-once-list", "List", WidgetMetric.TEST_TRANSITIONS, "",
+            WidgetPresentation.LIST, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.ABSOLUTE, "half", 0
+        );
+        final DashboardWidgetConfigDto textConfig = new DashboardWidgetConfigDto(
+            "w-once-text", "Text", WidgetMetric.TEST_TRANSITIONS, "",
+            WidgetPresentation.TEXT, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.ABSOLUTE, "quarter", 0
+        );
+
+        aggregationService.aggregateWidget(
+            listConfig, Collections.emptyList(), variations, Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+        Mockito.verify(spyDiffService, Mockito.times(1))
+            .computeDifferential(Mockito.anyList(), Mockito.anyList(), Mockito.nullable(AuraReportDataService.class));
+
+        aggregationService.aggregateWidget(
+            textConfig, Collections.emptyList(), variations, Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+        Mockito.verify(spyDiffService, Mockito.times(2))
+            .computeDifferential(Mockito.anyList(), Mockito.anyList(), Mockito.nullable(AuraReportDataService.class));
+    }
 }
 
 

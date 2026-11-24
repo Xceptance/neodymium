@@ -23,6 +23,7 @@
  */
 package com.xceptance.aura.report.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -91,6 +92,7 @@ public final class ReportDifferentialDto
             : Collections.emptyList();
     }
 
+    @JsonIgnore
     public List<String> getRunIds()
     {
         return runIds;
@@ -101,6 +103,7 @@ public final class ReportDifferentialDto
         return runIds;
     }
 
+    @JsonIgnore
     public int getTotalVariations()
     {
         return totalVariations;
@@ -111,6 +114,7 @@ public final class ReportDifferentialDto
         return totalVariations;
     }
 
+    @JsonIgnore
     public int getTotalTransitions()
     {
         return totalVariations;
@@ -121,6 +125,7 @@ public final class ReportDifferentialDto
         return turnedGreenCount;
     }
 
+    @JsonIgnore
     public int getUnticketedFailCount()
     {
         return unticketedFailCount;
@@ -131,6 +136,7 @@ public final class ReportDifferentialDto
         return unticketedFailCount;
     }
 
+    @JsonIgnore
     public int getKnownFailCount()
     {
         return knownFailCount;

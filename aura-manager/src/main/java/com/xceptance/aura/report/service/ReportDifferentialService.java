@@ -175,12 +175,26 @@ public class ReportDifferentialService
 
                 final boolean isFailed = isExecutionFailed(exec);
                 final boolean isPassed = isExecutionPassed(exec, isFailed);
-                final boolean hasBugs = (exec.getBugs() != null && !exec.getBugs().isEmpty())
-                    || (exec.getPrimaryBug() != null && !exec.getPrimaryBug().isBlank());
+                final String primaryBug = (exec.getPrimaryBug() != null && !exec.getPrimaryBug().isBlank())
+                    ? exec.getPrimaryBug().trim()
+                    : null;
+                final boolean hasBugs = (exec.getBugs() != null && !exec.getBugs().isEmpty()) || primaryBug != null;
 
                 final String failureText = AuraReportDataService.extractFailureText(exec);
 
-                final List<String> bugs = (exec.getBugs() != null) ? exec.getBugs() : Collections.emptyList();
+                final List<String> bugs;
+                if (exec.getBugs() != null && !exec.getBugs().isEmpty())
+                {
+                    bugs = exec.getBugs();
+                }
+                else if (primaryBug != null)
+                {
+                    bugs = List.of(primaryBug);
+                }
+                else
+                {
+                    bugs = Collections.emptyList();
+                }
                 final List<String> bugSeverities = (exec.getBugDetails() != null)
                     ? exec.getBugDetails().stream().map(TestExecutionDto.BugDetailDto::getSeverity).filter(Objects::nonNull).toList()
                     : Collections.emptyList();
@@ -299,7 +313,15 @@ public class ReportDifferentialService
         }
         else if (dataService != null)
         {
-            matchingRuns = dataService.getAllRuns().stream().limit(effectiveLimit).toList();
+            final boolean filterByBatch = batchName != null && !batchName.isBlank()
+                && !"all".equalsIgnoreCase(batchName) && !"Default".equalsIgnoreCase(batchName);
+            matchingRuns = dataService.getAllRuns().stream()
+                .filter(Objects::nonNull)
+                .filter(r -> !Boolean.TRUE.equals(r.getIsDeleted()))
+                .filter(r -> !filterByBatch
+                    || batchName.equalsIgnoreCase(AuraReportDataService.resolveEffectiveBatchName(r.getBatchName(), r.getTags())))
+                .limit(effectiveLimit)
+                .toList();
         }
         else
         {
@@ -311,7 +333,7 @@ public class ReportDifferentialService
 
     private TestTransitionDto evaluateTransition(final VariationTracker tracker)
     {
-        final List<ExecutionSnapshot> snapshots = tracker.snapshots;
+        final List<ExecutionSnapshot> snapshots = tracker.getOrderedSnapshots();
         if (snapshots.isEmpty())
         {
             return new TestTransitionDto(
@@ -322,10 +344,10 @@ public class ReportDifferentialService
         }
 
         final ExecutionSnapshot latest = snapshots.get(snapshots.size() - 1);
+        final ExecutionSnapshot prev = (snapshots.size() >= 2) ? snapshots.get(snapshots.size() - 2) : null;
         final boolean isMultiRun = snapshots.size() >= 2;
 
         boolean hadPriorFailure = false;
-        boolean hadPriorPass = false;
         String priorFailedRunId = "";
         String priorFailedStatus = "";
         String priorFailureText = "";
@@ -345,10 +367,6 @@ public class ReportDifferentialService
                         priorFailureText = snap.failureText;
                     }
                 }
-                if (snap.isPassed)
-                {
-                    hadPriorPass = true;
-                }
             }
         }
 
@@ -366,13 +384,13 @@ public class ReportDifferentialService
         }
         else if (latest.isFailed)
         {
-            if (hadPriorPass && !hadPriorFailure)
-            {
-                transitionType = TransitionType.REGRESSION;
-            }
-            else if (latest.hasBugs || "failed-known".equalsIgnoreCase(latest.status))
+            if (latest.hasBugs || "failed-known".equalsIgnoreCase(latest.status))
             {
                 transitionType = TransitionType.KNOWN_FAIL;
+            }
+            else if (prev != null && prev.isPassed)
+            {
+                transitionType = TransitionType.REGRESSION;
             }
             else
             {
@@ -515,10 +533,17 @@ public class ReportDifferentialService
     private static boolean isExecutionFailed(final TestExecutionDto exec)
     {
         final String st = (exec.getStatus() != null) ? exec.getStatus().toLowerCase(Locale.ROOT) : "";
-        final boolean statusFailed = st.contains("fail") || st.contains("error");
+        if (st.contains("fail") || st.contains("error"))
+        {
+            return true;
+        }
+        if (st.contains("pass") || st.contains("success") || st.contains("fixed") || st.contains("healed"))
+        {
+            return false;
+        }
         final boolean stepsFailed = exec.getFailedStepsCount() > 0;
         final boolean failureTextPresent = exec.getFailure() != null && !exec.getFailure().isBlank() && !"NONE".equalsIgnoreCase(exec.getFailure().trim());
-        return statusFailed || stepsFailed || failureTextPresent;
+        return stepsFailed || failureTextPresent;
     }
 
     private static boolean isExecutionPassed(final TestExecutionDto exec, final boolean isFailed)
@@ -540,7 +565,7 @@ public class ReportDifferentialService
         final String title;
         final String browser;
         final String location;
-        final List<ExecutionSnapshot> snapshots = new ArrayList<>();
+        final Map<String, ExecutionSnapshot> snapshotsByRunId = new LinkedHashMap<>();
 
         VariationTracker(
             final String key,
@@ -562,7 +587,15 @@ public class ReportDifferentialService
 
         void addSnapshot(final ExecutionSnapshot snapshot)
         {
-            snapshots.add(snapshot);
+            if (snapshot.runId != null)
+            {
+                snapshotsByRunId.put(snapshot.runId, snapshot);
+            }
+        }
+
+        List<ExecutionSnapshot> getOrderedSnapshots()
+        {
+            return new ArrayList<>(snapshotsByRunId.values());
         }
     }
 

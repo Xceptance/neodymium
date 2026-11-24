@@ -23,6 +23,7 @@
  */
 package com.xceptance.aura.report.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -202,11 +203,13 @@ public final class TestTransitionDto
         return previousFailedRunId;
     }
 
+    @JsonIgnore
     public String getPreviousRunId()
     {
         return previousFailedRunId;
     }
 
+    @JsonIgnore
     public String getPriorFailedRunId()
     {
         return previousFailedRunId;
@@ -217,6 +220,7 @@ public final class TestTransitionDto
         return previousStatus;
     }
 
+    @JsonIgnore
     public String getPriorFailedStatus()
     {
         return previousStatus;
@@ -227,11 +231,13 @@ public final class TestTransitionDto
         return bugs;
     }
 
+    @JsonIgnore
     public List<String> getBugTickets()
     {
         return bugs;
     }
 
+    @JsonIgnore
     public boolean hasBugs()
     {
         return !bugs.isEmpty();
@@ -247,6 +253,7 @@ public final class TestTransitionDto
         return errorCategory;
     }
 
+    @JsonIgnore
     public String getDistilledErrorCategory()
     {
         return errorCategory;
@@ -270,6 +277,7 @@ public final class TestTransitionDto
         return distilledError;
     }
 
+    @JsonIgnore
     public String getCleanedStackTrace()
     {
         return distilledError;
@@ -280,6 +288,7 @@ public final class TestTransitionDto
         return locator;
     }
 
+    @JsonIgnore
     public String getDistilledLocator()
     {
         return locator;
