@@ -24,9 +24,11 @@
 package com.xceptance.aura.test.controller;
 
 import com.xceptance.neodymium.aura.AuraFileService;
+import com.xceptance.neodymium.aura.dto.DatasetDto;
 import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -192,9 +194,9 @@ public class AuraTestFileControllerTest
 
         final String html = engine.process("fragments/test-selection", Collections.singleton("testSelectionContent"), context);
         Assertions.assertNotNull(html);
-        Assertions.assertTrue(html.contains("id=\"quickTagFiltersBar\""), "Must contain quick tag filters bar");
-        Assertions.assertTrue(html.contains("data-tag=\"feature:checkout\""), "Must contain feature:checkout quick tag button");
-        Assertions.assertTrue(html.contains("data-tag=\"smoke:true\""), "Must contain smoke:true quick tag button");
+        Assertions.assertFalse(html.contains("id=\"quickTagFiltersBar\""), "Must not render removed quick tag filters bar");
+        Assertions.assertTrue(html.contains("data-tag=\"feature:checkout\""), "Must contain feature:checkout tag chip");
+        Assertions.assertTrue(html.contains("data-tag=\"smoke:true\""), "Must contain smoke:true tag chip");
         Assertions.assertTrue(html.contains("filterTestsByTag(this.getAttribute('data-tag'))"), "Must use data-tag in event handler without Thymeleaf string restriction error");
     }
 
@@ -286,5 +288,59 @@ public class AuraTestFileControllerTest
         fileController.getFilesPanel(response, model);
 
         Assertions.assertEquals("{\"tests\":10}", model.getAttribute("folderTotalDatasetsJson"));
+    }
+
+    @Test
+    public void testRenderTestSelectionCompactTagBadgesAndGroupedInlineTags()
+    {
+        final SpringTemplateEngine engine = new SpringTemplateEngine();
+        final ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setPrefix("templates/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCharacterEncoding("UTF-8");
+        engine.setTemplateResolver(resolver);
+
+        final StandardLinkBuilder linkBuilder = new StandardLinkBuilder()
+        {
+            @Override
+            protected String computeContextPath(final IExpressionContext context, final String base, final Map<String, Object> parameters)
+            {
+                return "";
+            }
+        };
+        engine.setLinkBuilder(linkBuilder);
+
+        final Map<String, List<String>> rootTags = new LinkedHashMap<>();
+        rootTags.put("area", List.of("Catalog"));
+        rootTags.put("type", List.of("Regression"));
+
+        final Map<String, List<String>> allTags = new LinkedHashMap<>();
+        allTags.put("area", List.of("Catalog"));
+        allTags.put("type", List.of("Regression"));
+        allTags.put("category", List.of("art", "outdoor"));
+
+        final DatasetDto ds = new DatasetDto("ds1", "Art & Outdoor", true, false, null, Map.of("category", List.of("art", "outdoor")));
+        final YamlFileDto file1 = new YamlFileDto("tests/search.yaml", List.of(ds), false, null, false, allTags, rootTags);
+
+        final Context context = new Context();
+        context.setVariable("files", List.of(file1));
+        context.setVariable("availableTags", List.of("area:Catalog", "category:art", "category:outdoor", "type:Regression"));
+        context.setVariable("stepsFiles", Collections.emptyList());
+        context.setVariable("expandedFiles", Collections.singleton("tests/search.yaml"));
+        context.setVariable("selectedKeys", Collections.emptySet());
+        context.setVariable("selectedFileKeys", Collections.emptySet());
+        context.setVariable("partiallySelectedFileKeys", Collections.emptySet());
+
+        final String html = engine.process("fragments/test-selection", Collections.singleton("testSelectionContent"), context);
+        Assertions.assertNotNull(html);
+        Assertions.assertTrue(html.contains("id=\"toggleInlineTagsBtn\""), "Must render Show/Hide inline tags header toggle");
+        Assertions.assertTrue(html.contains("file-tag-count-badge"), "Must render compact file tag count badge");
+        Assertions.assertTrue(html.contains("dataset-tag-count-badge"), "Must render compact dataset tag count badge");
+        Assertions.assertTrue(html.contains("class=\"file-tags-row\""), "Must render dedicated second-line file tags row");
+        Assertions.assertTrue(html.contains("+2 dataset"), "Must render dataset-only tag hint on file row");
+        Assertions.assertTrue(html.contains("class=\"dataset-only-tags-data\""), "Must render hidden dataset-only tags data for popover");
+        Assertions.assertTrue(html.contains("class=\"dataset-tags-row\""), "Must render dedicated second-line dataset tags row");
+        Assertions.assertFalse(html.contains(">label</span>"), "Must not render repeated label icons on individual tag chips");
     }
 }
