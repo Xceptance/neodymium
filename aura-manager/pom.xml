@@ -15,7 +15,24 @@
     <artifactId>neodymium-manager</artifactId>
     <version>6.0.0-BETA</version>
     <name>Neodymium AI Manager</name>
+    <url>https://github.com/Xceptance/neodymium</url>
     <description>Unified Neodymium AI Manager: Test Execution Hub, Visual Playbook Editor, and Reporting Dashboard.</description>
+
+    <organization>
+        <name>Xceptance Software Technologies GmbH</name>
+        <url>https://www.xceptance.com</url>
+    </organization>
+
+    <developers>
+        <developer>
+            <name>Xceptance Test Automation Team</name>
+            <id>xceptance</id>
+            <email>testautomation@xceptance.com</email>
+            <organization>Xceptance Software Technologies GmbH</organization>
+            <organizationUrl>https://www.xceptance.com/</organizationUrl>
+            <timezone>+1</timezone>
+        </developer>
+    </developers>
 
     <licenses>
         <license>
@@ -30,6 +47,12 @@
             <comments>Commercial license for enterprise customers, SaaS providers, or teams requiring proprietary terms without AGPLv3 copyleft obligations.</comments>
         </license>
     </licenses>
+
+    <scm>
+        <connection>scm:git:git://github.com/Xceptance/neodymium.git</connection>
+        <developerConnection>scm:git:ssh://github.com/Xceptance/neodymium.git</developerConnection>
+        <url>https://github.com/Xceptance/neodymium/tree/master</url>
+    </scm>
 
     <properties>
         <java.version>21</java.version>
@@ -131,7 +154,7 @@
         <dependency>
 			<groupId>com.xceptance</groupId>
 			<artifactId>neodymium-core</artifactId>
-			<version>6.0.0-BETA</version>
+			<version>${project.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.yaml</groupId>
@@ -205,13 +228,109 @@
                 <configuration>
                     <mainClass>org.neodymium.manager.NeodymiumManagerLauncher</mainClass>
                     <classifier>exec</classifier>
+                    <attach>false</attach>
                     <skip>false</skip>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>license-maven-plugin</artifactId>
+                <version>2.5.0</version>
+                <executions>
+                    <execution>
+                        <id>add-third-party</id>
+                        <goals>
+                            <goal>add-third-party</goal>
+                        </goals>
+                        <phase>prepare-package</phase>
+                        <configuration>
+                            <outputDirectory>${project.build.outputDirectory}/META-INF</outputDirectory>
+                            <thirdPartyFilename>THIRD-PARTY.txt</thirdPartyFilename>
+                            <useMissingFile>false</useMissingFile>
+                            <failOnMissing>false</failOnMissing>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>3.4.0</version>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>3.12.0</version>
+                <executions>
+                    <execution>
+                        <id>attach-javadocs</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <source>21</source>
+                    <detectJavaApiLink>false</detectJavaApiLink>
+                    <doclint>none</doclint>
                 </configuration>
             </plugin>
         </plugins>
     </build>
 
     <profiles>
+        <profile>
+            <id>release-neodymium</id>
+            <activation>
+                <property>
+                    <name>signArtifacts</name>
+                    <value>true</value>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>3.2.8</version>
+                        <configuration>
+                            <gpgArguments>
+                                <arg>--pinentry-mode</arg>
+                                <arg>loopback</arg>
+                            </gpgArguments>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.12.0</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>true</autoPublish>
+                            <waitUntil>published</waitUntil>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
         <profile>
             <id>neo-classic-junit4</id>
             <properties>

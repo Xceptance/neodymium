@@ -5,4 +5,4 @@ echo ========================================================================
 echo   Starting Neodymium AI Manager...
 echo ========================================================================
 
-call mvn -U test-compile exec:java -Dexec.mainClass="org.neodymium.manager.NeodymiumManagerLauncher" -Dexec.classpathScope="test"
+call mvn test-compile exec:java -Dexec.mainClass="org.neodymium.manager.NeodymiumManagerLauncher" -Dexec.classpathScope="test" %*

@@ -28,7 +28,7 @@
 		<developer>
 			<name>Xceptance Test Automation Team</name>
 			<id>xceptance</id>
-			<email>testautomation@xceptance.com </email>
+			<email>testautomation@xceptance.com</email>
 			<organization>Xceptance Software Technologies GmbH</organization>
 			<organizationUrl>https://www.xceptance.com/</organizationUrl>
 			<timezone>+1</timezone>
@@ -164,6 +164,7 @@
 				<configuration>
 					<source>21</source>
 					<detectJavaApiLink>false</detectJavaApiLink>
+					<doclint>none</doclint>
 				</configuration>
 			</plugin>
 			<plugin>
@@ -210,63 +211,6 @@
 							<forkCount>1</forkCount>
 						</configuration>
 					</plugin>
-          <plugin>
-            <groupId>org.codehaus.mojo</groupId>
-            <artifactId>build-helper-maven-plugin</artifactId>
-            <version>3.8.0</version>
-            <configuration>
-              <artifacts>
-                <artifact>
-                  <file>target/${project.artifactId}-${project.version}-javadoc.jar</file>
-                  <classifier>javadoc</classifier>
-                </artifact>
-                <artifact>
-                  <file>target/${project.artifactId}-${project.version}-sources.jar</file>
-                  <classifier>sources</classifier>
-                </artifact>
-              </artifacts>
-            </configuration>
-            <executions>
-              <execution>
-                <id>attach-artifacts</id>
-                <phase>package</phase>
-                <goals>
-                  <goal>attach-artifact</goal>
-                </goals>
-              </execution>
-            </executions>
-          </plugin>
-          <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-gpg-plugin</artifactId>
-            <version>3.2.8</version>
-            <configuration>
-              <gpgArguments>
-                <arg>--pinentry-mode</arg>
-                <arg>loopback</arg>
-              </gpgArguments>
-            </configuration>
-            <executions>
-              <execution>
-                <id>sign-artifacts</id>
-                <phase>verify</phase>
-                <goals>
-                  <goal>sign</goal>
-                </goals>
-              </execution>
-            </executions>
-          </plugin>
-          <plugin>
-            <groupId>org.sonatype.central</groupId>
-            <artifactId>central-publishing-maven-plugin</artifactId>
-            <version>0.12.0</version>
-            <extensions>true</extensions>
-            <configuration>
-              <publishingServerId>central</publishingServerId>
-              <autoPublish>true</autoPublish>
-              <waitUntil>published</waitUntil>
-            </configuration>
-          </plugin>
 				</plugins>
 			</build>
 		</profile>
@@ -540,7 +484,7 @@
 					<artifactId>netty-all</artifactId>
 				</exclusion>
 				<exclusion>
-					<groupId> com.google.guava</groupId>
+					<groupId>com.google.guava</groupId>
 					<artifactId>guava</artifactId>
 				</exclusion>
 			</exclusions>

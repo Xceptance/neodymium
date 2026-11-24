@@ -8,7 +8,7 @@ echo   Starting Neodymium AI Manager...
 echo ========================================================================
 
 if exist aura-manager (
-    mvn -U spring-boot:run -pl aura-manager -am
+    call mvn spring-boot:run -pl aura-manager -am %*
 ) else (
-    mvn -U test-compile exec:java -Dexec.mainClass="org.neodymium.manager.NeodymiumManagerLauncher" -Dexec.classpathScope="test"
+    call mvn test-compile exec:java -Dexec.mainClass="org.neodymium.manager.NeodymiumManagerLauncher" -Dexec.classpathScope="test" %*
 )

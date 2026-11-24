@@ -2,7 +2,7 @@
 
 **Neodymium AI Manager** is a standalone Spring Boot web application providing an interactive management dashboard, visual YAML playbook editor, live test runner, and test report hub for the Neodymium ecosystem.
 
-Built with **Spring Boot 3**, **Thymeleaf 3**, **HTMX 1.9**, and **Bootstrap 5.3**, Neodymium AI Manager delivers a responsive, dynamic user experience without heavy single-page application (SPA) build chains.
+Built with **Spring Boot 4.1**, **Thymeleaf 3**, **HTMX 1.9**, and **Bootstrap 5.3**, Neodymium AI Manager delivers a responsive, dynamic user experience without heavy single-page application (SPA) build chains.
 
 ---
 
@@ -34,7 +34,7 @@ Built with **Spring Boot 3**, **Thymeleaf 3**, **HTMX 1.9**, and **Bootstrap 5.3
 
 * **Frontend**: Bootstrap 5.3 grid and components with unified sizing (`--base-font-size: 0.875rem`).
 * **Interactivity**: HTMX 1.9 dynamic HTML fragment swapping (`hx-get`, `hx-target`, `hx-swap`) for seamless page updates without full browser reloads.
-* **Unobtrusive Scripting**: Clean separation of concerns with zero inline styles (`style="..."`) or inline JavaScript handlers (`onclick="..."`).
+* **Server-Driven UI**: Thymeleaf templates paired with modular JavaScript controllers and HTMX partial updates without a frontend build pipeline.
 * **Backend**: Spring MVC controllers, Thymeleaf template engine, and asynchronous execution brokers.
 
 ---

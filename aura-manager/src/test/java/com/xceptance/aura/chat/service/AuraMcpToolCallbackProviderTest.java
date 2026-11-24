@@ -166,9 +166,10 @@ public class AuraMcpToolCallbackProviderTest
                 "list_tests",
                 "list_custom_dashboards",
                 "analyze_dashboard_page",
+                "analyze_report_differential",
                 "list_runs",
                 "list_batches")));
-        Assertions.assertEquals(15, toolNames.size());
+        Assertions.assertEquals(16, toolNames.size());
 
         final ToolCallback analyzeCallback = findTool(callbacks, "analyze_dashboard_page");
         final JsonNode analyzeSchema = OBJECT_MAPPER.readTree(analyzeCallback.getToolDefinition().inputSchema());

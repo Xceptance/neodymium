@@ -49,6 +49,7 @@ import org.springframework.web.context.WebApplicationContext;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
@@ -289,6 +290,7 @@ public class AuraInteractiveControllerTest
                 .andReturn();
 
         assertTrue(mvcResult.getResponse().getContentType().startsWith("text/event-stream"));
+        assertNull(mvcResult.getResponse().getHeader("Access-Control-Allow-Origin"));
     }
 
     @Test
@@ -301,6 +303,7 @@ public class AuraInteractiveControllerTest
         assertTrue(mvcResult.getResponse().getContentType().startsWith("text/event-stream"));
         assertEquals("no-cache", mvcResult.getResponse().getHeader("Cache-Control"));
         assertEquals("keep-alive", mvcResult.getResponse().getHeader("Connection"));
+        assertNull(mvcResult.getResponse().getHeader("Access-Control-Allow-Origin"));
     }
 
     @Test

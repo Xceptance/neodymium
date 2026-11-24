@@ -1,4 +1,4 @@
-[![Maven Central](https://img.shields.io/maven-central/v/com.xceptance/neodymium-library)](https://mvnrepository.com/artifact/com.xceptance/neodymium-library)
+[![Maven Central](https://img.shields.io/maven-central/v/com.xceptance/neodymium-core)](https://central.sonatype.com/artifact/com.xceptance/neodymium-core)
 
 # Neodymium Core
 
@@ -14,7 +14,7 @@ It provides the AI perception cascade, Universal Page Model (UPM), multimodal LL
 flowchart LR
     A["YAML Playbook<br/>(Natural Language)"] --> B["StateMachineRunner"]
     B --> C["UPM & Perception Engine<br/>(DOM + Visual Grounding)"]
-    C --> D["Multimodal LLM Provider<br/>(Gemini / Claude / Mock)"]
+    C --> D["Multimodal LLM Provider<br/>(Google Gemini / Mock)"]
     D --> E["Locator Cascade & Actions<br/>(5-Tier Resolver)"]
     E --> F["Companion JSON Recording<br/>(Selectors, SSIM Baselines, dHash)"]
     F --> G["Deterministic Replay<br/>(0 Tokens • Millisecond Speed)"]
@@ -23,7 +23,7 @@ flowchart LR
 ### 1. Neodymium AI Engine (`org.neodymium.ai.*`)
 - **Natural Language Playbooks**: Execute `.yaml` playbooks or inline test definitions using declarative steps (`open:`, `click:`, `type:`, `assert:`, `_include:`).
 - **Universal Page Model (UPM)**: Extracts semantic, spatial, and accessibility trees from browser DOM state to present clean representations to multimodal LLMs.
-- **Multimodal LLM Integration**: Pluggable providers supporting Google Gemini (Live API / SDK) and Claude, with outbound secret masking and in-memory LLM response caching (`@AiLlmCache`).
+- **Multimodal LLM Integration**: Built on a pluggable `LlmProvider` architecture — supporting **Google Gemini** (Live API / SDK) for `6.0.0-BETA` (with additional providers planned for future releases), plus outbound secret masking and in-memory LLM response caching (`@AiLlmCache`).
 
 ### 2. 5-Tier Locator Cascade Resolver
 Resolves elements with extreme resilience against layout and DOM drift:
@@ -100,7 +100,7 @@ mvn test -pl neodymium-core -Punit-tests
 
 ## Further Reading
 
-* [Comprehensive Neodymium Documentation](../doc/DOCUMENTATION.md)
+* [Official Neodymium Documentation](https://docs.xceptance.com/neodymium)
 * [Neodymium AI Redesign V2 Specifications](../doc/redesign-v2/architecture.md)
 
 ---

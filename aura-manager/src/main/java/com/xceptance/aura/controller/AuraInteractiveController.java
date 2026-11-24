@@ -166,7 +166,6 @@ public class AuraInteractiveController
     public ResponseEntity<Void> handleConsoleEventsHead()
     {
         final HttpHeaders headers = new HttpHeaders();
-        headers.set("Access-Control-Allow-Origin", "*");
         headers.set("Cache-Control", "no-cache");
         headers.set("Connection", "keep-alive");
         headers.set("Content-Type", "text/event-stream; charset=UTF-8");
@@ -179,7 +178,6 @@ public class AuraInteractiveController
         final InteractiveConsoleEngine engine = interactiveService.getOrCreateConsoleEngine();
 
         final HttpHeaders headers = new HttpHeaders();
-        headers.set("Access-Control-Allow-Origin", "*");
         headers.set("Cache-Control", "no-cache");
         headers.set("Connection", "keep-alive");
         headers.set("Content-Type", "text/event-stream; charset=UTF-8");
