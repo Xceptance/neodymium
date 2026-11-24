@@ -326,6 +326,59 @@ public final class CustomDashboardViewControllerIntegrationTest
     @Test
     public final void testCombineWidgetsEndpointEquivalenceRejection() throws Exception
     {
+        final long baseTime = System.currentTimeMillis() - 10_000L;
+        final String runId1 = "run-combine-guard-1-" + baseTime;
+        final String runId2 = "run-combine-guard-2-" + baseTime;
+
+        final TestRunEntity run1 = new TestRunEntity(
+            runId1, "CombineGuardBatch", "COMPLETED", "Trigger", "Staging", "US", "Chrome", "2026-11-10 14:00:00", baseTime
+        );
+        run1.setTotalTests(1);
+        run1.setPassedCount(1);
+        run1.setBrowsersCsv("Chrome");
+        run1.setLocalesCsv("US");
+        run1.setEnvironment("Staging");
+        runRepository.save(run1);
+        createdRunIds.add(runId1);
+
+        final TestExecutionDto exec1 = new TestExecutionDto(
+            "exec-combine-1", runId1, "com.xceptance.neodymium.test.CombineTestA", "testA",
+            "CombineTestA testA", "CombineTestA testA", null, null, "passed", "Java",
+            "US", "US", "Chrome", "NONE", List.of(), null, "Browsing (default)", List.of(),
+            Map.of(), Map.of(), null, null, null, null, "JAVA", "JAVA", "14:00:00", "2026-11-10",
+            "14:00:00", baseTime, 1, 0, 1000L, "1.0s", 0, 0L, 0.0, null, null, null,
+            null, null, null, null, false, null, null, Map.of()
+        );
+        dataService.saveRunReportToDisk(runId1, new RunReportDto(
+            runId1, "CombineGuardBatch", "2026-11-10 14:00:00", "1.0s", 1,
+            1, 0, 0, 0, 0, List.of(exec1)
+        ));
+
+        final long run2Time = baseTime + 5_000L;
+        final TestRunEntity run2 = new TestRunEntity(
+            runId2, "CombineGuardBatch", "COMPLETED", "Trigger", "Staging", "US", "Chrome", "2026-11-10 14:05:00", run2Time
+        );
+        run2.setTotalTests(1);
+        run2.setPassedCount(1);
+        run2.setBrowsersCsv("Chrome");
+        run2.setLocalesCsv("US");
+        run2.setEnvironment("Staging");
+        runRepository.save(run2);
+        createdRunIds.add(runId2);
+
+        final TestExecutionDto exec2 = new TestExecutionDto(
+            "exec-combine-2", runId2, "com.xceptance.neodymium.test.CombineTestB", "testB",
+            "CombineTestB testB", "CombineTestB testB", null, null, "passed", "Java",
+            "US", "US", "Chrome", "NONE", List.of(), null, "Browsing (default)", List.of(),
+            Map.of(), Map.of(), null, null, null, null, "JAVA", "JAVA", "14:05:00", "2026-11-10",
+            "14:05:00", run2Time, 1, 0, 1000L, "1.0s", 0, 0L, 0.0, null, null, null,
+            null, null, null, null, false, null, null, Map.of()
+        );
+        dataService.saveRunReportToDisk(runId2, new RunReportDto(
+            runId2, "CombineGuardBatch", "2026-11-10 14:05:00", "1.0s", 1,
+            1, 0, 0, 0, 0, List.of(exec2)
+        ));
+
         final DashboardPageConfigDto page = dashboardSettingService.createCustomPage("Combine Guardrail Page");
         createdPageIds.add(page.getId());
 
