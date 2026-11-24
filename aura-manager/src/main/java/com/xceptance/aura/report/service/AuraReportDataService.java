@@ -4186,8 +4186,9 @@ public class AuraReportDataService
         final Optional<TestRunEntity> runOpt = runRepository.findById(effectiveRunId);
         final boolean isActiveOnDisk = localRunJsonStorageService.isRunCurrentlyActiveOnDisk(effectiveRunId);
         final boolean isInProgress = liveRunBuffer.containsKey(effectiveRunId) || isActiveOnDisk;
+        final boolean isStale = localRunJsonStorageService.isRunJsonStale(effectiveRunId);
 
-        if (!isInProgress && runReportCache.containsKey(effectiveRunId))
+        if (!isInProgress && !isStale && runReportCache.containsKey(effectiveRunId))
         {
             LOG.debug("[PERF] getRunReport cache HIT for runId={}", effectiveRunId);
             return runReportCache.get(effectiveRunId);
@@ -4195,7 +4196,7 @@ public class AuraReportDataService
 
         synchronized (effectiveRunId.intern())
         {
-            if (!isInProgress && runReportCache.containsKey(effectiveRunId))
+            if (!isInProgress && !isStale && runReportCache.containsKey(effectiveRunId))
             {
                 LOG.debug("[PERF] getRunReport cache HIT (after sync lock) for runId={}", effectiveRunId);
                 return runReportCache.get(effectiveRunId);
@@ -4205,7 +4206,7 @@ public class AuraReportDataService
 
             final Path runDir = localRunJsonStorageService.getRunDir(effectiveRunId);
             final Path runJsonFile = (runDir != null) ? runDir.resolve("run.json") : null;
-            if (runDir != null && Files.exists(runDir) && Files.isDirectory(runDir) && (isInProgress || runJsonFile == null || !Files.exists(runJsonFile)))
+            if (runDir != null && Files.exists(runDir) && Files.isDirectory(runDir) && (isInProgress || isStale || runJsonFile == null || !Files.exists(runJsonFile)))
             {
                 localRunJsonStorageService.buildRunJsonContent(runDir.toFile(), effectiveRunId, true, isInProgress);
             }
@@ -4413,7 +4414,9 @@ public class AuraReportDataService
             final RunReportDto report = buildRunReportDto(runEntity, executions);
             if (!isInProgress)
             {
-                if (runOpt.isPresent() && "IN_PROGRESS".equalsIgnoreCase(runOpt.get().getStatus()))
+                if (runOpt.isPresent() && ("IN_PROGRESS".equalsIgnoreCase(runOpt.get().getStatus())
+                        || isStale
+                        || (runOpt.get().getRunningCount() != null && runOpt.get().getRunningCount() > 0)))
                 {
                     final TestRunEntity finishedRun = runOpt.get();
                     finishedRun.setStatus("COMPLETED");
