@@ -502,9 +502,31 @@ public final class BrowserToolProvider
         {
             try
             {
-                ((JavascriptExecutor) driver).executeScript("window.scrollBy(arguments[0], arguments[1]);", deltaX, deltaY);
-                x -= deltaX;
-                y -= deltaY;
+                final String scrollScript = """
+                    var beforeX = window.scrollX || window.pageXOffset || document.documentElement.scrollLeft || 0;
+                    var beforeY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+                    try {
+                        window.scrollBy({ left: arguments[0], top: arguments[1], behavior: 'instant' });
+                    } catch (e) {
+                        window.scrollBy(arguments[0], arguments[1]);
+                    }
+                    var afterX = window.scrollX || window.pageXOffset || document.documentElement.scrollLeft || 0;
+                    var afterY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+                    return { dx: Math.round(afterX - beforeX), dy: Math.round(afterY - beforeY) };
+                    """;
+                final Object scrollObj = ((JavascriptExecutor) driver).executeScript(scrollScript, deltaX, deltaY);
+                if (scrollObj instanceof Map<?, ?> scrollMap)
+                {
+                    final int actualDeltaX = scrollMap.get("dx") instanceof Number n ? n.intValue() : deltaX;
+                    final int actualDeltaY = scrollMap.get("dy") instanceof Number n ? n.intValue() : deltaY;
+                    x -= actualDeltaX;
+                    y -= actualDeltaY;
+                }
+                else
+                {
+                    x -= deltaX;
+                    y -= deltaY;
+                }
             }
             catch (final Exception ignored)
             {
@@ -858,18 +880,34 @@ public final class BrowserToolProvider
                     final String rectScript = """
                         var el = arguments[0];
                         if (!el) return null;
+                        var rawX = arguments[1];
+                        var rawY = arguments[2];
+                        var vh = window.innerHeight || document.documentElement.clientHeight || 0;
+                        var vw = window.innerWidth || document.documentElement.clientWidth || 0;
                         try {
-                            var vh = window.innerHeight || document.documentElement.clientHeight;
-                            var vw = window.innerWidth || document.documentElement.clientWidth;
                             var r0 = el.getBoundingClientRect();
-                            if (r0.top < 0 || r0.bottom > vh || r0.left < 0 || r0.right > vw) {
+                            if (vw > 0 && vh > 0 && (r0.top < 0 || r0.bottom > vh || r0.left < 0 || r0.right > vw)) {
                                 el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' });
                             }
                         } catch (e) {}
                         var r = el.getBoundingClientRect();
+                        if (vw > 0 && vh > 0 && typeof rawX === 'number' && typeof rawY === 'number') {
+                            var targetX = Math.round(r.left) + rawX;
+                            var targetY = Math.round(r.top) + rawY;
+                            if (targetX < 0 || targetX >= vw || targetY < 0 || targetY >= vh) {
+                                var dx = (targetX < 0 || targetX >= vw) ? (targetX - Math.floor(vw / 2)) : 0;
+                                var dy = (targetY < 0 || targetY >= vh) ? (targetY - Math.floor(vh / 2)) : 0;
+                                try {
+                                    window.scrollBy({ left: dx, top: dy, behavior: 'instant' });
+                                } catch (e) {
+                                    window.scrollBy(dx, dy);
+                                }
+                                r = el.getBoundingClientRect();
+                            }
+                        }
                         return { x: Math.round(r.left), y: Math.round(r.top) };
                         """;
-                    final Object rectObj = ((JavascriptExecutor) driver).executeScript(rectScript, el.getWrappedElement());
+                    final Object rectObj = ((JavascriptExecutor) driver).executeScript(rectScript, el.getWrappedElement(), rawX, rawY);
                     if (rectObj instanceof Map<?, ?> map)
                     {
                         x = ((Number) map.get("x")).intValue() + rawX;
@@ -1030,8 +1068,19 @@ public final class BrowserToolProvider
                         }
                         if (el) {
                             var rect = el.getBoundingClientRect();
+                            var vh = window.innerHeight || document.documentElement.clientHeight || 0;
+                            var vw = window.innerWidth || document.documentElement.clientWidth || 0;
                             var centerX = Math.round(rect.left + rect.width / 2);
                             var centerY = Math.round(rect.top + rect.height / 2);
+                            var isBadgeOverlay = el.parentElement && (el.parentElement.id === '_neo_som_badges_' || el.parentElement.id === '__neo_som_badges__');
+                            if (!isBadgeOverlay && vw > 0 && vh > 0 && (centerX < 0 || centerX >= vw || centerY < 0 || centerY >= vh)) {
+                                try {
+                                    el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' });
+                                    rect = el.getBoundingClientRect();
+                                    centerX = Math.round(rect.left + rect.width / 2);
+                                    centerY = Math.round(rect.top + rect.height / 2);
+                                } catch (e) {}
+                            }
                             var anchor = null;
                             var anchorSelector = null;
                             if (activeScope) {
