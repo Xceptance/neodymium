@@ -4047,13 +4047,13 @@ public class WidgetAggregationServiceTest
 
         final TestRunEntity run1 = new TestRunEntity("run-1", "DefaultBatch", "COMPLETED", "CI", "staging", "en-US", "Chrome", "2026-11-01 10:00", 1730455200000L);
         run1.setTotalTests(100);
-        run1.setPassedCount(70);
+        run1.setPassedCount(100); // 70 Classic clean + 15 Healed + 15 AI-Driven = 100 total passed
         run1.setPassedHealedCount(15);
         run1.setPassedAiCount(15);
 
         final TestRunEntity run2 = new TestRunEntity("run-2", "DefaultBatch", "COMPLETED", "CI", "staging", "en-US", "Chrome", "2026-11-02 10:00", 1730541600000L);
         run2.setTotalTests(50); // Total tests drop by 50, Classic drops from 70 to 20, but AI tests stay constant at 15
-        run2.setPassedCount(20);
+        run2.setPassedCount(50); // 20 Classic clean + 15 Healed + 15 AI-Driven = 50 total passed
         run2.setPassedHealedCount(15);
         run2.setPassedAiCount(15);
 
@@ -4069,6 +4069,18 @@ public class WidgetAggregationServiceTest
             .filter(l -> "AI-Driven".equals(l.getName()))
             .findFirst()
             .orElseThrow();
+        final WidgetTrendLayerDto classicLayer = view.getTrendLayers().stream()
+            .filter(l -> "Classic".equals(l.getName()))
+            .findFirst()
+            .orElseThrow();
+        final WidgetTrendLayerDto healedLayer = view.getTrendLayers().stream()
+            .filter(l -> "Healed".equals(l.getName()))
+            .findFirst()
+            .orElseThrow();
+
+        Assertions.assertEquals("70,20", classicLayer.getRawValuesCsv(), "Classic volume must drop from 70 to 20");
+        Assertions.assertEquals("15,15", healedLayer.getRawValuesCsv(), "Healed volume must stay constant at 15");
+        Assertions.assertEquals("15,15", aiLayer.getRawValuesCsv(), "AI-Driven volume must stay constant at 15 without clamping");
 
         Assertions.assertTrue(aiLayer.hasPath(), "AI-Driven layer must have a stacked area path for filled mode");
         Assertions.assertTrue(aiLayer.hasLinePath(), "AI-Driven layer must have a standalone line path for not-filled mode");

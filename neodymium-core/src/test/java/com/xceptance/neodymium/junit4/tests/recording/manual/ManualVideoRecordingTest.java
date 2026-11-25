@@ -65,7 +65,9 @@ public class ManualVideoRecordingTest extends AbstractRecordingTest
     @AfterClass
     public static void assertLogFileExists()
     {
-        File logFile = new File(FilmTestExecution.getContextVideo().ffmpegLogFile());
+        final String trackedLogFilePath = logFilePath.get(Thread.currentThread());
+        Assert.assertNotNull("the logfile path for the manual video recording test must be configured", trackedLogFilePath);
+        final File logFile = new File(trackedLogFilePath);
         Assert.assertTrue("the logfile for the manual video recording test exists", logFile.exists());
         logFile.delete();
         Assert.assertFalse("the logfile for the manual video recording test wasn't deleted", logFile.exists());

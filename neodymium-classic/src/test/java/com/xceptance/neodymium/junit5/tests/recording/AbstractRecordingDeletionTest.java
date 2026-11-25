@@ -38,38 +38,40 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Browser("Chrome_headless")
 public abstract class AbstractRecordingDeletionTest extends AbstractNeodymiumTest
 {
-    protected static Map<Thread, String> uuid = new HashMap<>();
+    protected static final Map<Thread, String> uuid = new ConcurrentHashMap<>();
 
-    protected static Map<Thread, String> logFilePath = new HashMap<>();
+    protected static final Map<Thread, String> logFilePath = new ConcurrentHashMap<>();
 
-    public static  Map<Thread,Class<? extends RecordingConfigurations>> configurationsClass = new HashMap<>();
+    public static final Map<Thread, Class<? extends RecordingConfigurations>> configurationsClass = new ConcurrentHashMap<>();
 
-    private boolean isGif;
+    private final boolean isGif;
 
-    protected AbstractRecordingDeletionTest(boolean isGif)
+    protected AbstractRecordingDeletionTest(final boolean isGif)
     {
         this.isGif = isGif;
     }
 
-    public static void beforeClass(String format, boolean filmAutomatically)
+    public static void beforeClass(final String format, final boolean filmAutomatically)
     {
         FilmTestExecution.clearThreadContexts();
 
-        Map<String, String> properties1 = new HashMap<>();
+        final Map<String, String> properties1 = new HashMap<>();
         properties1.put(format + ".filmAutomatically", Boolean.toString(filmAutomatically));
         properties1.put(format + ".enableFilming", "true");
         properties1.put(format + ".deleteRecordingsAfterAddingToAllureReport", "false");
         properties1.put(format + ".deleteTempRecordings", "true");
-        logFilePath.put(Thread.currentThread(),"target/ffmpeg_output_msg"+UUID.randomUUID()+".txt");
-        if("video".equals(format)) {
-            properties1.put("video.ffmpegLogFile",logFilePath.get(Thread.currentThread()));
+        logFilePath.put(Thread.currentThread(), "target/ffmpeg_output_msg" + UUID.randomUUID() + ".txt");
+        if ("video".equals(format))
+        {
+            properties1.put("video.ffmpegLogFile", logFilePath.get(Thread.currentThread()));
         }
-        final String fileLocation = "config/temp-" + format + "-delete-" + filmAutomatically +UUID.randomUUID()+ ".properties";
-        File tempConfigFile1 = new File("./" + fileLocation);
+        final String fileLocation = "config/temp-" + format + "-delete-" + filmAutomatically + UUID.randomUUID() + ".properties";
+        final File tempConfigFile1 = new File("./" + fileLocation);
 
         writeMapToPropertiesFile(properties1, tempConfigFile1);
 
@@ -81,7 +83,7 @@ public abstract class AbstractRecordingDeletionTest extends AbstractNeodymiumTes
     @NeodymiumTest
     public void test()
     {
-        List<String> uuids = isGif ? FilmTestExecution.getNamesOfAllCurrentGifRecordings() : FilmTestExecution.getNamesOfAllCurrentVideoRecordings();
+        final List<String> uuids = isGif ? FilmTestExecution.getNamesOfAllCurrentGifRecordings() : FilmTestExecution.getNamesOfAllCurrentVideoRecordings();
         Assert.assertEquals(1, uuids.size());
         uuid.put(Thread.currentThread(), uuids.get(0));
         Selenide.open("https://www.xceptance.com/en/");
@@ -91,8 +93,10 @@ public abstract class AbstractRecordingDeletionTest extends AbstractNeodymiumTes
     @AfterAll
     public static void assertRecordingFileWasDeleted()
     {
-        File recordingFile = new File(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).tempFolderToStoreRecording() + uuid + "."
-                                          + FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).format());
+        final String recordingUuid = uuid.get(Thread.currentThread());
+        Assert.assertNotNull("the recording uuid must be recorded before cleanup verification", recordingUuid);
+        final RecordingConfigurations config = FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread()));
+        final File recordingFile = new File(config.tempFolderToStoreRecording() + recordingUuid + "." + config.format());
         Assert.assertFalse("the recording file wasn't deleted", recordingFile.exists());
     }
 }
