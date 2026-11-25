@@ -5406,6 +5406,132 @@ public final class StaticResourceSyntaxTest
     }
 
     /**
+     * Verifies PR #579 review edge cases in {@code report-manager.js}:
+     * failure precedence over earlier healed actions/sub-steps, running sub-step precedence over
+     * healed sub-steps, and strict {@code hasRecordedExecution} guarding against omitted status
+     * or stale pre-recorded {@code healed: true} actions on unexecuted {@code PENDING} steps.
+     *
+     * @throws Exception if Node execution or assertions fail
+     */
+    @Test
+    public void testFailurePrecedenceRunningSubStepAndStrictExecutionGuardInReportManagerJs() throws Exception
+    {
+        final Path jsPath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsPath), "report-manager.js must exist: " + jsPath.toAbsolutePath());
+
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final String edgeCaseScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const assert = require('assert');\n" +
+            "const code = fs.readFileSync('" + jsPath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const blocksPayload = {\n" +
+            "    steps: [\n" +
+            "        {\n" +
+            "            instruction: 'Multi-action step with healed first action then failed second action',\n" +
+            "            status: 'failed',\n" +
+            "            passed: false,\n" +
+            "            contextLevel: 'LEAN',\n" +
+            "            duration: 1500,\n" +
+            "            actions: [\n" +
+            "                { type: 'FILL', target: '#newInput', expectedTarget: '#oldInput', healed: true, success: true },\n" +
+            "                { type: 'CLICK', target: '#missingBtn', success: false }\n" +
+            "            ]\n" +
+            "        },\n" +
+            "        {\n" +
+            "            instruction: 'Unexecuted step omitting status after failure',\n" +
+            "            contextLevel: 'LEAN'\n" +
+            "        },\n" +
+            "        {\n" +
+            "            instruction: 'Unexecuted PENDING step with stale pre-recorded healed action after failure',\n" +
+            "            status: 'PENDING',\n" +
+            "            actions: [\n" +
+            "                { type: 'CLICK', target: '#preHealedBtn', healed: true }\n" +
+            "            ]\n" +
+            "        },\n" +
+            "        {\n" +
+            "            instruction: 'Composite step with healed sub-step 0 and failed sub-step 1',\n" +
+            "            contextLevel: 'LEAN',\n" +
+            "            duration: 2100,\n" +
+            "            subSteps: [\n" +
+            "                { instruction: 'Sub 0 healed', status: 'HEALED', healed: true, actions: [{ type: 'CLICK', target: '#a', healed: true, success: true }] },\n" +
+            "                { instruction: 'Sub 1 failed', status: 'FAILED', failureReason: 'Missing element' }\n" +
+            "            ]\n" +
+            "        },\n" +
+            "        {\n" +
+            "            instruction: 'Composite step with healed sub-step 0 and running sub-step 1',\n" +
+            "            contextLevel: 'LEAN',\n" +
+            "            duration: 800,\n" +
+            "            subSteps: [\n" +
+            "                { instruction: 'Sub 0 healed', status: 'HEALED', healed: true, actions: [{ type: 'CLICK', target: '#a', healed: true, success: true }] },\n" +
+            "                { instruction: 'Sub 1 running', status: 'RUNNING' }\n" +
+            "            ]\n" +
+            "        }\n" +
+            "    ]\n" +
+            "};\n" +
+            "const sampleRow = {\n" +
+            "    id: 'row_review_edge_cases',\n" +
+            "    querySelector: () => null,\n" +
+            "    getAttribute: (name) => {\n" +
+            "        if (name === 'data-blocks') return JSON.stringify(blocksPayload);\n" +
+            "        if (name === 'data-status') return 'FAILED';\n" +
+            "        return '';\n" +
+            "    },\n" +
+            "    hasAttribute: (name) => name === 'data-steps-fetched',\n" +
+            "    setAttribute: () => {},\n" +
+            "    removeAttribute: () => {}\n" +
+            "};\n" +
+            "const sideList = { innerHTML: '', querySelector: () => null };\n" +
+            "const sandbox = {\n" +
+            "    console,\n" +
+            "    window: {},\n" +
+            "    document: {\n" +
+            "        readyState: 'complete',\n" +
+            "        getElementById: (id) => (id === 'sidePageStepList' ? sideList : null),\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {}, contains: () => true }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "vm.runInNewContext(code, sandbox);\n" +
+            "sandbox.renderStepsForExecution(sampleRow);\n" +
+            "const html = sideList.innerHTML;\n" +
+            "const startOfCard = (id) => {\n" +
+            "    const idIdx = html.indexOf('id=\"' + id + '\"');\n" +
+            "    assert(idIdx >= 0, 'Missing card ' + id);\n" +
+            "    const startIdx = html.lastIndexOf('<div class=\"step-item', idIdx);\n" +
+            "    assert(startIdx >= 0, 'Missing step-item wrapper for ' + id);\n" +
+            "    return startIdx;\n" +
+            "};\n" +
+            "const s0 = startOfCard('stepCard_core_0');\n" +
+            "const s1 = startOfCard('stepCard_core_1');\n" +
+            "const s2 = startOfCard('stepCard_core_2');\n" +
+            "const s3 = startOfCard('stepCard_core_3');\n" +
+            "const s4 = startOfCard('stepCard_core_4');\n" +
+            "const card0 = html.slice(s0, s1);\n" +
+            "const card0Header = card0.slice(0, card0.indexOf('step-action-inspector'));\n" +
+            "const card1 = html.slice(s1, s2);\n" +
+            "const card2 = html.slice(s2, s3);\n" +
+            "const card3 = html.slice(s3, s4);\n" +
+            "const card3Header = card3.slice(0, card3.indexOf('step-action-inspector'));\n" +
+            "const card4 = html.slice(s4);\n" +
+            "const card4Header = card4.slice(0, card4.indexOf('step-action-inspector'));\n" +
+            "assert(card0.includes('step-failed') && card0Header.includes('FAILED') && !card0Header.includes('HEALED'), 'Failed step with healed action must render FAILED and step-failed');\n" +
+            "assert(card1.includes('step-not-run') && card1.includes('NOT RUN'), 'Step omitting status without execution signals after failure must become NOT RUN');\n" +
+            "assert(card2.includes('step-not-run') && card2.includes('NOT RUN') && !card2.includes('step-healed'), 'PENDING step with stale pre-recorded healed action after failure must become NOT RUN');\n" +
+            "assert(card3.includes('step-failed') && card3Header.includes('FAILED') && !card3Header.includes('HEALED'), 'Composite step with healed sub 0 + failed sub 1 must render FAILED');\n" +
+            "assert(!card4.includes('step-healed') && !card4Header.includes('HEALED') && card4Header.includes('>LEAN<'), 'Composite step with healed sub 0 + running sub 1 must stay in-progress (not HEALED or PENDING)');\n";
+
+        runNodeScript(edgeCaseScript, "PR #579 edge case behavioral rendering test failed");
+    }
+
+    /**
      * Verifies that dashboard-runner.js displays #runFinishedModal on root (/) and /batch-history
      * when a run finishes (including across page navigation where localStorage held the running state),
      * suppresses the modal when already viewing that run's report, and triggers live HTMX refresh of

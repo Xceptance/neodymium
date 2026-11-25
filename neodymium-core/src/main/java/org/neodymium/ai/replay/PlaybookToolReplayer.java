@@ -508,7 +508,7 @@ public final class PlaybookToolReplayer
                 updated.setDomFeatureVector(healedVector);
             }
             step.getActions().set(callIndex, updated);
-            if (healedVector != null && step.getDomFeatureVector() != null)
+            if (callIndex == 0 && healedVector != null && step.getDomFeatureVector() != null)
             {
                 step.setDomFeatureVector(healedVector);
             }

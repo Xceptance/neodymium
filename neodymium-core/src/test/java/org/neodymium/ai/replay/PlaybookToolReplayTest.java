@@ -1955,4 +1955,85 @@ public class PlaybookToolReplayTest
             }
         });
     }
+
+    @Test
+    public void testMultiCallOfflineHealingDoesNotOverwriteStepDomFeatureVectorFromSubsequentCalls() throws Exception
+    {
+        final ObjectNode waitSchema = MAPPER.createObjectNode().put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("browser_wait", "Waits ms", waitSchema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                PlaybookToolReplayTest.this.executedCalls.add(call);
+                return ToolResult.success(call.callId(), "Waited");
+            }
+        });
+
+        final PlaybookStep step = new PlaybookStep("Wait then click confirm button");
+        final DomFeatureVector firstStepVector = new DomFeatureVector(
+                "a",
+                "Home",
+                Set.of("nav-home"),
+                Map.of("id", "btn0"),
+                "link",
+                "Home",
+                "header",
+                0
+        );
+        final DomFeatureVector secondOldVector = new DomFeatureVector(
+                "button",
+                "Confirm",
+                Set.of("confirm-btn"),
+                Map.of("id", "btn1Old"),
+                "button",
+                "Confirm",
+                "form",
+                0
+        );
+        final DomFeatureVector secondHealedCandidate = new DomFeatureVector(
+                "button",
+                "Confirm",
+                Set.of("confirm-btn"),
+                Map.of("id", "btn1New"),
+                "button",
+                "Confirm",
+                "form",
+                0
+        );
+
+        step.setDomFeatureVector(firstStepVector);
+
+        final ObjectNode waitArgs = MAPPER.createObjectNode().put("ms", 5);
+        final ObjectNode clickArgs = MAPPER.createObjectNode().put("target", "#btn1Old");
+        clickArgs.set("domFeatureVector", MAPPER.valueToTree(secondOldVector));
+
+        step.addToolCall(new ToolCall("call-wait-0", "browser_wait", waitArgs));
+        step.addToolCall(new ToolCall("call-click-1", "browser_click", clickArgs));
+
+        final Action act0 = new Action("WAIT", "", List.of("5"), "Wait briefly", "");
+        final Action act1 = new Action("CLICK", "#btn1Old", List.of(), "Click confirm", "");
+        act1.setDomFeatureVector(secondOldVector);
+        step.setActions(new ArrayList<>(List.of(act0, act1)));
+
+        this.context.setVariable("liveCandidates", List.of(secondHealedCandidate));
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+        final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertEquals(PlaybookStepStatus.HEALED, step.getStatus());
+        Assertions.assertEquals("#btn1New", step.getActions().get(1).getTarget());
+        Assertions.assertNotNull(step.getDomFeatureVector());
+        Assertions.assertEquals("btn0", step.getDomFeatureVector().getAttributes().get("id"),
+                "Healing callIndex=1 must NOT overwrite callIndex=0 step-level domFeatureVector");
+    }
 }

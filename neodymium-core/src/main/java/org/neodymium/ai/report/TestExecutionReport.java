@@ -531,6 +531,18 @@ public final class TestExecutionReport
 
         public boolean isHealed()
         {
+            if ("FAILED".equalsIgnoreCase(this.status)
+                || "NOT RUN".equalsIgnoreCase(this.status)
+                || "NOT_RUN".equalsIgnoreCase(this.status)
+                || "UNREACHED".equalsIgnoreCase(this.status)
+                || "SKIPPED".equalsIgnoreCase(this.status))
+            {
+                return false;
+            }
+            if (this.subSteps != null && this.subSteps.stream().anyMatch(s -> s != null && "FAILED".equalsIgnoreCase(s.getStatus())))
+            {
+                return false;
+            }
             if ("HEALED".equalsIgnoreCase(this.status))
             {
                 return true;

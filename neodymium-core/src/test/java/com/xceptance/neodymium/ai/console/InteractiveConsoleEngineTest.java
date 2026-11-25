@@ -59,6 +59,7 @@ import org.neodymium.util.Neodymium;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine.ActionResult;
@@ -2202,6 +2203,149 @@ public class InteractiveConsoleEngineTest
         {
             InteractiveConsoleEngine.markRunFinished(runId);
         }
+    }
+
+    @Test
+    public void testBuildStateJsonFailedAndRunningStepsWithHealedActionsDoNotOverwriteStatus() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(null);
+
+        final PlaybookStep failedStep = new PlaybookStep();
+        failedStep.setInstruction("Type search query and click broken submit");
+        failedStep.setStatus(PlaybookStepStatus.FAILED);
+        failedStep.setFailed(true);
+        failedStep.setFailureReason("Submit button not found");
+
+        final PlaybookStep runningStep = new PlaybookStep();
+        runningStep.setInstruction("Composite step in progress");
+        runningStep.setStatus(PlaybookStepStatus.RUNNING);
+
+        context.getTransientData().put("playbook.steps", List.of(failedStep, runningStep));
+        context.getTransientData().put("playbook.flatSteps", List.of(failedStep, runningStep));
+
+        final TestExecutionReport report = new TestExecutionReport();
+
+        final ReportStepEntry repFailed = new ReportStepEntry(0, failedStep.getInstruction());
+        repFailed.setBlock("steps");
+        repFailed.setStatus("FAILED");
+        repFailed.setFailureReason("Submit button not found");
+        final ReportActionEntry healedFirstAction = new ReportActionEntry(
+            "FILL", "#oldSearch", "test", "Type query", "Healed input", true);
+        healedFirstAction.setHealed(true);
+        healedFirstAction.setResolvedTarget("#newSearch");
+        final ReportActionEntry failedSecondAction = new ReportActionEntry(
+            "CLICK", "#missingSubmit", "", "Click submit", "Failed click", false);
+        repFailed.addAction(healedFirstAction);
+        repFailed.addAction(failedSecondAction);
+
+        final ReportStepEntry repRunning = new ReportStepEntry(1, runningStep.getInstruction());
+        repRunning.setBlock("steps");
+        repRunning.setStatus("RUNNING");
+        final ReportActionEntry runningHealedSubAction = new ReportActionEntry(
+            "CLICK", "#oldTab", "", "Click tab", "Healed sub-step", true);
+        runningHealedSubAction.setHealed(true);
+        repRunning.addAction(runningHealedSubAction);
+        final ReportStepEntry repSubHealed = new ReportStepEntry(0, "Switch tab");
+        repSubHealed.setStatus("HEALED");
+        final ReportStepEntry repSubRunning = new ReportStepEntry(1, "Wait for panel");
+        repSubRunning.setStatus("RUNNING");
+        repRunning.addSubStep(repSubHealed);
+        repRunning.addSubStep(repSubRunning);
+
+        report.addStep(repFailed);
+        report.addStep(repRunning);
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(
+            null,
+            context,
+            "run_status_test",
+            1,
+            "running",
+            null,
+            report);
+
+        final JsonObject root = JsonParser.parseString(stateJson).getAsJsonObject();
+        final JsonArray serializedSteps = root.getAsJsonObject("blocks").getAsJsonArray("steps");
+        assertEquals(2, serializedSteps.size());
+
+        final JsonObject serializedFailed = serializedSteps.get(0).getAsJsonObject();
+        assertEquals("failed", serializedFailed.get("status").getAsString(),
+            "FAILED step with an earlier healed action must remain status='failed'");
+        assertFalse(serializedFailed.has("healed") && serializedFailed.get("healed").getAsBoolean(),
+            "FAILED step must not be flagged healed=true");
+
+        final JsonObject serializedRunning = serializedSteps.get(1).getAsJsonObject();
+        assertEquals("running", serializedRunning.get("status").getAsString(),
+            "RUNNING step with an earlier healed action/sub-step must remain status='running'");
+        assertFalse(serializedRunning.has("healed") && serializedRunning.get("healed").getAsBoolean(),
+            "RUNNING step must not prematurely be flagged healed=true");
+    }
+
+    @Test
+    public void testNormalizeRunFolderSanitizesPathTraversalAndSeparators()
+    {
+        InteractiveConsoleEngine.setRunFolder("run_fallback_safe");
+        final String fallback = InteractiveConsoleEngine.getRunFolder();
+
+        final String traversal = InteractiveConsoleEngine.normalizeRunFolder("../evil");
+        assertFalse(traversal.contains(".."), "Traversal '..' must be stripped/sanitized");
+        assertFalse(traversal.contains("/"), "Path separator '/' must be sanitized");
+        assertFalse(traversal.contains("\\"), "Path separator '\\\\' must be sanitized");
+        assertTrue(traversal.startsWith("run_"), "Sanitized run folder must keep canonical prefix: " + traversal);
+
+        assertEquals("run_a_b_c", InteractiveConsoleEngine.normalizeRunFolder("run_a/b\\c"));
+        assertEquals("run_20261125_120000", InteractiveConsoleEngine.normalizeRunFolder("run_20261125_120000"));
+        assertEquals(fallback, InteractiveConsoleEngine.normalizeRunFolder(".."));
+        assertEquals(fallback, InteractiveConsoleEngine.normalizeRunFolder("///"));
+        assertEquals(fallback, InteractiveConsoleEngine.normalizeRunFolder("..."));
+    }
+
+    @Test
+    public void testPushStateHandlesNonPrimitiveRunIdAndScopesExecutionIndexesConsistently(@TempDir final Path customDir) throws IOException
+    {
+        final Path logsDir = customDir.resolve("console-logs");
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", logsDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final String activeRunFolder = "run_20261125_123000";
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine(activeRunFolder);
+
+        // 1. Non-primitive runId object must not throw UnsupportedOperationException
+        final String nonPrimitivePayload = "{"
+            + "\"runId\":{\"nested\":\"object\"},"
+            + "\"testClass\":\"com.xceptance.ConsistentIndexTest\","
+            + "\"testName\":\"ConsistentIndexTest :: ds0\","
+            + "\"status\":\"passed\","
+            + "\"steps\":[]"
+            + "}";
+        engine.pushState(nonPrimitivePayload);
+
+        // 2. Payload without runId uses engine's effective runFolder and gets index 2 (after ds0 above)
+        final String withoutRunId = "{"
+            + "\"testClass\":\"com.xceptance.ConsistentIndexTest\","
+            + "\"testName\":\"ConsistentIndexTest :: ds1\","
+            + "\"status\":\"passed\","
+            + "\"steps\":[]"
+            + "}";
+        engine.pushState(withoutRunId);
+
+        // 3. Payload with explicit matching runId shares the exact same index namespace -> index 3
+        final String withExplicitRunId = "{"
+            + "\"runId\":\"" + activeRunFolder + "\","
+            + "\"testClass\":\"com.xceptance.ConsistentIndexTest\","
+            + "\"testName\":\"ConsistentIndexTest :: ds2\","
+            + "\"status\":\"passed\","
+            + "\"steps\":[]"
+            + "}";
+        engine.pushState(withExplicitRunId);
+
+        assertTrue(Files.exists(logsDir.resolve(activeRunFolder + "/ConsistentIndexTest/console-execution-1.json")),
+            "Non-primitive runId must fall back safely and write console-execution-1.json");
+        assertTrue(Files.exists(logsDir.resolve(activeRunFolder + "/ConsistentIndexTest/console-execution-2.json")),
+            "Payload without runId must increment within runFolder namespace to console-execution-2.json");
+        assertTrue(Files.exists(logsDir.resolve(activeRunFolder + "/ConsistentIndexTest/console-execution-3.json")),
+            "Payload with matching runId must share runFolder index namespace and write console-execution-3.json");
     }
 }
 

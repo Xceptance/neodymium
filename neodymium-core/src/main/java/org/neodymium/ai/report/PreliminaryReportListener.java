@@ -510,7 +510,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                     {
                         targetStep.setReasonings(pbStep.getReasonings());
                     }
-                    if (pbStep.getFailureReason() != null)
+                    if (!isStepSuccess && pbStep.getFailureReason() != null)
                     {
                         targetStep.setFailureReason(pbStep.getFailureReason());
                     }
@@ -954,7 +954,17 @@ public final class PreliminaryReportListener implements ExecutionListener
                 }
                 if (actionExecuted.isHealed() && actionExecuted.isSuccess())
                 {
-                    this.currentStep.removeActionIf(a -> a != null && !a.isSuccess());
+                    final Integer targetSubIdx = action.getSubStepIndex();
+                    if (targetSubIdx != null)
+                    {
+                        this.currentStep.removeActionIf(
+                            a -> a != null && !a.isSuccess()
+                                && (a.getSubStepIndex() == null || targetSubIdx.equals(a.getSubStepIndex())));
+                    }
+                    else
+                    {
+                        this.currentStep.removeActionIf(a -> a != null && !a.isSuccess());
+                    }
                 }
                 this.currentStep.addAction(actionEntry);
                 if (action.getSubStepIndex() != null && !this.currentStep.getSubSteps().isEmpty())
@@ -963,10 +973,23 @@ public final class PreliminaryReportListener implements ExecutionListener
                     if (sIdx >= 0 && sIdx < this.currentStep.getSubSteps().size())
                     {
                         final TestExecutionReport.ReportStepEntry subEntry = this.currentStep.getSubSteps().get(sIdx);
+                        if (actionExecuted.isHealed() && actionExecuted.isSuccess())
+                        {
+                            subEntry.removeActionIf(a -> a != null && !a.isSuccess());
+                        }
                         subEntry.addAction(actionEntry);
                         if (actionExecuted.isSuccess())
                         {
-                            subEntry.setStatus("SUCCESS");
+                            if (actionExecuted.isHealed())
+                            {
+                                subEntry.setStatus("HEALED");
+                                subEntry.setFailureReason(null);
+                            }
+                            else if (!"HEALED".equalsIgnoreCase(subEntry.getStatus())
+                                && !"FAILED".equalsIgnoreCase(subEntry.getStatus()))
+                            {
+                                subEntry.setStatus("SUCCESS");
+                            }
                         }
                     }
                 }
@@ -1518,6 +1541,7 @@ public final class PreliminaryReportListener implements ExecutionListener
 
         long totalSubDuration = 0;
         boolean anyFailed = false;
+        boolean anyHealed = "HEALED".equalsIgnoreCase(step.getStatus());
         boolean allSuccess = true;
         boolean allSkipped = true;
         boolean allNotRun = true;
@@ -1550,6 +1574,10 @@ public final class PreliminaryReportListener implements ExecutionListener
             }
             else if ("SUCCESS".equalsIgnoreCase(subStatus) || "PASSED".equalsIgnoreCase(subStatus) || "HEALED".equalsIgnoreCase(subStatus))
             {
+                if ("HEALED".equalsIgnoreCase(subStatus) || sub.isHealed())
+                {
+                    anyHealed = true;
+                }
                 allSkipped = false;
                 allNotRun = false;
             }
@@ -1614,12 +1642,12 @@ public final class PreliminaryReportListener implements ExecutionListener
         }
         else if (allSuccess || (firstNotRunReason == null && !anyFailed))
         {
-            step.setStatus("SUCCESS");
+            step.setStatus(anyHealed ? "HEALED" : "SUCCESS");
             step.setFailureReason(null);
         }
         else
         {
-            step.setStatus(this.report.isSuccess() ? "SUCCESS" : "NOT RUN");
+            step.setStatus(this.report.isSuccess() ? (anyHealed ? "HEALED" : "SUCCESS") : "NOT RUN");
             if (!this.report.isSuccess() && step.getNotRunReason() == null)
             {
                 step.setNotRunReason(firstNotRunReason);
@@ -1917,11 +1945,7 @@ public final class PreliminaryReportListener implements ExecutionListener
         for (final TestExecutionReport.ReportStepEntry step : steps)
         {
             final String st = step.getStatus() != null ? step.getStatus().toUpperCase() : "";
-            if (step.isHealed())
-            {
-                healed++;
-            }
-            else if ("FAILED".equals(st))
+            if ("FAILED".equals(st))
             {
                 if (!step.isExpectedFailure())
                 {
@@ -1935,6 +1959,10 @@ public final class PreliminaryReportListener implements ExecutionListener
             else if ("NOT RUN".equals(st) || "NOT_RUN".equals(st) || "UNREACHED".equals(st))
             {
                 notRun++;
+            }
+            else if (step.isHealed())
+            {
+                healed++;
             }
         }
         m.setHealedSteps(healed);

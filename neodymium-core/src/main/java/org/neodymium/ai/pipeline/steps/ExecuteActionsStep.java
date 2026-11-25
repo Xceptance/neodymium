@@ -1094,10 +1094,11 @@ public final class ExecuteActionsStep
 
     /**
      * Extracts target selectors or coordinates from a step's recorded actions or tool calls
-     * prior to online healing so healed actions can preserve what failed during replay.
+     * prior to online healing while preserving 1:1 positional alignment across targetless entries
+     * so healed actions match their exact original indices.
      *
      * @param step the playbook step being healed
-     * @return ordered list of pre-healing target strings (may be empty, never null)
+     * @return positionally aligned list of pre-healing target strings or {@code null} for targetless entries
      */
     private static List<String> collectPreHealingTargets(final PlaybookStep step)
     {
@@ -1108,6 +1109,7 @@ public final class ExecuteActionsStep
             {
                 if (action == null)
                 {
+                    targets.add(null);
                     continue;
                 }
                 if (action.getTarget() != null && !action.getTarget().isBlank())
@@ -1118,6 +1120,10 @@ public final class ExecuteActionsStep
                 {
                     targets.add(action.getExpectedTarget());
                 }
+                else
+                {
+                    targets.add(null);
+                }
             }
         }
         else if (step.getToolCalls() != null)
@@ -1126,15 +1132,13 @@ public final class ExecuteActionsStep
             {
                 if (tc == null || tc.arguments() == null)
                 {
+                    targets.add(null);
                     continue;
                 }
                 final String sel = tc.arguments().hasNonNull("selector")
                     ? tc.arguments().get("selector").asText(null)
                     : (tc.arguments().hasNonNull("target") ? tc.arguments().get("target").asText(null) : null);
-                if (sel != null && !sel.isBlank())
-                {
-                    targets.add(sel);
-                }
+                targets.add((sel != null && !sel.isBlank()) ? sel : null);
             }
         }
         return targets;

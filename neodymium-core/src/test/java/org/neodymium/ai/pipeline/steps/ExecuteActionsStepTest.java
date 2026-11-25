@@ -48,12 +48,14 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.neodymium.ai.client.LlmRegistry;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.MockLlmProvider;
@@ -70,6 +72,7 @@ import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.model.ContextLevel;
+import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
@@ -2196,7 +2199,7 @@ public final class ExecuteActionsStepTest
      * failed replay attempt from the report actions, and captures post-step visual state.
      */
     @Test
-    public void testOnlineLlmHealingResetsPreMutatedFailedStatusAndReportsHealedOutcome() throws Exception
+    public void testOnlineLlmHealingResetsPreMutatedFailedStatusAndReportsHealedOutcome(@TempDir final Path tempDir) throws Exception
     {
         final BufferedImage postImg = new BufferedImage(10, 10, BufferedImage.TYPE_INT_RGB);
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -2243,7 +2246,6 @@ public final class ExecuteActionsStepTest
         sessionData.set("searchPhrase", "Neodymium");
 
         final ExecutionEventBus eventBus = new ExecutionEventBus();
-        final Path tempDir = Files.createTempDirectory("online-healing-status-test-");
         final PreliminaryReportListener reportListener = new PreliminaryReportListener(
             tempDir,
             EnumSet.of(DiskReportFormat.JSON),
@@ -2345,6 +2347,180 @@ public final class ExecuteActionsStepTest
         assertEquals("#legacyQueryBox", repAction.getExpectedTarget(), "Report action expectedTarget must preserve #legacyQueryBox");
         assertEquals("${searchPhrase}", repAction.getValue(), "Report action canonical value must keep parameterized placeholder");
         assertEquals("Neodymium", repAction.getResolvedValue(), "Report action resolvedValue must capture runtime text");
+    }
+
+    @Test
+    public void testMixedTargetlessAndTargetedOnlineHealingPreservesPositionalAlignmentAndRefreshesVector() throws Exception
+    {
+        final MockSutState sutState = new MockSutState("<html><body><button id=\"newBtn\">Go</button></body></html>", Collections.emptyList(), "dom_mixed");
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        for (int i = 0; i < 6; i++)
+        {
+            executor.enqueueState(sutState);
+        }
+
+        final DomFeatureVector staleStepVector = new DomFeatureVector(
+            "button", "Go", Set.of("old"), Map.of("id", "oldBtn"), "button", "Go", "body", 0);
+        final DomFeatureVector healedFirstVector = new DomFeatureVector(
+            "button", "Go", Set.of("new"), Map.of("id", "newBtn"), "button", "Go", "body", 0);
+
+        final ObjectNode waitArgs = JsonNodeFactory.instance.objectNode().put("ms", 10);
+        final ObjectNode healedClickArgs = JsonNodeFactory.instance.objectNode().put("selector", "#newBtn");
+        healedClickArgs.set("domFeatureVector", new ObjectMapper().valueToTree(healedFirstVector));
+        final ObjectNode extraClickArgs = JsonNodeFactory.instance.objectNode().put("selector", "#extraBtn");
+        final ObjectNode completeArgs = JsonNodeFactory.instance.objectNode().put("summary", "Healed mixed actions");
+
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        mockProvider.addResponse(new LlmResponse(
+            "",
+            new TokenUsage(25, 10, 35, 0),
+            "mock-model",
+            List.of(new ToolCall("heal-wait-0", "wait", waitArgs))));
+        mockProvider.addResponse(new LlmResponse(
+            "",
+            new TokenUsage(25, 10, 35, 0),
+            "mock-model",
+            List.of(new ToolCall("heal-click-1", "click", healedClickArgs))));
+        mockProvider.addResponse(new LlmResponse(
+            "",
+            new TokenUsage(25, 10, 35, 0),
+            "mock-model",
+            List.of(new ToolCall("heal-click-2", "click", extraClickArgs))));
+        mockProvider.addResponse(new LlmResponse(
+            "",
+            new TokenUsage(40, 10, 50, 0),
+            "mock-model",
+            List.of(new ToolCall("heal-done", "complete_step", completeArgs))));
+
+        final LlmRegistry llmRegistry = new LlmRegistry();
+        llmRegistry.setDefaultProvider(mockProvider);
+        final AiSession session = AiSession.mock(
+            ExecutionMode.REPLAY_WITH_HEALING,
+            new SessionData(),
+            llmRegistry,
+            new ExecutionEventBus(),
+            executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        final ToolRegistry toolRegistry = new ToolRegistry();
+        toolRegistry.register(new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return new ToolDefinition("wait", "Wait ms", JsonNodeFactory.instance.objectNode());
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Waited");
+            }
+        });
+        toolRegistry.register(new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return new ToolDefinition("click", "Click target", JsonNodeFactory.instance.objectNode());
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                final String sel = call.arguments().path("selector").asText("");
+                if ("#oldBtn".equals(sel))
+                {
+                    throw new RuntimeException("Element not found {PlaywrightBy: #oldBtn}");
+                }
+                return ToolResult.success(call.callId(), "{\"status\":\"ok\",\"target\":\"" + sel + "\"}");
+            }
+        });
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_WITH_HEALING);
+        context.getTransientData().put("KEY_TOOL_REGISTRY", toolRegistry);
+
+        final PlaybookStep step = new PlaybookStep("Wait then click Go button");
+        step.setDomFeatureVector(staleStepVector);
+        step.setToolCalls(List.of(
+            new ToolCall("rec-wait-0", "wait", JsonNodeFactory.instance.objectNode().put("ms", 10)),
+            new ToolCall("rec-click-1", "click", JsonNodeFactory.instance.objectNode().put("selector", "#oldBtn"))));
+        step.setActions(List.of(
+            new Action("WAIT", "", List.of("10"), "Wait", "", false),
+            new Action("CLICK", "#oldBtn", List.of(), "Click Go", "", false)));
+
+        context.getTransientData().put("playbook.steps", List.of(step));
+        context.getTransientData().put("playbook.flatSteps", List.of(step));
+        context.pushStep(ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, session, context));
+
+        ExecutionContext.setActiveContext(context);
+        try
+        {
+            new StateMachineRunner(session).run();
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
+
+        assertEquals(PlaybookStepStatus.HEALED, step.getStatus());
+        assertEquals(3, step.getActions().size());
+        assertNull(step.getActions().get(0).getExpectedTarget(),
+            "Targetless action at index 0 must NOT receive #oldBtn from index 1");
+        assertEquals("#oldBtn", step.getActions().get(1).getExpectedTarget(),
+            "Targeted action at index 1 must preserve #oldBtn as expectedTarget");
+        assertNull(step.getActions().get(2).getExpectedTarget(),
+            "Extra healed action beyond recorded bounds must have null expectedTarget, not its own #extraBtn selector");
+        assertNotNull(step.getDomFeatureVector());
+        assertEquals("newBtn", step.getDomFeatureVector().getAttributes().get("id"),
+            "Online healing must refresh stale pre-healing step-level DomFeatureVector");
+    }
+
+    @Test
+    public void testContextToolRegistryOverrideIsAdvertisedInDefinitionsAndAcceptedByParser()
+    {
+        final AgentToolLoopStep agentStep = new AgentToolLoopStep();
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        final ToolRegistry ctxRegistry = new ToolRegistry();
+        ctxRegistry.register(new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return new ToolDefinition(
+                    "custom_verify_badge",
+                    "Custom verification tool",
+                    JsonNodeFactory.instance.objectNode().put("type", "object"));
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "verified");
+            }
+        });
+        context.getTransientData().put("KEY_TOOL_REGISTRY", ctxRegistry);
+
+        final List<ToolDefinition> defs = agentStep.filterTools(false, context);
+        assertTrue(defs.stream().anyMatch(d -> "custom_verify_badge".equals(d.name())),
+            "Custom tool in KEY_TOOL_REGISTRY must be advertised in filterTools definitions");
+        assertTrue(defs.stream().anyMatch(d -> "complete_step".equals(d.name())),
+            "Built-in tools from default registry must remain available alongside KEY_TOOL_REGISTRY");
+
+        ExecutionContext.setActiveContext(context);
+        try
+        {
+            final ToolCall parsed = agentStep.parseLlmToolCall(
+                "{\"tool\": \"custom_verify_badge\", \"arguments\": {\"target\": \"#badge\"}}");
+            assertNotNull(parsed, "Custom tool in KEY_TOOL_REGISTRY must be recognized by parseLlmToolCall");
+            assertEquals("custom_verify_badge", parsed.toolName());
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
     }
 }
 

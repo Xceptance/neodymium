@@ -129,10 +129,11 @@ public final class InteractiveConsoleEngine {
 
     /**
      * Normalizes a raw run identifier into the canonical run folder name ({@code run_*} or {@code run-*}),
-     * falling back to {@link #getRunFolder()} when null or blank.
+     * sanitizing path traversal or separator characters and falling back to {@link #getRunFolder()} when
+     * null, blank, or lacking alphanumeric characters.
      *
      * @param runId the raw run identifier
-     * @return the normalized run folder name
+     * @return the normalized safe run folder name
      */
     public static String normalizeRunFolder(final String runId)
     {
@@ -140,18 +141,31 @@ public final class InteractiveConsoleEngine {
         {
             return getRunFolder();
         }
-        final String trimmed = runId.trim();
-        return (trimmed.startsWith("run_") || trimmed.startsWith("run-")) ? trimmed : "run_" + trimmed;
+        String sanitized = runId.trim().replaceAll("[^a-zA-Z0-9._-]", "_");
+        while (sanitized.contains(".."))
+        {
+            sanitized = sanitized.replace("..", "_");
+        }
+        sanitized = sanitized.replaceAll("^\\.+|\\.+$", "");
+        if (sanitized.isBlank() || !sanitized.matches(".*[a-zA-Z0-9].*"))
+        {
+            return getRunFolder();
+        }
+        return (sanitized.startsWith("run_") || sanitized.startsWith("run-")) ? sanitized : "run_" + sanitized;
     }
 
     private static String extractPayloadRunFolder(final JsonObject parsedState)
     {
-        if (parsedState != null && parsedState.has("runId") && !parsedState.get("runId").isJsonNull())
+        if (parsedState != null && parsedState.has("runId"))
         {
-            final String payloadRunId = parsedState.get("runId").getAsString();
-            if (payloadRunId != null && !payloadRunId.isBlank())
+            final JsonElement runIdElem = parsedState.get("runId");
+            if (runIdElem != null && !runIdElem.isJsonNull() && runIdElem.isJsonPrimitive())
             {
-                return normalizeRunFolder(payloadRunId);
+                final String payloadRunId = runIdElem.getAsString();
+                if (payloadRunId != null && !payloadRunId.isBlank())
+                {
+                    return normalizeRunFolder(payloadRunId);
+                }
             }
         }
         return null;
@@ -728,13 +742,12 @@ public final class InteractiveConsoleEngine {
                 final String testClassFolder = extractTestClassFolder(parsedState);
                 final String payloadRunFolder = extractPayloadRunFolder(parsedState);
                 final String runFolder = payloadRunFolder != null ? payloadRunFolder : getEffectiveRunFolder();
-                final int index = (payloadRunFolder != null)
-                    ? getExecutionIndex(payloadRunFolder + "::" + testClassFolder, executionKey)
-                    : getExecutionIndex(testClassFolder, executionKey);
+                final int index = getExecutionIndex(runFolder + "::" + testClassFolder, executionKey);
+                final int rootIndex = getExecutionIndex(testClassFolder, executionKey);
                 String contentToSave = minified;
 
                 // 1. Root file for compatibility in default allure.results.directory
-                final File executionJson = new File(defaultResultsDir, "console-execution-" + index + ".json");
+                final File executionJson = new File(defaultResultsDir, "console-execution-" + rootIndex + ".json");
 
                 // 2. Structured run and test class folders in configured console logs directory
                 final String configuredResultsDirPath = AiConfiguration.getInstance().getConsoleExecutionLogsDirectory();

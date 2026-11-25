@@ -105,9 +105,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -246,7 +248,7 @@ public final class AgentToolLoopStep implements PipelineStep
     private void executeLoop(final ExecutionContext context) throws PipelineException
     {
         final long startTimeMs = System.currentTimeMillis();
-        final ToolContext toolContext = new SimpleToolContext(this.toolRegistry);
+        final ToolContext toolContext = new SimpleToolContext(resolveEffectiveToolRegistry(context));
         toolContext.setVariable("neodymium.executionContext", context);
         final List<ToolCall> executedCalls = new ArrayList<>();
         final List<Action> executedActions = new ArrayList<>();
@@ -2290,6 +2292,7 @@ public final class AgentToolLoopStep implements PipelineStep
             final List<Action> existingActions = currentStep.getActions();
             final List<Action> actions = new ArrayList<>();
             final boolean healedStep = isHealedStep(context);
+            boolean stepVectorRefreshed = false;
             int actIdx = 0;
             for (final ToolCall call : executedCalls)
             {
@@ -2309,9 +2312,11 @@ public final class AgentToolLoopStep implements PipelineStep
                     applyHealedMetadata(sanitizedAction, healedStep, context, existingActions, actIdx);
                     actIdx++;
                     actions.add(sanitizedAction);
-                    if (currentStep.getDomFeatureVector() == null && sanitizedAction.getDomFeatureVector() != null)
+                    if (sanitizedAction.getDomFeatureVector() != null
+                        && (currentStep.getDomFeatureVector() == null || (healedStep && !stepVectorRefreshed)))
                     {
                         currentStep.setDomFeatureVector(sanitizedAction.getDomFeatureVector());
+                        stepVectorRefreshed = true;
                     }
                 }
             }
@@ -2367,8 +2372,7 @@ public final class AgentToolLoopStep implements PipelineStep
     }
 
     /**
-     * Resolves a tool by name, consulting a caller-supplied context {@code KEY_TOOL_REGISTRY}
-     * override first when this step uses the default built-in registry.
+     * Resolves a tool by name using the effective registry for the active context.
      *
      * @param context the current execution context
      * @param toolName the requested tool name
@@ -2376,17 +2380,96 @@ public final class AgentToolLoopStep implements PipelineStep
      */
     private Optional<AiTool> resolveTool(final ExecutionContext context, final String toolName)
     {
+        return resolveEffectiveToolRegistry(context).getTool(toolName);
+    }
+
+    /**
+     * Returns an overlay {@link ToolRegistry} combining a caller-supplied context
+     * {@code KEY_TOOL_REGISTRY} override with the step's base registry when applicable.
+     *
+     * @param context the current execution context
+     * @return effective tool registry for lookup and definition advertising
+     */
+    private ToolRegistry resolveEffectiveToolRegistry(final ExecutionContext context)
+    {
         if (this.defaultToolRegistry
                 && context != null
                 && context.getTransientData().get("KEY_TOOL_REGISTRY") instanceof final ToolRegistry ctxRegistry)
         {
-            final Optional<AiTool> customTool = ctxRegistry.getTool(toolName);
-            if (customTool.isPresent())
-            {
-                return customTool;
-            }
+            return new OverlayToolRegistry(this.toolRegistry, ctxRegistry);
         }
-        return this.toolRegistry.getTool(toolName);
+        return this.toolRegistry;
+    }
+
+    /**
+     * Read-only overlay registry prioritizing context-scoped custom/override tools while
+     * preserving built-in tools from the base registry.
+     */
+    private static final class OverlayToolRegistry extends ToolRegistry
+    {
+        private final ToolRegistry base;
+        private final ToolRegistry override;
+
+        private OverlayToolRegistry(final ToolRegistry base, final ToolRegistry override)
+        {
+            this.base = base;
+            this.override = override;
+        }
+
+        @Override
+        public Optional<AiTool> getTool(final String toolName)
+        {
+            final Optional<AiTool> customTool = this.override.getTool(toolName);
+            return customTool.isPresent() ? customTool : this.base.getTool(toolName);
+        }
+
+        @Override
+        public boolean hasTool(final String toolName)
+        {
+            return getTool(toolName).isPresent();
+        }
+
+        @Override
+        public Collection<AiTool> getAllTools()
+        {
+            final Map<String, AiTool> merged = new LinkedHashMap<>();
+            for (final AiTool tool : this.base.getAllTools())
+            {
+                if (tool != null && tool.getDefinition() != null)
+                {
+                    merged.put(tool.getDefinition().name(), tool);
+                }
+            }
+            for (final AiTool tool : this.override.getAllTools())
+            {
+                if (tool != null && tool.getDefinition() != null)
+                {
+                    merged.put(tool.getDefinition().name(), tool);
+                }
+            }
+            return Collections.unmodifiableCollection(new ArrayList<>(merged.values()));
+        }
+
+        @Override
+        public List<ToolDefinition> getDefinitions()
+        {
+            final Map<String, ToolDefinition> merged = new LinkedHashMap<>();
+            for (final ToolDefinition def : this.base.getDefinitions())
+            {
+                if (def != null)
+                {
+                    merged.put(def.name(), def);
+                }
+            }
+            for (final ToolDefinition def : this.override.getDefinitions())
+            {
+                if (def != null)
+                {
+                    merged.put(def.name(), def);
+                }
+            }
+            return Collections.unmodifiableList(new ArrayList<>(merged.values()));
+        }
     }
 
     /**
@@ -2543,7 +2626,7 @@ public final class AgentToolLoopStep implements PipelineStep
             return;
         }
         action.setHealed(true);
-        final String originalTarget = resolveHealedOriginalTarget(context, existingActions, actionIndex, action.getTarget());
+        final String originalTarget = resolveHealedOriginalTarget(context, existingActions, actionIndex);
         if (originalTarget != null && !originalTarget.isBlank())
         {
             action.setExpectedTarget(originalTarget);
@@ -2553,24 +2636,27 @@ public final class AgentToolLoopStep implements PipelineStep
 
     /**
      * Resolves the original pre-healing target selector for the given action index from captured
-     * pre-healing context targets or prior step actions, falling back to {@code newTarget}.
+     * pre-healing context targets or prior step actions, returning {@code null} when absent or out of bounds.
      */
     private static String resolveHealedOriginalTarget(
             final ExecutionContext context,
             final List<Action> existingActions,
-            final int actionIndex,
-            final String newTarget)
+            final int actionIndex)
     {
         if (context != null)
         {
             final Object preTargetsObj = context.getTransientData().get(ExecutionContext.KEY_PRE_HEALING_TARGETS);
-            if (preTargetsObj instanceof final List<?> preTargets && actionIndex >= 0 && actionIndex < preTargets.size())
+            if (preTargetsObj instanceof final List<?> preTargets)
             {
-                final Object candidate = preTargets.get(actionIndex);
-                if (candidate instanceof final String targetStr && !targetStr.isBlank())
+                if (actionIndex >= 0 && actionIndex < preTargets.size())
                 {
-                    return targetStr;
+                    final Object candidate = preTargets.get(actionIndex);
+                    if (candidate instanceof final String targetStr && !targetStr.isBlank())
+                    {
+                        return targetStr;
+                    }
                 }
+                return null;
             }
         }
         if (existingActions != null && actionIndex >= 0 && actionIndex < existingActions.size())
@@ -2592,7 +2678,7 @@ public final class AgentToolLoopStep implements PipelineStep
                 }
             }
         }
-        return newTarget;
+        return null;
     }
 
     /**
@@ -3185,7 +3271,7 @@ public final class AgentToolLoopStep implements PipelineStep
         }
         final String effectiveInstructionText = combinedBuilder.toString().toLowerCase(Locale.ROOT);
 
-        for (final ToolDefinition def : this.toolRegistry.getDefinitions())
+        for (final ToolDefinition def : resolveEffectiveToolRegistry(context).getDefinitions())
         {
             final String name = def.name();
             final String clean = name.startsWith("browser_") ? name.substring("browser_".length()) : name;
@@ -3943,6 +4029,7 @@ public final class AgentToolLoopStep implements PipelineStep
         }
         final String name = stripNamespacePrefix(rawName.trim()).toLowerCase(Locale.ROOT);
         final String clean = name.startsWith("browser_") ? name.substring("browser_".length()) : name;
+        final ToolRegistry effectiveRegistry = resolveEffectiveToolRegistry(ExecutionContext.getActiveContext());
         return "complete_step".equals(clean) || "fail_step".equals(clean) || "click".equals(clean)
                 || "fill".equals(clean) || "fill_form".equals(clean) || "type".equals(clean)
                 || "upload".equals(clean) || "upload_file".equals(clean)
@@ -3964,8 +4051,8 @@ public final class AgentToolLoopStep implements PipelineStep
                 || "screenshot".equals(clean) || "take_screenshot".equals(clean)
                 || "inspect_visual".equals(clean) || "mark_elements".equals(clean) || "request_context".equals(clean)
                 || "query_dom".equals(clean) || "inspect".equals(clean) || "execute_script".equals(clean)
-                || this.toolRegistry.hasTool(name) || this.toolRegistry.hasTool(rawName.trim())
-                || this.toolRegistry.hasTool(clean);
+                || effectiveRegistry.hasTool(name) || effectiveRegistry.hasTool(rawName.trim())
+                || effectiveRegistry.hasTool(clean);
     }
 
     private static String normalizeToolName(final String rawName)

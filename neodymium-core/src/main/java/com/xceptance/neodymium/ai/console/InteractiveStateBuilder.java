@@ -1171,6 +1171,16 @@ public final class InteractiveStateBuilder
             obj.addProperty("continueOnError", reportStep.isContinueOnError());
             obj.addProperty("noHealing", reportStep.isNoHealing());
             obj.addProperty("visual", reportStep.isVisual());
+            final boolean isStepFailed = status == PlaybookStepStatus.FAILED
+                || step.isFailed()
+                || "FAILED".equalsIgnoreCase(reportStep.getStatus())
+                || (reportStep.getSubSteps() != null && reportStep.getSubSteps().stream()
+                    .anyMatch(s -> s != null && ("FAILED".equalsIgnoreCase(s.getStatus()) || s.getFailureReason() != null)));
+            final boolean isStepRunning = !isStepFailed && (status == PlaybookStepStatus.RUNNING
+                || "RUNNING".equalsIgnoreCase(reportStep.getStatus())
+                || (reportStep.getSubSteps() != null && reportStep.getSubSteps().stream()
+                    .anyMatch(s -> s != null && "RUNNING".equalsIgnoreCase(s.getStatus()))));
+
             if (reportStep.isNotRun() || "NOT RUN".equalsIgnoreCase(reportStep.getStatus()) || "NOT_RUN".equalsIgnoreCase(reportStep.getStatus()))
             {
                 obj.addProperty("status", "not_run");
@@ -1179,7 +1189,11 @@ public final class InteractiveStateBuilder
                     obj.addProperty("notRunReason", reportStep.getNotRunReason());
                 }
             }
-            else if (reportStep.isHealed() || "HEALED".equalsIgnoreCase(reportStep.getStatus()))
+            else if (isStepFailed)
+            {
+                obj.addProperty("status", "failed");
+            }
+            else if (!isStepRunning && (reportStep.isHealed() || "HEALED".equalsIgnoreCase(reportStep.getStatus())))
             {
                 obj.addProperty("status", "healed");
                 obj.addProperty("healed", true);
@@ -1189,13 +1203,16 @@ public final class InteractiveStateBuilder
             {
                 final JsonArray reportActions = serializeReportActions(reportStep.getActions());
                 obj.add("actions", reportActions);
-                for (final JsonElement actElem : reportActions)
+                if (!isStepFailed && !isStepRunning)
                 {
-                    if (actElem.isJsonObject() && actElem.getAsJsonObject().has("healed") && actElem.getAsJsonObject().get("healed").getAsBoolean())
+                    for (final JsonElement actElem : reportActions)
                     {
-                        obj.addProperty("status", "healed");
-                        obj.addProperty("healed", true);
-                        break;
+                        if (actElem.isJsonObject() && actElem.getAsJsonObject().has("healed") && actElem.getAsJsonObject().get("healed").getAsBoolean())
+                        {
+                            obj.addProperty("status", "healed");
+                            obj.addProperty("healed", true);
+                            break;
+                        }
                     }
                 }
             }
@@ -1210,12 +1227,7 @@ public final class InteractiveStateBuilder
             }
             else if (!reportStep.getSubSteps().isEmpty())
             {
-                final boolean isStepFailed = status == PlaybookStepStatus.FAILED
-                    || step.isFailed()
-                    || "FAILED".equalsIgnoreCase(reportStep.getStatus());
-                final boolean hasFailedSubStep = reportStep.getSubSteps().stream()
-                    .anyMatch(s -> s != null && ("FAILED".equalsIgnoreCase(s.getStatus()) || s.getFailureReason() != null));
-                final boolean isFailing = isStepFailed || hasFailedSubStep || (isRunFailed && isThisStepActive);
+                final boolean isFailing = isStepFailed || (isRunFailed && isThisStepActive);
 
                 if (isFailing)
                 {

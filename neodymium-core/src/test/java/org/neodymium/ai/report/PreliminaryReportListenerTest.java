@@ -3599,4 +3599,128 @@ public class PreliminaryReportListenerTest
         assertNull(report.getFailureReason(), "Passing session report must not repopulate failureReason from stale KEY_LAST_EXECUTION_ERROR");
         assertNull(report.getFailureStackTrace(), "Passing session report must not repopulate failureStackTrace from stale KEY_LAST_EXECUTION_ERROR");
     }
+
+    @Test
+    @DisplayName("Verify failed steps containing an earlier healed action or sub-step are counted as FAILED, not HEALED")
+    public void testFailedStepWithEarlierHealedActionAndSubStepCountsAsFailedNotHealed(@TempDir final Path tempDir)
+    {
+        final PreliminaryReportListener listener = new PreliminaryReportListener(tempDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        // Step 0: single-action/multi-action step where Action 0 healed and Action 1 failed -> FAILED
+        final PlaybookStep singleStep = new PlaybookStep("Fill search and click missing submit");
+        bus.dispatch(new StepStartedEvent(singleStep, 0));
+
+        final Action healedOrig = new Action("FILL", "#oldSearch", List.of("test"), "Type query", "");
+        final Action healedResolved = new Action("FILL", "#newSearch", List.of("test"), "Type query", "");
+        bus.dispatch(new ActionExecutedEvent(healedOrig, healedResolved, true, true));
+
+        final Action failedClick = new Action("CLICK", "#missingSubmit", List.of(), "Click submit", "");
+        bus.dispatch(new ActionExecutedEvent(failedClick, failedClick, false, "Element not found", false));
+
+        singleStep.setStatus(PlaybookStepStatus.FAILED);
+        singleStep.setFailureReason("Submit button not found");
+        bus.dispatch(new StepFinishedEvent(singleStep, PlaybookStepStatus.FAILED));
+
+        // Step 1: composite step where sub-step 0 healed and sub-step 1 failed -> FAILED
+        final PlaybookStep compositeStep = new PlaybookStep("Composite checkout flow");
+        final PlaybookStep sub0 = new PlaybookStep("Enter promo code");
+        final PlaybookStep sub1 = new PlaybookStep("Confirm order");
+        compositeStep.setSubSteps(List.of(sub0, sub1));
+
+        bus.dispatch(new StepStartedEvent(compositeStep, 1));
+
+        final Action sub0Orig = new Action("FILL", "#promoOld", List.of("SAVE"), "Enter promo", "");
+        sub0Orig.setSubStepIndex(0);
+        sub0Orig.setSubStepInstruction(sub0.getInstruction());
+        final Action sub0Healed = new Action("FILL", "#promoNew", List.of("SAVE"), "Enter promo", "");
+        sub0Healed.setSubStepIndex(0);
+        sub0Healed.setSubStepInstruction(sub0.getInstruction());
+        bus.dispatch(new ActionExecutedEvent(sub0Orig, sub0Healed, true, true));
+
+        final Action sub1Failed = new Action("CLICK", "#confirmOrder", List.of(), "Click confirm", "");
+        sub1Failed.setSubStepIndex(1);
+        sub1Failed.setSubStepInstruction(sub1.getInstruction());
+        bus.dispatch(new ActionExecutedEvent(sub1Failed, sub1Failed, false, "Confirm disabled", false));
+
+        sub0.setStatus(PlaybookStepStatus.HEALED);
+        sub1.setStatus(PlaybookStepStatus.FAILED);
+        sub1.setFailureReason("Confirm disabled");
+        compositeStep.setStatus(PlaybookStepStatus.FAILED);
+        compositeStep.setFailureReason("Confirm disabled");
+        bus.dispatch(new StepFinishedEvent(compositeStep, PlaybookStepStatus.FAILED));
+
+        bus.dispatch(new SessionFinishedEvent(900L, false));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertFalse(report.isSuccess(), "Report must be unsuccessful");
+        assertEquals("FAILED", report.getStatus());
+        assertEquals(2, report.getSteps().size());
+
+        final TestExecutionReport.ReportStepEntry rep0 = report.getSteps().get(0);
+        assertEquals("FAILED", rep0.getStatus());
+        assertFalse(rep0.isHealed(), "FAILED step with earlier healed action must return isHealed() == false");
+
+        final TestExecutionReport.ReportStepEntry rep1 = report.getSteps().get(1);
+        assertEquals("FAILED", rep1.getStatus());
+        assertFalse(rep1.isHealed(), "FAILED composite step with earlier healed sub-step must return isHealed() == false");
+
+        assertEquals(2, report.getMetrics().getFailedSteps(), "Both failed steps must be counted in failedSteps");
+        assertEquals(0, report.getMetrics().getHealedSteps(), "Failed steps must NEVER be counted in healedSteps");
+    }
+
+    @Test
+    @DisplayName("Verify sub-step healing prunes failed actions, preserves HEALED status, and keeps cleared failureReason")
+    public void testSubStepHealingPrunesFailedActionsRetainsHealedStatusAndClearsStaleFailureReason(@TempDir final Path tempDir)
+    {
+        final PreliminaryReportListener listener = new PreliminaryReportListener(tempDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final PlaybookStep compositeStep = new PlaybookStep("Composite login macro");
+        final PlaybookStep sub0 = new PlaybookStep("Click sign in");
+        compositeStep.setSubSteps(List.of(sub0));
+
+        bus.dispatch(new StepStartedEvent(compositeStep, 0));
+
+        final Action initialFailed = new Action("CLICK", "#oldLoginBtn", List.of(), "Click sign in", "");
+        initialFailed.setSubStepIndex(0);
+        initialFailed.setSubStepInstruction(sub0.getInstruction());
+        bus.dispatch(new ActionExecutedEvent(initialFailed, initialFailed, false, "Element not found", false));
+
+        final Action healedCanon = new Action("CLICK", "#oldLoginBtn", List.of(), "Click sign in", "");
+        healedCanon.setSubStepIndex(0);
+        healedCanon.setSubStepInstruction(sub0.getInstruction());
+        final Action healedResolved = new Action("CLICK", "#newLoginBtn", List.of(), "Click sign in", "");
+        healedResolved.setSubStepIndex(0);
+        healedResolved.setSubStepInstruction(sub0.getInstruction());
+        bus.dispatch(new ActionExecutedEvent(healedCanon, healedResolved, true, true));
+
+        final Action followUpAction = new Action("WAIT", "100", List.of(), "Settle UI", "");
+        followUpAction.setSubStepIndex(0);
+        followUpAction.setSubStepInstruction(sub0.getInstruction());
+        bus.dispatch(new ActionExecutedEvent(followUpAction, followUpAction, true, false));
+
+        // Simulate stale failureReason lingering on PlaybookStep when StepFinishedEvent fires with HEALED
+        sub0.setStatus(PlaybookStepStatus.HEALED);
+        compositeStep.setStatus(PlaybookStepStatus.HEALED);
+        compositeStep.setFailureReason("Stale replay error that must not overwrite cleared failureReason");
+        bus.dispatch(new StepFinishedEvent(compositeStep, PlaybookStepStatus.HEALED));
+        bus.dispatch(new SessionFinishedEvent(400L, true));
+
+        final TestExecutionReport report = listener.getReport();
+        final TestExecutionReport.ReportStepEntry stepEntry = report.getSteps().get(0);
+        assertEquals("HEALED", stepEntry.getStatus());
+        assertNull(stepEntry.getFailureReason(), "Successful HEALED step must not restore stale pbStep.failureReason");
+        assertEquals(2, stepEntry.getActions().size(), "Failed action must be pruned from parent step");
+        assertTrue(stepEntry.getActions().stream().allMatch(TestExecutionReport.ReportActionEntry::isSuccess));
+
+        final TestExecutionReport.ReportStepEntry subEntry = stepEntry.getSubSteps().get(0);
+        assertEquals("HEALED", subEntry.getStatus(), "Healed sub-step status must be HEALED and not downgraded to SUCCESS by subsequent actions");
+        assertNull(subEntry.getFailureReason(), "Healed sub-step failureReason must be null");
+        assertEquals(2, subEntry.getActions().size(), "Failed action must also be pruned from subEntry");
+        assertTrue(subEntry.getActions().stream().allMatch(TestExecutionReport.ReportActionEntry::isSuccess));
+    }
 }
