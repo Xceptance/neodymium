@@ -31,9 +31,12 @@ import java.net.ServerSocket;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -322,10 +325,7 @@ public final class JavalinTestServer
         }
         catch (final Exception e)
         {
-            final boolean isBindError = (e instanceof BindException)
-                || (e.getCause() instanceof BindException)
-                || (e.getMessage() != null && e.getMessage().contains("Address already in use"));
-            if (isBindError)
+            if (isBindError(e))
             {
                 LOG.warn("Port collision during Javalin startup. Re-binding connectors to dynamic ephemeral ports (0).");
                 final ServerConnector httpConn = httpConnectorRef.get();
@@ -347,6 +347,32 @@ public final class JavalinTestServer
         }
         this.running = true;
         LOG.info("Javalin test server started on [http={}, https={}]", getPort(), getHttpsPort());
+    }
+
+    /**
+     * Checks whether the given throwable or any exception in its cause chain indicates a port bind failure.
+     *
+     * @param throwable the throwable thrown during server startup
+     * @return {@code true} if a {@link BindException} or bind error message is present in the cause chain
+     */
+    static boolean isBindError(final Throwable throwable)
+    {
+        final Set<Throwable> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+        Throwable current = throwable;
+        while (current != null && visited.add(current))
+        {
+            if (current instanceof BindException)
+            {
+                return true;
+            }
+            final String message = current.getMessage();
+            if (message != null && (message.contains("Address already in use") || message.contains("Failed to bind")))
+            {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     /**

@@ -29,7 +29,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -2444,50 +2443,64 @@ public final class PreliminaryReportListener implements ExecutionListener
             final Path rootOutputDir = (this.isCustomOutputDirectory && !this.outputDirectory.equals(configuredDiskReportDir))
                 ? this.outputDirectory
                 : Paths.get("target/ai-results");
-            if (!Files.exists(rootOutputDir))
-            {
-                Files.createDirectories(rootOutputDir);
-            }
             if (!Files.exists(this.outputDirectory))
             {
                 Files.createDirectories(this.outputDirectory);
             }
 
-            final String baseFileName = (this.lastBaseFileName != null) ? this.lastBaseFileName : computeBaseFileName();
-            this.lastBaseFileName = baseFileName;
-
+            final Map<DiskReportFormat, byte[]> renderedReports = new LinkedHashMap<>();
             for (final DiskReportFormat format : this.formats)
             {
                 switch (format)
                 {
-                    case HTML -> {
-                        final String htmlContent = this.htmlGenerator.generate(this.report);
-                        final Path htmlFile = rootOutputDir.resolve(baseFileName + ".html");
-                        Files.writeString(htmlFile, htmlContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-                        LOGGER.info("📊 Preliminary HTML report written: {}", htmlFile.toAbsolutePath());
-                    }
-                    case MARKDOWN -> {
-                        final String mdContent = this.markdownGenerator.generate(this.report);
-                        final Path mdFile = rootOutputDir.resolve(baseFileName + ".md");
-                        Files.writeString(mdFile, mdContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-                        LOGGER.info("📝 Preliminary Markdown report written: {}", mdFile.toAbsolutePath());
-                    }
-                    case JSON -> {
-                        final String jsonContent = this.jsonGenerator.generate(this.report);
-                        final Path jsonFile = rootOutputDir.resolve(baseFileName + ".json");
-                        Files.writeString(jsonFile, jsonContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-                        LOGGER.info("💾 Preliminary JSON report written: {}", jsonFile.toAbsolutePath());
-                    }
-                    case ALL -> {
+                    case HTML -> renderedReports.put(format, this.htmlGenerator.generate(this.report).getBytes(StandardCharsets.UTF_8));
+                    case MARKDOWN -> renderedReports.put(format, this.markdownGenerator.generate(this.report).getBytes(StandardCharsets.UTF_8));
+                    case JSON -> renderedReports.put(format, this.jsonGenerator.generate(this.report).getBytes(StandardCharsets.UTF_8));
+                    case ALL ->
+                    {
                         // Handled by parseFormats expanding to HTML, MARKDOWN, JSON
                     }
                 }
             }
 
-            if (this.formats.contains(DiskReportFormat.HTML) || this.formats.contains(DiskReportFormat.ALL))
+            HtmlIndexReportGenerator.withDirectoryLock(rootOutputDir, () ->
             {
-                this.indexGenerator.updateIndex(rootOutputDir, this.report, baseFileName);
-            }
+                final String baseFileName = (this.lastBaseFileName != null)
+                    ? this.lastBaseFileName
+                    : computeBaseFileName(rootOutputDir);
+                this.lastBaseFileName = baseFileName;
+
+                for (final Map.Entry<DiskReportFormat, byte[]> entry : renderedReports.entrySet())
+                {
+                    final DiskReportFormat format = entry.getKey();
+                    final Path targetFile = switch (format)
+                    {
+                        case HTML -> rootOutputDir.resolve(baseFileName + ".html");
+                        case MARKDOWN -> rootOutputDir.resolve(baseFileName + ".md");
+                        case JSON -> rootOutputDir.resolve(baseFileName + ".json");
+                        case ALL -> null;
+                    };
+                    if (targetFile != null)
+                    {
+                        HtmlIndexReportGenerator.writeBytesAtomically(targetFile, entry.getValue());
+                        switch (format)
+                        {
+                            case HTML -> LOGGER.info("📊 Preliminary HTML report written: {}", targetFile.toAbsolutePath());
+                            case MARKDOWN -> LOGGER.info("📝 Preliminary Markdown report written: {}", targetFile.toAbsolutePath());
+                            case JSON -> LOGGER.info("💾 Preliminary JSON report written: {}", targetFile.toAbsolutePath());
+                            case ALL ->
+                            {
+                            }
+                        }
+                    }
+                }
+
+                if (this.formats.contains(DiskReportFormat.HTML) || this.formats.contains(DiskReportFormat.ALL))
+                {
+                    this.indexGenerator.updateIndex(rootOutputDir, this.report, baseFileName);
+                }
+                return null;
+            });
         }
         catch (final Exception e)
         {
@@ -2495,7 +2508,7 @@ public final class PreliminaryReportListener implements ExecutionListener
         }
     }
 
-    private String computeBaseFileName()
+    private String computeBaseFileName(final Path targetDirectory)
     {
         final StringBuilder sb = new StringBuilder();
 
@@ -2530,9 +2543,9 @@ public final class PreliminaryReportListener implements ExecutionListener
 
         String candidate = raw;
         int counter = 1;
-        while (Files.exists(this.outputDirectory.resolve(candidate + ".html"))
-            || Files.exists(this.outputDirectory.resolve(candidate + ".json"))
-            || Files.exists(this.outputDirectory.resolve(candidate + ".md")))
+        while (Files.exists(targetDirectory.resolve(candidate + ".html"))
+            || Files.exists(targetDirectory.resolve(candidate + ".json"))
+            || Files.exists(targetDirectory.resolve(candidate + ".md")))
         {
             candidate = raw + "_" + counter++;
         }

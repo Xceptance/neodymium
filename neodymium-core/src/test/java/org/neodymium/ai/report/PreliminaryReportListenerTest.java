@@ -37,12 +37,21 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -3562,5 +3571,177 @@ public class PreliminaryReportListenerTest
         final TestExecutionReport.ReportStepEntry reportStep4 = report.getSteps().get(3);
         assertEquals("FAILED", reportStep4.getStatus(), "Step 4 must remain FAILED and not be clobbered by downstream Step 6");
         assertEquals("Token budget exceeded", reportStep4.getFailureReason(), "Step 4 failureReason must be preserved");
+    }
+
+    @Test
+    @DisplayName("Verify concurrent threads flushing identical report metadata reserve unique names and preserve all index entries")
+    public void testConcurrentIndexUpdatesAcrossThreadsPreserveAllEntries(@TempDir final Path reportDir) throws Exception
+    {
+        final int threadCount = 8;
+        final long sharedStartTimeMs = 1_795_600_000_000L;
+        final ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        final CountDownLatch readyLatch = new CountDownLatch(threadCount);
+        final CountDownLatch startLatch = new CountDownLatch(1);
+
+        try
+        {
+            final List<Callable<String>> tasks = new ArrayList<>();
+            for (int i = 0; i < threadCount; i++)
+            {
+                final int workerIndex = i;
+                tasks.add(() ->
+                {
+                    final PreliminaryReportListener listener = new PreliminaryReportListener(
+                        reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+                    listener.getReport().setTestClass("org.neodymium.ai.integration.verla.checkout.normal.CheckoutTest");
+                    listener.getReport().setTestMethod("live");
+                    listener.getReport().setDatasetId("normal");
+                    listener.getReport().setExecutionMode("FORCE_RECORDING");
+                    listener.getReport().setStartTimeMs(sharedStartTimeMs);
+
+                    final ExecutionEventBus bus = new ExecutionEventBus();
+                    bus.registerListener(listener);
+                    final PlaybookStep step = new PlaybookStep("Step for worker " + workerIndex);
+                    bus.dispatch(new StepStartedEvent(step, 0));
+                    bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
+
+                    readyLatch.countDown();
+                    assertTrue(startLatch.await(10, TimeUnit.SECONDS), "Timed out waiting for thread barrier");
+                    bus.dispatch(new SessionFinishedEvent(250 + workerIndex, true));
+                    return listener.getLastBaseFileName();
+                });
+            }
+
+            final List<Future<String>> futures = new ArrayList<>();
+            for (final Callable<String> task : tasks)
+            {
+                futures.add(executor.submit(task));
+            }
+            assertTrue(readyLatch.await(10, TimeUnit.SECONDS), "Threads did not become ready in time");
+            startLatch.countDown();
+
+            final Set<String> baseNames = new HashSet<>();
+            for (final Future<String> future : futures)
+            {
+                final String baseName = future.get(30, TimeUnit.SECONDS);
+                assertNotNull(baseName, "Base filename must be assigned");
+                assertTrue(baseNames.add(baseName), "Duplicate base filename reserved across threads: " + baseName);
+                assertTrue(Files.exists(reportDir.resolve(baseName + ".html")), "HTML report must exist for " + baseName);
+                assertTrue(Files.exists(reportDir.resolve(baseName + ".json")), "JSON report must exist for " + baseName);
+            }
+
+            assertEquals(threadCount, baseNames.size());
+
+            final JsonNode indexRoot = new ObjectMapper().readTree(Files.readString(reportDir.resolve("index-data.json")));
+            assertEquals(threadCount, indexRoot.size(), "index-data.json must retain all concurrent entries");
+            final Set<String> indexedNames = new HashSet<>();
+            for (final JsonNode entry : indexRoot)
+            {
+                indexedNames.add(entry.get("baseFileName").asText());
+            }
+            assertEquals(baseNames, indexedNames, "Indexed entries must match all written reports");
+            assertTrue(Files.exists(reportDir.resolve("index.html")), "index.html must exist");
+        }
+        finally
+        {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    @DisplayName("Verify concurrent child JVMs updating shared report directory preserve all entries without index corruption")
+    public void testConcurrentIndexUpdatesAcrossProcessesPreserveAllEntries(@TempDir final Path reportDir) throws Exception
+    {
+        final int processCount = 4;
+        final int reportsPerProcess = 3;
+        final int expectedTotal = processCount * reportsPerProcess;
+        final String javaBin = Path.of(System.getProperty("java.home"), "bin", "java").toString();
+        final String classPath = System.getProperty("java.class.path");
+
+        final List<Process> processes = new ArrayList<>();
+        for (int p = 0; p < processCount; p++)
+        {
+            final ProcessBuilder pb = new ProcessBuilder(
+                javaBin,
+                "-cp",
+                classPath,
+                ParallelIndexWriterHelper.class.getName(),
+                reportDir.toString(),
+                String.valueOf(p),
+                String.valueOf(reportsPerProcess)
+            );
+            pb.redirectErrorStream(true);
+            processes.add(pb.start());
+        }
+
+        for (int p = 0; p < processCount; p++)
+        {
+            final Process proc = processes.get(p);
+            final String output = new String(proc.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            assertTrue(proc.waitFor(60, TimeUnit.SECONDS), "Child JVM " + p + " timed out. Output:\n" + output);
+            assertEquals(0, proc.exitValue(), "Child JVM " + p + " failed with exit code " + proc.exitValue() + ". Output:\n" + output);
+        }
+
+        final Path indexDataPath = reportDir.resolve("index-data.json");
+        final Path indexHtmlPath = reportDir.resolve("index.html");
+        assertTrue(Files.exists(indexDataPath), "index-data.json must exist after multi-process updates");
+        assertTrue(Files.exists(indexHtmlPath), "index.html must exist after multi-process updates");
+
+        final long reportJsonCount;
+        try (final Stream<Path> paths = Files.list(reportDir))
+        {
+            reportJsonCount = paths
+                .map(path -> path.getFileName().toString())
+                .filter(name -> name.endsWith(".json") && !"index-data.json".equals(name) && !name.startsWith("."))
+                .count();
+        }
+        assertEquals(expectedTotal, reportJsonCount, "All multi-process report JSON files must be preserved");
+
+        final JsonNode indexRoot = new ObjectMapper().readTree(Files.readString(indexDataPath));
+        assertEquals(expectedTotal, indexRoot.size(), "index-data.json must retain all multi-process entries");
+        final String indexHtml = Files.readString(indexHtmlPath);
+        assertTrue(indexHtml.contains("All (" + expectedTotal + ")"), "index.html summary must list all " + expectedTotal + " entries");
+    }
+
+    /**
+     * Child-process entry point used by {@link #testConcurrentIndexUpdatesAcrossProcessesPreserveAllEntries(Path)}
+     * to flush multiple AI reports concurrently from independent JVMs.
+     */
+    public static final class ParallelIndexWriterHelper
+    {
+        private ParallelIndexWriterHelper()
+        {
+        }
+
+        /**
+         * Writes {@code count} reports from a child JVM into {@code reportDir}.
+         *
+         * @param args {@code [reportDir, workerId, count]}
+         */
+        public static void main(final String[] args)
+        {
+            final Path reportDir = Path.of(args[0]);
+            final int workerId = Integer.parseInt(args[1]);
+            final int count = Integer.parseInt(args[2]);
+            final long sharedStartTimeMs = 1_795_600_000_000L;
+
+            for (int i = 0; i < count; i++)
+            {
+                final PreliminaryReportListener listener = new PreliminaryReportListener(
+                    reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+                listener.getReport().setTestClass("com.example.ForkCheckoutTest");
+                listener.getReport().setTestMethod("live");
+                listener.getReport().setDatasetId("normal");
+                listener.getReport().setExecutionMode("FORCE_RECORDING");
+                listener.getReport().setStartTimeMs(sharedStartTimeMs);
+
+                final ExecutionEventBus bus = new ExecutionEventBus();
+                bus.registerListener(listener);
+                final PlaybookStep step = new PlaybookStep("Process " + workerId + " step " + i);
+                bus.dispatch(new StepStartedEvent(step, 0));
+                bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
+                bus.dispatch(new SessionFinishedEvent(150 + i, true));
+            }
+        }
     }
 }

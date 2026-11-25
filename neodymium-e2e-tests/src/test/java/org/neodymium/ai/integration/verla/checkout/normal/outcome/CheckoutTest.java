@@ -56,7 +56,7 @@ import org.neodymium.util.Neodymium;
 @NeodymiumAiTest
 @AiJudge(false)
 @AiOutcomeVerification(value = true, failOnError = false)
-@AiPlaybook(value = "playbooks/integration/VerlaGuestCheckout_Us_English_Normal.yaml", recordingDirectory = "target/playbooks/integration/checkout/normal")
+@AiPlaybook(value = "playbooks/integration/VerlaGuestCheckout_Us_English_Normal.yaml", recordingDirectory = "target/playbooks/integration/checkout/normal/outcome")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class CheckoutTest extends BaseAiTest
 {

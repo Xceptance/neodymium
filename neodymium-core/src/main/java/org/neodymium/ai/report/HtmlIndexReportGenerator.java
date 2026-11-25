@@ -30,9 +30,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import java.io.File;
 import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
@@ -41,10 +45,14 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.neodymium.ai.config.AiConfiguration;
 import org.slf4j.Logger;
@@ -74,6 +82,26 @@ public final class HtmlIndexReportGenerator
 
     private static final String REGISTRY_FILE = "index-data.json";
     private static final String INDEX_HTML_FILE = "index.html";
+    private static final String LOCK_FILE = ".index.lock";
+    private static final Map<Path, Object> DIRECTORY_LOCKS = new ConcurrentHashMap<>();
+    private static final ThreadLocal<Set<Path>> ACTIVE_LOCKS = ThreadLocal.withInitial(HashSet::new);
+
+    /**
+     * Functional interface representing a cross-process locked I/O operation.
+     *
+     * @param <T> the result type
+     */
+    @FunctionalInterface
+    interface LockedAction<T>
+    {
+        /**
+         * Executes the guarded operation while holding both the JVM monitor and OS file lock.
+         *
+         * @return operation result
+         * @throws IOException if an I/O error occurs
+         */
+        T execute() throws IOException;
+    }
 
     /**
      * Data transfer object representing a single test execution entry in the index registry.
@@ -446,6 +474,90 @@ public final class HtmlIndexReportGenerator
     }
 
     /**
+     * Executes an I/O action while holding both an intra-JVM per-directory monitor and an OS-level
+     * {@link FileLock} on {@code .index.lock} inside {@code outputDirectory}.
+     * Reentrant on the same thread for the same normalized directory to avoid overlapping channel locks.
+     *
+     * @param <T> the result type
+     * @param outputDirectory the directory whose lock protects concurrent index/report updates
+     * @param action the critical-section operation
+     * @return the action's return value
+     * @throws IOException if directory creation, locking, or the action fails
+     */
+    static <T> T withDirectoryLock(final Path outputDirectory, final LockedAction<T> action) throws IOException
+    {
+        final Path normalizedDir = outputDirectory.toAbsolutePath().normalize();
+        Files.createDirectories(normalizedDir);
+
+        final Set<Path> heldLocks = ACTIVE_LOCKS.get();
+        if (heldLocks.contains(normalizedDir))
+        {
+            return action.execute();
+        }
+
+        final Object jvmLock = DIRECTORY_LOCKS.computeIfAbsent(normalizedDir, k -> new Object());
+        synchronized (jvmLock)
+        {
+            final Path lockFile = normalizedDir.resolve(LOCK_FILE);
+            heldLocks.add(normalizedDir);
+            try (final FileChannel channel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                 final FileLock ignored = channel.lock())
+            {
+                return action.execute();
+            }
+            finally
+            {
+                heldLocks.remove(normalizedDir);
+                if (heldLocks.isEmpty())
+                {
+                    ACTIVE_LOCKS.remove();
+                }
+            }
+        }
+    }
+
+    /**
+     * Atomically writes bytes to {@code targetFile} via a sibling hidden temporary file and atomic move
+     * (falling back to standard replace move on filesystems without {@code ATOMIC_MOVE}).
+     *
+     * @param targetFile destination path
+     * @param bytes content bytes to write
+     * @throws IOException if writing or moving fails
+     */
+    static void writeBytesAtomically(final Path targetFile, final byte[] bytes) throws IOException
+    {
+        final Path parentDir = targetFile.toAbsolutePath().normalize().getParent();
+        if (parentDir != null)
+        {
+            Files.createDirectories(parentDir);
+        }
+
+        final String tmpName = "." + targetFile.getFileName() + "." + ProcessHandle.current().pid() + "." + UUID.randomUUID() + ".tmp";
+        final Path tempFile = (parentDir != null) ? parentDir.resolve(tmpName) : Path.of(tmpName);
+        boolean moved = false;
+        try
+        {
+            Files.write(tempFile, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+            try
+            {
+                Files.move(tempFile, targetFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            }
+            catch (final AtomicMoveNotSupportedException ignored)
+            {
+                Files.move(tempFile, targetFile, StandardCopyOption.REPLACE_EXISTING);
+            }
+            moved = true;
+        }
+        finally
+        {
+            if (!moved)
+            {
+                Files.deleteIfExists(tempFile);
+            }
+        }
+    }
+
+    /**
      * Updates the report index files ({@code index-data.json} and {@code index.html}) in the target directory.
      *
      * @param outputDirectory the target directory containing test reports
@@ -461,57 +573,12 @@ public final class HtmlIndexReportGenerator
 
         try
         {
-            if (!Files.exists(outputDirectory))
+            withDirectoryLock(outputDirectory, () ->
             {
-                Files.createDirectories(outputDirectory);
-            }
-
-            final Path registryPath = outputDirectory.resolve(REGISTRY_FILE);
-            final Map<String, IndexEntry> entriesByBase = new LinkedHashMap<>();
-
-            // 1. Read existing index registry if present
-            if (Files.exists(registryPath))
-            {
-                try
-                {
-                    final List<IndexEntry> existing = OBJECT_MAPPER.readValue(registryPath.toFile(), new TypeReference<List<IndexEntry>>() {});
-                    if (existing != null)
-                    {
-                        for (final IndexEntry e : existing)
-                        {
-                            if (e.getBaseFileName() != null)
-                            {
-                                entriesByBase.put(e.getBaseFileName(), e);
-                            }
-                        }
-                    }
-                }
-                catch (final Exception e)
-                {
-                    LOGGER.warn("Could not parse existing index registry file {}, rebuilding from scratch: {}", registryPath, e.getMessage());
-                }
-            }
-
-            // 2. Discover/scan any unindexed *.json reports in the output directory
-            scanDirectoryForReports(outputDirectory, entriesByBase);
-
-            // 3. Put/replace current test run entry
-            final IndexEntry currentEntry = IndexEntry.fromReport(currentReport, baseFileName);
-            entriesByBase.put(baseFileName, currentEntry);
-
-            // 4. Sort entries reverse-chronologically (newest on top)
-            final List<IndexEntry> sortedEntries = new ArrayList<>(entriesByBase.values());
-            sortedEntries.sort(Comparator.comparingLong(IndexEntry::getTimestamp).reversed());
-
-            // 5. Persist registry JSON
-            OBJECT_MAPPER.writeValue(registryPath.toFile(), sortedEntries);
-
-            // 6. Generate and write index.html
-            final String htmlContent = generateIndexHtml(sortedEntries);
-            final Path indexPath = outputDirectory.resolve(INDEX_HTML_FILE);
-            Files.write(indexPath, htmlContent.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-
-            LOGGER.info("📑 Test execution index updated: {}", indexPath.toAbsolutePath());
+                final IndexEntry currentEntry = IndexEntry.fromReport(currentReport, baseFileName);
+                rebuildIndexLocked(outputDirectory, baseFileName, currentEntry, "updated");
+                return null;
+            });
         }
         catch (final Exception e)
         {
@@ -539,53 +606,73 @@ public final class HtmlIndexReportGenerator
                 return;
             }
 
-            final Path registryPath = outputDirectory.resolve(REGISTRY_FILE);
-            final Map<String, IndexEntry> entriesByBase = new LinkedHashMap<>();
-
-            // 1. Read existing index registry if present
-            if (Files.exists(registryPath))
+            withDirectoryLock(outputDirectory, () ->
             {
-                try
-                {
-                    final List<IndexEntry> existing = OBJECT_MAPPER.readValue(registryPath.toFile(), new TypeReference<List<IndexEntry>>() {});
-                    if (existing != null)
-                    {
-                        for (final IndexEntry e : existing)
-                        {
-                            if (e.getBaseFileName() != null)
-                            {
-                                entriesByBase.put(e.getBaseFileName(), e);
-                            }
-                        }
-                    }
-                }
-                catch (final Exception e)
-                {
-                    LOGGER.warn("Could not parse existing index registry file {}, rebuilding from scratch: {}", registryPath, e.getMessage());
-                }
-            }
-
-            // 2. Discover/scan any unindexed *.json reports in the output directory
-            scanDirectoryForReports(outputDirectory, entriesByBase);
-
-            // 3. Sort entries reverse-chronologically (newest on top)
-            final List<IndexEntry> sortedEntries = new ArrayList<>(entriesByBase.values());
-            sortedEntries.sort(Comparator.comparingLong(IndexEntry::getTimestamp).reversed());
-
-            // 4. Persist registry JSON
-            OBJECT_MAPPER.writeValue(registryPath.toFile(), sortedEntries);
-
-            // 5. Generate and write index.html
-            final String htmlContent = generateIndexHtml(sortedEntries);
-            final Path indexPath = outputDirectory.resolve(INDEX_HTML_FILE);
-            Files.write(indexPath, htmlContent.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-
-            LOGGER.info("📑 Test execution index refreshed: {}", indexPath.toAbsolutePath());
+                rebuildIndexLocked(outputDirectory, null, null, "refreshed");
+                return null;
+            });
         }
         catch (final Exception e)
         {
             LOGGER.error("Failed to refresh test execution index in {}: {}", outputDirectory, e.getMessage(), e);
         }
+    }
+
+    private void rebuildIndexLocked(
+        final Path outputDirectory,
+        final String baseFileName,
+        final IndexEntry currentEntry,
+        final String actionVerb) throws IOException
+    {
+        final Path registryPath = outputDirectory.resolve(REGISTRY_FILE);
+        final Map<String, IndexEntry> entriesByBase = new LinkedHashMap<>();
+
+        // 1. Read existing index registry if present
+        if (Files.exists(registryPath))
+        {
+            try
+            {
+                final List<IndexEntry> existing = OBJECT_MAPPER.readValue(registryPath.toFile(), new TypeReference<List<IndexEntry>>() {});
+                if (existing != null)
+                {
+                    for (final IndexEntry e : existing)
+                    {
+                        if (e.getBaseFileName() != null)
+                        {
+                            entriesByBase.put(e.getBaseFileName(), e);
+                        }
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.warn("Could not parse existing index registry file {}, rebuilding from scratch: {}", registryPath, e.getMessage());
+            }
+        }
+
+        // 2. Discover/scan any unindexed *.json reports in the output directory
+        scanDirectoryForReports(outputDirectory, entriesByBase);
+
+        // 3. Put/replace current test run entry when called via updateIndex
+        if (baseFileName != null && currentEntry != null)
+        {
+            entriesByBase.put(baseFileName, currentEntry);
+        }
+
+        // 4. Sort entries reverse-chronologically (newest on top)
+        final List<IndexEntry> sortedEntries = new ArrayList<>(entriesByBase.values());
+        sortedEntries.sort(Comparator.comparingLong(IndexEntry::getTimestamp).reversed());
+
+        // 5. Persist registry JSON atomically
+        final byte[] registryBytes = OBJECT_MAPPER.writeValueAsBytes(sortedEntries);
+        writeBytesAtomically(registryPath, registryBytes);
+
+        // 6. Generate and write index.html atomically
+        final String htmlContent = generateIndexHtml(sortedEntries);
+        final Path indexPath = outputDirectory.resolve(INDEX_HTML_FILE);
+        writeBytesAtomically(indexPath, htmlContent.getBytes(StandardCharsets.UTF_8));
+
+        LOGGER.info("📑 Test execution index {}: {}", actionVerb, indexPath.toAbsolutePath());
     }
 
     /**
@@ -602,7 +689,7 @@ public final class HtmlIndexReportGenerator
     private static void scanDirectoryForReports(final Path outputDirectory, final Map<String, IndexEntry> targetMap)
     {
         final File dir = outputDirectory.toFile();
-        final File[] jsonFiles = dir.listFiles((d, name) -> name.endsWith(".json") && !name.equals(REGISTRY_FILE));
+        final File[] jsonFiles = dir.listFiles((d, name) -> name.endsWith(".json") && !name.equals(REGISTRY_FILE) && !name.startsWith("."));
         if (jsonFiles == null || jsonFiles.length == 0)
         {
             return;

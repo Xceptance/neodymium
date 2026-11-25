@@ -57,7 +57,7 @@ import org.neodymium.util.Neodymium;
 @NeodymiumAiTest
 @AiJudge(true)
 @AiOutcomeVerification(value = false, failOnError = false)
-@AiPlaybook(value = "verla/HomepageTest.yaml", recordingDirectory = "target/playbooks/integration/homepage")
+@AiPlaybook(value = "verla/HomepageTest.yaml", recordingDirectory = "target/playbooks/integration/homepage/judge")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class HomepageTest extends BaseAiTest
 {

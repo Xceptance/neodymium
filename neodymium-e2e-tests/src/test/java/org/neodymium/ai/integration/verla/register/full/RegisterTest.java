@@ -56,7 +56,7 @@ import org.neodymium.util.Neodymium;
 @NeodymiumAiTest
 @AiJudge(true)
 @AiOutcomeVerification(value = true, failOnError = false)
-@AiPlaybook(value = "verla/RegisterTest.yaml", recordingDirectory = "target/playbooks/integration/register")
+@AiPlaybook(value = "verla/RegisterTest.yaml", recordingDirectory = "target/playbooks/integration/register/full")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class RegisterTest extends BaseAiTest
 {

@@ -43,7 +43,9 @@
 		<log4j.version>2.25.3</log4j.version>
 		<junit.jupiter.version>6.1.3</junit.jupiter.version>
 		<junit.vintage.version>6.1.3</junit.vintage.version>
-		<surefire.forkCount>1</surefire.forkCount>
+		<surefire.forkCount>4</surefire.forkCount>
+		<e2e.http.port>0</e2e.http.port>
+		<e2e.https.port>0</e2e.https.port>
 		<!--
 			JUnit tags excluded from the default run. LiveAPI/LiveLlm tests call a real LLM provider (cost, API key,
 			non-determinism), ExternalSite tests need internet access to third-party sites.
@@ -126,6 +128,8 @@
 						<java.util.logging.config.file>logging.properties</java.util.logging.config.file>
 						<allure.results.directory>${allure.results.directory}</allure.results.directory>
 						<selenide.headless>true</selenide.headless>
+						<neodymium.ai.http.port>${e2e.http.port}</neodymium.ai.http.port>
+						<neodymium.ai.https.port>${e2e.https.port}</neodymium.ai.https.port>
 					</systemPropertyVariables>
 					<workingDirectory>${session.executionRootDirectory}</workingDirectory>
 					<forkCount>${surefire.forkCount}</forkCount>

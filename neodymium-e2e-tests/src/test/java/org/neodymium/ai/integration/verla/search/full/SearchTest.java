@@ -57,7 +57,7 @@ import org.neodymium.util.Neodymium;
 @NeodymiumAiTest
 @AiJudge(true)
 @AiOutcomeVerification(value = true, failOnError = false)
-@AiPlaybook(value = "/verla/SearchTest.yaml", recordingDirectory = "target/playbooks/integration/search")
+@AiPlaybook(value = "/verla/SearchTest.yaml", recordingDirectory = "target/playbooks/integration/search/full")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class SearchTest extends BaseAiTest
 {
