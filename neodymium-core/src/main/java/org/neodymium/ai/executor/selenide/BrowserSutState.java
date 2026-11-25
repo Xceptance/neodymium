@@ -53,7 +53,13 @@ public final class BrowserSutState implements SutState
     private final String contentHash;
 
     /**
-     * Constructs a BrowserSutState.
+     * Indicates whether attached screenshots were captured full-page ({@code true}),
+     * viewport-only ({@code false}), or unspecified/absent ({@code null}).
+     */
+    private final Boolean fullPageScreenshot;
+
+    /**
+     * Constructs a BrowserSutState with unspecified screenshot capture scope.
      *
      * @param htmlSource the raw DOM HTML source code
      * @param attachments the visual screenshots or binary attachments list
@@ -65,9 +71,28 @@ public final class BrowserSutState implements SutState
         final String contentHash
     )
     {
+        this(htmlSource, attachments, contentHash, null);
+    }
+
+    /**
+     * Constructs a BrowserSutState with explicit screenshot capture scope metadata.
+     *
+     * @param htmlSource the raw DOM HTML source code
+     * @param attachments the visual screenshots or binary attachments list
+     * @param contentHash the content hash
+     * @param fullPageScreenshot {@code true} if captured full-page, {@code false} if viewport-only, {@code null} if unspecified
+     */
+    public BrowserSutState(
+        final String htmlSource,
+        final List<SutAttachment> attachments,
+        final String contentHash,
+        final Boolean fullPageScreenshot
+    )
+    {
         this.htmlSource = htmlSource;
         this.attachments = attachments == null ? Collections.emptyList() : List.copyOf(attachments);
         this.contentHash = contentHash;
+        this.fullPageScreenshot = fullPageScreenshot;
     }
 
     /**
@@ -101,5 +126,17 @@ public final class BrowserSutState implements SutState
     public String getContentHash()
     {
         return this.contentHash;
+    }
+
+    /**
+     * Returns whether attached screenshots were captured full-page or viewport-only.
+     *
+     * @return {@code Boolean.TRUE} for full-page captures, {@code Boolean.FALSE} for viewport captures,
+     *         or {@code null} when unspecified or absent
+     */
+    @Override
+    public Boolean isFullPageScreenshot()
+    {
+        return this.fullPageScreenshot;
     }
 }

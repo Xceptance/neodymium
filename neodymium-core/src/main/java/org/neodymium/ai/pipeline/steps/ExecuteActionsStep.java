@@ -998,6 +998,7 @@ public final class ExecuteActionsStep
             {
                 handlers.put(HealingRequiredException.class, c ->
                 {
+                    c.getTransientData().remove(ExecutionContext.KEY_POST_ACTION_STATE);
                     c.getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, true);
                     LOGGER.warn("⚠️ Replay step requires online healing — launching AgentToolLoopStep for: \"{}\"", step.getInstruction());
                     final TargetExecutor executor = (TargetExecutor) c.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);

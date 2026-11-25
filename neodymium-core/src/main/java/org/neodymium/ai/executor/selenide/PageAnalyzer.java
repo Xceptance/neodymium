@@ -757,7 +757,7 @@ public class PageAnalyzer
 
     public String captureScreenshot(final String title, final ContextLevel level) throws IOException
     {
-        return captureScreenshot(title, level, false, null);
+        return captureScreenshot(title, level, level != null && level.isFullPageScreenshot(), null);
     }
 
     public String captureScreenshot(final String title, final boolean isFullPage) throws IOException
@@ -781,7 +781,7 @@ public class PageAnalyzer
         LOG.debug("   📸 Capturing screenshot for: {} (level: {}, fullPage: {})", title, level, isFullPage);
         try
         {
-            final String result = captureScreenshotInternal(title, level, isFullPage, driver);
+            final String result = captureScreenshotInternal(title, isFullPage, driver);
             final long elapsedMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
             final String dimsStr = formatImageDimensions(result);
             final int sizeKb = result != null ? (result.length() * 3 / 4 / 1024) : 0;
@@ -801,7 +801,7 @@ public class PageAnalyzer
                         final String fallback = activeHandles.iterator().next();
                         driver.switchTo().window(fallback);
                         driver.switchTo().defaultContent();
-                        final String result = captureScreenshotInternal(title, level, isFullPage, driver);
+                        final String result = captureScreenshotInternal(title, isFullPage, driver);
                         final long elapsedMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
                         final String dimsStr = formatImageDimensions(result);
                         final int sizeKb = result != null ? (result.length() * 3 / 4 / 1024) : 0;
@@ -822,7 +822,7 @@ public class PageAnalyzer
         return null;
     }
 
-    private String captureScreenshotInternal(final String title, final ContextLevel level, final boolean isFullPage, final WebDriver driver) throws Exception
+    private String captureScreenshotInternal(final String title, final boolean isFullPage, final WebDriver driver) throws Exception
     {
         boolean hidden = false;
         if (driver instanceof final JavascriptExecutor js)
@@ -842,7 +842,7 @@ public class PageAnalyzer
 
         try
         {
-            final boolean forceFullPage = isFullPage || (level != null && level.isFullPageScreenshot());
+            final boolean forceFullPage = isFullPage;
             if (driver != null && (!Neodymium.hasDriver() || Neodymium.getDriver() != driver))
             {
                 final WebDriverStateContainer container = new WebDriverStateContainer();
