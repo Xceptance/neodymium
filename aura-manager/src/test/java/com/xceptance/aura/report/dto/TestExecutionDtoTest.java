@@ -789,5 +789,32 @@ public final class TestExecutionDtoTest
         Assertions.assertEquals("file:///workspace/storage/runs/run-1/com.example.TestClass/execution.log", deserialized.getFileUri());
         Assertions.assertEquals("[INFO] Step 1 passed\n[INFO] Step 2 passed", deserialized.getContent());
     }
+
+    /**
+     * Verifies that an online LLM self-healed replay execution is classified strictly as
+     * {@code HEALED} and is not double-counted as {@code AI-Driven} due to healing LLM token usage.
+     */
+    @Test
+    public void testOnlineHealedReplayExecutionIsNotDoubleCountedAsAiDriven() throws Exception
+    {
+        final String json = """
+            {
+                "id": "exec-healed-replay-1",
+                "testClass": "com.xceptance.test.SearchTest",
+                "status": "healed",
+                "executionMode": "REPLAY_WITH_HEALING",
+                "healedStepsCount": 1,
+                "llmCallsCount": 2,
+                "llmTotalTokens": 230
+            }
+            """;
+
+        final TestExecutionDto dto = this.objectMapper.readValue(json, TestExecutionDto.class);
+
+        Assertions.assertEquals("HEALED", dto.getDisplayMode());
+        Assertions.assertTrue(dto.isHealed());
+        Assertions.assertFalse(dto.isAiDriven(),
+            "Healed replay test using online LLM healing must not be double-counted as AI-driven");
+    }
 }
 

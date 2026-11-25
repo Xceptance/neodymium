@@ -59,6 +59,7 @@ import org.neodymium.util.Neodymium;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine.ActionResult;
@@ -1993,6 +1994,166 @@ public class InteractiveConsoleEngineTest
         engine.reconcileTestOutcome(false, new RuntimeException("Blank status failure"));
         final JsonObject failedBlankState = JsonParser.parseString(engine.getCurrentStateJson()).getAsJsonObject();
         assertEquals("failed", failedBlankState.get("status").getAsString(), "Blank status must transition to failed when testPassed is false");
+
+        // When test has healed status but later fails in JUnit, it should transition to failed
+        final String healedJson = "{\"testName\":\"HealedStatusTest · ds1\",\"testFile\":\"com.xceptance.HealedStatusTest#execute\",\"status\":\"healed\",\"steps\":[]}";
+        engine.pushState(healedJson);
+        engine.reconcileTestOutcome(false, new RuntimeException("Post-healing JUnit assertion failure"));
+        final JsonObject failedHealedState = JsonParser.parseString(engine.getCurrentStateJson()).getAsJsonObject();
+        assertEquals("failed", failedHealedState.get("status").getAsString(), "Healed status must transition to failed when testPassed is false");
+    }
+
+    /**
+     * Verifies that {@link InteractiveStateBuilder} does not copy {@code llmCalls} from an earlier
+     * core step (whose global index equals a later core step's block-local index due to preceding
+     * {@code before} hooks) onto a subsequent zero-LLM replay step.
+     */
+    @Test
+    public void testBuildStateJsonDoesNotDuplicateFallbackLlmCallsAcrossBlockIndices() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(null);
+
+        final PlaybookStep before0 = new PlaybookStep();
+        before0.setInstruction("Before 1");
+        before0.setStatus(PlaybookStepStatus.SUCCESS);
+
+        final PlaybookStep before1 = new PlaybookStep();
+        before1.setInstruction("Before 2");
+        before1.setStatus(PlaybookStepStatus.SUCCESS);
+
+        final PlaybookStep step0Healed = new PlaybookStep();
+        step0Healed.setInstruction("Type query into search field");
+        step0Healed.setStatus(PlaybookStepStatus.HEALED);
+
+        final PlaybookStep step1Replay = new PlaybookStep();
+        step1Replay.setInstruction("Wait for suggestions");
+        step1Replay.setStatus(PlaybookStepStatus.SUCCESS);
+
+        final PlaybookStep step2Replay = new PlaybookStep();
+        step2Replay.setInstruction("Click search button");
+        step2Replay.setStatus(PlaybookStepStatus.SUCCESS);
+
+        context.getTransientData().put("playbook.beforeSteps", List.of(before0, before1));
+        context.getTransientData().put("playbook.steps", List.of(step0Healed, step1Replay, step2Replay));
+        context.getTransientData().put("playbook.flatSteps", List.of(before0, before1, step0Healed, step1Replay, step2Replay));
+
+        final TestExecutionReport report = new TestExecutionReport();
+        final ReportStepEntry repBefore0 = new ReportStepEntry(0, "Before 1");
+        repBefore0.setBlock("before");
+        repBefore0.setStatus("SUCCESS");
+        final ReportStepEntry repBefore1 = new ReportStepEntry(1, "Before 2");
+        repBefore1.setBlock("before");
+        repBefore1.setStatus("SUCCESS");
+
+        final ReportStepEntry repStep0 = new ReportStepEntry(2, "Type query into search field");
+        repStep0.setBlock("steps");
+        repStep0.setStatus("HEALED");
+
+        final ReportLlmCallEntry healedCall = new ReportLlmCallEntry();
+        healedCall.setStepIndex(2);
+        healedCall.setBlock("steps");
+        healedCall.setCapability("TEXT");
+        healedCall.setModelName("mock-healer-model");
+        healedCall.setUserPrompt("Heal search selector");
+        healedCall.setResponseContent("{\"selector\":\"#searchInput\"}");
+        repStep0.addLlmCall(healedCall);
+
+        final ReportStepEntry repStep1 = new ReportStepEntry(3, "Wait for suggestions");
+        repStep1.setBlock("steps");
+        repStep1.setStatus("SUCCESS");
+
+        final ReportStepEntry repStep2 = new ReportStepEntry(4, "Click search button");
+        repStep2.setBlock("steps");
+        repStep2.setStatus("SUCCESS");
+
+        report.addStep(repBefore0);
+        report.addStep(repBefore1);
+        report.addStep(repStep0);
+        report.addStep(repStep1);
+        report.addStep(repStep2);
+        report.addLlmCall(healedCall);
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "test-run-no-dup-llm", 4, "passed", null, report);
+        final JsonNode root = new ObjectMapper().readTree(stateJson);
+        final JsonNode stepsBlock = root.path("blocks").path("steps");
+        assertEquals(3, stepsBlock.size());
+
+        assertEquals(1, stepsBlock.get(0).path("llmCalls").size(), "Healed step at globalIndex=2 must have its own LLM call");
+        assertFalse(stepsBlock.get(2).has("llmCalls") && !stepsBlock.get(2).path("llmCalls").isEmpty(),
+            "Subsequent replay step (blockIndex=2, globalIndex=4) must NOT inherit LLM calls from step at globalIndex=2");
+    }
+
+    @Test
+    public void testPushStateWithDistinctRunIdsIsolatesRunFoldersAndPreservesEarlierRun(@TempDir final Path customDir) throws IOException
+    {
+        final Path logsDir = customDir.resolve("console-logs");
+        final Path reportsDir = customDir.resolve("ai-reports");
+        final Path storageDir = customDir.resolve("storage-runs");
+
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", logsDir.toString());
+        System.setProperty("neodymium.ai.report.disk.directory", reportsDir.toString());
+        System.setProperty("neodymium.ai.storageRuns.directory", storageDir.toString());
+        AiConfiguration.resetInstance();
+        final String initialDefaultRunFolder = InteractiveConsoleEngine.getRunFolder();
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("run_20261124_100001");
+        final String runOneState = "{"
+            + "\"runId\":\"run_20261124_100001\","
+            + "\"testClass\":\"com.xceptance.WikipediaSearchTest\","
+            + "\"testName\":\"WikipediaSearchTest :: search · ds1\","
+            + "\"status\":\"healed\","
+            + "\"llmCalls\":[{\"id\":\"heal-call-1\",\"model\":\"mock-healer\"}],"
+            + "\"blocks\":{\"steps\":[{\"instruction\":\"Type query\",\"status\":\"healed\",\"llmCalls\":[{\"id\":\"heal-call-1\"}]}]}"
+            + "}";
+        final String runTwoState = "{"
+            + "\"runId\":\"run_20261124_100002\","
+            + "\"testClass\":\"com.xceptance.WikipediaSearchTest\","
+            + "\"testName\":\"WikipediaSearchTest :: search · ds1\","
+            + "\"status\":\"healed\","
+            + "\"llmCalls\":[],"
+            + "\"blocks\":{\"steps\":[{\"instruction\":\"Type query\",\"status\":\"healed\",\"llmCalls\":[]}]}"
+            + "}";
+        final String runThreeState = "{"
+            + "\"runId\":\"run_20261124_100003\","
+            + "\"testClass\":\"com.xceptance.WikipediaSearchTest\","
+            + "\"testName\":\"WikipediaSearchTest :: search · ds1\","
+            + "\"status\":\"passed\","
+            + "\"llmCalls\":[],"
+            + "\"blocks\":{\"steps\":[{\"instruction\":\"Type query\",\"status\":\"passed\",\"llmCalls\":[]}]}"
+            + "}";
+
+        engine.pushState(runOneState);
+        engine.setRunId("run_20261124_100002");
+        engine.pushState(runTwoState);
+        engine.pushState(runThreeState);
+
+        final List<Path> roots = List.of(logsDir, reportsDir, storageDir);
+        for (final Path root : roots)
+        {
+            final Path runOneFile = root.resolve("run_20261124_100001/WikipediaSearchTest/console-execution-1.json");
+            final Path runTwoFile = root.resolve("run_20261124_100002/WikipediaSearchTest/console-execution-1.json");
+            final Path runThreeFile = root.resolve("run_20261124_100003/WikipediaSearchTest/console-execution-1.json");
+            assertTrue(Files.exists(runOneFile), "First run execution JSON must exist under " + root);
+            assertTrue(Files.exists(runTwoFile), "Second run execution JSON must exist under " + root);
+            assertTrue(Files.exists(runThreeFile), "Third run execution JSON must exist under " + root);
+
+            final String runOneJson = Files.readString(runOneFile);
+            final String runTwoJson = Files.readString(runTwoFile);
+            final String runThreeJson = Files.readString(runThreeFile);
+            assertTrue(runOneJson.contains("\"runId\":\"run_20261124_100001\""), "First run JSON must keep its own runId");
+            assertTrue(runOneJson.contains("heal-call-1"), "First run LLM call must not be overwritten by later runs");
+            assertFalse(runOneJson.contains("run_20261124_100002"), "First run JSON must not contain second runId");
+
+            assertTrue(runTwoJson.contains("\"runId\":\"run_20261124_100002\""), "Second run JSON must keep its own runId");
+            assertFalse(runTwoJson.contains("heal-call-1"), "Second run JSON must not contain first run LLM call");
+            assertFalse(runTwoJson.contains("run_20261124_100003"), "Second run JSON must not be overwritten by third payload runId");
+
+            assertTrue(runThreeJson.contains("\"runId\":\"run_20261124_100003\""), "Third run JSON must honor payload runId even without setRunId");
+            assertFalse(runThreeJson.contains("heal-call-1"), "Third run JSON must not contain first run LLM call");
+            assertFalse(Files.exists(root.resolve(initialDefaultRunFolder)),
+                "Initial default JVM run folder must not be used when payload provides runId");
+        }
     }
 
     @Test
@@ -2042,6 +2203,149 @@ public class InteractiveConsoleEngineTest
         {
             InteractiveConsoleEngine.markRunFinished(runId);
         }
+    }
+
+    @Test
+    public void testBuildStateJsonFailedAndRunningStepsWithHealedActionsDoNotOverwriteStatus() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(null);
+
+        final PlaybookStep failedStep = new PlaybookStep();
+        failedStep.setInstruction("Type search query and click broken submit");
+        failedStep.setStatus(PlaybookStepStatus.FAILED);
+        failedStep.setFailed(true);
+        failedStep.setFailureReason("Submit button not found");
+
+        final PlaybookStep runningStep = new PlaybookStep();
+        runningStep.setInstruction("Composite step in progress");
+        runningStep.setStatus(PlaybookStepStatus.RUNNING);
+
+        context.getTransientData().put("playbook.steps", List.of(failedStep, runningStep));
+        context.getTransientData().put("playbook.flatSteps", List.of(failedStep, runningStep));
+
+        final TestExecutionReport report = new TestExecutionReport();
+
+        final ReportStepEntry repFailed = new ReportStepEntry(0, failedStep.getInstruction());
+        repFailed.setBlock("steps");
+        repFailed.setStatus("FAILED");
+        repFailed.setFailureReason("Submit button not found");
+        final ReportActionEntry healedFirstAction = new ReportActionEntry(
+            "FILL", "#oldSearch", "test", "Type query", "Healed input", true);
+        healedFirstAction.setHealed(true);
+        healedFirstAction.setResolvedTarget("#newSearch");
+        final ReportActionEntry failedSecondAction = new ReportActionEntry(
+            "CLICK", "#missingSubmit", "", "Click submit", "Failed click", false);
+        repFailed.addAction(healedFirstAction);
+        repFailed.addAction(failedSecondAction);
+
+        final ReportStepEntry repRunning = new ReportStepEntry(1, runningStep.getInstruction());
+        repRunning.setBlock("steps");
+        repRunning.setStatus("RUNNING");
+        final ReportActionEntry runningHealedSubAction = new ReportActionEntry(
+            "CLICK", "#oldTab", "", "Click tab", "Healed sub-step", true);
+        runningHealedSubAction.setHealed(true);
+        repRunning.addAction(runningHealedSubAction);
+        final ReportStepEntry repSubHealed = new ReportStepEntry(0, "Switch tab");
+        repSubHealed.setStatus("HEALED");
+        final ReportStepEntry repSubRunning = new ReportStepEntry(1, "Wait for panel");
+        repSubRunning.setStatus("RUNNING");
+        repRunning.addSubStep(repSubHealed);
+        repRunning.addSubStep(repSubRunning);
+
+        report.addStep(repFailed);
+        report.addStep(repRunning);
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(
+            null,
+            context,
+            "run_status_test",
+            1,
+            "running",
+            null,
+            report);
+
+        final JsonObject root = JsonParser.parseString(stateJson).getAsJsonObject();
+        final JsonArray serializedSteps = root.getAsJsonObject("blocks").getAsJsonArray("steps");
+        assertEquals(2, serializedSteps.size());
+
+        final JsonObject serializedFailed = serializedSteps.get(0).getAsJsonObject();
+        assertEquals("failed", serializedFailed.get("status").getAsString(),
+            "FAILED step with an earlier healed action must remain status='failed'");
+        assertFalse(serializedFailed.has("healed") && serializedFailed.get("healed").getAsBoolean(),
+            "FAILED step must not be flagged healed=true");
+
+        final JsonObject serializedRunning = serializedSteps.get(1).getAsJsonObject();
+        assertEquals("running", serializedRunning.get("status").getAsString(),
+            "RUNNING step with an earlier healed action/sub-step must remain status='running'");
+        assertFalse(serializedRunning.has("healed") && serializedRunning.get("healed").getAsBoolean(),
+            "RUNNING step must not prematurely be flagged healed=true");
+    }
+
+    @Test
+    public void testNormalizeRunFolderSanitizesPathTraversalAndSeparators()
+    {
+        InteractiveConsoleEngine.setRunFolder("run_fallback_safe");
+        final String fallback = InteractiveConsoleEngine.getRunFolder();
+
+        final String traversal = InteractiveConsoleEngine.normalizeRunFolder("../evil");
+        assertFalse(traversal.contains(".."), "Traversal '..' must be stripped/sanitized");
+        assertFalse(traversal.contains("/"), "Path separator '/' must be sanitized");
+        assertFalse(traversal.contains("\\"), "Path separator '\\\\' must be sanitized");
+        assertTrue(traversal.startsWith("run_"), "Sanitized run folder must keep canonical prefix: " + traversal);
+
+        assertEquals("run_a_b_c", InteractiveConsoleEngine.normalizeRunFolder("run_a/b\\c"));
+        assertEquals("run_20261125_120000", InteractiveConsoleEngine.normalizeRunFolder("run_20261125_120000"));
+        assertEquals(fallback, InteractiveConsoleEngine.normalizeRunFolder(".."));
+        assertEquals(fallback, InteractiveConsoleEngine.normalizeRunFolder("///"));
+        assertEquals(fallback, InteractiveConsoleEngine.normalizeRunFolder("..."));
+    }
+
+    @Test
+    public void testPushStateHandlesNonPrimitiveRunIdAndScopesExecutionIndexesConsistently(@TempDir final Path customDir) throws IOException
+    {
+        final Path logsDir = customDir.resolve("console-logs");
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", logsDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final String activeRunFolder = "run_20261125_123000";
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine(activeRunFolder);
+
+        // 1. Non-primitive runId object must not throw UnsupportedOperationException
+        final String nonPrimitivePayload = "{"
+            + "\"runId\":{\"nested\":\"object\"},"
+            + "\"testClass\":\"com.xceptance.ConsistentIndexTest\","
+            + "\"testName\":\"ConsistentIndexTest :: ds0\","
+            + "\"status\":\"passed\","
+            + "\"steps\":[]"
+            + "}";
+        engine.pushState(nonPrimitivePayload);
+
+        // 2. Payload without runId uses engine's effective runFolder and gets index 2 (after ds0 above)
+        final String withoutRunId = "{"
+            + "\"testClass\":\"com.xceptance.ConsistentIndexTest\","
+            + "\"testName\":\"ConsistentIndexTest :: ds1\","
+            + "\"status\":\"passed\","
+            + "\"steps\":[]"
+            + "}";
+        engine.pushState(withoutRunId);
+
+        // 3. Payload with explicit matching runId shares the exact same index namespace -> index 3
+        final String withExplicitRunId = "{"
+            + "\"runId\":\"" + activeRunFolder + "\","
+            + "\"testClass\":\"com.xceptance.ConsistentIndexTest\","
+            + "\"testName\":\"ConsistentIndexTest :: ds2\","
+            + "\"status\":\"passed\","
+            + "\"steps\":[]"
+            + "}";
+        engine.pushState(withExplicitRunId);
+
+        assertTrue(Files.exists(logsDir.resolve(activeRunFolder + "/ConsistentIndexTest/console-execution-1.json")),
+            "Non-primitive runId must fall back safely and write console-execution-1.json");
+        assertTrue(Files.exists(logsDir.resolve(activeRunFolder + "/ConsistentIndexTest/console-execution-2.json")),
+            "Payload without runId must increment within runFolder namespace to console-execution-2.json");
+        assertTrue(Files.exists(logsDir.resolve(activeRunFolder + "/ConsistentIndexTest/console-execution-3.json")),
+            "Payload with matching runId must share runFolder index namespace and write console-execution-3.json");
     }
 }
 

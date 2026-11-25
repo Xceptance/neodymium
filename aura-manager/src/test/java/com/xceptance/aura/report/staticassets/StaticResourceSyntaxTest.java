@@ -426,8 +426,8 @@ public final class StaticResourceSyntaxTest
         Assertions.assertTrue(Files.exists(indexPath), "index.html must exist: " + indexPath.toAbsolutePath());
         final String indexContent = Files.readString(indexPath, StandardCharsets.UTF_8);
         Assertions.assertTrue(
-            indexContent.contains("report-manager.js?v=1.1.7"),
-            "index.html must reference report-manager.js with cache buster ?v=1.1.7"
+            indexContent.contains("report-manager.js?v=1.1.9"),
+            "index.html must reference report-manager.js with cache buster ?v=1.1.9"
         );
         Assertions.assertTrue(
             indexContent.contains("dashboard-styles.css?v=1.2.8"),
@@ -5268,6 +5268,267 @@ public final class StaticResourceSyntaxTest
             "report-manager.js videoAttachment filter must match true playable video extensions");
         Assertions.assertTrue(jsContent.contains("(a && a.type === 'gif') || p.endsWith('.gif')"),
             "report-manager.js must identify gif attachments separately");
+    }
+
+    /**
+     * Verifies that {@code report-manager.js} treats healed steps (including composite steps with
+     * healed sub-steps) as executed, guards downstream step status against premature {@code not_run}
+     * overwrites when execution data exists, and excludes healed executions from AI-only counts.
+     */
+    @Test
+    public void testHealedStepRenderingAndDownstreamPreservationInReportManagerJs() throws Exception
+    {
+        final Path jsPath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsPath), "report-manager.js must exist: " + jsPath.toAbsolutePath());
+        final String jsContent = Files.readString(jsPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(jsContent.contains("const isUnexecutedOrSkipped = !isPassed && !isFailed && !isHealed && status !== 'running';"),
+            "Healed steps must not be treated as unexecuted/skipped or forced to PENDING");
+        Assertions.assertTrue(jsContent.contains("if (hasEncounteredFailure && !isRunningState && !hasRecordedExecution && rawStatus !== 'failed')"),
+            "Downstream steps with recorded execution or passing/healed status must not be overwritten to not_run");
+        Assertions.assertTrue(jsContent.contains("else if (hasHealedSub) {\n                    rawStatus = 'healed';"),
+            "Composite step with healed sub-step must preserve healed status");
+        Assertions.assertTrue(jsContent.contains("const isAi = !isHealed && (r.getAttribute('data-ai') === 'true'"),
+            "Healed replay rows must not be double-counted in AI-driven area counters");
+
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final String healedNodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const assert = require('assert');\n" +
+            "const code = fs.readFileSync('" + jsPath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const blocksPayload = {\n" +
+            "    steps: [\n" +
+            "        {\n" +
+            "            instruction: 'Type query into healed search box',\n" +
+            "            status: 'healed',\n" +
+            "            healed: true,\n" +
+            "            contextLevel: 'LEAN',\n" +
+            "            duration: 23000,\n" +
+            "            startTimestamp: '2026-11-24T12:15:11.923Z',\n" +
+            "            actions: [{ type: 'TYPE', target: '#searchInput', expectedTarget: '#legacyQueryBox', healed: true, success: true }],\n" +
+            "            screenshots: [{ label: 'Healed Step Capture', mediaType: 'image/png', base64Data: 'AAAA' }],\n" +
+            "            llmCalls: [{ modelName: 'gemini-3.5-flash-lite', inputTokens: 100, outputTokens: 20, totalTokens: 120, costUsd: 0.001, userPrompt: 'u', responseContent: 'r' }]\n" +
+            "        },\n" +
+            "        {\n" +
+            "            instruction: 'Composite healed search macro',\n" +
+            "            contextLevel: 'LEAN',\n" +
+            "            duration: 5000,\n" +
+            "            screenshots: [],\n" +
+            "            subSteps: [\n" +
+            "                { instruction: 'Sub 1', status: 'SUCCESS', screenshots: [{ label: 'Unhealed Sub', mediaType: 'image/png', base64Data: 'BBBB' }] },\n" +
+            "                { instruction: 'Sub 2 healed', status: 'HEALED', healed: true, actions: [{ type: 'CLICK', target: '#go', healed: true, success: true }], screenshots: [{ label: 'Healed Sub Capture', mediaType: 'image/png', base64Data: 'CCCC' }] }\n" +
+            "            ]\n" +
+            "        },\n" +
+            "        {\n" +
+            "            instruction: 'Failed assertion step',\n" +
+            "            status: 'failed',\n" +
+            "            passed: false,\n" +
+            "            contextLevel: 'LEAN',\n" +
+            "            duration: 1200\n" +
+            "        },\n" +
+            "        {\n" +
+            "            instruction: 'Cleanup step already executed',\n" +
+            "            status: 'passed',\n" +
+            "            contextLevel: 'LEAN',\n" +
+            "            duration: 900,\n" +
+            "            actions: [{ type: 'CLICK', target: '#logout', success: true }]\n" +
+            "        },\n" +
+            "        {\n" +
+            "            instruction: 'Trailing unreached step',\n" +
+            "            status: 'PENDING'\n" +
+            "        }\n" +
+            "    ]\n" +
+            "};\n" +
+            "const sampleRow = {\n" +
+            "    id: 'row_healed_behavior',\n" +
+            "    querySelector: () => null,\n" +
+            "    getAttribute: (name) => {\n" +
+            "        if (name === 'data-blocks') return JSON.stringify(blocksPayload);\n" +
+            "        if (name === 'data-status') return 'FAILED';\n" +
+            "        return '';\n" +
+            "    },\n" +
+            "    hasAttribute: (name) => name === 'data-steps-fetched',\n" +
+            "    setAttribute: () => {},\n" +
+            "    removeAttribute: () => {}\n" +
+            "};\n" +
+            "const sideList = { innerHTML: '', querySelector: () => null };\n" +
+            "const sandbox = {\n" +
+            "    console,\n" +
+            "    window: {},\n" +
+            "    document: {\n" +
+            "        readyState: 'complete',\n" +
+            "        getElementById: (id) => (id === 'sidePageStepList' ? sideList : null),\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {}, contains: () => true }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "vm.runInNewContext(code, sandbox);\n" +
+            "sandbox.renderStepsForExecution(sampleRow);\n" +
+            "const html = sideList.innerHTML;\n" +
+            "const startOfCard = (id) => {\n" +
+            "    const idIdx = html.indexOf('id=\"' + id + '\"');\n" +
+            "    assert(idIdx >= 0, 'Missing card ' + id);\n" +
+            "    const startIdx = html.lastIndexOf('<div class=\"step-item', idIdx);\n" +
+            "    assert(startIdx >= 0, 'Missing step-item wrapper for ' + id);\n" +
+            "    return startIdx;\n" +
+            "};\n" +
+            "const s0 = startOfCard('stepCard_core_0');\n" +
+            "const s1 = startOfCard('stepCard_core_1');\n" +
+            "const s2 = startOfCard('stepCard_core_2');\n" +
+            "const s3 = startOfCard('stepCard_core_3');\n" +
+            "const s4 = startOfCard('stepCard_core_4');\n" +
+            "const card0 = html.slice(s0, s1);\n" +
+            "const card1 = html.slice(s1, s2);\n" +
+            "const card1Header = card1.slice(0, card1.indexOf('step-action-inspector'));\n" +
+            "const card3 = html.slice(s3, s4);\n" +
+            "const card4 = html.slice(s4);\n" +
+            "assert(card0.includes('step-healed') && card0.includes('HEALED'), 'Step 1 must render HEALED badge');\n" +
+            "assert(card0.includes('>LEAN<') && !card0.includes('>PENDING<'), 'Step 1 must render LEAN badge instead of PENDING');\n" +
+            "assert(card0.includes('1 action(s)'), 'Step 1 must render 1 action(s)');\n" +
+            "assert(card0.includes('1 screenshot(s)'), 'Step 1 must render 1 screenshot(s)');\n" +
+            "assert(card0.includes('1 LLM call(s)'), 'Step 1 must render 1 LLM call(s)');\n" +
+            "assert(card0.includes('0 min 23 s'), 'Step 1 must render formatted duration 0 min 23 s');\n" +
+            "assert(card0.includes('2026-11-24T12:15:11.923Z'), 'Step 1 must render startTimestamp instead of N/A');\n" +
+            "assert(card1.includes('step-healed') && card1Header.includes('HEALED') && !card1Header.includes('SUCCESS'), 'Composite step with healed sub-step must render HEALED');\n" +
+            "assert(card1.includes('1 screenshot(s)') && card1.includes('Healed Sub Capture'), 'Composite healed step must pull screenshot from healed sub-step');\n" +
+            "assert(card3.includes('step-passed') && card3.includes('SUCCESS') && !card3.includes('NOT RUN'), 'Downstream executed step after failure must keep SUCCESS');\n" +
+            "assert(card4.includes('step-not-run') && card4.includes('NOT RUN'), 'Trailing unexecuted PENDING step after failure must become NOT RUN');\n";
+
+        runNodeScript(healedNodeTestScript, "Healed step behavioral rendering test failed");
+    }
+
+    /**
+     * Verifies PR #579 review edge cases in {@code report-manager.js}:
+     * failure precedence over earlier healed actions/sub-steps, running sub-step precedence over
+     * healed sub-steps, and strict {@code hasRecordedExecution} guarding against omitted status
+     * or stale pre-recorded {@code healed: true} actions on unexecuted {@code PENDING} steps.
+     *
+     * @throws Exception if Node execution or assertions fail
+     */
+    @Test
+    public void testFailurePrecedenceRunningSubStepAndStrictExecutionGuardInReportManagerJs() throws Exception
+    {
+        final Path jsPath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsPath), "report-manager.js must exist: " + jsPath.toAbsolutePath());
+
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final String edgeCaseScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const assert = require('assert');\n" +
+            "const code = fs.readFileSync('" + jsPath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const blocksPayload = {\n" +
+            "    steps: [\n" +
+            "        {\n" +
+            "            instruction: 'Multi-action step with healed first action then failed second action',\n" +
+            "            status: 'failed',\n" +
+            "            passed: false,\n" +
+            "            contextLevel: 'LEAN',\n" +
+            "            duration: 1500,\n" +
+            "            actions: [\n" +
+            "                { type: 'FILL', target: '#newInput', expectedTarget: '#oldInput', healed: true, success: true },\n" +
+            "                { type: 'CLICK', target: '#missingBtn', success: false }\n" +
+            "            ]\n" +
+            "        },\n" +
+            "        {\n" +
+            "            instruction: 'Unexecuted step omitting status after failure',\n" +
+            "            contextLevel: 'LEAN'\n" +
+            "        },\n" +
+            "        {\n" +
+            "            instruction: 'Unexecuted PENDING step with stale pre-recorded healed action after failure',\n" +
+            "            status: 'PENDING',\n" +
+            "            actions: [\n" +
+            "                { type: 'CLICK', target: '#preHealedBtn', healed: true }\n" +
+            "            ]\n" +
+            "        },\n" +
+            "        {\n" +
+            "            instruction: 'Composite step with healed sub-step 0 and failed sub-step 1',\n" +
+            "            contextLevel: 'LEAN',\n" +
+            "            duration: 2100,\n" +
+            "            subSteps: [\n" +
+            "                { instruction: 'Sub 0 healed', status: 'HEALED', healed: true, actions: [{ type: 'CLICK', target: '#a', healed: true, success: true }] },\n" +
+            "                { instruction: 'Sub 1 failed', status: 'FAILED', failureReason: 'Missing element' }\n" +
+            "            ]\n" +
+            "        },\n" +
+            "        {\n" +
+            "            instruction: 'Composite step with healed sub-step 0 and running sub-step 1',\n" +
+            "            contextLevel: 'LEAN',\n" +
+            "            duration: 800,\n" +
+            "            subSteps: [\n" +
+            "                { instruction: 'Sub 0 healed', status: 'HEALED', healed: true, actions: [{ type: 'CLICK', target: '#a', healed: true, success: true }] },\n" +
+            "                { instruction: 'Sub 1 running', status: 'RUNNING' }\n" +
+            "            ]\n" +
+            "        }\n" +
+            "    ]\n" +
+            "};\n" +
+            "const sampleRow = {\n" +
+            "    id: 'row_review_edge_cases',\n" +
+            "    querySelector: () => null,\n" +
+            "    getAttribute: (name) => {\n" +
+            "        if (name === 'data-blocks') return JSON.stringify(blocksPayload);\n" +
+            "        if (name === 'data-status') return 'FAILED';\n" +
+            "        return '';\n" +
+            "    },\n" +
+            "    hasAttribute: (name) => name === 'data-steps-fetched',\n" +
+            "    setAttribute: () => {},\n" +
+            "    removeAttribute: () => {}\n" +
+            "};\n" +
+            "const sideList = { innerHTML: '', querySelector: () => null };\n" +
+            "const sandbox = {\n" +
+            "    console,\n" +
+            "    window: {},\n" +
+            "    document: {\n" +
+            "        readyState: 'complete',\n" +
+            "        getElementById: (id) => (id === 'sidePageStepList' ? sideList : null),\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {}, contains: () => true }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "vm.runInNewContext(code, sandbox);\n" +
+            "sandbox.renderStepsForExecution(sampleRow);\n" +
+            "const html = sideList.innerHTML;\n" +
+            "const startOfCard = (id) => {\n" +
+            "    const idIdx = html.indexOf('id=\"' + id + '\"');\n" +
+            "    assert(idIdx >= 0, 'Missing card ' + id);\n" +
+            "    const startIdx = html.lastIndexOf('<div class=\"step-item', idIdx);\n" +
+            "    assert(startIdx >= 0, 'Missing step-item wrapper for ' + id);\n" +
+            "    return startIdx;\n" +
+            "};\n" +
+            "const s0 = startOfCard('stepCard_core_0');\n" +
+            "const s1 = startOfCard('stepCard_core_1');\n" +
+            "const s2 = startOfCard('stepCard_core_2');\n" +
+            "const s3 = startOfCard('stepCard_core_3');\n" +
+            "const s4 = startOfCard('stepCard_core_4');\n" +
+            "const card0 = html.slice(s0, s1);\n" +
+            "const card0Header = card0.slice(0, card0.indexOf('step-action-inspector'));\n" +
+            "const card1 = html.slice(s1, s2);\n" +
+            "const card2 = html.slice(s2, s3);\n" +
+            "const card3 = html.slice(s3, s4);\n" +
+            "const card3Header = card3.slice(0, card3.indexOf('step-action-inspector'));\n" +
+            "const card4 = html.slice(s4);\n" +
+            "const card4Header = card4.slice(0, card4.indexOf('step-action-inspector'));\n" +
+            "assert(card0.includes('step-failed') && card0Header.includes('FAILED') && !card0Header.includes('HEALED'), 'Failed step with healed action must render FAILED and step-failed');\n" +
+            "assert(card1.includes('step-not-run') && card1.includes('NOT RUN'), 'Step omitting status without execution signals after failure must become NOT RUN');\n" +
+            "assert(card2.includes('step-not-run') && card2.includes('NOT RUN') && !card2.includes('step-healed'), 'PENDING step with stale pre-recorded healed action after failure must become NOT RUN');\n" +
+            "assert(card3.includes('step-failed') && card3Header.includes('FAILED') && !card3Header.includes('HEALED'), 'Composite step with healed sub 0 + failed sub 1 must render FAILED');\n" +
+            "assert(!card4.includes('step-healed') && !card4Header.includes('HEALED') && card4Header.includes('>LEAN<'), 'Composite step with healed sub 0 + running sub 1 must stay in-progress (not HEALED or PENDING)');\n";
+
+        runNodeScript(edgeCaseScript, "PR #579 edge case behavioral rendering test failed");
     }
 
     /**

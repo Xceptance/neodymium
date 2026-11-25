@@ -312,12 +312,19 @@ public class PlaybookToolReplayTest
         PlaybookToolReplayer.replayStep(step, this.registry, this.context);
         this.executedCalls.clear();
 
+        // Use a fresh unhealed step for the timed benchmark so offline healing actually executes
+        final PlaybookStep timedStep = new PlaybookStep("Click favorite heart icon");
+        timedStep.addToolCall(new ToolCall("call-30", "browser_click", MAPPER.createObjectNode().put("target", ".icon-favorite-old")));
+        final Action timedAct = new Action("CLICK", ".icon-favorite-old", List.of(), "Favorite", "");
+        timedAct.setDomFeatureVector(recordedIcon);
+        timedStep.setActions(List.of(timedAct));
+
         final long start = System.nanoTime();
-        final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context);
+        final ToolResult result = PlaybookToolReplayer.replayStep(timedStep, this.registry, this.context);
         final long durationMs = (System.nanoTime() - start) / 1_000_000;
 
         Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
-        Assertions.assertEquals(PlaybookStepStatus.HEALED, step.getStatus());
+        Assertions.assertEquals(PlaybookStepStatus.HEALED, timedStep.getStatus());
         Assertions.assertEquals(1, this.executedCalls.size());
         Assertions.assertEquals("#favorite-heart", this.executedCalls.get(0).arguments().path("target").asText());
         // Sub-millisecond CPU execution
@@ -1034,8 +1041,14 @@ public class PlaybookToolReplayTest
         Assertions.assertEquals(PlaybookStepStatus.HEALED, step.getStatus());
         Assertions.assertEquals("#account-status-new", this.executedCalls.get(0).arguments().path("target").asText());
 
-        // 2. Candidate with mismatched attribute is rejected and fails conclusively
+        // 2. Candidate with mismatched attribute is rejected and fails conclusively (on a fresh unhealed step)
         this.executedCalls.clear();
+        final PlaybookStep mismatchStep = new PlaybookStep("Assert account status is active");
+        mismatchStep.addToolCall(new ToolCall("call-attr-2", "assert_attribute", assertArgs.deepCopy()));
+        final Action mismatchAction = new Action("ASSERT_ATTRIBUTE", "#account-status", List.of("data-status", "active"), "Verify status", "");
+        mismatchAction.setDomFeatureVector(recordedVector);
+        mismatchStep.setActions(List.of(mismatchAction));
+
         final DomFeatureVector mismatchedCandidate = new DomFeatureVector(
                 "div",
                 "Suspended User",
@@ -1050,7 +1063,7 @@ public class PlaybookToolReplayTest
 
         final ConclusiveFailureException ex = Assertions.assertThrows(
                 ConclusiveFailureException.class,
-                () -> PlaybookToolReplayer.replayStep(step, this.registry, this.context)
+                () -> PlaybookToolReplayer.replayStep(mismatchStep, this.registry, this.context)
         );
         Assertions.assertTrue(ex.getMessage().contains("Assertion failed during replay"));
         Assertions.assertEquals("#account-status", this.executedCalls.get(0).arguments().path("target").asText());
@@ -1187,8 +1200,14 @@ public class PlaybookToolReplayTest
         Assertions.assertEquals(PlaybookStepStatus.HEALED, step.getStatus());
         Assertions.assertEquals("#submit-order-dyn", this.executedCalls.get(0).arguments().path("target").asText());
 
-        // 2. Candidate is disabled -> rejected for healing
+        // 2. Candidate is disabled -> rejected for healing (on a fresh unhealed step)
         this.executedCalls.clear();
+        final PlaybookStep disabledStep = new PlaybookStep("Assert submit button is visible and enabled");
+        disabledStep.addToolCall(new ToolCall("call-state-2", "assert_element_state", assertArgs.deepCopy()));
+        final Action disabledAction = new Action("ASSERT_ELEMENT_STATE", "#submit-order", List.of("visible", "enabled"), "Verify button", "");
+        disabledAction.setDomFeatureVector(recordedVector);
+        disabledStep.setActions(List.of(disabledAction));
+
         final DomFeatureVector disabledCandidate = new DomFeatureVector(
                 "button",
                 "Submit",
@@ -1204,7 +1223,7 @@ public class PlaybookToolReplayTest
 
         final ConclusiveFailureException ex = Assertions.assertThrows(
                 ConclusiveFailureException.class,
-                () -> PlaybookToolReplayer.replayStep(step, this.registry, this.context)
+                () -> PlaybookToolReplayer.replayStep(disabledStep, this.registry, this.context)
         );
         Assertions.assertTrue(ex.getMessage().contains("Assertion failed during replay"));
         Assertions.assertEquals("#submit-order", this.executedCalls.get(0).arguments().path("target").asText());
@@ -1475,6 +1494,73 @@ public class PlaybookToolReplayTest
 
         Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
         Assertions.assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus());
+    }
+
+    @Test
+    public void testOfflineDomHealingUpdatesToolCallsWhilePreservingVariablePlaceholders() throws Exception
+    {
+        registerFillTool();
+        final PlaybookStep step = createOfflineFillStep();
+        final SessionData sessionData = createSearchSessionData();
+        this.context.setVariable("liveCandidates", List.of(createSearchInputCandidate()));
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+        final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context, sessionData, null);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertEquals(PlaybookStepStatus.HEALED, step.getStatus());
+        Assertions.assertEquals("#searchInput", this.executedCalls.get(0).arguments().path("selector").asText());
+        Assertions.assertEquals("Neodymium", this.executedCalls.get(0).arguments().path("text").asText());
+
+        final ToolCall persistedCall = step.getToolCalls().get(0);
+        Assertions.assertEquals("#searchInput", persistedCall.arguments().path("selector").asText(),
+                "Persisted ToolCall selector must update to healed #searchInput");
+        Assertions.assertEquals("${searchPhrase}", persistedCall.arguments().path("text").asText(),
+                "Persisted ToolCall must preserve parameterized ${searchPhrase} placeholder");
+        Assertions.assertEquals("searchInput", persistedCall.arguments().path("domFeatureVector").path("attributes").path("id").asText(),
+                "Persisted ToolCall domFeatureVector must update to the healed candidate identity");
+
+        final Action persistedAction = step.getActions().get(0);
+        Assertions.assertEquals("#searchInput", persistedAction.getTarget());
+        Assertions.assertTrue(persistedAction.isHealed());
+        Assertions.assertEquals("#searchField", persistedAction.getExpectedTarget());
+    }
+
+    @Test
+    public void testOfflineHealedStepConvergesToCleanSuccessOnSubsequentReplay() throws Exception
+    {
+        registerFillTool();
+        final PlaybookStep step = createOfflineFillStep();
+        final SessionData sessionData = createSearchSessionData();
+        this.context.setVariable("liveCandidates", List.of(createSearchInputCandidate()));
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+        // Run 1: offline DOM healing heals #searchField -> #searchInput and persists it to toolCalls
+        final ToolResult run1Result = PlaybookToolReplayer.replayStep(step, this.registry, this.context, sessionData, null);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, run1Result.status());
+        Assertions.assertEquals(PlaybookStepStatus.HEALED, step.getStatus());
+
+        // Run 2: clear transient liveCandidates (simulating direct replay where #searchInput works cleanly)
+        this.executedCalls.clear();
+        final SimpleToolContext cleanRunContext = new SimpleToolContext(this.registry);
+        cleanRunContext.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+        step.setStatus(PlaybookStepStatus.RUNNING);
+
+        final ToolResult run2Result = PlaybookToolReplayer.replayStep(step, this.registry, cleanRunContext, sessionData, null);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, run2Result.status());
+        Assertions.assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus(),
+                "Subsequent replay of offline-healed playbook must converge to clean SUCCESS");
+        Assertions.assertEquals("#searchInput", this.executedCalls.get(0).arguments().path("selector").asText());
+        Assertions.assertEquals("Neodymium", this.executedCalls.get(0).arguments().path("text").asText());
+
+        final Action convergedAction = step.getActions().get(0);
+        Assertions.assertFalse(convergedAction.isHealed(), "Clean replay must clear stale healed flag");
+        Assertions.assertNull(convergedAction.getExpectedTarget(), "Clean replay must clear stale expectedTarget");
+        Assertions.assertNull(convergedAction.getOriginalTarget(), "Clean replay must clear stale originalTarget");
+        Assertions.assertNull(convergedAction.getHealedFrom(), "Clean replay must clear stale healedFrom");
+        Assertions.assertEquals("#searchInput", step.getToolCalls().get(0).arguments().path("selector").asText());
+        Assertions.assertEquals("${searchPhrase}", step.getToolCalls().get(0).arguments().path("text").asText());
     }
 
     @Test
@@ -1773,6 +1859,74 @@ public class PlaybookToolReplayTest
                 PlaybookToolReplayer.resolveAssertElementStates(MAPPER.createObjectNode().put("state", "empty").put("negated", true)));
     }
 
+    private void registerFillTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode().put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("fill", "Fills input field", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                PlaybookToolReplayTest.this.executedCalls.add(call);
+                return ToolResult.success(call.callId(), "Filled " + call.arguments().path("selector").asText());
+            }
+        });
+    }
+
+    private PlaybookStep createOfflineFillStep()
+    {
+        final PlaybookStep step = new PlaybookStep("Type '${searchPhrase}' in the Search input field");
+        final DomFeatureVector recorded = new DomFeatureVector(
+                "input",
+                "Search Wikipedia",
+                Set.of("mw-searchField"),
+                Map.of("id", "searchField", "name", "search", "type", "search", "placeholder", "Search Wikipedia"),
+                "textbox",
+                "Search Wikipedia",
+                "div",
+                0
+        );
+        final ObjectNode fillArgs = MAPPER.createObjectNode()
+                .put("selector", "#searchField")
+                .put("text", "${searchPhrase}");
+        fillArgs.set("domFeatureVector", MAPPER.valueToTree(recorded));
+        step.addToolCall(new ToolCall("call-fill-1", "fill", fillArgs));
+
+        final Action act = new Action("TYPE", "#searchField", List.of("${searchPhrase}"), "Type '${searchPhrase}' into #searchField", "");
+        act.setDomFeatureVector(recorded);
+        step.setActions(List.of(act));
+        return step;
+    }
+
+    private SessionData createSearchSessionData()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.set("searchPhrase", "Neodymium");
+        return sessionData;
+    }
+
+    private DomFeatureVector createSearchInputCandidate()
+    {
+        return new DomFeatureVector(
+                "input",
+                "Search Wikipedia",
+                Set.of("search-input"),
+                Map.of("id", "searchInput", "name", "search", "type", "search", "placeholder", "Search Wikipedia"),
+                "textbox",
+                "Search Wikipedia",
+                "div",
+                0
+        );
+    }
+
     private void registerMockAssertElementStateTool(final String toolName, final boolean failOnOldSelector)
     {
         final ObjectNode schema = MAPPER.createObjectNode().put("type", "object");
@@ -1800,5 +1954,86 @@ public class PlaybookToolReplayTest
                 return ToolResult.success(call.callId(), "State verified for " + target);
             }
         });
+    }
+
+    @Test
+    public void testMultiCallOfflineHealingDoesNotOverwriteStepDomFeatureVectorFromSubsequentCalls() throws Exception
+    {
+        final ObjectNode waitSchema = MAPPER.createObjectNode().put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("browser_wait", "Waits ms", waitSchema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                PlaybookToolReplayTest.this.executedCalls.add(call);
+                return ToolResult.success(call.callId(), "Waited");
+            }
+        });
+
+        final PlaybookStep step = new PlaybookStep("Wait then click confirm button");
+        final DomFeatureVector firstStepVector = new DomFeatureVector(
+                "a",
+                "Home",
+                Set.of("nav-home"),
+                Map.of("id", "btn0"),
+                "link",
+                "Home",
+                "header",
+                0
+        );
+        final DomFeatureVector secondOldVector = new DomFeatureVector(
+                "button",
+                "Confirm",
+                Set.of("confirm-btn"),
+                Map.of("id", "btn1Old"),
+                "button",
+                "Confirm",
+                "form",
+                0
+        );
+        final DomFeatureVector secondHealedCandidate = new DomFeatureVector(
+                "button",
+                "Confirm",
+                Set.of("confirm-btn"),
+                Map.of("id", "btn1New"),
+                "button",
+                "Confirm",
+                "form",
+                0
+        );
+
+        step.setDomFeatureVector(firstStepVector);
+
+        final ObjectNode waitArgs = MAPPER.createObjectNode().put("ms", 5);
+        final ObjectNode clickArgs = MAPPER.createObjectNode().put("target", "#btn1Old");
+        clickArgs.set("domFeatureVector", MAPPER.valueToTree(secondOldVector));
+
+        step.addToolCall(new ToolCall("call-wait-0", "browser_wait", waitArgs));
+        step.addToolCall(new ToolCall("call-click-1", "browser_click", clickArgs));
+
+        final Action act0 = new Action("WAIT", "", List.of("5"), "Wait briefly", "");
+        final Action act1 = new Action("CLICK", "#btn1Old", List.of(), "Click confirm", "");
+        act1.setDomFeatureVector(secondOldVector);
+        step.setActions(new ArrayList<>(List.of(act0, act1)));
+
+        this.context.setVariable("liveCandidates", List.of(secondHealedCandidate));
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+        final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertEquals(PlaybookStepStatus.HEALED, step.getStatus());
+        Assertions.assertEquals("#btn1New", step.getActions().get(1).getTarget());
+        Assertions.assertNotNull(step.getDomFeatureVector());
+        Assertions.assertEquals("btn0", step.getDomFeatureVector().getAttributes().get("id"),
+                "Healing callIndex=1 must NOT overwrite callIndex=0 step-level domFeatureVector");
     }
 }

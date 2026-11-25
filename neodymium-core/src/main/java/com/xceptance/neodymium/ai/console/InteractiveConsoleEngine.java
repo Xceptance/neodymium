@@ -127,13 +127,48 @@ public final class InteractiveConsoleEngine {
         return "run_" + new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
     }
 
+    /**
+     * Normalizes a raw run identifier into the canonical run folder name ({@code run_*} or {@code run-*}),
+     * sanitizing path traversal or separator characters and falling back to {@link #getRunFolder()} when
+     * null, blank, or lacking alphanumeric characters.
+     *
+     * @param runId the raw run identifier
+     * @return the normalized safe run folder name
+     */
     public static String normalizeRunFolder(final String runId)
     {
         if (runId == null || runId.isBlank())
         {
             return getRunFolder();
         }
-        return (runId.startsWith("run_") || runId.startsWith("run-")) ? runId : "run_" + runId;
+        String sanitized = runId.trim().replaceAll("[^a-zA-Z0-9._-]", "_");
+        while (sanitized.contains(".."))
+        {
+            sanitized = sanitized.replace("..", "_");
+        }
+        sanitized = sanitized.replaceAll("^\\.+|\\.+$", "");
+        if (sanitized.isBlank() || !sanitized.matches(".*[a-zA-Z0-9].*"))
+        {
+            return getRunFolder();
+        }
+        return (sanitized.startsWith("run_") || sanitized.startsWith("run-")) ? sanitized : "run_" + sanitized;
+    }
+
+    private static String extractPayloadRunFolder(final JsonObject parsedState)
+    {
+        if (parsedState != null && parsedState.has("runId"))
+        {
+            final JsonElement runIdElem = parsedState.get("runId");
+            if (runIdElem != null && !runIdElem.isJsonNull() && runIdElem.isJsonPrimitive())
+            {
+                final String payloadRunId = runIdElem.getAsString();
+                if (payloadRunId != null && !payloadRunId.isBlank())
+                {
+                    return normalizeRunFolder(payloadRunId);
+                }
+            }
+        }
+        return null;
     }
 
     public static String getRunFolder()
@@ -643,6 +678,7 @@ public final class InteractiveConsoleEngine {
             else
             {
                 final boolean wasPassed = "passed".equalsIgnoreCase(currentStatus)
+                    || "healed".equalsIgnoreCase(currentStatus)
                     || "passed-clean".equalsIgnoreCase(currentStatus)
                     || "succeeded".equalsIgnoreCase(currentStatus)
                     || "succeeded-fixed".equalsIgnoreCase(currentStatus);
@@ -704,16 +740,17 @@ public final class InteractiveConsoleEngine {
                 final JsonObject parsedState = JsonParser.parseString(minified).getAsJsonObject();
                 final String executionKey = extractExecutionKey(parsedState);
                 final String testClassFolder = extractTestClassFolder(parsedState);
-                final int index = getExecutionIndex(testClassFolder, executionKey);
+                final String payloadRunFolder = extractPayloadRunFolder(parsedState);
+                final String runFolder = payloadRunFolder != null ? payloadRunFolder : getEffectiveRunFolder();
+                final int index = getExecutionIndex(runFolder + "::" + testClassFolder, executionKey);
+                final int rootIndex = getExecutionIndex(testClassFolder, executionKey);
                 String contentToSave = minified;
 
-
                 // 1. Root file for compatibility in default allure.results.directory
-                final File executionJson = new File(defaultResultsDir, "console-execution-" + index + ".json");
+                final File executionJson = new File(defaultResultsDir, "console-execution-" + rootIndex + ".json");
 
                 // 2. Structured run and test class folders in configured console logs directory
                 final String configuredResultsDirPath = AiConfiguration.getInstance().getConsoleExecutionLogsDirectory();
-                final String runFolder = getEffectiveRunFolder();
                 final File structuredDir = new File(configuredResultsDirPath, runFolder + "/" + testClassFolder);
                 if (!structuredDir.exists())
                 {

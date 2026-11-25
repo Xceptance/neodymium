@@ -1133,33 +1133,14 @@ public final class InteractiveStateBuilder
         }
 
         // Attach details from matching ReportStepEntry if report is available
-        ReportStepEntry reportStep = null;
-        if (report != null && report.getSteps() != null)
-        {
-            for (final ReportStepEntry entry : report.getSteps())
-            {
-                if (entry != null && (entry.getStepIndex() == stepIndex || entry.getStepIndex() == globalIndex))
-                {
-                    final String entryBlock = entry.getBlock();
-                    final boolean blockMatches = (entryBlock == null || expectedBlock == null || expectedBlock.equalsIgnoreCase(entryBlock));
-                    if (!blockMatches)
-                    {
-                        continue;
-                    }
-                    final String entryRaw = entry.getRawInstruction();
-                    final String entryInst = entry.getInstruction();
-                    final boolean matchesInstruction = (rawInstruction != null && !rawInstruction.isBlank()
-                        && (rawInstruction.equals(entryRaw) || rawInstruction.equals(entryInst)))
-                        || (resolvedInstruction != null && !resolvedInstruction.isBlank()
-                        && (resolvedInstruction.equals(entryRaw) || resolvedInstruction.equals(entryInst)));
-                    if (matchesInstruction || entryRaw == null || rawInstruction == null || rawInstruction.isBlank())
-                    {
-                        reportStep = entry;
-                        break;
-                    }
-                }
-            }
-        }
+        final ReportStepEntry reportStep = findMatchingReportStep(
+            report,
+            stepIndex,
+            globalIndex,
+            expectedBlock,
+            rawInstruction,
+            resolvedInstruction
+        );
 
         if (reportStep != null)
         {
@@ -1190,6 +1171,16 @@ public final class InteractiveStateBuilder
             obj.addProperty("continueOnError", reportStep.isContinueOnError());
             obj.addProperty("noHealing", reportStep.isNoHealing());
             obj.addProperty("visual", reportStep.isVisual());
+            final boolean isStepFailed = status == PlaybookStepStatus.FAILED
+                || step.isFailed()
+                || "FAILED".equalsIgnoreCase(reportStep.getStatus())
+                || (reportStep.getSubSteps() != null && reportStep.getSubSteps().stream()
+                    .anyMatch(s -> s != null && !s.isOptional() && ("FAILED".equalsIgnoreCase(s.getStatus()) || s.getFailureReason() != null)));
+            final boolean isStepRunning = !isStepFailed && (status == PlaybookStepStatus.RUNNING
+                || "RUNNING".equalsIgnoreCase(reportStep.getStatus())
+                || (reportStep.getSubSteps() != null && reportStep.getSubSteps().stream()
+                    .anyMatch(s -> s != null && "RUNNING".equalsIgnoreCase(s.getStatus()))));
+
             if (reportStep.isNotRun() || "NOT RUN".equalsIgnoreCase(reportStep.getStatus()) || "NOT_RUN".equalsIgnoreCase(reportStep.getStatus()))
             {
                 obj.addProperty("status", "not_run");
@@ -1198,7 +1189,11 @@ public final class InteractiveStateBuilder
                     obj.addProperty("notRunReason", reportStep.getNotRunReason());
                 }
             }
-            else if (reportStep.isHealed() || "HEALED".equalsIgnoreCase(reportStep.getStatus()))
+            else if (isStepFailed)
+            {
+                obj.addProperty("status", "failed");
+            }
+            else if (!isStepRunning && (reportStep.isHealed() || "HEALED".equalsIgnoreCase(reportStep.getStatus())))
             {
                 obj.addProperty("status", "healed");
                 obj.addProperty("healed", true);
@@ -1208,13 +1203,16 @@ public final class InteractiveStateBuilder
             {
                 final JsonArray reportActions = serializeReportActions(reportStep.getActions());
                 obj.add("actions", reportActions);
-                for (final JsonElement actElem : reportActions)
+                if (!isStepFailed && !isStepRunning)
                 {
-                    if (actElem.isJsonObject() && actElem.getAsJsonObject().has("healed") && actElem.getAsJsonObject().get("healed").getAsBoolean())
+                    for (final JsonElement actElem : reportActions)
                     {
-                        obj.addProperty("status", "healed");
-                        obj.addProperty("healed", true);
-                        break;
+                        if (actElem.isJsonObject() && actElem.getAsJsonObject().has("healed") && actElem.getAsJsonObject().get("healed").getAsBoolean())
+                        {
+                            obj.addProperty("status", "healed");
+                            obj.addProperty("healed", true);
+                            break;
+                        }
                     }
                 }
             }
@@ -1229,12 +1227,7 @@ public final class InteractiveStateBuilder
             }
             else if (!reportStep.getSubSteps().isEmpty())
             {
-                final boolean isStepFailed = status == PlaybookStepStatus.FAILED
-                    || step.isFailed()
-                    || "FAILED".equalsIgnoreCase(reportStep.getStatus());
-                final boolean hasFailedSubStep = reportStep.getSubSteps().stream()
-                    .anyMatch(s -> s != null && ("FAILED".equalsIgnoreCase(s.getStatus()) || s.getFailureReason() != null));
-                final boolean isFailing = isStepFailed || hasFailedSubStep || (isRunFailed && isThisStepActive);
+                final boolean isFailing = isStepFailed || (isRunFailed && isThisStepActive);
 
                 if (isFailing)
                 {
@@ -1451,7 +1444,7 @@ public final class InteractiveStateBuilder
             obj.add("subSteps", serializeSubSteps(reportStep.getSubSteps()));
         }
 
-        if (!obj.has("llmCalls") && report != null && report.getLlmCalls() != null)
+        if (!obj.has("llmCalls") && reportStep == null && report != null && report.getLlmCalls() != null)
         {
             final List<ReportLlmCallEntry> matchingCalls = new ArrayList<>();
             for (final ReportLlmCallEntry call : report.getLlmCalls())
@@ -1460,7 +1453,7 @@ public final class InteractiveStateBuilder
                 {
                     final String callBlock = call.getBlock() != null ? call.getBlock() : "steps";
                     final boolean blockMatches = expectedBlock.equalsIgnoreCase(callBlock);
-                    if (blockMatches && (call.getStepIndex() == stepIndex || call.getStepIndex() == globalIndex))
+                    if (blockMatches && call.getStepIndex() == globalIndex)
                     {
                         matchingCalls.add(call);
                     }
@@ -1993,5 +1986,85 @@ public final class InteractiveStateBuilder
             }
         }
         return arr;
+    }
+
+    /**
+     * Resolves the {@link ReportStepEntry} matching a serialized step, prioritizing exact global
+     * step index matches before falling back to block-local index matches, and enforcing
+     * instruction equality whenever both the step and report entry carry non-blank instruction text.
+     *
+     * @param report the active execution report
+     * @param stepIndex block-local step index
+     * @param globalIndex global flattened step index
+     * @param expectedBlock target execution block name (before, steps, after)
+     * @param rawInstruction raw step instruction
+     * @param resolvedInstruction runtime-resolved step instruction
+     * @return matching {@link ReportStepEntry}, or {@code null} if none matches
+     */
+    private static ReportStepEntry findMatchingReportStep(
+        final TestExecutionReport report,
+        final int stepIndex,
+        final int globalIndex,
+        final String expectedBlock,
+        final String rawInstruction,
+        final String resolvedInstruction
+    )
+    {
+        if (report == null || report.getSteps() == null)
+        {
+            return null;
+        }
+        final ReportStepEntry globalMatch = findReportStepByIndex(
+            report.getSteps(),
+            globalIndex,
+            expectedBlock,
+            rawInstruction,
+            resolvedInstruction
+        );
+        if (globalMatch != null)
+        {
+            return globalMatch;
+        }
+        return stepIndex != globalIndex
+            ? findReportStepByIndex(report.getSteps(), stepIndex, expectedBlock, rawInstruction, resolvedInstruction)
+            : null;
+    }
+
+    private static ReportStepEntry findReportStepByIndex(
+        final List<ReportStepEntry> entries,
+        final int targetIndex,
+        final String expectedBlock,
+        final String rawInstruction,
+        final String resolvedInstruction
+    )
+    {
+        final boolean hasStepInstruction = (rawInstruction != null && !rawInstruction.isBlank())
+            || (resolvedInstruction != null && !resolvedInstruction.isBlank());
+        for (final ReportStepEntry entry : entries)
+        {
+            if (entry == null || entry.getStepIndex() != targetIndex)
+            {
+                continue;
+            }
+            final String entryBlock = entry.getBlock();
+            final boolean blockMatches = entryBlock == null || expectedBlock == null || expectedBlock.equalsIgnoreCase(entryBlock);
+            if (!blockMatches)
+            {
+                continue;
+            }
+            final String entryRaw = entry.getRawInstruction();
+            final String entryInst = entry.getInstruction();
+            final boolean hasEntryInstruction = (entryRaw != null && !entryRaw.isBlank())
+                || (entryInst != null && !entryInst.isBlank());
+            final boolean matchesInstruction = (rawInstruction != null && !rawInstruction.isBlank()
+                && (rawInstruction.equals(entryRaw) || rawInstruction.equals(entryInst)))
+                || (resolvedInstruction != null && !resolvedInstruction.isBlank()
+                    && (resolvedInstruction.equals(entryRaw) || resolvedInstruction.equals(entryInst)));
+            if (matchesInstruction || !hasStepInstruction || !hasEntryInstruction)
+            {
+                return entry;
+            }
+        }
+        return null;
     }
 }

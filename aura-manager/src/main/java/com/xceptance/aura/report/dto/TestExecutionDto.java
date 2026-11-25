@@ -1704,6 +1704,10 @@ public final class TestExecutionDto
     @JsonProperty("aiDriven")
     public boolean isAiDriven()
     {
+        if (isHealed())
+        {
+            return false;
+        }
         return "AI".equalsIgnoreCase(getDisplayMode())
             || (getLlmCallsCount() > 0)
             || (getLlmTotalTokens() > 0L)

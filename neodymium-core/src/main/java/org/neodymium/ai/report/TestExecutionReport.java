@@ -531,7 +531,27 @@ public final class TestExecutionReport
 
         public boolean isHealed()
         {
-            return "HEALED".equalsIgnoreCase(this.status);
+            if ("FAILED".equalsIgnoreCase(this.status)
+                || "NOT RUN".equalsIgnoreCase(this.status)
+                || "NOT_RUN".equalsIgnoreCase(this.status)
+                || "UNREACHED".equalsIgnoreCase(this.status)
+                || "SKIPPED".equalsIgnoreCase(this.status))
+            {
+                return false;
+            }
+            if (this.subSteps != null && this.subSteps.stream().anyMatch(s -> s != null && !s.isOptional() && "FAILED".equalsIgnoreCase(s.getStatus())))
+            {
+                return false;
+            }
+            if ("HEALED".equalsIgnoreCase(this.status))
+            {
+                return true;
+            }
+            if (this.actions != null && this.actions.stream().anyMatch(a -> a != null && a.isHealed()))
+            {
+                return true;
+            }
+            return this.subSteps != null && this.subSteps.stream().anyMatch(s -> s != null && s.isHealed());
         }
 
         public long getStartTimeMs()
@@ -716,6 +736,14 @@ public final class TestExecutionReport
             if (action != null)
             {
                 this.actions.add(action);
+            }
+        }
+
+        public void removeActionIf(final Predicate<ReportActionEntry> filter)
+        {
+            if (filter != null)
+            {
+                this.actions.removeIf(filter);
             }
         }
 

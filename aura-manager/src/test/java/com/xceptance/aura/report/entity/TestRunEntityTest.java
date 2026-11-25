@@ -148,4 +148,21 @@ public class TestRunEntityTest
         entity.setPlaybookCount(null);
         assertEquals(0, entity.getPlaybookCountSafe());
     }
+
+    @Test
+    public void testAiCountClampedWhenHealedAndAiDoubleCountedInCategoryTotal()
+    {
+        final TestRunEntity entity = new TestRunEntity();
+        entity.setTotalTests(1);
+        entity.setPassedCount(1);
+        entity.setPassedHealedCount(1);
+        entity.setPassedAiCount(1);
+
+        assertEquals(1, entity.getPassedHealedCountSafe());
+        assertEquals(0, entity.getPassedAiCountSafe(),
+            "Healed execution must not leave an extra overlapping AI count in the status bar");
+        assertEquals(0, entity.getPassedCleanCount());
+        assertEquals(100.0, entity.getPassedHealedPct());
+        assertEquals(0.0, entity.getPassedAiPct());
+    }
 }
