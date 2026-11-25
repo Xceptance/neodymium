@@ -1563,6 +1563,302 @@ public class PlaybookToolReplayTest
         Assertions.assertEquals("${searchPhrase}", step.getToolCalls().get(0).arguments().path("text").asText());
     }
 
+    @Test
+    public void testAssertElementStateHiddenSkipsProactiveHealing() throws Exception
+    {
+        registerMockAssertElementStateTool("assert_element_state", false);
+        registerMockAssertElementStateTool("browser_assert_element_state", false);
+
+        final DomFeatureVector recordedVector = new DomFeatureVector(
+                "button",
+                "",
+                Set.of("secret-btn"),
+                Map.of("id", "hidden-btn"),
+                "button",
+                "Secret Button",
+                "body",
+                0,
+                0, 0, 0, 0
+        );
+        final DomFeatureVector matchingHiddenCandidate = new DomFeatureVector(
+                "button",
+                "",
+                Set.of("secret-btn"),
+                Map.of("id", "hidden-btn-alt"),
+                "button",
+                "Secret Button",
+                "body",
+                0,
+                0, 0, 0, 0
+        );
+        this.context.setVariable("liveCandidates", List.of(matchingHiddenCandidate));
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+        final List<ObjectNode> variants = List.of(
+                MAPPER.createObjectNode().put("selector", "button#hidden-btn").put("state", "hidden"),
+                MAPPER.createObjectNode().put("selector", "button#hidden-btn").put("state", "invisible"),
+                MAPPER.createObjectNode().put("selector", "button#hidden-btn").put("state", "visible").put("negated", true)
+        );
+
+        for (final ObjectNode args : variants)
+        {
+            this.executedCalls.clear();
+            final PlaybookStep step = new PlaybookStep("Assert secret button is hidden");
+            step.addToolCall(new ToolCall("call-hidden", "assert_element_state", args));
+            final Action recordedAction = new Action("ASSERT_HIDDEN", "button#hidden-btn", List.of("hidden"), "Verify hidden", "");
+            recordedAction.setDomFeatureVector(recordedVector);
+            step.setActions(List.of(recordedAction));
+
+            final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+            Assertions.assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus(), "Hidden assertion must not trigger healing for args: " + args);
+            Assertions.assertEquals(1, this.executedCalls.size());
+            Assertions.assertEquals("button#hidden-btn", this.executedCalls.get(0).arguments().path("selector").asText());
+        }
+
+        // Also verify browser_-prefixed tool name skips proactive healing
+        this.executedCalls.clear();
+        final PlaybookStep prefixedStep = new PlaybookStep("Assert secret button is hidden (prefixed)");
+        final ObjectNode prefixedArgs = MAPPER.createObjectNode().put("selector", "button#hidden-btn").put("state", "hidden");
+        prefixedStep.addToolCall(new ToolCall("call-hidden-prefixed", "browser_assert_element_state", prefixedArgs));
+        final Action prefixedAction = new Action("ASSERT_HIDDEN", "button#hidden-btn", List.of("hidden"), "Verify hidden", "");
+        prefixedAction.setDomFeatureVector(recordedVector);
+        prefixedStep.setActions(List.of(prefixedAction));
+
+        final ToolResult prefixedResult = PlaybookToolReplayer.replayStep(prefixedStep, this.registry, this.context);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, prefixedResult.status());
+        Assertions.assertEquals(PlaybookStepStatus.SUCCESS, prefixedStep.getStatus());
+        Assertions.assertEquals("button#hidden-btn", this.executedCalls.get(0).arguments().path("selector").asText());
+    }
+
+    @Test
+    public void testAssertElementStateAbsentSkipsProactiveHealing() throws Exception
+    {
+        registerMockAssertElementStateTool("assert_element_state", false);
+
+        final DomFeatureVector recordedVector = new DomFeatureVector(
+                "div",
+                "Banner",
+                Set.of("promo-banner"),
+                Map.of("id", "promo-banner"),
+                "region",
+                "Banner",
+                "body",
+                0,
+                0, 0, 100, 40
+        );
+        final DomFeatureVector candidate = new DomFeatureVector(
+                "div",
+                "Banner",
+                Set.of("promo-banner"),
+                Map.of("id", "promo-banner-alt"),
+                "region",
+                "Banner",
+                "body",
+                0,
+                0, 0, 100, 40
+        );
+        this.context.setVariable("liveCandidates", List.of(candidate));
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+        final List<ObjectNode> variants = List.of(
+                MAPPER.createObjectNode().put("selector", "#promo-banner").put("state", "absent"),
+                MAPPER.createObjectNode().put("selector", "#promo-banner").put("state", "not_exists"),
+                MAPPER.createObjectNode().put("selector", "#promo-banner").put("state", "exists").put("negated", true)
+        );
+
+        for (final ObjectNode args : variants)
+        {
+            this.executedCalls.clear();
+            final PlaybookStep step = new PlaybookStep("Assert banner is absent");
+            step.addToolCall(new ToolCall("call-absent", "assert_element_state", args));
+            final Action recordedAction = new Action("ASSERT_ABSENT", "#promo-banner", List.of("absent"), "Verify absent", "");
+            recordedAction.setDomFeatureVector(recordedVector);
+            step.setActions(List.of(recordedAction));
+
+            final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+            Assertions.assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus(), "Absent assertion must not trigger healing for args: " + args);
+            Assertions.assertEquals("#promo-banner", this.executedCalls.get(0).arguments().path("selector").asText());
+        }
+    }
+
+    @Test
+    public void testAssertElementStateNegatedHiddenStillAllowsVisibleHealing() throws Exception
+    {
+        registerMockAssertElementStateTool("assert_element_state", true);
+
+        final PlaybookStep step = new PlaybookStep("Assert banner is not hidden");
+        final ObjectNode assertArgs = MAPPER.createObjectNode()
+                .put("selector", "#old-banner")
+                .put("state", "hidden")
+                .put("negated", true);
+        step.addToolCall(new ToolCall("call-neg-hidden", "assert_element_state", assertArgs));
+
+        final DomFeatureVector recordedVector = new DomFeatureVector(
+                "div",
+                "Promo Banner",
+                Set.of("banner-card"),
+                Map.of("id", "old-banner", "data-test", "banner"),
+                "region",
+                "Promo Banner",
+                "main",
+                0,
+                10, 20, 200, 50
+        );
+        final Action recordedAction = new Action("ASSERT_ELEMENT_STATE", "#old-banner", List.of("hidden"), "Verify visible", "");
+        recordedAction.setDomFeatureVector(recordedVector);
+        step.setActions(List.of(recordedAction));
+
+        final DomFeatureVector visibleCandidate = new DomFeatureVector(
+                "div",
+                "Promo Banner",
+                Set.of("banner-card"),
+                Map.of("id", "new-banner", "data-test", "banner"),
+                "region",
+                "Promo Banner",
+                "main",
+                0,
+                10, 20, 200, 50
+        );
+        this.context.setVariable("liveCandidates", List.of(visibleCandidate));
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+        final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertEquals(PlaybookStepStatus.HEALED, step.getStatus());
+        Assertions.assertEquals("#new-banner", this.executedCalls.get(0).arguments().path("selector").asText());
+    }
+
+    @Test
+    public void testAssertElementStateExistsAndCompoundHiddenDisabledStillHealWhenMissing() throws Exception
+    {
+        registerMockAssertElementStateTool("assert_element_state", true);
+
+        final DomFeatureVector recordedVector = new DomFeatureVector(
+                "button",
+                "",
+                Set.of("hidden-control", "btn"),
+                Map.of("id", "old-hidden", "disabled", "true", "data-role", "secret"),
+                "button",
+                "Secret",
+                "form",
+                0,
+                0, 0, 0, 0
+        );
+        final DomFeatureVector matchingCandidate = new DomFeatureVector(
+                "button",
+                "",
+                Set.of("hidden-control", "btn"),
+                Map.of("id", "new-hidden", "disabled", "true", "data-role", "secret"),
+                "button",
+                "Secret",
+                "form",
+                0,
+                0, 0, 0, 0
+        );
+        this.context.setVariable("liveCandidates", List.of(matchingCandidate));
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+        // 1. 'exists' heals when missing
+        final PlaybookStep existsStep = new PlaybookStep("Assert hidden element exists");
+        existsStep.addToolCall(new ToolCall("call-exists", "assert_element_state",
+                MAPPER.createObjectNode().put("selector", "#old-hidden").put("state", "exists")));
+        final Action existsAction = new Action("ASSERT_EXISTS", "#old-hidden", List.of("exists"), "Verify exists", "");
+        existsAction.setDomFeatureVector(recordedVector);
+        existsStep.setActions(List.of(existsAction));
+
+        final ToolResult existsResult = PlaybookToolReplayer.replayStep(existsStep, this.registry, this.context);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, existsResult.status());
+        Assertions.assertEquals(PlaybookStepStatus.HEALED, existsStep.getStatus());
+        Assertions.assertEquals("#new-hidden", this.executedCalls.get(0).arguments().path("selector").asText());
+
+        // 2. 'absent' + negated=true resolves to 'exists' and heals when missing
+        this.executedCalls.clear();
+        final PlaybookStep negatedAbsentStep = new PlaybookStep("Assert element is not absent");
+        negatedAbsentStep.addToolCall(new ToolCall("call-neg-absent", "assert_element_state",
+                MAPPER.createObjectNode().put("selector", "#old-hidden").put("state", "absent").put("negated", true)));
+        negatedAbsentStep.setActions(List.of(existsAction));
+
+        final ToolResult negatedAbsentResult = PlaybookToolReplayer.replayStep(negatedAbsentStep, this.registry, this.context);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, negatedAbsentResult.status());
+        Assertions.assertEquals(PlaybookStepStatus.HEALED, negatedAbsentStep.getStatus());
+        Assertions.assertEquals("#new-hidden", this.executedCalls.get(0).arguments().path("selector").asText());
+
+        // 3. Compound ['hidden', 'disabled'] heals onto hidden+disabled candidate
+        this.executedCalls.clear();
+        final PlaybookStep compoundStep = new PlaybookStep("Assert hidden control is hidden and disabled");
+        final ObjectNode compoundArgs = MAPPER.createObjectNode().put("selector", "#old-hidden");
+        compoundArgs.putArray("states").add("hidden").add("disabled");
+        compoundStep.addToolCall(new ToolCall("call-compound-hd", "assert_element_state", compoundArgs));
+        final Action compoundAction = new Action("ASSERT_ELEMENT_STATE", "#old-hidden", List.of("hidden", "disabled"), "Verify hidden disabled", "");
+        compoundAction.setDomFeatureVector(recordedVector);
+        compoundStep.setActions(List.of(compoundAction));
+
+        final ToolResult compoundResult = PlaybookToolReplayer.replayStep(compoundStep, this.registry, this.context);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, compoundResult.status());
+        Assertions.assertEquals(PlaybookStepStatus.HEALED, compoundStep.getStatus());
+        Assertions.assertEquals("#new-hidden", this.executedCalls.get(0).arguments().path("selector").asText());
+
+        // 4. Compound ['hidden', 'disabled'] rejects enabled hidden candidate and fails conclusively
+        this.executedCalls.clear();
+        final DomFeatureVector enabledHiddenCandidate = new DomFeatureVector(
+                "button",
+                "",
+                Set.of("hidden-control", "btn"),
+                Map.of("id", "new-hidden", "data-role", "secret"),
+                "button",
+                "Secret",
+                "form",
+                0,
+                0, 0, 0, 0
+        );
+        this.context.setVariable("liveCandidates", List.of(enabledHiddenCandidate));
+
+        final PlaybookStep rejectedStep = new PlaybookStep("Assert hidden control is hidden and disabled");
+        rejectedStep.addToolCall(new ToolCall("call-compound-reject", "assert_element_state", compoundArgs));
+        rejectedStep.setActions(List.of(compoundAction));
+
+        final ConclusiveFailureException ex = Assertions.assertThrows(
+                ConclusiveFailureException.class,
+                () -> PlaybookToolReplayer.replayStep(rejectedStep, this.registry, this.context)
+        );
+        Assertions.assertTrue(ex.getMessage().contains("Assertion failed during replay"));
+        Assertions.assertEquals(PlaybookStepStatus.FAILED, rejectedStep.getStatus());
+        Assertions.assertEquals("#old-hidden", this.executedCalls.get(0).arguments().path("selector").asText());
+    }
+
+    @Test
+    public void testResolveAssertElementStatesNormalizationAndNegation()
+    {
+        Assertions.assertEquals(List.of(), PlaybookToolReplayer.resolveAssertElementStates(null));
+        Assertions.assertEquals(List.of(), PlaybookToolReplayer.resolveAssertElementStates(MAPPER.createObjectNode()));
+
+        final ObjectNode arrayArgs = MAPPER.createObjectNode();
+        arrayArgs.putArray("states").add("invisible").add("disabled");
+        Assertions.assertEquals(List.of("hidden", "disabled"), PlaybookToolReplayer.resolveAssertElementStates(arrayArgs));
+
+        final ObjectNode splitArgs = MAPPER.createObjectNode()
+                .put("state", "displayed, not readonly and non-existent");
+        Assertions.assertEquals(List.of("visible", "not_readonly", "absent"), PlaybookToolReplayer.resolveAssertElementStates(splitArgs));
+
+        Assertions.assertEquals(List.of("hidden"),
+                PlaybookToolReplayer.resolveAssertElementStates(MAPPER.createObjectNode().put("state", "visible").put("negated", true)));
+        Assertions.assertEquals(List.of("visible"),
+                PlaybookToolReplayer.resolveAssertElementStates(MAPPER.createObjectNode().put("state", "invisible").put("not", true)));
+        Assertions.assertEquals(List.of("absent"),
+                PlaybookToolReplayer.resolveAssertElementStates(MAPPER.createObjectNode().put("state", "present").put("negated", true)));
+        Assertions.assertEquals(List.of("exists"),
+                PlaybookToolReplayer.resolveAssertElementStates(MAPPER.createObjectNode().put("state", "not_exists").put("negated", true)));
+        Assertions.assertEquals(List.of("not_editable"),
+                PlaybookToolReplayer.resolveAssertElementStates(MAPPER.createObjectNode().put("state", "editable").put("negated", true)));
+        Assertions.assertEquals(List.of("not_readonly"),
+                PlaybookToolReplayer.resolveAssertElementStates(MAPPER.createObjectNode().put("state", "readonly").put("negated", true)));
+        Assertions.assertEquals(List.of("not_empty"),
+                PlaybookToolReplayer.resolveAssertElementStates(MAPPER.createObjectNode().put("state", "empty").put("negated", true)));
+    }
+
     private void registerFillTool()
     {
         final ObjectNode schema = MAPPER.createObjectNode().put("type", "object");
@@ -1629,5 +1925,34 @@ public class PlaybookToolReplayTest
                 "div",
                 0
         );
+    }
+
+    private void registerMockAssertElementStateTool(final String toolName, final boolean failOnOldSelector)
+    {
+        final ObjectNode schema = MAPPER.createObjectNode().put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition(toolName, "Asserts element state", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                PlaybookToolReplayTest.this.executedCalls.add(call);
+                final String target = call.arguments().hasNonNull("selector")
+                        ? call.arguments().path("selector").asText()
+                        : call.arguments().path("target").asText();
+                if (failOnOldSelector && target.contains("old"))
+                {
+                    throw new AssertionError("Element " + target + " not found");
+                }
+                return ToolResult.success(call.callId(), "State verified for " + target);
+            }
+        });
     }
 }

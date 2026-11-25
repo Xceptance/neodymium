@@ -38,7 +38,11 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.client.LlmRegistry;
 import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.event.ExecutionEventBus;
+import org.neodymium.ai.event.structural.ActionExecutedEvent;
+import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.executor.selenide.PageAnalyzer;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 import org.neodymium.ai.model.ContextLevel;
@@ -67,6 +71,7 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -1983,6 +1988,217 @@ public class BrowserToolsTest
         finally
         {
             Selenide.closeWebDriver();
+        }
+    }
+
+    @Test
+    public void testAssertElementStateHiddenDoesNotProactivelyHealOnValidHiddenElement() throws Exception
+    {
+        final String originalBrowser = Configuration.browser;
+        final boolean originalHeadless = Configuration.headless;
+        Configuration.browser = "chrome";
+        Configuration.headless = true;
+        final String html = """
+            <!DOCTYPE html>
+            <html>
+            <head><title>Hidden State Replay Test</title></head>
+            <body>
+                <button id="hidden-btn" style="display:none;">Secret Button</button>
+                <button id="other-hidden-btn" style="display:none;">Other Secret</button>
+            </body>
+            </html>
+            """;
+        try
+        {
+            Selenide.open("data:text/html;charset=utf-8," + html);
+
+            final DomFeatureVector recordedVector = new PageAnalyzer().extractFeatureVector(
+                    WebDriverRunner.getWebDriver(),
+                    $("button#hidden-btn").getWrappedElement());
+            Assertions.assertNotNull(recordedVector, "Recorded DomFeatureVector must be extracted for hidden element");
+
+            final ExecutionEventBus eventBus = new ExecutionEventBus();
+            final List<ActionExecutedEvent> actionEvents = new ArrayList<>();
+            eventBus.registerListener(event ->
+            {
+                if (event instanceof final ActionExecutedEvent aee)
+                {
+                    actionEvents.add(aee);
+                }
+            });
+            final AiSession session = AiSession.mock(
+                    ExecutionMode.REPLAY_WITH_HEALING,
+                    new SessionData(Map.of()),
+                    new LlmRegistry(),
+                    eventBus,
+                    (TargetExecutor) null);
+
+            final SimpleToolContext ctx = new SimpleToolContext(this.registry);
+            ctx.setVariable("neodymium.session", session);
+            ctx.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+            final PlaybookStep step = new PlaybookStep("Assert that the 'Secret Button' button is hidden");
+            final ObjectMapper mapper = new ObjectMapper();
+            final ObjectNode assertArgs = mapper.createObjectNode()
+                    .put("selector", "button#hidden-btn")
+                    .put("state", "hidden");
+            step.addToolCall(new ToolCall("call-assert-hidden", "assert_element_state", assertArgs));
+
+            final Action recordedAction = new Action("ASSERT_HIDDEN", "button#hidden-btn", List.of("hidden"), "Assert hidden", "");
+            recordedAction.setDomFeatureVector(recordedVector);
+            step.setActions(List.of(recordedAction));
+
+            final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, ctx);
+
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+            Assertions.assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus(), "Valid hidden assertion must not be marked HEALED");
+            Assertions.assertEquals("button#hidden-btn", step.getActions().get(0).getTarget());
+            Assertions.assertEquals(1, actionEvents.size());
+            Assertions.assertFalse(actionEvents.get(0).isHealed());
+            Assertions.assertEquals("button#hidden-btn", actionEvents.get(0).getResolvedAction().getTarget());
+        }
+        finally
+        {
+            Selenide.closeWebDriver();
+            Configuration.browser = originalBrowser;
+            Configuration.headless = originalHeadless;
+        }
+    }
+
+    @Test
+    public void testAssertElementStateHiddenFailsConclusivelyWhenElementIsVisible() throws Exception
+    {
+        final String originalBrowser = Configuration.browser;
+        final boolean originalHeadless = Configuration.headless;
+        final long originalTimeout = Configuration.timeout;
+        Configuration.browser = "chrome";
+        Configuration.headless = true;
+        Configuration.timeout = 300;
+        final String html = """
+            <!DOCTYPE html>
+            <html>
+            <head><title>Hidden State Visible Regression Test</title></head>
+            <body>
+                <button id="hidden-btn">Secret Button</button>
+                <button id="other-hidden-btn" style="display:none;">Secret Button</button>
+            </body>
+            </html>
+            """;
+        try
+        {
+            Selenide.open("data:text/html;charset=utf-8," + html);
+
+            final SimpleToolContext ctx = new SimpleToolContext(this.registry);
+            ctx.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+            final PlaybookStep step = new PlaybookStep("Assert that the 'Secret Button' button is hidden");
+            final ObjectMapper mapper = new ObjectMapper();
+            final ObjectNode assertArgs = mapper.createObjectNode()
+                    .put("selector", "button#hidden-btn")
+                    .put("state", "hidden");
+            step.addToolCall(new ToolCall("call-assert-hidden-visible", "assert_element_state", assertArgs));
+
+            final DomFeatureVector recordedVector = new DomFeatureVector(
+                    "button",
+                    "",
+                    Set.of(),
+                    Map.of("id", "hidden-btn"),
+                    "button",
+                    "Secret Button",
+                    "body",
+                    0,
+                    0, 0, 0, 0
+            );
+            final Action recordedAction = new Action("ASSERT_HIDDEN", "button#hidden-btn", List.of("hidden"), "Assert hidden", "");
+            recordedAction.setDomFeatureVector(recordedVector);
+            step.setActions(List.of(recordedAction));
+
+            final ConclusiveFailureException ex = Assertions.assertThrows(
+                    ConclusiveFailureException.class,
+                    () -> PlaybookToolReplayer.replayStep(step, this.registry, ctx)
+            );
+            Assertions.assertTrue(ex.getMessage().contains("Assertion failed during replay"));
+            Assertions.assertEquals(PlaybookStepStatus.FAILED, step.getStatus());
+        }
+        finally
+        {
+            Selenide.closeWebDriver();
+            Configuration.browser = originalBrowser;
+            Configuration.headless = originalHeadless;
+            Configuration.timeout = originalTimeout;
+        }
+    }
+
+    @Test
+    public void testAssertElementStateExistsDoesNotProactivelyHealWhenHiddenElementIsAttached() throws Exception
+    {
+        final String originalBrowser = Configuration.browser;
+        final boolean originalHeadless = Configuration.headless;
+        Configuration.browser = "chrome";
+        Configuration.headless = true;
+        final String html = """
+            <!DOCTYPE html>
+            <html>
+            <head><title>Exists State Attached Hidden Test</title></head>
+            <body>
+                <button id="hidden-btn" style="display:none;">Secret Button</button>
+            </body>
+            </html>
+            """;
+        try
+        {
+            Selenide.open("data:text/html;charset=utf-8," + html);
+
+            final DomFeatureVector recordedVector = new PageAnalyzer().extractFeatureVector(
+                    WebDriverRunner.getWebDriver(),
+                    $("button#hidden-btn").getWrappedElement());
+            Assertions.assertNotNull(recordedVector);
+
+            final ExecutionEventBus eventBus = new ExecutionEventBus();
+            final List<ActionExecutedEvent> actionEvents = new ArrayList<>();
+            eventBus.registerListener(event ->
+            {
+                if (event instanceof final ActionExecutedEvent aee)
+                {
+                    actionEvents.add(aee);
+                }
+            });
+            final AiSession session = AiSession.mock(
+                    ExecutionMode.REPLAY_WITH_HEALING,
+                    new SessionData(Map.of()),
+                    new LlmRegistry(),
+                    eventBus,
+                    (TargetExecutor) null);
+
+            final SimpleToolContext ctx = new SimpleToolContext(this.registry);
+            ctx.setVariable("neodymium.session", session);
+            ctx.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+            final PlaybookStep step = new PlaybookStep("Assert that the 'Secret Button' button exists");
+            final ObjectMapper mapper = new ObjectMapper();
+            final ObjectNode assertArgs = mapper.createObjectNode()
+                    .put("selector", "button#hidden-btn")
+                    .put("state", "exists");
+            step.addToolCall(new ToolCall("call-assert-exists", "assert_element_state", assertArgs));
+
+            final Action recordedAction = new Action("ASSERT_EXISTS", "button#hidden-btn", List.of("exists"), "Assert exists", "");
+            recordedAction.setDomFeatureVector(recordedVector);
+            step.setActions(List.of(recordedAction));
+
+            final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, ctx);
+
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+            Assertions.assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus(), "Attached hidden element for 'exists' must not trigger healing");
+            Assertions.assertEquals("button#hidden-btn", step.getActions().get(0).getTarget());
+            Assertions.assertEquals(1, actionEvents.size());
+            Assertions.assertFalse(actionEvents.get(0).isHealed());
+            Assertions.assertEquals("button#hidden-btn", actionEvents.get(0).getResolvedAction().getTarget());
+        }
+        finally
+        {
+            Selenide.closeWebDriver();
+            Configuration.browser = originalBrowser;
+            Configuration.headless = originalHeadless;
         }
     }
 }

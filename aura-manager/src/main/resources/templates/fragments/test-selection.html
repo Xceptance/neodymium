@@ -16,6 +16,9 @@
             </button>
         </div>
         <div style="display: flex; align-items: center; gap: 4px;">
+            <button type="button" class="btn-edit neo-u-8" id="toggleInlineTagsBtn" onclick="toggleInlineTagsMode()" title="Show Inline Tags" aria-pressed="false">
+                <span class="material-symbols-outlined" id="inlineTagsModeIcon" style="font-size: 16px;">sell</span>
+            </button>
             <button type="button" class="btn-edit neo-u-8" id="toggleFileViewBtn" onclick="toggleFileViewMode()" title="Switch View Mode (Flat / Hierarchical)">
                 <span class="material-symbols-outlined" id="fileViewModeIcon" style="font-size: 16px;">view_list</span>
             </button>
@@ -35,10 +38,6 @@
                 th:style="${q != null and !q.isEmpty() ? 'display: inline-flex;' : 'display: none;'}">
             <span class="material-symbols-outlined" style="font-size: 16px;">close</span>
         </button>
-    </div>
-    <div class="quick-tag-filters" id="quickTagFiltersBar" th:if="${availableTags != null and !availableTags.isEmpty()}" style="display: flex; gap: 4px; overflow-x: auto; padding: 4px 8px 6px 8px; scrollbar-width: none; border-bottom: 1px solid var(--border);">
-        <button type="button" class="quick-tag-btn active" onclick="filterTestsByTag('')" data-tag="" style="padding: 2px 7px; font-size: 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-main); cursor: pointer; white-space: nowrap;">All</button>
-        <button type="button" class="quick-tag-btn" th:each="t : ${availableTags}" th:data-tag="${t}" onclick="if(typeof filterTestsByTag==='function') filterTestsByTag(this.getAttribute('data-tag'));" th:text="${t}" style="padding: 2px 7px; font-size: 10px; border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.35); background: rgba(59, 130, 246, 0.1); color: #3b82f6; cursor: pointer; white-space: nowrap;">tag:val</button>
     </div>
     <div class="content-scroll" id="yamlFileList" th:fragment="yamlFileList" hx-get="/api/files/list" hx-include="#testSearchInput" hx-trigger="refreshFiles from:body" hx-swap="innerHTML" data-active-tab="tests">
         <div th:replace="~{fragments/test-selection :: yamlFileListContent}"></div>
@@ -120,23 +119,18 @@
                                    hx-target="#queueListContainer" hx-swap="innerHTML">
                         </label>
                         <span th:if="${item.hasError}" class="material-symbols-outlined" style="color: var(--danger, #ef4444); font-size: 16px; margin-right: 4px;" th:title="${'YAML Parse Error: ' + item.errorMessage}">error</span>
-                        <span class="file-name-label" style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 6px;" th:styleappend="${item.hasError ? 'color: var(--danger, #ef4444);' : ''}" th:text="${item.file}">filename.yaml</span>
-                        <div class="file-tags-container" th:if="${item.tags != null and !item.tags.isEmpty()}" style="display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; flex-wrap: wrap;">
-                            <th:block th:each="entry : ${item.tags.entrySet()}">
-                                <span class="tag-chip test-tag-chip" th:each="val : ${entry.value}"
-                                      th:data-tag="${entry.key + ':' + val}"
-                                      th:data-key="${entry.key}"
-                                      th:data-value="${val}"
-                                      onclick="event.stopPropagation(); if(typeof filterTestsByTag==='function') filterTestsByTag(this.getAttribute('data-tag'));"
-                                      style="padding: 1px 6px; font-size: 10px; border-radius: 4px; background: rgba(59, 130, 246, 0.12); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.3); cursor: pointer; user-select: none; line-height: 1.2; display: inline-flex; align-items: center; gap: 2px;"
-                                      th:title="'Click to filter tests by ' + ${entry.key} + ':' + ${val}">
-                                    <span class="material-symbols-outlined" style="font-size: 11px;">label</span>
-                                    <span th:text="${entry.key + ': ' + val}">tag: val</span>
-                                </span>
-                            </th:block>
-                        </div>
+                        <span class="file-name-label" style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 6px; flex: 1; min-width: 0;" th:styleappend="${item.hasError ? 'color: var(--danger, #ef4444);' : ''}" th:text="${item.file}" th:title="${item.file}">filename.yaml</span>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 2px;">
+                    <div class="item-actions" style="display: flex; align-items: center; gap: 2px; flex-shrink: 0; margin-left: 6px;">
+                        <button type="button" class="tag-count-badge file-tag-count-badge" th:if="${item.totalTagCount > 0}"
+                                onclick="event.stopPropagation(); if(typeof toggleTagPopover==='function') toggleTagPopover(this, event);"
+                                onmouseenter="if(typeof scheduleTagPopoverOpen==='function') scheduleTagPopoverOpen(this);"
+                                onmouseleave="if(typeof scheduleTagPopoverClose==='function') scheduleTagPopoverClose();"
+                                th:title="'View ' + ${item.totalTagCount} + ' tags (click to inspect & filter)'"
+                                th:aria-label="'View ' + ${item.totalTagCount} + ' tags for ' + ${item.file}">
+                            <span class="material-symbols-outlined" aria-hidden="true">sell</span>
+                            <span th:text="${item.totalTagCount}">0</span>
+                        </button>
                         <button type="button" class="playbook-marker-btn" th:if="${item.hasPlaybook}" th:data-file="${item.file}"
                                 onclick="event.stopPropagation(); if(typeof openPlaybookInspector==='function') openPlaybookInspector(this.getAttribute('data-file'), '');"
                                 style="padding: 2px 5px; font-size: 11px; border-radius: 4px; background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.4); cursor: pointer; display: inline-flex; align-items: center; gap: 3px;"
@@ -158,6 +152,43 @@
                         </button>
                     </div>
                 </div>
+
+                <div class="file-tags-row" th:if="${item.totalTagCount > 0}">
+                    <th:block th:if="${item.rootTags != null and !item.rootTags.isEmpty()}">
+                        <span class="tag-group-chip" data-tag-scope="file" th:each="entry : ${item.rootTags.entrySet()}" th:data-key="${entry.key}">
+                            <span class="tag-group-key" th:text="${entry.key + ':'}">key:</span>
+                            <th:block th:each="val, iterStat : ${entry.value}">
+                                <span class="tag-val-sep" th:if="${!iterStat.first}" aria-hidden="true">&middot;</span>
+                                <button type="button" class="tag-chip test-tag-chip tag-group-val"
+                                        th:data-tag="${entry.key + ':' + val}"
+                                        th:data-key="${entry.key}"
+                                        th:data-value="${val}"
+                                        onclick="event.stopPropagation(); if(typeof filterTestsByTag==='function') filterTestsByTag(this.getAttribute('data-tag'));"
+                                        th:title="'Click to filter tests by ' + ${entry.key} + ':' + ${val}"
+                                        th:text="${val}">val</button>
+                            </th:block>
+                        </span>
+                    </th:block>
+                    <button type="button" class="tag-dataset-hint-chip" th:if="${item.datasetOnlyTagCount > 0}"
+                            onclick="event.stopPropagation(); if(typeof toggleTagPopover==='function') toggleTagPopover(this, event);"
+                            onmouseenter="if(typeof scheduleTagPopoverOpen==='function') scheduleTagPopoverOpen(this);"
+                            onmouseleave="if(typeof scheduleTagPopoverClose==='function') scheduleTagPopoverClose();"
+                            th:title="'Inspect ' + ${item.datasetOnlyTagCount} + ' dataset-level tags'">
+                        <span th:text="'+' + ${item.datasetOnlyTagCount} + ' dataset'">+1 dataset</span>
+                    </button>
+                    <div class="dataset-only-tags-data" th:if="${item.datasetOnlyTagCount > 0}" style="display: none;" aria-hidden="true">
+                        <span class="tag-group-chip" data-tag-scope="dataset" th:each="entry : ${item.datasetOnlyTags.entrySet()}" th:data-key="${entry.key}">
+                            <span class="tag-group-key" th:text="${entry.key + ':'}">key:</span>
+                            <th:block th:each="val : ${entry.value}">
+                                <button type="button" class="tag-chip dataset-only-tag-ref tag-group-val"
+                                        th:data-tag="${entry.key + ':' + val}"
+                                        th:data-key="${entry.key}"
+                                        th:data-value="${val}"
+                                        th:text="${val}">val</button>
+                            </th:block>
+                        </span>
+                    </div>
+                </div>
                 
                 <div class="dataset-list" th:id="'datasets-' + ${item.file}" th:data-file="${item.file}" th:style="'display: ' + (${#sets.contains(expandedFiles, item.file) ? 'flex' : 'none'}) + '; flex-direction: column; padding-left: 24px; margin-top: 4px; gap: 4px;'">
                     <div th:if="${item.hasError}" class="file-parse-error-box" style="padding: 8px 12px; border-radius: 6px; background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; font-size: 11px; color: #ef4444; word-break: break-word;">
@@ -165,38 +196,52 @@
                         <div style="font-family: monospace; white-space: pre-wrap;" th:text="${item.errorMessage}">Parse error details</div>
                         <div style="margin-top: 6px; color: var(--text-secondary); font-size: 11px;">Click the repair icon to edit the file in Raw YAML mode.</div>
                     </div>
-                    <div th:unless="${item.hasError}" class="dataset-item" th:each="dataset : ${item.datasets}" style="display: flex; align-items: center; padding: 4px 8px; border-radius: 6px; font-size: 12px; justify-content: space-between; cursor: pointer;" th:data-file="${item.file}" th:data-id="${dataset.id}" onclick="const cb = this.querySelector('.dataset-select-cb'); if (cb &amp;&amp; event.target !== cb &amp;&amp; !event.target.closest('.custom-checkbox') &amp;&amp; !event.target.closest('.playbook-marker-btn')) { cb.click(); }">
-                        <div style="display: flex; align-items: center; min-width: 0; overflow: hidden; flex: 1;">
-                            <label class="custom-checkbox" onclick="event.stopPropagation();">
-                                <input type="checkbox" class="dataset-select-cb" th:data-file="${item.file}" th:data-id="${dataset.id}" 
-                                       th:checked="${selectedKeys != null and selectedKeys.contains(item.file + '::' + dataset.id)}"
-                                       onchange="if(typeof toggleDatasetCheckboxInstant==='function') toggleDatasetCheckboxInstant(this);"
-                                       th:hx-post="@{/api/queue/toggle(file=${item.file},id=${dataset.id})}"
-                                       hx-target="#queueListContainer" hx-swap="innerHTML">
-                            </label>
-                            <span class="material-symbols-outlined" style="margin-left: 8px; margin-right: 6px; color: var(--accent); opacity: 0.7; flex-shrink: 0; font-size: 14px;">database</span>
-                            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 2px;" th:text="${dataset.label}">dataset label</span>
-                            <div class="dataset-tags-container" th:if="${dataset.tags != null and !dataset.tags.isEmpty()}" style="display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; flex-wrap: wrap;">
-                                <th:block th:each="entry : ${dataset.tags.entrySet()}">
-                                    <span class="tag-chip dataset-tag-chip" th:each="val : ${entry.value}"
-                                          th:data-tag="${entry.key + ':' + val}"
-                                          th:data-key="${entry.key}"
-                                          th:data-value="${val}"
-                                          onclick="event.stopPropagation(); if(typeof filterTestsByTag==='function') filterTestsByTag(this.getAttribute('data-tag'));"
-                                          style="padding: 1px 5px; font-size: 9.5px; border-radius: 3px; background: rgba(14, 165, 233, 0.12); color: #0284c7; border: 1px solid rgba(14, 165, 233, 0.3); cursor: pointer; user-select: none; line-height: 1.2; display: inline-flex; align-items: center; gap: 2px;"
-                                          th:title="'Click to filter tests by ' + ${entry.key} + ':' + ${val}">
-                                        <span class="material-symbols-outlined" style="font-size: 10px;">label</span>
-                                        <span th:text="${entry.key + ': ' + val}">tag: val</span>
-                                    </span>
-                                </th:block>
+                    <div th:unless="${item.hasError}" class="dataset-item" th:each="dataset : ${item.datasets}" style="display: flex; flex-direction: column; padding: 4px 8px; border-radius: 6px; font-size: 12px; cursor: pointer;" th:data-file="${item.file}" th:data-id="${dataset.id}" onclick="const cb = this.querySelector('.dataset-select-cb'); if (cb &amp;&amp; event.target !== cb &amp;&amp; !event.target.closest('.custom-checkbox') &amp;&amp; !event.target.closest('.playbook-marker-btn') &amp;&amp; !event.target.closest('.tag-count-badge') &amp;&amp; !event.target.closest('.dataset-tags-row')) { cb.click(); }">
+                        <div class="dataset-item-row" style="display: flex; align-items: center; justify-content: space-between; width: 100%; min-width: 0;">
+                            <div style="display: flex; align-items: center; min-width: 0; overflow: hidden; flex: 1;">
+                                <label class="custom-checkbox" onclick="event.stopPropagation();">
+                                    <input type="checkbox" class="dataset-select-cb" th:data-file="${item.file}" th:data-id="${dataset.id}" 
+                                           th:checked="${selectedKeys != null and selectedKeys.contains(item.file + '::' + dataset.id)}"
+                                           onchange="if(typeof toggleDatasetCheckboxInstant==='function') toggleDatasetCheckboxInstant(this);"
+                                           th:hx-post="@{/api/queue/toggle(file=${item.file},id=${dataset.id})}"
+                                           hx-target="#queueListContainer" hx-swap="innerHTML">
+                                </label>
+                                <span class="material-symbols-outlined" style="margin-left: 8px; margin-right: 6px; color: var(--accent); opacity: 0.7; flex-shrink: 0; font-size: 14px;">database</span>
+                                <span class="dataset-label-text" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 2px; flex: 1; min-width: 0;" th:text="${dataset.label}" th:title="${dataset.label}">dataset label</span>
+                            </div>
+                            <div class="item-actions" style="display: flex; align-items: center; gap: 3px; flex-shrink: 0; margin-left: 6px;">
+                                <button type="button" class="tag-count-badge dataset-tag-count-badge" th:if="${dataset.totalTagCount > 0}"
+                                        onclick="event.stopPropagation(); if(typeof toggleTagPopover==='function') toggleTagPopover(this, event);"
+                                        onmouseenter="if(typeof scheduleTagPopoverOpen==='function') scheduleTagPopoverOpen(this);"
+                                        onmouseleave="if(typeof scheduleTagPopoverClose==='function') scheduleTagPopoverClose();"
+                                        th:title="'View ' + ${dataset.totalTagCount} + ' dataset tags (click to inspect & filter)'"
+                                        th:aria-label="'View ' + ${dataset.totalTagCount} + ' tags for ' + ${dataset.label}">
+                                    <span class="material-symbols-outlined" aria-hidden="true">sell</span>
+                                    <span th:text="${dataset.totalTagCount}">0</span>
+                                </button>
+                                <button type="button" class="playbook-marker-btn" th:if="${dataset.hasPlaybook}" th:data-file="${item.file}" th:data-id="${dataset.id}"
+                                        onclick="event.stopPropagation(); if(typeof openPlaybookInspector==='function') openPlaybookInspector(this.getAttribute('data-file'), this.getAttribute('data-id'));"
+                                        style="padding: 2px 5px; font-size: 11px; border-radius: 4px; background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.4); cursor: pointer; display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;"
+                                        title="View Recorded Companion JSON Playbook">
+                                    <span class="material-symbols-outlined" style="font-size: 14px;">menu_book</span>
+                                </button>
                             </div>
                         </div>
-                        <button type="button" class="playbook-marker-btn" th:if="${dataset.hasPlaybook}" th:data-file="${item.file}" th:data-id="${dataset.id}"
-                                onclick="event.stopPropagation(); if(typeof openPlaybookInspector==='function') openPlaybookInspector(this.getAttribute('data-file'), this.getAttribute('data-id'));"
-                                style="padding: 2px 5px; font-size: 11px; border-radius: 4px; background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.4); cursor: pointer; display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;"
-                                title="View Recorded Companion JSON Playbook">
-                            <span class="material-symbols-outlined" style="font-size: 14px;">menu_book</span>
-                        </button>
+                        <div class="dataset-tags-row" th:if="${dataset.totalTagCount > 0}">
+                            <span class="tag-group-chip dataset-tag-group-chip" data-tag-scope="dataset" th:each="entry : ${dataset.tags.entrySet()}" th:data-key="${entry.key}">
+                                <span class="tag-group-key" th:text="${entry.key + ':'}">key:</span>
+                                <th:block th:each="val, iterStat : ${entry.value}">
+                                    <span class="tag-val-sep" th:if="${!iterStat.first}" aria-hidden="true">&middot;</span>
+                                    <button type="button" class="tag-chip dataset-tag-chip tag-group-val"
+                                            th:data-tag="${entry.key + ':' + val}"
+                                            th:data-key="${entry.key}"
+                                            th:data-value="${val}"
+                                            onclick="event.stopPropagation(); if(typeof filterTestsByTag==='function') filterTestsByTag(this.getAttribute('data-tag'));"
+                                            th:title="'Click to filter tests by ' + ${entry.key} + ':' + ${val}"
+                                            th:text="${val}">val</button>
+                                </th:block>
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>

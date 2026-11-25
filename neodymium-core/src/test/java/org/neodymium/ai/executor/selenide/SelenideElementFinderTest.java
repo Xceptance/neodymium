@@ -23,7 +23,12 @@
  */
 package org.neodymium.ai.executor.selenide;
 
+import com.codeborne.selenide.WebDriverRunner;
+import java.lang.reflect.Proxy;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
@@ -31,6 +36,9 @@ import org.neodymium.ai.action.LocatorCandidate;
 import org.neodymium.ai.executor.selenide.selector.PlaywrightBy;
 import org.openqa.selenium.By;
 import org.openqa.selenium.InvalidSelectorException;
+import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
 
 /**
  * Unit tests verifying target locator splitting and candidate resolution in {@link SelenideElementFinder}.
@@ -40,6 +48,18 @@ import org.openqa.selenium.InvalidSelectorException;
  */
 public class SelenideElementFinderTest
 {
+    private interface MockJsDriver extends WebDriver, JavascriptExecutor
+    {
+    }
+
+    @AfterEach
+    public void tearDown()
+    {
+        if (WebDriverRunner.hasWebDriverStarted())
+        {
+            WebDriverRunner.closeWebDriver();
+        }
+    }
     @Test
     public void testCandidateSetPreservation()
     {
@@ -181,5 +201,122 @@ public class SelenideElementFinderTest
         Assertions.assertThrows(
             IllegalArgumentException.class,
             () -> SelenideElementFinder.findElements(emptyAction));
+    }
+
+    @Test
+    public void testIsDirectlyAttachedSafelyReturnsFalseOnNullBlankOrNoDriver()
+    {
+        Assertions.assertFalse(SelenideElementFinder.isDirectlyAttached(null));
+        Assertions.assertFalse(SelenideElementFinder.isDirectlyAttached("   "));
+        Assertions.assertFalse(SelenideElementFinder.isDirectlyAttached("button#hidden-btn"));
+    }
+
+    @Test
+    public void testIsDirectlyAttachedReturnsTrueForHiddenElementWhileIsDirectlyPresentReturnsFalse()
+    {
+        final AtomicBoolean displayedChecked = new AtomicBoolean(false);
+        final WebElement hiddenButton = (WebElement) Proxy.newProxyInstance(
+            SelenideElementFinderTest.class.getClassLoader(),
+            new Class<?>[] { WebElement.class },
+            (proxy, method, args) ->
+            {
+                final String name = method.getName();
+                if ("equals".equals(name))
+                {
+                    return args != null && args.length == 1 && proxy == args[0];
+                }
+                if ("hashCode".equals(name))
+                {
+                    return System.identityHashCode(proxy);
+                }
+                if ("toString".equals(name))
+                {
+                    return "MockHiddenButton";
+                }
+                if ("isDisplayed".equals(name))
+                {
+                    displayedChecked.set(true);
+                    return false;
+                }
+                if ("getTagName".equals(name))
+                {
+                    return "button";
+                }
+                if ("findElements".equals(name))
+                {
+                    return Collections.emptyList();
+                }
+                return null;
+            });
+
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+            SelenideElementFinderTest.class.getClassLoader(),
+            new Class<?>[] { MockJsDriver.class },
+            (proxy, method, args) ->
+            {
+                final String name = method.getName();
+                if ("equals".equals(name))
+                {
+                    return args != null && args.length == 1 && proxy == args[0];
+                }
+                if ("hashCode".equals(name))
+                {
+                    return System.identityHashCode(proxy);
+                }
+                if ("toString".equals(name))
+                {
+                    return "MockJsDriver";
+                }
+                if ("executeScript".equals(name))
+                {
+                    if (args != null && args.length >= 2 && args[1] instanceof final Object[] scriptArgs
+                        && scriptArgs.length >= 2 && "button#hidden-btn".equals(scriptArgs[1]))
+                    {
+                        return List.of(hiddenButton);
+                    }
+                    return Collections.emptyList();
+                }
+                if ("findElements".equals(name))
+                {
+                    if (args != null && args.length >= 1 && args[0] instanceof final PlaywrightBy playwrightBy)
+                    {
+                        return playwrightBy.findElements((WebDriver) proxy);
+                    }
+                    if (args != null && args.length >= 1 && args[0] instanceof final By by
+                        && by.toString().contains("//button[@id='hidden-btn']"))
+                    {
+                        return List.of(hiddenButton);
+                    }
+                    return Collections.emptyList();
+                }
+                return null;
+            });
+
+        try
+        {
+            WebDriverRunner.setWebDriver(mockDriver);
+
+            Assertions.assertFalse(SelenideElementFinder.isDirectlyPresent("button#hidden-btn"));
+            Assertions.assertTrue(displayedChecked.get(), "isDirectlyPresent must inspect element visibility");
+            displayedChecked.set(false);
+            Assertions.assertTrue(SelenideElementFinder.isDirectlyAttached("button#hidden-btn"));
+            Assertions.assertFalse(displayedChecked.get(), "isDirectlyAttached must not check element visibility");
+
+            displayedChecked.set(false);
+            Assertions.assertFalse(SelenideElementFinder.isDirectlyPresent("//button[@id='hidden-btn']"));
+            Assertions.assertTrue(displayedChecked.get(), "isDirectlyPresent must inspect XPath element visibility");
+            displayedChecked.set(false);
+            Assertions.assertTrue(SelenideElementFinder.isDirectlyAttached("//button[@id='hidden-btn']"));
+            Assertions.assertFalse(displayedChecked.get(), "isDirectlyAttached must not check XPath element visibility");
+
+            Assertions.assertFalse(SelenideElementFinder.isDirectlyAttached("button#missing-btn"));
+        }
+        finally
+        {
+            if (WebDriverRunner.hasWebDriverStarted())
+            {
+                WebDriverRunner.closeWebDriver();
+            }
+        }
     }
 }

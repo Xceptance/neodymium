@@ -715,6 +715,279 @@ public class BrowserToolProviderStabilityTest
     }
 
     @Test
+    public void testPureCoordinateClickUsesActualScrollDeltaWhenClampedAtBottom() throws Exception
+    {
+        final AtomicInteger requestedDeltaX = new AtomicInteger(Integer.MIN_VALUE);
+        final AtomicInteger requestedDeltaY = new AtomicInteger(Integer.MIN_VALUE);
+
+        final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("getTitle".equals(name))
+                    {
+                        return "Visual Markers Sandbox";
+                    }
+                    if ("getCurrentUrl".equals(name))
+                    {
+                        return "http://localhost:8542/AuraGlanceTest/shop/sandbox/visual-markers.html";
+                    }
+                    if ("executeScript".equals(name))
+                    {
+                        final String script = (String) args[0];
+                        if (script != null && script.contains("window.innerWidth"))
+                        {
+                            return Map.of("width", 1024, "height", 625);
+                        }
+                        if (script != null && script.contains("window.scrollBy"))
+                        {
+                            final Object[] scriptArgs = (Object[]) args[1];
+                            requestedDeltaX.set(((Number) scriptArgs[0]).intValue());
+                            requestedDeltaY.set(((Number) scriptArgs[1]).intValue());
+                            // Simulate page bottom clamp: max vertical scroll is 207px despite requesting 318px
+                            return Map.of("dx", 0, "dy", 207);
+                        }
+                        return null;
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final AiTool tool = this.registry.getTool("browser_click").orElseThrow();
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("target", "coord: 133, 630");
+
+        final ToolCall call = new ToolCall("call-coord-clamp-bottom", "browser_click", args);
+        final ToolResult result = tool.execute(call, null);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertEquals(0, requestedDeltaX.get(), "No horizontal scroll should be requested");
+        Assertions.assertEquals(318, requestedDeltaY.get(), "Requested vertical scroll should aim to center target (630 - 312)");
+
+        final JsonNode content = MAPPER.readTree(result.content());
+        Assertions.assertEquals(133, content.get("x").asInt());
+        Assertions.assertEquals(423, content.get("y").asInt(),
+                "Final Y must subtract actual scrolled distance (630 - 207 = 423), not requested delta (312)");
+    }
+
+    @Test
+    public void testPureCoordinateClickHandlesUnclampedTopEdgeAndUnscrollableClamps() throws Exception
+    {
+        final AtomicInteger actualDx = new AtomicInteger(0);
+        final AtomicInteger actualDy = new AtomicInteger(0);
+
+        final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("getTitle".equals(name))
+                    {
+                        return "Sandbox";
+                    }
+                    if ("getCurrentUrl".equals(name))
+                    {
+                        return "http://localhost:8542/sandbox.html";
+                    }
+                    if ("executeScript".equals(name))
+                    {
+                        final String script = (String) args[0];
+                        if (script != null && script.contains("window.innerWidth"))
+                        {
+                            return Map.of("width", 1024, "height", 625);
+                        }
+                        if (script != null && script.contains("window.scrollBy"))
+                        {
+                            return Map.of("dx", actualDx.get(), "dy", actualDy.get());
+                        }
+                        return null;
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final AiTool tool = this.registry.getTool("browser_click").orElseThrow();
+
+        // Case 1: Full unclamped vertical scroll (900 - 312 = 588)
+        actualDx.set(0);
+        actualDy.set(588);
+        final ObjectNode unclampedArgs = MAPPER.createObjectNode();
+        unclampedArgs.put("target", "coord: 500, 900");
+        final JsonNode unclampedRes = MAPPER.readTree(tool.execute(new ToolCall("call-unclamped", "browser_click", unclampedArgs), null).content());
+        Assertions.assertEquals(500, unclampedRes.get("x").asInt());
+        Assertions.assertEquals(312, unclampedRes.get("y").asInt());
+
+        // Case 2: Clamped at top/left edges (target -100, -80; actual scroll -50, -80)
+        actualDx.set(-50);
+        actualDy.set(-80);
+        final ObjectNode topLeftArgs = MAPPER.createObjectNode();
+        topLeftArgs.put("target", "coord: -100, -80");
+        final JsonNode topLeftRes = MAPPER.readTree(tool.execute(new ToolCall("call-top-left", "browser_click", topLeftArgs), null).content());
+        Assertions.assertEquals(0, topLeftRes.get("x").asInt(), "Still-negative X after partial scroll clamps to 0");
+        Assertions.assertEquals(0, topLeftRes.get("y").asInt(), "Exact top-edge scroll lands at Y=0");
+
+        // Case 3: Unscrollable page (actual scroll 0, 0)
+        actualDx.set(0);
+        actualDy.set(0);
+        final ObjectNode unscrollableArgs = MAPPER.createObjectNode();
+        unscrollableArgs.put("target", "coord: 1200, 700");
+        final JsonNode unscrollableRes = MAPPER.readTree(tool.execute(new ToolCall("call-unscrollable", "browser_click", unscrollableArgs), null).content());
+        Assertions.assertEquals(1023, unscrollableRes.get("x").asInt(), "Unscrollable X clamps to vpWidth - 1");
+        Assertions.assertEquals(624, unscrollableRes.get("y").asInt(), "Unscrollable Y clamps to vpHeight - 1");
+    }
+
+    @Test
+    public void testAnchoredCoordinateClickPassesOffsetsToRectScriptAndSkipsExtraScroll() throws Exception
+    {
+        final AtomicBoolean rectScriptInvoked = new AtomicBoolean(false);
+        final AtomicBoolean safeScrollInvoked = new AtomicBoolean(false);
+        final AtomicInteger passedRawX = new AtomicInteger(-1);
+        final AtomicInteger passedRawY = new AtomicInteger(-1);
+
+        final WebElement mockAnchor = createProxy(WebElement.class,
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("isDisplayed".equals(name))
+                    {
+                        return true;
+                    }
+                    if ("getTagName".equals(name))
+                    {
+                        return "section";
+                    }
+                    return null;
+                }
+        );
+
+        final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("getTitle".equals(name))
+                    {
+                        return "Visual Markers Sandbox";
+                    }
+                    if ("getCurrentUrl".equals(name))
+                    {
+                        return "http://localhost:8542/AuraGlanceTest/shop/sandbox/visual-markers.html";
+                    }
+                    if ("findElement".equals(name))
+                    {
+                        return mockAnchor;
+                    }
+                    if ("findElements".equals(name))
+                    {
+                        return Collections.singletonList(mockAnchor);
+                    }
+                    if ("executeScript".equals(name))
+                    {
+                        final String script = (String) args[0];
+                        if (script != null && script.contains("getBoundingClientRect") && script.contains("window.scrollBy"))
+                        {
+                            final Object[] scriptArgs = (Object[]) args[1];
+                            rectScriptInvoked.set(true);
+                            passedRawX.set(((Number) scriptArgs[1]).intValue());
+                            passedRawY.set(((Number) scriptArgs[2]).intValue());
+                            // Post-scroll anchor top is -28 so -28 + 451 = 423 (inside 625px viewport)
+                            return Map.of("x", 0, "y", -28);
+                        }
+                        if (script != null && script.contains("window.innerWidth"))
+                        {
+                            return Map.of("width", 1024, "height", 625);
+                        }
+                        if (script != null && script.contains("window.scrollBy"))
+                        {
+                            safeScrollInvoked.set(true);
+                            return Map.of("dx", 0, "dy", 0);
+                        }
+                        return null;
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final AiTool tool = this.registry.getTool("browser_click").orElseThrow();
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("target", "coord:#sandbox@133,451");
+
+        final ToolCall call = new ToolCall("call-anchored-reread", "browser_click", args);
+        final ToolResult result = tool.execute(call, null);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertTrue(rectScriptInvoked.get(), "Anchored rectScript with post-scroll re-read must be invoked");
+        Assertions.assertEquals(133, passedRawX.get());
+        Assertions.assertEquals(451, passedRawY.get());
+        Assertions.assertFalse(safeScrollInvoked.get(), "performSafeCoordinateClick should not scroll again once target is in viewport");
+
+        final JsonNode content = MAPPER.readTree(result.content());
+        Assertions.assertEquals(133, content.get("x").asInt());
+        Assertions.assertEquals(423, content.get("y").asInt());
+    }
+
+    @Test
+    public void testMarkerClickScriptScrollsElementIntoViewBeforeReadingRect() throws Exception
+    {
+        final AtomicReference<String> capturedBadgeScript = new AtomicReference<>();
+        final AtomicBoolean safeScrollInvoked = new AtomicBoolean(false);
+
+        final MockJsDriver mockDriver = createProxy(MockJsDriver.class,
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("getTitle".equals(name))
+                    {
+                        return "Visual Markers Sandbox";
+                    }
+                    if ("getCurrentUrl".equals(name))
+                    {
+                        return "http://localhost:8542/AuraGlanceTest/shop/sandbox/visual-markers.html";
+                    }
+                    if ("executeScript".equals(name))
+                    {
+                        final String script = (String) args[0];
+                        if (script != null && script.contains("#_neo_som_badges_"))
+                        {
+                            capturedBadgeScript.set(script);
+                            return Map.of(
+                                    "x", 133,
+                                    "y", 423,
+                                    "anchorSelector", "#sandbox",
+                                    "relX", 133,
+                                    "relY", 451
+                            );
+                        }
+                        if (script != null && script.contains("window.innerWidth"))
+                        {
+                            return Map.of("width", 1024, "height", 625);
+                        }
+                        if (script != null && script.contains("window.scrollBy"))
+                        {
+                            safeScrollInvoked.set(true);
+                            return Map.of("dx", 0, "dy", 0);
+                        }
+                        return null;
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final AiTool tool = this.registry.getTool("browser_click").orElseThrow();
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("target", "marker:4");
+
+        final ToolCall call = new ToolCall("call-marker-scroll", "browser_click", args);
+        final ToolResult result = tool.execute(call, null);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertNotNull(capturedBadgeScript.get());
+        Assertions.assertTrue(capturedBadgeScript.get().contains("el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' })"),
+                "clickBadgeScript must scroll out-of-viewport marked elements into view before reading rect");
+        Assertions.assertTrue(capturedBadgeScript.get().contains("isBadgeOverlay"),
+                "clickBadgeScript must guard against calling scrollIntoView on badge overlay divs");
+        Assertions.assertFalse(safeScrollInvoked.get(),
+                "performSafeCoordinateClick should not scroll again when marker element is already scrolled into viewport");
+    }
+
+    @Test
     public void testAssertElementStateToolSchema()
     {
         final AiTool tool = this.registry.getTool("browser_assert_element_state").orElseThrow();
