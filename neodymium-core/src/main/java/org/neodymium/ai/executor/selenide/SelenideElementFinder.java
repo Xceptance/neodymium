@@ -377,13 +377,30 @@ public final class SelenideElementFinder
      */
     public static boolean isDirectlyPresent(final String target)
     {
+        return isDirectlyAvailable(target, true);
+    }
+
+    /**
+     * Checks whether the given target locator is currently attached in the DOM regardless of visibility,
+     * without blocking or waiting for timeouts.
+     *
+     * @param target the target locator (CSS, XPath, Playwright pseudo, etc.)
+     * @return true if at least one matching element is currently attached in the DOM
+     */
+    public static boolean isDirectlyAttached(final String target)
+    {
+        return isDirectlyAvailable(target, false);
+    }
+
+    private static boolean isDirectlyAvailable(final String target, final boolean requireVisible)
+    {
         if (target == null || target.isBlank() || !WebDriverRunner.hasWebDriverStarted())
         {
             return false;
         }
         try
         {
-            return findDirect(target) != null;
+            return findDirect(target, requireVisible) != null;
         }
         catch (final AssertionError | Exception ignored)
         {
@@ -392,6 +409,11 @@ public final class SelenideElementFinder
     }
 
     private static SelenideElement findDirect(final String rawCandidate)
+    {
+        return findDirect(rawCandidate, true);
+    }
+
+    private static SelenideElement findDirect(final String rawCandidate, final boolean requireVisible)
     {
         if (rawCandidate == null || rawCandidate.isBlank())
         {
@@ -409,10 +431,10 @@ public final class SelenideElementFinder
                 try
                 {
                     final ElementsCollection markedEls = Selenide.$$(By.cssSelector("[data-m='" + markerNum + "']"));
-                    final SelenideElement visibleMarked = findFirstVisible(markedEls, clean);
-                    if (visibleMarked != null)
+                    final SelenideElement matchedMarked = selectDirectMatch(markedEls, clean, requireVisible);
+                    if (matchedMarked != null)
                     {
-                        return visibleMarked;
+                        return matchedMarked;
                     }
                     if (!markedEls.isEmpty())
                     {
@@ -427,7 +449,7 @@ public final class SelenideElementFinder
 
         if (isAutomationIdSelector(clean))
         {
-            final SelenideElement el = tryResolveAutomationId(clean);
+            final SelenideElement el = tryResolveAutomationId(clean, requireVisible);
             if (el != null)
             {
                 return el;
@@ -437,22 +459,25 @@ public final class SelenideElementFinder
         try
         {
             final ElementsCollection els = Selenide.$$(LocatorResolver.resolveLocator(clean));
-            final SelenideElement visible = findFirstVisible(els, clean);
-            if (visible != null)
+            final SelenideElement matched = selectDirectMatch(els, clean, requireVisible);
+            if (matched != null)
             {
-                return visible;
+                return matched;
             }
-            for (final SelenideElement el : els)
+            if (requireVisible)
             {
-                try
+                for (final SelenideElement el : els)
                 {
-                    if ("select".equalsIgnoreCase(el.getTagName()))
+                    try
                     {
-                        return el;
+                        if ("select".equalsIgnoreCase(el.getTagName()))
+                        {
+                            return el;
+                        }
                     }
-                }
-                catch (final AssertionError | Exception ignored)
-                {
+                    catch (final AssertionError | Exception ignored)
+                    {
+                    }
                 }
             }
         }
@@ -469,10 +494,10 @@ public final class SelenideElementFinder
             try
             {
                 final ElementsCollection els = Selenide.$$(By.linkText(clean));
-                final SelenideElement visible = findFirstVisible(els, clean);
-                if (visible != null)
+                final SelenideElement matched = selectDirectMatch(els, clean, requireVisible);
+                if (matched != null)
                 {
-                    return visible;
+                    return matched;
                 }
             }
             catch (final AssertionError | Exception ignored)
@@ -490,10 +515,10 @@ public final class SelenideElementFinder
                     escaped, escaped, escaped
                 );
                 final ElementsCollection els = Selenide.$$x(xpath);
-                final SelenideElement visible = findFirstVisible(els, clean);
-                if (visible != null)
+                final SelenideElement matched = selectDirectMatch(els, clean, requireVisible);
+                if (matched != null)
                 {
-                    return visible;
+                    return matched;
                 }
             }
             catch (final AssertionError | Exception ignored)
@@ -506,10 +531,10 @@ public final class SelenideElementFinder
             try
             {
                 final ElementsCollection els = Selenide.$$(By.tagName(clean));
-                final SelenideElement visible = findFirstVisible(els, clean);
-                if (visible != null)
+                final SelenideElement matched = selectDirectMatch(els, clean, requireVisible);
+                if (matched != null)
                 {
-                    return visible;
+                    return matched;
                 }
             }
             catch (final AssertionError | Exception ignored)
@@ -520,7 +545,23 @@ public final class SelenideElementFinder
         return null;
     }
 
-    private static SelenideElement tryResolveAutomationId(final String clean)
+    private static SelenideElement selectDirectMatch(
+        final ElementsCollection els,
+        final String originalTarget,
+        final boolean requireVisible)
+    {
+        if (els == null)
+        {
+            return null;
+        }
+        if (requireVisible)
+        {
+            return findFirstVisible(els, originalTarget);
+        }
+        return !els.isEmpty() ? els.first() : null;
+    }
+
+    private static SelenideElement tryResolveAutomationId(final String clean, final boolean requireVisible)
     {
         final Matcher matcher = Pattern.compile("(xc[a-zA-Z0-9_\\-]+)").matcher(clean);
         if (!matcher.find())
@@ -532,28 +573,28 @@ public final class SelenideElementFinder
         {
             final String transformedCss = clean.replaceAll("#(xc[a-zA-Z0-9_\\-]+)", "[data-ai='$1']");
             ElementsCollection els = Selenide.$$(By.cssSelector(transformedCss));
-            SelenideElement visible = findFirstVisible(els, clean);
-            if (visible != null)
+            SelenideElement matched = selectDirectMatch(els, clean, requireVisible);
+            if (matched != null)
             {
-                return visible;
+                return matched;
             }
 
             ensureAutomationIdsStampedIfNeeded(clean);
             els = Selenide.$$(By.cssSelector(transformedCss));
-            visible = findFirstVisible(els, clean);
-            if (visible != null)
+            matched = selectDirectMatch(els, clean, requireVisible);
+            if (matched != null)
             {
-                return visible;
+                return matched;
             }
 
             final boolean isSimple = !clean.contains(" ") && !clean.contains(">") && !clean.contains("+") && !clean.contains("~") && !clean.contains(",");
             if (isSimple)
             {
                 els = Selenide.$$(By.cssSelector("[data-ai='" + neoId + "']"));
-                visible = findFirstVisible(els, clean);
-                if (visible != null)
+                matched = selectDirectMatch(els, clean, requireVisible);
+                if (matched != null)
                 {
-                    return visible;
+                    return matched;
                 }
             }
 

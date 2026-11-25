@@ -540,6 +540,7 @@ public final class PlaybookToolReplayer
         // Only interactive / actionable tools targeting an element can be healed.
         // Read-only inspection / navigation tools must never trigger locator healing.
         final String toolName = call.toolName() != null ? call.toolName().trim().toLowerCase(Locale.ROOT) : "";
+        final String cleanTool = stripNamespacePrefix(toolName);
         if ("query_dom".equals(toolName) || "inspect_element".equals(toolName) || "execute_script".equals(toolName)
                 || "take_screenshot".equals(toolName) || "screenshot".equals(toolName) || "navigate".equals(toolName)
                 || "browser_navigate".equals(toolName) || "get_page_source".equals(toolName)
@@ -548,6 +549,21 @@ public final class PlaybookToolReplayer
                 || "assert_count".equals(toolName) || "browser_assert_count".equals(toolName))
         {
             return null;
+        }
+
+        final boolean requireVisible;
+        if (isAssertElementStateTool(cleanTool))
+        {
+            final List<String> resolvedStates = resolveAssertElementStates(args);
+            if (shouldSkipProactiveHealingForElementState(resolvedStates))
+            {
+                return null;
+            }
+            requireVisible = requiresVisibleTargetForElementState(resolvedStates);
+        }
+        else
+        {
+            requireVisible = true;
         }
 
         final String currentTarget = args.hasNonNull("target") ? args.path("target").asText().trim() : args.path("selector").asText().trim();
@@ -587,11 +603,11 @@ public final class PlaybookToolReplayer
         }
         else
         {
-            // If the current target is already directly present and visible on the live page,
-            // no healing is needed. Never overwrite or corrupt an active, working locator.
+            // If the current target is already directly available on the live page for the required
+            // visibility contract, no healing is needed. Never overwrite or corrupt a working locator.
             try
             {
-                if (WebDriverRunner.hasWebDriverStarted() && SelenideElementFinder.isDirectlyPresent(currentTarget))
+                if (WebDriverRunner.hasWebDriverStarted() && isTargetDirectlyAvailable(currentTarget, requireVisible))
                 {
                     return null;
                 }
@@ -623,7 +639,7 @@ public final class PlaybookToolReplayer
             if (!currentTarget.contains("data-ai=") && !currentTarget.contains("#xc"))
             {
                 DomQuiescenceWatcher.waitForDomQuiet(Duration.ofMillis(400), Duration.ofMillis(50));
-                if (SelenideElementFinder.isDirectlyPresent(currentTarget))
+                if (isTargetDirectlyAvailable(currentTarget, requireVisible))
                 {
                     return null;
                 }
@@ -1348,64 +1364,39 @@ public final class PlaybookToolReplayer
             return negated ? !matched : matched;
         }
 
-        if ("assert_element_state".equals(cleanTool) || "browser_assert_element_state".equals(cleanTool))
+        if (isAssertElementStateTool(cleanTool))
         {
-            final List<String> states = new ArrayList<>();
-            if (args.has("states") && args.path("states").isArray())
-            {
-                for (final JsonNode s : args.path("states"))
-                {
-                    if (s.isTextual() && !s.asText().isBlank())
-                    {
-                        states.add(s.asText().trim().toLowerCase(Locale.ROOT));
-                    }
-                }
-            }
-            if (states.isEmpty())
-            {
-                final String rawState = args.hasNonNull("state")
-                        ? args.path("state").asText()
-                        : (args.hasNonNull("expectedState")
-                                ? args.path("expectedState").asText()
-                                : args.path("value").asText(""));
-                for (final String part : rawState.split("[,&]|\\band\\b"))
-                {
-                    final String trimmed = part.trim().toLowerCase(Locale.ROOT);
-                    if (!trimmed.isBlank())
-                    {
-                        states.add(trimmed);
-                    }
-                }
-            }
+            final List<String> resolvedStates = resolveAssertElementStates(args);
+            final Map<String, String> attrs = candidate.getAttributes() != null ? candidate.getAttributes() : Map.of();
 
-            final boolean negated = args.path("negated").asBoolean(false)
-                    || args.path("not").asBoolean(false);
-
-            for (final String state : states)
+            for (final String state : resolvedStates)
             {
                 final boolean satisfies = switch (state)
                 {
-                    case "visible", "displayed" -> candidate.getWidth() > 0 && candidate.getHeight() > 0;
-                    case "hidden", "invisible" -> candidate.getWidth() <= 0 || candidate.getHeight() <= 0;
-                    case "disabled" -> candidate.getAttributes().containsKey("disabled")
-                            || "true".equalsIgnoreCase(candidate.getAttributes().get("aria-disabled"));
-                    case "enabled" -> !candidate.getAttributes().containsKey("disabled")
-                            && !"true".equalsIgnoreCase(candidate.getAttributes().get("aria-disabled"));
-                    case "checked" -> candidate.getAttributes().containsKey("checked")
-                            || "true".equalsIgnoreCase(candidate.getAttributes().get("aria-checked"));
-                    case "unchecked" -> !candidate.getAttributes().containsKey("checked")
-                            && !"true".equalsIgnoreCase(candidate.getAttributes().get("aria-checked"));
-                    case "readonly" -> candidate.getAttributes().containsKey("readonly")
-                            || "true".equalsIgnoreCase(candidate.getAttributes().get("aria-readonly"));
-                    case "editable" -> !candidate.getAttributes().containsKey("readonly")
-                            && !candidate.getAttributes().containsKey("disabled");
+                    case "visible" -> candidate.getWidth() > 0 && candidate.getHeight() > 0;
+                    case "hidden" -> candidate.getWidth() <= 0 || candidate.getHeight() <= 0;
+                    case "disabled" -> attrs.containsKey("disabled")
+                            || "true".equalsIgnoreCase(attrs.get("aria-disabled"));
+                    case "enabled" -> !attrs.containsKey("disabled")
+                            && !"true".equalsIgnoreCase(attrs.get("aria-disabled"));
+                    case "checked" -> attrs.containsKey("checked")
+                            || "true".equalsIgnoreCase(attrs.get("aria-checked"));
+                    case "unchecked" -> !attrs.containsKey("checked")
+                            && !"true".equalsIgnoreCase(attrs.get("aria-checked"));
+                    case "readonly" -> attrs.containsKey("readonly")
+                            || "true".equalsIgnoreCase(attrs.get("aria-readonly"));
+                    case "not_readonly" -> !attrs.containsKey("readonly")
+                            && !"true".equalsIgnoreCase(attrs.get("aria-readonly"));
+                    case "editable" -> !attrs.containsKey("readonly")
+                            && !attrs.containsKey("disabled");
+                    case "not_editable" -> attrs.containsKey("readonly")
+                            || attrs.containsKey("disabled");
                     case "exists" -> true;
                     case "absent" -> false;
                     default -> true;
                 };
 
-                final boolean stateMatched = negated ? !satisfies : satisfies;
-                if (!stateMatched)
+                if (!satisfies)
                 {
                     return false;
                 }
@@ -1415,6 +1406,121 @@ public final class PlaybookToolReplayer
 
         // For any other assertion tools, do not allow healing without exact validation
         return false;
+    }
+
+    /**
+     * Resolves and normalizes target state tokens for {@code assert_element_state} arguments,
+     * applying {@code negated}/{@code not} inversion to match {@link BrowserToolProvider}.
+     *
+     * @param args tool call arguments JSON node
+     * @return immutable list of normalized, effective state names
+     */
+    static List<String> resolveAssertElementStates(final JsonNode args)
+    {
+        if (args == null)
+        {
+            return List.of();
+        }
+
+        final List<String> rawStates = new ArrayList<>();
+        if (args.has("states") && args.path("states").isArray())
+        {
+            for (final JsonNode s : args.path("states"))
+            {
+                if (s.isTextual() && !s.asText().isBlank())
+                {
+                    rawStates.add(s.asText().trim());
+                }
+            }
+        }
+        if (rawStates.isEmpty())
+        {
+            final String rawState = args.hasNonNull("state")
+                    ? args.path("state").asText()
+                    : (args.hasNonNull("expectedState")
+                            ? args.path("expectedState").asText()
+                            : args.path("value").asText(""));
+            for (final String part : rawState.split("[,&]|\\band\\b"))
+            {
+                final String trimmed = part.trim();
+                if (!trimmed.isBlank())
+                {
+                    rawStates.add(trimmed);
+                }
+            }
+        }
+
+        if (rawStates.isEmpty())
+        {
+            return List.of();
+        }
+
+        final boolean negated = args.path("negated").asBoolean(false)
+                || args.path("not").asBoolean(false);
+        final List<String> resolvedStates = new ArrayList<>(rawStates.size());
+        for (final String rawState : rawStates)
+        {
+            final String normalized = BrowserToolProvider.normalizeElementState(rawState);
+            if (normalized.isBlank())
+            {
+                continue;
+            }
+            final String targetState = negated ? switch (normalized)
+            {
+                case "visible" -> "hidden";
+                case "hidden" -> "visible";
+                case "enabled" -> "disabled";
+                case "disabled" -> "enabled";
+                case "checked" -> "unchecked";
+                case "unchecked" -> "checked";
+                case "selected" -> "unselected";
+                case "unselected" -> "selected";
+                case "focused" -> "unfocused";
+                case "unfocused" -> "focused";
+                case "exists" -> "absent";
+                case "absent" -> "exists";
+                case "editable" -> "not_editable";
+                case "not_editable" -> "editable";
+                case "readonly" -> "not_readonly";
+                case "not_readonly" -> "readonly";
+                case "empty" -> "not_empty";
+                case "not_empty" -> "empty";
+                default -> normalized;
+            } : normalized;
+            resolvedStates.add(targetState);
+        }
+        return List.copyOf(resolvedStates);
+    }
+
+    private static boolean isAssertElementStateTool(final String cleanTool)
+    {
+        return "assert_element_state".equals(cleanTool) || "browser_assert_element_state".equals(cleanTool);
+    }
+
+    private static boolean shouldSkipProactiveHealingForElementState(final List<String> resolvedStates)
+    {
+        if (resolvedStates.isEmpty())
+        {
+            return false;
+        }
+        // Pure hidden/absent assertions are satisfied when the element is absent from DOM;
+        // scanning and healing onto a similar sibling hidden element would mask regressions or misbind locators.
+        return resolvedStates.contains("absent")
+                || resolvedStates.stream().allMatch(s -> "hidden".equals(s) || "absent".equals(s));
+    }
+
+    private static boolean requiresVisibleTargetForElementState(final List<String> resolvedStates)
+    {
+        if (resolvedStates.isEmpty())
+        {
+            return true;
+        }
+        return resolvedStates.stream().anyMatch(s -> "visible".equals(s) || "editable".equals(s) || "focused".equals(s));
+    }
+
+    private static boolean isTargetDirectlyAvailable(final String target, final boolean requireVisible)
+    {
+        return requireVisible ? SelenideElementFinder.isDirectlyPresent(target) : SelenideElementFinder.isDirectlyAttached(target);
     }
 
     private static boolean isRecoverableElementFailure(final Throwable t)
