@@ -230,6 +230,7 @@ public final class SelenideTargetExecutor implements TargetExecutor
         final String hash = calculateHtmlHash(html);
 
         final List<SutAttachment> attachments = new ArrayList<>();
+        Boolean capturedFullPage = null;
         if (activeLevel.includesScreenshot())
         {
             String base64Data = null;
@@ -246,6 +247,7 @@ public final class SelenideTargetExecutor implements TargetExecutor
 
             if (base64Data != null)
             {
+                capturedFullPage = Boolean.valueOf(isFullPage);
                 attachments.add(new SutAttachment("image/png", "screenshot", base64Data));
             }
             else
@@ -303,12 +305,16 @@ public final class SelenideTargetExecutor implements TargetExecutor
                     {
                         LOGGER.error("Failed to read screenshot file: " + screenshotFile, e);
                     }
+                    if (base64Data != null)
+                    {
+                        capturedFullPage = Boolean.FALSE;
+                    }
                     attachments.add(new SutAttachment(mediaType, screenshotFile, base64Data));
                 }
             }
         }
 
-        return new BrowserSutState(html, attachments, hash);
+        return new BrowserSutState(html, attachments, hash, capturedFullPage);
     }
 
     /**

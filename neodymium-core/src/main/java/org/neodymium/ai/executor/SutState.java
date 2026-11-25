@@ -56,4 +56,16 @@ public interface SutState
      * @return the state content hash string
      */
     String getContentHash();
+
+    /**
+     * Indicates whether the visual screenshot attachment(s) in this state were captured
+     * as a full scrollable page ({@code true}) or as the active viewport ({@code false}).
+     *
+     * @return {@code Boolean.TRUE} for full-page captures, {@code Boolean.FALSE} for viewport captures,
+     *         or {@code null} when capture scope is unspecified or no screenshot was captured
+     */
+    default Boolean isFullPageScreenshot()
+    {
+        return null;
+    }
 }

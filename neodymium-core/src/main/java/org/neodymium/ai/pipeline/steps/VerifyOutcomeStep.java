@@ -111,10 +111,6 @@ public final class VerifyOutcomeStep implements PipelineStep
         final ExecutionMode mode = (ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
         final PlaybookStep step = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
 
-        final ContextLevel activeLevel =
-            context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof ContextLevel cl
-                ? cl
-                : ContextLevel.MINIMAL;
         CoordinateTarget coordinateTarget = null;
         if (step != null && step.getActions() != null)
         {
@@ -161,9 +157,7 @@ public final class VerifyOutcomeStep implements PipelineStep
                     executor.applyColorWireframe();
                     try
                     {
-                        final ContextLevel level = (activeLevel != null && activeLevel.includesScreenshot())
-                            ? activeLevel
-                            : (isFullPageReq ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL);
+                        final ContextLevel level = isFullPageReq ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL;
                         capturedState = executor.captureState(level, isFullPageReq);
                         if (session != null && session.getEventBus() != null && capturedState != null)
                         {
@@ -177,27 +171,31 @@ public final class VerifyOutcomeStep implements PipelineStep
                 }
                 else
                 {
-                    if (step.getActions() != null && !step.getActions().isEmpty())
+                    final SutState postActionState = (SutState) context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
+                    if (hasMatchingImageAttachment(postActionState, isFullPageReq))
                     {
-                        capturedState = (SutState) context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
+                        capturedState = postActionState;
                     }
-                    else if (isFullPageReq && context.getTransientData().containsKey(ExecutionContext.KEY_POST_ACTION_STATE))
+                    else if (isFullPageMismatch(postActionState, isFullPageReq))
                     {
-                        capturedState = (SutState) context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
-                    }
-                    else
-                    {
+                        LOGGER.debug("   ⚠️ Discarding KEY_POST_ACTION_STATE with mismatched fullPage={} (expected fullPage={})",
+                            postActionState.isFullPageScreenshot(), isFullPageReq);
                         context.getTransientData().remove(ExecutionContext.KEY_POST_ACTION_STATE);
                     }
-                    if (capturedState == null || capturedState.getAttachments() == null || capturedState.getAttachments().isEmpty())
+                    if (capturedState == null)
                     {
                         final SutState lastState = (SutState) context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
-                        if (lastState != null && lastState.getAttachments() != null && !lastState.getAttachments().isEmpty())
+                        if (hasMatchingImageAttachment(lastState, isFullPageReq))
                         {
                             capturedState = lastState;
                         }
                         else
                         {
+                            if (isFullPageMismatch(lastState, isFullPageReq))
+                            {
+                                LOGGER.debug("   ⚠️ Skipping KEY_LAST_STATE with mismatched fullPage={} (expected fullPage={})",
+                                    lastState.isFullPageScreenshot(), isFullPageReq);
+                            }
                             if (coordinateTarget != null && coordinateTarget.anchorSelector() != null && !coordinateTarget.anchorSelector().isBlank())
                             {
                                 try
@@ -212,13 +210,9 @@ public final class VerifyOutcomeStep implements PipelineStep
                                 {
                                 }
                             }
-                            final ContextLevel level = coordinateTarget != null
-                                ? ContextLevel.VISUAL
-                                : ((activeLevel != null && activeLevel.includesScreenshot()) 
-                                    ? activeLevel 
-                                    : (isFullPageReq 
-                                        ? ContextLevel.VISUAL_LEAN 
-                                        : ContextLevel.VISUAL));
+                            final ContextLevel level = (coordinateTarget == null && isFullPageReq)
+                                ? ContextLevel.VISUAL_LEAN
+                                : ContextLevel.VISUAL;
                             capturedState = executor.captureState(level, isFullPageReq);
                             if (session != null && session.getEventBus() != null && capturedState != null)
                             {
@@ -403,7 +397,7 @@ public final class VerifyOutcomeStep implements PipelineStep
                     || (step != null && step.isFullPageVisualStep()));
             final SutState finalState;
             final SutState preCapturedPostState = (SutState) context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
-            if (preCapturedPostState != null)
+            if (preCapturedPostState != null && !(step != null && step.isVisualOrLayoutStep() && isFullPageMismatch(preCapturedPostState, isFullPageReq)))
             {
                 finalState = preCapturedPostState;
             }
@@ -650,10 +644,7 @@ public final class VerifyOutcomeStep implements PipelineStep
                         : step.getInstruction();
                     LOGGER.debug("   📸 Computed SSIM matrix for instruction: \"{}\"", resolvedInstr);
                     step.setScreenshotHash(dHash);
-                    if (isFullPageReq)
-                    {
-                        step.setFullPage(true);
-                    }
+                    step.setFullPage(isFullPageReq);
 
 
                     // 12. Create synthetic NONE action if no explicit DOM actions were generated to hold visual baseline
@@ -807,5 +798,44 @@ public final class VerifyOutcomeStep implements PipelineStep
         }
 
         LOGGER.debug("   └────────────────────────────────────────────────────────");
+    }
+
+    /**
+     * Checks whether the given state carries explicit screenshot capture-scope metadata that
+     * contradicts the requested full-page mode.
+     *
+     * @param state the candidate SUT state
+     * @param expectedFullPage {@code true} if a full-page screenshot is required, {@code false} for viewport
+     * @return {@code true} if {@code state} has explicit capture-scope metadata differing from {@code expectedFullPage}
+     */
+    private static boolean isFullPageMismatch(final SutState state, final boolean expectedFullPage)
+    {
+        return state != null
+            && state.isFullPageScreenshot() != null
+            && state.isFullPageScreenshot().booleanValue() != expectedFullPage;
+    }
+
+    /**
+     * Checks whether the given state contains at least one usable image attachment and does not
+     * contradict the requested full-page capture scope.
+     *
+     * @param state the candidate SUT state
+     * @param expectedFullPage {@code true} if a full-page screenshot is required, {@code false} for viewport
+     * @return {@code true} if the state provides a usable image attachment with matching capture scope
+     */
+    private static boolean hasMatchingImageAttachment(final SutState state, final boolean expectedFullPage)
+    {
+        if (state == null || state.getAttachments() == null || state.getAttachments().isEmpty() || isFullPageMismatch(state, expectedFullPage))
+        {
+            return false;
+        }
+        for (final SutAttachment attachment : state.getAttachments())
+        {
+            if (attachment != null && attachment.mediaType() != null && attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 }

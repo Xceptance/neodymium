@@ -1060,6 +1060,7 @@ public final class ExecuteActionsStep
      */
     private static void prepareStepForOnlineHealing(final PlaybookStep step, final ExecutionContext contextState)
     {
+        contextState.getTransientData().remove(ExecutionContext.KEY_POST_ACTION_STATE);
         contextState.getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, true);
         if (step == null)
         {
