@@ -353,23 +353,23 @@ public final class SessionData
     public Map<String, String> getRawSensitiveData()
     {
         final Map<String, String> sensitiveMap = new HashMap<>();
-        
+
         for (final Map.Entry<String, DataEntry> entry : this.staticData.entrySet())
         {
-            if (entry.getValue().sensitive() && entry.getValue().value() != null)
+            if (entry.getValue() != null && entry.getValue().sensitive() && entry.getValue().value() != null)
             {
-                sensitiveMap.put(entry.getKey(), String.valueOf(entry.getValue().value()));
+                flattenObject(entry.getKey(), entry.getValue().value(), sensitiveMap);
             }
         }
-        
+
         for (final Map.Entry<String, DataEntry> entry : this.dynamicData.entrySet())
         {
-            if (entry.getValue().sensitive() && entry.getValue().value() != null)
+            if (entry.getValue() != null && entry.getValue().sensitive() && entry.getValue().value() != null)
             {
-                sensitiveMap.put(entry.getKey(), String.valueOf(entry.getValue().value()));
+                flattenObject(entry.getKey(), entry.getValue().value(), sensitiveMap);
             }
         }
-        
+
         return sensitiveMap;
     }
 
@@ -386,7 +386,7 @@ public final class SessionData
      */
     public String resolveVariables(final String template)
     {
-        return resolveVariables(template, 0, true);
+        return resolveVariables(template, 0, true, false);
     }
 
     /**
@@ -399,10 +399,36 @@ public final class SessionData
      */
     public String resolveAvailableVariables(final String template)
     {
-        return resolveVariables(template, 0, false);
+        return resolveVariables(template, 0, false, false);
     }
 
-    private String resolveVariables(final String template, final int depth, final boolean strict)
+    /**
+     * Resolves non-sensitive variable placeholders in the format "${variableName}" in a template string
+     * while leaving sensitive placeholders unexpanded. Supports nested resolution.
+     * Throws {@link UnresolvableVariableException} if any placeholder is missing or null.
+     *
+     * @param template the template string containing placeholders
+     * @return the resolved string with non-sensitive placeholders replaced and sensitive placeholders intact
+     * @throws UnresolvableVariableException if any placeholder cannot be resolved
+     */
+    public String resolveNonSensitiveVariables(final String template)
+    {
+        return resolveVariables(template, 0, true, true);
+    }
+
+    /**
+     * Leniently resolves currently available non-sensitive variable placeholders in the format "${variableName}"
+     * in a template string while leaving sensitive and unresolvable placeholders intact.
+     *
+     * @param template the template string containing placeholders
+     * @return the partially resolved string with available non-sensitive placeholders replaced
+     */
+    public String resolveAvailableNonSensitiveVariables(final String template)
+    {
+        return resolveVariables(template, 0, false, true);
+    }
+
+    private String resolveVariables(final String template, final int depth, final boolean strict, final boolean skipSensitive)
     {
         if (depth > 10)
         {
@@ -426,7 +452,8 @@ public final class SessionData
         {
             sb.append(template, lastEnd, matcher.start());
             final String placeholderKey = matcher.group(1);
-            final Object value = this.getRaw(placeholderKey);
+            final DataEntry entry = this.getEntry(placeholderKey);
+            final Object value = entry != null ? entry.value() : null;
             if (value == null)
             {
                 if (strict)
@@ -437,6 +464,11 @@ public final class SessionData
                 {
                     sb.append(matcher.group(0));
                 }
+            }
+            else if (skipSensitive && entry.sensitive())
+            {
+                // Preserve sensitive placeholders verbatim and avoid setting replaced=true so mixed templates terminate.
+                sb.append(matcher.group(0));
             }
             else
             {
@@ -450,7 +482,7 @@ public final class SessionData
         final String result = sb.toString();
         if (replaced && result.contains("${"))
         {
-            return resolveVariables(result, depth + 1, strict);
+            return resolveVariables(result, depth + 1, strict, skipSensitive);
         }
         return result;
     }

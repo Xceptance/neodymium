@@ -43,9 +43,12 @@ import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.LocatorCascadeResolver;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
+import org.neodymium.ai.model.SessionData;
+import org.neodymium.ai.model.UnresolvableVariableException;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.steps.AgentToolLoopStep;
+import org.neodymium.ai.prompt.DefaultActionSanitizer;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.tool.AiTool;
 import org.neodymium.ai.tool.SimpleToolContext;
@@ -53,7 +56,6 @@ import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.ai.tool.ToolCallVariableResolver;
 import org.neodymium.ai.tool.ToolContext;
 import org.neodymium.ai.tool.ToolRegistry;
-import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.tool.ToolResult;
 import org.neodymium.ai.tool.browser.BrowserToolProvider;
 import org.neodymium.ai.tool.browser.ReanchoringBridge;
@@ -243,12 +245,12 @@ public final class PlaybookToolReplayer
                 try
                 {
                     result = toolOpt.get().execute(finalCall, effectiveContext);
-                    dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, true);
+                    dispatchActionEvent(session, sessionData, rawCall, finalCall, isToolHealed, true);
                     syncStepActionOnSuccess(step, i, rawCall, variableResolvedCall, finalCall, isToolHealed);
                 }
                 catch (final AssertionError e)
                 {
-                    dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, false);
+                    dispatchActionEvent(session, sessionData, rawCall, finalCall, isToolHealed, false);
                     step.setStatus(PlaybookStepStatus.FAILED);
                     step.setFailed(true);
                     step.setFailureReason(e.getMessage());
@@ -283,7 +285,7 @@ public final class PlaybookToolReplayer
                             try
                             {
                                 retryResult = toolOpt.get().execute(reactiveHealedCall, effectiveContext);
-                                dispatchActionEvent(session, variableResolvedCall, reactiveHealedCall, true, true);
+                                dispatchActionEvent(session, sessionData, rawCall, reactiveHealedCall, true, true);
                                 syncStepActionOnSuccess(step, i, rawCall, variableResolvedCall, reactiveHealedCall, true);
                                 anyHealed = true;
                             }
@@ -300,7 +302,7 @@ public final class PlaybookToolReplayer
                     }
                     else
                     {
-                        dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, false);
+                        dispatchActionEvent(session, sessionData, rawCall, finalCall, isToolHealed, false);
                         step.setStatus(PlaybookStepStatus.FAILED);
                         step.setFailed(true);
                         step.setFailureReason(e.getMessage());
@@ -319,12 +321,12 @@ public final class PlaybookToolReplayer
                 {
                     effectiveExecutor.execute(mapped);
                     result = ToolResult.success(finalCall.callId(), "Action executed via TargetExecutor");
-                    dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, true);
+                    dispatchActionEvent(session, sessionData, rawCall, finalCall, isToolHealed, true);
                     syncStepActionOnSuccess(step, i, rawCall, variableResolvedCall, finalCall, isToolHealed);
                 }
                 catch (final AssertionError e)
                 {
-                    dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, false);
+                    dispatchActionEvent(session, sessionData, rawCall, finalCall, isToolHealed, false);
                     step.setStatus(PlaybookStepStatus.FAILED);
                     step.setFailed(true);
                     step.setFailureReason(e.getMessage());
@@ -360,7 +362,7 @@ public final class PlaybookToolReplayer
                             {
                                 effectiveExecutor.execute(reactiveMapped);
                                 retryResult = ToolResult.success(reactiveHealedCall.callId(), "Action executed via TargetExecutor after reactive self-healing");
-                                dispatchActionEvent(session, variableResolvedCall, reactiveHealedCall, true, true);
+                                dispatchActionEvent(session, sessionData, rawCall, reactiveHealedCall, true, true);
                                 syncStepActionOnSuccess(step, i, rawCall, variableResolvedCall, reactiveHealedCall, true);
                                 anyHealed = true;
                             }
@@ -377,7 +379,7 @@ public final class PlaybookToolReplayer
                     }
                     else
                     {
-                        dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, false);
+                        dispatchActionEvent(session, sessionData, rawCall, finalCall, isToolHealed, false);
                         step.setStatus(PlaybookStepStatus.FAILED);
                         step.setFailed(true);
                         step.setFailureReason(e.getMessage());
@@ -434,29 +436,64 @@ public final class PlaybookToolReplayer
 
     private static void dispatchActionEvent(
         final AiSession session,
-        final ToolCall canonicalCall,
+        final SessionData sessionData,
+        final ToolCall rawCall,
         final ToolCall finalCall,
         final boolean isHealed,
         final boolean success
     )
     {
-        if (session != null && session.getEventBus() != null)
+        if (session == null || session.getEventBus() == null)
         {
-            final Action resolvedAction = AgentToolLoopStep.mapToolCallToAction(finalCall);
-            if (isHealed && canonicalCall != null)
+            return;
+        }
+
+        final SessionData effectiveSessionData = sessionData != null ? sessionData : session.getSessionData();
+        final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+        final ToolCall baseCall = rawCall != null ? rawCall : finalCall;
+        final ToolCall normalizedCanonical = effectiveSessionData != null && baseCall != null
+            ? ToolCallVariableResolver.normalizePlaceholders(baseCall, effectiveSessionData)
+            : baseCall;
+        final Action mappedCanonical = AgentToolLoopStep.mapToolCallToAction(normalizedCanonical);
+        final Action canonicalAction = effectiveSessionData != null
+            ? sanitizer.sanitize(mappedCanonical, effectiveSessionData)
+            : mappedCanonical;
+
+        ToolCall safeResolvedCall = baseCall;
+        if (effectiveSessionData != null && baseCall != null)
+        {
+            try
             {
-                final Action canonicalAction = AgentToolLoopStep.mapToolCallToAction(canonicalCall);
-                final String origTarget = canonicalAction.getExpectedTarget() != null && !canonicalAction.getExpectedTarget().isBlank()
-                    ? canonicalAction.getExpectedTarget()
-                    : canonicalAction.getTarget();
-                resolvedAction.setExpectedTarget(origTarget);
-                resolvedAction.setHealed(true);
-                session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, resolvedAction, success, null, true));
+                safeResolvedCall = ToolCallVariableResolver.resolveNonSensitiveVariables(baseCall, effectiveSessionData);
             }
-            else
+            catch (final UnresolvableVariableException e)
             {
-                session.getEventBus().dispatch(new ActionExecutedEvent(resolvedAction, success));
+                safeResolvedCall = normalizedCanonical;
             }
+        }
+        if (isHealed && finalCall != null && safeResolvedCall != null)
+        {
+            safeResolvedCall = overlayHealedLocatorArgs(safeResolvedCall, finalCall);
+        }
+
+        Action resolvedAction = AgentToolLoopStep.mapToolCallToAction(safeResolvedCall);
+        if (effectiveSessionData != null)
+        {
+            resolvedAction = sanitizer.sanitizeSensitiveOnly(resolvedAction, effectiveSessionData);
+        }
+
+        if (isHealed && canonicalAction != null)
+        {
+            final String origTarget = canonicalAction.getExpectedTarget() != null && !canonicalAction.getExpectedTarget().isBlank()
+                ? canonicalAction.getExpectedTarget()
+                : canonicalAction.getTarget();
+            resolvedAction.setExpectedTarget(origTarget);
+            resolvedAction.setHealed(true);
+            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, resolvedAction, success, null, true));
+        }
+        else
+        {
+            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, resolvedAction, success));
         }
     }
 
@@ -537,30 +574,40 @@ public final class PlaybookToolReplayer
         }
 
         // Preserve variable placeholders in rawCall (e.g. ${searchPhrase}) while syncing only locator/DOM identity
-        final ObjectNode updatedRawArgs = rawCall.arguments() != null
-            ? rawCall.arguments().deepCopy()
+        updatedCalls.set(callIndex, overlayHealedLocatorArgs(rawCall, finalCall));
+        step.setToolCalls(updatedCalls);
+    }
+
+    private static ToolCall overlayHealedLocatorArgs(final ToolCall baseCall, final ToolCall healedCall)
+    {
+        if (baseCall == null || healedCall == null)
+        {
+            return baseCall;
+        }
+
+        final ObjectNode updatedArgs = baseCall.arguments() != null
+            ? baseCall.arguments().deepCopy()
             : MAPPER.createObjectNode();
-        final JsonNode finalArgs = finalCall.arguments();
+        final JsonNode finalArgs = healedCall.arguments();
         if (finalArgs != null)
         {
             if (finalArgs.hasNonNull("selector"))
             {
-                updatedRawArgs.set("selector", finalArgs.get("selector").deepCopy());
+                updatedArgs.set("selector", finalArgs.get("selector").deepCopy());
             }
             if (finalArgs.hasNonNull("target"))
             {
-                updatedRawArgs.set("target", finalArgs.get("target").deepCopy());
+                updatedArgs.set("target", finalArgs.get("target").deepCopy());
             }
-            syncOptionalArg(finalArgs, updatedRawArgs, "x");
-            syncOptionalArg(finalArgs, updatedRawArgs, "y");
+            syncOptionalArg(finalArgs, updatedArgs, "x");
+            syncOptionalArg(finalArgs, updatedArgs, "y");
             if (finalArgs.hasNonNull("domFeatureVector"))
             {
-                updatedRawArgs.set("domFeatureVector", finalArgs.get("domFeatureVector").deepCopy());
+                updatedArgs.set("domFeatureVector", finalArgs.get("domFeatureVector").deepCopy());
             }
         }
 
-        updatedCalls.set(callIndex, new ToolCall(rawCall.callId(), rawCall.toolName(), updatedRawArgs));
-        step.setToolCalls(updatedCalls);
+        return new ToolCall(baseCall.callId(), baseCall.toolName(), updatedArgs);
     }
 
     private static void syncOptionalArg(final JsonNode finalArgs, final ObjectNode updatedRawArgs, final String field)

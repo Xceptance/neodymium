@@ -248,6 +248,25 @@ public final class ToolCallVariableResolver
      */
     public static ToolCall resolveVariables(final ToolCall call, final SessionData sessionData)
     {
+        return resolveVariables(call, sessionData, false);
+    }
+
+    /**
+     * Resolves non-sensitive variable references (e.g. {@code ${variableName}} and {@code $variableName})
+     * in the given tool call's arguments against the supplied {@link SessionData} while keeping sensitive
+     * placeholders unexpanded as {@code ${varName}}.
+     *
+     * @param call the raw or masked tool call
+     * @param sessionData the session data holding active runtime variables and secrets
+     * @return a new ToolCall with non-sensitive argument values resolved, or the original call if no changes occurred
+     */
+    public static ToolCall resolveNonSensitiveVariables(final ToolCall call, final SessionData sessionData)
+    {
+        return resolveVariables(call, sessionData, true);
+    }
+
+    private static ToolCall resolveVariables(final ToolCall call, final SessionData sessionData, final boolean skipSensitive)
+    {
         if (call == null || sessionData == null || call.arguments() == null || !call.arguments().isObject())
         {
             return call;
@@ -293,7 +312,7 @@ public final class ToolCallVariableResolver
             storeTargetVar = null;
         }
 
-        final boolean changed = resolveObjectNode(args, sessionData, isStoreTool, isScriptTool, storeTargetVar);
+        final boolean changed = resolveObjectNode(args, sessionData, isStoreTool, isScriptTool, storeTargetVar, skipSensitive);
         return changed ? new ToolCall(call.callId(), call.toolName(), args) : call;
     }
 
@@ -302,7 +321,8 @@ public final class ToolCallVariableResolver
             final SessionData sessionData,
             final boolean isStoreTool,
             final boolean isScriptTool,
-            final String storeTargetVar)
+            final String storeTargetVar,
+            final boolean skipSensitive)
     {
         boolean changed = false;
         final List<String> fieldNames = new ArrayList<>();
@@ -329,7 +349,7 @@ public final class ToolCallVariableResolver
                     {
                         continue;
                     }
-                    final String resolved = sessionData.resolveVariables(original);
+                    final String resolved = resolveString(original, sessionData, false, skipSensitive);
                     if (!resolved.equals(original))
                     {
                         objectNode.put(key, resolved);
@@ -358,16 +378,16 @@ public final class ToolCallVariableResolver
                             }
                         }
                         LOGGER.warn("Resolving available sibling variables while preserving unresolvable self-referential placeholder in store tool value '{}'", normalized);
-                        resolved = sessionData.resolveAvailableVariables(normalized);
+                        resolved = resolveString(normalized, sessionData, true, skipSensitive);
                     }
                     else
                     {
-                        resolved = sessionData.resolveVariables(normalized);
+                        resolved = resolveString(normalized, sessionData, false, skipSensitive);
                     }
                 }
                 else
                 {
-                    resolved = sessionData.resolveVariables(normalized);
+                    resolved = resolveString(normalized, sessionData, false, skipSensitive);
                 }
 
                 if (!resolved.equals(original))
@@ -378,14 +398,14 @@ public final class ToolCallVariableResolver
             }
             else if (child.isObject())
             {
-                if (resolveObjectNode((ObjectNode) child, sessionData, false, isScriptTool, null))
+                if (resolveObjectNode((ObjectNode) child, sessionData, false, isScriptTool, null, skipSensitive))
                 {
                     changed = true;
                 }
             }
             else if (child.isArray())
             {
-                if (resolveArrayNode((ArrayNode) child, sessionData, isScriptTool))
+                if (resolveArrayNode((ArrayNode) child, sessionData, isScriptTool, skipSensitive))
                 {
                     changed = true;
                 }
@@ -397,7 +417,8 @@ public final class ToolCallVariableResolver
     private static boolean resolveArrayNode(
             final ArrayNode arrayNode,
             final SessionData sessionData,
-            final boolean isScriptTool)
+            final boolean isScriptTool,
+            final boolean skipSensitive)
     {
         boolean changed = false;
         for (int i = 0; i < arrayNode.size(); i++)
@@ -412,7 +433,7 @@ public final class ToolCallVariableResolver
                     continue;
                 }
 
-                final String resolved = sessionData.resolveVariables(normalized);
+                final String resolved = resolveString(normalized, sessionData, false, skipSensitive);
                 if (!resolved.equals(original))
                 {
                     arrayNode.set(i, arrayNode.textNode(resolved));
@@ -421,19 +442,36 @@ public final class ToolCallVariableResolver
             }
             else if (element.isObject())
             {
-                if (resolveObjectNode((ObjectNode) element, sessionData, false, isScriptTool, null))
+                if (resolveObjectNode((ObjectNode) element, sessionData, false, isScriptTool, null, skipSensitive))
                 {
                     changed = true;
                 }
             }
             else if (element.isArray())
             {
-                if (resolveArrayNode((ArrayNode) element, sessionData, isScriptTool))
+                if (resolveArrayNode((ArrayNode) element, sessionData, isScriptTool, skipSensitive))
                 {
                     changed = true;
                 }
             }
         }
         return changed;
+    }
+
+    private static String resolveString(
+            final String text,
+            final SessionData sessionData,
+            final boolean lenient,
+            final boolean skipSensitive)
+    {
+        if (lenient)
+        {
+            return skipSensitive
+                    ? sessionData.resolveAvailableNonSensitiveVariables(text)
+                    : sessionData.resolveAvailableVariables(text);
+        }
+        return skipSensitive
+                ? sessionData.resolveNonSensitiveVariables(text)
+                : sessionData.resolveVariables(text);
     }
 }

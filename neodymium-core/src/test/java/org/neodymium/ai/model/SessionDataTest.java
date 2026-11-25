@@ -24,7 +24,6 @@
 package org.neodymium.ai.model;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -411,5 +410,56 @@ public final class SessionDataTest
         assertEquals(42, session.get("intVal"));
         assertEquals(true, session.get("boolVal"));
         assertEquals(mapVal, session.get("mapVal"));
+    }
+
+    /**
+     * Verifies that resolveNonSensitiveVariables expands non-sensitive placeholders
+     * while keeping sensitive placeholders intact across mixed templates.
+     */
+    @Test
+    public void testResolveNonSensitiveVariablesRetainsSensitivePlaceholdersAndExpandsNonSensitive()
+    {
+        final SessionData session = new SessionData();
+        session.putDynamic("user.name", "alice", false);
+        session.putDynamic("user.password", "secretPassword123", true);
+
+        final String resolved = session.resolveNonSensitiveVariables("${user.name}:${user.password}");
+        assertEquals("alice:${user.password}", resolved);
+        assertEquals("alice:secretPassword123", session.resolveVariables("${user.name}:${user.password}"));
+        assertThrows(UnresolvableVariableException.class, () -> session.resolveNonSensitiveVariables("${user.password}:${missingVar}"));
+        assertEquals("alice:${user.password}:${missingVar}", session.resolveAvailableNonSensitiveVariables("${user.name}:${user.password}:${missingVar}"));
+    }
+
+    /**
+     * Verifies that transitive references from non-sensitive variables to sensitive variables
+     * keep the sensitive placeholder unexpanded and terminate cleanly.
+     */
+    @Test
+    public void testResolveNonSensitiveVariablesRetainsTransitiveSensitiveReferences()
+    {
+        final SessionData session = new SessionData();
+        session.putDynamic("api.token", "tok-999", true);
+        session.putDynamic("authHeader", "Bearer ${api.token}", false);
+
+        final String resolved = session.resolveNonSensitiveVariables("${authHeader}");
+        assertEquals("Bearer ${api.token}", resolved);
+    }
+
+    /**
+     * Verifies that nested sensitive Map entries are retained as placeholders by
+     * resolveNonSensitiveVariables and flattened by getRawSensitiveData.
+     */
+    @Test
+    public void testResolveNonSensitiveVariablesRetainsNestedSensitiveMapPlaceholderAndFlattensSensitiveData()
+    {
+        final Map<String, Object> credsMap = new HashMap<>();
+        credsMap.put("password", "secret123");
+        final Map<String, SessionData.DataEntry> staticMap = new HashMap<>();
+        staticMap.put("creds", new SessionData.DataEntry(credsMap, true));
+
+        final SessionData session = new SessionData(staticMap);
+
+        assertEquals("${creds.password}", session.resolveNonSensitiveVariables("${creds.password}"));
+        assertEquals("secret123", session.getRawSensitiveData().get("creds.password"));
     }
 }

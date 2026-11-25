@@ -62,6 +62,24 @@ public final class DefaultActionSanitizer implements ActionSanitizer
     @Override
     public Action sanitize(final Action rawAction, final SessionData data)
     {
+        return sanitizeAction(rawAction, data, false);
+    }
+
+    /**
+     * Scrubs only sensitive session values (from {@link SessionData#getRawSensitiveData()})
+     * in the given action while preserving already-resolved non-sensitive values and action metadata.
+     *
+     * @param rawAction the action to scrub
+     * @param data the active session data container identifying sensitive credentials
+     * @return the action with sensitive credential literals replaced by placeholders
+     */
+    public Action sanitizeSensitiveOnly(final Action rawAction, final SessionData data)
+    {
+        return sanitizeAction(rawAction, data, true);
+    }
+
+    private Action sanitizeAction(final Action rawAction, final SessionData data, final boolean sensitiveOnly)
+    {
         if (rawAction == null)
         {
             return null;
@@ -73,93 +91,43 @@ public final class DefaultActionSanitizer implements ActionSanitizer
         }
 
         final Map<String, String> sensitiveMap = data.getRawSensitiveData();
-        final Map<String, String> varMap = buildSanitizationVariables(rawAction, data);
-        if (varMap.isEmpty())
+        if (sensitiveOnly && (sensitiveMap == null || sensitiveMap.isEmpty()))
+        {
+            return rawAction;
+        }
+
+        final Map<String, String> varMap = sensitiveOnly ? sensitiveMap : buildSanitizationVariables(rawAction, data);
+        if (varMap == null || varMap.isEmpty())
         {
             return rawAction;
         }
 
         // Sort entries by value length descending to prevent substring collision (e.g. nested URLs)
-        final List<Map.Entry<String, String>> sortedEntries = new ArrayList<>();
-        for (final Map.Entry<String, String> entry : varMap.entrySet())
-        {
-            if (entry.getValue() != null && !entry.getValue().isEmpty())
-            {
-                sortedEntries.add(entry);
-            }
-        }
+        final List<Map.Entry<String, String>> sortedEntries = sortEntriesDescending(varMap);
         if (sortedEntries.isEmpty())
         {
             return rawAction;
         }
-        sortedEntries.sort((e1, e2) -> Integer.compare(e2.getValue().length(), e1.getValue().length()));
 
         // 1. Sanitize values list
         final List<String> sanitizedValues = new ArrayList<>();
         for (final String val : rawAction.getValues())
         {
-            if (val == null)
-            {
-                sanitizedValues.add(null);
-            }
-            else
-            {
-                String cleanVal = val;
-                for (final Map.Entry<String, String> entry : sortedEntries)
-                {
-                    final String varKey = entry.getKey();
-                    final String rawVal = entry.getValue();
-                    if (rawVal != null && !rawVal.isEmpty())
-                    {
-                        if (!isEligibleVariable(varKey, data))
-                        {
-                            continue;
-                        }
-
-                        final boolean isSensitive = sensitiveMap.containsKey(varKey);
-                        if (isSensitive || rawVal.length() >= 4)
-                        {
-                            cleanVal = replaceOutsidePlaceholders(cleanVal, rawVal, "${" + varKey + "}");
-                        }
-                    }
-                }
-                sanitizedValues.add(cleanVal);
-            }
+            sanitizedValues.add(replaceVariablesInText(val, sortedEntries, sensitiveMap, data, sensitiveOnly));
         }
 
         // 2. Sanitize target selector/URL
         String rawTarget = rawAction.getTarget();
-        if (("NAVIGATE".equalsIgnoreCase(rawAction.getType()) || "GOTO".equalsIgnoreCase(rawAction.getType()))
-            && (rawTarget == null || rawTarget.isEmpty() || "url".equalsIgnoreCase(rawTarget)))
+        final boolean isNavigate = "NAVIGATE".equalsIgnoreCase(rawAction.getType()) || "GOTO".equalsIgnoreCase(rawAction.getType());
+        if (!sensitiveOnly && isNavigate && (rawTarget == null || rawTarget.isEmpty() || "url".equalsIgnoreCase(rawTarget)))
         {
             if (rawAction.getValue() != null && !rawAction.getValue().isEmpty())
             {
                 rawTarget = rawAction.getValue();
             }
         }
-        String sanitizedTarget = rawTarget;
-        if (sanitizedTarget != null)
-        {
-            for (final Map.Entry<String, String> entry : sortedEntries)
-            {
-                final String varKey = entry.getKey();
-                final String rawVal = entry.getValue();
-                if (rawVal != null && !rawVal.isEmpty())
-                {
-                    if (!isEligibleVariable(varKey, data))
-                    {
-                        continue;
-                    }
-
-                    final boolean isSensitive = sensitiveMap.containsKey(varKey);
-                    if (isSensitive || rawVal.length() >= 4)
-                    {
-                        sanitizedTarget = replaceOutsidePlaceholders(sanitizedTarget, rawVal, "${" + varKey + "}");
-                    }
-                }
-            }
-        }
-        if (("NAVIGATE".equalsIgnoreCase(rawAction.getType()) || "GOTO".equalsIgnoreCase(rawAction.getType()))
+        String sanitizedTarget = replaceVariablesInText(rawTarget, sortedEntries, sensitiveMap, data, sensitiveOnly);
+        if (!sensitiveOnly && isNavigate
             && (sanitizedTarget == null || sanitizedTarget.isEmpty() || "url".equalsIgnoreCase(sanitizedTarget))
             && !sanitizedValues.isEmpty() && sanitizedValues.get(0) != null)
         {
@@ -167,64 +135,23 @@ public final class DefaultActionSanitizer implements ActionSanitizer
         }
 
         // 3. Sanitize description
-        String sanitizedDesc = rawAction.getDescription();
-        if (sanitizedDesc != null)
-        {
-            for (final Map.Entry<String, String> entry : sortedEntries)
-            {
-                final String varKey = entry.getKey();
-                final String rawVal = entry.getValue();
-                if (rawVal != null && !rawVal.isEmpty())
-                {
-                    if (!isEligibleVariable(varKey, data))
-                    {
-                        continue;
-                    }
-
-                    final boolean isSensitive = sensitiveMap.containsKey(varKey);
-                    if (isSensitive || rawVal.length() >= 4)
-                    {
-                        sanitizedDesc = replaceOutsidePlaceholders(sanitizedDesc, rawVal, "${" + varKey + "}");
-                    }
-                }
-            }
-        }
+        final String sanitizedDesc = replaceVariablesInText(rawAction.getDescription(), sortedEntries, sensitiveMap, data, sensitiveOnly);
 
         // 4. Sanitize reasoning
-        String sanitizedReasoning = rawAction.getReasoning();
-        if (sanitizedReasoning != null)
-        {
-            for (final Map.Entry<String, String> entry : sortedEntries)
-            {
-                final String varKey = entry.getKey();
-                final String rawVal = entry.getValue();
-                if (rawVal != null && !rawVal.isEmpty())
-                {
-                    if (!isEligibleVariable(varKey, data))
-                    {
-                        continue;
-                    }
+        final String sanitizedReasoning = replaceVariablesInText(rawAction.getReasoning(), sortedEntries, sensitiveMap, data, sensitiveOnly);
 
-                    final boolean isSensitive = sensitiveMap.containsKey(varKey);
-                    if (isSensitive || rawVal.length() >= 4)
-                    {
-                        sanitizedReasoning = replaceOutsidePlaceholders(sanitizedReasoning, rawVal, "${" + varKey + "}");
-                    }
-                }
-            }
-        }
-
-        // Construct the new sanitized action
+        // Construct the new sanitized action while preserving flags and metadata
         final Action sanitizedAction = new Action(
             rawAction.getType(),
             sanitizedTarget,
             sanitizedValues,
             sanitizedDesc,
-            sanitizedReasoning
+            sanitizedReasoning,
+            rawAction.isRegex(),
+            rawAction.isNegated()
         );
 
-        sanitizedAction.setIsRegex(rawAction.isRegex());
-        sanitizedAction.setStepInstruction(sanitizeText(rawAction.getStepInstruction(), data));
+        sanitizedAction.setStepInstruction(sanitizeFieldText(rawAction.getStepInstruction(), data, sortedEntries, sensitiveMap, sensitiveOnly));
         sanitizedAction.setStepLine(rawAction.getStepLine());
         sanitizedAction.setStepFile(rawAction.getStepFile());
         sanitizedAction.setStepScreenshotHash(rawAction.getStepScreenshotHash());
@@ -237,7 +164,7 @@ public final class DefaultActionSanitizer implements ActionSanitizer
             {
                 if (candidate != null)
                 {
-                    final String sanitizedCandidateTarget = sanitizeText(candidate.getLocator(), data);
+                    final String sanitizedCandidateTarget = sanitizeFieldText(candidate.getLocator(), data, sortedEntries, sensitiveMap, sensitiveOnly);
                     sanitizedCandidates.add(new LocatorCandidate(sanitizedCandidateTarget, candidate.getStrategy(), candidate.getScore(), candidate.getReasoning()));
                 }
             }
@@ -249,7 +176,17 @@ public final class DefaultActionSanitizer implements ActionSanitizer
         sanitizedAction.setHasElse(rawAction.getHasElse());
         if (rawAction.getFrame() != null)
         {
-            sanitizedAction.setFrame(sanitizeText(rawAction.getFrame(), data));
+            sanitizedAction.setFrame(sanitizeFieldText(rawAction.getFrame(), data, sortedEntries, sensitiveMap, sensitiveOnly));
+        }
+        sanitizedAction.setSubStepIndex(rawAction.getSubStepIndex());
+        if (rawAction.getSubStepInstruction() != null)
+        {
+            sanitizedAction.setSubStepInstruction(sanitizeFieldText(rawAction.getSubStepInstruction(), data, sortedEntries, sensitiveMap, sensitiveOnly));
+        }
+        sanitizedAction.setHealed(rawAction.isHealed());
+        if (rawAction.getExpectedTarget() != null)
+        {
+            sanitizedAction.setExpectedTarget(sanitizeFieldText(rawAction.getExpectedTarget(), data, sortedEntries, sensitiveMap, sensitiveOnly));
         }
 
         // Copy dynamic parameters map
@@ -261,32 +198,101 @@ public final class DefaultActionSanitizer implements ActionSanitizer
             final List<Action> sanitizedCondition = new ArrayList<>();
             for (final Action condAct : rawAction.getCondition())
             {
-                sanitizedCondition.add(sanitize(condAct, data));
+                sanitizedCondition.add(sanitizeAction(condAct, data, sensitiveOnly));
             }
             sanitizedAction.setCondition(sanitizedCondition);
         }
-        
+
         if (rawAction.getThen() != null)
         {
             final List<Action> sanitizedThen = new ArrayList<>();
             for (final Action thenAct : rawAction.getThen())
             {
-                sanitizedThen.add(sanitize(thenAct, data));
+                sanitizedThen.add(sanitizeAction(thenAct, data, sensitiveOnly));
             }
             sanitizedAction.setThen(sanitizedThen);
         }
-        
+
         if (rawAction.getElseActions() != null)
         {
             final List<Action> sanitizedElse = new ArrayList<>();
             for (final Action elseAct : rawAction.getElseActions())
             {
-                sanitizedElse.add(sanitize(elseAct, data));
+                sanitizedElse.add(sanitizeAction(elseAct, data, sensitiveOnly));
             }
             sanitizedAction.setElseActions(sanitizedElse);
         }
 
         return sanitizedAction;
+    }
+
+    private String sanitizeFieldText(
+            final String input,
+            final SessionData data,
+            final List<Map.Entry<String, String>> sortedEntries,
+            final Map<String, String> sensitiveMap,
+            final boolean sensitiveOnly)
+    {
+        if (input == null || input.isEmpty())
+        {
+            return input;
+        }
+        if (sensitiveOnly)
+        {
+            return replaceVariablesInText(input, sortedEntries, sensitiveMap, data, true);
+        }
+        return sanitizeText(input, data);
+    }
+
+    private static List<Map.Entry<String, String>> sortEntriesDescending(final Map<String, String> varMap)
+    {
+        final List<Map.Entry<String, String>> sortedEntries = new ArrayList<>();
+        for (final Map.Entry<String, String> entry : varMap.entrySet())
+        {
+            if (entry.getValue() != null && !entry.getValue().isEmpty())
+            {
+                sortedEntries.add(entry);
+            }
+        }
+        sortedEntries.sort((e1, e2) -> Integer.compare(e2.getValue().length(), e1.getValue().length()));
+        return sortedEntries;
+    }
+
+    private String replaceVariablesInText(
+            final String input,
+            final List<Map.Entry<String, String>> sortedEntries,
+            final Map<String, String> sensitiveMap,
+            final SessionData data,
+            final boolean sensitiveOnly)
+    {
+        if (input == null || input.isEmpty() || sortedEntries.isEmpty())
+        {
+            return input;
+        }
+
+        String clean = input;
+        for (final Map.Entry<String, String> entry : sortedEntries)
+        {
+            final String varKey = entry.getKey();
+            final String rawVal = entry.getValue();
+            if (rawVal != null && !rawVal.isEmpty())
+            {
+                if (!sensitiveOnly)
+                {
+                    if (!isEligibleVariable(varKey, data))
+                    {
+                        continue;
+                    }
+                    final boolean isSensitive = sensitiveMap != null && sensitiveMap.containsKey(varKey);
+                    if (!isSensitive && rawVal.length() < 4)
+                    {
+                        continue;
+                    }
+                }
+                clean = replaceOutsidePlaceholders(clean, rawVal, "${" + varKey + "}");
+            }
+        }
+        return clean;
     }
 
     /**
@@ -306,7 +312,7 @@ public final class DefaultActionSanitizer implements ActionSanitizer
         // 1. Explicit placeholders in the action's step instruction template
         if (rawAction != null && rawAction.getStepInstruction() != null)
         {
-            final java.util.Set<String> keys = data.extractVariableNames(rawAction.getStepInstruction());
+            final Set<String> keys = data.extractVariableNames(rawAction.getStepInstruction());
             for (final String key : keys)
             {
                 final String val = allVars.get(key);
@@ -416,7 +422,7 @@ public final class DefaultActionSanitizer implements ActionSanitizer
         final Map<String, String> varMap = new LinkedHashMap<>();
 
         // 1. Explicit placeholders inside the input string itself
-        final java.util.Set<String> keys = data.extractVariableNames(input);
+        final Set<String> keys = data.extractVariableNames(input);
         for (final String key : keys)
         {
             if (excludedVars != null && excludedVars.contains(key))
@@ -510,40 +516,8 @@ public final class DefaultActionSanitizer implements ActionSanitizer
             return input;
         }
 
-        final List<Map.Entry<String, String>> sortedEntries = new ArrayList<>();
-        for (final Map.Entry<String, String> entry : varMap.entrySet())
-        {
-            if (entry.getValue() != null && !entry.getValue().isEmpty())
-            {
-                sortedEntries.add(entry);
-            }
-        }
-        if (sortedEntries.isEmpty())
-        {
-            return input;
-        }
-        sortedEntries.sort((e1, e2) -> Integer.compare(e2.getValue().length(), e1.getValue().length()));
-
-        String clean = input;
-        for (final Map.Entry<String, String> entry : sortedEntries)
-        {
-            final String varKey = entry.getKey();
-            final String rawVal = entry.getValue();
-            if (rawVal != null && !rawVal.isEmpty())
-            {
-                if (!isEligibleVariable(varKey, data))
-                {
-                    continue;
-                }
-
-                final boolean isSensitive = sensitiveMap.containsKey(varKey);
-                if (isSensitive || rawVal.length() >= 4)
-                {
-                    clean = replaceOutsidePlaceholders(clean, rawVal, "${" + varKey + "}");
-                }
-            }
-        }
-        return clean;
+        final List<Map.Entry<String, String>> sortedEntries = sortEntriesDescending(varMap);
+        return replaceVariablesInText(input, sortedEntries, sensitiveMap, data, false);
     }
 
     /**

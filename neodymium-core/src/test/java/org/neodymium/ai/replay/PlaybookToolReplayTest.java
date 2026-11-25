@@ -2036,4 +2036,146 @@ public class PlaybookToolReplayTest
         Assertions.assertEquals("btn0", step.getDomFeatureVector().getAttributes().get("id"),
                 "Healing callIndex=1 must NOT overwrite callIndex=0 step-level domFeatureVector");
     }
+
+    @Test
+    public void testReplayStepRetainsSensitivePlaceholderInActionExecutedEventWhileExecutingSecret() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode().put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("fill", "Fills input", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                PlaybookToolReplayTest.this.executedCalls.add(call);
+                return ToolResult.success(call.callId(), "Filled");
+            }
+        });
+
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("user.name", "alice", false);
+        sessionData.putDynamic("user.password", "secretPassword123", true);
+
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final List<ActionExecutedEvent> actionEvents = new ArrayList<>();
+        eventBus.registerListener(event ->
+        {
+            if (event instanceof final ActionExecutedEvent aee)
+            {
+                actionEvents.add(aee);
+            }
+        });
+        final AiSession session = AiSession.mock(
+                ExecutionMode.REPLAY_WITH_HEALING,
+                sessionData,
+                new LlmRegistry(),
+                eventBus,
+                (TargetExecutor) null);
+        this.context.setVariable("neodymium.session", session);
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+        final PlaybookStep step = new PlaybookStep("Fill credentials");
+        final ObjectNode fillArgs = MAPPER.createObjectNode()
+                .put("selector", "#pwd")
+                .put("text", "${user.name}:${user.password}");
+        step.addToolCall(new ToolCall("call-fill-sec", "fill", fillArgs));
+
+        final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context, sessionData, null);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertEquals(1, this.executedCalls.size());
+        Assertions.assertEquals("alice:secretPassword123", this.executedCalls.get(0).arguments().path("text").asText(),
+                "Replay execution must receive resolved secret value");
+
+        Assertions.assertEquals(1, actionEvents.size());
+        final ActionExecutedEvent event = actionEvents.get(0);
+        Assertions.assertEquals("${user.name}:${user.password}", event.getAction().getValue());
+        Assertions.assertEquals("alice:${user.password}", event.getResolvedAction().getValue(),
+                "Replay ActionExecutedEvent.resolvedAction must retain sensitive placeholder");
+    }
+
+    @Test
+    public void testHealedReplayStepRetainsSensitivePlaceholderInActionExecutedEventWhileUpdatingTarget() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode().put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("fill", "Fills input", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                PlaybookToolReplayTest.this.executedCalls.add(call);
+                return ToolResult.success(call.callId(), "Filled");
+            }
+        });
+
+        final DomFeatureVector recordedVector = new DomFeatureVector(
+                "input", "", Set.of("pwd-old"), Map.of("id", "oldPwd", "type", "password"), "textbox", "Password", "form", 0);
+        final DomFeatureVector liveCandidate = new DomFeatureVector(
+                "input", "", Set.of("pwd-new"), Map.of("id", "newPwd", "type", "password"), "textbox", "Password", "form", 0);
+
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("user.name", "alice", false);
+        sessionData.putDynamic("user.password", "secretPassword123", true);
+
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final List<ActionExecutedEvent> actionEvents = new ArrayList<>();
+        eventBus.registerListener(event ->
+        {
+            if (event instanceof final ActionExecutedEvent aee)
+            {
+                actionEvents.add(aee);
+            }
+        });
+        final AiSession session = AiSession.mock(
+                ExecutionMode.REPLAY_WITH_HEALING,
+                sessionData,
+                new LlmRegistry(),
+                eventBus,
+                (TargetExecutor) null);
+        this.context.setVariable("neodymium.session", session);
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+        this.context.setVariable("liveCandidates", List.of(liveCandidate));
+
+        final PlaybookStep step = new PlaybookStep("Fill healed password");
+        final ObjectNode fillArgs = MAPPER.createObjectNode()
+                .put("selector", "#oldPwd")
+                .put("text", "${user.name}:${user.password}");
+        fillArgs.set("domFeatureVector", MAPPER.valueToTree(recordedVector));
+        step.addToolCall(new ToolCall("call-fill-heal", "fill", fillArgs));
+        final Action recordedAct = new Action("TYPE", "#oldPwd", List.of("${user.name}:${user.password}"), "Fill password", "");
+        recordedAct.setDomFeatureVector(recordedVector);
+        step.setActions(new ArrayList<>(List.of(recordedAct)));
+
+        final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context, sessionData, null);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertEquals(PlaybookStepStatus.HEALED, step.getStatus());
+        Assertions.assertEquals("#newPwd", this.executedCalls.get(0).arguments().path("selector").asText());
+        Assertions.assertEquals("alice:secretPassword123", this.executedCalls.get(0).arguments().path("text").asText());
+
+        Assertions.assertEquals(1, actionEvents.size());
+        final ActionExecutedEvent event = actionEvents.get(0);
+        Assertions.assertTrue(event.isHealed());
+        Assertions.assertEquals("#oldPwd", event.getAction().getTarget());
+        Assertions.assertEquals("#newPwd", event.getResolvedAction().getTarget());
+        Assertions.assertEquals("#oldPwd", event.getResolvedAction().getExpectedTarget());
+        Assertions.assertEquals("${user.name}:${user.password}", event.getAction().getValue());
+        Assertions.assertEquals("alice:${user.password}", event.getResolvedAction().getValue(),
+                "Healed replay ActionExecutedEvent.resolvedAction must retain sensitive placeholder");
+    }
 }

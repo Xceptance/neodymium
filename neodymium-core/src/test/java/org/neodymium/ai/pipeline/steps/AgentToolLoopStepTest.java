@@ -47,7 +47,6 @@ import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
-import org.neodymium.ai.event.ExecutionListener;
 import org.neodymium.ai.event.InteractiveConsoleListener;
 import org.neodymium.ai.event.structural.ActionExecutedEvent;
 import org.neodymium.ai.event.structural.StateCapturedEvent;
@@ -5189,6 +5188,189 @@ public class AgentToolLoopStepTest
         Assertions.assertEquals("${user.password}", capturedCanonicalAction.get().getValue(), "action (canonical) in event must retain variable placeholder without leaking secret");
         Assertions.assertNotNull(capturedResolvedAction.get(), "resolvedAction must be populated in ActionExecutedEvent");
         Assertions.assertEquals("${user.password}", capturedResolvedAction.get().getValue(), "resolvedAction in event must retain variable placeholder without leaking secret");
+    }
+
+    @Test
+    public void testSingleShotToolPathRetainsSensitivePlaceholderInActionExecutedEventWhileExecutingSecret() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+
+        final AtomicReference<String> executedText = new AtomicReference<>();
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("fill", "Fills field", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                executedText.set(call.arguments().path("text").asText());
+                return ToolResult.success(call.callId(), "{\"status\":\"ok\"}");
+            }
+        });
+
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("user.password", "secretPassword123", true);
+
+        final AtomicReference<ActionExecutedEvent> capturedEvent = new AtomicReference<>();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        eventBus.registerListener(event ->
+        {
+            if (event instanceof final ActionExecutedEvent aee)
+            {
+                capturedEvent.set(aee);
+            }
+        });
+
+        final MockLlmProvider mockLlm = new MockLlmProvider();
+        mockLlm.addResponse(new LlmResponse("{\"action\":\"TYPE\",\"target\":\"#pwd\",\"value\":\"${user.password}\"}", new TokenUsage(10, 10, 20), "mock"));
+        final LlmRegistry llmRegistry = new LlmRegistry();
+        llmRegistry.setDefaultProvider(mockLlm);
+        final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY, sessionData, llmRegistry, eventBus, new MockTargetExecutor());
+
+        this.context = session.getExecutionContext();
+        this.context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Enter password");
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), null, 30);
+        step.execute(this.context);
+
+        Assertions.assertEquals("secretPassword123", executedText.get(), "Registered AiTool must execute with resolved secret");
+        final ActionExecutedEvent event = capturedEvent.get();
+        Assertions.assertNotNull(event, "ActionExecutedEvent must be dispatched");
+        Assertions.assertEquals("${user.password}", event.getAction().getValue());
+        Assertions.assertEquals("${user.password}", event.getResolvedAction().getValue(),
+                "resolvedAction in event must retain variable placeholder without leaking secret");
+    }
+
+    @Test
+    public void testInteractiveLoopRetainsSensitivePlaceholderAndExpandsNonSensitiveInResolvedAction() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+
+        final AtomicReference<String> executedText = new AtomicReference<>();
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("fill", "Fills field", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                executedText.set(call.arguments().path("text").asText());
+                return ToolResult.success(call.callId(), "{\"status\":\"ok\"}");
+            }
+        });
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Done");
+            }
+        });
+
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("user.name", "alice", false);
+        sessionData.putDynamic("user.password", "secretPassword123", true);
+
+        final List<ActionExecutedEvent> events = new ArrayList<>();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        eventBus.registerListener(event ->
+        {
+            if (event instanceof final ActionExecutedEvent aee)
+            {
+                events.add(aee);
+            }
+        });
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) ->
+        {
+            if (turn.incrementAndGet() == 1)
+            {
+                return new LlmResponse(
+                        "{\"thought\":\"filling credentials\",\"tool_call\":{\"name\":\"fill\",\"arguments\":{\"selector\":\"#creds\",\"text\":\"${user.name}:${user.password}\"}}}",
+                        new TokenUsage(10, 10, 20),
+                        "mock");
+            }
+            return new LlmResponse(
+                    "{\"thought\":\"done\",\"tool_call\":{\"name\":\"complete_step\",\"arguments\":{\"summary\":\"Filled\"}}}",
+                    new TokenUsage(10, 10, 20),
+                    "mock");
+        };
+
+        final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY, sessionData, new LlmRegistry(), eventBus, new MockTargetExecutor());
+        this.context = session.getExecutionContext();
+        this.context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Enter credentials");
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        step.execute(this.context);
+
+        Assertions.assertEquals("alice:secretPassword123", executedText.get(), "Tool must execute with all resolved variables");
+        Assertions.assertEquals(1, events.size(), "One ActionExecutedEvent must be dispatched");
+        Assertions.assertEquals("${user.name}:${user.password}", events.get(0).getAction().getValue());
+        Assertions.assertEquals("alice:${user.password}", events.get(0).getResolvedAction().getValue(),
+                "resolvedAction must expand non-sensitive variables while keeping sensitive placeholder masked");
+    }
+
+    @Test
+    public void testResolvedActionScrubsLiteralSecretEmittedDirectlyByLlm() throws Exception
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("user.password", "secretPassword123", true);
+
+        final AtomicReference<ActionExecutedEvent> capturedEvent = new AtomicReference<>();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        eventBus.registerListener(event ->
+        {
+            if (event instanceof final ActionExecutedEvent aee)
+            {
+                capturedEvent.set(aee);
+            }
+        });
+
+        final MockLlmProvider mockLlm = new MockLlmProvider();
+        mockLlm.addResponse(new LlmResponse("{\"action\":\"TYPE\",\"target\":\"#pwd\",\"value\":\"secretPassword123\"}", new TokenUsage(10, 10, 20), "mock"));
+        final LlmRegistry llmRegistry = new LlmRegistry();
+        llmRegistry.setDefaultProvider(mockLlm);
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY, sessionData, llmRegistry, eventBus, executor);
+
+        this.context = session.getExecutionContext();
+        this.context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Enter password");
+        this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), null, 30);
+        step.execute(this.context);
+
+        final ActionExecutedEvent event = capturedEvent.get();
+        Assertions.assertNotNull(event);
+        Assertions.assertEquals("${user.password}", event.getAction().getValue());
+        Assertions.assertEquals("${user.password}", event.getResolvedAction().getValue(),
+                "Literal secret in resolvedAction must be scrubbed to placeholder");
     }
 
     @Test
