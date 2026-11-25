@@ -481,7 +481,7 @@ public class AuraMcpIntegrationTest
         final Model model = new ConcurrentModel();
         settingsController.getSettingsModal("mcp", model);
 
-        Assertions.assertEquals(15, model.getAttribute("mcpToolsCount"));
+        Assertions.assertEquals(16, model.getAttribute("mcpToolsCount"));
         final List<Map<String, String>> tools = (List<Map<String, String>>) model.getAttribute("mcpToolsList");
         Assertions.assertNotNull(tools);
 
@@ -494,6 +494,7 @@ public class AuraMcpIntegrationTest
                 "list_tests",
                 "list_custom_dashboards",
                 "analyze_dashboard_page",
+                "analyze_report_differential",
                 "list_runs",
                 "list_batches")));
     }
@@ -542,6 +543,7 @@ public class AuraMcpIntegrationTest
                 "list_tests",
                 "list_custom_dashboards",
                 "analyze_dashboard_page",
+                "analyze_report_differential",
                 "list_runs",
                 "list_batches")), "Missing expected analytics tools in /mcp tools/list: " + registeredToolNames);
 
