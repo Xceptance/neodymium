@@ -539,7 +539,7 @@ public final class TestExecutionReport
             {
                 return false;
             }
-            if (this.subSteps != null && this.subSteps.stream().anyMatch(s -> s != null && "FAILED".equalsIgnoreCase(s.getStatus())))
+            if (this.subSteps != null && this.subSteps.stream().anyMatch(s -> s != null && !s.isOptional() && "FAILED".equalsIgnoreCase(s.getStatus())))
             {
                 return false;
             }

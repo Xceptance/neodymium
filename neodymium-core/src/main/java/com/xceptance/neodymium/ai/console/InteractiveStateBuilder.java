@@ -1175,7 +1175,7 @@ public final class InteractiveStateBuilder
                 || step.isFailed()
                 || "FAILED".equalsIgnoreCase(reportStep.getStatus())
                 || (reportStep.getSubSteps() != null && reportStep.getSubSteps().stream()
-                    .anyMatch(s -> s != null && ("FAILED".equalsIgnoreCase(s.getStatus()) || s.getFailureReason() != null)));
+                    .anyMatch(s -> s != null && !s.isOptional() && ("FAILED".equalsIgnoreCase(s.getStatus()) || s.getFailureReason() != null)));
             final boolean isStepRunning = !isStepFailed && (status == PlaybookStepStatus.RUNNING
                 || "RUNNING".equalsIgnoreCase(reportStep.getStatus())
                 || (reportStep.getSubSteps() != null && reportStep.getSubSteps().stream()

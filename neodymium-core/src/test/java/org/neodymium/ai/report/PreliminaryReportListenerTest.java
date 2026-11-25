@@ -3723,4 +3723,146 @@ public class PreliminaryReportListenerTest
         assertEquals(2, subEntry.getActions().size(), "Failed action must also be pruned from subEntry");
         assertTrue(subEntry.getActions().stream().allMatch(TestExecutionReport.ReportActionEntry::isSuccess));
     }
+
+    @Test
+    @DisplayName("Verify grouped compound step online healing prunes sub-step failed action and backfills healed action with full metadata")
+    public void testGroupedCompoundStepOnlineHealingPrunesSubStepFailedActionAndBackfillsHealedAction(@TempDir final Path tempDir)
+    {
+        final PreliminaryReportListener listener = new PreliminaryReportListener(tempDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final PlaybookStep compositeStep = new PlaybookStep("Complete checkout form");
+        final PlaybookStep sub0 = new PlaybookStep("Enter username");
+        final PlaybookStep sub1 = new PlaybookStep("Click submit");
+        compositeStep.setSubSteps(List.of(sub0, sub1));
+
+        bus.dispatch(new StepStartedEvent(compositeStep, 0));
+
+        // Replay: sub-step 0 succeeds, sub-step 1 fails
+        final Action sub0Replay = new Action("FILL", "#username", List.of("alice"), "Enter username", "");
+        sub0Replay.setSubStepIndex(0);
+        sub0Replay.setSubStepInstruction(sub0.getInstruction());
+        bus.dispatch(new ActionExecutedEvent(sub0Replay, sub0Replay, true, false));
+
+        final Action sub1Failed = new Action("CLICK", "#oldSubmitBtn", List.of(), "Click submit", "");
+        sub1Failed.setSubStepIndex(1);
+        sub1Failed.setSubStepInstruction(sub1.getInstruction());
+        bus.dispatch(new ActionExecutedEvent(sub1Failed, sub1Failed, false, "Element not found", false));
+
+        // Online LLM healing emits healed action without subStepIndex (partitioning happens later in endHookStep)
+        final Action healedCanon = new Action("CLICK", "#newSubmitBtn", List.of(), "Click submit", "Healed submit button");
+        healedCanon.setExpectedTarget("#oldSubmitBtn");
+        healedCanon.setHealed(true);
+        final Action healedResolved = new Action("CLICK", "#newSubmitBtn", List.of(), "Click submit", "Healed submit button");
+        healedResolved.setExpectedTarget("#oldSubmitBtn");
+        healedResolved.setHealed(true);
+        bus.dispatch(new ActionExecutedEvent(healedCanon, healedResolved, true, null, true));
+
+        // endHookStep partitions actions onto pbStep and sub-steps, then dispatches StepFinishedEvent(HEALED)
+        final Action partitionedSub0 = new Action("FILL", "#username", List.of("alice"), "Enter username", "");
+        partitionedSub0.setSubStepIndex(0);
+        partitionedSub0.setSubStepInstruction(sub0.getInstruction());
+        final Action partitionedSub1 = new Action("CLICK", "#newSubmitBtn", List.of(), "Click submit", "Healed submit button");
+        partitionedSub1.setSubStepIndex(1);
+        partitionedSub1.setSubStepInstruction(sub1.getInstruction());
+        partitionedSub1.setExpectedTarget("#oldSubmitBtn");
+        partitionedSub1.setHealed(true);
+
+        sub0.setActions(List.of(partitionedSub0));
+        sub0.setStatus(PlaybookStepStatus.SUCCESS);
+        sub1.setActions(List.of(partitionedSub1));
+        sub1.setStatus(PlaybookStepStatus.HEALED);
+        compositeStep.setActions(List.of(partitionedSub0, partitionedSub1));
+        compositeStep.setStatus(PlaybookStepStatus.HEALED);
+
+        bus.dispatch(new StepFinishedEvent(compositeStep, PlaybookStepStatus.HEALED));
+        bus.dispatch(new SessionFinishedEvent(500L, true));
+
+        final TestExecutionReport report = listener.getReport();
+        assertTrue(report.isSuccess());
+        assertEquals(1, report.getMetrics().getHealedSteps());
+        assertEquals(0, report.getMetrics().getFailedSteps());
+
+        final TestExecutionReport.ReportStepEntry stepEntry = report.getSteps().get(0);
+        assertEquals("HEALED", stepEntry.getStatus());
+        assertTrue(stepEntry.isHealed());
+
+        final TestExecutionReport.ReportStepEntry subEntry1 = stepEntry.getSubSteps().get(1);
+        assertEquals("HEALED", subEntry1.getStatus());
+        assertNull(subEntry1.getFailureReason());
+        assertEquals(1, subEntry1.getActions().size(), "Aborted failed replay action must be pruned and replaced with healed action");
+        final TestExecutionReport.ReportActionEntry healedEntry = subEntry1.getActions().get(0);
+        assertTrue(healedEntry.isSuccess(), "Backfilled sub-step action must be successful");
+        assertTrue(healedEntry.isHealed(), "Backfilled sub-step action must retain healed=true metadata");
+        assertEquals("#newSubmitBtn", healedEntry.getResolvedTarget(), "Backfilled sub-step action must retain resolvedTarget");
+        assertEquals("#oldSubmitBtn", healedEntry.getExpectedTarget(), "Backfilled sub-step action must retain expectedTarget");
+    }
+
+    @Test
+    @DisplayName("Verify optional sub-step failure is preserved when sibling heals in online LLM healing")
+    public void testOptionalSubStepFailurePreservedWhenSiblingHeals(@TempDir final Path tempDir)
+    {
+        final PreliminaryReportListener listener = new PreliminaryReportListener(tempDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final PlaybookStep compositeStep = new PlaybookStep("Dismiss banner and submit");
+        final PlaybookStep sub0 = new PlaybookStep("Dismiss optional cookie banner");
+        sub0.setOptional(true);
+        sub0.setParent(compositeStep);
+        final PlaybookStep sub1 = new PlaybookStep("Click submit");
+        sub1.setParent(compositeStep);
+        compositeStep.setSubSteps(List.of(sub0, sub1));
+
+        bus.dispatch(new StepStartedEvent(compositeStep, 0));
+
+        // Optional sub-step 0 runs, fails, and finishes FAILED
+        bus.dispatch(new StepStartedEvent(sub0, 0));
+        final Action sub0Failed = new Action("CLICK", "#cookieAccept", List.of(), "Dismiss banner", "");
+        bus.dispatch(new ActionExecutedEvent(sub0Failed, sub0Failed, false, "Banner absent", false));
+        sub0.setStatus(PlaybookStepStatus.FAILED);
+        sub0.setFailureReason("Banner absent");
+        bus.dispatch(new StepFinishedEvent(sub0, PlaybookStepStatus.FAILED));
+
+        // Sub-step 1 fails replay, then heals online and finishes HEALED
+        bus.dispatch(new StepStartedEvent(sub1, 1));
+        final Action sub1Failed = new Action("CLICK", "#oldSubmit", List.of(), "Click submit", "");
+        bus.dispatch(new ActionExecutedEvent(sub1Failed, sub1Failed, false, "Old submit missing", false));
+
+        final Action healedCanon = new Action("CLICK", "#newSubmit", List.of(), "Click submit", "Healed submit");
+        healedCanon.setExpectedTarget("#oldSubmit");
+        healedCanon.setHealed(true);
+        bus.dispatch(new ActionExecutedEvent(healedCanon, healedCanon, true, null, true));
+
+        sub1.setActions(List.of(healedCanon));
+        sub1.setStatus(PlaybookStepStatus.HEALED);
+        bus.dispatch(new StepFinishedEvent(sub1, PlaybookStepStatus.HEALED));
+
+        compositeStep.setActions(List.of(healedCanon));
+        compositeStep.setStatus(PlaybookStepStatus.HEALED);
+
+        bus.dispatch(new StepFinishedEvent(compositeStep, PlaybookStepStatus.HEALED));
+        bus.dispatch(new SessionFinishedEvent(450L, true));
+
+        final TestExecutionReport report = listener.getReport();
+        assertTrue(report.isSuccess());
+        assertEquals(1, report.getMetrics().getHealedSteps());
+        assertEquals(0, report.getMetrics().getFailedSteps());
+
+        final TestExecutionReport.ReportStepEntry stepEntry = report.getSteps().get(0);
+        assertEquals("HEALED", stepEntry.getStatus());
+
+        final TestExecutionReport.ReportStepEntry subEntry0 = stepEntry.getSubSteps().get(0);
+        assertEquals("FAILED", subEntry0.getStatus(), "Optional sub-step must retain its genuine FAILED status");
+        assertEquals("Banner absent", subEntry0.getFailureReason(), "Optional sub-step must retain its failureReason");
+        assertEquals(1, subEntry0.getActions().size(), "Optional sub-step must retain its failed action");
+        assertFalse(subEntry0.getActions().get(0).isSuccess());
+
+        final TestExecutionReport.ReportStepEntry subEntry1 = stepEntry.getSubSteps().get(1);
+        assertEquals("HEALED", subEntry1.getStatus());
+        assertEquals(1, subEntry1.getActions().size());
+        assertTrue(subEntry1.getActions().get(0).isSuccess());
+        assertTrue(subEntry1.getActions().get(0).isHealed());
+    }
 }

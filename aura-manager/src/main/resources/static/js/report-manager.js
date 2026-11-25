@@ -6413,7 +6413,7 @@ function renderStepsForExecution(activeRow) {
             let hasExecutedSubs = false;
             if (subsList.length > 0) {
                 const executedSubs = subsList.filter(sub => sub.status && String(sub.status).toUpperCase() !== 'PENDING' && String(sub.status).toUpperCase() !== 'SKIPPED' && String(sub.status).toUpperCase() !== 'NOT RUN' && String(sub.status).toUpperCase() !== 'NOT_RUN');
-                const hasFailedSub = subsList.some(sub => String(sub.status || '').toUpperCase() === 'FAILED' || sub.failureReason || sub.error || sub.failure);
+                const hasFailedSub = subsList.some(sub => !sub.optional && (String(sub.status || '').toUpperCase() === 'FAILED' || sub.failureReason || sub.error || sub.failure));
                 const hasRunningSub = subsList.some(sub => String(sub.status || '').toUpperCase() === 'RUNNING');
                 const hasHealedSub = subsList.some(sub => {
                     const subStatus = String(sub.status || '').toUpperCase();
