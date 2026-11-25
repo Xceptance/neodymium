@@ -51,6 +51,12 @@ public final class MockSutState implements SutState
     private final String contentHash;
 
     /**
+     * Indicates whether attached screenshots were captured full-page ({@code true}),
+     * viewport-only ({@code false}), or unspecified/absent ({@code null}).
+     */
+    private final Boolean fullPageScreenshot;
+
+    /**
      * Constructs a MockSutState with text content and content hash.
      *
      * @param textContent the text representation of the state
@@ -58,7 +64,7 @@ public final class MockSutState implements SutState
      */
     public MockSutState(final String textContent, final String contentHash)
     {
-        this(textContent, Collections.emptyList(), contentHash);
+        this(textContent, Collections.emptyList(), contentHash, null);
     }
 
     /**
@@ -70,9 +76,29 @@ public final class MockSutState implements SutState
      */
     public MockSutState(final String textContent, final List<SutAttachment> attachments, final String contentHash)
     {
+        this(textContent, attachments, contentHash, null);
+    }
+
+    /**
+     * Constructs a MockSutState with detailed text content, attachments list, content hash,
+     * and explicit screenshot capture scope metadata.
+     *
+     * @param textContent the text representation of the state
+     * @param attachments the list of attachments
+     * @param contentHash the content hash
+     * @param fullPageScreenshot {@code true} if full-page, {@code false} if viewport-only, {@code null} if unspecified
+     */
+    public MockSutState(
+        final String textContent,
+        final List<SutAttachment> attachments,
+        final String contentHash,
+        final Boolean fullPageScreenshot
+    )
+    {
         this.textContent = textContent;
         this.attachments = attachments == null ? Collections.emptyList() : List.copyOf(attachments);
         this.contentHash = contentHash;
+        this.fullPageScreenshot = fullPageScreenshot;
     }
 
     /**
@@ -106,5 +132,17 @@ public final class MockSutState implements SutState
     public String getContentHash()
     {
         return this.contentHash;
+    }
+
+    /**
+     * Returns whether attached screenshots were captured full-page or viewport-only.
+     *
+     * @return {@code Boolean.TRUE} for full-page captures, {@code Boolean.FALSE} for viewport captures,
+     *         or {@code null} when unspecified or absent
+     */
+    @Override
+    public Boolean isFullPageScreenshot()
+    {
+        return this.fullPageScreenshot;
     }
 }

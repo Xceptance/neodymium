@@ -32,6 +32,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -272,6 +273,7 @@ public class ScreenshotWriter {
         long viewWidth = (long) devtoolsDriver.executeScript("return window.innerWidth");
         long viewHeight = (long) devtoolsDriver.executeScript("return window.innerHeight");
         boolean exceedViewport = fullWidth > viewWidth || fullHeight > viewHeight;
+        final long[] originalScrollbarWidths = exceedViewport ? captureViewportScrollbarWidths(devtoolsDriver) : null;
         Viewport viewport = new Viewport(0, 0, fullWidth, fullHeight, 1);
 
         long origX = 0;
@@ -301,6 +303,10 @@ public class ScreenshotWriter {
             ResultType screenshot = outputType.convertFromBase64Png(base64);
             return Optional.of(screenshot);
         } finally {
+            if (exceedViewport)
+            {
+                restoreViewportScrollbarsIfHidden(devtoolsDriver, originalScrollbarWidths);
+            }
             if (didScroll) {
                 try {
                     devtoolsDriver.executeScript("window.scrollTo(arguments[0], arguments[1])", origX, origY);
@@ -321,6 +327,7 @@ public class ScreenshotWriter {
         long viewWidth = (long) cdpDriver.executeScript("return window.innerWidth");
         long viewHeight = (long) cdpDriver.executeScript("return window.innerHeight");
         boolean exceedViewport = fullWidth > viewWidth || fullHeight > viewHeight;
+        final long[] originalScrollbarWidths = exceedViewport ? captureViewportScrollbarWidths(cdpDriver) : null;
         Map<String, Object> captureScreenshotOptions = ImmutableMap.of(
                 "clip", ImmutableMap.of(
                         "x", 0,
@@ -352,12 +359,91 @@ public class ScreenshotWriter {
             ResultType screenshot = outputType.convertFromBase64Png(base64);
             return Optional.of(screenshot);
         } finally {
+            if (exceedViewport)
+            {
+                restoreViewportScrollbarsIfHidden(cdpDriver, originalScrollbarWidths);
+            }
             if (didScroll) {
                 try {
                     cdpDriver.executeScript("window.scrollTo(arguments[0], arguments[1])", origX, origY);
                 } catch (Exception ignored) {
                 }
             }
+        }
+    }
+
+    /**
+     * Captures the current horizontal and vertical viewport scrollbar sizes before a full-page CDP capture.
+     *
+     * @param js the JavaScript-capable driver
+     * @return a two-element array {@code [verticalScrollbarWidth, horizontalScrollbarHeight]} in CSS pixels
+     */
+    private static long[] captureViewportScrollbarWidths(final JavascriptExecutor js)
+    {
+        if (js == null)
+        {
+            return new long[] { 0L, 0L };
+        }
+        try
+        {
+            final Object result = js.executeScript(
+                    "var t = document.compatMode === 'CSS1Compat' ? document.documentElement : (document.body || document.documentElement); "
+                            + "return t ? [Math.max(0, window.innerWidth - t.clientWidth), Math.max(0, window.innerHeight - t.clientHeight)] : [0, 0];");
+            if (result instanceof final List<?> dims && dims.size() >= 2
+                    && dims.get(0) instanceof final Number width && dims.get(1) instanceof final Number height)
+            {
+                return new long[] { width.longValue(), height.longValue() };
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+        return new long[] { 0L, 0L };
+    }
+
+    /**
+     * Restores viewport scrollbars via a non-destructive root overflow relayout when Chromium's
+     * {@code captureBeyondViewport: true} leaves {@code hide_scrollbars} active after capture.
+     *
+     * @param js the JavaScript-capable driver
+     * @param originalScrollbarWidths the pre-capture {@code [verticalScrollbarWidth, horizontalScrollbarHeight]}
+     */
+    private static void restoreViewportScrollbarsIfHidden(final JavascriptExecutor js, final long[] originalScrollbarWidths)
+    {
+        if (js == null || originalScrollbarWidths == null || originalScrollbarWidths.length < 2
+                || (originalScrollbarWidths[0] <= 0 && originalScrollbarWidths[1] <= 0))
+        {
+            return;
+        }
+        try
+        {
+            // Chromium's Page.captureScreenshot(captureBeyondViewport=true) enables hide_scrollbars during
+            // capture without forcing a root relayout afterward; briefly toggling documentElement overflow
+            // restores pre-capture scrollbar layout width while preserving existing inline style/priority.
+            js.executeScript(
+                    "var t = document.compatMode === 'CSS1Compat' ? document.documentElement : (document.body || document.documentElement); "
+                            + "if (!t) { return; } "
+                            + "var curW = Math.max(0, window.innerWidth - t.clientWidth); "
+                            + "var curH = Math.max(0, window.innerHeight - t.clientHeight); "
+                            + "if (curW >= arguments[0] && curH >= arguments[1]) { return; } "
+                            + "var root = document.documentElement; "
+                            + "if (!root || !root.style) { return; } "
+                            + "var hadStyle = root.hasAttribute('style'); "
+                            + "var prevX = root.style.getPropertyValue('overflow-x'); "
+                            + "var prevXPrio = root.style.getPropertyPriority('overflow-x'); "
+                            + "var prevY = root.style.getPropertyValue('overflow-y'); "
+                            + "var prevYPrio = root.style.getPropertyPriority('overflow-y'); "
+                            + "root.style.setProperty('overflow-x', prevX === 'hidden' ? 'auto' : 'hidden', 'important'); "
+                            + "root.style.setProperty('overflow-y', prevY === 'hidden' ? 'auto' : 'hidden', 'important'); "
+                            + "void root.offsetHeight; "
+                            + "if (prevX) { root.style.setProperty('overflow-x', prevX, prevXPrio); } else { root.style.removeProperty('overflow-x'); } "
+                            + "if (prevY) { root.style.setProperty('overflow-y', prevY, prevYPrio); } else { root.style.removeProperty('overflow-y'); } "
+                            + "if (!hadStyle && root.style.length === 0) { root.removeAttribute('style'); } "
+                            + "void root.offsetHeight;",
+                    originalScrollbarWidths[0], originalScrollbarWidths[1]);
+        }
+        catch (final Exception ignored)
+        {
         }
     }
 

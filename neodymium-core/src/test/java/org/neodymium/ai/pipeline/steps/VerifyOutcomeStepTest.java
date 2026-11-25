@@ -360,12 +360,14 @@ public class VerifyOutcomeStepTest
         final MockSutState staleState = new MockSutState(
             "<html>stale</html>",
             List.of(new SutAttachment("image/png", "stale.png", staleBase64)),
-            "stale_hash");
+            "stale_hash",
+            Boolean.TRUE);
 
         final MockSutState viewportState = new MockSutState(
             "<html>viewport</html>",
             List.of(new SutAttachment("image/png", "viewport.png", viewportBase64)),
-            "viewport_hash");
+            "viewport_hash",
+            Boolean.FALSE);
 
         context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
         context.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, staleState);
@@ -627,5 +629,183 @@ public class VerifyOutcomeStepTest
         Assertions.assertNotNull(visualStep.getScreenshotHash(), "Viewport visual step must record a screenshot hash.");
         Assertions.assertEquals(ScreenshotHasher.DEFAULT_SSIM_MATRIX_DIM, visualStep.getScreenshotHashDim());
         Assertions.assertFalse(visualStep.isFullPage(), "Viewport visual step must enforce fullPage=false even at VISUAL_LEAN.");
+    }
+
+    /**
+     * Regression test for GitLab #172: Verifies that a pure (visual) verification step with empty actions
+     * and fullPage=false hashes the matching viewport KEY_POST_ACTION_STATE instead of discarding it and
+     * falling back to a full-page KEY_LAST_STATE captured during an escalated multi-turn loop, and that
+     * strict replay passes via VisualBaselineGateStep.
+     */
+    @Test
+    public void testPureViewportVisualStepUsesViewportPostActionStateOverFullPageLastState() throws Exception
+    {
+        final String fullPageBase64 = renderPatternImageBase64(1500, 2125, Color.WHITE, Color.BLUE, true);
+        final String viewportBase64 = renderPatternImageBase64(1500, 857, Color.WHITE, Color.GREEN, false);
+
+        final MockSutState fullPageLastState = new MockSutState(
+            "<html>fullpage</html>",
+            List.of(new SutAttachment("image/png", "fullpage.png", fullPageBase64)),
+            "fullpage_hash",
+            Boolean.TRUE);
+
+        final MockSutState viewportPostState = new MockSutState(
+            "<html>viewport</html>",
+            List.of(new SutAttachment("image/png", "viewport.png", viewportBase64)),
+            "viewport_hash",
+            Boolean.FALSE);
+
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_RECORDING);
+        context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, fullPageLastState);
+        context.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, viewportPostState);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL_LEAN);
+        context.getTransientData().put("semanticVerification.enabled", false);
+
+        final PlaybookStep visualStep = new PlaybookStep("Die gezeigte Landesflagge ist die Flagge von \"Germany\" (visual).");
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, visualStep);
+
+        final VerifyOutcomeStep step = new VerifyOutcomeStep();
+        step.execute(context);
+
+        final String expectedViewportHash = ScreenshotHasher.computeSsimMatrix(viewportBase64);
+        final String expectedFullPageHash = ScreenshotHasher.computeSsimMatrix(fullPageBase64);
+
+        Assertions.assertEquals(expectedViewportHash, visualStep.getScreenshotHash(),
+            "Pure viewport (visual) step must hash the viewport KEY_POST_ACTION_STATE, not full-page KEY_LAST_STATE.");
+        Assertions.assertNotEquals(expectedFullPageHash, visualStep.getScreenshotHash(),
+            "Baseline hash must not come from full-page KEY_LAST_STATE.");
+        Assertions.assertFalse(visualStep.isFullPage(), "Step must be recorded with fullPage=false.");
+
+        final MockTargetExecutor replayExecutor = new MockTargetExecutor();
+        replayExecutor.enqueueState(viewportPostState);
+        replayExecutor.enqueueState(viewportPostState);
+
+        final AiSession replaySession = AiSession.mock(new SessionData(new HashMap<>()), session.getLlmRegistry(), new ExecutionEventBus(), replayExecutor);
+        final ExecutionContext replayContext = replaySession.getExecutionContext();
+        replayContext.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        replayContext.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, replayExecutor);
+
+        final VisualBaselineGateStep gateStep = new VisualBaselineGateStep(visualStep, replaySession);
+        final boolean matched = Assertions.assertDoesNotThrow(() -> gateStep.executeGate(replayContext));
+        Assertions.assertTrue(matched, "Strict replay of recorded pure viewport visual step must pass and short-circuit.");
+        Assertions.assertEquals(List.of(false), replayExecutor.getCapturedFullPageFlags());
+    }
+
+    /**
+     * Verifies that when KEY_POST_ACTION_STATE is absent for a pure (visual) step (fullPage=false)
+     * and KEY_LAST_STATE holds a full-page capture under an escalated VISUAL_LEAN context level,
+     * VerifyOutcomeStep rejects the mismatched KEY_LAST_STATE and captures a fresh viewport state
+     * using ContextLevel.VISUAL and isFullPage=false.
+     */
+    @Test
+    public void testPureViewportVisualStepWithoutPostActionStateRejectsFullPageLastStateAndCapturesFreshViewport() throws Exception
+    {
+        final String fullPageBase64 = renderPatternImageBase64(1500, 2125, Color.WHITE, Color.BLUE, true);
+        final String viewportBase64 = renderPatternImageBase64(1500, 857, Color.WHITE, Color.GREEN, false);
+
+        final MockSutState fullPageLastState = new MockSutState(
+            "<html>fullpage</html>",
+            List.of(new SutAttachment("image/png", "fullpage.png", fullPageBase64)),
+            "fullpage_hash",
+            Boolean.TRUE);
+
+        final MockSutState freshViewportState = new MockSutState(
+            "<html>viewport</html>",
+            List.of(new SutAttachment("image/png", "viewport.png", viewportBase64)),
+            "viewport_hash",
+            Boolean.FALSE);
+        targetExecutor.enqueueState(freshViewportState);
+
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
+        context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, fullPageLastState);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL_LEAN);
+        context.getTransientData().put("semanticVerification.enabled", false);
+
+        final PlaybookStep visualStep = new PlaybookStep("Die gezeigte Landesflagge ist die Flagge von \"Germany\" (visual).");
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, visualStep);
+
+        final VerifyOutcomeStep step = new VerifyOutcomeStep();
+        step.execute(context);
+
+        final String expectedViewportHash = ScreenshotHasher.computeSsimMatrix(viewportBase64);
+        Assertions.assertEquals(List.of(false), targetExecutor.getCapturedFullPageFlags(),
+            "Fallback capture must request isFullPage=false.");
+        Assertions.assertEquals(List.of(ContextLevel.VISUAL), targetExecutor.getCapturedContextLevels(),
+            "Fallback viewport capture must use ContextLevel.VISUAL, not escalated VISUAL_LEAN.");
+        Assertions.assertEquals(expectedViewportHash, visualStep.getScreenshotHash(),
+            "Baseline hash must match freshly captured viewport screenshot.");
+        Assertions.assertFalse(visualStep.isFullPage(), "Step must be marked fullPage=false.");
+    }
+
+    /**
+     * Verifies that when KEY_POST_ACTION_STATE is absent for a (visual: full) step
+     * and KEY_LAST_STATE holds a viewport-only capture, VerifyOutcomeStep rejects the
+     * mismatched KEY_LAST_STATE and captures a fresh full-page state using ContextLevel.VISUAL_LEAN.
+     */
+    @Test
+    public void testPureFullPageVisualStepWithoutPostActionStateRejectsViewportLastStateAndCapturesFreshFullPage() throws Exception
+    {
+        final String viewportBase64 = renderPatternImageBase64(1500, 857, Color.WHITE, Color.GREEN, false);
+        final String fullPageBase64 = renderPatternImageBase64(1500, 2125, Color.WHITE, Color.BLUE, true);
+
+        final MockSutState viewportLastState = new MockSutState(
+            "<html>viewport</html>",
+            List.of(new SutAttachment("image/png", "viewport.png", viewportBase64)),
+            "viewport_hash",
+            Boolean.FALSE);
+
+        final MockSutState freshFullPageState = new MockSutState(
+            "<html>fullpage</html>",
+            List.of(new SutAttachment("image/png", "fullpage.png", fullPageBase64)),
+            "fullpage_hash",
+            Boolean.TRUE);
+        targetExecutor.enqueueState(freshFullPageState);
+
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
+        context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, viewportLastState);
+        context.getTransientData().put("semanticVerification.enabled", false);
+
+        final PlaybookStep fullPageStep = new PlaybookStep("Verify full page summary (visual: full)");
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, fullPageStep);
+
+        final VerifyOutcomeStep step = new VerifyOutcomeStep();
+        step.execute(context);
+
+        final String expectedFullPageHash = ScreenshotHasher.computeSsimMatrix(fullPageBase64);
+        Assertions.assertEquals(List.of(true), targetExecutor.getCapturedFullPageFlags(),
+            "Fallback capture for (visual: full) must request isFullPage=true.");
+        Assertions.assertEquals(List.of(ContextLevel.VISUAL_LEAN), targetExecutor.getCapturedContextLevels(),
+            "Fallback full-page capture must use ContextLevel.VISUAL_LEAN.");
+        Assertions.assertEquals(expectedFullPageHash, fullPageStep.getScreenshotHash(),
+            "Baseline hash must match freshly captured full-page screenshot.");
+        Assertions.assertTrue(fullPageStep.isFullPage(), "Step must be marked fullPage=true.");
+    }
+
+    private static String renderPatternImageBase64(
+        final int width,
+        final int height,
+        final Color bgColor,
+        final Color accentColor,
+        final boolean includeLowerSection
+    ) throws Exception
+    {
+        final BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g = img.createGraphics();
+        g.setColor(bgColor);
+        g.fillRect(0, 0, width, height);
+        g.setColor(accentColor);
+        g.fillRect(40, 20, Math.max(10, width - 80), 80);
+        if (includeLowerSection && height > 1200)
+        {
+            g.setColor(Color.DARK_GRAY);
+            g.fillRect(40, 1100, Math.max(10, width - 80), 400);
+        }
+        g.dispose();
+
+        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream())
+        {
+            ImageIO.write(img, "png", baos);
+            return Base64.getEncoder().encodeToString(baos.toByteArray());
+        }
     }
 }

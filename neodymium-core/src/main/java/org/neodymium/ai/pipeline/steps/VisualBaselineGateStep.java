@@ -498,15 +498,18 @@ public final class VisualBaselineGateStep implements PipelineStep
             }
         }
 
+        final boolean isFullPageReq = coordinateTarget == null
+            && (Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                || this.step.isFullPageVisualStep());
         SutState postState = (SutState) context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
-        if (this.step.isLayoutStep() || postState == null || postState.getAttachments() == null || postState.getAttachments().isEmpty())
+        final boolean fullPageMismatch = postState != null
+            && postState.isFullPageScreenshot() != null
+            && postState.isFullPageScreenshot().booleanValue() != isFullPageReq;
+        if (this.step.isLayoutStep() || fullPageMismatch || postState == null || postState.getAttachments() == null || postState.getAttachments().isEmpty())
         {
             final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
             if (executor != null)
             {
-                final boolean isFullPageReq = coordinateTarget == null
-                    && (Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
-                        || this.step.isFullPageVisualStep());
                 final ContextLevel cl = isFullPageReq ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL;
                 try
                 {

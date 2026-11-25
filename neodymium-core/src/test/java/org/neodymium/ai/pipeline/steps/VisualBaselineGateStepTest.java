@@ -46,6 +46,7 @@ import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.executor.MockSutState;
 import org.neodymium.ai.executor.MockTargetExecutor;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.DivergenceException;
@@ -849,6 +850,65 @@ public class VisualBaselineGateStepTest
         assertFalse(bypassed, "Interactive marker step must still execute its action after pre-click tile check passes");
         assertNotNull(step.getSsimScore());
         assertTrue(step.getSsimScore() >= 0.95);
+    }
+
+    @Test
+    public void testExecutePostActionCheckRecapturesWhenPostActionStateFullPageMismatches() throws IOException
+    {
+        final BufferedImage viewportImg = new BufferedImage(1500, 857, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D gv = viewportImg.createGraphics();
+        gv.setColor(Color.WHITE);
+        gv.fillRect(0, 0, 1500, 857);
+        gv.setColor(Color.BLUE);
+        gv.fillRect(40, 20, 1420, 80);
+        gv.dispose();
+
+        final BufferedImage fullPageImg = new BufferedImage(1500, 2125, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D gf = fullPageImg.createGraphics();
+        gf.setColor(Color.WHITE);
+        gf.fillRect(0, 0, 1500, 2125);
+        gf.setColor(Color.BLUE);
+        gf.fillRect(40, 20, 1420, 80);
+        gf.setColor(Color.DARK_GRAY);
+        gf.fillRect(40, 1100, 1420, 400);
+        gf.dispose();
+
+        final String viewportBase64 = encodeToBase64(viewportImg);
+        final String fullPageBase64 = encodeToBase64(fullPageImg);
+        final String expectedHash = ScreenshotHasher.computeSsimMatrix(viewportBase64);
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockSutState fullPagePostState = new MockSutState(
+            "<html>full</html>",
+            List.of(new SutAttachment("image/png", "full.png", fullPageBase64)),
+            "full_hash",
+            Boolean.TRUE);
+        final MockSutState freshViewportState = new MockSutState(
+            "<html>vp</html>",
+            List.of(new SutAttachment("image/png", "vp.png", viewportBase64)),
+            "vp_hash",
+            Boolean.FALSE);
+        executor.enqueueState(freshViewportState);
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, null, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, fullPagePostState);
+
+        final PlaybookStep step = new PlaybookStep("Click and verify header flag (visual)");
+        step.setFullPage(false);
+        step.setScreenshotHash(expectedHash);
+        step.getActions().add(new Action("CLICK", "#flag-btn", null));
+
+        final VisualBaselineGateStep gateStep = new VisualBaselineGateStep(step, session);
+        assertDoesNotThrow(() -> gateStep.executePostActionCheck(context));
+
+        assertEquals(List.of(false), executor.getCapturedFullPageFlags());
+        assertEquals(List.of(ContextLevel.VISUAL), executor.getCapturedContextLevels());
+        assertNotNull(step.getSsimScore());
+        assertTrue(step.getSsimScore() >= 0.99);
     }
 
     private static String encodeToBase64(final BufferedImage image) throws IOException
