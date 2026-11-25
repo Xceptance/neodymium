@@ -23,7 +23,6 @@
  */
 package com.xceptance.neodymium.junit4.tests.recording.config;
 
-import org.neodymium.common.recording.FilmTestExecution;
 import org.neodymium.common.recording.config.VideoRecordingConfigurations;
 import com.xceptance.neodymium.junit4.tests.recording.AbstractRecordingDeletionTest;
 import org.junit.AfterClass;
@@ -49,7 +48,9 @@ public class DeleteVideoRecordingTest extends AbstractRecordingDeletionTest
     @AfterClass
     public static void assertLogFileExists()
     {
-        File logFile = new File(FilmTestExecution.getContextVideo().ffmpegLogFile());
+        final String trackedLogFilePath = logFilePath.get(Thread.currentThread());
+        Assert.assertNotNull("the logfile path for the automatic video recording test must be configured", trackedLogFilePath);
+        final File logFile = new File(trackedLogFilePath);
         Assert.assertTrue("the logfile for the automatic video recording test exists", logFile.exists());
         logFile.delete();
         Assert.assertFalse("the logfile for the automatic video recording test wasn't deleted", logFile.exists());
