@@ -3865,4 +3865,73 @@ public class PreliminaryReportListenerTest
         assertTrue(subEntry1.getActions().get(0).isSuccess());
         assertTrue(subEntry1.getActions().get(0).isHealed());
     }
+
+    @Test
+    @DisplayName("Verify full compound-step re-execution during online healing aligns trailing healed actions to correct sub-steps")
+    public void testGroupedCompoundStepFullReExecutionHealingAlignsTrailingHealedActionsToSubSteps(@TempDir final Path tempDir)
+    {
+        final PreliminaryReportListener listener = new PreliminaryReportListener(tempDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final PlaybookStep compositeStep = new PlaybookStep("Fill form and submit");
+        final PlaybookStep sub0 = new PlaybookStep("Enter email");
+        final PlaybookStep sub1 = new PlaybookStep("Click submit");
+        compositeStep.setSubSteps(List.of(sub0, sub1));
+
+        bus.dispatch(new StepStartedEvent(compositeStep, 0));
+
+        // Partial replay: sub-step 0 succeeds, sub-step 1 fails
+        final Action sub0Replay = new Action("FILL", "#email", List.of("a@b.com"), "Enter email", "");
+        sub0Replay.setSubStepIndex(0);
+        sub0Replay.setSubStepInstruction(sub0.getInstruction());
+        bus.dispatch(new ActionExecutedEvent(sub0Replay, sub0Replay, true, false));
+
+        final Action sub1Failed = new Action("CLICK", "#oldSubmit", List.of(), "Click submit", "");
+        sub1Failed.setSubStepIndex(1);
+        sub1Failed.setSubStepInstruction(sub1.getInstruction());
+        bus.dispatch(new ActionExecutedEvent(sub1Failed, sub1Failed, false, "Element not found", false));
+
+        // Online LLM healing re-executes BOTH sub-steps (2 healed actions with subStepIndex == null)
+        final Action healed0 = new Action("FILL", "#emailV2", List.of("a@b.com"), "Enter email", "Re-entered email");
+        healed0.setExpectedTarget("#email");
+        healed0.setHealed(true);
+        bus.dispatch(new ActionExecutedEvent(healed0, healed0, true, null, true));
+
+        final Action healed1 = new Action("CLICK", "#newSubmit", List.of(), "Click submit", "Healed submit");
+        healed1.setExpectedTarget("#oldSubmit");
+        healed1.setHealed(true);
+        bus.dispatch(new ActionExecutedEvent(healed1, healed1, true, null, true));
+
+        // endHookStep partitions the 2 healed actions onto pbStep and its sub-steps
+        final Action p0 = new Action("FILL", "#emailV2", List.of("a@b.com"), "Enter email", "Re-entered email");
+        p0.setSubStepIndex(0);
+        p0.setSubStepInstruction(sub0.getInstruction());
+        p0.setExpectedTarget("#email");
+        p0.setHealed(true);
+
+        final Action p1 = new Action("CLICK", "#newSubmit", List.of(), "Click submit", "Healed submit");
+        p1.setSubStepIndex(1);
+        p1.setSubStepInstruction(sub1.getInstruction());
+        p1.setExpectedTarget("#oldSubmit");
+        p1.setHealed(true);
+
+        sub0.setActions(List.of(p0));
+        sub0.setStatus(PlaybookStepStatus.HEALED);
+        sub1.setActions(List.of(p1));
+        sub1.setStatus(PlaybookStepStatus.HEALED);
+        compositeStep.setActions(List.of(p0, p1));
+        compositeStep.setStatus(PlaybookStepStatus.HEALED);
+
+        bus.dispatch(new StepFinishedEvent(compositeStep, PlaybookStepStatus.HEALED));
+        bus.dispatch(new SessionFinishedEvent(600L, true));
+
+        final TestExecutionReport.ReportStepEntry stepEntry = listener.getReport().getSteps().get(0);
+        final TestExecutionReport.ReportStepEntry subEntry1 = stepEntry.getSubSteps().get(1);
+        assertEquals("HEALED", subEntry1.getStatus());
+        assertEquals(1, subEntry1.getActions().size());
+        assertEquals("CLICK", subEntry1.getActions().get(0).getType(), "Sub-step 1 must receive healed1 (CLICK), not misaligned healed0 (FILL)");
+        assertEquals("#newSubmit", subEntry1.getActions().get(0).getResolvedTarget());
+        assertEquals("#oldSubmit", subEntry1.getActions().get(0).getExpectedTarget());
+    }
 }

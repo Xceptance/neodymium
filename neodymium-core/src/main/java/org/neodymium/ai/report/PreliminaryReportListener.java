@@ -576,42 +576,44 @@ public final class PreliminaryReportListener implements ExecutionListener
                                 targetStep.addAction(actionEntry);
                             }
                         }
-                        else
+                        else if (!targetStep.getActions().isEmpty())
                         {
-                            final int count = Math.min(targetStep.getActions().size(), pbStep.getActions().size());
-                            for (int a = 0; a < count; a++)
+                            final List<Action> pActions = pbStep.getActions();
+                            final List<TestExecutionReport.ReportActionEntry> rActions = targetStep.getActions();
+                            int offset = 0;
+                            if (rActions.size() > pActions.size())
                             {
-                                final TestExecutionReport.ReportActionEntry rAct = targetStep.getActions().get(a);
-                                final Action pbAct = pbStep.getActions().get(a);
-                                if (rAct.getSubStepIndex() == null && pbAct.getSubStepIndex() != null)
+                                final int candidateOffset = rActions.size() - pActions.size();
+                                boolean trailingUnassigned = true;
+                                for (int i = candidateOffset; i < rActions.size(); i++)
                                 {
-                                    rAct.setSubStepIndex(pbAct.getSubStepIndex());
+                                    final TestExecutionReport.ReportActionEntry tailEntry = rActions.get(i);
+                                    if (tailEntry != null && tailEntry.getSubStepIndex() != null)
+                                    {
+                                        trailingUnassigned = false;
+                                        break;
+                                    }
                                 }
-                                if (rAct.getSubStepInstruction() == null && pbAct.getSubStepInstruction() != null)
+                                if (trailingUnassigned)
                                 {
-                                    rAct.setSubStepInstruction(pbAct.getSubStepInstruction());
+                                    offset = candidateOffset;
                                 }
                             }
-                        }
-                    }
-
-                    if (pbStep.getActions() != null && !pbStep.getActions().isEmpty() && !targetStep.getActions().isEmpty())
-                    {
-                        final List<Action> pActions = pbStep.getActions();
-                        final List<TestExecutionReport.ReportActionEntry> rActions = targetStep.getActions();
-                        for (int i = 0; i < pActions.size() && i < rActions.size(); i++)
-                        {
-                            final Action pa = pActions.get(i);
-                            final TestExecutionReport.ReportActionEntry ra = rActions.get(i);
-                            if (ra != null && pa != null)
+                            for (int i = 0; i < pActions.size() && (offset + i) < rActions.size(); i++)
                             {
-                                if (pa.getSubStepIndex() != null)
+                                final Action pa = pActions.get(i);
+                                final TestExecutionReport.ReportActionEntry ra = rActions.get(offset + i);
+                                if (ra != null && pa != null)
                                 {
-                                    ra.setSubStepIndex(pa.getSubStepIndex());
-                                }
-                                if (pa.getSubStepInstruction() != null && !pa.getSubStepInstruction().isBlank())
-                                {
-                                    ra.setSubStepInstruction(pa.getSubStepInstruction());
+                                    if (ra.getSubStepIndex() == null && pa.getSubStepIndex() != null)
+                                    {
+                                        ra.setSubStepIndex(pa.getSubStepIndex());
+                                    }
+                                    if ((ra.getSubStepInstruction() == null || ra.getSubStepInstruction().isBlank())
+                                        && pa.getSubStepInstruction() != null && !pa.getSubStepInstruction().isBlank())
+                                    {
+                                        ra.setSubStepInstruction(pa.getSubStepInstruction());
+                                    }
                                 }
                             }
                         }
