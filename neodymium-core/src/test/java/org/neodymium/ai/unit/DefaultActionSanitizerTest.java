@@ -343,4 +343,42 @@ public class DefaultActionSanitizerTest
         Assertions.assertEquals("iframe[name='${tenantId}'] >>> #pact2", sanitized.getFrame(),
             "Frame path should be preserved and parameterized with dynamic session variables");
     }
+
+    @Test
+    public void testSanitizeSensitiveOnlyMasksSecretsWhileKeepingResolvedNonSensitiveValuesAndMetadata()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("searchPhrase", "Neodymium", false);
+        sessionData.putDynamic("user.password", "secretPassword123", true);
+
+        final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+
+        final Action action = new Action(
+            "TYPE",
+            "#pwd",
+            List.of("Neodymium and secretPassword123"),
+            "Type Neodymium and secretPassword123",
+            "Reasoning with secretPassword123",
+            true,
+            true
+        );
+        action.setHealed(true);
+        action.setExpectedTarget("#old-pwd");
+        action.setSubStepIndex(2);
+        action.setSubStepInstruction("Enter Neodymium and secretPassword123");
+        action.setFrame("iframe[name='Neodymium'] >>> #secretPassword123");
+
+        final Action scrubbed = sanitizer.sanitizeSensitiveOnly(action, sessionData);
+
+        Assertions.assertEquals("Neodymium and ${user.password}", scrubbed.getValues().get(0));
+        Assertions.assertEquals("Type Neodymium and ${user.password}", scrubbed.getDescription());
+        Assertions.assertEquals("Reasoning with ${user.password}", scrubbed.getReasoning());
+        Assertions.assertEquals("Enter Neodymium and ${user.password}", scrubbed.getSubStepInstruction());
+        Assertions.assertEquals("iframe[name='Neodymium'] >>> #${user.password}", scrubbed.getFrame());
+        Assertions.assertTrue(scrubbed.isRegex(), "Regex flag must be preserved");
+        Assertions.assertTrue(scrubbed.isNegated(), "Negated flag must be preserved");
+        Assertions.assertTrue(scrubbed.isHealed(), "Healed flag must be preserved");
+        Assertions.assertEquals("#old-pwd", scrubbed.getExpectedTarget(), "ExpectedTarget must be preserved");
+        Assertions.assertEquals(2, scrubbed.getSubStepIndex(), "SubStepIndex must be preserved");
+    }
 }

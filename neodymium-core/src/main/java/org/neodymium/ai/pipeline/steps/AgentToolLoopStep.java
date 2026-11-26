@@ -1067,7 +1067,7 @@ public final class AgentToolLoopStep implements PipelineStep
                         executedCalls.add(callToRecord);
                         if (!"complete_step".equals(effectiveCall.toolName()) && !"screenshot".equals(effectiveCall.toolName()) && !"browser_take_screenshot".equals(effectiveCall.toolName()))
                         {
-                            dispatchActionExecutedEvent(context, callToRecord, null, thought, actionIdx);
+                            dispatchActionExecutedEvent(context, callToRecord, thought, actionIdx);
                         }
                     }
                     else if (executor != null)
@@ -1103,7 +1103,7 @@ public final class AgentToolLoopStep implements PipelineStep
                         }
                         final int actionIdx = countNonControlCalls(executedCalls);
                         executedCalls.add(effectiveCall);
-                        dispatchActionExecutedEvent(context, effectiveCall, executableCall, thought, actionIdx);
+                        dispatchActionExecutedEvent(context, effectiveCall, thought, actionIdx);
                     }
                     else
                     {
@@ -1691,7 +1691,7 @@ public final class AgentToolLoopStep implements PipelineStep
                         final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
                         if (session != null && session.getEventBus() != null)
                         {
-                            final Action resolvedAction = buildResolvedAction(callToRecord, null, canonicalAction, context, healedStep, existingStepActions, actionIdx);
+                            final Action resolvedAction = buildResolvedAction(callToRecord, canonicalAction, context, healedStep, existingStepActions, actionIdx);
                             session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, resolvedAction, true, null, healedStep));
                         }
                     }
@@ -2515,16 +2515,14 @@ public final class AgentToolLoopStep implements PipelineStep
      * Maps, sanitizes, marks healing metadata, and dispatches an {@link ActionExecutedEvent}
      * for single-shot tool or executor calls.
      *
-     * @param sourceCall the recorded/canonical tool call
-     * @param preResolvedCall optional pre-resolved tool call with session variables expanded
-     * @param thought optional model reasoning text
      * @param context the current execution context
+     * @param sourceCall the recorded/canonical tool call
+     * @param thought optional model reasoning text
      * @param actionIndex 0-based index of the action within the step
      */
     private void dispatchActionExecutedEvent(
             final ExecutionContext context,
             final ToolCall sourceCall,
-            final ToolCall preResolvedCall,
             final String thought,
             final int actionIndex)
     {
@@ -2537,7 +2535,7 @@ public final class AgentToolLoopStep implements PipelineStep
         final List<Action> existingActions = stepObj instanceof final PlaybookStep ps ? ps.getActions() : null;
         final boolean healedStep = isHealedStep(context);
         final Action canonicalAction = buildCanonicalAction(sourceCall, thought, context, healedStep, existingActions, actionIndex);
-        final Action resolvedAction = buildResolvedAction(sourceCall, preResolvedCall, canonicalAction, context, healedStep, existingActions, actionIndex);
+        final Action resolvedAction = buildResolvedAction(sourceCall, canonicalAction, context, healedStep, existingActions, actionIndex);
         session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, resolvedAction, true, null, healedStep));
     }
 
@@ -2565,12 +2563,11 @@ public final class AgentToolLoopStep implements PipelineStep
     }
 
     /**
-     * Builds the runtime-resolved {@link Action} (preserving expanded variables alongside healing metadata)
-     * for {@link ActionExecutedEvent} telemetry.
+     * Builds the runtime-resolved {@link Action} for {@link ActionExecutedEvent} telemetry,
+     * expanding non-sensitive variables while keeping sensitive placeholders and literals masked.
      */
     private Action buildResolvedAction(
             final ToolCall sourceCall,
-            final ToolCall preResolvedCall,
             final Action canonicalAction,
             final ExecutionContext context,
             final boolean healedStep,
@@ -2579,15 +2576,11 @@ public final class AgentToolLoopStep implements PipelineStep
     {
         final SessionData sessionData = context.getSessionData();
         final ToolCall resolvedCall;
-        if (preResolvedCall != null)
-        {
-            resolvedCall = preResolvedCall;
-        }
-        else if (sessionData != null)
+        if (sessionData != null)
         {
             try
             {
-                resolvedCall = ToolCallVariableResolver.resolveVariables(sourceCall, sessionData);
+                resolvedCall = ToolCallVariableResolver.resolveNonSensitiveVariables(sourceCall, sessionData);
             }
             catch (final UnresolvableVariableException e)
             {
@@ -2606,6 +2599,11 @@ public final class AgentToolLoopStep implements PipelineStep
             && !canonicalAction.getReasoning().isBlank())
         {
             resolvedAction = resolvedAction.withReasoning(canonicalAction.getReasoning());
+        }
+        if (sessionData != null)
+        {
+            final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+            resolvedAction = sanitizer.sanitizeSensitiveOnly(resolvedAction, sessionData);
         }
         applyHealedMetadata(resolvedAction, healedStep, context, existingActions, actionIndex);
         return resolvedAction;

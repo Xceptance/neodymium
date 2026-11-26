@@ -143,69 +143,26 @@ public final class SessionData
         }
 
         // 2. Check Neodymium test data properties (runtime code overrides via Neodymium.getData().put)
-        try
+        final DataEntry staticEntry = findStaticEntry(key);
+        final boolean staticSensitive = staticEntry != null && staticEntry.sensitive();
+        final String neoProp = lookupNeodymiumDataOverride(key);
+        if (neoProp != null)
         {
-            if (org.neodymium.util.Neodymium.getData() != null && org.neodymium.util.Neodymium.getData().exists(key))
+            if (staticEntry != null && !(staticEntry.value() instanceof String)
+                && neoProp.equals(String.valueOf(staticEntry.value())))
             {
-                final String neoProp = org.neodymium.util.Neodymium.getData().asString(key);
-                if (neoProp != null)
-                {
-                    final DataEntry staticEntry = this.staticData.get(key);
-                    if (staticEntry != null && !(staticEntry.value() instanceof String)
-                        && neoProp.equals(String.valueOf(staticEntry.value())))
-                    {
-                        // Fall through to rich object in staticData below
-                    }
-                    else
-                    {
-                        return new DataEntry(neoProp, false);
-                    }
-                }
+                // Fall through to rich object in staticData below
             }
-        }
-        catch (final Throwable ignored)
-        {
-        }
-        try
-        {
-            if (com.xceptance.neodymium.util.Neodymium.getData() != null && com.xceptance.neodymium.util.Neodymium.getData().exists(key))
+            else
             {
-                final String neoProp = com.xceptance.neodymium.util.Neodymium.getData().asString(key);
-                if (neoProp != null)
-                {
-                    final DataEntry staticEntry = this.staticData.get(key);
-                    if (staticEntry != null && !(staticEntry.value() instanceof String)
-                        && neoProp.equals(String.valueOf(staticEntry.value())))
-                    {
-                        // Fall through to rich object in staticData below
-                    }
-                    else
-                    {
-                        return new DataEntry(neoProp, false);
-                    }
-                }
+                return new DataEntry(neoProp, staticSensitive);
             }
-        }
-        catch (final Throwable ignored)
-        {
         }
 
         // 3. Fallback to static data (from external data file)
-        if (this.staticData.containsKey(key))
+        if (staticEntry != null)
         {
-            return this.staticData.get(key);
-        }
-        final DataEntry staticNested = resolveNestedPath(this.staticData, key);
-        if (staticNested != null)
-        {
-            return staticNested;
-        }
-        for (final Map.Entry<String, DataEntry> entry : this.staticData.entrySet())
-        {
-            if (entry.getKey().equalsIgnoreCase(key))
-            {
-                return entry.getValue();
-            }
+            return staticEntry;
         }
 
         // 4. Fallback to System properties
@@ -353,24 +310,102 @@ public final class SessionData
     public Map<String, String> getRawSensitiveData()
     {
         final Map<String, String> sensitiveMap = new HashMap<>();
-        
+
         for (final Map.Entry<String, DataEntry> entry : this.staticData.entrySet())
         {
-            if (entry.getValue().sensitive() && entry.getValue().value() != null)
+            if (entry.getValue() != null && entry.getValue().sensitive() && entry.getValue().value() != null)
             {
-                sensitiveMap.put(entry.getKey(), String.valueOf(entry.getValue().value()));
+                flattenObject(entry.getKey(), entry.getValue().value(), sensitiveMap);
             }
         }
-        
+
+        // Reflect runtime Neodymium.getData() overrides for already-flattened sensitive static keys
+        for (final Map.Entry<String, String> entry : sensitiveMap.entrySet())
+        {
+            final String neoOverride = lookupNeodymiumDataOverride(entry.getKey());
+            if (neoOverride != null)
+            {
+                entry.setValue(neoOverride);
+            }
+        }
+
         for (final Map.Entry<String, DataEntry> entry : this.dynamicData.entrySet())
         {
-            if (entry.getValue().sensitive() && entry.getValue().value() != null)
+            if (entry.getValue() != null && entry.getValue().sensitive() && entry.getValue().value() != null)
             {
-                sensitiveMap.put(entry.getKey(), String.valueOf(entry.getValue().value()));
+                flattenObject(entry.getKey(), entry.getValue().value(), sensitiveMap);
             }
         }
-        
+
         return sensitiveMap;
+    }
+
+    /**
+     * Resolves a key against {@link #staticData} using exact, nested dot-path, and case-insensitive matching.
+     *
+     * @param key the variable key name
+     * @return the matching static {@link DataEntry}, or null if absent
+     */
+    private DataEntry findStaticEntry(final String key)
+    {
+        if (this.staticData.containsKey(key))
+        {
+            return this.staticData.get(key);
+        }
+        final DataEntry staticNested = resolveNestedPath(this.staticData, key);
+        if (staticNested != null)
+        {
+            return staticNested;
+        }
+        for (final Map.Entry<String, DataEntry> entry : this.staticData.entrySet())
+        {
+            if (entry.getKey().equalsIgnoreCase(key))
+            {
+                return entry.getValue();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Looks up a runtime test-data override from either the {@code org.neodymium} or legacy
+     * {@code com.xceptance.neodymium} thread-local {@code Neodymium.getData()} store.
+     *
+     * @param key the variable key name
+     * @return the override string value, or null if not present
+     */
+    private static String lookupNeodymiumDataOverride(final String key)
+    {
+        try
+        {
+            if (Neodymium.getData() != null && Neodymium.getData().exists(key))
+            {
+                final String neoProp = Neodymium.getData().asString(key);
+                if (neoProp != null)
+                {
+                    return neoProp;
+                }
+            }
+        }
+        catch (final Throwable ignored)
+        {
+        }
+        try
+        {
+            if (com.xceptance.neodymium.util.Neodymium.getData() != null
+                && com.xceptance.neodymium.util.Neodymium.getData().exists(key))
+            {
+                final String neoProp = com.xceptance.neodymium.util.Neodymium.getData().asString(key);
+                if (neoProp != null)
+                {
+                    return neoProp;
+                }
+            }
+        }
+        catch (final Throwable ignored)
+        {
+        }
+        return null;
     }
 
     private static final Pattern VARIABLE_PATTERN = Pattern.compile("\\$\\{([^}]+)\\}");
@@ -386,7 +421,7 @@ public final class SessionData
      */
     public String resolveVariables(final String template)
     {
-        return resolveVariables(template, 0, true);
+        return resolveVariables(template, 0, true, false);
     }
 
     /**
@@ -399,10 +434,36 @@ public final class SessionData
      */
     public String resolveAvailableVariables(final String template)
     {
-        return resolveVariables(template, 0, false);
+        return resolveVariables(template, 0, false, false);
     }
 
-    private String resolveVariables(final String template, final int depth, final boolean strict)
+    /**
+     * Resolves non-sensitive variable placeholders in the format "${variableName}" in a template string
+     * while leaving sensitive placeholders unexpanded. Supports nested resolution.
+     * Throws {@link UnresolvableVariableException} if any placeholder is missing or null.
+     *
+     * @param template the template string containing placeholders
+     * @return the resolved string with non-sensitive placeholders replaced and sensitive placeholders intact
+     * @throws UnresolvableVariableException if any placeholder cannot be resolved
+     */
+    public String resolveNonSensitiveVariables(final String template)
+    {
+        return resolveVariables(template, 0, true, true);
+    }
+
+    /**
+     * Leniently resolves currently available non-sensitive variable placeholders in the format "${variableName}"
+     * in a template string while leaving sensitive and unresolvable placeholders intact.
+     *
+     * @param template the template string containing placeholders
+     * @return the partially resolved string with available non-sensitive placeholders replaced
+     */
+    public String resolveAvailableNonSensitiveVariables(final String template)
+    {
+        return resolveVariables(template, 0, false, true);
+    }
+
+    private String resolveVariables(final String template, final int depth, final boolean strict, final boolean skipSensitive)
     {
         if (depth > 10)
         {
@@ -426,7 +487,8 @@ public final class SessionData
         {
             sb.append(template, lastEnd, matcher.start());
             final String placeholderKey = matcher.group(1);
-            final Object value = this.getRaw(placeholderKey);
+            final DataEntry entry = this.getEntry(placeholderKey);
+            final Object value = entry != null ? entry.value() : null;
             if (value == null)
             {
                 if (strict)
@@ -437,6 +499,11 @@ public final class SessionData
                 {
                     sb.append(matcher.group(0));
                 }
+            }
+            else if (skipSensitive && entry.sensitive())
+            {
+                // Preserve sensitive placeholders verbatim and avoid setting replaced=true so mixed templates terminate.
+                sb.append(matcher.group(0));
             }
             else
             {
@@ -450,7 +517,7 @@ public final class SessionData
         final String result = sb.toString();
         if (replaced && result.contains("${"))
         {
-            return resolveVariables(result, depth + 1, strict);
+            return resolveVariables(result, depth + 1, strict, skipSensitive);
         }
         return result;
     }

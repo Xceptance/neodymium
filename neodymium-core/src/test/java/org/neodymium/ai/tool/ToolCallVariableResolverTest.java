@@ -346,4 +346,37 @@ public class ToolCallVariableResolverTest
         final ToolCall resolved = ToolCallVariableResolver.resolveVariables(call, sessionData);
         Assertions.assertEquals("var $btn = document.querySelector('button'); return $btn.textContent + ' ' + 'secretToken';", resolved.arguments().path("script").asText());
     }
+
+    @Test
+    public void testResolveNonSensitiveVariablesExpandsPublicAndPreservesSensitivePlaceholders()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("user.name", "alice", false);
+        sessionData.putDynamic("password", "SecretP@ss123!", true);
+
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("username", "${user.name}");
+        args.put("secret", "$password");
+        args.put("composite", "${user.name}:${password}");
+
+        final ObjectNode nested = args.putObject("nested");
+        nested.put("label", "Hello ${user.name}");
+        nested.put("token", "${password}");
+
+        final ArrayNode items = args.putArray("items");
+        items.add("${user.name}");
+        items.add("${password}");
+
+        final ToolCall call = new ToolCall("callNonSens", "fill", args);
+        final ToolCall resolved = ToolCallVariableResolver.resolveNonSensitiveVariables(call, sessionData);
+
+        Assertions.assertNotSame(call, resolved);
+        Assertions.assertEquals("alice", resolved.arguments().path("username").asText());
+        Assertions.assertEquals("${password}", resolved.arguments().path("secret").asText());
+        Assertions.assertEquals("alice:${password}", resolved.arguments().path("composite").asText());
+        Assertions.assertEquals("Hello alice", resolved.arguments().path("nested").path("label").asText());
+        Assertions.assertEquals("${password}", resolved.arguments().path("nested").path("token").asText());
+        Assertions.assertEquals("alice", resolved.arguments().path("items").get(0).asText());
+        Assertions.assertEquals("${password}", resolved.arguments().path("items").get(1).asText());
+    }
 }
