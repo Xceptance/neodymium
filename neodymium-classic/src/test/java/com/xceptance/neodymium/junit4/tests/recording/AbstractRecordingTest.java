@@ -1,0 +1,102 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2026 Xceptance
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+package com.xceptance.neodymium.junit4.tests.recording;
+
+import java.io.File;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+import org.aeonbits.owner.ConfigFactory;
+import org.junit.AfterClass;
+import org.junit.Assert;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+
+import com.codeborne.selenide.Selenide;
+import com.xceptance.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.common.recording.FilmTestExecution;
+import com.xceptance.neodymium.common.recording.config.RecordingConfigurations;
+import com.xceptance.neodymium.junit4.NeodymiumRunner;
+import com.xceptance.neodymium.junit4.tests.NeodymiumTest;
+
+@Browser("Chrome_headless")
+@RunWith(NeodymiumRunner.class)
+public abstract class AbstractRecordingTest extends NeodymiumTest
+{
+    protected static final Map<Thread, String> uuid = new ConcurrentHashMap<>();
+
+    protected static final Map<Thread, String> logFilePath = new ConcurrentHashMap<>();
+
+    public static final Map<Thread, Class<? extends RecordingConfigurations>> configurationsClass = new ConcurrentHashMap<>();
+
+    private final boolean isGif;
+
+    protected AbstractRecordingTest(final boolean isGif)
+    {
+        this.isGif = isGif;
+    }
+
+    public static void beforeClass(final String format, final boolean filmAutomatically)
+    {
+        FilmTestExecution.clearThreadContexts();
+        final Map<String, String> properties1 = new HashMap<>();
+        properties1.put(format + ".filmAutomatically", Boolean.toString(filmAutomatically));
+        properties1.put(format + ".enableFilming", "true");
+        properties1.put(format + ".deleteRecordingsAfterAddingToAllureReport", "false");
+        if ("video".equals(format))
+        {
+            final String uniqueLogFile = "target/ffmpeg_output_msg_" + UUID.randomUUID() + ".txt";
+            logFilePath.put(Thread.currentThread(), uniqueLogFile);
+            properties1.put("video.ffmpegLogFile", uniqueLogFile);
+        }
+        final String fileLocation = "config/temp-" + format + "-" + filmAutomatically + UUID.randomUUID() + ".properties";
+        final File tempConfigFile1 = new File("./" + fileLocation);
+        writeMapToPropertiesFile(properties1, tempConfigFile1);
+        ConfigFactory.setProperty(FilmTestExecution.TEMPORARY_CONFIG_FILE_PROPERTY_NAME, "file:" + fileLocation);
+        tempFiles.add(tempConfigFile1);
+    }
+
+    @Test
+    public void test()
+    {
+        final List<String> uuids = isGif ? FilmTestExecution.getNamesOfAllCurrentGifRecordings() : FilmTestExecution.getNamesOfAllCurrentVideoRecordings();
+        Assert.assertEquals(1, uuids.size());
+        uuid.put(Thread.currentThread(), uuids.get(0));
+        Selenide.open("https://www.xceptance.com/en/");
+        Selenide.sleep(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).oneImagePerMilliseconds());
+    }
+
+    @AfterClass
+    public static void assertRecordingFileExists()
+    {
+        final File recordingFile = new File(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).tempFolderToStoreRecording() + uuid.get(Thread.currentThread()) + "."
+            + FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).format());
+        Assert.assertTrue("the recording file doesn't exist", recordingFile.exists());
+        recordingFile.delete();
+        Assert.assertFalse("the recording file wasn't deleted", recordingFile.exists());
+    }
+}

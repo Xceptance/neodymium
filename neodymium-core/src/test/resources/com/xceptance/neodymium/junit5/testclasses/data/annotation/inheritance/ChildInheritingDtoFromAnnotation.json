@@ -1,0 +1,12 @@
+[
+  {
+    "testId": "1",
+    "email": "john1@varmail.de",
+    "password": "neodymium1"
+  },
+  {
+    "testId": "2",
+    "email": "john2@varmail.de",
+    "password": "neodymium2"
+  }
+]

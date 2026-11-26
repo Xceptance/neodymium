@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Virtualized List &amp; Infinite Feeds - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+    <style>
+        .virtual-scroll-viewport {
+            height: 380px;
+            overflow-y: auto;
+            position: relative;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.25);
+            margin: 1.5rem 0;
+            box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.4);
+        }
+        .virtual-spacer {
+            width: 100%;
+            position: relative;
+            pointer-events: none;
+        }
+        .virtual-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            will-change: transform;
+        }
+        .virtual-item {
+            height: 60px;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1.25rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            transition: background 0.15s ease;
+        }
+        .virtual-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+        }
+        .item-details {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .item-index {
+            font-size: 0.8rem;
+            color: var(--text-secondary, #a0aec0);
+            min-width: 2rem;
+            font-family: monospace;
+        }
+        .item-title {
+            font-weight: 600;
+            color: #fff;
+            font-size: 0.95rem;
+        }
+        .item-meta {
+            color: var(--text-secondary, #a0aec0);
+            font-size: 0.85rem;
+        }
+        .selection-panel {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-top: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .badge-bar {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+    </style>
+</head>
+<body class="aura-theme">
+    <header class="sandbox-header">
+        <div class="header-container">
+            <a href="index.html" class="back-link">&larr; Back to Challenges</a>
+            <h1>Dynamic Virtualized List &amp; Infinite Feeds</h1>
+            <p class="subtitle">Challenge 14: DOM nodes for offscreen items are unmounted dynamically. Requires iterative scrolling to discover and interact with items.</p>
+        </div>
+    </header>
+
+    <main class="sandbox-main">
+        <section class="challenge-section">
+            <h2>Product Catalog (Virtualized)</h2>
+            <p style="color: var(--text-secondary, #a0aec0); margin-bottom: 1rem;">
+                Only items currently visible in the scrollable viewport exist in the DOM. Offscreen items do not exist in the DOM tree until scrolled into view.
+            </p>
+
+            <div class="badge-bar">
+                <span id="total-items-badge" class="badge badge-blue">Total: 100 Products</span>
+                <span id="mounted-count" class="badge badge-purple">Mounted: 0 in DOM</span>
+                <span id="mounted-range" class="badge badge-green">Range: 0 - 0</span>
+            </div>
+
+            <!-- Virtual scrollable container -->
+            <div id="virtual-list-container" class="virtual-scroll-viewport">
+                <div id="virtual-spacer" class="virtual-spacer"></div>
+                <div id="virtual-content" class="virtual-content"></div>
+            </div>
+
+            <!-- Selection and Order Confirmation panel -->
+            <div class="selection-panel">
+                <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem; color: #fff;">Selected Product</h3>
+                <div id="selected-product-status" style="margin-bottom: 1rem; font-size: 1rem; color: var(--text-secondary, #a0aec0);">
+                    No product selected
+                </div>
+                <button id="confirm-selection-btn" class="btn btn-primary" disabled onclick="confirmSelection()">
+                    Confirm Selection
+                </button>
+                <div id="confirmation-result" style="margin-top: 1rem; font-size: 1.05rem; font-weight: 600; color: #00ffcc;"></div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const TOTAL_ITEMS = 100;
+        const ITEM_HEIGHT = 60;
+        const VISIBLE_COUNT = 7;
+
+        // Generate synthetic product catalog
+        const PRODUCT_NAMES = [
+            "Aura Glow Stick", "Neural Processor", "Cybernetic Implant", "Holographic Emitter",
+            "Quantum Sensor", "Plasma Conduit", "Photon Lens", "Subatomic Weaver",
+            "Flux Capacitor", "Nano Shield", "Gravity Disruptor", "Bio-Metric Key",
+            "Thermal Dampener", "Synapse Link", "Vortex Regulator", "Ion Thruster"
+        ];
+
+        const products = [];
+        for (let i = 1; i <= TOTAL_ITEMS; i++) {
+            let name;
+            if (i === 42) {
+                name = "Quantum Sensor";
+            } else if (i === 1) {
+                name = "Aura Glow Stick";
+            } else if (i === 100) {
+                name = "Cybernetic Neural Link";
+            } else {
+                name = PRODUCT_NAMES[(i - 1) % PRODUCT_NAMES.length];
+            }
+            const price = (19.99 + (i * 1.5)).toFixed(2);
+            products.push({
+                id: i,
+                name: name,
+                title: "Product #" + i + ": " + name,
+                price: price,
+                sku: "SKU-AURA-" + String(i).padStart(3, '0')
+            });
+        }
+
+        const container = document.getElementById('virtual-list-container');
+        const spacer = document.getElementById('virtual-spacer');
+        const content = document.getElementById('virtual-content');
+        const mountedCount = document.getElementById('mounted-count');
+        const mountedRange = document.getElementById('mounted-range');
+        const selectedStatus = document.getElementById('selected-product-status');
+        const confirmBtn = document.getElementById('confirm-selection-btn');
+        const confirmationResult = document.getElementById('confirmation-result');
+
+        spacer.style.height = (TOTAL_ITEMS * ITEM_HEIGHT) + 'px';
+
+        let selectedProduct = null;
+
+        function renderVirtualList() {
+            const scrollTop = container.scrollTop;
+            const startIndex = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - 1);
+            const endIndex = Math.min(TOTAL_ITEMS - 1, startIndex + VISIBLE_COUNT + 2);
+
+            content.innerHTML = '';
+            content.style.transform = 'translateY(' + (startIndex * ITEM_HEIGHT) + 'px)';
+
+            for (let i = startIndex; i <= endIndex; i++) {
+                const p = products[i];
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'virtual-item';
+                itemDiv.id = 'item-' + p.id;
+                itemDiv.setAttribute('data-id', p.id);
+
+                itemDiv.innerHTML = `
+                    <div class="item-details">
+                        <span class="item-index">#${p.id}</span>
+                        <div>
+                            <div class="item-title">${p.title}</div>
+                            <div class="item-meta">$${p.price} &bull; ${p.sku}</div>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary select-product-btn" id="select-product-${p.id}" data-id="${p.id}" onclick="selectProduct(${p.id})">
+                        Select
+                    </button>
+                `;
+                content.appendChild(itemDiv);
+            }
+
+            const count = endIndex - startIndex + 1;
+            mountedCount.textContent = 'Mounted: ' + count + ' in DOM';
+            mountedRange.textContent = 'Range: ' + (startIndex + 1) + ' - ' + (endIndex + 1);
+        }
+
+        function selectProduct(id) {
+            const product = products.find(p => p.id === id);
+            if (!product) return;
+            selectedProduct = product;
+            selectedStatus.textContent = 'Selected: ' + product.title;
+            confirmBtn.disabled = false;
+            confirmationResult.textContent = '';
+        }
+
+        function confirmSelection() {
+            if (!selectedProduct) return;
+            confirmationResult.textContent = 'Order confirmed for ' + selectedProduct.title + '!';
+        }
+
+        container.addEventListener('scroll', renderVirtualList);
+        // Initial render
+        renderVirtualList();
+    </script>
+</body>
+</html>

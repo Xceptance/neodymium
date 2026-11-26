@@ -1,0 +1,32 @@
+<div id="register-wrapper" class="mx-auto my-12 max-w-md w-full p-8 bg-sand-50 rounded-2xl border border-sand-200 shadow-xl">
+    <h2 class="font-serif text-3xl font-bold text-espresso text-center mb-6">${lang_register}</h2>
+    <div class="mb-4 text-center text-xs font-bold text-danger">${auth_error}</div>
+
+    <form hx-put="api/auth/register" hx-target="#register-wrapper" hx-swap="outerHTML" class="space-y-4">
+        <div>
+            <label for="email" class="block text-xs font-bold uppercase tracking-wider mb-2 text-ink">${lang_email}</label>
+            <input type="email" id="email" name="email" required value="${input_email}" placeholder="user@example.com" class="w-full px-4 py-3 rounded-lg border border-sand-200 bg-white text-xs outline-none focus:border-terracotta-500">
+            <div class="mt-1 text-xs font-semibold text-danger">${err_email}</div>
+        </div>
+
+        <div>
+            <label for="password" class="block text-xs font-bold uppercase tracking-wider mb-2 text-ink">${lang_password}</label>
+            <input type="password" id="password" name="password" required minlength="6" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" class="w-full px-4 py-3 rounded-lg border border-sand-200 bg-white text-xs outline-none focus:border-terracotta-500">
+            <div class="mt-1 text-xs font-semibold text-danger">${err_password}</div>
+        </div>
+
+        <div>
+            <label for="confirmPassword" class="block text-xs font-bold uppercase tracking-wider mb-2 text-ink">Confirm Password</label>
+            <input type="password" id="confirmPassword" name="confirmPassword" required minlength="6" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" class="w-full px-4 py-3 rounded-lg border border-sand-200 bg-white text-xs outline-none focus:border-terracotta-500">
+            <div class="mt-1 text-xs font-semibold text-danger">${err_confirmPassword}</div>
+        </div>
+
+        <button type="submit" class="w-full py-3.5 bg-terracotta-500 hover:bg-terracotta-600 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-md transition-colors">
+            ${lang_register}
+        </button>
+
+        <p class="text-center text-xs text-muted pt-2">
+            Already have an account? <a href="login.html" class="font-bold text-terracotta-500 hover:underline">${lang_login}</a>
+        </p>
+    </form>
+</div>

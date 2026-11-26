@@ -1,0 +1,36 @@
+# AI-generated: Gemini 3.6 Flash
+# @author AI-generated: Gemini 3.6 Flash
+# @author Xceptance GmbH 2026
+
+steps: |
+  Ouvrir ${verla.url}/verla-${quality}/index.html
+  Ouvrir le sélecteur de région.
+  Cliquer sur Canada (FR).
+  Vérifier que le drapeau du Canada est affiché.
+
+  Localiser la première carte produit et cliquer sur 'Add to Cart'
+  Lorsque cette chaîne '${quality}' n'est pas égale à 'bad', cliquer sur le bouton de taille 'L'
+  La quantité dans le mini-panier est maintenant 1.
+  Aller au panier depuis le mini-panier.
+  Cliquer sur 'Commander'
+
+  Le titre indique maintenant 'Paiement'
+  Il y a des formulaires de saisie de données sur la gauche et un bloc récapitulatif de commande sur la droite (visual).
+  Sélectionner 'Canada (FR)' comme pays.
+  Saisir 'Jean' comme prénom, 'Dupont' comme nom et l'adresse e-mail 'foo@varmail.net'.
+  Saisir '100 Rue Saint-Denis' comme rue, 'Montréal' comme ville, 'QC' comme province et 'H2X 3K4' comme code postal.
+  Numéro de carte '4111 1111 1111 1111', date d'expiration '12/29' et CVV '111'.
+  Cliquer sur 'Acheter'.
+  Attendre que le texte "Merci pour votre achat !" apparaisse.
+  Un numéro de commande au format 'V-[0-9]+-CA_FR' est affiché, le montant total est en CAD $, le code postal est 'H2X 3K4' et le texte "Merci pour votre achat !" est affiché.
+  Il y a une coche verte au centre de l'écran (visual: full).
+
+data:
+  - testId: "perfect"
+    quality: "perfect"
+    email: "user-perfect@example.com"
+    guestEmail: "guest-perfect@example.com"
+  - testId: "normal"
+    quality: "normal"
+    email: "user-normal@example.com"
+    guestEmail: "guest-normal@example.com"

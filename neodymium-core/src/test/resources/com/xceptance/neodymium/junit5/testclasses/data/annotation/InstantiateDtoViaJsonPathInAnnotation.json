@@ -1,0 +1,48 @@
+[
+  {
+    "testId": "1",
+    "user": {
+      "email": "john1@varmail.de",
+      "password": "neodymium1",
+      "contacts": {
+        "friends": [
+          {
+            "email": "irrelevant1@varmail.de",
+            "password": "irrelevant1"
+          },
+          {
+            "email": "irrelevant10@varmail.de",
+            "password": "irrelevant10"
+          },
+          {
+            "email": "friend.of.john1@varmail.de",
+            "password": "neodymium_friend_of_john1"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "testId": "2",
+    "user": {
+      "email": "john2@varmail.de",
+      "password": "neodymium2",
+      "contacts": {
+        "friends": [
+          {
+            "email": "irrelevant2@varmail.de",
+            "password": "irrelevant2"
+          },
+          {
+            "email": "irrelevant20@varmail.de",
+            "password": "irrelevant20"
+          },
+          {
+            "email": "friend.of.john2@varmail.de",
+            "password": "neodymium_friend_of_john2"
+          }
+        ]
+      }
+    }
+  }
+]

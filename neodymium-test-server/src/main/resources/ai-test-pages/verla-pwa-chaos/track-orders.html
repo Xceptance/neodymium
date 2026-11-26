@@ -1,0 +1,23 @@
+<div class="auth-card" style="max-width: 440px; margin: 40px auto; padding: 32px; border: 1px solid var(--color-border); border-radius: 6px; background: #FAF9F6;">
+    <h2 style="font-family: var(--font-family-serif); font-size: 26px; font-weight: 700; text-align: center; margin-bottom: 20px; color: #005699;">${lang_trackOrders}</h2>
+
+    <!-- HTMX order lookup form -->
+    <form hx-post="api/order/lookup" hx-target="#order-lookup-result" hx-swap="innerHTML">
+        <div style="margin-bottom: 16px;">
+            <label for="orderNumber" style="display:block; font-size:12px; font-weight:700; text-transform:uppercase; margin-bottom:6px;">${lang_orderNumber}</label>
+            <input type="text" id="orderNumber" name="orderNumber" placeholder="V-102931-US" style="width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:4px; font-size:14px; background:#fff;" required>
+        </div>
+
+        <div style="margin-bottom: 24px;">
+            <label for="zipCode" style="display:block; font-size:12px; font-weight:700; text-transform:uppercase; margin-bottom:6px;">${lang_zipCode}</label>
+            <input type="text" id="zipCode" name="zipCode" placeholder="43219" style="width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:4px; font-size:14px; background:#fff;" required>
+        </div>
+
+        <button type="submit" class="btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-size: 13px; margin-bottom: 16px; background: #005699;">
+            ${lang_lookup}
+        </button>
+    </form>
+
+    <!-- Result container -->
+    <div id="order-lookup-result" style="margin-top: 20px;"></div>
+</div>

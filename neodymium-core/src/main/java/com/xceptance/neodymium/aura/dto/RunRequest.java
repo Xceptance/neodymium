@@ -1,0 +1,95 @@
+/*
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package com.xceptance.neodymium.aura.dto;
+
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Data transfer object representing a request to run a selection of tests/datasets.
+ *
+ * @author AI-generated: Gemini 3.8 Flash (High)
+ * @author Xceptance GmbH 2026
+ */
+public final class RunRequest
+{
+    public List<DatasetSelection> datasets;
+    public boolean headless;
+    public boolean interactive;
+    public boolean allure;
+    public boolean video;
+    public boolean videoOnlyOnFailure = true;
+    public String executionMode = "LLM_RECORDING";
+    public List<String> globalBrowserProfiles;
+    public String targetRunId;
+    public String batchName;
+    public String environment;
+    public Map<String, List<String>> tags;
+
+    public RunRequest()
+    {
+    }
+
+    public RunRequest(final List<DatasetSelection> datasets, final boolean headless, final boolean interactive,
+            final boolean allure, final boolean video, final String executionMode)
+    {
+        this(datasets, headless, interactive, allure, video, executionMode, null, null, null, null);
+    }
+
+    public RunRequest(final List<DatasetSelection> datasets, final boolean headless, final boolean interactive,
+            final boolean allure, final boolean video, final String executionMode, final List<String> globalBrowserProfiles)
+    {
+        this(datasets, headless, interactive, allure, video, executionMode, globalBrowserProfiles, null, null, null);
+    }
+
+    public RunRequest(final List<DatasetSelection> datasets, final boolean headless, final boolean interactive,
+            final boolean allure, final boolean video, final String executionMode, final List<String> globalBrowserProfiles,
+            final String batchName)
+    {
+        this(datasets, headless, interactive, allure, video, executionMode, globalBrowserProfiles, batchName, null, null);
+    }
+
+    public RunRequest(final List<DatasetSelection> datasets, final boolean headless, final boolean interactive,
+            final boolean allure, final boolean video, final String executionMode, final List<String> globalBrowserProfiles,
+            final String batchName, final Map<String, List<String>> tags)
+    {
+        this(datasets, headless, interactive, allure, video, executionMode, globalBrowserProfiles, batchName, tags, null);
+    }
+
+    public RunRequest(final List<DatasetSelection> datasets, final boolean headless, final boolean interactive,
+            final boolean allure, final boolean video, final String executionMode, final List<String> globalBrowserProfiles,
+            final String batchName, final Map<String, List<String>> tags, final String targetRunId)
+    {
+        this.datasets = datasets;
+        this.headless = headless;
+        this.interactive = interactive;
+        this.allure = allure;
+        this.video = video;
+        this.executionMode = executionMode != null ? executionMode : "LLM_RECORDING";
+        this.globalBrowserProfiles = globalBrowserProfiles;
+        this.batchName = batchName;
+        this.tags = tags;
+        this.targetRunId = targetRunId;
+    }
+}

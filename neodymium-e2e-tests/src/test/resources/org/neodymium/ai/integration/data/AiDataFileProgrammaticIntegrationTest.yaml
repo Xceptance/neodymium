@@ -1,0 +1,21 @@
+promptAddon:
+  general: "Always be concise."
+
+steps:
+  - This step should be ignored completely by programmatic tests!
+
+data:
+  - testId: "dataset-one"
+    tier1Var: "value-from-file"
+    overrideTarget: "original-file-value"
+    phrase:
+      Part1: "Hello"
+      Part2: "World"
+    composed: "${phrase.Part1} ${phrase.Part2}"
+  - testId: "dataset-two"
+    tier1Var: "value-from-file-2"
+    overrideTarget: "original-file-value-2"
+    phrase:
+      Part1: "Good"
+      Part2: "Morning"
+    composed: "${phrase.Part1} ${phrase.Part2}"

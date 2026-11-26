@@ -1,0 +1,21 @@
+# [DEF-20261026-1035] Batch History Known Test Base Variations Ignores History Limit and Dropdown Run Filters
+
+- **Status:** `Resolved`
+- **Opened:** 2026-10-26 10:35
+- **Closed:** 2026-10-26 10:39
+- **Component:** `aura-manager`
+- **Scope:** `Framework`
+- **Symptom:** On the `/batch-history` view, changing the History Records Limit (such as switching between "Last 5", "Last 10", "Last 25", "Last 50", "All", or entering a custom limit) or selecting dropdown scope filters (Browsers, Locales, Environments, Areas, Tags) failed to update the "Known Test Base Variations" table or its execution counts `(var.totalExecutionsCount)`. Execution counters remained fixed at 1 run, and variations only reflected the single latest run rather than the history limit window.
+- **Root Cause:** In `AuraReportViewController.batchHistory(...)`, `dataService.getBatchTestBaseClasses` was invoked with `contributingRuns` (the minimal subset of runs providing only the single latest execution per test variation) rather than `eligibleRuns` (the runs matching the history limit, manual exclusions, cutoff date, and active dropdown filter sets). Because `contributingRuns` typically contains only the single latest run regardless of whether the limit is 5, 25, or all runs, the variations table never adjusted its window of executions or discovered variations across the historical limit.
+- **Detection Gap ("What did we miss?"):** Previous controller tests stubbed `getBatchTestBaseClasses` or only asserted that `contributingRuns` was passed, without testing variation count and execution count behavior across multiple history limit values (e.g. limit=1 vs limit=2 vs all).
+- **Resolution:**
+  - In `BatchLatestExecutionsDto.java`:
+    - Added `eligibleRuns` field, accessor `getEligibleRuns()`, and constructor support while retaining backward-compatible signatures.
+  - In `AuraReportDataService.java`:
+    - Updated `getBatchLatestTestExecutionsSummary(...)` to pass `eligibleRuns` into `BatchLatestExecutionsDto`.
+  - In `AuraReportViewController.java`:
+    - Resolved `eligibleRuns = (latestExecResult != null && latestExecResult.getEligibleRuns() != null) ? latestExecResult.getEligibleRuns() : defaultEligibleRuns`.
+    - Passed `eligibleRuns` to `dataService.getBatchTestBaseClasses(effectiveBatchArg, eligibleRuns, selectedRunBrowsers, selectedRunLocales, selectedRunEnvs, selectedRunAreas, selectedRunTags)`.
+- **Safety Net Added:**
+  - `TestBaseVariationHistoryTest.testBatchTestBaseClassesVariationCountReflectsHistoryLimitAndEligibleRuns`: Verifies that variations and execution counts scale dynamically across history limits (limit 1 vs 2 vs 3).
+  - `AuraReportViewControllerTest.testBatchHistoryVariationsReflectHistoryLimitAndDropdownFilters`: Verifies controller delegation of `eligibleRuns` corresponding to active limits to `dataService.getBatchTestBaseClasses`.

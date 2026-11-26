@@ -1,0 +1,170 @@
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 40px; align-items: flex-start;">
+    <!-- Left Column: Checkout Forms -->
+    <div style="background: var(--apoc-bg-surface); border: 1px solid var(--apoc-border); border-radius: 12px; padding: 36px;">
+        <h1 style="font-family: var(--apoc-font-serif); font-size: 26px; font-weight: 700; color: #FFFFFF; margin-bottom: 24px; border-bottom: 1px solid var(--apoc-border); padding-bottom: 12px;">
+            1. Shipping &amp; VIP Authentication
+        </h1>
+
+        <form action="api/checkout/purchase" method="POST" id="apoc-checkout-form" onsubmit="event.preventDefault(); submitApocalypseCheckout(this);">
+            <!-- Customer Details -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                <div>
+                    <label for="firstName" style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--apoc-text-secondary); margin-bottom: 6px;">First Name</label>
+                    <input type="text" name="firstName" id="firstName" value="John" required style="width: 100%; background: var(--apoc-bg-elevated); border: 1px solid var(--apoc-border); border-radius: 4px; color: #fff; padding: 10px 12px; font-size: 13px;">
+                </div>
+                <div>
+                    <label for="lastName" style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--apoc-text-secondary); margin-bottom: 6px;">Last Name</label>
+                    <input type="text" name="lastName" id="lastName" value="Doe" required style="width: 100%; background: var(--apoc-bg-elevated); border: 1px solid var(--apoc-border); border-radius: 4px; color: #fff; padding: 10px 12px; font-size: 13px;">
+                </div>
+            </div>
+
+            <div style="margin-bottom: 16px;">
+                <label for="email" style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--apoc-text-secondary); margin-bottom: 6px;">Email Address</label>
+                <input type="email" name="email" id="email" value="john.doe@example.com" required style="width: 100%; background: var(--apoc-bg-elevated); border: 1px solid var(--apoc-border); border-radius: 4px; color: #fff; padding: 10px 12px; font-size: 13px;">
+            </div>
+
+            <!-- Shipping Details -->
+            <div style="margin-bottom: 20px;">
+                <label for="shipping-country" class="apoc-form-label">Country</label>
+                <select id="shipping-country" name="country" class="apoc-form-control" onchange="loadApocalypseAddressForm(this.value)">
+                    ${country_options_html}
+                </select>
+            </div>
+
+            <!-- Dynamic country address fields -->
+            <div id="shipping-address-fields" style="margin-bottom: 28px;">
+                ${address_fields_html}
+            </div>
+
+            <!-- Payment Simulator Section -->
+            <h2 style="font-family: var(--apoc-font-serif); font-size: 20px; font-weight: 700; color: var(--apoc-gold); margin-bottom: 16px; border-bottom: 1px solid var(--apoc-border); padding-bottom: 8px;">
+                2. Encrypted Vault Payment
+            </h2>
+
+            <div class="apoc-form-group">
+                <label for="cardName" class="apoc-form-label">Name on Card</label>
+                <input type="text" name="cardName" id="cardName" value="John Doe" class="apoc-form-control" required>
+            </div>
+
+            <!-- HORROR: Split 4-box Credit Card Input + Unified Hidden Field for Full Compatibility -->
+            <div style="margin-bottom: 16px;">
+                <label class="apoc-form-label">
+                    Card Number (4-Block Encrypted Input)
+                </label>
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; width: 100%;">
+                    <input type="text" id="card-part-1" class="apoc-card-part" maxlength="4" value="4111" placeholder="4111" onkeyup="autoAdvanceCard(this, 'card-part-2')">
+                    <input type="text" id="card-part-2" class="apoc-card-part" maxlength="4" value="1111" placeholder="1111" onkeyup="autoAdvanceCard(this, 'card-part-3')">
+                    <input type="text" id="card-part-3" class="apoc-card-part" maxlength="4" value="1111" placeholder="1111" onkeyup="autoAdvanceCard(this, 'card-part-4')">
+                    <input type="text" id="card-part-4" class="apoc-card-part" maxlength="4" value="1111" placeholder="1111" onkeyup="updateMergedCard()">
+                </div>
+                <!-- Unified input bound to name="cardNumber" for form submission and standard Selenide fallbacks -->
+                <input type="hidden" name="cardNumber" id="cardNumber" value="4111111111111111">
+            </div>
+
+            <div class="apoc-grid-2" style="margin-bottom: 28px;">
+                <div>
+                    <label for="cardExpiry" class="apoc-form-label">Expiry (MM/YY)</label>
+                    <input type="text" name="cardExpiry" id="cardExpiry" placeholder="12/29" value="12/29" required class="apoc-form-control">
+                </div>
+                <div>
+                    <label for="cardCvv" class="apoc-form-label">CVV Security Code</label>
+                    <input type="text" name="cardCvv" id="cardCvv" placeholder="111" value="111" required maxlength="4" class="apoc-form-control">
+                </div>
+            </div>
+
+            <!-- Submit Button with Pseudo-Element Text & Progressive Hydration -->
+            <button type="submit" class="apoc-btn-gold" id="apoc-purchase-btn" data-interactive="true" style="width: 100%; padding: 14px 28px;">
+                <span class="ps-txt ps-txt-purchase"></span>
+                <span class="hydration-indicator"></span>
+            </button>
+        </form>
+    </div>
+
+    <!-- Right Column: Order Summary -->
+    <div style="background: var(--apoc-bg-surface); border: 1px solid var(--apoc-border); border-radius: 12px; padding: 32px; position: sticky; top: 100px;">
+        <h2 style="font-family: var(--apoc-font-serif); font-size: 20px; font-weight: 700; color: #FFFFFF; margin-bottom: 20px; border-bottom: 1px solid var(--apoc-border); padding-bottom: 10px;">
+            Order Summary
+        </h2>
+
+        <div style="display: flex; flex-direction: column; gap: 12px; font-size: 14px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; color: var(--apoc-text-secondary);">
+                <span>Subtotal</span>
+                <span style="color: #fff; font-weight: 600;">${checkout_subtotal}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; color: var(--apoc-text-secondary);">
+                <span>Express Courier Shipping</span>
+                <span style="color: var(--apoc-gold); font-weight: 600;">${checkout_shipping}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; color: var(--apoc-text-secondary);">
+                <span>Estimated Tax (10%)</span>
+                <span style="color: #fff; font-weight: 600;">${checkout_tax}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 18px; font-weight: 800; color: var(--apoc-gold); border-top: 1px solid var(--apoc-border); padding-top: 14px;">
+                <span>Total Amount</span>
+                <span>${checkout_total}</span>
+            </div>
+        </div>
+
+        <div style="background: var(--apoc-bg-elevated); border-radius: 6px; padding: 12px; font-size: 11px; color: var(--apoc-text-muted); line-height: 1.6;">
+            🔒 All transactions are secured by 256-bit quantum-resistant TLS encryption. Deliveries dispatched with insured white-glove packaging.
+        </div>
+    </div>
+</div>
+
+<script>
+    function loadApocalypseAddressForm(countryCode) {
+        fetch('api/address-form?country=' + encodeURIComponent(countryCode) + '&prefix=shipping-')
+            .then(r => r.text())
+            .then(html => {
+                const container = document.getElementById('shipping-address-fields');
+                if (container && html) {
+                    container.innerHTML = html;
+                }
+            });
+    }
+    function autoAdvanceCard(current, nextId) {
+        if (current.value.length >= 4) {
+            const next = document.getElementById(nextId);
+            if (next) next.focus();
+        }
+        updateMergedCard();
+    }
+    function updateMergedCard() {
+        const p1 = (document.getElementById('card-part-1') && document.getElementById('card-part-1').value) || '4111';
+        const p2 = (document.getElementById('card-part-2') && document.getElementById('card-part-2').value) || '1111';
+        const p3 = (document.getElementById('card-part-3') && document.getElementById('card-part-3').value) || '1111';
+        const p4 = (document.getElementById('card-part-4') && document.getElementById('card-part-4').value) || '1111';
+        const hidden = document.getElementById('cardNumber');
+        if (hidden) hidden.value = p1 + p2 + p3 + p4;
+    }
+    function submitApocalypseCheckout(form) {
+        updateMergedCard();
+        const btn = document.getElementById('apoc-purchase-btn');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span style="display:inline-block; animation:spin 1s infinite linear;">↻</span> Processing Vault Order...';
+        }
+        const formData = new FormData(form);
+        const body = new URLSearchParams(formData).toString();
+        fetch('api/checkout/purchase', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body
+        })
+        .then(r => r.text())
+        .then(html => {
+            const main = document.getElementById('main-content') || document.querySelector('main');
+            if (main) {
+                main.innerHTML = html;
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<span class="ps-txt ps-txt-purchase"></span>';
+            }
+        });
+    }
+</script>

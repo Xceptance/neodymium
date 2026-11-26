@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dynamic Reveal AJAX Fragment - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+</head>
+<body class="aura-theme-dark">
+    <div class="aura-container">
+        <header class="aura-header">
+            <div class="aura-logo">Aura AI <span>Sandbox</span></div>
+            <nav class="aura-nav">
+                <a href="../index.html">← Back to Storefront</a>
+            </nav>
+        </header>
+
+        <main class="aura-main">
+            <section class="aura-card">
+                <h1>Dynamic Reveal AJAX Fragment Challenge</h1>
+                <p class="aura-desc">
+                    Clicking the link below triggers a real asynchronous HTTP fetch request to retrieve an external HTML fragment 
+                    ('coupon-fragment.html') and embeds the newly received DOM elements. The input box is completely non-existent in the page DOM 
+                    until the HTTP response arrives.
+                </p>
+
+                <div style="display: flex; flex-direction: column; align-items: center; margin: 3rem 0; gap: 1.5rem;">
+                    <!-- Trigger link -->
+                    <a href="#" id="promo-toggle-ajax" style="color: #00ffcc; text-decoration: underline; font-weight: bold; font-size: 16px;">Have a promo code?</a>
+
+                    <!-- Dynamic container -->
+                    <div id="promo-container-ajax" style="display: flex; gap: 0.5rem; transition: opacity 0.3s ease; opacity: 1; min-height: 50px;">
+                        <!-- Content is fetched dynamically via HTTP fetch -->
+                    </div>
+                </div>
+
+                <div class="aura-status-box" style="margin-top: 2rem; padding: 1.5rem; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
+                    Status: <span id="promo-status-ajax" style="font-weight: bold; color: #ffcc00;">No code applied</span>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const toggle = document.getElementById('promo-toggle-ajax');
+        const container = document.getElementById('promo-container-ajax');
+        const status = document.getElementById('promo-status-ajax');
+
+        toggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Issue HTTP AJAX fetch for coupon-fragment.html
+            fetch('coupon-fragment.html')
+                .then(response => response.text())
+                .then(htmlSnippet => {
+                    container.innerHTML = htmlSnippet;
+                    
+                    document.getElementById('ajax-coupon-btn').addEventListener('click', function() {
+                        const code = document.getElementById('ajax-coupon-field').value;
+                        if (code === 'DISCOUNT') {
+                            status.innerText = 'Coupon DISCOUNT applied successfully!';
+                            status.style.color = '#00ffcc';
+                        } else {
+                            status.innerText = `Invalid coupon code: ${code || 'empty'}`;
+                            status.style.color = '#ff3366';
+                        }
+                    });
+                })
+                .catch(err => {
+                    status.innerText = 'Failed to load promo code fragment';
+                    status.style.color = '#ff3366';
+                });
+        });
+    </script>
+    <script src="../../shared/controls.js"></script>
+</body>
+</html>

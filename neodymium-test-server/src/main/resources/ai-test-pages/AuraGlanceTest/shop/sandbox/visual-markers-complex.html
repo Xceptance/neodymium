@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complex Visual Markers & Dense UI Challenge - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+    <style>
+        .complex-layout {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            gap: 2rem;
+            margin-top: 1.5rem;
+        }
+        .sticky-nav {
+            position: sticky;
+            top: 0;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            padding: 0.75rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            gap: 1.5rem;
+        }
+        .search-bar-group {
+            display: flex;
+            align-items: center;
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            padding: 2px 6px;
+            flex: 1;
+            max-width: 500px;
+        }
+        .search-bar-group select,
+        .search-bar-group input {
+            background: transparent;
+            border: none;
+            color: #f8fafc;
+            padding: 6px 8px;
+            outline: none;
+        }
+        .search-bar-group select {
+            border-right: 1px solid rgba(255, 255, 255, 0.15);
+            font-size: 0.85rem;
+            color: #94a3b8;
+        }
+        .search-bar-group input {
+            flex: 1;
+        }
+        .search-bar-group button {
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            padding: 4px 6px;
+            display: flex;
+            align-items: center;
+        }
+        .search-bar-group button:hover {
+            color: #fff;
+        }
+        .category-tab-bar {
+            display: flex;
+            gap: 0.5rem;
+            padding: 0.75rem 2rem;
+            background: rgba(30, 41, 59, 0.5);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            overflow-x: auto;
+        }
+        .cat-tab {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 6px 14px;
+            font-size: 0.85rem;
+            color: #cbd5e1;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .cat-tab.active, .cat-tab:hover {
+            background: #e11d48;
+            color: #fff;
+            border-color: #e11d48;
+        }
+        .sidebar-facet {
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+        .facet-accordion summary {
+            cursor: pointer;
+            font-weight: 600;
+            color: #f1f5f9;
+            margin-bottom: 0.75rem;
+            user-select: none;
+        }
+        .facet-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            color: #cbd5e1;
+        }
+        .facet-list label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+        }
+        .swatch-row {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .swatch-item {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.1s;
+        }
+        .swatch-item:hover, .swatch-item:focus {
+            transform: scale(1.15);
+            border-color: #fff;
+        }
+        .toggle-switch-box {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: 6px;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+        .toggle-switch-box:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .dense-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.25rem;
+        }
+        .dense-card {
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+        }
+        .dense-card:hover {
+            border-color: rgba(225, 29, 72, 0.4);
+        }
+        .card-top-badges {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        .badge-pill {
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+        .badge-sale { background: #e11d48; color: #fff; }
+        .badge-new { background: #0ea5e9; color: #fff; }
+        .chip-group {
+            display: flex;
+            gap: 0.4rem;
+            margin: 0.75rem 0;
+            flex-wrap: wrap;
+        }
+        .size-chip {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 4px;
+            padding: 3px 8px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            color: #cbd5e1;
+        }
+        .size-chip:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+        }
+        .stepper-group {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            padding: 2px 4px;
+            width: fit-content;
+        }
+        .stepper-btn {
+            background: transparent;
+            border: none;
+            color: #cbd5e1;
+            font-size: 1rem;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .stepper-btn:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+        .stepper-val {
+            width: 28px;
+            text-align: center;
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .card-actions-row {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            align-items: center;
+        }
+        .btn-ghost-icon {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            padding: 8px;
+            color: #cbd5e1;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .btn-ghost-icon:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+        }
+        .btn-primary-action {
+            flex: 1;
+            background: #e11d48;
+            border: 1px solid #e11d48;
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: #fff;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            text-align: center;
+        }
+        .btn-primary-action:hover {
+            background: #be123c;
+        }
+        .pagination-bar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 2rem;
+            padding: 1rem;
+            background: rgba(30, 41, 59, 0.5);
+            border-radius: 8px;
+        }
+        .page-btn {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            padding: 6px 12px;
+            color: #cbd5e1;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+        .page-btn.active, .page-btn:hover {
+            background: #e11d48;
+            color: #fff;
+            border-color: #e11d48;
+        }
+        ._status_banner {
+            margin: 1rem 0;
+            padding: 1rem;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            border-radius: 8px;
+            text-align: center;
+        }
+        ._status_banner span {
+            font-weight: 700;
+            color: #38bdf8;
+        }
+    </style>
+</head>
+<body class="aura-theme-dark">
+    <!-- Header -->
+    <header class="sticky-nav">
+        <a href="#home" class="aura-logo" style="text-decoration: none; color: inherit;" onclick="updateFeedback('Home logo clicked')">
+            Aura AI <span>Complex UI</span>
+        </a>
+
+        <!-- Search Bar with multi-controls -->
+        <div class="search-bar-group">
+            <select id="search-category" onchange="updateFeedback('Search category changed to ' + this.value)">
+                <option value="all">All Departments</option>
+                <option value="wearables">Wearables</option>
+                <option value="audio">Audio Gear</option>
+                <option value="cyber">Cybernetics</option>
+            </select>
+            <input type="text" id="search-input" placeholder="Search across 500+ items...">
+            <button id="search-clear-btn" title="Clear Search" onclick="document.getElementById('search-input').value=''; updateFeedback('Search input cleared')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+            <button id="search-submit-btn" title="Submit Search" onclick="updateFeedback('Search submitted: ' + document.getElementById('search-input').value)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            </button>
+        </div>
+
+        <!-- Utility Actions -->
+        <div style="display: flex; gap: 0.75rem; align-items: center;">
+            <select id="currency-select" class="cat-tab" onchange="updateFeedback('Currency switched to ' + this.value)">
+                <option value="USD">USD ($)</option>
+                <option value="EUR">EUR (€)</option>
+                <option value="GBP">GBP (£)</option>
+            </select>
+            <button id="theme-toggle-btn" class="btn-ghost-icon" title="Toggle Theme" onclick="updateFeedback('Theme mode toggled')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+            </button>
+            <button id="header-notif-btn" class="btn-ghost-icon" title="Notifications" onclick="updateFeedback('Notifications modal opened')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+            </button>
+            <button id="header-wishlist-btn" class="btn-ghost-icon" title="Wishlist" onclick="updateFeedback('Wishlist opened')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+            </button>
+            <button id="header-cart-btn" class="btn-ghost-icon" title="Cart Drawer" onclick="updateFeedback('Cart drawer opened')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>
+            </button>
+            <button id="header-user-btn" class="btn-ghost-icon" title="User Profile" onclick="updateFeedback('User profile menu toggled')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="category-tab-bar" role="tablist">
+        <button class="cat-tab active" role="tab" onclick="updateFeedback('Navigated to All Products')">All Products</button>
+        <button class="cat-tab" role="tab" onclick="updateFeedback('Navigated to Wearables')">Wearables</button>
+        <button class="cat-tab" role="tab" onclick="updateFeedback('Navigated to Audio Gear')">Audio Gear</button>
+        <button class="cat-tab" role="tab" onclick="updateFeedback('Navigated to Optics')">Optics</button>
+        <button class="cat-tab" role="tab" onclick="updateFeedback('Navigated to Neural Links')">Neural Links</button>
+        <button class="cat-tab" role="tab" onclick="updateFeedback('Navigated to Cybernetics')">Cybernetics</button>
+        <button class="cat-tab" role="tab" onclick="updateFeedback('Navigated to Flash Deals')">Flash Deals 🔥</button>
+    </nav>
+
+    <div class="aura-container">
+        <!-- Feedback Banner -->
+        <div class="_status_banner">
+            Action Result: <span id="action-feedback">No action taken yet</span>
+        </div>
+
+        <div class="complex-layout">
+            <!-- Sidebar Filters -->
+            <aside class="sidebar-facet">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0; font-size: 1.1rem;">Filters</h3>
+                    <button id="clear-all-filters-btn" class="cat-tab" style="padding: 3px 8px; font-size: 0.75rem;" onclick="updateFeedback('All filters cleared')">Reset</button>
+                </div>
+
+                <!-- Accordion 1: Categories -->
+                <details class="facet-accordion" open>
+                    <summary>Department</summary>
+                    <div class="facet-list">
+                        <label><input type="checkbox" id="filter-wearable" onchange="updateFeedback('Filter wearable toggled: ' + this.checked)"> Wearables</label>
+                        <label><input type="checkbox" id="filter-audio" onchange="updateFeedback('Filter audio toggled: ' + this.checked)"> Audio Gear</label>
+                        <label><input type="checkbox" id="filter-optics" onchange="updateFeedback('Filter optics toggled: ' + this.checked)"> Smart Optics</label>
+                    </div>
+                </details>
+
+                <!-- Accordion 2: Price Range -->
+                <details class="facet-accordion" open>
+                    <summary>Price Range</summary>
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <input type="range" id="price-slider" min="10" max="500" value="250" onchange="updateFeedback('Price slider changed to $' + this.value)">
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <input type="number" id="min-price-input" value="10" style="width: 60px; background: rgba(0,0,0,0.3); border: 1px solid #475569; border-radius: 4px; color: #fff; padding: 2px 6px;">
+                            <span>-</span>
+                            <input type="number" id="max-price-input" value="250" style="width: 60px; background: rgba(0,0,0,0.3); border: 1px solid #475569; border-radius: 4px; color: #fff; padding: 2px 6px;">
+                            <button id="price-apply-btn" class="cat-tab" style="padding: 2px 8px;" onclick="updateFeedback('Price range applied')">Go</button>
+                        </div>
+                    </div>
+                </details>
+
+                <!-- Accordion 3: Swatches -->
+                <details class="facet-accordion" open>
+                    <summary>Color Accent</summary>
+                    <div class="swatch-row">
+                        <div class="swatch-item _swatch" role="radio" tabindex="0" title="Crimson Red" style="background: #e11d48;" onclick="updateFeedback('Color filtered: Crimson Red')"></div>
+                        <div class="swatch-item _swatch" role="radio" tabindex="0" title="Neon Cyan" style="background: #06b6d4;" onclick="updateFeedback('Color filtered: Neon Cyan')"></div>
+                        <div class="swatch-item _swatch" role="radio" tabindex="0" title="Cyber Violet" style="background: #8b5cf6;" onclick="updateFeedback('Color filtered: Cyber Violet')"></div>
+                        <div class="swatch-item _swatch" role="radio" tabindex="0" title="Matrix Emerald" style="background: #10b981;" onclick="updateFeedback('Color filtered: Matrix Emerald')"></div>
+                    </div>
+                </details>
+
+                <!-- Accordion 4: Availability -->
+                <details class="facet-accordion" open>
+                    <summary>Availability</summary>
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <div role="switch" class="toggle-switch-box _toggle_box" tabindex="0" onclick="updateFeedback('In Stock Only filter toggled')">
+                            <span>In Stock Only</span>
+                            <span style="color: #10b981;">●</span>
+                        </div>
+                        <div role="switch" class="toggle-switch-box _toggle_box" tabindex="0" onclick="updateFeedback('On Sale Only filter toggled')">
+                            <span>On Sale Only</span>
+                            <span style="color: #e11d48;">●</span>
+                        </div>
+                    </div>
+                </details>
+            </aside>
+
+            <!-- Main Catalog Content -->
+            <main>
+                <!-- Catalog Toolbar -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; background: rgba(30, 41, 59, 0.4); padding: 0.75rem 1rem; border-radius: 8px;">
+                    <span style="font-size: 0.9rem; color: #94a3b8;">Showing <strong>6</strong> premium items</span>
+                    <div style="display: flex; gap: 0.75rem; align-items: center;">
+                        <select id="sort-order-select" class="cat-tab" onchange="updateFeedback('Sorted by ' + this.value)">
+                            <option value="featured">Featured</option>
+                            <option value="price-asc">Price: Low to High</option>
+                            <option value="price-desc">Price: High to Low</option>
+                            <option value="rating">Top Rated</option>
+                        </select>
+                        <button id="view-mode-grid" class="btn-ghost-icon" title="Grid View" onclick="updateFeedback('Grid view activated')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
+                        </button>
+                        <button id="view-mode-list" class="btn-ghost-icon" title="List View" onclick="updateFeedback('List view activated')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Product Grid (6 Multi-Element Cards) -->
+                <div class="dense-grid">
+                    <!-- Card 1: Hoodie -->
+                    <div class="dense-card" id="card-hoodie">
+                        <div>
+                            <div class="card-top-badges">
+                                <span class="badge-pill badge-sale">SALE -25%</span>
+                                <span style="color: #94a3b8; font-size: 0.8rem;">SKU: N-101</span>
+                            </div>
+                            <h4 style="margin: 0.25rem 0; font-size: 1.05rem;">
+                                <a href="#product-hoodie" style="color: #f8fafc; text-decoration: none;" onclick="updateFeedback('Navigated to Hoodie detail')">Cyberpunk Neon Hoodie</a>
+                            </h4>
+                            <div style="color: #e11d48; font-weight: 700; margin-bottom: 0.5rem;">$129.99 <span style="text-decoration: line-through; color: #64748b; font-size: 0.85rem; font-weight: normal;">$169.99</span></div>
+                            <p style="color: #94a3b8; font-size: 0.85rem; margin: 0 0 0.5rem 0;">Weatherproof futuristic streetwear with smart fiber weave.</p>
+
+                            <!-- Size chips -->
+                            <div class="chip-group">
+                                <div class="size-chip _chip" data-action="size-hoodie-s" onclick="updateFeedback('Hoodie Size S selected')">S</div>
+                                <div class="size-chip _chip" data-action="size-hoodie-m" onclick="updateFeedback('Hoodie Size M selected')">M</div>
+                                <div class="size-chip _chip" data-action="size-hoodie-l" onclick="updateFeedback('Hoodie Size L selected')">L</div>
+                                <div class="size-chip _chip" data-action="size-hoodie-xl" onclick="updateFeedback('Hoodie Size XL selected')">XL</div>
+                            </div>
+
+                            <!-- Stepper -->
+                            <div class="stepper-group">
+                                <button class="stepper-btn" onclick="stepQty('qty-hoodie', -1); updateFeedback('Hoodie qty decreased')">-</button>
+                                <input type="text" id="qty-hoodie" class="stepper-val" value="1" readonly>
+                                <button class="stepper-btn" onclick="stepQty('qty-hoodie', 1); updateFeedback('Hoodie qty increased')">+</button>
+                            </div>
+                        </div>
+
+                        <!-- Card Action Buttons -->
+                        <div class="card-actions-row">
+                            <button class="btn-ghost-icon" title="Wishlist Hoodie" data-action="favorite-hoodie" onclick="updateFeedback('Favorite added for Hoodie')">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                            </button>
+                            <button class="btn-ghost-icon" title="Quick View Hoodie" data-action="quickview-hoodie" onclick="updateFeedback('Quick View opened for Hoodie')">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                            <button class="btn-primary-action" data-action="addcart-hoodie" onclick="updateFeedback('Hoodie added to Cart')">Add to Cart</button>
+                        </div>
+                    </div>
+
+                    <!-- Card 2: Audio Buds -->
+                    <div class="dense-card" id="card-buds">
+                        <div>
+                            <div class="card-top-badges">
+                                <span class="badge-pill badge-new">NEW ARRIVAL</span>
+                                <span style="color: #94a3b8; font-size: 0.8rem;">SKU: N-202</span>
+                            </div>
+                            <h4 style="margin: 0.25rem 0; font-size: 1.05rem;">
+                                <a href="#product-buds" style="color: #f8fafc; text-decoration: none;" onclick="updateFeedback('Navigated to Buds detail')">Quantum Noise Cancelling Buds</a>
+                            </h4>
+                            <div style="color: #38bdf8; font-weight: 700; margin-bottom: 0.5rem;">$199.50</div>
+                            <p style="color: #94a3b8; font-size: 0.85rem; margin: 0 0 0.5rem 0;">Ultra-low latency spatial audio with biometric heart tracking.</p>
+
+                            <!-- Color swatches -->
+                            <div class="swatch-row" style="margin: 0.75rem 0;">
+                                <div class="swatch-item _swatch" role="radio" tabindex="0" title="Matte Black" style="background: #1e293b;" onclick="updateFeedback('Buds color selected: Matte Black')"></div>
+                                <div class="swatch-item _swatch" role="radio" tabindex="0" title="Pure White" style="background: #f8fafc;" onclick="updateFeedback('Buds color selected: Pure White')"></div>
+                                <div class="swatch-item _swatch" role="radio" tabindex="0" title="Cyber Cyan" style="background: #06b6d4;" onclick="updateFeedback('Buds color selected: Cyber Cyan')"></div>
+                            </div>
+
+                            <div class="stepper-group">
+                                <button class="stepper-btn" onclick="stepQty('qty-buds', -1); updateFeedback('Buds qty decreased')">-</button>
+                                <input type="text" id="qty-buds" class="stepper-val" value="1" readonly>
+                                <button class="stepper-btn" onclick="stepQty('qty-buds', 1); updateFeedback('Buds qty increased')">+</button>
+                            </div>
+                        </div>
+
+                        <div class="card-actions-row">
+                            <button class="btn-ghost-icon" title="Wishlist Buds" data-action="favorite-buds" onclick="updateFeedback('Favorite added for Buds')">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                            </button>
+                            <button class="btn-ghost-icon" title="Quick View Buds" data-action="quickview-buds" onclick="updateFeedback('Quick View opened for Buds')">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                            <button class="btn-primary-action" data-action="addcart-buds" onclick="updateFeedback('Buds added to Cart')">Add to Cart</button>
+                        </div>
+                    </div>
+
+                    <!-- Card 3: Holographic Smart Glasses -->
+                    <div class="dense-card" id="card-glasses">
+                        <div>
+                            <div class="card-top-badges">
+                                <span class="badge-pill badge-sale">HOT 🔥</span>
+                                <span style="color: #94a3b8; font-size: 0.8rem;">SKU: N-303</span>
+                            </div>
+                            <h4 style="margin: 0.25rem 0; font-size: 1.05rem;">
+                                <a href="#product-glasses" style="color: #f8fafc; text-decoration: none;" onclick="updateFeedback('Navigated to Glasses detail')">Holographic Smart Glasses</a>
+                            </h4>
+                            <div style="color: #38bdf8; font-weight: 700; margin-bottom: 0.5rem;">$349.00</div>
+                            <p style="color: #94a3b8; font-size: 0.85rem; margin: 0 0 0.5rem 0;">Retinal projection display with augmented reality navigation.</p>
+
+                            <div class="chip-group">
+                                <div class="size-chip _chip" data-action="frame-slim" onclick="updateFeedback('Glasses frame selected: Slim Carbon')">Slim Carbon</div>
+                                <div class="size-chip _chip" data-action="frame-titanium" onclick="updateFeedback('Glasses frame selected: Titanium')">Titanium</div>
+                            </div>
+
+                            <div class="stepper-group">
+                                <button class="stepper-btn" onclick="stepQty('qty-glasses', -1); updateFeedback('Glasses qty decreased')">-</button>
+                                <input type="text" id="qty-glasses" class="stepper-val" value="1" readonly>
+                                <button class="stepper-btn" onclick="stepQty('qty-glasses', 1); updateFeedback('Glasses qty increased')">+</button>
+                            </div>
+                        </div>
+
+                        <div class="card-actions-row">
+                            <button class="btn-ghost-icon" title="Wishlist Glasses" data-action="favorite-glasses" onclick="updateFeedback('Favorite added for Glasses')">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                            </button>
+                            <button class="btn-ghost-icon" title="Quick View Glasses" data-action="quickview-glasses" onclick="updateFeedback('Quick View opened for Holographic Glasses')">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                            <button class="btn-primary-action" data-action="addcart-glasses" onclick="updateFeedback('Glasses added to Cart')">Add to Cart</button>
+                        </div>
+                    </div>
+
+                    <!-- Card 4: Neural Interface Band -->
+                    <div class="dense-card" id="card-neural">
+                        <div>
+                            <div class="card-top-badges">
+                                <span class="badge-pill badge-new">LIMITED</span>
+                                <span style="color: #94a3b8; font-size: 0.8rem;">SKU: N-404</span>
+                            </div>
+                            <h4 style="margin: 0.25rem 0; font-size: 1.05rem;">
+                                <a href="#product-neural" style="color: #f8fafc; text-decoration: none;" onclick="updateFeedback('Navigated to Neural Band detail')">Tactical Neural Interface Band</a>
+                            </h4>
+                            <div style="color: #38bdf8; font-weight: 700; margin-bottom: 0.5rem;">$89.00</div>
+                            <p style="color: #94a3b8; font-size: 0.85rem; margin: 0 0 0.5rem 0;">Direct motor-cortex feedback wristband for cybernetic input.</p>
+
+                            <div class="chip-group">
+                                <div class="size-chip _chip" data-action="neural-wrist-s" onclick="updateFeedback('Band size selected: Small')">160mm</div>
+                                <div class="size-chip _chip" data-action="neural-wrist-m" onclick="updateFeedback('Band size selected: Medium')">180mm</div>
+                                <div class="size-chip _chip" data-action="neural-wrist-l" onclick="updateFeedback('Band size selected: Large')">200mm</div>
+                            </div>
+
+                            <div class="stepper-group">
+                                <button class="stepper-btn" onclick="stepQty('qty-neural', -1); updateFeedback('Neural band qty decreased')">-</button>
+                                <input type="text" id="qty-neural" class="stepper-val" value="1" readonly>
+                                <button class="stepper-btn" onclick="stepQty('qty-neural', 1); updateFeedback('Neural band qty increased')">+</button>
+                            </div>
+                        </div>
+
+                        <div class="card-actions-row">
+                            <button class="btn-ghost-icon" title="Wishlist Neural Band" data-action="favorite-neural" onclick="updateFeedback('Favorite added for Neural Band')">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                            </button>
+                            <button class="btn-ghost-icon" title="Quick View Neural Band" data-action="quickview-neural" onclick="updateFeedback('Quick View opened for Neural Band')">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                            <button class="btn-primary-action" data-action="addcart-neural" onclick="updateFeedback('Neural Band added to Cart')">Add to Cart</button>
+                        </div>
+                    </div>
+
+                    <!-- Card 5: Plasma Flask -->
+                    <div class="dense-card" id="card-flask">
+                        <div>
+                            <div class="card-top-badges">
+                                <span class="badge-pill badge-sale">-15%</span>
+                                <span style="color: #94a3b8; font-size: 0.8rem;">SKU: N-505</span>
+                            </div>
+                            <h4 style="margin: 0.25rem 0; font-size: 1.05rem;">
+                                <a href="#product-flask" style="color: #f8fafc; text-decoration: none;" onclick="updateFeedback('Navigated to Flask detail')">Plasma Energy Thermos</a>
+                            </h4>
+                            <div style="color: #e11d48; font-weight: 700; margin-bottom: 0.5rem;">$45.00 <span style="text-decoration: line-through; color: #64748b; font-size: 0.85rem; font-weight: normal;">$55.00</span></div>
+                            <p style="color: #94a3b8; font-size: 0.85rem; margin: 0 0 0.5rem 0;">Induction-heated vacuum thermal flask with LED temp display.</p>
+
+                            <div class="swatch-row" style="margin: 0.75rem 0;">
+                                <div class="swatch-item _swatch" role="radio" tabindex="0" title="Cobalt" style="background: #2563eb;" onclick="updateFeedback('Flask color selected: Cobalt')"></div>
+                                <div class="swatch-item _swatch" role="radio" tabindex="0" title="Amber" style="background: #f59e0b;" onclick="updateFeedback('Flask color selected: Amber')"></div>
+                            </div>
+
+                            <div class="stepper-group">
+                                <button class="stepper-btn" onclick="stepQty('qty-flask', -1); updateFeedback('Flask qty decreased')">-</button>
+                                <input type="text" id="qty-flask" class="stepper-val" value="1" readonly>
+                                <button class="stepper-btn" onclick="stepQty('qty-flask', 1); updateFeedback('Flask qty increased')">+</button>
+                            </div>
+                        </div>
+
+                        <div class="card-actions-row">
+                            <button class="btn-ghost-icon" title="Wishlist Flask" data-action="favorite-flask" onclick="updateFeedback('Favorite added for Flask')">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                            </button>
+                            <button class="btn-ghost-icon" title="Quick View Flask" data-action="quickview-flask" onclick="updateFeedback('Quick View opened for Flask')">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                            <button class="btn-primary-action" data-action="addcart-flask" onclick="updateFeedback('Flask added to Cart')">Add to Cart</button>
+                        </div>
+                    </div>
+
+                    <!-- Card 6: Bionic Glove -->
+                    <div class="dense-card" id="card-glove">
+                        <div>
+                            <div class="card-top-badges">
+                                <span class="badge-pill badge-new">PRO EDITION</span>
+                                <span style="color: #94a3b8; font-size: 0.8rem;">SKU: N-606</span>
+                            </div>
+                            <h4 style="margin: 0.25rem 0; font-size: 1.05rem;">
+                                <a href="#product-glove" style="color: #f8fafc; text-decoration: none;" onclick="updateFeedback('Navigated to Glove detail')">Bionic Exoskeleton Glove</a>
+                            </h4>
+                            <div style="color: #38bdf8; font-weight: 700; margin-bottom: 0.5rem;">$279.00</div>
+                            <p style="color: #94a3b8; font-size: 0.85rem; margin: 0 0 0.5rem 0;">Pneumatic grip-assist glove with carbon fiber tendons.</p>
+
+                            <div class="chip-group">
+                                <div class="size-chip _chip" data-action="glove-hand-left" onclick="updateFeedback('Glove hand selected: Left')">Left Hand</div>
+                                <div class="size-chip _chip" data-action="glove-hand-right" onclick="updateFeedback('Glove hand selected: Right')">Right Hand</div>
+                            </div>
+
+                            <div class="stepper-group">
+                                <button class="stepper-btn" onclick="stepQty('qty-glove', -1); updateFeedback('Glove qty decreased')">-</button>
+                                <input type="text" id="qty-glove" class="stepper-val" value="1" readonly>
+                                <button class="stepper-btn" onclick="stepQty('qty-glove', 1); updateFeedback('Glove qty increased')">+</button>
+                            </div>
+                        </div>
+
+                        <div class="card-actions-row">
+                            <button class="btn-ghost-icon" title="Wishlist Glove" data-action="favorite-glove" onclick="updateFeedback('Favorite added for Glove')">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                            </button>
+                            <button class="btn-ghost-icon" title="Quick View Glove" data-action="quickview-glove" onclick="updateFeedback('Quick View opened for Bionic Glove')">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                            <button class="btn-primary-action" data-action="addcart-glove" onclick="updateFeedback('Bionic Glove added to Cart')">Add to Cart</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pagination Bar -->
+                <div class="pagination-bar">
+                    <button id="pagination-prev" class="page-btn" onclick="updateFeedback('Navigated to Previous Page')">‹ Prev</button>
+                    <button class="page-btn active" onclick="updateFeedback('Page 1 selected')">1</button>
+                    <button class="page-btn" onclick="updateFeedback('Page 2 selected')">2</button>
+                    <button class="page-btn" onclick="updateFeedback('Page 3 selected')">3</button>
+                    <button class="page-btn" onclick="updateFeedback('Page 4 selected')">4</button>
+                    <button id="pagination-next" class="page-btn" onclick="updateFeedback('Navigated to Next Page')">Next ›</button>
+                    <span style="color: #64748b; font-size: 0.85rem; margin: 0 0.5rem;">|</span>
+                    <select id="page-size-select" class="cat-tab" onchange="updateFeedback('Page size set to ' + this.value)">
+                        <option value="6">6 per page</option>
+                        <option value="12">12 per page</option>
+                        <option value="24">24 per page</option>
+                    </select>
+                </div>
+            </main>
+        </div>
+
+        <!-- Footer Newsletter Section -->
+        <footer style="margin-top: 3rem; padding: 2rem; background: rgba(30, 41, 59, 0.4); border-radius: 10px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255, 255, 255, 0.05);">
+            <div>
+                <h4 style="margin: 0 0 0.25rem 0;">Stay in the Loop</h4>
+                <p style="margin: 0; color: #94a3b8; font-size: 0.85rem;">Subscribe to get early drops, insider discounts, and release notes.</p>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+                <input type="email" id="newsletter-email" placeholder="agent@neodymium.ai" style="padding: 8px 12px; background: rgba(0, 0, 0, 0.4); border: 1px solid #475569; border-radius: 6px; color: #fff; width: 240px;">
+                <button id="newsletter-submit-btn" class="btn-primary-action" style="padding: 8px 16px;" onclick="updateFeedback('Subscribed to newsletter: ' + document.getElementById('newsletter-email').value)">Subscribe</button>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        function updateFeedback(msg) {
+            var fb = document.getElementById('action-feedback');
+            fb.innerText = msg;
+            fb.style.color = '#10b981';
+        }
+        function stepQty(inputId, delta) {
+            var el = document.getElementById(inputId);
+            var val = parseInt(el.value, 10) || 1;
+            val = Math.max(1, val + delta);
+            el.value = val;
+        }
+    </script>
+    <script src="../../shared/controls.js"></script>
+</body>
+</html>

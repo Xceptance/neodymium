@@ -1,0 +1,66 @@
+/*
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package org.neodymium.ai.junit;
+
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+/**
+ * Configures the upfront Playbook Pre-Flight Linter at the class or method level.
+ * When multiple values are specified (e.g. {@code @AiLinter({false, true})}), the runner executes
+ * the test across both linter variations.
+ *
+ * @author AI-generated: Gemini 3.7 Flash
+ * @author Xceptance GmbH 2026
+ */
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.TYPE, ElementType.METHOD})
+public @interface AiLinter
+{
+    /**
+     * Whether the upfront Playbook Pre-Flight Linter is enabled for the test execution.
+     * Defaults to {@code true} when annotated without arguments.
+     *
+     * @return boolean flag(s) indicating if pre-flight linter is active
+     */
+    boolean[] value() default {true};
+
+    /**
+     * Whether detected pre-flight linter findings should halt and fail the test execution.
+     * Defaults to {@code false} (findings are non-blocking advisory warnings).
+     *
+     * @return boolean flag indicating if findings trigger test failure
+     */
+    boolean failOnFindings() default false;
+
+    /**
+     * Whether the empirical post-flight Playbook Linter is enabled for the test execution.
+     * Defaults to {@code false}.
+     *
+     * @return boolean flag indicating if post-flight linter is active
+     */
+    boolean postFlight() default false;
+}

@@ -1,0 +1,27 @@
+<section style="max-width: 800px; margin: 0 auto; padding: 20px 0;">
+    <h1 style="font-family: var(--apoc-font-serif); font-size: 36px; font-weight: 700; color: var(--apoc-gold); margin-bottom: 20px;">VIP Concierge Contact</h1>
+    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 30px; color: var(--apoc-text-secondary);">
+        Our private client advisors are stationed across Zurich, Paris, and Tokyo to handle bespoke olfactory commissions and order inquiries.
+    </p>
+
+    <div style="background: var(--apoc-bg-surface); border: 1px solid var(--apoc-border); border-radius: 12px; padding: 32px;">
+        <form onsubmit="event.preventDefault(); alert('Concierge inquiry transmitted.');">
+            <div style="margin-bottom: 16px;">
+                <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:6px; color:var(--apoc-text-secondary);">Client Name</label>
+                <input type="text" required style="width:100%; padding:10px 14px; border:1px solid var(--apoc-border); border-radius:4px; font-size:13px; background:var(--apoc-bg-elevated); color:#fff;">
+            </div>
+            <div style="margin-bottom: 16px;">
+                <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:6px; color:var(--apoc-text-secondary);">Client Email</label>
+                <input type="email" required style="width:100%; padding:10px 14px; border:1px solid var(--apoc-border); border-radius:4px; font-size:13px; background:var(--apoc-bg-elevated); color:#fff;">
+            </div>
+            <div style="margin-bottom: 24px;">
+                <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:6px; color:var(--apoc-text-secondary);">Inquiry Details</label>
+                <textarea rows="4" required style="width:100%; padding:10px 14px; border:1px solid var(--apoc-border); border-radius:4px; font-size:13px; background:var(--apoc-bg-elevated); color:#fff;"></textarea>
+            </div>
+            <button type="submit" class="apoc-btn-gold" data-interactive="true" style="padding:12px 28px;">
+                <span>Transmit Inquiry</span>
+                <span class="hydration-indicator"></span>
+            </button>
+        </form>
+    </div>
+</section>

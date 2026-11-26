@@ -1,0 +1,317 @@
+/*
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package org.neodymium.ai.prompt;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.List;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.neodymium.ai.client.ResponseSchema;
+import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.playbook.linter.LinterCategory;
+import org.neodymium.ai.playbook.linter.LinterSeverity;
+import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
+
+/**
+ * Unit tests for {@link PlaybookLinterPrompt}.
+ *
+ * @author AI-generated: Gemini 3.7 Flash
+ * @author Xceptance GmbH 2026
+ */
+public final class PlaybookLinterPromptTest
+{
+    @Test
+    @DisplayName("Verify prompt compilation with scenario description and steps")
+    public void testPromptCompilationWithDescription()
+    {
+        final PlaybookStep s1 = new PlaybookStep("Open the country selector and click \"${country}\".");
+        s1.setLineNumber(12);
+        s1.setSourceFile("checkout.yaml");
+
+        final PlaybookStep s2 = new PlaybookStep("Auf der rechten Seite ist ein grünes Symbol.");
+        s2.setLineNumber(15);
+        s2.setSourceFile("checkout.yaml");
+
+        final PlaybookLinterPrompt prompt = new PlaybookLinterPrompt("Guest Checkout Flow", List.of(s1, s2), null);
+
+        final String userMsg = prompt.compileUserMessage(null);
+        assertTrue(userMsg.contains("## Scenario Context"));
+        assertTrue(userMsg.contains("Goal: Guest Checkout Flow"));
+        assertTrue(userMsg.contains("1. Open the country selector and click \"${country}\"."));
+        assertTrue(userMsg.contains("2. Auf der rechten Seite ist ein grünes Symbol."));
+        assertEquals(ResponseSchema.LINTER, prompt.getResponseSchema());
+    }
+
+    @Test
+    @DisplayName("Verify prompt compilation without description")
+    public void testPromptCompilationWithoutDescription()
+    {
+        final PlaybookStep s1 = new PlaybookStep("Click Login");
+        final PlaybookLinterPrompt prompt = new PlaybookLinterPrompt(null, List.of(s1), null);
+
+        final String userMsg = prompt.compileUserMessage(null);
+        assertFalse(userMsg.contains("## Scenario Context"));
+        assertTrue(userMsg.contains("1. Click Login"));
+    }
+
+    @Test
+    @DisplayName("Verify parsing multilingual JSON response across categories")
+    public void testParseMultilingualJsonResponse() throws Exception
+    {
+        final PlaybookStep s1 = new PlaybookStep("Open the country selector and click \"${country}\".");
+        s1.setLineNumber(10);
+        s1.setSourceFile("test.yaml");
+
+        final PlaybookStep s2 = new PlaybookStep("Auf der linken Seite ist ein Menü das Abmelden ermöglicht.");
+        s2.setLineNumber(14);
+        s2.setSourceFile("test.yaml");
+
+        final PlaybookStep s3 = new PlaybookStep("ボタンをクリックして確認する");
+        s3.setLineNumber(20);
+        s3.setSourceFile("test.yaml");
+
+        final PlaybookStep s4 = new PlaybookStep("If a cookie consent banner is displayed.");
+        s4.setLineNumber(25);
+        s4.setSourceFile("test.yaml");
+
+        final PlaybookLinterPrompt prompt = new PlaybookLinterPrompt("Multilingual Scenario", List.of(s1, s2, s3, s4), null);
+
+        final String jsonResponse = """
+            ```json
+            {
+              "findings": [
+                {
+                  "stepIndex": 1,
+                  "category": "STEP_SPLITTING_CANDIDATE",
+                  "severity": "WARNING",
+                  "message": "Instruction combines two interactive actions.",
+                  "suggestedRewrite": "1. Open the country selector\\n2. Click \\"${country}\\"",
+                  "scope": null
+                },
+                {
+                  "stepIndex": 2,
+                  "category": "AMBIGUOUS_AFFORDANCE",
+                  "severity": "INFO",
+                  "message": "Passive capability phrasing instead of explicit imperative action.",
+                  "suggestedRewrite": "Klicke auf Abmelden im Menü auf der linken Seite",
+                  "scope": null
+                },
+                {
+                  "stepIndex": 3,
+                  "category": "STEP_SPLITTING_CANDIDATE",
+                  "severity": "WARNING",
+                  "message": "Action and verification combined.",
+                  "suggestedRewrite": "1. ボタンをクリックする\\n2. 確認メッセージが表示されることを確認する",
+                  "scope": null
+                },
+                {
+                  "stepIndex": 4,
+                  "category": "INCOMPLETE_BRANCH_CLAUSE",
+                  "severity": "WARNING",
+                  "message": "Dangling conditional clause without action.",
+                  "suggestedRewrite": "If a cookie consent banner is displayed, click \\"Accept All\\"",
+                  "scope": null
+                }
+              ]
+            }
+            ```
+            """;
+
+        final List<PlaybookLinterFinding> findings = prompt.parseResponse(jsonResponse, null);
+        assertEquals(4, findings.size());
+
+        final PlaybookLinterFinding f1 = findings.get(0);
+        assertEquals(1, f1.stepIndex());
+        assertEquals(10, f1.lineNumber());
+        assertEquals("test.yaml", f1.sourceFile());
+        assertEquals(LinterCategory.STEP_SPLITTING_CANDIDATE, f1.category());
+        assertEquals(LinterSeverity.WARNING, f1.severity());
+        assertTrue(f1.suggestedRewrite().contains("${country}"));
+
+        final PlaybookLinterFinding f2 = findings.get(1);
+        assertEquals(2, f2.stepIndex());
+        assertEquals(14, f2.lineNumber());
+        assertEquals(LinterCategory.AMBIGUOUS_AFFORDANCE, f2.category());
+        assertEquals(LinterSeverity.INFO, f2.severity());
+        assertTrue(f2.suggestedRewrite().contains("Klicke auf Abmelden"));
+
+        final PlaybookLinterFinding f3 = findings.get(2);
+        assertEquals(3, f3.stepIndex());
+        assertEquals(20, f3.lineNumber());
+        assertEquals(LinterCategory.STEP_SPLITTING_CANDIDATE, f3.category());
+        assertTrue(f3.suggestedRewrite().contains("ボタンをクリックする"));
+
+        final PlaybookLinterFinding f4 = findings.get(3);
+        assertEquals(4, f4.stepIndex());
+        assertEquals(25, f4.lineNumber());
+        assertEquals(LinterCategory.INCOMPLETE_BRANCH_CLAUSE, f4.category());
+        assertTrue(f4.suggestedRewrite().contains("Accept All"));
+    }
+
+    @Test
+    @DisplayName("Verify parsing invalid or empty response returns empty list")
+    public void testParseInvalidOrEmptyResponse() throws Exception
+    {
+        final PlaybookLinterPrompt prompt = new PlaybookLinterPrompt("Empty", List.of(), null);
+        assertTrue(prompt.parseResponse("", null).isEmpty());
+        assertTrue(prompt.parseResponse("Invalid content", null).isEmpty());
+        assertTrue(prompt.parseResponse("{\"findings\": []}", null).isEmpty());
+    }
+
+    @Test
+    @DisplayName("Verify parsing enhanced architecture categories: journey fidelity, unrecognized tags, script interactions, and regex patterns")
+    public void testParseEnhancedArchitectureCategories()
+    {
+        final PlaybookStep s1 = new PlaybookStep("Navigate to https://example.com/checkout directly");
+        s1.setLineNumber(10);
+        s1.setSourceFile("checkout.yaml");
+
+        final PlaybookStep s2 = new PlaybookStep("Check badge is green (screenshot)");
+        s2.setLineNumber(15);
+        s2.setSourceFile("checkout.yaml");
+
+        final PlaybookStep s3 = new PlaybookStep("Run JavaScript to click the submit button");
+        s3.setLineNumber(20);
+        s3.setSourceFile("checkout.yaml");
+
+        final PlaybookStep s4 = new PlaybookStep("Verify order ID matches #ORD-2026-9988");
+        s4.setLineNumber(25);
+        s4.setSourceFile("checkout.yaml");
+
+        final PlaybookLinterPrompt prompt = new PlaybookLinterPrompt("Enhanced Architecture Scenario", List.of(s1, s2, s3, s4), null);
+
+        final String jsonResponse = """
+            ```json
+            {
+              "findings": [
+                {
+                  "stepIndex": 1,
+                  "category": "JOURNEY_FIDELITY_VIOLATION",
+                  "severity": "ERROR",
+                  "message": "Direct URL navigation mid-scenario violates journey fidelity.",
+                  "suggestedRewrite": "Click the \\"Proceed to Checkout\\" button",
+                  "scope": null
+                },
+                {
+                  "stepIndex": 2,
+                  "category": "UNRECOGNIZED_MODALITY_TAG",
+                  "severity": "WARNING",
+                  "message": "Tag (screenshot) is not recognized; use standard (visual) tag.",
+                  "suggestedRewrite": "Check badge is green (visual)",
+                  "scope": "VIEWPORT"
+                },
+                {
+                  "stepIndex": 3,
+                  "category": "EXPLICIT_SCRIPT_INTERACTION",
+                  "severity": "WARNING",
+                  "message": "Script execution to click elements bypasses standard user validation.",
+                  "suggestedRewrite": "Click the submit button",
+                  "scope": null
+                },
+                {
+                  "stepIndex": 4,
+                  "category": "HARDCODED_VOLATILE_DATA",
+                  "severity": "WARNING",
+                  "message": "Hardcoded dynamic ID will fail in replay; use regex pattern.",
+                  "suggestedRewrite": "Verify order ID matches pattern \\"#ORD-[0-9]{4}-[0-9]+\\"",
+                  "scope": null
+                }
+              ]
+            }
+            ```
+            """;
+
+        final List<PlaybookLinterFinding> findings = prompt.parseResponse(jsonResponse, null);
+        assertEquals(4, findings.size());
+
+        final PlaybookLinterFinding f1 = findings.get(0);
+        assertEquals(1, f1.stepIndex());
+        assertEquals(10, f1.lineNumber());
+        assertEquals("checkout.yaml", f1.sourceFile());
+        assertEquals(LinterCategory.JOURNEY_FIDELITY_VIOLATION, f1.category());
+        assertEquals(LinterSeverity.ERROR, f1.severity());
+        assertTrue(f1.suggestedRewrite().contains("Proceed to Checkout"));
+
+        final PlaybookLinterFinding f2 = findings.get(1);
+        assertEquals(2, f2.stepIndex());
+        assertEquals(15, f2.lineNumber());
+        assertEquals(LinterCategory.UNRECOGNIZED_MODALITY_TAG, f2.category());
+        assertEquals(LinterSeverity.WARNING, f2.severity());
+        assertTrue(f2.suggestedRewrite().contains("(visual)"));
+
+        final PlaybookLinterFinding f3 = findings.get(2);
+        assertEquals(3, f3.stepIndex());
+        assertEquals(20, f3.lineNumber());
+        assertEquals(LinterCategory.EXPLICIT_SCRIPT_INTERACTION, f3.category());
+        assertEquals(LinterSeverity.WARNING, f3.severity());
+        assertEquals("Click the submit button", f3.suggestedRewrite());
+
+        final PlaybookLinterFinding f4 = findings.get(3);
+        assertEquals(4, f4.stepIndex());
+        assertEquals(25, f4.lineNumber());
+        assertEquals(LinterCategory.HARDCODED_VOLATILE_DATA, f4.category());
+        assertEquals(LinterSeverity.WARNING, f4.severity());
+        assertTrue(f4.suggestedRewrite().contains("matches pattern"));
+    }
+
+    @Test
+    @DisplayName("Verify prompt compilation with hierarchical sub-steps")
+    public void testPromptCompilationWithHierarchicalSubSteps()
+    {
+        final PlaybookStep parent = new PlaybookStep("Locate the first product card:");
+        parent.setLineNumber(9);
+        parent.setSourceFile("AddToCartTest.yaml");
+
+        final PlaybookStep sub1 = new PlaybookStep("Hover over it");
+        final PlaybookStep sub2 = new PlaybookStep("Click its 'Add to Cart' button");
+        final PlaybookStep sub3 = new PlaybookStep("When this string '${testId}' is not equal 'bad', click the size 'S'");
+
+        parent.getSubSteps().addAll(List.of(sub1, sub2, sub3));
+
+        final PlaybookStep step2 = new PlaybookStep("Verify cart count is 1");
+        step2.setLineNumber(15);
+        step2.setSourceFile("AddToCartTest.yaml");
+
+        final PlaybookLinterPrompt prompt = new PlaybookLinterPrompt("Sub-Step Scenario", List.of(parent, step2), null);
+
+        final String userMsg = prompt.compileUserMessage(null);
+        assertTrue(userMsg.contains("1. Locate the first product card:"));
+        assertTrue(userMsg.contains("  - Hover over it"));
+        assertTrue(userMsg.contains("  - Click its 'Add to Cart' button"));
+        assertTrue(userMsg.contains("  - When this string '${testId}' is not equal 'bad', click the size 'S'"));
+        assertTrue(userMsg.contains("2. Verify cart count is 1"));
+
+        final String sysMsg = prompt.compileSystemMessage(null);
+        assertTrue(sysMsg.contains("Hierarchical Steps & Sub-Steps (Turn Groups)"));
+        assertTrue(sysMsg.contains("already explicitly split"));
+        assertTrue(sysMsg.contains("No Standalone Scoping / Anchor Steps"));
+        assertTrue(sysMsg.contains("Form Field Batching (Prefer Turn Groups over Micro-Steps)"));
+        assertTrue(sysMsg.contains("No Introduced Dangling Pronouns"));
+        assertTrue(sysMsg.contains("Be Non-Intrusive on Well-Formed Steps & Composite Interactions"));
+    }
+}
+

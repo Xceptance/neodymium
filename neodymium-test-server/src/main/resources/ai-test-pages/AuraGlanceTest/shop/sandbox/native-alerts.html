@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Native Browser Alerts &amp; Dialogs - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+    <style>
+        .dialog-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            transition: all 0.2s ease;
+        }
+        .dialog-card:hover {
+            border-color: rgba(0, 255, 204, 0.3);
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .dialog-title {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 0.5rem;
+        }
+        .dialog-desc {
+            color: var(--text-secondary, #a0aec0);
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+        .status-badge {
+            margin-top: 1rem;
+            padding: 0.75rem 1rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            border-left: 3px solid #00ffcc;
+            font-size: 0.95rem;
+            color: #e2e8f0;
+        }
+    </style>
+</head>
+<body class="aura-theme">
+    <header class="sandbox-header">
+        <div class="header-container">
+            <a href="index.html" class="back-link">&larr; Back to Challenges</a>
+            <h1>Native Browser Alerts &amp; Dialogs</h1>
+            <p class="subtitle">Challenge 15: Modal window dialogs (alert, confirm, prompt) block WebDriver execution and throw UnhandledAlertException if unhandled.</p>
+        </div>
+    </header>
+
+    <main class="sandbox-main">
+        <section class="challenge-section">
+            <h2>Native Dialog Test Bench</h2>
+            <p style="color: var(--text-secondary, #a0aec0); margin-bottom: 1.5rem;">
+                Trigger native modal dialogs and test autonomous acceptance, dismissal, and text prompt entry via <code>browser_handle_alert</code>.
+            </p>
+
+            <!-- 1. Alert Dialog -->
+            <div class="dialog-card">
+                <div class="dialog-title">1. System Notification Alert</div>
+                <div class="dialog-desc">Triggers a standard <code>window.alert()</code> modal message that must be acknowledged.</div>
+                <button id="trigger-alert-btn" class="btn btn-primary" onclick="triggerAlert()">
+                    Show Alert
+                </button>
+                <div id="alert-status" class="status-badge">No alert triggered</div>
+            </div>
+
+            <!-- 2. Confirm Dialog -->
+            <div class="dialog-card">
+                <div class="dialog-title">2. Deletion Confirmation Dialog</div>
+                <div class="dialog-desc">Triggers a <code>window.confirm()</code> modal asking for OK (accept) or Cancel (dismiss).</div>
+                <button id="trigger-confirm-btn" class="btn btn-warning" onclick="triggerConfirm()">
+                    Delete Item #42
+                </button>
+                <div id="confirm-status" class="status-badge">No action taken</div>
+            </div>
+
+            <!-- 3. Prompt Dialog -->
+            <div class="dialog-card">
+                <div class="dialog-title">3. Voucher Code Prompt Dialog</div>
+                <div class="dialog-desc">Triggers a <code>window.prompt()</code> requiring custom text entry before acceptance.</div>
+                <button id="trigger-prompt-btn" class="btn btn-secondary" onclick="triggerPrompt()">
+                    Enter Voucher Code
+                </button>
+                <div id="prompt-status" class="status-badge">No voucher entered</div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        function triggerAlert() {
+            window.alert("Notification: System maintenance scheduled tonight at 02:00 UTC.");
+            document.getElementById('alert-status').textContent = "Alert acknowledged";
+        }
+
+        function triggerConfirm() {
+            const confirmed = window.confirm("Are you sure you want to permanently delete item #42?");
+            document.getElementById('confirm-status').textContent = confirmed ? "Item #42 deleted successfully" : "Deletion cancelled";
+        }
+
+        function triggerPrompt() {
+            const code = window.prompt("Please enter your discount voucher code:", "SUMMER2026");
+            if (code !== null && code.trim() !== "") {
+                document.getElementById('prompt-status').textContent = "Voucher applied: " + code.trim();
+            } else {
+                document.getElementById('prompt-status').textContent = "Voucher cancelled";
+            }
+        }
+    </script>
+</body>
+</html>

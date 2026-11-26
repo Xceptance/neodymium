@@ -1,0 +1,123 @@
+<div class="account-container" id="account-page-container" style="display: flex; gap: 36px; align-items: flex-start; flex-wrap: wrap;">
+    <!-- Left Navigation Sidebar -->
+    <aside class="account-sidebar" style="flex: 1; min-width: 220px; background: var(--apoc-bg-surface); border: 1px solid var(--apoc-border); padding: 24px; border-radius: 8px;">
+        <h3 style="font-family: var(--apoc-font-serif); font-size: 20px; margin-bottom: 20px; font-weight: 700; color: var(--apoc-gold);">Client Dashboard</h3>
+        
+        <ul style="list-style: none; display: flex; flex-direction: column; gap: 10px; font-size: 14px;">
+            <li><button onclick="showAccountTab('orders')" id="tab-btn-orders" style="font-weight: 700; color: var(--apoc-gold); text-align: left; width: 100%; display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 0;">📦 ${lang_orderHistory}</button></li>
+            <li><button onclick="showAccountTab('addresses')" id="tab-btn-addresses" style="font-weight: 500; color: var(--apoc-text-secondary); text-align: left; width: 100%; display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 0;">🏠 ${lang_manageAddresses}</button></li>
+            <li><button onclick="showAccountTab('cards')" id="tab-btn-cards" style="font-weight: 500; color: var(--apoc-text-secondary); text-align: left; width: 100%; display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 0;">💳 ${lang_manageCards}</button></li>
+            <li><button onclick="showAccountTab('password')" id="tab-btn-password" style="font-weight: 500; color: var(--apoc-text-secondary); text-align: left; width: 100%; display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 0;">🔑 ${lang_changePassword}</button></li>
+            <li style="border-top: 1px solid var(--apoc-border); padding-top: 12px; margin-top: 8px;"><a href="api/auth/logout" style="color: var(--apoc-accent-crimson); font-weight: 600; display: flex; align-items: center; gap: 8px;">🚪 ${lang_logout}</a></li>
+        </ul>
+    </aside>
+
+    <!-- Right Dashboard Area -->
+    <section class="account-main" id="account-dashboard-content" style="flex: 3; min-width: 320px;">
+        <!-- 1. Orders Tab -->
+        <div class="account-tab-panel" id="tab-panel-orders">
+            <h2 style="font-family: var(--apoc-font-serif); font-size: 24px; font-weight: 700; color: #FFFFFF; margin-bottom: 20px;">${lang_orderHistory}</h2>
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+                ${account_orders_html}
+            </div>
+        </div>
+
+        <!-- 2. Address Book Tab -->
+        <div class="account-tab-panel" id="tab-panel-addresses" style="display: none;">
+            <h2 style="font-family: var(--apoc-font-serif); font-size: 24px; font-weight: 700; color: #FFFFFF; margin-bottom: 20px;">${lang_manageAddresses}</h2>
+            
+            <div id="address-list-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 20px; margin-bottom: 30px;">
+                ${account_addresses_html}
+            </div>
+
+            <div style="background-color: var(--apoc-bg-surface); border: 1px solid var(--apoc-border); padding: 24px; border-radius: 8px; max-width: 500px;">
+                <h3 style="font-family: var(--apoc-font-serif); font-size: 18px; margin-bottom: 16px; color: var(--apoc-gold);">Add New Address</h3>
+                <form action="api/auth/address/add" method="POST">
+                    <div style="margin-bottom: 14px;">
+                        <label for="address-country" style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; margin-bottom:6px; color:var(--apoc-text-secondary);">${lang_country}</label>
+                        <select id="address-country" name="country" style="width:100%; padding:10px 14px; border:1px solid var(--apoc-border); border-radius:4px; font-size:13px; background:var(--apoc-bg-elevated); color:#fff;" required>
+                            ${country_options_html}
+                        </select>
+                    </div>
+
+                    <div id="address-form-fields">
+                        ${address_fields_html}
+                    </div>
+
+                    <button type="submit" class="apoc-btn-gold" style="padding: 10px 20px; margin-top: 10px;">
+                        ${lang_addAddress}
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 3. Credit Cards Tab -->
+        <div class="account-tab-panel" id="tab-panel-cards" style="display: none;">
+            <h2 style="font-family: var(--apoc-font-serif); font-size: 24px; font-weight: 700; color: #FFFFFF; margin-bottom: 20px;">${lang_manageCards}</h2>
+            
+            <div id="card-list-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 20px; margin-bottom: 30px;">
+                ${account_cards_html}
+            </div>
+
+            <div style="background-color: var(--apoc-bg-surface); border: 1px solid var(--apoc-border); padding: 24px; border-radius: 8px; max-width: 500px;">
+                <h3 style="font-family: var(--apoc-font-serif); font-size: 18px; margin-bottom: 16px; color: var(--apoc-gold);">Store New Vault Card</h3>
+                <form action="api/auth/card/add" method="POST">
+                    <div style="margin-bottom: 14px;">
+                        <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; margin-bottom:6px; color:var(--apoc-text-secondary);">Card Number</label>
+                        <input type="text" name="cardNumber" placeholder="4111 1111 1111 1111" required style="width:100%; padding:10px 14px; border:1px solid var(--apoc-border); border-radius:4px; font-size:13px; background:var(--apoc-bg-elevated); color:#fff;">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+                        <div>
+                            <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; margin-bottom:6px; color:var(--apoc-text-secondary);">Expiry</label>
+                            <input type="text" name="cardExpiry" placeholder="MM/YY" required style="width:100%; padding:10px 14px; border:1px solid var(--apoc-border); border-radius:4px; font-size:13px; background:var(--apoc-bg-elevated); color:#fff;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; margin-bottom:6px; color:var(--apoc-text-secondary);">CVV</label>
+                            <input type="text" name="cardCvv" placeholder="111" required style="width:100%; padding:10px 14px; border:1px solid var(--apoc-border); border-radius:4px; font-size:13px; background:var(--apoc-bg-elevated); color:#fff;">
+                        </div>
+                    </div>
+                    <button type="submit" class="apoc-btn-gold" style="padding: 10px 20px;">
+                        Save Encrypted Card
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 4. Change Password Tab -->
+        <div class="account-tab-panel" id="tab-panel-password" style="display: none;">
+            <h2 style="font-family: var(--apoc-font-serif); font-size: 24px; font-weight: 700; color: #FFFFFF; margin-bottom: 20px;">${lang_changePassword}</h2>
+            <div style="background-color: var(--apoc-bg-surface); border: 1px solid var(--apoc-border); padding: 24px; border-radius: 8px; max-width: 440px;">
+                <form action="api/auth/password" method="POST">
+                    <div style="margin-bottom: 14px;">
+                        <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; margin-bottom:6px; color:var(--apoc-text-secondary);">Current Password</label>
+                        <input type="password" name="currentPassword" required style="width:100%; padding:10px 14px; border:1px solid var(--apoc-border); border-radius:4px; font-size:13px; background:var(--apoc-bg-elevated); color:#fff;">
+                    </div>
+                    <div style="margin-bottom: 14px;">
+                        <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; margin-bottom:6px; color:var(--apoc-text-secondary);">New Password</label>
+                        <input type="password" name="newPassword" required minlength="6" style="width:100%; padding:10px 14px; border:1px solid var(--apoc-border); border-radius:4px; font-size:13px; background:var(--apoc-bg-elevated); color:#fff;">
+                    </div>
+                    <button type="submit" class="apoc-btn-gold" style="padding: 10px 20px;">
+                        Update Password
+                    </button>
+                </form>
+            </div>
+        </div>
+    </section>
+</div>
+
+<script>
+    function showAccountTab(tabName) {
+        document.querySelectorAll('.account-tab-panel').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('.account-sidebar button').forEach(el => {
+            el.style.fontWeight = '500';
+            el.style.color = 'var(--apoc-text-secondary)';
+        });
+        const targetPanel = document.getElementById('tab-panel-' + tabName);
+        if (targetPanel) targetPanel.style.display = 'block';
+        const targetBtn = document.getElementById('tab-btn-' + tabName);
+        if (targetBtn) {
+            targetBtn.style.fontWeight = '700';
+            targetBtn.style.color = 'var(--apoc-gold)';
+        }
+    }
+</script>

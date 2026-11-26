@@ -1,0 +1,12 @@
+# AI-generated: Gemini 2.5 Pro
+steps: |
+  Open ${auraManagerUrl} in the browser
+  Click the "Create New Test" button
+  Wait for the Create Test Modal to appear
+  Enter "Automated Workspace Test" into the test name input field
+  Click the "Create Test" submit button
+  Click the "Close" button in the editor panel
+  java verifyAutomatedWorkspaceTestPresent()
+
+data:
+  - testId: "Create_Test"

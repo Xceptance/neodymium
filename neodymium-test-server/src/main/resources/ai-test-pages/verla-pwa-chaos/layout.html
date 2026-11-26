@@ -1,0 +1,1335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <base href="/verla-${quality}/">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VÉRLA &mdash; Fine Fragrance, Body Care &amp; Home</title>
+    <script>
+        if (localStorage.getItem('onetrust_accepted') === 'true' || document.cookie.indexOf('onetrust_accepted=true') !== -1 || sessionStorage.getItem('onetrust_accepted') === 'true') {
+            document.documentElement.classList.add('cookie-accepted');
+        }
+    </script>
+    <style>
+        .cookie-accepted #onetrust-banner { display: none !important; }
+    </style>
+    <!-- Local Fonts (Zero External CDN) -->
+    <link href="/shared/fonts.css" rel="stylesheet">
+    <style>
+        /* CSS Reset & Emotion CSS-in-JS Bath & Body Works / Wick PWA Theme */
+        :root {
+            --color-bg-primary: #FFFFFF;
+            --color-bg-secondary: #FAF9F6;
+            --color-text-primary: #1A1A1A;
+            --color-text-secondary: #666666;
+            --color-border: #E6E2DA;
+            --color-accent: #005699; /* VÉRLA Deep Blue */
+            --color-accent-pink: #E80070; /* VÉRLA Vibrant Pink */
+            --color-accent-light: #F0F6FA;
+            --color-accent-dark: #003B69;
+            --color-success: #399E4A;
+            --color-error: #C85353;
+            --font-family-serif: 'Playfair Display', Georgia, serif;
+            --font-family-sans: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --transition-speed: 0.25s;
+            --max-width: 1280px;
+            --border-radius: 4px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: var(--color-bg-primary);
+            color: var(--color-text-primary);
+            font-family: var(--font-family-sans);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        a { color: inherit; text-decoration: none; }
+        button, input, select, textarea { font-family: inherit; font-size: inherit; }
+        button { background: none; border: none; cursor: pointer; }
+
+        .container { max-width: var(--max-width); margin: 0 auto; padding: 0 20px; width: 100%; }
+
+        /* Wick Header & Marquee Banner */
+        .wick-header__root { position: sticky; top: 0; z-index: 1000; background: #fff; border-bottom: 1px solid var(--color-border); }
+        .wick-header__bannerWrapper { background: #005699; color: #fff; font-size: 12px; font-weight: 600; padding: 8px 16px; overflow: hidden; }
+        .wick-marquee__root { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+        .wick-marquee__viewport { display: flex; align-items: center; gap: 24px; overflow: hidden; white-space: nowrap; flex: 1; }
+        .wick-marquee__item { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; }
+        .wick-marquee__item a { color: #fff; text-decoration: underline; }
+        .wick-button.emotion-c105od { color: #fff; opacity: 0.8; display: flex; align-items: center; justify-content: center; }
+        .wick-button.emotion-c105od:hover { opacity: 1; }
+
+        /* Main Header Bar */
+        .wick-header__barWrapper { width: 100%; border-bottom: 1px solid var(--color-border); background: #FFFFFF; }
+        .wick-header__bar { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; max-width: var(--max-width); margin: 0 auto; }
+        .wick-header__left { display: flex; align-items: center; gap: 24px; }
+        .wick-primary-nav__root { display: flex; gap: 20px; list-style: none; align-items: center; }
+        .wick-primary-nav__trigger { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #222; padding: 6px 0; position: relative; }
+        .wick-primary-nav__trigger:hover { color: var(--color-accent); }
+        
+        .wick-logo-text { font-family: var(--font-family-serif); font-size: 26px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #005699; }
+        .wick-logo-text span { color: #E80070; }
+
+        .wick-header__right { display: flex; align-items: center; gap: 16px; }
+        .wick-button { display: inline-flex; align-items: center; justify-content: center; padding: 6px; border-radius: 4px; color: #333; }
+        .wick-button:hover { background-color: var(--color-bg-secondary); color: var(--color-accent); }
+
+        /* Rotating Reveal Search Bar */
+        .wick-header__subBarWrapper { background: #FAF9F6; border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); padding: 8px 24px; }
+        .wick-global-search__triggerPrompt {
+            width: 100%; max-width: 600px; margin: 0 auto; display: flex; align-items: center; gap: 10px;
+            background: #FFFFFF; border: 1px solid var(--color-border); border-radius: 20px; padding: 8px 16px;
+            cursor: pointer; text-align: left; transition: border-color var(--transition-speed);
+        }
+        .wick-global-search__triggerPrompt:hover, .wick-global-search__triggerPrompt:focus { border-color: var(--color-accent); outline: none; }
+        .wick-global-search__triggerPromptIcon svg { width: 16px; height: 16px; fill: #666; }
+        .wick-global-search__triggerPromptPrefix { font-size: 12px; color: #888; text-transform: uppercase; font-weight: 600; }
+        .wick-global-search__triggerPromptValue { font-size: 13px; color: #222; font-weight: 500; }
+        .wick-global-search__triggerPromptCursor { animation: blink 1s step-start infinite; color: var(--color-accent); font-weight: bold; margin-left: 2px; }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* Search Overlay Modal */
+        .search-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2000; align-items: flex-start; justify-content: center; padding-top: 80px; }
+        .search-modal-overlay.active { display: flex; }
+        .search-modal-box { background: #fff; width: 90%; max-width: 650px; border-radius: 8px; padding: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); }
+
+        /* Search Suggestions Dropdown */
+        .search-suggestion-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 10px 16px;
+            cursor: pointer;
+            text-decoration: none;
+            color: var(--color-text-primary);
+            border-bottom: 1px solid var(--color-border);
+            transition: background var(--transition-speed);
+        }
+        .search-suggestion-item:last-child {
+            border-bottom: none;
+        }
+        .search-suggestion-item:hover {
+            background: #F0F6FA;
+        }
+        .search-suggestion-thumb {
+            width: 42px;
+            height: 42px;
+            background: #FAF9F6;
+            border: 1px solid var(--color-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+        .search-suggestion-thumb svg {
+            width: 70%;
+            height: 70%;
+            color: #005699;
+        }
+        .search-suggestion-info {
+            display: flex;
+            flex-direction: column;
+            text-align: left;
+            flex: 1;
+        }
+        .search-suggestion-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #1A1A1A;
+        }
+        .search-suggestion-price {
+            font-size: 12px;
+            font-weight: 700;
+            color: #005699;
+            margin-top: 2px;
+        }
+        .search-more-link {
+            display: block;
+            padding: 12px 16px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: #005699;
+            text-decoration: none;
+            background: #FAF9F6;
+            border-top: 1px solid var(--color-border);
+        }
+        .search-more-link:hover {
+            text-decoration: underline;
+            background: #F0F6FA;
+        }
+
+        /* Cart Badge */
+        .cart-badge { background-color: #E80070; color: white; font-size: 10px; border-radius: 50%; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; margin-left: 4px; }
+        .wick-button.emotion-s28hge { position: relative; display: inline-flex; align-items: center; gap: 4px; }
+        .emotion-1db0yyd { display: inline-flex; }
+        .emotion-16mjpn3 { font-size: 11px; font-weight: 700; }
+
+        /* Video Error Modal (Simulated Decode Interruption) */
+        .vjs-error-display { position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 3000; display: flex; align-items: center; justify-content: center; }
+        .vjs-errors-dialog { background: #fff; border-radius: 8px; padding: 28px; max-width: 520px; width: 90%; box-shadow: 0 12px 36px rgba(0,0,0,0.25); text-align: left; position: relative; }
+        .vjs-errors-headline { font-size: 18px; font-weight: 700; color: #111; margin-bottom: 12px; font-family: var(--font-family-serif); }
+        .vjs-errors-code { font-size: 12px; color: #C85353; font-weight: 600; margin-bottom: 8px; }
+        .vjs-errors-details { font-size: 11px; color: #666; word-break: break-all; margin-bottom: 20px; background: #FAF9F6; padding: 10px; border-radius: 4px; border: 1px solid var(--color-border); }
+        .vjs-errors-ok-button { background: #005699; color: #fff; font-weight: 600; padding: 10px 24px; border-radius: 4px; font-size: 13px; cursor: pointer; }
+        .vjs-close-button { position: absolute; top: 14px; right: 14px; font-size: 22px; color: #888; background: none; border: none; cursor: pointer; }
+
+        /* Delayed Marketing Modal */
+        .marketing-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 2500; align-items: center; justify-content: center; }
+        .marketing-modal-overlay.active { display: flex; }
+        .marketing-modal { background: #fff; border-radius: 8px; max-width: 480px; width: 90%; padding: 36px 28px; text-align: center; position: relative; box-shadow: 0 16px 48px rgba(0,0,0,0.2); }
+        .marketing-modal h2 { font-family: var(--font-family-serif); font-size: 28px; color: #005699; margin-bottom: 12px; font-weight: 700; }
+        .marketing-modal p { font-size: 14px; color: #555; margin-bottom: 24px; line-height: 1.6; }
+        .marketing-modal input { width: 100%; padding: 12px 16px; border: 1px solid var(--color-border); border-radius: 4px; margin-bottom: 12px; font-size: 14px; }
+        .marketing-modal .btn-claim { width: 100%; background: #E80070; color: #fff; font-weight: 700; padding: 14px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.08em; font-size: 13px; cursor: pointer; }
+        .marketing-modal .btn-dismiss { background: none; border: none; font-size: 12px; color: #888; margin-top: 12px; text-decoration: underline; cursor: pointer; }
+        .marketing-close-btn { position: absolute; top: 12px; right: 12px; font-size: 20px; color: #888; cursor: pointer; }
+
+        /* OneTrust / Cookie Consent Banner */
+        .onetrust-banner { position: fixed; bottom: 0; left: 0; right: 0; background: #1A1A1A; color: #fff; padding: 16px 24px; z-index: 1900; display: flex; justify-content: space-between; align-items: center; gap: 20px; font-size: 12px; box-shadow: 0 -4px 16px rgba(0,0,0,0.15); }
+        .onetrust-banner p { flex: 1; line-height: 1.5; color: #ccc; }
+        .onetrust-buttons { display: flex; gap: 10px; }
+        .onetrust-btn-accept { background: #005699; color: #fff; font-weight: 600; padding: 8px 18px; border-radius: 4px; font-size: 12px; cursor: pointer; }
+        .onetrust-btn-reject { background: #333; color: #fff; font-weight: 500; padding: 8px 14px; border-radius: 4px; font-size: 12px; cursor: pointer; }
+
+        /* Slide-Over Mini-Cart Drawer */
+        .pwa-drawer-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2200; }
+        .pwa-drawer-backdrop.active { display: block; }
+        .pwa-drawer { position: fixed; top: 0; right: -420px; width: 400px; max-width: 90%; height: 100vh; background: #fff; z-index: 2300; box-shadow: -8px 0 30px rgba(0,0,0,0.15); transition: right 0.3s ease; display: flex; flex-direction: column; }
+        .pwa-drawer.active { right: 0; }
+        .pwa-drawer-header { padding: 20px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; }
+        .pwa-drawer-header h3 { font-family: var(--font-family-serif); font-size: 20px; font-weight: 700; color: #005699; }
+        .pwa-drawer-body { flex: 1; overflow-y: auto; padding: 20px; }
+        .pwa-drawer-footer { padding: 20px; border-top: 1px solid var(--color-border); background: #FAF9F6; }
+
+        /* Product Cards: 12-Layer Emotion Soup */
+        .plp-layout-container {
+            display: flex;
+            gap: 32px;
+            align-items: flex-start;
+            width: 100%;
+        }
+        .plp-sidebar {
+            width: 260px;
+            flex-shrink: 0;
+            background: #FAF9F6;
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            padding: 20px;
+            position: sticky;
+            top: 120px;
+        }
+        .plp-main-content {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .products-grid, .wick-layout-grid.emotion-88r6x8 {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 20px;
+            width: 100%;
+        }
+        @media (min-width: 1200px) {
+            .plp-main-content .products-grid, .plp-main-content .wick-layout-grid.emotion-88r6x8 {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        @media (max-width: 900px) {
+            .plp-layout-container {
+                flex-direction: column;
+            }
+            .plp-sidebar {
+                width: 100%;
+                position: static;
+                margin-bottom: 20px;
+            }
+        }
+        .emotion-1s86rl4 { position: relative; display: flex; flex-direction: column; width: 100%; }
+        .wick-linkbox.emotion-164b4e4 { background: #fff; border: 1px solid var(--color-border); border-radius: 6px; padding: 16px; display: flex; flex-direction: column; position: relative; height: 100%; transition: all var(--transition-speed); }
+        .wick-linkbox.emotion-164b4e4:hover { border-color: var(--color-accent); box-shadow: 0 6px 20px rgba(0,86,153,0.08); transform: translateY(-2px); }
+        .wick-card__root.emotion-1bfi37c { display: flex; flex-direction: column; height: 100%; }
+        .emotion-brx7u0 { position: relative; height: 180px; background: #FAF9F6; border-radius: 4px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; }
+        .emotion-ci36qi { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+        .emotion-167ekqp, .emotion-hzkzo2, .emotion-5mrfce { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+        .wick-image.emotion-n45is0 { width: 65%; height: 65%; color: #005699; }
+        .wick-badge.emotion-2b9vae { position: absolute; top: 8px; left: 8px; background: #E80070; color: #fff; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 3px; text-transform: uppercase; }
+        .wick-card__body.emotion-ebdcim { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+        .emotion-e2von4 { font-size: 11px; font-weight: 700; color: #E80070; text-transform: uppercase; letter-spacing: 0.05em; }
+        .wick-card__title.emotion-14lzra7 { font-family: var(--font-family-serif); font-size: 15px; font-weight: 600; color: #1A1A1A; line-height: 1.3; }
+        .wick-card__description.emotion-ht9fx4 { font-size: 12px; color: #666; }
+        .emotion-1rkvoei { font-size: 15px; font-weight: 700; color: #005699; }
+        .emotion-bxysmo { font-size: 13px; color: #888; margin-left: 6px; }
+        .wick-card__footer.emotion-1nht3qk { margin-top: 10px; }
+        
+        /* Number Stepper & Button */
+        .wick-number-stepper__root.emotion-1bd2lri { position: relative; height: 38px; overflow: hidden; border-radius: 4px; }
+        .wick-number-stepper__label { display: none; }
+        .wick-number-stepper__input.emotion-ds87jz, input.wick-number-stepper__input { display: none !important; }
+        .wick-button.emotion-wasmr0.product-quick-add {
+            width: 100%; background: #005699; color: #fff; font-weight: 600; font-size: 12px;
+            text-transform: uppercase; letter-spacing: 0.05em; padding: 10px; border-radius: 4px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .wick-button.emotion-wasmr0.product-quick-add:hover { background: #003B69; }
+        .wick-number-stepper__stepper-wrapper {
+            display: none; width: 100%; height: 100%; align-items: center; justify-content: space-between;
+            border: 1px solid var(--color-accent); border-radius: 4px; background: #fff;
+        }
+        .wick-number-stepper__stepper-wrapper.active { display: flex; }
+        .stepper-btn { width: 36px; height: 100%; background: #F0F6FA; color: #005699; font-weight: bold; font-size: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .stepper-val { font-weight: 700; font-size: 14px; color: #005699; flex: 1; text-align: center; }
+
+        /* Quick Size Selection Modal */
+        .quick-size-modal-overlay {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 2400;
+            align-items: center; justify-content: center;
+        }
+        .quick-size-modal-overlay.active { display: flex !important; }
+        .quick-size-modal {
+            background: #fff; border-radius: 8px; max-width: 460px; width: 92%;
+            padding: 28px; position: relative; box-shadow: 0 16px 48px rgba(0,0,0,0.2);
+        }
+        .quick-size-close-btn {
+            position: absolute; top: 14px; right: 14px; font-size: 24px; color: #888;
+            background: none; border: none; cursor: pointer; line-height: 1;
+        }
+        .quick-size-close-btn:hover { color: #111; }
+        .quick-size-modal-content { display: flex; gap: 20px; align-items: flex-start; }
+        .quick-size-thumb {
+            width: 100px; height: 100px; background: #FAF9F6; border: 1px solid var(--color-border);
+            border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 10px;
+        }
+        .quick-size-thumb svg { width: 100%; height: 100%; color: #005699; }
+        .quick-size-info { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+        .quick-size-title { font-family: var(--font-family-serif); font-size: 17px; font-weight: 700; color: #1A1A1A; line-height: 1.3; }
+        .quick-size-price { font-size: 16px; font-weight: 700; color: #005699; }
+        .quick-size-selector-wrap { margin-top: 6px; }
+        .quick-size-label { font-size: 12px; font-weight: 700; text-transform: uppercase; color: #555; display: block; margin-bottom: 8px; }
+        .quick-size-options { display: flex; flex-wrap: wrap; gap: 8px; }
+        .quick-size-pill {
+            padding: 8px 14px; border: 1px solid var(--color-border); border-radius: 4px; background: #fff;
+            font-size: 13px; font-weight: 600; color: #333; cursor: pointer; transition: all 0.2s;
+        }
+        .quick-size-pill:hover:not(:disabled) { border-color: #005699; color: #005699; }
+        .quick-size-pill.selected { border-color: #005699; background: #005699; color: #fff; }
+        .quick-size-pill:disabled { opacity: 0.4; cursor: not-allowed; text-decoration: line-through; background: #f5f5f5; }
+        .quick-size-submit-btn {
+            width: 100%; background: #005699; color: #fff; font-weight: 700; font-size: 13px;
+            text-transform: uppercase; letter-spacing: 0.05em; padding: 12px; border-radius: 4px;
+            border: none; cursor: pointer; margin-top: 12px; transition: background 0.2s;
+        }
+        .quick-size-submit-btn:hover:not(:disabled) { background: #003B69; }
+        .quick-size-submit-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+        .wick-stack.emotion-1wv6ypd { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #666; margin-top: 6px; }
+        .wick-icon.emotion-e1qt4e { width: 14px; height: 14px; color: #399E4A; }
+
+        /* PLP Page Specifics */
+        .sf-product-list-page.emotion-12lw99g { width: 100%; }
+        .sf-breadcrumb { display: flex; gap: 8px; font-size: 12px; color: #666; margin-bottom: 16px; list-style: none; }
+        .sf-breadcrumb a:hover { color: #005699; text-decoration: underline; }
+        .emotion-1bs8vl2 { display: none !important; }
+        .emotion-1iz5owa { display: flex !important; }
+        @media (max-width: 768px) {
+            .emotion-1bs8vl2 { display: flex !important; }
+            .emotion-1iz5owa { display: none !important; }
+        }
+        .wick-heading.emotion-1cbx7db { font-family: var(--font-family-serif); font-size: 32px; font-weight: 700; color: #005699; margin-bottom: 8px; }
+        .wick-sticky-scroll__root.emotion-7ccjak {
+            position: sticky; top: 120px; z-index: 100; background: #FAF9F6; border: 1px solid var(--color-border);
+            border-radius: 6px; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;
+        }
+        .bopis-toggle-wrapper { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; color: #333; }
+
+        /* Cart Page Specifics: 2-Column Desktop Grid & Component Styling */
+        .emotion-1bqnmih { width: 100%; }
+        .chakra-container.emotion-1sntv1k { max-width: 1200px; margin: 0 auto; width: 100%; }
+        .cart-layout-grid {
+            display: flex;
+            gap: 32px;
+            align-items: flex-start;
+            width: 100%;
+        }
+        .cart-main-col {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .cart-sidebar-col {
+            width: 380px;
+            flex-shrink: 0;
+            position: sticky;
+            top: 120px;
+        }
+        @media (max-width: 900px) {
+            .cart-layout-grid {
+                flex-direction: column;
+            }
+            .cart-sidebar-col {
+                width: 100%;
+                position: static;
+                margin-top: 24px;
+            }
+        }
+
+        /* Z-Index Layering for LinkBox & Buttons */
+        .wick-linkbox { position: relative; }
+        .wick-linkbox__overlay { position: absolute; inset: 0; z-index: 1; }
+        .wick-card__body { position: relative; z-index: 2; }
+        .wick-card__footer { position: relative; z-index: 5; }
+        .wick-button.emotion-wasmr0.product-quick-add { position: relative; z-index: 6; cursor: pointer; }
+        .wick-number-stepper__root { position: relative; z-index: 6; }
+
+        .emotion-ccf7si { margin-bottom: 16px; }
+        .chakra-button.emotion-1dhlla0 {
+            display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600;
+            color: #005699; background: none; border: none; cursor: pointer; padding: 0;
+        }
+        .chakra-button.emotion-1dhlla0:hover { text-decoration: underline; }
+        .emotion-caw46r svg { width: 14px; height: 14px; fill: currentColor; }
+
+        .wick-heading.emotion-1cf4hnz { font-family: var(--font-family-serif); font-size: 28px; font-weight: 700; color: #005699; margin-bottom: 20px; }
+        .wick-alert__root.emotion-1byj8ca { background: #F0F6FA; border-left: 4px solid #005699; padding: 12px 16px; border-radius: 4px; font-size: 13px; color: #005699; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+        .wick-alert__root.emotion-1byj8ca svg { width: 18px; height: 18px; flex-shrink: 0; fill: currentColor; }
+        .emotion-4lw04n { display: flex; gap: 20px; background: #FAF9F6; border: 1px solid var(--color-border); border-radius: 6px; padding: 16px 20px; margin-bottom: 24px; }
+        .emotion-1sel7uw { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; color: #333; }
+        .emotion-1sel7uw svg { width: 20px; height: 20px; flex-shrink: 0; fill: #005699; }
+        .emotion-f7stei { width: 1px; background: var(--color-border); }
+        
+        .emotion-14m478p {
+            background: #fff;
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            padding: 20px 24px;
+            margin-bottom: 16px;
+        }
+        .emotion-13sc4bo {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 24px;
+            width: 100%;
+        }
+        .emotion-3a4b3m {
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+            flex: 2;
+            min-width: 220px;
+        }
+        .emotion-son7hv {
+            width: 80px;
+            height: 80px;
+            background: #FAF9F6;
+            border-radius: 4px;
+            padding: 8px;
+            flex-shrink: 0;
+        }
+        .emotion-mwrbhd {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .emotion-11yo3di {
+            font-family: var(--font-family-serif);
+            font-weight: 700;
+            font-size: 16px;
+            color: #1A1A1A;
+            text-decoration: none;
+        }
+        .emotion-11yo3di:hover { color: #005699; }
+        .emotion-70cgun {
+            font-size: 10px;
+            font-weight: 700;
+            color: #E80070;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .emotion-nil7ry { font-size: 12px; color: #666; }
+        .emotion-1gfvj26 {
+            background: none;
+            border: none;
+            color: #005699;
+            font-size: 12px;
+            cursor: pointer;
+            padding: 0;
+            text-decoration: underline;
+            text-align: left;
+            margin-top: 4px;
+        }
+        .emotion-1lkc10l { display: none; } /* Mobile remove hidden on desktop */
+        .emotion-momggs {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #888;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .emotion-momggs:hover { color: #E80070; }
+        .emotion-momggs svg { width: 16px; height: 16px; fill: currentColor; }
+
+        .emotion-1n86e98 {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            flex: 3;
+            min-width: 0;
+        }
+        .emotion-1uk17kq {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            width: 100%;
+        }
+        .emotion-ypx4ne {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex: 1;
+            gap: 20px;
+        }
+        .emotion-pv8b0v {
+            min-width: 110px;
+        }
+        .emotion-1lolq8 { font-size: 15px; font-weight: 700; color: #E80070; }
+        .emotion-1gi7eky { font-size: 13px; color: #888; text-decoration: line-through; margin: 0 4px; }
+        .emotion-1cs13xl { font-size: 12px; color: #666; }
+        .wick-stack.emotion-1en055y {
+            display: flex;
+            align-items: center;
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+            background: #fff;
+        }
+        .wick-button.emotion-1r0ic55, .wick-button.emotion-vsashv {
+            padding: 6px 10px;
+            font-weight: bold;
+            color: #005699;
+            background: #F0F6FA;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .wick-icon.emotion-ahtlur {
+            width: 14px !important;
+            height: 14px !important;
+            min-width: 14px !important;
+            min-height: 14px !important;
+            flex-shrink: 0;
+            fill: currentColor;
+            color: #005699;
+            display: inline-block;
+        }
+        .wick-input.emotion-1gmt8fm {
+            width: 40px;
+            text-align: center;
+            border: none;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        .emotion-i0biay {
+            min-width: 70px;
+            text-align: right;
+        }
+        .emotion-17zaex6 {
+            font-weight: 700;
+            color: #1A1A1A;
+            font-size: 15px;
+        }
+        .emotion-17xa3kp {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .emotion-1jckwfz {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            font-size: 12px;
+            color: #333;
+        }
+        .emotion-2ao40p {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            cursor: pointer;
+        }
+        .emotion-14o94mz {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 14px;
+            height: 14px;
+            border: 1px solid var(--color-border);
+            border-radius: 50%;
+            margin-top: 2px;
+            background: #fff;
+            flex-shrink: 0;
+        }
+        .emotion-14o94mz[data-checked] .dot {
+            width: 8px;
+            height: 8px;
+            background: #005699;
+            border-radius: 50%;
+            display: block;
+        }
+        .emotion-6z50h5 { font-weight: 600; font-size: 12px; }
+        .emotion-q5l1h4, .emotion-i3nb58 { font-size: 11px; color: var(--color-success); }
+        .emotion-etjba6 { font-size: 12px; color: #666; }
+        .emotion-10iahqc { color: #005699; text-decoration: underline; display: inline; cursor: pointer; }
+
+        @media (max-width: 900px) {
+            .emotion-13sc4bo {
+                flex-direction: column;
+                gap: 16px;
+            }
+            .emotion-1lkc10l { display: block; }
+            .emotion-17xa3kp { display: none; }
+            .emotion-1n86e98 { width: 100%; border-top: 1px solid var(--color-border); padding-top: 16px; }
+            .emotion-1uk17kq { flex-wrap: wrap; }
+        }
+
+        /* Gift Messaging Box */
+        .wick-stack.emotion-120khze {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px 20px;
+            background: #FAF9F6;
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            margin: 20px 0;
+            font-size: 13px;
+            color: #333;
+        }
+        .wick-icon.emotion-1xj7d2j {
+            width: 28px !important;
+            height: 28px !important;
+            min-width: 28px !important;
+            min-height: 28px !important;
+            max-width: 28px !important;
+            max-height: 28px !important;
+            flex-shrink: 0;
+            color: #005699;
+            fill: currentColor;
+        }
+
+        /* Order Summary Sidebar */
+        .emotion-2qrmgs {
+            background: #FAF9F6;
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .wick-group.emotion-mkrjjj { display: flex; gap: 8px; margin-top: 8px; }
+        .wick-input.emotion-1y4qxzj { flex: 1; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 4px; font-size: 13px; background: #fff; }
+        .wick-button.emotion-1pprvi8 { padding: 10px 18px; background: #005699; color: #fff; border-radius: 4px; font-weight: 600; font-size: 12px; text-transform: uppercase; cursor: pointer; border: none; }
+        .wick-field__helperText.emotion-150unkc { font-size: 11px; color: #888; margin-top: 4px; display: block; }
+        
+        .chakra-stack.emotion-lxtbew { background: #fff; border: 1px solid var(--color-border); border-radius: 6px; padding: 16px; margin: 16px 0; font-size: 13px; }
+        .chakra-heading.emotion-w31ykh { font-family: var(--font-family-serif); font-size: 15px; font-weight: 700; color: #005699; margin-bottom: 4px; }
+        .chakra-button.emotion-w51mf2 { margin-top: 10px; padding: 8px 16px; background: #F0F6FA; color: #005699; border: 1px solid #005699; border-radius: 4px; font-weight: 600; font-size: 12px; cursor: pointer; }
+
+        .wick-heading.emotion-fwh00l { font-family: var(--font-family-serif); font-size: 20px; font-weight: 700; color: #005699; margin-bottom: 16px; }
+        .emotion-gg4vpm, .emotion-esfqlg, .emotion-14ehbns, .emotion-1v4itgc { display: flex; justify-content: space-between; align-items: center; font-size: 14px; margin-bottom: 10px; color: #333; }
+        .emotion-1u1qmfi { font-weight: 600; }
+        .emotion-q1rail { font-size: 11px; color: #888; }
+        .wick-separator.emotion-sk2zcy { display: block; height: 1px; background: var(--color-border); margin: 14px 0; }
+        .emotion-1cxzevn { font-size: 18px; font-weight: 700; color: #1A1A1A; }
+
+        .wick-button.emotion-168g49t { width: 100%; background: #E80070; color: #fff; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; padding: 14px; border-radius: 4px; display: flex; align-items: center; justify-content: center; gap: 8px; border: none; cursor: pointer; }
+        .wick-button.emotion-168g49t:hover { background: #C5005F; }
+        .wick-icon.emotion-1yq2hjp { width: 20px !important; height: 20px !important; min-width: 20px !important; min-height: 20px !important; flex-shrink: 0; fill: currentColor; }
+        .emotion-10txwal { font-size: 11px; color: #888; margin-top: 14px; line-height: 1.4; text-align: center; }
+
+        /* Checkout Page Specifics */
+        .emotion-1jecged { width: 100%; }
+        .emotion-18s5kfr { margin-bottom: 30px; }
+        .emotion-1od5tx1 { display: flex; justify-content: space-between; list-style: none; position: relative; }
+        .emotion-1od5tx1::before { content: ''; position: absolute; top: 14px; left: 0; right: 0; height: 2px; background: var(--color-border); z-index: 1; }
+        .emotion-79elbk { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #888; }
+        .emotion-79elbk::before { content: ''; width: 28px; height: 28px; border-radius: 50%; background: #FAF9F6; border: 2px solid var(--color-border); display: flex; align-items: center; justify-content: center; }
+        .emotion-79elbk[data-active="true"] { color: #005699; }
+        .emotion-79elbk[data-active="true"]::before { background: #005699; border-color: #005699; color: #fff; }
+
+        .checkout-grid { display: flex; gap: 32px; align-items: flex-start; }
+        .checkout-left { flex: 1.6; display: flex; flex-direction: column; gap: 20px; }
+        .checkout-right { flex: 1; background: #FAF9F6; border: 1px solid var(--color-border); border-radius: 6px; padding: 24px; }
+        .checkout-card { background: #FAF9F6; border: 1px solid var(--color-border); border-radius: 6px; padding: 20px; }
+        .checkout-card h3 { font-family: var(--font-family-serif); font-size: 18px; font-weight: 700; color: #005699; margin-bottom: 16px; }
+
+        /* Forms & Address Inputs */
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-label {
+            display: block;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+            color: #444;
+            letter-spacing: 0.03em;
+        }
+        .form-control, .form-input, .wick-input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+            font-size: 14px;
+            background: #fff;
+            color: var(--color-text-primary);
+            outline: none;
+            box-sizing: border-box;
+            transition: border-color var(--transition-speed);
+        }
+        .form-control:focus, .form-input:focus, .wick-input:focus {
+            border-color: var(--color-accent);
+        }
+        .form-grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .form-grid-1-2 {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        /* Footer Accordions & Geometric Reveal */
+        .footer { background-color: #FAF9F6; border-top: 1px solid var(--color-border); padding: 50px 0 30px; margin-top: auto; position: relative; }
+        .verla-pattern-reveal { height: 12px; width: 100%; position: absolute; top: 0; left: 0; overflow: hidden; }
+        .wick-accordion__root { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 30px; margin-bottom: 40px; }
+        .wick-accordion__itemTrigger { width: 100%; display: flex; justify-content: space-between; align-items: center; text-align: left; padding: 8px 0; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #005699; }
+        .wick-list__root { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-top: 12px; font-size: 13px; color: #555; }
+        .wick-list__root a:hover { color: #005699; text-decoration: underline; }
+
+        /* Utility buttons */
+        .btn-primary { background-color: #005699; color: white; padding: 12px 24px; border-radius: 4px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; text-transform: uppercase; font-size: 13px; letter-spacing: 0.05em; }
+        .btn-primary:hover { background-color: #003B69; }
+
+        /* Country Selector Modal */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2100; align-items: center; justify-content: center; }
+        .modal-overlay.active { display: flex; }
+        .modal { background: white; border-radius: 8px; padding: 24px; max-width: 480px; width: 90%; position: relative; }
+        .modal-close-btn { position: absolute; top: 16px; right: 16px; font-size: 20px; cursor: pointer; }
+        .country-search-input { width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: 4px; margin-bottom: 16px; font-size: 13px; }
+        .country-list { list-style: none; max-height: 240px; overflow-y: auto; }
+        .country-item { padding: 10px 14px; border-bottom: 1px solid var(--color-border); cursor: pointer; font-size: 13px; }
+        .country-item:hover, .country-item.selected { background-color: var(--color-accent-light); color: var(--color-accent); font-weight: 600; }
+    </style>
+</head>
+<body class="homepage-redesign react chakra-ui-light homepage-redesign-desktop">
+    <div class="react-target">
+        <div class="locale-en-us">
+            <div id="app" class="emotion-jvwy60">
+                <a href="#wick-skip-nav" class="emotion-1vrdl6y visually-hidden" style="position:absolute;left:-9999px;">Skip to Content</a>
+
+                <!-- Multi-Layered Wick Header -->
+                <header class="wick-header__root emotion-1ss52ls">
+                    <!-- Top Marquee Banner -->
+                    <aside aria-label="Site promotions" role="region" class="wick-header__bannerWrapper emotion-1ah8dr4">
+                        <div class="wick-header__banner emotion-11r15vh">
+                            <div class="wick-banner__root emotion-ldst4a">
+                                <div class="wick-stack emotion-3tl3mr" aria-label="Site promotions" data-dan-component="global-promo-banner--slider" data-testid="promo-banner-slider">
+                                    <div class="wick-marquee__root emotion-wxefrh" data-scope="marquee" data-part="root" id="marquee::R1lcpmhapfd:">
+                                        <div class="wick-marquee__viewport emotion-9snzya" data-scope="marquee" data-part="viewport" id="marquee::R1lcpmhapfd::viewport">
+                                            <div class="wick-marquee__item" data-scope="marquee" data-part="item">
+                                                <span>🎉 <strong>TODAY ONLY:</strong> $4.95 Select Full-Size Body Wash &amp; Fragrance Mist &mdash; <a href="c/tops.html" data-dan-component="global-promo-banner-link">Shop Collection</a></span>
+                                            </div>
+                                            <span aria-hidden="true">&bull;</span>
+                                            <div class="wick-marquee__item" data-scope="marquee" data-part="item">
+                                                <span>✨ $2.95 All Foaming Botanical Cleansers &mdash; <a href="c/bottoms.html">Shop Cleansers</a></span>
+                                            </div>
+                                            <span aria-hidden="true">&bull;</span>
+                                            <div class="wick-marquee__item" data-scope="marquee" data-part="item">
+                                                <span>🚚 Free Shipping on Orders Over $50 with Code <strong>FREESHIP</strong></span>
+                                            </div>
+                                        </div>
+                                        <button type="button" aria-label="Pause announcements" data-testid="promo-banner-play-pause" class="wick-button emotion-c105od" onclick="toggleMarquee(this)">
+                                            <svg focusable="false" aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
+
+                    <!-- Main Navigation Bar -->
+                    <div class="wick-header__barWrapper emotion-10j0o01">
+                        <div class="wick-header__bar emotion-f5fwag">
+                            <div class="wick-header__left emotion-7tcy5y">
+                                <a class="wick-link emotion-hzpymk" aria-label="VÉRLA Logo" data-dan-component="branding-logo" href="index.html">
+                                    <span class="wick-logo-text">VÉRLA<span>.</span></span>
+                                </a>
+                                <nav aria-label="Main" class="wick-primary-nav__root emotion-1r7z949">
+                                    <a class="wick-primary-nav__trigger emotion-fv6ygi" data-dan-component="navbar-link" href="c/tops.html">${lang_tops}</a>
+                                    <a class="wick-primary-nav__trigger emotion-fv6ygi" data-dan-component="navbar-link" href="c/bottoms.html">${lang_bottoms}</a>
+                                    <a class="wick-primary-nav__trigger emotion-fv6ygi" data-dan-component="navbar-link" href="c/outerwear.html">${lang_outerwear}</a>
+                                    <a class="wick-primary-nav__trigger emotion-fv6ygi" data-dan-component="navbar-link" href="c/footwear.html">${lang_footwear}</a>
+                                    <a class="wick-primary-nav__trigger emotion-fv6ygi" data-dan-component="navbar-link" href="c/accessories.html">${lang_accessories}</a>
+                                </nav>
+                            </div>
+
+                            <div class="wick-header__right emotion-vdh9xa">
+                                <button type="button" id="country-trigger-btn" class="wick-button" aria-label="Select Country" title="Select Country">
+                                    <span style="font-size: 16px;">${country_flag}</span>
+                                </button>
+
+                                ${user_nav_status}
+
+                                <div id="cart-btn-wrapper" class="relative inline-block emotion-vdh9xa">
+                                    ${cart_badge_html}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Rotating Reveal Search Trigger Sub-Bar -->
+                    <div class="wick-header__subBarWrapper emotion-1afmwm4">
+                        <div class="wick-header__subBar emotion-1kosukw">
+                            <button data-scope="dialog" data-part="trigger" id="dialog::Raspmhapfd::trigger" data-ownedby=":Raspmhapfd:" aria-haspopup="dialog" aria-expanded="false" aria-label="Open search" type="button" data-prompt-variant="reveal" class="wick-global-search__triggerPrompt emotion-1pahpl" onclick="openSearchModal()">
+                                <span aria-hidden="true" class="wick-global-search__triggerPromptIcon emotion-8sw6uk">
+                                    <svg viewBox="0 0 24 24"><path fill="currentColor" d="M10.5 2.375a8.125 8.125 0 0 1 6.169 13.41l2.387 2.387 2.386 2.387a.625.625 0 0 1-.883.883l-4.775-4.773A8.125 8.125 0 1 1 10.5 2.375m0 1.25a6.875 6.875 0 1 0 0 13.75 6.875 6.875 0 0 0 0-13.75"/></svg>
+                                </span>
+                                <span aria-hidden="true" class="wick-global-search__triggerPromptText emotion-seij6d">
+                                    <span class="wick-global-search__triggerPromptPrefix emotion-1colujf">Search for</span>
+                                    <span class="wick-global-search__triggerPromptValue emotion-u4n0w8">
+                                        <span data-phase="in" class="wick-global-search__triggerPromptRevealClip emotion-1wq2lax" id="rotating-search-text">Artisan Candles<span aria-hidden="true" class="wick-global-search__triggerPromptCursor emotion-2ob4n9">|</span></span>
+                                    </span>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </header>
+
+                <!-- Search Overlay Dialog -->
+                <div class="search-modal-overlay" id="search-modal-overlay">
+                    <div class="search-modal-box">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <h3 style="font-family: var(--font-family-serif); font-size: 18px; font-weight: 700; color: #005699;">${lang_searchPlaceholder}</h3>
+                            <button type="button" onclick="closeSearchModal()" style="font-size: 20px; color: #888;">&times;</button>
+                        </div>
+                        <form action="plp.html" method="GET" autocomplete="off" onsubmit="event.preventDefault(); window.pwaRouter.navigate('plp.html?q=' + encodeURIComponent(this.q.value)); closeSearchModal();">
+                            <input type="search" id="search-input" name="q" class="country-search-input" placeholder="${lang_searchPlaceholder}" value="${search_query}" autofocus
+                                   hx-get="api/search/suggest" hx-target="#search-suggestions" hx-trigger="keyup changed delay:250ms">
+                            <div id="search-suggestions" style="max-height: 250px; overflow-y: auto;"></div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Main Content Area -->
+                <div id="wick-skip-nav" tabindex="-1" style="display:flex;flex-direction:column;flex:1;outline:0">
+                    <main id="app-main" role="main" aria-hidden="false" class="emotion-dy7dxy container" style="padding-top: 30px; padding-bottom: 60px;">
+                        ${body}
+                    </main>
+                </div>
+
+                <!-- Geometric Canvas Reveal Footer Area -->
+                <div class="emotion-gn6ni">
+                    <footer data-dan-component="footer" class="footer emotion-13a51km">
+                        <div class="verla-pattern-reveal">
+                            <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" preserveAspectRatio="none" style="width:100%;height:12px;" viewBox="0 0 1200 24">
+                                <defs>
+                                    <pattern id="verla-geom-pat" width="24" height="24" patternUnits="userSpaceOnUse">
+                                        <rect width="12" height="12" fill="#005699" opacity="0.3"/>
+                                        <rect x="12" width="12" height="12" fill="#E80070" opacity="0.2"/>
+                                        <rect y="12" width="12" height="12" fill="#E80070" opacity="0.2"/>
+                                        <rect x="12" y="12" width="12" height="12" fill="#005699" opacity="0.4"/>
+                                    </pattern>
+                                </defs>
+                                <rect width="100%" height="100%" fill="url(#verla-geom-pat)"/>
+                            </svg>
+                        </div>
+                        <div class="container">
+                            <div data-scope="accordion" data-part="root" id="accordion::Rabl7ktmhapfd:" class="wick-accordion__root emotion-101m152">
+                                <div class="wick-accordion__item">
+                                    <div class="wick-accordion__itemTrigger">Customer Care</div>
+                                    <ul class="wick-list__root">
+                                        <li><a href="faq.html">Help &amp; FAQs</a></li>
+                                        <li><a href="shipping.html">Shipping Options</a></li>
+                                        <li><a href="shipping.html">Returns &amp; Exchanges</a></li>
+                                        <li><a href="track-orders.html">Order Tracking</a></li>
+                                        <li><a href="contact.html">Contact Us</a></li>
+                                    </ul>
+                                </div>
+                                <div class="wick-accordion__item">
+                                    <div class="wick-accordion__itemTrigger">My Account</div>
+                                    <ul class="wick-list__root">
+                                        <li><a href="login.html">Sign In or Sign Up</a></li>
+                                        <li><a href="account.html">Account Dashboard</a></li>
+                                        <li><a href="track-orders.html">Order Tracking</a></li>
+                                    </ul>
+                                </div>
+                                <div class="wick-accordion__item">
+                                    <div class="wick-accordion__itemTrigger">Discover</div>
+                                    <ul class="wick-list__root">
+                                        <li><a href="about.html">About VÉRLA</a></li>
+                                        <li><a href="careers.html">Careers</a></li>
+                                        <li><a href="stores.html">Store Locator</a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div style="border-top: 1px solid var(--color-border); padding-top: 20px; display: flex; justify-content: space-between; font-size: 12px; color: #888;">
+                                <p>&copy; 2026 VÉRLA Fragrances, Inc. All rights reserved.</p>
+                                <div style="display: flex; gap: 20px;">
+                                    <a href="about.html">Privacy Policy</a>
+                                    <a href="about.html">Terms of Use</a>
+                                </div>
+                            </div>
+                        </div>
+                    </footer>
+                </div>
+
+                <!-- Simulated Decode Interruption Modal Mockup -->
+                <div class="vjs-error-display" id="vjs-error-modal" style="display: none;" role="dialog" aria-modal="true">
+                    <div class="vjs-errors-dialog">
+                        <button class="vjs-close-button" type="button" title="Close Modal Dialog" onclick="closeVideoErrorModal()">&times;</button>
+                        <h2 class="vjs-errors-headline">The video is bad or in a format that cannot be played on your browser</h2>
+                        <div class="vjs-errors-code"><b>Error Code:</b> MEDIA_ERR_DECODE</div>
+                        <div class="vjs-errors-details">
+                            <b>Technical details:</b> video append of 795837b failed for segment #0 in playlist rendition.m3u8 (PWA simulated decode interruption).
+                        </div>
+                        <button class="vjs-errors-ok-button" type="button" onclick="closeVideoErrorModal()">OK</button>
+                    </div>
+                </div>
+
+                <!-- Delayed Marketing Promo Modal -->
+                <div class="marketing-modal-overlay" id="marketing-modal-overlay" role="dialog" aria-modal="true">
+                    <div class="marketing-modal">
+                        <button class="marketing-close-btn" type="button" onclick="closeMarketingModal()">&times;</button>
+                        <span style="font-size: 32px; display: block; margin-bottom: 8px;">🎁</span>
+                        <h2>Get 20% Off!</h2>
+                        <p>Sign up to receive VIP offers, new scent alerts, and exclusive event access.</p>
+                        <input type="email" placeholder="Enter your email address" id="marketing-email-input">
+                        <button class="btn-claim" type="button" onclick="closeMarketingModal()">Claim 20% Off</button>
+                        <button class="btn-dismiss" type="button" onclick="closeMarketingModal()">No thanks, I prefer paying full price</button>
+                    </div>
+                </div>
+
+                <!-- OneTrust Cookie Banner -->
+                <div class="onetrust-banner" id="onetrust-banner">
+                    <p>We use cookies and similar technologies to enhance site navigation, analyze site usage, and assist in our marketing efforts. By clicking "Accept All Cookies", you agree to the storing of cookies on your device.</p>
+                    <div class="onetrust-buttons">
+                        <button type="button" class="onetrust-btn-reject" onclick="dismissCookieBanner()">Reject Non-Essential</button>
+                        <button type="button" class="onetrust-btn-accept" onclick="dismissCookieBanner()">Accept All Cookies</button>
+                    </div>
+                </div>
+
+                <!-- Slide-Over Mini-Cart Drawer -->
+                <div class="pwa-drawer-backdrop" id="pwa-drawer-backdrop" onclick="closeMiniCartDrawer()"></div>
+                <aside class="pwa-drawer" id="pwa-drawer" aria-label="Shopping Bag Drawer">
+                    <div class="pwa-drawer-header">
+                        <h3>Your Bag</h3>
+                        <button type="button" onclick="closeMiniCartDrawer()" style="font-size: 24px; color: #666;">&times;</button>
+                    </div>
+                    <div class="pwa-drawer-body" id="pwa-drawer-body">
+                        ${cart_dropdown_items_html}
+                    </div>
+                    <div class="pwa-drawer-footer">
+                        <button type="button" class="btn-primary" style="width: 100%; justify-content: center; padding: 14px; background: #005699; color: #fff; font-weight: 700; border: none; cursor: pointer;" onclick="closeMiniCartDrawer(); if(window.pwaRouter){event.preventDefault(); window.pwaRouter.navigate('cart.html');} else {location.href='cart.html';}">View Bag &amp; Checkout</button>
+                    </div>
+                </aside>
+
+                <!-- Country Selector Modal -->
+                <div class="modal-overlay" id="country-modal-overlay">
+                    <div class="modal">
+                        <button type="button" class="modal-close-btn" id="country-modal-close" aria-label="Close region modal">&times;</button>
+                        <h3 style="font-family: var(--font-family-serif); font-size: 20px; font-weight: 600; margin-bottom: 20px;">${lang_selectRegion}</h3>
+                        <input type="text" class="country-search-input" id="country-search" placeholder="${lang_searchCountry}"
+                               hx-get="api/countries" hx-target="#country-list-container" hx-trigger="keyup">
+                        <ul class="country-list" id="country-list-container">
+                            ${country_items_list}
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Quick Size Selection Modal -->
+                <div class="quick-size-modal-overlay" id="quick-size-modal-overlay" role="dialog" aria-modal="true">
+                    <div class="quick-size-modal">
+                        <button class="quick-size-close-btn" type="button" onclick="closeQuickSizeModal()">&times;</button>
+                        <div class="quick-size-modal-content">
+                            <div class="quick-size-thumb" id="quick-size-thumb"></div>
+                            <div class="quick-size-info">
+                                <h3 id="quick-size-title" class="quick-size-title"></h3>
+                                <div id="quick-size-price" class="quick-size-price"></div>
+                                <div class="quick-size-selector-wrap">
+                                    <label class="quick-size-label">Select Size:</label>
+                                    <div id="quick-size-options" class="quick-size-options"></div>
+                                </div>
+                                <button type="button" id="quick-size-add-btn" class="quick-size-submit-btn" disabled>Add to Bag</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts (Zero External CDN) -->
+    <script src="/shared/htmx.js"></script>
+    <script>
+        // PWA Micro-Router
+        window.pwaRouter = {
+            navigate: async function(url) {
+                const mainEl = document.getElementById('app-main');
+                if (!mainEl) {
+                    window.location.href = url;
+                    return;
+                }
+                
+                try {
+                    const resp = await fetch(url, {
+                        headers: { 'X-PWA-Router': 'true' }
+                    });
+                    if (resp.ok) {
+                        const html = await resp.text();
+                        mainEl.innerHTML = html;
+                        window.history.pushState({}, '', url);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        window.pwaRouter.initPageWidgets();
+                    } else {
+                        window.location.href = url;
+                    }
+                } catch (e) {
+                    window.location.href = url;
+                }
+            },
+            initPageWidgets: function() {
+                const mainEl = document.getElementById('app-main');
+                if (window.htmx && mainEl) {
+                    window.htmx.process(mainEl);
+                }
+            }
+        };
+
+        // Quick Size Modal Manager
+        let currentQuickAddProduct = null;
+        let selectedQuickAddSize = null;
+
+        function openQuickSizeModal(productData) {
+            currentQuickAddProduct = productData;
+            selectedQuickAddSize = null;
+            
+            document.getElementById('quick-size-title').textContent = productData.name;
+            document.getElementById('quick-size-price').textContent = productData.price;
+            document.getElementById('quick-size-thumb').innerHTML = productData.svg;
+            
+            const optionsContainer = document.getElementById('quick-size-options');
+            optionsContainer.innerHTML = '';
+            
+            const submitBtn = document.getElementById('quick-size-add-btn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Add to Bag';
+            
+            const sizes = productData.sizes;
+            const stockMap = productData.stock || {};
+            
+            sizes.forEach(sz => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'quick-size-pill';
+                btn.textContent = sz;
+                const inStock = stockMap[sz] === undefined || stockMap[sz] > 0;
+                if (!inStock) {
+                    btn.disabled = true;
+                    btn.title = 'Out of stock';
+                }
+                btn.onclick = () => {
+                    optionsContainer.querySelectorAll('.quick-size-pill').forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    selectedQuickAddSize = sz;
+                    submitBtn.disabled = false;
+                };
+                optionsContainer.appendChild(btn);
+            });
+            
+            submitBtn.onclick = () => {
+                if (!selectedQuickAddSize || !currentQuickAddProduct) return;
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Adding...';
+                window.pwaCart.add(currentQuickAddProduct.id, 1, null, selectedQuickAddSize);
+                setTimeout(() => {
+                    closeQuickSizeModal();
+                    openMiniCartDrawer();
+                }, 300);
+            };
+            
+            document.getElementById('quick-size-modal-overlay').classList.add('active');
+        }
+
+        function closeQuickSizeModal() {
+            const overlay = document.getElementById('quick-size-modal-overlay');
+            if (overlay) overlay.classList.remove('active');
+            currentQuickAddProduct = null;
+            selectedQuickAddSize = null;
+        }
+
+        // Global delegated click listener for Quick Add buttons
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('.product-quick-add');
+            if (btn) {
+                if (btn.disabled || btn.classList.contains('adding')) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const pid = btn.getAttribute('data-product-id');
+                const cat = btn.getAttribute('data-category');
+                const stockStr = btn.getAttribute('data-stock');
+                
+                if (pid) {
+                    let stockMap = {};
+                    try { stockMap = JSON.parse(stockStr || '{}'); } catch(err) {}
+                    
+                    const sizeKeys = Object.keys(stockMap).filter(k => k !== '');
+                    if (cat && cat !== 'accessories' && sizeKeys.length > 0) {
+                        const tile = btn.closest('[data-dan-component="product-tile"]') || btn.closest('.emotion-1s86rl4') || btn.closest('.product-card');
+                        const title = tile ? (tile.querySelector('.wick-card__title a') || tile.querySelector('.wick-card__title') || tile.querySelector('.product-title a'))?.textContent?.trim() : '';
+                        const price = tile ? (tile.querySelector('.emotion-1rkvoei') || tile.querySelector('.product-price'))?.textContent?.trim() : '';
+                        const svg = tile ? (tile.querySelector('svg.wick-image') || tile.querySelector('svg'))?.outerHTML : '';
+                        
+                        openQuickSizeModal({
+                            id: pid,
+                            name: title || btn.getAttribute('data-rec-name') || 'Product',
+                            price: price || '',
+                            svg: svg || '',
+                            sizes: sizeKeys,
+                            stock: stockMap
+                        });
+                        return;
+                    }
+                    
+                    const originalText = btn.textContent;
+                    btn.classList.add('adding');
+                    btn.textContent = 'Adding...';
+                    window.pwaCart.add(pid, 1, btn);
+                    setTimeout(() => {
+                        btn.classList.remove('adding');
+                        btn.classList.add('added');
+                        btn.textContent = 'Added!';
+                        openMiniCartDrawer();
+                        setTimeout(() => {
+                            btn.classList.remove('added');
+                            btn.textContent = originalText;
+                        }, 1500);
+                    }, 400);
+                }
+            }
+        });
+
+        // PWA Cart Manager
+        window.pwaCart = {
+            add: async function(productId, qty, btnEl, size) {
+                try {
+                    let url = 'api/cart/add?productId=' + encodeURIComponent(productId) + '&quantity=' + (qty || 1);
+                    if (size) {
+                        url += '&size=' + encodeURIComponent(size);
+                    }
+                    const resp = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'X-PWA-Router': 'true' }
+                    });
+                    if (resp.ok) {
+                        const btnHtml = await resp.text();
+                        const btnWrapper = document.getElementById('cart-btn-wrapper');
+                        if (btnWrapper) {
+                            btnWrapper.innerHTML = btnHtml;
+                        }
+                        // Refresh mini-cart drawer content
+                        const drawerResp = await fetch('api/cart/dropdown', { headers: { 'X-PWA-Router': 'true' } });
+                        if (drawerResp.ok) {
+                            const drawerHtml = await drawerResp.text();
+                            const db = document.getElementById('pwa-drawer-body');
+                            if (db) db.innerHTML = drawerHtml;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Cart add error:', e);
+                }
+            },
+            update: async function(productId, qty) {
+                try {
+                    const resp = await fetch('api/cart/update?productId=' + encodeURIComponent(productId) + '&quantity=' + qty, {
+                        method: 'POST',
+                        headers: { 'X-PWA-Router': 'true' }
+                    });
+                    if (resp.ok) {
+                        const html = await resp.text();
+                        const wrapper = document.getElementById('cart-content-wrapper');
+                        if (wrapper) wrapper.outerHTML = html;
+                    }
+                } catch (e) {
+                    console.error('Cart update error:', e);
+                }
+            },
+            remove: async function(productId) {
+                try {
+                    const resp = await fetch('api/cart/remove?productId=' + encodeURIComponent(productId), {
+                        method: 'POST',
+                        headers: { 'X-PWA-Router': 'true' }
+                    });
+                    if (resp.ok) {
+                        const html = await resp.text();
+                        const wrapper = document.getElementById('cart-content-wrapper');
+                        if (wrapper) wrapper.outerHTML = html;
+                    }
+                } catch (e) {
+                    console.error('Cart remove error:', e);
+                }
+            },
+            applyCoupon: async function(code) {
+                try {
+                    const resp = await fetch('api/cart/coupon?couponCode=' + encodeURIComponent(code), {
+                        method: 'POST',
+                        headers: { 'X-PWA-Router': 'true' }
+                    });
+                    if (resp.ok) {
+                        const html = await resp.text();
+                        const wrapper = document.getElementById('cart-content-wrapper');
+                        if (wrapper) wrapper.outerHTML = html;
+                    }
+                } catch (e) {
+                    console.error('Coupon error:', e);
+                }
+            }
+        };
+
+        // Rotating Search Text
+        const searchPrompts = ["Artisan Candles", "Botanical Hand Cleansers", "Fine Fragrance Mist", "Home Fragrance Diffusers", "Velvet Body Creams"];
+        let promptIdx = 0;
+        setInterval(() => {
+            promptIdx = (promptIdx + 1) % searchPrompts.length;
+            const el = document.getElementById('rotating-search-text');
+            if (el) {
+                el.innerHTML = searchPrompts[promptIdx] + '<span aria-hidden="true" class="wick-global-search__triggerPromptCursor emotion-2ob4n9">|</span>';
+            }
+        }, 3000);
+
+        // Global delegated click listener for search suggestions
+        document.addEventListener('click', function(e) {
+            const item = e.target.closest('.search-suggestion-item, .search-more-link');
+            if (item) {
+                const href = item.getAttribute('href');
+                if (href) {
+                    closeSearchModal();
+                    if (window.pwaRouter) {
+                        e.preventDefault();
+                        window.pwaRouter.navigate(href);
+                    }
+                }
+            }
+        });
+
+        function openSearchModal() {
+            document.getElementById('search-modal-overlay').classList.add('active');
+            setTimeout(() => document.getElementById('search-input')?.focus(), 50);
+        }
+        function closeSearchModal() {
+            const overlay = document.getElementById('search-modal-overlay');
+            if (overlay) overlay.classList.remove('active');
+            const input = document.getElementById('search-input');
+            if (input) input.value = '';
+            const sugg = document.getElementById('search-suggestions');
+            if (sugg) sugg.innerHTML = '';
+        }
+
+        function openMiniCartDrawer() {
+            document.getElementById('pwa-drawer-backdrop').classList.add('active');
+            document.getElementById('pwa-drawer').classList.add('active');
+        }
+        function closeMiniCartDrawer() {
+            document.getElementById('pwa-drawer-backdrop').classList.remove('active');
+            document.getElementById('pwa-drawer').classList.remove('active');
+        }
+
+        function closeVideoErrorModal() {
+            document.getElementById('vjs-error-modal').style.display = 'none';
+        }
+
+        function closeMarketingModal() {
+            document.getElementById('marketing-modal-overlay').classList.remove('active');
+            sessionStorage.setItem('pwa_modal_dismissed', 'true');
+        }
+
+        function dismissCookieBanner() {
+            const banner = document.getElementById('onetrust-banner');
+            if (banner) banner.style.display = 'none';
+            document.cookie = "onetrust_accepted=true; path=/; max-age=86400";
+            localStorage.setItem('onetrust_accepted', 'true');
+            sessionStorage.setItem('onetrust_accepted', 'true');
+            document.documentElement.classList.add('cookie-accepted');
+        }
+
+        function toggleMarquee(btn) {
+            const vp = document.getElementById('marquee::R1lcpmhapfd::viewport');
+            if (vp) {
+                if (vp.style.animationPlayState === 'paused') {
+                    vp.style.animationPlayState = 'running';
+                    btn.setAttribute('aria-label', 'Pause announcements');
+                } else {
+                    vp.style.animationPlayState = 'paused';
+                    btn.setAttribute('aria-label', 'Play announcements');
+                }
+            }
+        }
+
+        // Intercept internal link clicks for PWA router
+        document.addEventListener('click', function(e) {
+            const anchor = e.target.closest('a');
+            if (anchor && anchor.href && anchor.href.startsWith(window.location.origin) && !anchor.hasAttribute('download') && !anchor.target) {
+                const url = anchor.href;
+                if (url.endsWith('.html') || url.includes('/c/') || url.includes('/p/')) {
+                    e.preventDefault();
+                    window.pwaRouter.navigate(url);
+                }
+            }
+        });
+
+        // Handle popstate for browser back/forward
+        window.addEventListener('popstate', function() {
+            window.pwaRouter.navigate(window.location.href);
+        });
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', function() {
+            window.pwaRouter.initPageWidgets();
+            
+            // Country selector trigger
+            const countryBtn = document.getElementById('country-trigger-btn');
+            if (countryBtn) {
+                countryBtn.onclick = function() {
+                    document.getElementById('country-modal-overlay').classList.add('active');
+                };
+            }
+            const countryClose = document.getElementById('country-modal-close');
+            if (countryClose) {
+                countryClose.onclick = function() {
+                    document.getElementById('country-modal-overlay').classList.remove('active');
+                };
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+# @author AI-generated: Gemini 2.5 Pro
+# @author Xceptance GmbH 2026
+
+steps: |
+  Open ${verla.url}/verla-perfect/index.html in the browser

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>All Actions Integration Test Page</title>
+</head>
+<body>
+    <h1>All Actions Test Page</h1>
+    
+    <div>
+        <label for="input-text">Text Input</label>
+        <input type="text" id="input-text" />
+    </div>
+
+    <div>
+        <button id="btn-click">Click Me</button>
+        <span id="click-status">Not Clicked</span>
+    </div>
+
+    <div>
+        <label for="check-box">Checkbox</label>
+        <input type="checkbox" id="check-box" />
+    </div>
+
+    <div>
+        <select id="select-dropdown">
+            <option value="option1">Option 1</option>
+            <option value="option2">Option 2</option>
+        </select>
+    </div>
+
+    <div>
+        <div id="hover-element" style="width: 100px; height: 50px; background-color: gray;">Hover Element</div>
+        <span id="hover-status">Not Hovered</span>
+    </div>
+
+    <script>
+        document.getElementById('btn-click').addEventListener('click', function() {
+            document.getElementById('click-status').innerText = 'Clicked';
+        });
+        document.getElementById('hover-element').addEventListener('mouseover', function() {
+            document.getElementById('hover-status').innerText = 'Hovered';
+        });
+    </script>
+</body>
+</html>

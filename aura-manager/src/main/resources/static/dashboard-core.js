@@ -1,0 +1,1679 @@
+// ============================================================================
+// Neodymium Aura Dashboard - Core, Theme, Toast & Layout Engine
+// ============================================================================
+
+// Global State Variables
+var clientId = 'client_' + Math.random().toString(36).substring(2, 9);
+var lastActiveView = 'dashboardView';
+var disconnected = false;
+
+var historyCached = [];
+var currentReportId = null;
+var currentTestFile = null;
+
+var activeEditingFile = null;
+var selectedDatasets = [];
+var currentFilesListCached = [];
+
+var isRunning = false;
+var consoleOpened = false;
+var consoleCollapsed = true;
+
+var logFilterAiOnly = true;
+var logFilterErrorsOnly = false;
+var hasShownStartMessage = false;
+
+var activeRunStats = {
+    running: false,
+    startTime: null,
+    total: 0,
+    passed: 0,
+    failed: 0,
+    skipped: 0,
+    activeFile: null,
+    activeTestId: null,
+    tests: []
+};
+var liveCompletedFiles = new Set();
+var liveLastActiveFile = null;
+
+var chatSessions = [];
+var currentSessionId = null;
+var conversationHistory = [];
+
+var historyNavState = 1;
+var savedRunsWidth = 280;
+var savedTestsWidth = 240;
+
+// Bind to window for direct Selenium/Selenide executeScript access
+window.clientId = clientId;
+window.lastActiveView = lastActiveView;
+window.historyCached = historyCached;
+window.currentReportId = currentReportId;
+window.currentTestFile = currentTestFile;
+window.activeEditingFile = activeEditingFile;
+window.selectedDatasets = selectedDatasets;
+window.currentFilesListCached = currentFilesListCached;
+window.isRunning = isRunning;
+window.consoleOpened = consoleOpened;
+window.consoleCollapsed = consoleCollapsed;
+window.logFilterAiOnly = logFilterAiOnly;
+window.logFilterErrorsOnly = logFilterErrorsOnly;
+window.activeRunStats = activeRunStats;
+window.liveCompletedFiles = liveCompletedFiles;
+window.historyNavState = historyNavState;
+
+// Helper getters for dynamic DOM elements
+function getEditorFileName() {
+    return document.getElementById('editorFileName');
+}
+window.getEditorFileName = getEditorFileName;
+
+function getEditorContent() {
+    return document.getElementById('editorContent');
+}
+window.getEditorContent = getEditorContent;
+
+// Toast Notification System
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+    if (message && typeof message === 'object') {
+        if (message.error) message = message.error;
+        else if (message.message) message = message.message;
+        else if (message.file) message = `File ${message.file} processed`;
+        else message = JSON.stringify(message);
+    }
+    if (typeof message === 'string' && message.trim().startsWith('{') && message.trim().endsWith('}')) {
+        try {
+            const parsed = JSON.parse(message);
+            if (parsed.error) message = parsed.error;
+            else if (parsed.message) message = parsed.message;
+            else if (parsed.file) message = `File ${parsed.file} processed`;
+        } catch (e) {}
+    }
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    let iconName = 'info';
+    if (type === 'success') iconName = 'check_circle';
+    else if (type === 'error') iconName = 'error';
+    else if (type === 'warning') iconName = 'warning';
+    toast.innerHTML = `<span class="material-symbols-outlined">${iconName}</span> <span>${message}</span>`;
+    toast.style.cursor = 'pointer';
+    toast.onclick = () => toast.remove();
+    container.appendChild(toast);
+    const duration = type === 'error' ? 10000 : 3000;
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.remove();
+        }
+    }, duration);
+}
+window.showToast = showToast;
+
+function showWarning(msg) {
+    const banner = document.getElementById('warningBanner');
+    const bannerText = document.getElementById('warningBannerText');
+    if (banner && bannerText) {
+        bannerText.textContent = msg;
+        banner.style.display = 'block';
+        setTimeout(() => {
+            banner.style.display = 'none';
+        }, 5000);
+    }
+}
+window.showWarning = showWarning;
+
+// Theme Logic
+function syncThemeToIframes(theme) {
+    const iframes = document.querySelectorAll('iframe');
+    iframes.forEach(iframe => {
+        try {
+            if (iframe.contentWindow) {
+                iframe.contentWindow.postMessage({ type: 'aura-theme-change', theme: theme }, '*');
+                if (typeof iframe.contentWindow.applyTheme === 'function') {
+                    iframe.contentWindow.applyTheme(theme);
+                }
+            }
+        } catch (e) {
+            // Ignore potential cross-origin restrictions
+        }
+    });
+}
+window.syncThemeToIframes = syncThemeToIframes;
+
+function updateThemeUI(theme) {
+    const lightBtn = document.getElementById('themeLight');
+    const darkBtn = document.getElementById('themeDark');
+    const sysBtn = document.getElementById('themeSystem');
+
+    if (lightBtn) {
+        lightBtn.style.background = (theme === 'light') ? 'var(--accent)' : 'transparent';
+        lightBtn.style.color = (theme === 'light') ? '#ffffff' : 'var(--text-secondary)';
+        lightBtn.style.borderRadius = '4px';
+    }
+    if (darkBtn) {
+        darkBtn.style.background = (theme === 'dark') ? 'var(--accent)' : 'transparent';
+        darkBtn.style.color = (theme === 'dark') ? '#ffffff' : 'var(--text-secondary)';
+        darkBtn.style.borderRadius = '4px';
+    }
+    if (sysBtn) {
+        sysBtn.style.background = (theme === 'system') ? 'var(--accent)' : 'transparent';
+        sysBtn.style.color = (theme === 'system') ? '#ffffff' : 'var(--text-secondary)';
+        sysBtn.style.borderRadius = '4px';
+    }
+}
+window.updateThemeUI = updateThemeUI;
+
+function initTheme() {
+    const savedTheme = localStorage.getItem('aura_theme') || 'system';
+    applyTheme(savedTheme);
+
+    if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+            const currentTheme = localStorage.getItem('aura_theme') || 'system';
+            if (currentTheme === 'system') {
+                applyTheme('system');
+            }
+        });
+    }
+
+    window.addEventListener('load', function () {
+        syncThemeToIframes(savedTheme);
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+        updateThemeUI(savedTheme);
+        applyFileViewMode();
+        document.querySelectorAll('iframe').forEach(iframe => {
+            iframe.addEventListener('load', function () {
+                const currentTheme = localStorage.getItem('aura_theme') || 'system';
+                syncThemeToIframes(currentTheme);
+            });
+        });
+    });
+}
+window.initTheme = initTheme;
+
+function applyTheme(theme) {
+    const root = document.documentElement;
+    const body = document.body;
+    let effectiveTheme = theme;
+    if (theme === 'system') {
+        effectiveTheme = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+    }
+
+    if (theme === 'dark') {
+        root.classList.add('force-dark');
+        root.classList.remove('force-light');
+        if (body) {
+            body.classList.add('force-dark');
+            body.classList.remove('force-light');
+        }
+    } else if (theme === 'light') {
+        root.classList.add('force-light');
+        root.classList.remove('force-dark');
+        if (body) {
+            body.classList.add('force-light');
+            body.classList.remove('force-dark');
+        }
+    } else {
+        root.classList.remove('force-dark', 'force-light');
+        if (body) {
+            body.classList.remove('force-dark', 'force-light');
+        }
+    }
+
+    root.setAttribute('data-bs-theme', effectiveTheme);
+    if (body) {
+        body.setAttribute('data-bs-theme', effectiveTheme);
+    }
+
+    updateThemeUI(theme);
+    localStorage.setItem('aura_theme', theme);
+    syncThemeToIframes(effectiveTheme);
+}
+window.applyTheme = applyTheme;
+
+function changeTheme(theme) {
+    localStorage.setItem('aura_theme', theme);
+    applyTheme(theme);
+    fetch('/api/theme?theme=' + encodeURIComponent(theme), { method: 'POST' }).catch(() => {});
+}
+window.changeTheme = changeTheme;
+
+// ============================================================================
+// File View Mode Logic (Flat vs Hierarchical) & Tree Builder
+// ============================================================================
+function getFileViewMode() {
+    return localStorage.getItem('aura_file_view_mode') || 'flat';
+}
+window.getFileViewMode = getFileViewMode;
+
+function setFileViewMode(mode) {
+    const validMode = (mode === 'hierarchical' || mode === 'tree') ? 'hierarchical' : 'flat';
+    localStorage.setItem('aura_file_view_mode', validMode);
+    applyFileViewMode();
+}
+window.setFileViewMode = setFileViewMode;
+
+function toggleFileViewMode() {
+    const current = getFileViewMode();
+    const next = (current === 'flat') ? 'hierarchical' : 'flat';
+    setFileViewMode(next);
+}
+window.toggleFileViewMode = toggleFileViewMode;
+
+function getCollapsedFolders() {
+    try {
+        const saved = localStorage.getItem('aura_collapsed_folders');
+        return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function setFolderCollapsed(folderPath, collapsed) {
+    let folders = getCollapsedFolders();
+    if (collapsed) {
+        if (!folders.includes(folderPath)) folders.push(folderPath);
+    } else {
+        folders = folders.filter(p => p !== folderPath);
+    }
+    localStorage.setItem('aura_collapsed_folders', JSON.stringify(folders));
+}
+
+function toggleTreeFolder(headerEl) {
+    if (!headerEl) return;
+    const groupEl = headerEl.closest('.tree-folder-group');
+    if (!groupEl) return;
+
+    const folderPath = groupEl.getAttribute('data-folder-path') || '';
+    const isCollapsed = groupEl.classList.toggle('is-collapsed');
+
+    const arrowEl = headerEl.querySelector('.tree-folder-arrow');
+    const iconEl = headerEl.querySelector('.tree-folder-icon');
+
+    if (arrowEl) arrowEl.textContent = isCollapsed ? 'keyboard_arrow_right' : 'keyboard_arrow_down';
+    if (iconEl) iconEl.textContent = isCollapsed ? 'folder' : 'folder_open';
+
+    if (folderPath) {
+        setFolderCollapsed(folderPath, isCollapsed);
+    }
+}
+window.toggleTreeFolder = toggleTreeFolder;
+
+function updateViewModeToggleUI(mode) {
+    const dashIcon = document.getElementById('fileViewModeIcon');
+    const dashBtn = document.getElementById('toggleFileViewBtn');
+    const editorIcon = document.getElementById('editorFragmentViewModeIcon');
+    const editorBtn = document.getElementById('toggleEditorFragmentViewBtn');
+
+    const isHierarchical = (mode === 'hierarchical');
+    const iconName = isHierarchical ? 'account_tree' : 'view_list';
+    const tooltipText = isHierarchical ? 'Switch View Mode (Hierarchical -> Flat)' : 'Switch View Mode (Flat -> Hierarchical)';
+
+    if (dashIcon) dashIcon.textContent = iconName;
+    if (dashBtn) {
+        dashBtn.title = tooltipText;
+        if (isHierarchical) dashBtn.classList.add('btn-view-mode-active');
+        else dashBtn.classList.remove('btn-view-mode-active');
+    }
+
+    if (editorIcon) editorIcon.textContent = iconName;
+    if (editorBtn) {
+        editorBtn.title = tooltipText;
+        if (isHierarchical) editorBtn.classList.add('btn-view-mode-active');
+        else editorBtn.classList.remove('btn-view-mode-active');
+    }
+}
+
+function applyFileViewMode() {
+    const mode = getFileViewMode();
+    updateViewModeToggleUI(mode);
+
+    organizeContainerView(document.getElementById('sidebarTestsContainer'), '.file-container', mode);
+    organizeContainerView(document.getElementById('sidebarFragmentsContainer'), '.file-container', mode);
+    organizeContainerView(document.getElementById('fragmentCardsContainer'), '.include-card', mode);
+}
+window.applyFileViewMode = applyFileViewMode;
+
+function organizeContainerView(container, itemSelector, mode) {
+    if (!container) return;
+
+    const items = Array.from(container.querySelectorAll(itemSelector));
+    if (items.length === 0) return;
+
+    // Remove existing tree folder wrappers
+    const treeWrappers = container.querySelectorAll('.tree-folder-group');
+    treeWrappers.forEach(w => w.remove());
+
+    if (mode === 'flat') {
+        // Flat Mode: Append item elements directly back to container
+        items.forEach(item => {
+            const filePath = item.getAttribute('data-file');
+            if (filePath) {
+                const parts = filePath.split('/');
+                const fileName = parts[parts.length - 1];
+
+                const labelSpan = item.querySelector('.file-name-label') || item.querySelector('.item-main > span[style*="font-weight"]');
+                if (labelSpan && labelSpan.textContent !== filePath) {
+                    labelSpan.textContent = filePath;
+                }
+
+                const cardTitleSpan = item.querySelector('.include-title > span:last-child');
+                if (cardTitleSpan && cardTitleSpan.textContent !== fileName) {
+                    cardTitleSpan.textContent = fileName;
+                }
+
+                const pathDiv = item.querySelector('.include-path');
+                if (pathDiv) {
+                    pathDiv.style.display = '';
+                    if (pathDiv.textContent !== filePath) {
+                        pathDiv.textContent = filePath;
+                    }
+                }
+            }
+            container.appendChild(item);
+        });
+        return;
+    }
+
+    // Hierarchical Mode: Build Directory Tree
+    const rootFolders = [];
+    const rootItems = [];
+    const nodes = {};
+
+    items.forEach(item => {
+        const filePath = item.getAttribute('data-file');
+        if (!filePath) {
+            rootItems.push(item);
+            return;
+        }
+
+        const parts = filePath.split('/');
+        const fileName = parts[parts.length - 1];
+
+        const labelSpan = item.querySelector('.file-name-label') || item.querySelector('.item-main > span[style*="font-weight"]');
+        if (labelSpan) {
+            labelSpan.textContent = fileName;
+        }
+
+        const cardTitleSpan = item.querySelector('.include-title > span:last-child');
+        if (cardTitleSpan) {
+            cardTitleSpan.textContent = fileName;
+        }
+
+        const pathDiv = item.querySelector('.include-path');
+        if (pathDiv) {
+            pathDiv.style.display = 'none';
+        }
+
+        if (parts.length <= 1) {
+            rootItems.push(item);
+            return;
+        }
+
+        let currentPath = '';
+        for (let i = 0; i < parts.length - 1; i++) {
+            const dirName = parts[i];
+            const parentPath = currentPath;
+            currentPath = currentPath ? (currentPath + '/' + dirName) : dirName;
+
+            if (!nodes[currentPath]) {
+                nodes[currentPath] = {
+                    name: dirName,
+                    fullPath: currentPath,
+                    parentPath: parentPath,
+                    subfolders: [],
+                    items: []
+                };
+                if (parentPath && nodes[parentPath]) {
+                    if (!nodes[parentPath].subfolders.includes(currentPath)) {
+                        nodes[parentPath].subfolders.push(currentPath);
+                    }
+                } else if (!rootFolders.includes(currentPath)) {
+                    rootFolders.push(currentPath);
+                }
+            }
+        }
+
+        nodes[currentPath].items.push(item);
+    });
+
+    const collapsedList = getCollapsedFolders();
+    const hasCheckboxes = container.id === 'sidebarTestsContainer' || items.some(it => it.querySelector('.file-select-cb') !== null);
+    let folderStates = (typeof window !== 'undefined' && window.currentFolderSelectionStates) ? window.currentFolderSelectionStates : null;
+    if (!folderStates) {
+        try {
+            const rawStates = container.getAttribute('data-folder-states');
+            if (rawStates) {
+                folderStates = JSON.parse(rawStates);
+                if (typeof window !== 'undefined') {
+                    window.currentFolderSelectionStates = folderStates;
+                }
+            }
+        } catch (e) {}
+    }
+    let folderTotals = (typeof window !== 'undefined' && window.currentFolderTotals) ? window.currentFolderTotals : null;
+    if (!folderTotals) {
+        try {
+            const rawTotals = container.getAttribute('data-folder-totals');
+            if (rawTotals) {
+                folderTotals = JSON.parse(rawTotals);
+                if (typeof window !== 'undefined') {
+                    window.currentFolderTotals = folderTotals;
+                }
+            }
+        } catch (e) {}
+    }
+
+    function buildFolderElement(folderPath) {
+        const node = nodes[folderPath];
+        if (!node) return null;
+
+        const isCollapsed = collapsedList.includes(folderPath);
+
+        const groupDiv = document.createElement('div');
+        groupDiv.className = 'tree-folder-group' + (isCollapsed ? ' is-collapsed' : '');
+        groupDiv.setAttribute('data-folder-path', folderPath);
+
+        const headerDiv = document.createElement('div');
+        headerDiv.className = 'tree-folder-header';
+        headerDiv.setAttribute('onclick', 'toggleTreeFolder(this)');
+
+        const arrowSpan = document.createElement('span');
+        arrowSpan.className = 'material-symbols-outlined tree-folder-arrow';
+        arrowSpan.textContent = isCollapsed ? 'keyboard_arrow_right' : 'keyboard_arrow_down';
+
+        headerDiv.appendChild(arrowSpan);
+
+        if (hasCheckboxes) {
+            const checkboxLabel = document.createElement('label');
+            checkboxLabel.className = 'custom-checkbox';
+            checkboxLabel.setAttribute('onclick', 'event.stopPropagation();');
+
+            const checkboxInput = document.createElement('input');
+            checkboxInput.type = 'checkbox';
+            checkboxInput.className = 'folder-select-cb';
+            checkboxInput.setAttribute('data-folder', folderPath);
+            checkboxInput.setAttribute('onchange', "if(typeof toggleFolderCheckboxesInstant==='function') toggleFolderCheckboxesInstant(this);");
+
+            if (folderStates && folderStates[folderPath]) {
+                const st = folderStates[folderPath];
+                if (st === 'checked') {
+                    checkboxInput.checked = true;
+                    checkboxInput.indeterminate = false;
+                } else if (st === 'indeterminate') {
+                    checkboxInput.checked = false;
+                    checkboxInput.indeterminate = true;
+                } else if (st === 'unchecked') {
+                    checkboxInput.checked = false;
+                    checkboxInput.indeterminate = false;
+                }
+            }
+
+            checkboxLabel.appendChild(checkboxInput);
+
+            headerDiv.appendChild(checkboxLabel);
+        }
+
+        const iconSpan = document.createElement('span');
+        iconSpan.className = 'material-symbols-outlined tree-folder-icon';
+        iconSpan.textContent = isCollapsed ? 'folder' : 'folder_open';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'tree-folder-name';
+        nameSpan.textContent = node.name;
+
+        headerDiv.appendChild(iconSpan);
+        headerDiv.appendChild(nameSpan);
+
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'tree-folder-content';
+
+        node.subfolders.forEach(subPath => {
+            const subFolderEl = buildFolderElement(subPath);
+            if (subFolderEl) contentDiv.appendChild(subFolderEl);
+        });
+
+        node.items.forEach(item => {
+            contentDiv.appendChild(item);
+        });
+
+        groupDiv.appendChild(headerDiv);
+        groupDiv.appendChild(contentDiv);
+
+        return groupDiv;
+    }
+
+    rootFolders.forEach(folderPath => {
+        const folderEl = buildFolderElement(folderPath);
+        if (folderEl) container.appendChild(folderEl);
+    });
+
+    rootItems.forEach(item => {
+        const filePath = item.getAttribute('data-file');
+        if (filePath) {
+            const labelSpan = item.querySelector('.item-main > span[style*="font-weight"]');
+            if (labelSpan) labelSpan.textContent = filePath;
+        }
+        container.appendChild(item);
+    });
+
+    if (hasCheckboxes && typeof updateAllFolderCheckboxes === 'function') {
+        updateAllFolderCheckboxes(container);
+    }
+}
+
+// Layout Resizers (Sidebar & Console)
+let isResizingH = false;
+let isResizingV = false;
+
+function updateSidebarRunnerProgress(statusData) {
+    const sidebarProgressEl = document.getElementById('sidebarActiveProgress');
+    const sidebarProgressContainer = document.getElementById('sidebarActiveProgressContainer');
+    if (!sidebarProgressContainer || !sidebarProgressEl) return;
+
+    if (!statusData || (!statusData.progressText && !statusData.total && !statusData.scheduledCount && !statusData.executedCount && !statusData.running)) {
+        sidebarProgressContainer.style.display = 'none';
+        try {
+            localStorage.removeItem('aura_active_run_progress');
+            localStorage.removeItem('aura_active_run_progress_meta');
+        } catch (e) {}
+        return;
+    }
+
+    sidebarProgressContainer.style.display = 'flex';
+
+    const passed = Number(statusData.passed) || 0;
+    const failed = Number(statusData.failed) || 0;
+    const skipped = Number(statusData.skipped) || 0;
+    const runningCount = Number(statusData.runningCount) || (statusData.running ? 1 : 0);
+    const scheduled = Number(statusData.scheduledCount) || 0;
+    const total = scheduled > 0 ? scheduled : (Number(statusData.total) || 0);
+    const executed = statusData.executedCount != null ? Number(statusData.executedCount) : (passed + failed);
+
+    // Number formatter for scaling to 10k+ tests gracefully
+    const fmt = (n) => (typeof Intl !== 'undefined' && Intl.NumberFormat) ? new Intl.NumberFormat().format(n) : String(n);
+
+    // Update text counter (e.g. "3 / 9", "1,450 / 10,000", or "3 executed")
+    if (total > 0) {
+        sidebarProgressEl.textContent = `${fmt(executed)} / ${fmt(total)}`;
+    } else if (executed > 0) {
+        sidebarProgressEl.textContent = `${fmt(executed)} executed`;
+    } else if (statusData.progressText) {
+        sidebarProgressEl.textContent = statusData.progressText;
+    } else {
+        sidebarProgressEl.textContent = statusData.running ? 'Running...' : 'Ready';
+    }
+
+    // Update progress track and segments
+    const track = document.getElementById('sidebarProgressTrack');
+    const segPassed = document.getElementById('sidebarProgressSegPassed');
+    const segFailed = document.getElementById('sidebarProgressSegFailed');
+    const segRunning = document.getElementById('sidebarProgressSegRunning');
+
+    if (track) {
+        if (total > 0) {
+            track.classList.remove('is-indeterminate');
+
+            const passedPct = Math.max(0, Math.min(100, (passed / total) * 100));
+            const failedPct = Math.max(0, Math.min(100, (failed / total) * 100));
+            const runningPct = statusData.running ? Math.max(0, Math.min(100, (runningCount / total) * 100)) : 0;
+
+            if (segPassed) {
+                if (passed > 0) {
+                    segPassed.style.display = 'block';
+                    segPassed.style.width = passedPct + '%';
+                } else {
+                    segPassed.style.display = 'none';
+                    segPassed.style.width = '0%';
+                }
+            }
+
+            if (segFailed) {
+                if (failed > 0) {
+                    segFailed.style.display = 'block';
+                    segFailed.style.width = failedPct + '%';
+                } else {
+                    segFailed.style.display = 'none';
+                    segFailed.style.width = '0%';
+                }
+            }
+
+            if (segRunning) {
+                if (statusData.running && (runningCount > 0 || (total > executed && executed > 0))) {
+                    segRunning.style.display = 'block';
+                    segRunning.style.width = Math.max(runningPct, 2) + '%';
+                } else {
+                    segRunning.style.display = 'none';
+                    segRunning.style.width = '0%';
+                }
+            }
+        } else if (statusData.running) {
+            // Indeterminate state when total is unknown during discovery
+            track.classList.add('is-indeterminate');
+            if (segPassed) { segPassed.style.display = 'none'; segPassed.style.width = '0%'; }
+            if (segFailed) { segFailed.style.display = 'none'; segFailed.style.width = '0%'; }
+            if (segRunning) { segRunning.style.display = 'none'; segRunning.style.width = '0%'; }
+        } else {
+            track.classList.remove('is-indeterminate');
+            if (segPassed) { segPassed.style.display = 'none'; segPassed.style.width = '0%'; }
+            if (segFailed) { segFailed.style.display = 'none'; segFailed.style.width = '0%'; }
+            if (segRunning) { segRunning.style.display = 'none'; segRunning.style.width = '0%'; }
+        }
+    }
+
+    // Update outcome chips (Quiet until broken: only display passed when > 0, failure when > 0)
+    const chipPassed = document.getElementById('sidebarChipPassed');
+    const chipPassedVal = document.getElementById('sidebarChipPassedVal');
+    if (chipPassed && chipPassedVal) {
+        if (passed > 0) {
+            chipPassed.style.display = 'inline-flex';
+            chipPassedVal.textContent = fmt(passed);
+        } else {
+            chipPassed.style.display = 'none';
+        }
+    }
+
+    const chipFailed = document.getElementById('sidebarChipFailed');
+    const chipFailedVal = document.getElementById('sidebarChipFailedVal');
+    if (chipFailed && chipFailedVal) {
+        if (failed > 0) {
+            chipFailed.style.display = 'inline-flex';
+            chipFailedVal.textContent = fmt(failed);
+        } else {
+            chipFailed.style.display = 'none';
+        }
+    }
+
+    // Collapsed sidebar beaker notification dot
+    const collapsedFailDot = document.getElementById('sidebarCollapsedFailIndicator');
+    if (collapsedFailDot) {
+        collapsedFailDot.style.display = failed > 0 ? 'block' : 'none';
+    }
+
+    // Comprehensive hover tooltip
+    const tooltipParts = [];
+    if (total > 0) tooltipParts.push(`${fmt(executed)} of ${fmt(total)} executed`);
+    if (passed > 0) tooltipParts.push(`${fmt(passed)} passed`);
+    if (failed > 0) tooltipParts.push(`${fmt(failed)} failed`);
+    if (statusData.running && runningCount > 0) tooltipParts.push(`${fmt(runningCount)} running`);
+    if (tooltipParts.length > 0) {
+        sidebarProgressContainer.setAttribute('title', tooltipParts.join(' · '));
+    }
+
+    try {
+        localStorage.setItem('aura_active_run_progress', sidebarProgressEl.textContent);
+        localStorage.setItem('aura_active_run_progress_meta', JSON.stringify({
+            passed: passed,
+            failed: failed,
+            skipped: skipped,
+            runningCount: runningCount,
+            scheduledCount: scheduled,
+            total: total,
+            executedCount: executed,
+            running: !!statusData.running,
+            progressText: statusData.progressText || ''
+        }));
+    } catch (e) {}
+}
+window.updateSidebarRunnerProgress = updateSidebarRunnerProgress;
+
+function restoreActiveRunContextUI() {
+    const sidebarCard = document.getElementById('sidebarContextCard');
+    if (!sidebarCard) return;
+
+    const savedRunId = localStorage.getItem('aura_active_run_id');
+    const savedStatus = localStorage.getItem('aura_active_run_status') || 'finished';
+    const savedReportUrl = localStorage.getItem('aura_active_run_report_url') || (savedRunId ? `/run-report?runId=${encodeURIComponent(savedRunId)}` : '');
+
+    const sidebarRunIdEl = document.getElementById('sidebarActiveRunId');
+    const currentRunIdText = sidebarRunIdEl ? sidebarRunIdEl.textContent.trim() : '';
+    const hasHtmlRunId = currentRunIdText && !currentRunIdText.includes('RUN_ID') && currentRunIdText !== 'Run #' && currentRunIdText !== '#';
+
+    const effectiveRunId = hasHtmlRunId ? currentRunIdText.replace(/^(Run\s*)?#?/, '').trim() : (savedRunId ? savedRunId.replace(/^(Run\s*)?#?/, '').trim() : null);
+
+    if (effectiveRunId) {
+        activeRunStats.runId = effectiveRunId;
+        const reportUrl = savedReportUrl || `/run-report?runId=${encodeURIComponent(effectiveRunId)}`;
+
+        sidebarCard.setAttribute('href', reportUrl);
+        sidebarCard.style.display = 'flex';
+
+        if (sidebarRunIdEl) {
+            sidebarRunIdEl.textContent = effectiveRunId.startsWith('#') ? effectiveRunId : `#${effectiveRunId}`;
+        }
+
+        const sidebarBatchNameEl = document.getElementById('sidebarActiveBatchName');
+        if (sidebarBatchNameEl) {
+            const rawBatch = (sidebarBatchNameEl.textContent || '').trim();
+            if (!rawBatch || ['default', 'unknown', 'queue', 'suite', 'all', 'n/a'].includes(rawBatch.toLowerCase())) {
+                sidebarBatchNameEl.style.display = 'none';
+            } else {
+                sidebarBatchNameEl.style.display = 'block';
+            }
+        }
+
+        const sidebarStatusEl = document.getElementById('sidebarActiveStatus') || document.getElementById('sidebarActiveEnv');
+        if (sidebarStatusEl && (sidebarStatusEl.textContent === 'Unknown' || !sidebarStatusEl.textContent)) {
+            sidebarStatusEl.textContent = savedStatus;
+        }
+
+        const pulseDot = document.getElementById('sidebarContextPulseDot');
+        if (pulseDot) {
+            const isRunningState = (sidebarStatusEl && sidebarStatusEl.textContent === 'running') || savedStatus === 'running';
+            pulseDot.style.display = isRunningState ? 'inline-block' : 'none';
+        }
+
+        const savedProgress = localStorage.getItem('aura_active_run_progress');
+        const savedMetaStr = localStorage.getItem('aura_active_run_progress_meta');
+        const sidebarProgressEl = document.getElementById('sidebarActiveProgress');
+        const sidebarProgressContainer = document.getElementById('sidebarActiveProgressContainer');
+        if (sidebarProgressEl && (savedProgress || savedMetaStr)) {
+            if (sidebarProgressContainer) {
+                sidebarProgressContainer.style.display = 'flex';
+            }
+            if (savedMetaStr) {
+                try {
+                    const meta = JSON.parse(savedMetaStr);
+                    updateSidebarRunnerProgress(meta);
+                } catch (e) {
+                    sidebarProgressEl.textContent = savedProgress;
+                }
+            } else if (savedProgress) {
+                sidebarProgressEl.textContent = savedProgress;
+            }
+        }
+    } else {
+        sidebarCard.style.display = 'none';
+    }
+}
+window.restoreActiveRunContextUI = restoreActiveRunContextUI;
+
+document.addEventListener('DOMContentLoaded', function() {
+    restoreActiveRunContextUI();
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('view') === 'history' || window.location.pathname.endsWith('/history')) {
+        showView('reportViewContainer');
+    }
+
+    const sidebarResizer = document.getElementById('sidebarResizer');
+    if (sidebarResizer) {
+        sidebarResizer.addEventListener('mousedown', function (e) {
+            isResizingH = true;
+            document.body.style.cursor = 'ew-resize';
+            e.preventDefault();
+        });
+    }
+
+    const consoleResizer = document.getElementById('consoleResizer');
+    if (consoleResizer) {
+        consoleResizer.addEventListener('mousedown', function (e) {
+            isResizingV = true;
+            document.body.style.cursor = 'ns-resize';
+            e.preventDefault();
+        });
+    }
+});
+
+document.addEventListener('mousemove', function (e) {
+    if (isResizingH) {
+        const workspace = document.querySelector('.workspace-layout');
+        if (workspace) {
+            const workspaceRect = workspace.getBoundingClientRect();
+            const newWidth = workspaceRect.right - e.clientX - 16;
+            if (newWidth > 200 && newWidth < workspaceRect.width * 0.6) {
+                const rightArea = document.getElementById('rightArea');
+                if (rightArea) rightArea.style.width = newWidth + 'px';
+            }
+        }
+    }
+    if (isResizingV) {
+        const consolePanel = document.getElementById('consolePanel');
+        if (consolePanel && consolePanel.style.display !== 'none') {
+            const workspace = document.querySelector('.workspace-layout');
+            if (workspace) {
+                const workspaceRect = workspace.getBoundingClientRect();
+                const newHeight = workspaceRect.bottom - e.clientY - 16;
+                if (newHeight > 100 && newHeight < workspaceRect.height * 0.8) {
+                    consolePanel.style.height = newHeight + 'px';
+                }
+            }
+        }
+    }
+});
+
+document.addEventListener('mouseup', function (e) {
+    if (isResizingH || isResizingV) {
+        isResizingH = false;
+        isResizingV = false;
+        document.body.style.cursor = 'default';
+    }
+});
+
+function switchState(stateName) {
+    const container = document.getElementById('auraTestManagerWorkspace') || document.getElementById('dashboardView');
+    if (container) {
+        container.querySelectorAll('.view-state').forEach(el => el.classList.remove('active'));
+    } else {
+        document.querySelectorAll('#state-selection, #state-editor').forEach(el => el.classList.remove('active'));
+    }
+    const stateEl = document.getElementById('state-' + stateName);
+    if (stateEl) stateEl.classList.add('active');
+}
+window.switchState = switchState;
+
+function showView(viewId) {
+    const dashView = document.getElementById('dashboardView');
+    const icView = document.getElementById('interactiveConsoleView');
+
+    if (dashView) dashView.style.display = 'none';
+    if (icView) icView.style.display = 'none';
+
+    const targetView = document.getElementById(viewId);
+    if (targetView) targetView.style.display = 'flex';
+
+    lastActiveView = viewId;
+    window.lastActiveView = viewId;
+}
+window.showView = showView;
+
+function openInteractiveConsoleView(url) {
+    const iframe = document.getElementById('interactiveConsoleIframe');
+    if (iframe) {
+        const targetUrl = url || '/interactive_console.html';
+        const currentSrc = iframe.src || '';
+        if (!currentSrc || currentSrc === 'about:blank' || currentSrc.includes('about:blank') || (url && currentSrc !== targetUrl)) {
+            iframe.src = targetUrl;
+        }
+    }
+    showView('interactiveConsoleView');
+}
+window.openInteractiveConsoleView = openInteractiveConsoleView;
+
+function closeInteractiveConsoleView() {
+    showView('dashboardView');
+    const iframe = document.getElementById('interactiveConsoleIframe');
+    if (iframe) {
+        iframe.src = 'about:blank';
+    }
+    if (typeof wasInLiveRunView !== 'undefined') {
+        wasInLiveRunView = false;
+        window.wasInLiveRunView = false;
+    }
+}
+window.closeInteractiveConsoleView = closeInteractiveConsoleView;
+
+function onEditorPanelSwapped(evt) {
+    const container = document.getElementById('auraTestManagerWorkspace') || document.getElementById('dashboardView');
+    if (!container) return;
+
+    if (evt && evt.detail && evt.detail.target && evt.detail.target.id !== 'editorPanel') {
+        if (typeof updateCenterLayout === 'function') updateCenterLayout();
+        return;
+    }
+
+    const fileSpan = document.getElementById('editorFileName');
+    const dataFile = fileSpan ? fileSpan.getAttribute('data-file') : null;
+    const textFile = fileSpan && fileSpan.textContent ? fileSpan.textContent.trim() : null;
+    const filename = (dataFile && dataFile.trim() !== '') ? dataFile.trim() : textFile;
+
+    if (filename && filename !== '') {
+        activeEditingFile = filename;
+        window.activeEditingFile = activeEditingFile;
+        if (window.history && window.history.pushState) {
+            const searchParams = new URLSearchParams(window.location.search);
+            if (searchParams.get('file') !== filename) {
+                const targetUrl = window.location.pathname + '?file=' + encodeURIComponent(filename);
+                window.history.pushState({ file: filename }, '', targetUrl);
+            }
+        }
+    } else {
+        activeEditingFile = null;
+        window.activeEditingFile = null;
+        if (window.history && window.history.pushState) {
+            const searchParams = new URLSearchParams(window.location.search);
+            if (searchParams.has('file')) {
+                window.history.pushState({}, '', window.location.pathname);
+            }
+        }
+    }
+    if (typeof updateCenterLayout === 'function') updateCenterLayout();
+}
+window.onEditorPanelSwapped = onEditorPanelSwapped;
+
+function init() {
+    if (window.location.search.includes('test=true')) {
+        window.confirm = () => true;
+        window.prompt = (msg, defaultText) => defaultText || "Mocked Input";
+    }
+
+    const isTestManagerPage = document.getElementById('auraTestManagerWorkspace') !== null ||
+                              document.getElementById('dashboardView') !== null;
+
+    if (isTestManagerPage) {
+        if (typeof initTestSearchFilter === 'function') initTestSearchFilter();
+        if (typeof scrollToBottom === 'function') scrollToBottom();
+        if (typeof loadFiles === 'function') loadFiles();
+        if (typeof startPolling === 'function') startPolling();
+        if (typeof initResizers === 'function') initResizers();
+    } else {
+        if (document.getElementById('sidebarContextCard') !== null && typeof startPolling === 'function') {
+            startPolling();
+        }
+    }
+
+    let savedYamlFileListScrollTop = 0;
+    let savedBrowserScrollTop = 0;
+
+    document.addEventListener('htmx:beforeSwap', function(evt) {
+        if (evt.detail && evt.detail.target && evt.detail.target.id === 'yamlFileList') {
+            const isSearch = evt.detail.elt && evt.detail.elt.id === 'testSearchInput';
+            if (isSearch) {
+                savedYamlFileListScrollTop = 0;
+            } else {
+                savedYamlFileListScrollTop = evt.detail.target.scrollTop;
+            }
+        } else if (evt.detail && evt.detail.target && evt.detail.target.id === 'configPanel') {
+            const browserScroll = document.getElementById('browserProfilesScrollContainer');
+            if (browserScroll) {
+                savedBrowserScrollTop = browserScroll.scrollTop;
+            }
+        }
+    });
+
+    document.addEventListener('htmx:oobAfterSwap', function(evt) {
+        onEditorPanelSwapped(evt);
+        if (typeof syncStateFromQueueContainer === 'function') syncStateFromQueueContainer();
+        if (typeof syncCheckboxesFromState === 'function') syncCheckboxesFromState();
+    });
+
+    document.addEventListener('htmx:afterSwap', function(evt) {
+        onEditorPanelSwapped(evt);
+        if (evt.detail && evt.detail.target) {
+            if (evt.detail.target.id === 'yamlFileList' || evt.detail.target.id === 'editorPanel' || evt.detail.target.querySelector('#fragmentCardsContainer')) {
+                if (evt.detail.target.id === 'yamlFileList') {
+                    if (typeof updateClearTestSearchBtn === 'function') updateClearTestSearchBtn();
+                    const scrollPos = savedYamlFileListScrollTop;
+                    evt.detail.target.scrollTop = scrollPos;
+                    requestAnimationFrame(() => {
+                        if (evt.detail.target) {
+                            evt.detail.target.scrollTop = scrollPos;
+                        }
+                    });
+                    if (typeof syncCheckboxesFromState === 'function') syncCheckboxesFromState();
+                }
+                applyFileViewMode();
+            } else if (evt.detail.target.id === 'configPanel') {
+                const browserScroll = document.getElementById('browserProfilesScrollContainer');
+                if (browserScroll && savedBrowserScrollTop > 0) {
+                    browserScroll.scrollTop = savedBrowserScrollTop;
+                    requestAnimationFrame(() => {
+                        const bs = document.getElementById('browserProfilesScrollContainer');
+                        if (bs) bs.scrollTop = savedBrowserScrollTop;
+                    });
+                }
+            } else if (evt.detail.target.id === 'queueListContainer' || evt.detail.target.id === 'runControls') {
+                if (typeof syncStateFromQueueContainer === 'function') syncStateFromQueueContainer();
+            }
+        }
+    });
+
+    document.addEventListener('htmx:afterSettle', function(evt) {
+        onEditorPanelSwapped(evt);
+    });
+
+    document.addEventListener('htmx:responseError', function(evt) {
+        const detail = evt ? evt.detail : null;
+        const xhr = detail ? detail.xhr : null;
+        let errorMsg = 'Server returned HTTP ' + (xhr && xhr.status ? xhr.status : 'Error');
+        if (xhr && xhr.responseText) {
+            try {
+                const data = JSON.parse(xhr.responseText);
+                if (data && data.error) {
+                    errorMsg = data.error;
+                } else {
+                    const plain = xhr.responseText.trim();
+                    if (plain && !plain.startsWith('<')) {
+                        errorMsg = plain.slice(0, 300);
+                    }
+                }
+            } catch (e) {
+                const plain = xhr.responseText.trim();
+                if (plain && !plain.startsWith('<')) {
+                    errorMsg = plain.slice(0, 300);
+                }
+            }
+        }
+
+        showWarning(errorMsg);
+    });
+
+    document.addEventListener('htmx:sendError', function(evt) {
+        showWarning('Network error communicating with server.');
+    });
+
+    if (typeof syncStateFromQueueContainer === 'function') syncStateFromQueueContainer();
+
+    document.body.addEventListener('aiAction', async function(evt) {
+        const data = evt.detail;
+        if (!data) return;
+
+        const actions = Array.isArray(data.actions) && data.actions.length > 0
+            ? data.actions
+            : (data.action ? [data.action] : []);
+
+        if (actions.includes('refresh_files')) {
+            if (typeof loadFiles === 'function' && document.getElementById('yamlFileList')) await loadFiles();
+        }
+        if (actions.includes('refresh_runs')) {
+            if (window.htmx && document.getElementById('queueListContainer')) {
+                window.htmx.ajax('GET', '/playbooks', {
+                    target: '#queueListContainer',
+                    select: '#queueListContainer',
+                    swap: 'outerHTML'
+                });
+            } else if (window.htmx && document.getElementById('mainViewContainer')
+                    && (document.getElementById('pageCustomDashboard') || document.getElementById('pageBatchHistoryOverview'))) {
+                window.htmx.ajax('POST', '/runs/refresh', {
+                    target: '#mainViewContainer',
+                    swap: 'innerHTML'
+                });
+            }
+            if (typeof pollStatus === 'function') {
+                pollStatus();
+            }
+            if (typeof showToast === 'function') {
+                showToast('Run status updated via Neodymium AI Assistant.');
+            }
+        }
+    });
+
+    document.body.addEventListener('fileSaved', function(evt) {
+        const detail = evt.detail;
+        if (detail && detail.file) {
+            showToast(`💾 ${detail.file} successfully saved to disk!`, "success");
+        }
+    });
+
+    document.body.addEventListener('htmx:afterSwap', function(evt) {
+        if (evt.detail.target.id === 'chatMessages' || evt.detail.target.id === 'chatContainer') {
+            if (typeof scrollToBottom === 'function') scrollToBottom();
+        }
+    });
+}
+window.init = init;
+
+// Modal Controls Event Delegation
+document.addEventListener('click', function(e) {
+    const openBtn = e.target.closest('#openModalBtn');
+    if (openBtn) {
+        const modal = document.getElementById('createTestModal');
+        const nameInput = document.getElementById('newTestName');
+        if (modal) modal.style.display = 'flex';
+        if (nameInput) {
+            nameInput.value = '';
+            nameInput.focus();
+        }
+    }
+    const closeBtn = e.target.closest('#closeModalBtn');
+    if (closeBtn) {
+        const modal = document.getElementById('createTestModal');
+        if (modal) modal.style.display = 'none';
+    }
+});
+
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        const visibleModals = Array.from(document.querySelectorAll('.modal-overlay, .image-lightbox-modal'))
+            .filter(function(m) {
+                return m.offsetWidth > 0 || m.offsetHeight > 0 || window.getComputedStyle(m).display !== 'none';
+            });
+        if (visibleModals.length > 0) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            visibleModals.forEach(function(m) {
+                m.style.display = 'none';
+                if (m.classList.contains('active')) {
+                    m.classList.remove('active');
+                }
+            });
+            const newTestInput = document.getElementById('newTestName');
+            if (newTestInput) {
+                newTestInput.value = '';
+            }
+            return;
+        }
+    }
+
+    const newTestInput = document.getElementById('newTestName');
+    if (newTestInput && event.target === newTestInput && event.key === 'Enter') {
+        if (typeof submitCreateTest === 'function') {
+            submitCreateTest();
+        }
+    }
+});
+
+function initTestSearchFilter() {
+    const searchInput = document.getElementById('testSearchInput');
+    if (!searchInput) return;
+
+    let query = '';
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlQuery = urlParams.get('q');
+        const serverQuery = searchInput.value || '';
+        const cookieQuery = (typeof getFilterCookie === 'function') ? getFilterCookie() : null;
+        const storedQuery = (typeof sessionStorage !== 'undefined') ? sessionStorage.getItem('aura_test_search_query') : null;
+        query = (urlQuery !== null && urlQuery !== '') ? urlQuery : (serverQuery || cookieQuery || storedQuery || '');
+    } catch (e) {}
+
+    if (query) {
+        searchInput.value = query;
+        if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.setItem('aura_test_search_query', query);
+        }
+        if (typeof setFilterCookie === 'function') {
+            setFilterCookie(query);
+        }
+        if (typeof updateClearTestSearchBtn === 'function') {
+            updateClearTestSearchBtn(query);
+        }
+        if (typeof applyInstantTestFilter === 'function') {
+            applyInstantTestFilter(query);
+        }
+    } else {
+        if (typeof updateClearTestSearchBtn === 'function') {
+            updateClearTestSearchBtn('');
+        }
+    }
+}
+window.initTestSearchFilter = initTestSearchFilter;
+
+window.addEventListener('pageshow', function() {
+    const isMgr = document.getElementById('auraTestManagerWorkspace') !== null ||
+                  document.getElementById('dashboardView') !== null;
+    if (isMgr && typeof initTestSearchFilter === 'function') {
+        initTestSearchFilter();
+    }
+});
+
+initTheme();
+document.addEventListener('DOMContentLoaded', function() {
+    init();
+    applyInlineTagsMode();
+    updateActiveTagFilterUI();
+});
+
+function getInlineTagsMode() {
+    try {
+        return localStorage.getItem('aura_show_inline_tags') === 'true';
+    } catch (e) {
+        return false;
+    }
+}
+window.getInlineTagsMode = getInlineTagsMode;
+
+function setInlineTagsMode(enabled) {
+    try {
+        localStorage.setItem('aura_show_inline_tags', enabled ? 'true' : 'false');
+    } catch (e) {}
+    if (typeof closeTagPopover === 'function') {
+        closeTagPopover();
+    }
+    applyInlineTagsMode();
+}
+window.setInlineTagsMode = setInlineTagsMode;
+
+function toggleInlineTagsMode() {
+    setInlineTagsMode(!getInlineTagsMode());
+}
+window.toggleInlineTagsMode = toggleInlineTagsMode;
+
+function applyInlineTagsMode() {
+    const showTags = getInlineTagsMode();
+    const listEl = document.getElementById('yamlFileList');
+    const toggleBtn = document.getElementById('toggleInlineTagsBtn');
+
+    if (listEl) {
+        listEl.classList.toggle('tags-expanded', showTags);
+    }
+    if (toggleBtn) {
+        toggleBtn.classList.toggle('btn-view-mode-active', showTags);
+        toggleBtn.setAttribute('aria-pressed', showTags ? 'true' : 'false');
+        toggleBtn.title = showTags ? 'Hide Inline Tags (Compact View)' : 'Show Inline Tags';
+    }
+}
+window.applyInlineTagsMode = applyInlineTagsMode;
+
+const _tagPopoverState = {
+    el: null,
+    trigger: null,
+    pinned: false,
+    openTimer: null,
+    closeTimer: null
+};
+
+function _ensureTagPopoverElement() {
+    if (_tagPopoverState.el && document.body.contains(_tagPopoverState.el)) {
+        return _tagPopoverState.el;
+    }
+    const pop = document.createElement('div');
+    pop.id = 'tagInspectorPopover';
+    pop.className = 'tag-inspector-popover';
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-label', 'Test case tags');
+    pop.style.display = 'none';
+
+    pop.addEventListener('mouseenter', function() {
+        if (_tagPopoverState.closeTimer) {
+            clearTimeout(_tagPopoverState.closeTimer);
+            _tagPopoverState.closeTimer = null;
+        }
+    });
+    pop.addEventListener('mouseleave', function() {
+        if (!_tagPopoverState.pinned) {
+            scheduleTagPopoverClose();
+        }
+    });
+    pop.addEventListener('click', function(e) {
+        e.stopPropagation();
+    });
+
+    document.body.appendChild(pop);
+    _tagPopoverState.el = pop;
+    return pop;
+}
+
+function _extractGroupedTagsFromScope(containerEl, scopeSelector) {
+    const groups = [];
+    if (!containerEl) return groups;
+    const chipEls = containerEl.querySelectorAll(scopeSelector);
+    chipEls.forEach(groupEl => {
+        const key = groupEl.getAttribute('data-key') || '';
+        const values = [];
+        groupEl.querySelectorAll('.tag-group-val').forEach(valEl => {
+            const val = valEl.getAttribute('data-value') || valEl.textContent.trim();
+            const fullTag = valEl.getAttribute('data-tag') || (key ? key + ':' + val : val);
+            if (val) {
+                values.push({ value: val, tag: fullTag, key: key });
+            }
+        });
+        if (key && values.length > 0) {
+            groups.push({ key: key, values: values });
+        }
+    });
+    return groups;
+}
+
+function _renderPopoverSection(parentEl, titleText, groups) {
+    if (!groups || groups.length === 0) return;
+
+    const section = document.createElement('div');
+    section.className = 'tag-popover-section';
+
+    const title = document.createElement('div');
+    title.className = 'tag-popover-section-title';
+    title.textContent = titleText;
+    section.appendChild(title);
+
+    groups.forEach(group => {
+        const row = document.createElement('div');
+        row.className = 'tag-popover-row';
+
+        const keyEl = document.createElement('span');
+        keyEl.className = 'tag-popover-key';
+        keyEl.textContent = group.key;
+        row.appendChild(keyEl);
+
+        const valsWrap = document.createElement('div');
+        valsWrap.className = 'tag-popover-vals';
+
+        group.values.forEach(item => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'tag-popover-val';
+            btn.setAttribute('data-tag', item.tag);
+            btn.setAttribute('data-key', item.key);
+            btn.setAttribute('data-value', item.value);
+            btn.title = 'Click to filter by ' + item.tag;
+            btn.textContent = item.value;
+            btn.addEventListener('click', function(ev) {
+                ev.stopPropagation();
+                if (typeof filterTestsByTag === 'function') {
+                    filterTestsByTag(item.tag);
+                }
+            });
+            valsWrap.appendChild(btn);
+        });
+
+        row.appendChild(valsWrap);
+        section.appendChild(row);
+    });
+
+    parentEl.appendChild(section);
+}
+
+function _positionTagPopover(pop, triggerEl) {
+    const rect = triggerEl.getBoundingClientRect();
+    const margin = 8;
+
+    pop.style.visibility = 'hidden';
+    pop.style.display = 'block';
+    const popRect = pop.getBoundingClientRect();
+
+    let top = rect.bottom + 6;
+    if (top + popRect.height > window.innerHeight - margin) {
+        const aboveTop = rect.top - popRect.height - 6;
+        top = aboveTop >= margin ? aboveTop : Math.max(margin, window.innerHeight - popRect.height - margin);
+    }
+
+    let left = rect.right - popRect.width;
+    if (left < margin) {
+        left = Math.min(rect.left, window.innerWidth - popRect.width - margin);
+    }
+    if (left < margin) {
+        left = margin;
+    }
+
+    pop.style.top = Math.round(top) + 'px';
+    pop.style.left = Math.round(left) + 'px';
+    pop.style.visibility = 'visible';
+}
+
+function openTagPopover(triggerEl, pinned) {
+    if (!triggerEl) return;
+    if (_tagPopoverState.openTimer) {
+        clearTimeout(_tagPopoverState.openTimer);
+        _tagPopoverState.openTimer = null;
+    }
+    if (_tagPopoverState.closeTimer) {
+        clearTimeout(_tagPopoverState.closeTimer);
+        _tagPopoverState.closeTimer = null;
+    }
+
+    const isDatasetTrigger = triggerEl.classList.contains('dataset-tag-count-badge');
+    const datasetItem = isDatasetTrigger ? triggerEl.closest('.dataset-item') : null;
+    const fileContainer = triggerEl.closest('.file-container');
+
+    let headerLabel = '';
+    let fileGroups = [];
+    let datasetGroups = [];
+
+    if (datasetItem) {
+        const dsLabelEl = datasetItem.querySelector('.dataset-label-text');
+        headerLabel = dsLabelEl ? dsLabelEl.textContent.trim() : (datasetItem.getAttribute('data-id') || 'Dataset');
+        datasetGroups = _extractGroupedTagsFromScope(datasetItem, '.dataset-tags-row > .tag-group-chip[data-tag-scope="dataset"]');
+    } else if (fileContainer) {
+        const fileLabelEl = fileContainer.querySelector('.file-name-label');
+        headerLabel = fileLabelEl ? fileLabelEl.textContent.trim() : (fileContainer.getAttribute('data-file') || 'Test');
+        fileGroups = _extractGroupedTagsFromScope(fileContainer, '.file-tags-row > .tag-group-chip[data-tag-scope="file"]');
+        datasetGroups = _extractGroupedTagsFromScope(fileContainer, '.dataset-only-tags-data > .tag-group-chip[data-tag-scope="dataset"]');
+    }
+
+    if (fileGroups.length === 0 && datasetGroups.length === 0) {
+        closeTagPopover();
+        return;
+    }
+
+    const pop = _ensureTagPopoverElement();
+    pop.textContent = '';
+
+    const header = document.createElement('div');
+    header.className = 'tag-popover-header';
+
+    const titleEl = document.createElement('span');
+    titleEl.className = 'tag-popover-title';
+    titleEl.textContent = headerLabel;
+    titleEl.title = headerLabel;
+    header.appendChild(titleEl);
+
+    const hintEl = document.createElement('span');
+    hintEl.className = 'tag-popover-hint';
+    hintEl.textContent = 'Click to filter';
+    header.appendChild(hintEl);
+
+    pop.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'tag-popover-body';
+    _renderPopoverSection(body, 'File Tags', fileGroups);
+    _renderPopoverSection(body, 'Dataset Tags', datasetGroups);
+    pop.appendChild(body);
+
+    _tagPopoverState.trigger = triggerEl;
+    _tagPopoverState.pinned = Boolean(pinned);
+
+    updateActiveTagFilterUI();
+    _positionTagPopover(pop, triggerEl);
+}
+
+function toggleTagPopover(triggerEl, event) {
+    if (event) event.stopPropagation();
+    if (_tagPopoverState.el && _tagPopoverState.el.style.display !== 'none' && _tagPopoverState.trigger === triggerEl && _tagPopoverState.pinned) {
+        closeTagPopover();
+        return;
+    }
+    openTagPopover(triggerEl, true);
+}
+window.toggleTagPopover = toggleTagPopover;
+
+function scheduleTagPopoverOpen(triggerEl) {
+    if (_tagPopoverState.pinned) return;
+    if (_tagPopoverState.closeTimer) {
+        clearTimeout(_tagPopoverState.closeTimer);
+        _tagPopoverState.closeTimer = null;
+    }
+    if (_tagPopoverState.openTimer) {
+        clearTimeout(_tagPopoverState.openTimer);
+    }
+    _tagPopoverState.openTimer = setTimeout(function() {
+        _tagPopoverState.openTimer = null;
+        if (!_tagPopoverState.pinned) {
+            openTagPopover(triggerEl, false);
+        }
+    }, 160);
+}
+window.scheduleTagPopoverOpen = scheduleTagPopoverOpen;
+
+function scheduleTagPopoverClose() {
+    if (_tagPopoverState.openTimer) {
+        clearTimeout(_tagPopoverState.openTimer);
+        _tagPopoverState.openTimer = null;
+    }
+    if (_tagPopoverState.pinned) return;
+    if (_tagPopoverState.closeTimer) {
+        clearTimeout(_tagPopoverState.closeTimer);
+    }
+    _tagPopoverState.closeTimer = setTimeout(function() {
+        _tagPopoverState.closeTimer = null;
+        if (!_tagPopoverState.pinned) {
+            closeTagPopover();
+        }
+    }, 180);
+}
+window.scheduleTagPopoverClose = scheduleTagPopoverClose;
+
+function closeTagPopover() {
+    if (_tagPopoverState.openTimer) {
+        clearTimeout(_tagPopoverState.openTimer);
+        _tagPopoverState.openTimer = null;
+    }
+    if (_tagPopoverState.closeTimer) {
+        clearTimeout(_tagPopoverState.closeTimer);
+        _tagPopoverState.closeTimer = null;
+    }
+    if (_tagPopoverState.el) {
+        _tagPopoverState.el.style.display = 'none';
+    }
+    _tagPopoverState.trigger = null;
+    _tagPopoverState.pinned = false;
+}
+window.closeTagPopover = closeTagPopover;
+
+document.addEventListener('click', function(e) {
+    if (!_tagPopoverState.el || _tagPopoverState.el.style.display === 'none') return;
+    if (_tagPopoverState.el.contains(e.target)) return;
+    if (_tagPopoverState.trigger && _tagPopoverState.trigger.contains(e.target)) return;
+    closeTagPopover();
+});
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && _tagPopoverState.el && _tagPopoverState.el.style.display !== 'none') {
+        closeTagPopover();
+    }
+});
+
+document.addEventListener('scroll', function(e) {
+    if (!_tagPopoverState.el || _tagPopoverState.el.style.display === 'none') return;
+    if (e.target && _tagPopoverState.el.contains(e.target)) return;
+    closeTagPopover();
+}, true);
+
+function filterTestsByTag(tagString) {
+    const searchInput = document.getElementById('testSearchInput');
+    if (!searchInput) return;
+
+    const trimmedTag = (tagString || '').trim();
+    if (!trimmedTag) {
+        // "All" clicked -> clear all active filters
+        searchInput.value = '';
+    } else {
+        // Parse current comma-separated tokens from search input
+        const currentTokens = searchInput.value
+            .split(',')
+            .map(t => t.trim())
+            .filter(Boolean);
+
+        const targetLower = trimmedTag.toLowerCase();
+        const existingIndex = currentTokens.findIndex(t => t.toLowerCase() === targetLower);
+
+        if (existingIndex >= 0) {
+            // Tag already selected -> toggle off
+            currentTokens.splice(existingIndex, 1);
+        } else {
+            // Tag not selected -> toggle on (add to active tags)
+            currentTokens.push(trimmedTag);
+        }
+
+        searchInput.value = currentTokens.join(', ');
+    }
+
+    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+    if (window.htmx) {
+        window.htmx.trigger(searchInput, 'search');
+    }
+    updateActiveTagFilterUI();
+}
+window.filterTestsByTag = filterTestsByTag;
+
+function clearTestSearch() {
+    const searchInput = document.getElementById('testSearchInput');
+    if (!searchInput) return;
+    searchInput.value = '';
+    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+    if (window.htmx) {
+        window.htmx.trigger(searchInput, 'search');
+    }
+    updateActiveTagFilterUI();
+}
+window.clearTestSearch = clearTestSearch;
+
+function updateActiveTagFilterUI() {
+    const searchInput = document.getElementById('testSearchInput');
+    const clearBtn = document.getElementById('clearTestSearchBtn');
+    const query = searchInput ? searchInput.value.trim() : '';
+
+    if (clearBtn) {
+        clearBtn.style.display = query ? 'inline-flex' : 'none';
+    }
+
+    const activeTokens = query
+        .split(',')
+        .map(t => t.trim().toLowerCase())
+        .filter(Boolean);
+
+    const hasActiveTokens = activeTokens.length > 0;
+
+    const matchesActiveToken = (el) => {
+        if (!hasActiveTokens) return false;
+        const tag = (el.getAttribute('data-tag') || '').toLowerCase();
+        const key = (el.getAttribute('data-key') || '').toLowerCase();
+        const tagVal = (el.getAttribute('data-value') || '').toLowerCase();
+        const chipCombined = key ? (key + ':' + tagVal) : tag;
+        return activeTokens.some(token =>
+            tag === token || key === token || tagVal === token || chipCombined === token
+        );
+    };
+
+    const chips = document.querySelectorAll('#yamlFileList .test-tag-chip, #yamlFileList .dataset-tag-chip, #tagInspectorPopover .tag-popover-val');
+    chips.forEach(chip => {
+        chip.classList.toggle('tag-chip-active', matchesActiveToken(chip));
+    });
+
+    document.querySelectorAll('#yamlFileList .file-container').forEach(fileContainer => {
+        const badge = fileContainer.querySelector('.file-tag-count-badge');
+        if (badge) {
+            let hasMatch = false;
+            if (hasActiveTokens) {
+                const allFileTagVals = fileContainer.querySelectorAll('.file-tags-row .tag-group-val');
+                for (let i = 0; i < allFileTagVals.length; i++) {
+                    if (matchesActiveToken(allFileTagVals[i])) {
+                        hasMatch = true;
+                        break;
+                    }
+                }
+            }
+            badge.classList.toggle('tag-count-badge-active', hasMatch);
+        }
+
+        const dsHintChip = fileContainer.querySelector('.tag-dataset-hint-chip');
+        if (dsHintChip) {
+            let hasDsOnlyMatch = false;
+            if (hasActiveTokens) {
+                const dsOnlyVals = fileContainer.querySelectorAll('.dataset-only-tags-data .tag-group-val');
+                for (let i = 0; i < dsOnlyVals.length; i++) {
+                    if (matchesActiveToken(dsOnlyVals[i])) {
+                        hasDsOnlyMatch = true;
+                        break;
+                    }
+                }
+            }
+            dsHintChip.classList.toggle('tag-count-badge-active', hasDsOnlyMatch);
+        }
+    });
+
+    document.querySelectorAll('#yamlFileList .dataset-item').forEach(dsItem => {
+        const badge = dsItem.querySelector('.dataset-tag-count-badge');
+        if (!badge) return;
+        let hasMatch = false;
+        if (hasActiveTokens) {
+            const allDsTagVals = dsItem.querySelectorAll('.dataset-tags-row .tag-group-val');
+            for (let i = 0; i < allDsTagVals.length; i++) {
+                if (matchesActiveToken(allDsTagVals[i])) {
+                    hasMatch = true;
+                    break;
+                }
+            }
+        }
+        badge.classList.toggle('tag-count-badge-active', hasMatch);
+    });
+}
+window.updateActiveTagFilterUI = updateActiveTagFilterUI;
+
+document.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.target && (evt.target.id === 'yamlFileList' || evt.target.closest('#yamlFileList') || (evt.target.querySelector && evt.target.querySelector('#yamlFileList')))) {
+        if (typeof closeTagPopover === 'function') {
+            closeTagPopover();
+        }
+        if (typeof applyInlineTagsMode === 'function') {
+            applyInlineTagsMode();
+        }
+        updateActiveTagFilterUI();
+        if (typeof applyFileViewMode === 'function') {
+            applyFileViewMode();
+        }
+    }
+});

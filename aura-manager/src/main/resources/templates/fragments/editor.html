@@ -1,0 +1,818 @@
+<!--
+  Xceptance Aura Visual Playbook Editor Fragment
+  @author AI-generated: Antigravity
+  Xceptance GmbH 2026
+-->
+<style>
+.empty-steps-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px;
+    border: 2px dashed rgba(203, 213, 225, 0.8);
+    border-radius: 8px;
+    color: var(--text-secondary, #64748b);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    margin: 6px 0;
+    background: rgba(248, 250, 252, 0.6);
+    user-select: none;
+}
+.empty-steps-placeholder:hover {
+    border-color: var(--accent, #2563eb);
+    color: var(--accent, #2563eb);
+    background: rgba(37, 99, 235, 0.05);
+}
+</style>
+
+<div class="panel editor-container" id="editorPanel" th:fragment="editorPanelContent" th:data-has-error="${hasParseError}" th:data-mode="${editorMode}" th:data-area="${areaTag != null ? areaTag : ''}">
+    <div class="panel-header">
+        <div class="neo-u-11" id="editorTitle">
+            <span class="material-symbols-outlined neo-u-12" th:text="${isFragment != null and isFragment ? 'extension' : 'description'}">description</span>
+            <span id="editorFileName" th:data-file="${activeEditingFile}" th:text="${activeEditingFile != null ? activeEditingFile : ''}"></span>
+            <span th:if="${isFragment != null and isFragment}" class="file-badge-steps" style="margin-left: 6px;">🧩 Step Fragment</span>
+            <span th:if="${activeEditingFile != null and !activeEditingFile.isEmpty() and (isFragment == null or !isFragment)}" class="file-badge-yaml" style="margin-left: 6px;">🧪 Test Playbook</span>
+            <!-- Root Tags Assignment / Display -->
+            <div id="editorTagsContainer" class="editor-tags-container" th:if="${activeEditingFile != null and !activeEditingFile.isEmpty() and (isFragment == null or !isFragment)}" style="display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; flex-wrap: wrap;">
+                <th:block th:if="${rootTags != null and !rootTags.isEmpty()}">
+                    <th:block th:each="entry : ${rootTags.entrySet()}">
+                        <span class="root-tag-chip" th:each="val : ${entry.value}" th:data-key="${entry.key}" th:data-value="${val}" style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 12px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.35); font-size: 11px; color: #3b82f6; font-weight: 500;">
+                            <span class="material-symbols-outlined" style="font-size: 12px;">label</span>
+                            <span class="root-tag-text" th:text="${entry.key + ': ' + val}">key: val</span>
+                            <button type="button" class="btn-remove-root-tag" onclick="removeRootTagFromBtn(this)" title="Remove tag" style="background: transparent; border: none; cursor: pointer; color: var(--text-secondary); display: inline-flex; align-items: center; padding: 0; margin-left: 2px;">
+                                <span class="material-symbols-outlined" style="font-size: 12px;">close</span>
+                            </button>
+                        </span>
+                    </th:block>
+                </th:block>
+                <button type="button" 
+                        class="btn-editor btn-add-root-tag" 
+                        id="btnAddRootTag" 
+                        onclick="openAddRootTagModal()" 
+                        title="Add playbook root tag"
+                        style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 8px;">
+                    <span class="material-symbols-outlined" style="font-size: 13px;">label</span>
+                    <span>+ Tag</span>
+                </button>
+            </div>
+            <span id="editorUnsavedBadge" style="display: none;" class="unsaved-badge">
+                <span class="material-symbols-outlined" style="font-size: 12px;">warning</span> Unsaved
+            </span>
+        </div>
+        <div class="editor-actions">
+            <!-- Mode Switcher -->
+            <div class="editor-mode-toggle" style="display: inline-flex; align-items: center; background: rgba(0,0,0,0.15); border: 1px solid var(--border); border-radius: 6px; padding: 2px; margin-right: 6px;">
+                <button type="button" class="btn-mode-toggle" id="btnModeVisual" onclick="setEditorMode('visual')"
+                        th:disabled="${hasParseError != null and hasParseError}"
+                        th:style="${'raw'.equals(editorMode) ? 'opacity: 0.5; padding: 3px 8px; font-size: 11px; border-radius: 4px; border: none; background: transparent; color: var(--text-secondary); cursor: pointer;' : 'padding: 3px 8px; font-size: 11px; border-radius: 4px; border: none; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;'}"
+                        th:title="${hasParseError != null and hasParseError ? 'Visual editor disabled due to YAML syntax error' : 'Switch to Visual Editor'}">
+                    <span class="material-symbols-outlined" style="font-size: 13px; vertical-align: middle;">dashboard</span> Visual
+                </button>
+                <button type="button" class="btn-mode-toggle" id="btnModeRaw" onclick="setEditorMode('raw')"
+                        th:style="${'raw'.equals(editorMode) ? 'padding: 3px 8px; font-size: 11px; border-radius: 4px; border: none; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;' : 'opacity: 0.8; padding: 3px 8px; font-size: 11px; border-radius: 4px; border: none; background: transparent; color: var(--text-secondary); cursor: pointer;'}"
+                        title="Switch to Raw YAML Editor">
+                    <span class="material-symbols-outlined" style="font-size: 13px; vertical-align: middle;">code</span> Raw YAML
+                </button>
+            </div>
+            <button class="btn-editor" id="undoBtn" onclick="editorUndo()" onmousedown="event.preventDefault()" title="Undo (Ctrl+Z)" disabled>
+                <span class="material-symbols-outlined">undo</span> Undo
+            </button>
+            <button class="btn-editor" id="redoBtn" onclick="editorRedo()" onmousedown="event.preventDefault()" title="Redo (Ctrl+Y)" disabled>
+                <span class="material-symbols-outlined">redo</span> Redo
+            </button>
+            <button class="btn-editor btn-validate" id="reviewStepsBtn" onclick="runValidateFile()" title="Validate file: check YAML syntax, include paths, and variable definitions" th:disabled="${hasParseError != null and hasParseError}">
+                <span class="material-symbols-outlined">verified</span> Validate File
+            </button>
+            <button class="btn-editor btn-ai-review" id="aiReviewBtn" onclick="runAiReview()" title="AI Review: Analyze playbook steps for ambiguity, missing assertions, and design best practices with PlaybookLinter" th:disabled="${hasParseError != null and hasParseError}">
+                <span class="material-symbols-outlined">auto_awesome</span> AI Review
+            </button>
+            <button type="button"
+                    class="btn-editor save"
+                    id="saveYamlBtn"
+                    onclick="saveYamlFile()">
+                <span class="material-symbols-outlined">save</span> Save
+            </button>
+            <button class="btn-editor" id="renameTestBtn" onclick="openRenameModal()"><span class="material-symbols-outlined">drive_file_rename_outline</span> Rename / Move</button>
+            <button class="btn-editor delete" id="deleteTestBtn" onclick="deleteYamlFile()"><span class="material-symbols-outlined">delete</span> Delete</button>
+            <button type="button"
+                    class="btn-editor" 
+                    id="closeEditorBtn"
+                    onclick="closeEditor()">
+                <span class="material-symbols-outlined">close</span> Close
+            </button>
+        </div>
+    </div>
+
+    <!-- YAML Parse Error Warning Banner -->
+    <div id="editorParseErrorBanner" th:if="${hasParseError != null and hasParseError}" style="margin: 10px 16px 0 16px; padding: 12px 16px; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.4); border-left: 4px solid #ef4444; border-radius: 6px; color: #ef4444; font-size: 12px; display: flex; flex-direction: column; gap: 6px;">
+        <div style="display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px;">
+            <span class="material-symbols-outlined" style="font-size: 18px;">error</span>
+            <span>YAML Syntax Error Detected &mdash; Loaded in Raw YAML Mode</span>
+        </div>
+        <div style="font-family: monospace; white-space: pre-wrap; font-size: 11.5px; line-height: 1.4; background: rgba(0,0,0,0.2); padding: 8px 10px; border-radius: 4px; word-break: break-word;" th:text="${parseErrorMessage}">YAML parsing failed</div>
+        <div style="color: var(--text-secondary); font-size: 11px;">
+            Fix the syntax or indentation error directly in the editor below and click <b>Save</b> to restore visual editing mode.
+        </div>
+    </div>
+
+    <!-- Raw YAML Code Editor Panel -->
+    <div class="editor-raw-panel" id="rawEditorPanel" th:style="${'raw'.equals(editorMode) ? 'display: flex;' : 'display: none;'}">
+        <div class="editor-code-panel" style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+            <div class="panel-header" style="flex-shrink: 0;">
+                <div class="panel-title">
+                    <span class="material-symbols-outlined" style="font-size: 18px; color: var(--accent);">edit_document</span>
+                    Direct YAML Source
+                </div>
+                <div style="font-size: 11px; color: var(--text-secondary);">
+                    UTF-8 &bull; Spaces only (no tabs)
+                </div>
+            </div>
+            <textarea id="rawYamlTextarea" spellcheck="false" class="raw-yaml-textarea"
+                      oninput="handleRawYamlInput(this)"
+                      th:text="${fileContent}"></textarea>
+        </div>
+    </div>
+
+    <!-- Hidden input holding compiled YAML payload for HTMX form submission -->
+    <input type="hidden" id="editorContent" name="content" th:value="${editorContent != null ? editorContent : ''}" />
+    <input type="hidden" id="editorPropertiesKey" th:value="${propertiesKey != null ? propertiesKey : '_properties'}" />
+    <input type="hidden" id="editorMetaKey" th:value="${metaKey != null ? metaKey : '_meta'}" />
+    <input type="hidden" id="editorMetaYaml" th:value="${metaYaml != null ? metaYaml : ''}" />
+    <input type="hidden" id="editorDescription" th:value="${description != null ? description : ''}" />
+    <input type="hidden" id="editorPromptAddonYaml" th:value="${promptAddonYaml != null ? promptAddonYaml : ''}" />
+
+    <!-- Main Visual Editor Layout Container -->
+    <div id="visualEditorContainer" class="visual-editor-container" th:style="${'raw'.equals(editorMode) ? 'display: none;' : 'display: flex;'}">
+        
+        <!-- Central Visual Editor Area -->
+        <main class="editor-main-area" id="visualEditorMain">
+
+            <!-- Subtle Add Properties Button Container (Only for test playbooks, not fragments) -->
+            <div id="addPropertiesBtnContainer" th:style="${(isFragment != null and isFragment) or ((propertiesList != null and !#lists.isEmpty(propertiesList)) or (propertiesYaml != null and !#strings.isEmpty(propertiesYaml))) ? 'display: none;' : 'display: block;'}">
+                <button class="btn-add-section-block" onclick="addPropertiesBlock()">
+                    <span class="material-symbols-outlined">tune</span>
+                    <span>Add '_properties:' Block</span>
+                </button>
+            </div>
+
+            <!-- properties: Section Code Panel -->
+            <div class="editor-code-panel" id="playbookPropertiesPanel" th:style="${(propertiesList != null and !#lists.isEmpty(propertiesList)) or (propertiesYaml != null and !#strings.isEmpty(propertiesYaml)) ? 'display: flex;' : 'display: none;'}">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="material-symbols-outlined" style="font-size: 18px; color: var(--accent);">tune</span>
+                        <span th:text="${'Playbook Properties (' + (propertiesKey != null ? propertiesKey : '_properties') + ':)'}">Playbook Properties (_properties:)</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="font-size: 12px; color: var(--text-secondary);">
+                            Override token budgets, timeouts, or browser profiles
+                        </div>
+                        <button type="button" class="btn-remove-section-block" onclick="removePropertiesBlock()">
+                            <span class="material-symbols-outlined">delete</span>
+                            Remove Block
+                        </button>
+                    </div>
+                </div>
+                <div style="padding: 12px 16px;">
+                    <!-- Autocomplete suggestions for common Neodymium properties -->
+                    <datalist id="propertyKeySuggestions">
+                        <option value="neodymium.ai.tokenBudget.input">
+                        <option value="neodymium.ai.tokenBudget.output">
+                        <option value="neodymium.ai.maxStepsPerRun">
+                        <option value="skipReplay">
+                        <option value="browser">
+                        <option value="neodymium.url">
+                        <option value="neodymium.ai.model">
+                        <option value="neodymium.ai.temperature">
+                        <option value="neodymium.ai.timeout">
+                    </datalist>
+
+                    <div class="properties-table-container">
+                        <table class="properties-editor-table" id="playbookPropertiesTable">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50%;">Property Name (Key)</th>
+                                    <th style="width: 45%;">Value</th>
+                                    <th style="width: 5%; text-align: center;"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="propertiesTableBody">
+                                <th:block th:if="${propertiesList != null and !#lists.isEmpty(propertiesList)}">
+                                    <tr th:each="prop : ${propertiesList}" class="property-row">
+                                        <td>
+                                            <input type="text" class="property-key-input" th:value="${prop.get('key')}" placeholder="e.g. skipReplay" list="propertyKeySuggestions" oninput="compilePlaybookToYaml()" />
+                                        </td>
+                                        <td>
+                                            <input type="text" class="property-val-input" th:value="${prop.get('value')}" placeholder="Value" oninput="compilePlaybookToYaml()" />
+                                        </td>
+                                        <td class="property-action-col">
+                                            <button type="button" class="btn-remove-property" title="Remove Property" onclick="removePropertyRow(this)">
+                                                <span class="material-symbols-outlined">delete</span>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </th:block>
+                            </tbody>
+                        </table>
+                        <button type="button" class="btn-add-property-row" onclick="addPropertyRow('', '')">
+                            <span class="material-symbols-outlined" style="font-size: 15px;">add</span>
+                            <span>Add Property</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Subtle Add 'before:' Button Container -->
+            <div id="addBeforeBtnContainer" th:style="${(isFragment != null and isFragment) or (beforeSteps != null and !#lists.isEmpty(beforeSteps)) ? 'display: none;' : 'display: block;'}">
+                <button class="btn-add-section-block" onclick="addBeforeBlock()">
+                    <span class="material-symbols-outlined">add_circle</span>
+                    <span>Add 'before:' Block</span>
+                </button>
+            </div>
+
+            <!-- before: Section Code Panel -->
+            <div class="editor-code-panel" id="beforeCodePanel" th:style="${beforeSteps != null and !#lists.isEmpty(beforeSteps) ? 'display: flex;' : 'display: none;'}">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="material-symbols-outlined" style="font-size: 18px; color: var(--accent-purple);">play_circle</span>
+                        Setup Steps (before:)
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="font-size: 12px; color: var(--text-secondary);">
+                            Runs before main steps
+                        </div>
+                        <button type="button" class="btn-editor" style="font-size: 11px; padding: 3px 8px;" onclick="addStepToContainer('beforeStepsList')">
+                            <span class="material-symbols-outlined" style="font-size: 14px;">add</span> Add Step
+                        </button>
+                        <button class="btn-remove-section-block" onclick="removeBeforeBlock()">
+                            <span class="material-symbols-outlined">delete</span>
+                            Remove Block
+                        </button>
+                    </div>
+                </div>
+                <div class="steps-container" id="beforeStepsList" onclick="handleStepsContainerClick(event, this)">
+                    <th:block th:if="${beforeSteps != null and !#lists.isEmpty(beforeSteps)}">
+                        <th:block th:each="step, iterStat : ${beforeSteps}">
+                            <div class="substeps-toggle-bar substeps-group-header" onclick="toggleSubsteps(this)"
+                                 th:if="${(step.startsWith('  - ') or step.startsWith('    - ')) and (iterStat.index == 0 or !(beforeSteps[iterStat.index - 1].startsWith('  - ') or beforeSteps[iterStat.index - 1].startsWith('    - ')))}">
+                                <div class="substeps-header-left">
+                                    <span class="material-symbols-outlined toggle-chevron">expand_more</span>
+                                    <span class="substeps-title"
+                                          contenteditable="true"
+                                          spellcheck="false"
+                                          title="Click to rename sub-steps block"
+                                          onclick="handleSubstepTitleClick(event, this)"
+                                          onkeydown="handleSubstepTitleKeyDown(event, this)"
+                                          onfocus="handleSubstepTitleFocus(this)"
+                                          oninput="handleSubstepTitleInput(this)"
+                                          onblur="handleSubstepTitleBlur(this)"
+                                          th:text="${iterStat.index > 0 and beforeSteps[iterStat.index - 1].startsWith('#') ? (beforeSteps[iterStat.index - 1].startsWith('# ') ? beforeSteps[iterStat.index - 1].substring(2) : beforeSteps[iterStat.index - 1].substring(1)) : 'Sub-steps'}">Sub-steps</span>
+                                </div>
+                                <span class="substeps-count-badge">Sub-steps</span>
+                            </div>
+                            <div class="step-row"
+                                 th:classappend="${step.startsWith('#') ? 'step-row-comment' : (step.startsWith('  - ') or step.startsWith('    - ') ? 'step-row-substep' : '')}"
+                                 th:data-line="${iterStat.index + 1}">
+                                <span class="step-number" th:if="${step.startsWith('#')}"><span class="comment-hash-badge">#</span></span>
+                                <span class="step-number" th:unless="${step.startsWith('#')}" th:text="${(step.startsWith('  - ') or step.startsWith('    - ')) ? '↳' : iterStat.index + 1}">1</span>
+                                <div class="step-content" contenteditable="true" spellcheck="false"
+                                     th:data-raw="${(step.startsWith('  - ') or step.startsWith('    - ')) ? (step.startsWith('  - ') ? step.substring(4) : step.substring(6)) : step}"
+                                     th:text="${(step.startsWith('  - ') or step.startsWith('    - ')) ? (step.startsWith('  - ') ? step.substring(4) : step.substring(6)) : step}"
+                                     onkeydown="handleKeyDown(event, this)"
+                                     onfocus="handleStepFocus(this)"
+                                     onblur="handleStepBlur(this)"
+                                     oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);"></div>
+                                <div class="step-actions">
+                                    <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(this, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                                    <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(this, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                                    <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(this)"><span class="material-symbols-outlined">delete</span></button>
+                                </div>
+                            </div>
+                        </th:block>
+                    </th:block>
+                    <th:block th:if="${beforeSteps == null or #lists.isEmpty(beforeSteps)}">
+                        <div class="empty-steps-placeholder" onclick="addStepToContainer('beforeStepsList')">
+                            <span class="material-symbols-outlined" style="font-size: 20px; color: var(--accent, #2563eb);">add_circle</span>
+                            <span>No steps defined in this section. Click here or use '+ Add Step' to create one.</span>
+                        </div>
+                    </th:block>
+                </div>
+            </div>
+
+            <!-- steps: Main Section Code Panel -->
+            <div class="editor-code-panel" id="stepsCodePanel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="material-symbols-outlined" style="font-size: 18px; color: var(--accent);">task_alt</span>
+                        Playbook Steps (steps:)
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="font-size: 12px; color: var(--text-secondary);">
+                            Core execution steps
+                        </div>
+                        <button type="button" class="btn-editor" id="addStepBtn" style="font-size: 11px; padding: 3px 8px;" onclick="addStepToContainer('stepsList')">
+                            <span class="material-symbols-outlined" style="font-size: 14px;">add</span> Add Step
+                        </button>
+                    </div>
+                </div>
+                <div class="steps-container" id="stepsList" onclick="handleStepsContainerClick(event, this)">
+                    <th:block th:if="${mainSteps != null and !#lists.isEmpty(mainSteps)}">
+                        <th:block th:each="step, iterStat : ${mainSteps}">
+                            <div class="substeps-toggle-bar substeps-group-header" onclick="toggleSubsteps(this)"
+                                 th:if="${(step.startsWith('  - ') or step.startsWith('    - ')) and (iterStat.index == 0 or !(mainSteps[iterStat.index - 1].startsWith('  - ') or mainSteps[iterStat.index - 1].startsWith('    - ')))}">
+                                <div class="substeps-header-left">
+                                    <span class="material-symbols-outlined toggle-chevron">expand_more</span>
+                                    <span class="substeps-title"
+                                          contenteditable="true"
+                                          spellcheck="false"
+                                          title="Click to rename sub-steps block"
+                                          onclick="handleSubstepTitleClick(event, this)"
+                                          onkeydown="handleSubstepTitleKeyDown(event, this)"
+                                          onfocus="handleSubstepTitleFocus(this)"
+                                          oninput="handleSubstepTitleInput(this)"
+                                          onblur="handleSubstepTitleBlur(this)"
+                                          th:text="${iterStat.index > 0 and mainSteps[iterStat.index - 1].startsWith('#') ? (mainSteps[iterStat.index - 1].startsWith('# ') ? mainSteps[iterStat.index - 1].substring(2) : mainSteps[iterStat.index - 1].substring(1)) : 'Sub-steps'}">Sub-steps</span>
+                                </div>
+                                <span class="substeps-count-badge">Sub-steps</span>
+                            </div>
+                            <div class="step-row"
+                                  th:classappend="${step.startsWith('#') ? 'step-row-comment' : (step.startsWith('  - ') or step.startsWith('    - ') ? 'step-row-substep' : '')}"
+                                  th:data-line="${iterStat.index + 1}">
+                                <span class="step-number" th:if="${step.startsWith('#')}"><span class="comment-hash-badge">#</span></span>
+                                <span class="step-number" th:unless="${step.startsWith('#')}" th:text="${(step.startsWith('  - ') or step.startsWith('    - ')) ? '↳' : iterStat.index + 1}">1</span>
+                                <div class="step-content" contenteditable="true" spellcheck="false"
+                                     th:data-raw="${(step.startsWith('  - ') or step.startsWith('    - ')) ? (step.startsWith('  - ') ? step.substring(4) : step.substring(6)) : step}"
+                                     th:text="${(step.startsWith('  - ') or step.startsWith('    - ')) ? (step.startsWith('  - ') ? step.substring(4) : step.substring(6)) : step}"
+                                     onkeydown="handleKeyDown(event, this)"
+                                     onfocus="handleStepFocus(this)"
+                                     onblur="handleStepBlur(this)"
+                                     oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);"></div>
+                                <div class="step-actions">
+                                    <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(this, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                                    <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(this, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                                    <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(this)"><span class="material-symbols-outlined">delete</span></button>
+                                </div>
+                            </div>
+                        </th:block>
+                    </th:block>
+                    <th:block th:if="${mainSteps == null or #lists.isEmpty(mainSteps)}">
+                        <div class="empty-steps-placeholder" onclick="addStepToContainer('stepsList')">
+                            <span class="material-symbols-outlined" style="font-size: 20px; color: var(--accent, #2563eb);">add_circle</span>
+                            <span>No steps defined in this section. Click here or use '+ Add Step' to create one.</span>
+                        </div>
+                    </th:block>
+                </div>
+            </div>
+
+            <!-- after: Section Code Panel -->
+            <div class="editor-code-panel" id="afterCodePanel" th:style="${afterSteps != null and !#lists.isEmpty(afterSteps) ? 'display: flex;' : 'display: none;'}">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="material-symbols-outlined" style="font-size: 18px; color: var(--accent-purple);">stop_circle</span>
+                        After Steps (after:)
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="font-size: 12px; color: var(--text-secondary);">
+                            Teardown / Cleanup
+                        </div>
+                        <button type="button" class="btn-editor" style="font-size: 11px; padding: 3px 8px;" onclick="addStepToContainer('afterStepsList')">
+                            <span class="material-symbols-outlined" style="font-size: 14px;">add</span> Add Step
+                        </button>
+                        <button class="btn-remove-section-block" onclick="removeAfterBlock()">
+                            <span class="material-symbols-outlined">delete</span>
+                            Remove Block
+                        </button>
+                    </div>
+                </div>
+                <div class="steps-container" id="afterStepsList" onclick="handleStepsContainerClick(event, this)">
+                    <th:block th:if="${afterSteps != null and !#lists.isEmpty(afterSteps)}">
+                        <th:block th:each="step, iterStat : ${afterSteps}">
+                            <div class="substeps-toggle-bar substeps-group-header" onclick="toggleSubsteps(this)"
+                                 th:if="${(step.startsWith('  - ') or step.startsWith('    - ')) and (iterStat.index == 0 or !(afterSteps[iterStat.index - 1].startsWith('  - ') or afterSteps[iterStat.index - 1].startsWith('    - ')))}">
+                                <div class="substeps-header-left">
+                                    <span class="material-symbols-outlined toggle-chevron">expand_more</span>
+                                    <span class="substeps-title"
+                                          contenteditable="true"
+                                          spellcheck="false"
+                                          title="Click to rename sub-steps block"
+                                          onclick="handleSubstepTitleClick(event, this)"
+                                          onkeydown="handleSubstepTitleKeyDown(event, this)"
+                                          onfocus="handleSubstepTitleFocus(this)"
+                                          oninput="handleSubstepTitleInput(this)"
+                                          onblur="handleSubstepTitleBlur(this)"
+                                          th:text="${iterStat.index > 0 and afterSteps[iterStat.index - 1].startsWith('#') ? (afterSteps[iterStat.index - 1].startsWith('# ') ? afterSteps[iterStat.index - 1].substring(2) : afterSteps[iterStat.index - 1].substring(1)) : 'Sub-steps'}">Sub-steps</span>
+                                </div>
+                                <span class="substeps-count-badge">Sub-steps</span>
+                            </div>
+                            <div class="step-row"
+                                 th:classappend="${step.startsWith('#') ? 'step-row-comment' : (step.startsWith('  - ') or step.startsWith('    - ') ? 'step-row-substep' : '')}"
+                                 th:data-line="${iterStat.index + 1}">
+                                <span class="step-number" th:if="${step.startsWith('#')}"><span class="comment-hash-badge">#</span></span>
+                                <span class="step-number" th:unless="${step.startsWith('#')}" th:text="${(step.startsWith('  - ') or step.startsWith('    - ')) ? '↳' : iterStat.index + 1}">1</span>
+                                <div class="step-content" contenteditable="true" spellcheck="false"
+                                     th:data-raw="${(step.startsWith('  - ') or step.startsWith('    - ')) ? (step.startsWith('  - ') ? step.substring(4) : step.substring(6)) : step}"
+                                     th:text="${(step.startsWith('  - ') or step.startsWith('    - ')) ? (step.startsWith('  - ') ? step.substring(4) : step.substring(6)) : step}"
+                                     onkeydown="handleKeyDown(event, this)"
+                                     onfocus="handleStepFocus(this)"
+                                     onblur="handleStepBlur(this)"
+                                     oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);"></div>
+                                <div class="step-actions">
+                                    <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(this, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                                    <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(this, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                                    <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(this)"><span class="material-symbols-outlined">delete</span></button>
+                                </div>
+                            </div>
+                        </th:block>
+                    </th:block>
+                    <th:block th:if="${afterSteps == null or #lists.isEmpty(afterSteps)}">
+                        <div class="empty-steps-placeholder" onclick="addStepToContainer('afterStepsList')">
+                            <span class="material-symbols-outlined" style="font-size: 20px; color: var(--accent, #2563eb);">add_circle</span>
+                            <span>No steps defined in this section. Click here or use '+ Add Step' to create one.</span>
+                        </div>
+                    </th:block>
+                </div>
+            </div>
+
+            <!-- Subtle Add 'after:' Button Container -->
+            <div id="addAfterBtnContainer" th:style="${(isFragment != null and isFragment) or (afterSteps != null and !#lists.isEmpty(afterSteps)) ? 'display: none;' : 'display: block;'}">
+                <button class="btn-add-section-block" onclick="addAfterBlock()">
+                    <span class="material-symbols-outlined">add_circle</span>
+                    <span>Add 'after:' Block</span>
+                </button>
+            </div>
+
+            <!-- Transposed Test Data Matrix (Only for Test Playbooks) -->
+            <div class="editor-code-panel" id="dataMatrixCodePanel" th:style="${isFragment != null and isFragment ? 'display: none;' : 'display: flex;'}">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="material-symbols-outlined" style="font-size: 18px; color: var(--accent-purple);">grid_on</span>
+                        Test Data Matrix (data:)
+                    </div>
+                </div>
+                <div style="padding: 16px; overflow-x: auto;">
+                    <table class="transposed-matrix" id="transposedGrid">
+                        <thead>
+                            <tr id="matrixHeaderRow">
+                                <th class="var-key-col">Variable Key \ Iteration</th>
+                                <th th:each="row, iterStat : ${dataMatrix}" th:id="'iterHeader_' + ${iterStat.index + 1}" class="iter-col-header">
+                                    <div class="iter-header-content">
+                                        <span th:text="${row.get('testId') != null ? row.get('testId') : 'Iteration ' + (iterStat.index + 1)}">Iteration 1</span>
+                                        <button type="button" class="btn-remove-iteration" title="Remove Data Set" onclick="removeMatrixColumn(this)">
+                                            <span class="material-symbols-outlined">close</span>
+                                        </button>
+                                    </div>
+                                </th>
+                                <th th:if="${dataMatrix == null or #lists.isEmpty(dataMatrix)}" id="iterHeader_1" class="iter-col-header">
+                                    <div class="iter-header-content">
+                                        <span>Iteration 1</span>
+                                        <button type="button" class="btn-remove-iteration" title="Remove Data Set" onclick="removeMatrixColumn(this)">
+                                            <span class="material-symbols-outlined">close</span>
+                                        </button>
+                                    </div>
+                                </th>
+                                <th>
+                                    <button class="add-col-th-btn" onclick="addMatrixColumnInline()">
+                                        <span class="material-symbols-outlined" style="font-size: 14px;">add</span>
+                                        Add Iteration
+                                    </button>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Dataset Tags Row -->
+                            <tr id="matrixTagsRow" class="matrix-tags-row" style="background: rgba(255, 255, 255, 0.02); border-bottom: 1px solid var(--border);">
+                                <td>
+                                    <div class="var-key-cell" style="font-weight: 600; color: var(--accent); display: flex; align-items: center; gap: 4px;">
+                                        <span class="material-symbols-outlined" style="font-size: 15px;">label</span>
+                                        <span>Tags</span>
+                                    </div>
+                                </td>
+                                <th:block th:if="${dataMatrix != null and !#lists.isEmpty(dataMatrix)}">
+                                    <td th:each="dataRow, iterStat : ${dataMatrix}" class="dataset-tags-cell" th:data-col="${iterStat.index}">
+                                        <div class="dataset-tags-wrapper" style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-height: 26px;">
+                                            <th:block th:if="${datasetTagsList != null and iterStat.index < datasetTagsList.size() and datasetTagsList.get(iterStat.index) != null}">
+                                                <th:block th:each="entry : ${datasetTagsList.get(iterStat.index).entrySet()}">
+                                                    <span class="dataset-tag-chip" th:each="val : ${entry.value}" th:data-key="${entry.key}" th:data-value="${val}" style="display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: 10px; background: rgba(14, 165, 233, 0.12); border: 1px solid rgba(14, 165, 233, 0.35); font-size: 10.5px; color: #0284c7; font-weight: 500;">
+                                                        <span th:text="${entry.key + ': ' + val}">key: val</span>
+                                                        <button type="button" class="btn-remove-ds-tag" onclick="removeDatasetTagFromBtn(this)" title="Remove tag" style="background: transparent; border: none; cursor: pointer; color: var(--text-secondary); display: inline-flex; align-items: center; padding: 0; margin-left: 1px;">
+                                                            <span class="material-symbols-outlined" style="font-size: 11px;">close</span>
+                                                        </button>
+                                                    </span>
+                                                </th:block>
+                                            </th:block>
+                                            <button type="button" class="btn-add-dataset-tag" th:onclick="|openAddDatasetTagModal(${iterStat.index})|" title="Add tag to dataset" style="background: transparent; border: 1px dashed var(--border); border-radius: 10px; color: var(--text-secondary); cursor: pointer; padding: 1px 6px; font-size: 10.5px; display: inline-flex; align-items: center; gap: 2px;">
+                                                <span class="material-symbols-outlined" style="font-size: 12px;">add</span>
+                                                <span>Tag</span>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </th:block>
+                                <th:block th:if="${dataMatrix == null or #lists.isEmpty(dataMatrix)}">
+                                    <td class="dataset-tags-cell" data-col="0">
+                                        <div class="dataset-tags-wrapper" style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-height: 26px;">
+                                            <button type="button" class="btn-add-dataset-tag" onclick="openAddDatasetTagModal(0)" title="Add tag to dataset" style="background: transparent; border: 1px dashed var(--border); border-radius: 10px; color: var(--text-secondary); cursor: pointer; padding: 1px 6px; font-size: 10.5px; display: inline-flex; align-items: center; gap: 2px;">
+                                                <span class="material-symbols-outlined" style="font-size: 12px;">add</span>
+                                                <span>Tag</span>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </th:block>
+                                <td></td>
+                            </tr>
+                            <th:block th:if="${varKeys != null and !#lists.isEmpty(varKeys)}">
+                                <tr th:each="key : ${varKeys}">
+                                    <td>
+                                        <div class="var-key-cell">
+                                            <input type="text" class="var-key-input" th:value="${key}" oninput="compilePlaybookToYaml()" />
+                                            <button class="btn-insert-var-chip" th:data-key="${key}" onclick="insertVariableFromInput(this.getAttribute('data-key'))">+ Insert</button>
+                                            <button type="button" class="btn-remove-var" title="Remove Variable" onclick="removeMatrixRow(this)">
+                                                <span class="material-symbols-outlined" style="font-size: 14px;">close</span>
+                                            </button>
+                                        </div>
+                                    </td>
+                                    <td th:each="dataRow : ${dataMatrix}">
+                                        <input type="text" class="cell-val" th:value="${dataRow.get(key)}" placeholder="empty" oninput="compilePlaybookToYaml()" />
+                                    </td>
+                                    <td></td>
+                                </tr>
+                            </th:block>
+                            <th:block th:if="${varKeys == null or #lists.isEmpty(varKeys)}">
+                                <tr>
+                                    <td>
+                                        <div class="var-key-cell">
+                                            <input type="text" class="var-key-input" value="testId" />
+                                            <button class="btn-insert-var-chip" onclick="insertVariableFromInput('testId')">+ Insert</button>
+                                            <button type="button" class="btn-remove-var" title="Remove Variable" onclick="removeMatrixRow(this)">
+                                                <span class="material-symbols-outlined" style="font-size: 14px;">close</span>
+                                            </button>
+                                        </div>
+                                    </td>
+                                    <td><input type="text" class="cell-val" value="Default" oninput="compilePlaybookToYaml()" /></td>
+                                    <td></td>
+                                </tr>
+                            </th:block>
+                        </tbody>
+                    </table>
+                    <button class="add-row-bottom-btn" id="addVarBtn" onclick="addMatrixRowInlineEmpty()">
+                        <span class="material-symbols-outlined" style="font-size: 14px;">add</span>
+                        <span>Add Variable Row</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Fragment Variables (Only for .steps Fragment Files) -->
+            <div class="editor-code-panel" id="fragmentVariablesPanel" th:style="${isFragment != null and isFragment ? 'display: flex;' : 'display: none;'}">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="material-symbols-outlined" style="font-size: 18px; color: #a855f7;">data_object</span>
+                        Fragment Variables
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-secondary);">
+                        Uneditable list of variables referenced in this fragment and their scope definition
+                    </div>
+                </div>
+                <div style="padding: 16px;">
+                    <div id="fragmentVariablesListContainer" class="fragment-vars-container">
+                        <!-- Populated dynamically via JS -->
+                    </div>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Right Sidebar Quick Insert Palette -->
+        <aside class="sidebar-palette-right" id="editorSidebarPalette">
+            
+            <!-- Category 1: Actions & Templates -->
+            <div>
+                <div class="palette-section-title">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">play_arrow</span>
+                    Actions & Templates
+                </div>
+                <div class="action-chip-list">
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Open ${neodymium.url}')" title="Navigate browser to the base application URL configured in neodymium.properties">
+                        <span class="label"><span class="material-symbols-outlined icon">public</span> Open Base URL</span>
+                    </div>
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Type &quot;&quot;', 6)" title="Input text into an input field or text area">
+                        <span class="label"><span class="material-symbols-outlined icon">edit_note</span> Type Text</span>
+                    </div>
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Wait for  to be visible',9)" title="Wait asynchronously for an element to appear on the page">
+                        <span class="label"><span class="material-symbols-outlined icon">timer</span> Wait for Visible</span>
+                    </div>
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Assert  is visible',7)" title="Verify that an element is present and visible in the viewport">
+                        <span class="label"><span class="material-symbols-outlined icon">visibility</span> Assert Visible</span>
+                    </div>
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Assert page contains &quot;&quot;', 22)" title="Verify that the page content contains the expected string">
+                        <span class="label"><span class="material-symbols-outlined icon">find_in_page</span> Assert Text</span>
+                    </div>
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Select option &quot;&quot;', 15)" title="Select an option from a dropdown or custom select component">
+                        <span class="label"><span class="material-symbols-outlined icon">checklist</span> Select Option</span>
+                    </div>
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Click ',6)" title="Click a button, link, or interactive element">
+                        <span class="label"><span class="material-symbols-outlined icon">touch_app</span> Click Element</span>
+                    </div>
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Store text from  as ', 16)" title="Dynamic variable extraction: Captures text from a live element and stores it into a variable">
+                        <span class="label"><span class="material-symbols-outlined icon">save</span> Store text from</span>
+                    </div>
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Store &quot;&quot; as ', 7)" title="Variable assignment: Stores a fixed string into a dynamic variable">
+                        <span class="label"><span class="material-symbols-outlined icon">pin</span> Store literal as</span>
+                    </div>
+                    <div class="action-chip" onclick="insertSubstepRow()" title="Sub-step: Inserts an indented child micro-action below the active step">
+                        <span class="label"><span class="material-symbols-outlined icon">subdirectory_arrow_right</span> Substep</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Category 2: Control Tags & Flags -->
+            <div>
+                <div class="palette-section-title">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">label</span>
+                    Control Tags & Flags
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(optional)')" title="Soft assertion: Logs warning on failure and continues execution without failing test">(optional)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(soft)')" title="Synonym for (optional): Soft assertion that does not abort or fail the test">(soft)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(continue-on-error)')" title="Error recovery: Records failure warning and proceeds with subsequent steps">(continue-on-error)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(no-replay)')" title="Bypass replay: Forces live LLM inference instead of recorded companion action">(no-replay)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(no-healing)')" title="Disable self-healing: Fails immediately on selector divergence without AI recovery">(no-healing)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(bug: )', 6)" title="Expected bug: Test passes if step fails; fails if step unexpectedly passes">(bug: ID)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(hint: #)', 8)" title="Selector hint: Attempts direct CSS/XPath locator, saving 100% of DOM tokens">(hint: #)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(hint: use java method)')" title="Method hint: Delegates step execution to an annotated @Tool Java method">(hint: java)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(marker)')" title="Visual grounding: Overlays Set-of-Marks numbered badges on visual elements">(marker)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(timeout: 10s)')" title="Step timeout: Overrides default execution timeout (e.g. 10s, 5000ms)">(timeout: 10s)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(threshold: 0.95)')" title="SSIM tolerance: Overrides minimum image match score (e.g. 0.95 or 95%)">(threshold: 0.95)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(context: minimal)')" title="DOM context level: Overrides initial context sent to LLM (minimal, lean, standard, full, hint)">(context: minimal)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(visual)')" title="Visual check: Viewport screenshot comparison against recorded visual baseline">(visual)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(visual: full)')" title="Full-page visual check: Scrolling full-page capture for visual baseline comparison">(visual: full)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(layout)')" title="Layout check: Redacts text and media to verify layout wireframe structure">(layout)</button>
+                    <button type="button" class="btn-editor tag-chip-btn" style="font-size: 11px; padding: 4px 8px;" onclick="insertSnippetWithCaret('(layout: full)')" title="Full-page layout check: Full-page layout wireframe verification">(layout: full)</button>
+                </div>
+            </div>
+
+            <!-- Category 3: Java Extensions & Variables -->
+            <div>
+                <div class="palette-section-title">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">code</span>
+                    Java Extensions & Variables
+                </div>
+                <div class="action-chip-list">
+                    <div class="action-chip" onclick="insertSnippetWithCaret('Execute Java method &quot;&quot;', 22)">
+                        <span class="label"><span class="material-symbols-outlined icon">terminal</span> Call Java Method</span>
+                    </div>
+                    <div class="action-chip" onclick="insertSnippetWithCaret('${}', 2)">
+                        <span class="label"><span class="material-symbols-outlined icon">data_object</span> Insert Variable &#36;{}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Category 4: Available Step Fragments (.steps) -->
+            <div class="palette-category-fragments" id="editorFragmentCategory">
+                <div class="palette-section-title" style="display: flex; align-items: center; justify-content: space-between;">
+                    <span style="display: flex; align-items: center; gap: 4px;">
+                        <span class="material-symbols-outlined" style="font-size: 14px; color: #a855f7;">extension</span>
+                        <span>Available Step Fragments (.steps)</span>
+                    </span>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <button type="button" class="btn-edit" id="toggleEditorFragmentViewBtn" onclick="toggleFileViewMode()" style="padding: 1px 6px; font-size: 10px;" title="Switch View Mode (Flat / Hierarchical)">
+                            <span class="material-symbols-outlined" id="editorFragmentViewModeIcon" style="font-size: 12px;">view_list</span>
+                        </button>
+                        <button class="btn-edit" id="openModalFragmentEditorBtn" onclick="openCreateModal('steps')" style="padding: 1px 6px; font-size: 10px; border-color: rgba(168, 85, 247, 0.4); color: #a855f7;" title="Create new step fragment file">
+                            <span class="material-symbols-outlined" style="font-size: 12px;">add</span> New
+                        </button>
+                    </div>
+                </div>
+                <div class="search-container" style="margin: 6px 0 8px 0;">
+                    <span class="material-symbols-outlined search-icon" style="font-size: 14px; color: var(--text-secondary);">search</span>
+                    <input type="text" id="editorFragmentSearchInput" placeholder="Search fragments..."
+                           class="search-input" style="font-size: 11px; padding: 4px 6px 4px 26px; width: 100%; box-sizing: border-box;"
+                           oninput="filterFragmentPaletteCards(this.value)" />
+                </div>
+                <div id="fragmentCardsContainer" style="display: flex; flex-direction: column; gap: 8px;">
+                    <th:block th:if="${stepsFiles != null and !stepsFiles.isEmpty()}">
+                        <div class="include-card" th:each="stepFile : ${stepsFiles}" th:data-file="${stepFile}" onclick="insertIncludePill(this.getAttribute('data-file'))">
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
+                                <div class="include-title" style="min-width: 0; flex: 1; display: flex; align-items: center; overflow: visible;">
+                                    <span class="material-symbols-outlined" style="font-size: 14px; color: #a855f7; margin-right: 4px; flex-shrink: 0;">extension</span>
+                                    <span th:if="${fragmentRequiredVarsMap != null and fragmentRequiredVarsMap.get(stepFile) != null}"
+                                          class="material-symbols-outlined fragment-req-vars-icon"
+                                          style="margin-right: 6px; font-size: 14px; color: #d97706; cursor: help; flex-shrink: 0;"
+                                          th:data-req-vars="${fragmentRequiredVarsMap.get(stepFile)}"
+                                          onclick="event.stopPropagation();">info</span>
+                                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;" th:text="${stepFile}">fragment.steps</span>
+                                </div>
+                            </div>
+                            <div class="include-path" th:text="${stepFile}">fragments/login.steps</div>
+                        </div>
+                    </th:block>
+                    <th:block th:if="${stepsFiles == null or stepsFiles.isEmpty()}">
+                        <div style="font-size: 12px; color: var(--text-secondary); padding: 8px; font-style: italic;">
+                            No .steps fragments found in src/test/resources.
+                        </div>
+                    </th:block>
+                    <div id="noMatchingFragmentsMsg" style="display: none; font-size: 12px; color: var(--text-secondary); padding: 8px; font-style: italic;">
+                        No matching step fragments found.
+                    </div>
+                </div>
+            </div>
+
+        </aside>
+    </div>
+    <script th:inline="javascript">
+        /*<![CDATA[*/
+        window.fragmentVarScopes = /*[[${fragmentVarScopes}]]*/ {};
+        if (typeof updateFragmentVariablesList === 'function') {
+            updateFragmentVariablesList();
+        }
+        /*]]>*/
+    </script>
+    <!-- Non-blocking Variable Prompt Dialog Container -->
+    <div id="varPromptContainer" class="var-prompt-container"></div>
+</div>
+
+<!-- HTMX Fragment for Inline Inclusion Tree Expansion -->
+<th:block th:fragment="includeTreeCardFragment">
+    <div class="include-tree-card" th:id="'includeTreeCard_' + ${cardId}" th:data-include-file="${includeFile}">
+        <div class="include-tree-header">
+            <div class="include-tree-title">
+                <span class="material-symbols-outlined" style="font-size: 16px;">extension</span>
+                <span>Included File: <b th:text="${includeFile}">included.yaml</b></span>
+                <span th:id="'unsavedBadge_' + ${cardId}" style="display: none;" class="unsaved-badge">
+                    <span class="material-symbols-outlined" style="font-size: 12px;">warning</span> Unsaved Changes
+                </span>
+            </div>
+            <div class="include-tree-actions">
+                <div class="include-vars-dropdown-wrapper" style="position: relative; display: inline-block;">
+                    <button class="btn-editor btn-include-vars" type="button" style="font-size: 11px; padding: 3px 8px; gap: 4px;" th:id="'btnVarsInclude_' + ${cardId}" th:data-card-id="${cardId}" onclick="toggleIncludeVarsDropdown(this.getAttribute('data-card-id'))" title="Variables used in this include">
+                        <span class="material-symbols-outlined" style="font-size: 14px; color: #c084fc;">data_object</span>
+                        <span>Variables (<span th:text="${includeVars != null ? includeVars.size() : 0}">0</span>)</span>
+                        <span class="material-symbols-outlined" style="font-size: 14px;">expand_more</span>
+                    </button>
+                    <div class="include-vars-dropdown" th:id="'varsDropdown_' + ${cardId}" style="display: none;">
+                        <div class="include-vars-dropdown-header">
+                            <span class="material-symbols-outlined" style="font-size: 14px; color: #a855f7;">data_object</span>
+                            <span>Variables in Include</span>
+                        </div>
+                        <div class="include-vars-dropdown-body">
+                            <div th:if="${includeVars == null or includeVars.isEmpty()}" class="empty-include-vars">
+                                No variables used in this include.
+                            </div>
+                            <div th:each="v : ${includeVars}" class="include-var-row" th:data-var="${v}">
+                                <code class="var-badge" th:text="'${' + ${v} + '}'">${var}</code>
+                                <div class="var-scope-toggle-group">
+                                    <button type="button" class="btn-var-scope scope-defined"
+                                            th:classappend="${includeVarScopes != null and includeVarScopes.get(v) == 'defined'} ? 'active-defined' : ''"
+                                            th:data-card-id="${cardId}"
+                                            th:data-var="${v}"
+                                            onclick="toggleIncludeTreeVarScope(this.getAttribute('data-card-id'), this.getAttribute('data-var'), 'defined')"
+                                            title="Variable is defined within this fragment">
+                                        Defined in include
+                                    </button>
+                                    <button type="button" class="btn-var-scope scope-required"
+                                            th:classappend="${includeVarScopes == null or includeVarScopes.get(v) != 'defined'} ? 'active-required' : ''"
+                                            th:data-card-id="${cardId}"
+                                            th:data-var="${v}"
+                                            onclick="toggleIncludeTreeVarScope(this.getAttribute('data-card-id'), this.getAttribute('data-var'), 'required')"
+                                            title="Variable requires definition from using file">
+                                        Required from using file
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <button class="btn-editor" style="font-size: 11px; padding: 3px 8px;" th:id="'btnEditInclude_' + ${cardId}" th:data-card-id="${cardId}" onclick="enableIncludeEdit(this.getAttribute('data-card-id'))">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">edit</span> Edit File
+                </button>
+                <button class="btn-editor" style="display: none; font-size: 11px; padding: 3px 8px;" th:id="'btnAddIncludeStep_' + ${cardId}" th:data-card-id="${cardId}" onclick="addNestedStep(this.getAttribute('data-card-id'))">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">add</span> Add Step
+                </button>
+                <button class="btn-editor save" th:id="'btnSaveInclude_' + ${cardId}" style="display: none; font-size: 11px; padding: 3px 8px;" th:data-card-id="${cardId}" onclick="saveIncludeInline(this.getAttribute('data-card-id'))">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">save</span> Save
+                </button>
+                <button class="btn-editor" th:id="'btnDiscardInclude_' + ${cardId}" style="display: none; font-size: 11px; padding: 3px 8px;" th:data-card-id="${cardId}" onclick="discardIncludeInline(this.getAttribute('data-card-id'))">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">close</span> Discard
+                </button>
+            </div>
+        </div>
+        <div th:if="${fileExists == false}" class="include-warning-banner" style="padding: 6px 12px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #fbbf24; border-radius: 6px; font-size: 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+            <span class="material-symbols-outlined" style="font-size: 16px;">warning</span>
+            <span>Included file does not exist on disk. Edit steps below and save to create it.</span>
+        </div>
+        <div th:id="'includeInnerSteps_' + ${cardId}" style="display: flex; flex-direction: column; gap: 4px;">
+            <th:block th:if="${includeSteps != null and !#lists.isEmpty(includeSteps)}">
+                <div class="nested-editable-step" contenteditable="false" th:each="step : ${includeSteps}" th:data-original="${step}" th:data-card-id="${cardId}" onfocus="handleNestedFocus(this, event)" onblur="handleNestedBlur(this)" onkeydown="handleNestedKeyDown(event, this.getAttribute('data-card-id'))" oninput="markIncludeUnsaved(this.getAttribute('data-card-id'))">
+                    <span class="sub-line-num">-</span>
+                    <span th:text="${step}">Step text</span>
+                </div>
+            </th:block>
+            <th:block th:if="${includeSteps == null or #lists.isEmpty(includeSteps)}">
+                <div class="empty-steps-placeholder" th:data-card-id="${cardId}" onclick="addNestedStep(this.getAttribute('data-card-id'))">
+                    <span class="material-symbols-outlined" style="font-size: 20px; color: var(--accent, #2563eb);">add_circle</span>
+                    <span>No steps defined in this include. Click here to add a step.</span>
+                </div>
+            </th:block>
+        </div>
+    </div>
+</th:block>

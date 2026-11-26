@@ -1,0 +1,11 @@
+[
+  {
+    "testId": "fist set",
+    "key1": "val1",
+    "key2": "val2"
+  },
+  {
+    "testId": "second set",
+    "key1": "new val"
+  }
+]

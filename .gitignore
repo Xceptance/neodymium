@@ -20,28 +20,26 @@
 
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
-/target/
-/.classpath
-/.project
-/.settings/
+target/
+.classpath
+.project
+.settings/
 build
 dev-*.properties 
 temp-*.properties
 embeddedLocalProxySelfSignedRootCertificate.p12
-/bin/
-/allure-results/
-/.allure/
-/allure-report/
-/aura-allure-results-temp/
-
-
+bin/
+allure-results/
+.allure/
+allure-report/
+aura-allure-results-temp/
 
 # IDE/AI helper folders
 .idea
-/.agents/
-/.gemini/
-/.specify/
-/.vscode/
+.agents/
+.gemini/
+.specify/
+.vscode/
 /specs/
 
 newTickets.txt
@@ -49,13 +47,36 @@ neodymium.code-workspace
 
 # Neodymium AI temporary scratch folder
 tmp/
+ai-reports/
+ai-reports-lean/
 
 # Neodymium Aura Reports History
-/allure-reports-history/
+allure-reports-history/
 
 # Antigravity CLI
 .antigravitycli/
 
 # Neodymium AI playbooks
-/src/test/resources/ai-playbooks/
+**/ai-playbooks/
+**/playbooks/integration/programmatic/
 
+chat-history/
+
+# Added by code-review-graph
+.code-review-graph/
+.mcp.json
+
+# Local release test runner & Python bytecode
+run-release-tests.sh
+__pycache__/
+*.pyc
+
+# Neodymium Aura Manager sandbox folders
+**/src/test/java/com/xceptance/neodymium/aura/sandbox/
+target/aura-sandbox/
+# Neodymium Aura storage and runtime database
+/storage/
+/data/
+**/aura-manager/data/
+**/aura-manager/storage/
+*.db

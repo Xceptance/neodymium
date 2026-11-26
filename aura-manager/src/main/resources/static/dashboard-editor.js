@@ -1,0 +1,7028 @@
+// ============================================================================
+// Neodymium Aura Dashboard - Test & Dataset Editor & Queue Control
+// ============================================================================
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+window.escapeHtml = escapeHtml;
+
+function isDatasetSelected(file, id) {
+    if (!file || id == null) return false;
+    const strFile = String(file);
+    const strId = String(id);
+    return selectedDatasets.some(d => String(d.file) === strFile && String(d.id) === strId);
+}
+window.isDatasetSelected = isDatasetSelected;
+
+function isAllDatasetsChecked(fileDto) {
+    if (!fileDto || !fileDto.datasets || fileDto.datasets.length === 0) return false;
+    return fileDto.datasets.every(d => isDatasetSelected(fileDto.file, d.id));
+}
+window.isAllDatasetsChecked = isAllDatasetsChecked;
+
+function toggleSelectDataset(file, id, checked) {
+    const queueEl = document.getElementById('queueListContainer');
+    if (!queueEl) return;
+    htmx.ajax('POST', '/api/queue/toggle?file=' + encodeURIComponent(file) + '&id=' + encodeURIComponent(id), { target: '#queueListContainer', swap: 'innerHTML' });
+}
+window.toggleSelectDataset = toggleSelectDataset;
+
+function toggleSelectAllDatasets(file, checked) {
+    const queueEl = document.getElementById('queueListContainer');
+    if (!queueEl) return;
+    htmx.ajax('POST', '/api/queue/toggleAll?file=' + encodeURIComponent(file) + '&checked=' + checked, { target: '#queueListContainer', swap: 'innerHTML' });
+}
+window.toggleSelectAllDatasets = toggleSelectAllDatasets;
+
+function toggleFileCheckboxesInstant(fileCb) {
+    if (!fileCb) return;
+    fileCb.indeterminate = false;
+    const container = fileCb.closest('.file-container');
+    if (!container) return;
+    const datasetCbs = container.querySelectorAll('.dataset-select-cb');
+    datasetCbs.forEach(cb => {
+        cb.checked = fileCb.checked;
+    });
+    if (typeof updateParentFolderCheckboxes === 'function') {
+        updateParentFolderCheckboxes(fileCb);
+    }
+}
+window.toggleFileCheckboxesInstant = toggleFileCheckboxesInstant;
+
+function toggleDatasetCheckboxInstant(datasetCb) {
+    if (!datasetCb) return;
+    const container = datasetCb.closest('.file-container');
+    if (!container) return;
+    const fileCb = container.querySelector('.file-select-cb');
+    if (!fileCb) return;
+    const datasetCbs = container.querySelectorAll('.dataset-select-cb');
+    let allChecked = true;
+    let anyChecked = false;
+    datasetCbs.forEach(cb => {
+        if (cb.checked) anyChecked = true;
+        else allChecked = false;
+    });
+    fileCb.checked = allChecked;
+    fileCb.indeterminate = (!allChecked && anyChecked);
+    if (typeof updateParentFolderCheckboxes === 'function') {
+        updateParentFolderCheckboxes(fileCb);
+    }
+}
+window.toggleDatasetCheckboxInstant = toggleDatasetCheckboxInstant;
+
+function getFolderTotalDatasets(folderPath) {
+    if (!folderPath) return 0;
+    if (!window.currentFolderTotals) {
+        try {
+            const targetEl = document.querySelector('[data-folder-totals]') || document.getElementById('sidebarTestsContainer') || document.getElementById('yamlFileList');
+            const raw = targetEl ? targetEl.getAttribute('data-folder-totals') : null;
+            if (raw) {
+                window.currentFolderTotals = JSON.parse(raw);
+            }
+        } catch (e) {}
+    }
+    if (window.currentFolderTotals && typeof window.currentFolderTotals[folderPath] === 'number') {
+        return window.currentFolderTotals[folderPath];
+    }
+    return 0;
+}
+window.getFolderTotalDatasets = getFolderTotalDatasets;
+
+function countFolderTotalDatasets(groupEl, folderPath) {
+    const knownTotal = getFolderTotalDatasets(folderPath);
+    if (knownTotal > 0) {
+        return knownTotal;
+    }
+    if (!groupEl) return 0;
+    let domTotal = 0;
+    const fileContainers = groupEl.querySelectorAll('.file-container');
+    fileContainers.forEach(container => {
+        const datasetCbs = container.querySelectorAll('.dataset-select-cb');
+        if (datasetCbs.length > 0) {
+            domTotal += datasetCbs.length;
+        } else {
+            domTotal += 1;
+        }
+    });
+    return domTotal;
+}
+window.countFolderTotalDatasets = countFolderTotalDatasets;
+
+function countFolderSelectedDatasets(groupEl, folderPath) {
+    if (!groupEl) return 0;
+    let selectedCount = 0;
+
+    // 1. Count selected datasets/files currently present in DOM under groupEl
+    const fileContainers = groupEl.querySelectorAll('.file-container');
+    const domFilePaths = new Set();
+
+    fileContainers.forEach(container => {
+        const filePath = container.getAttribute('data-file');
+        if (filePath) {
+            domFilePaths.add(filePath);
+        }
+        const datasetCbs = container.querySelectorAll('.dataset-select-cb');
+        if (datasetCbs.length > 0) {
+            datasetCbs.forEach(dcb => {
+                if (dcb.checked) {
+                    selectedCount++;
+                }
+            });
+        } else {
+            const fileCb = container.querySelector('.file-select-cb');
+            if (fileCb && fileCb.checked) {
+                selectedCount++;
+            }
+        }
+    });
+
+    // 2. Count selected items from queue that belong to this folder but are filtered out of the DOM
+    if (folderPath) {
+        const queueContainer = document.getElementById('queueListContainer');
+        if (queueContainer) {
+            const queueItems = queueContainer.querySelectorAll('.queue-item');
+            queueItems.forEach(qItem => {
+                const qFile = qItem.getAttribute('data-file');
+                if (qFile && !domFilePaths.has(qFile)) {
+                    const prefix = folderPath.endsWith('/') ? folderPath : (folderPath + '/');
+                    if (qFile.startsWith(prefix) || qFile === folderPath) {
+                        selectedCount++;
+                    }
+                }
+            });
+        }
+    }
+
+    return selectedCount;
+}
+window.countFolderSelectedDatasets = countFolderSelectedDatasets;
+
+function applyFolderCheckboxState(folderCb, selectedCount, totalCount) {
+    if (!folderCb) return;
+    if (selectedCount === 0 || totalCount === 0) {
+        folderCb.checked = false;
+        folderCb.indeterminate = false;
+    } else if (selectedCount >= totalCount) {
+        folderCb.checked = true;
+        folderCb.indeterminate = false;
+    } else {
+        folderCb.checked = false;
+        folderCb.indeterminate = true;
+    }
+}
+window.applyFolderCheckboxState = applyFolderCheckboxState;
+
+function updateFolderCheckboxState(groupEl) {
+    if (!groupEl) return;
+    const folderHeader = groupEl.querySelector(':scope > .tree-folder-header');
+    const folderCb = folderHeader ? folderHeader.querySelector('.folder-select-cb') : null;
+    if (!folderCb) return;
+
+    const folderPath = groupEl.getAttribute('data-folder-path');
+    const knownTotal = getFolderTotalDatasets(folderPath);
+    const totalCount = countFolderTotalDatasets(groupEl, folderPath);
+    const selectedCount = countFolderSelectedDatasets(groupEl, folderPath);
+
+    const searchInput = document.getElementById('testSearchInput');
+    const activeQuery = (searchInput && searchInput.value) ? searchInput.value.trim() : '';
+    const isFiltered = Boolean(activeQuery);
+
+    if (selectedCount === 0 || totalCount === 0) {
+        folderCb.checked = false;
+        folderCb.indeterminate = false;
+    } else if (isFiltered && knownTotal === 0 && selectedCount > 0) {
+        // When filtered and project total is unknown, ancestor folders cannot be safely assumed 100% selected
+        folderCb.checked = false;
+        folderCb.indeterminate = true;
+    } else if (selectedCount >= totalCount) {
+        folderCb.checked = true;
+        folderCb.indeterminate = false;
+    } else {
+        folderCb.checked = false;
+        folderCb.indeterminate = true;
+    }
+
+    if (folderPath) {
+        if (!window.currentFolderSelectionStates) {
+            window.currentFolderSelectionStates = {};
+        }
+        window.currentFolderSelectionStates[folderPath] = folderCb.checked ? 'checked' : (folderCb.indeterminate ? 'indeterminate' : 'unchecked');
+    }
+}
+window.updateFolderCheckboxState = updateFolderCheckboxState;
+
+function toggleFolderCheckboxesInstant(folderCb) {
+    if (!folderCb) return;
+    const folderGroup = folderCb.closest('.tree-folder-group');
+    if (!folderGroup) return;
+
+    const folderPath = folderGroup.getAttribute('data-folder-path');
+    const searchInput = document.getElementById('testSearchInput');
+    const activeQuery = (searchInput && searchInput.value) ? searchInput.value.trim() : '';
+    const isFiltered = Boolean(activeQuery);
+
+    const content = folderGroup.querySelector(':scope > .tree-folder-content');
+    let isChecked = folderCb.checked;
+
+    if (content) {
+        if (isFiltered) {
+            // Determine desired target state based on visible files
+            const fileContainers = content.querySelectorAll('.file-container');
+            const visibleContainers = Array.from(fileContainers).filter(fc => fc.style.display !== 'none');
+            const visibleFileCbs = visibleContainers.map(fc => fc.querySelector('.file-select-cb')).filter(Boolean);
+
+            if (visibleFileCbs.length > 0) {
+                const allVisibleChecked = visibleFileCbs.every(cb => cb.checked);
+                // If all visible files are already checked, user is deselecting them; otherwise selecting.
+                isChecked = !allVisibleChecked;
+            }
+
+            // Scoped selection: only toggle visible matching file containers and their datasets
+            fileContainers.forEach(container => {
+                if (container.style.display !== 'none') {
+                    const fileCb = container.querySelector('.file-select-cb');
+                    if (fileCb) {
+                        fileCb.checked = isChecked;
+                        fileCb.indeterminate = false;
+                    }
+                    const datasetCbs = container.querySelectorAll('.dataset-select-cb');
+                    datasetCbs.forEach(dcb => {
+                        const dItem = dcb.closest('.dataset-item');
+                        if (!dItem || dItem.style.display !== 'none') {
+                            dcb.checked = isChecked;
+                        }
+                    });
+                }
+            });
+
+            // Update subfolder checkboxes within this folder (deepest first)
+            const subFolderGroups = Array.from(content.querySelectorAll('.tree-folder-group'));
+            subFolderGroups.sort((a, b) => {
+                const depthA = (a.getAttribute('data-folder-path') || '').split('/').length;
+                const depthB = (b.getAttribute('data-folder-path') || '').split('/').length;
+                return depthB - depthA;
+            });
+            subFolderGroups.forEach(subGroup => {
+                updateFolderCheckboxState(subGroup);
+            });
+
+            // Update clicked folder checkbox state accurately using total datasets
+            updateFolderCheckboxState(folderGroup);
+        } else {
+            // Not filtered: full cascade
+            folderCb.checked = isChecked;
+            folderCb.indeterminate = false;
+
+            // Cascade to all descendant folder checkboxes
+            const subFolderCbs = content.querySelectorAll('.folder-select-cb');
+            subFolderCbs.forEach(cb => {
+                cb.checked = isChecked;
+                cb.indeterminate = false;
+            });
+
+            // Cascade to all descendant file checkboxes
+            const fileCbs = content.querySelectorAll('.file-select-cb');
+            fileCbs.forEach(cb => {
+                cb.checked = isChecked;
+                cb.indeterminate = false;
+            });
+
+            // Cascade to all descendant dataset checkboxes
+            const datasetCbs = content.querySelectorAll('.dataset-select-cb');
+            datasetCbs.forEach(cb => {
+                cb.checked = isChecked;
+            });
+
+            // Update subfolder selection states cache
+            const subFolderGroups = content.querySelectorAll('.tree-folder-group');
+            subFolderGroups.forEach(subGroup => {
+                const subPath = subGroup.getAttribute('data-folder-path');
+                if (subPath && window.currentFolderSelectionStates) {
+                    window.currentFolderSelectionStates[subPath] = isChecked ? 'checked' : 'unchecked';
+                }
+            });
+
+            if (folderPath && window.currentFolderSelectionStates) {
+                window.currentFolderSelectionStates[folderPath] = isChecked ? 'checked' : 'unchecked';
+            }
+        }
+    }
+
+    if (folderPath && window.currentFolderSelectionStates) {
+        window.currentFolderSelectionStates[folderPath] = folderCb.checked ? 'checked' : (folderCb.indeterminate ? 'indeterminate' : 'unchecked');
+    }
+
+    if (typeof updateParentFolderCheckboxes === 'function') {
+        updateParentFolderCheckboxes(folderGroup);
+    }
+
+    // Call backend endpoint to synchronize queue
+    if (folderPath && typeof htmx !== 'undefined' && htmx.ajax) {
+        let url = '/api/queue/toggleFolder?folder=' + encodeURIComponent(folderPath) + '&checked=' + isChecked;
+        if (activeQuery) {
+            url += '&q=' + encodeURIComponent(activeQuery);
+        }
+        htmx.ajax('POST', url, {
+            target: '#queueListContainer',
+            swap: 'innerHTML'
+        });
+    }
+}
+window.toggleFolderCheckboxesInstant = toggleFolderCheckboxesInstant;
+
+function updateParentFolderCheckboxes(startEl) {
+    if (!startEl) return;
+    let parentGroup = startEl.parentElement ? startEl.parentElement.closest('.tree-folder-group') : null;
+    while (parentGroup) {
+        updateFolderCheckboxState(parentGroup);
+        parentGroup = parentGroup.parentElement ? parentGroup.parentElement.closest('.tree-folder-group') : null;
+    }
+}
+window.updateParentFolderCheckboxes = updateParentFolderCheckboxes;
+
+function updateAllFolderCheckboxes(rootContainer) {
+    const root = rootContainer || document.getElementById('sidebarTestsContainer') || document.getElementById('yamlFileList');
+    if (!root) return;
+    const folderGroups = Array.from(root.querySelectorAll('.tree-folder-group'));
+    if (folderGroups.length === 0) return;
+
+    folderGroups.sort((a, b) => {
+        const depthA = (a.getAttribute('data-folder-path') || '').split('/').length;
+        const depthB = (b.getAttribute('data-folder-path') || '').split('/').length;
+        return depthB - depthA;
+    });
+
+    folderGroups.forEach(group => {
+        updateFolderCheckboxState(group);
+    });
+}
+window.updateAllFolderCheckboxes = updateAllFolderCheckboxes;
+
+function applyFolderSelectionStates(states) {
+    if (!states || typeof states !== 'object') return;
+    window.currentFolderSelectionStates = Object.assign(window.currentFolderSelectionStates || {}, states);
+    const root = document.getElementById('sidebarTestsContainer') || document.getElementById('yamlFileList');
+    if (!root) return;
+
+    try {
+        const targetContainer = document.getElementById('sidebarTestsContainer') || root;
+        targetContainer.setAttribute('data-folder-states', JSON.stringify(window.currentFolderSelectionStates));
+    } catch (e) {}
+
+    const folderGroups = root.querySelectorAll('.tree-folder-group');
+    folderGroups.forEach(group => {
+        const folderPath = group.getAttribute('data-folder-path');
+        if (!folderPath) return;
+        const header = group.querySelector(':scope > .tree-folder-header');
+        const folderCb = header ? header.querySelector('.folder-select-cb') : null;
+        if (!folderCb) return;
+
+        const state = window.currentFolderSelectionStates[folderPath];
+        if (state === 'checked') {
+            folderCb.checked = true;
+            folderCb.indeterminate = false;
+        } else if (state === 'indeterminate') {
+            folderCb.checked = false;
+            folderCb.indeterminate = true;
+        } else if (state === 'unchecked') {
+            folderCb.checked = false;
+            folderCb.indeterminate = false;
+        }
+    });
+}
+window.applyFolderSelectionStates = applyFolderSelectionStates;
+
+if (typeof document !== 'undefined') {
+    document.body.addEventListener('folderStatesUpdated', function(evt) {
+        if (evt && evt.detail) {
+            applyFolderSelectionStates(evt.detail);
+        }
+    });
+    document.body.addEventListener('folderTotalsUpdated', function(evt) {
+        if (evt && evt.detail) {
+            window.currentFolderTotals = Object.assign(window.currentFolderTotals || {}, evt.detail);
+            try {
+                const target = document.getElementById('sidebarTestsContainer') || document.getElementById('yamlFileList');
+                if (target) {
+                    target.setAttribute('data-folder-totals', JSON.stringify(window.currentFolderTotals));
+                }
+            } catch (e) {}
+        }
+    });
+}
+
+function toggleExpandFile(file, targetEl) {
+    if (!file) return;
+    const escapedFile = String(file).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const list = document.getElementById('datasets-' + file) || document.querySelector(`.dataset-list[data-file="${escapedFile}"]`);
+    const listItem = targetEl ? targetEl.closest('.list-item') : document.querySelector(`.list-item[data-file="${escapedFile}"]`);
+    
+    if (list) {
+        const isHidden = window.getComputedStyle(list).display === 'none' || list.style.display === 'none';
+        list.style.display = isHidden ? 'flex' : 'none';
+        
+        if (listItem) {
+            const icon = listItem.querySelector('.item-main i');
+            if (icon) {
+                if (isHidden) {
+                    icon.classList.remove('fa-chevron-right');
+                    icon.classList.add('fa-chevron-down');
+                } else {
+                    icon.classList.remove('fa-chevron-down');
+                    icon.classList.add('fa-chevron-right');
+                }
+            }
+            const matIcon = listItem.querySelector('.item-main .material-symbols-outlined');
+            if (matIcon) {
+                matIcon.textContent = isHidden ? 'keyboard_arrow_down' : 'keyboard_arrow_right';
+            }
+        }
+    }
+    fetch('/api/files/toggle?file=' + encodeURIComponent(file), { method: 'POST' }).catch(() => {});
+}
+window.toggleExpandFile = toggleExpandFile;
+
+function setFilterCookie(query) {
+    try {
+        const trimmed = (query || '').trim();
+        if (trimmed) {
+            document.cookie = 'aura_test_search_query=' + encodeURIComponent(trimmed) + '; path=/; max-age=31536000; SameSite=Lax';
+        } else {
+            document.cookie = 'aura_test_search_query=; path=/; max-age=0; SameSite=Lax';
+        }
+    } catch (e) {}
+}
+window.setFilterCookie = setFilterCookie;
+
+function getFilterCookie() {
+    try {
+        const match = document.cookie.match(/(?:^|;\s*)aura_test_search_query=([^;]*)/);
+        return match ? decodeURIComponent(match[1]) : null;
+    } catch (e) {
+        return null;
+    }
+}
+window.getFilterCookie = getFilterCookie;
+
+function applyInstantTestFilter(query) {
+    const term = (query || '').trim().toLowerCase();
+    const yamlContainer = document.getElementById('yamlFileList');
+    if (!yamlContainer) return;
+
+    const fileContainers = yamlContainer.querySelectorAll('.file-container');
+    const folderGroups = yamlContainer.querySelectorAll('.tree-folder-group');
+    if (fileContainers.length === 0 && folderGroups.length === 0) return;
+
+    if (!term) {
+        fileContainers.forEach(container => {
+            container.style.display = 'flex';
+            const datasetItems = container.querySelectorAll('.dataset-item');
+            datasetItems.forEach(d => { d.style.display = 'flex'; });
+        });
+        folderGroups.forEach(folder => {
+            folder.style.display = '';
+        });
+        return;
+    }
+
+    // 1. Identify which folder groups directly match the filter
+    const matchingFolders = new Set();
+    folderGroups.forEach(folder => {
+        const folderPath = (folder.getAttribute('data-folder-path') || '').toLowerCase();
+        const folderNameEl = folder.querySelector('.tree-folder-name');
+        const folderName = (folderNameEl ? folderNameEl.textContent : '').toLowerCase();
+        if ((folderPath && folderPath.includes(term)) || (folderName && folderName.includes(term))) {
+            matchingFolders.add(folder);
+        }
+    });
+
+    // 2. Filter file containers
+    fileContainers.forEach(container => {
+        // Check if any ancestor folder matches the filter
+        let inMatchingFolder = false;
+        let parent = container.parentElement;
+        while (parent && parent !== yamlContainer) {
+            if (parent.classList && parent.classList.contains('tree-folder-group') && matchingFolders.has(parent)) {
+                inMatchingFolder = true;
+                break;
+            }
+            parent = parent.parentElement;
+        }
+
+        const datasetItems = container.querySelectorAll('.dataset-item');
+
+        if (inMatchingFolder) {
+            container.style.display = 'flex';
+            datasetItems.forEach(d => { d.style.display = 'flex'; });
+            return;
+        }
+
+        const fileName = (container.getAttribute('data-file') || '').toLowerCase();
+        const matchesFile = fileName.includes(term);
+
+        let anyDatasetMatched = false;
+        if (datasetItems.length > 0) {
+            datasetItems.forEach(d => {
+                const label = (d.textContent || '').toLowerCase();
+                const dId = (d.getAttribute('data-id') || '').toLowerCase();
+                const matched = matchesFile || label.includes(term) || dId.includes(term);
+                d.style.display = matched ? 'flex' : 'none';
+                if (matched) anyDatasetMatched = true;
+            });
+        }
+
+        if (matchesFile || anyDatasetMatched) {
+            container.style.display = 'flex';
+        } else {
+            container.style.display = 'none';
+        }
+    });
+
+    // 3. Update folder visibility bottom-up (reverse DOM order)
+    const reversedFolders = Array.from(folderGroups).reverse();
+    reversedFolders.forEach(folder => {
+        if (matchingFolders.has(folder)) {
+            folder.style.display = '';
+            // Ensure all subfolders inside a matching folder are also displayed
+            const subFolders = folder.querySelectorAll('.tree-folder-group');
+            subFolders.forEach(sub => { sub.style.display = ''; });
+            return;
+        }
+
+        const visibleFile = folder.querySelector('.file-container:not([style*="display: none"])');
+        const visibleSubFolder = folder.querySelector('.tree-folder-group:not([style*="display: none"])');
+        folder.style.display = (visibleFile || visibleSubFolder) ? '' : 'none';
+    });
+
+    if (typeof updateAllFolderCheckboxes === 'function') {
+        updateAllFolderCheckboxes();
+    }
+}
+window.applyInstantTestFilter = applyInstantTestFilter;
+
+function loadFiles(forceSwap = false) {
+    return new Promise(async (resolve, reject) => {
+        let resolved = false;
+        const done = () => {
+            if (!resolved) {
+                resolved = true;
+                resolve();
+            }
+        };
+        setTimeout(done, 1000);
+        try {
+            const timestamp = Date.now();
+            const res = await fetch('/api/files/json?t=' + timestamp);
+            currentFilesListCached = await res.json();
+            window.currentFilesListCached = currentFilesListCached;
+            const fileListEl = document.getElementById('yamlFileList');
+            const searchInput = document.getElementById('testSearchInput');
+            const storedQuery = (typeof sessionStorage !== 'undefined') ? sessionStorage.getItem('aura_test_search_query') : null;
+            const cookieQuery = (typeof getFilterCookie === 'function') ? getFilterCookie() : null;
+            const activeQuery = (searchInput && searchInput.value.trim()) ? searchInput.value.trim() : (cookieQuery ? cookieQuery.trim() : (storedQuery ? storedQuery.trim() : ''));
+            if (searchInput && !searchInput.value && activeQuery) {
+                searchInput.value = activeQuery;
+            }
+            updateClearTestSearchBtn(activeQuery);
+
+            if (fileListEl && (forceSwap || window.initializedAlready)) {
+                const listener = function(evt) {
+                    if (evt.detail.target && evt.detail.target.id === 'yamlFileList') {
+                        document.removeEventListener('htmx:afterSwap', listener);
+                        window.initializedAlready = true;
+                        syncCheckboxesFromState();
+                        if (typeof updateQueueList === 'function') updateQueueList();
+                        done();
+                    }
+                };
+                document.addEventListener('htmx:afterSwap', listener);
+                const targetUrl = activeQuery ? ('/api/files/search?q=' + encodeURIComponent(activeQuery) + '&t=' + timestamp) : ('/api/files/list?t=' + timestamp);
+                htmx.ajax('GET', targetUrl, { target: '#yamlFileList', swap: 'innerHTML' });
+            } else {
+                window.initializedAlready = true;
+                syncCheckboxesFromState();
+                if (typeof updateQueueList === 'function') updateQueueList();
+                done();
+            }
+        } catch (e) {
+            console.error("Failed to load files", e);
+            done();
+        }
+    });
+}
+window.loadFiles = loadFiles;
+
+function onTestSearchInput(query) {
+    const trimmed = (query || '').trim();
+    if (typeof sessionStorage !== 'undefined') {
+        if (trimmed) {
+            sessionStorage.setItem('aura_test_search_query', trimmed);
+        } else {
+            sessionStorage.removeItem('aura_test_search_query');
+        }
+    }
+    setFilterCookie(trimmed);
+    updateClearTestSearchBtn(trimmed);
+    applyInstantTestFilter(trimmed);
+    if (typeof updateActiveTagFilterUI === 'function') {
+        updateActiveTagFilterUI();
+    }
+}
+window.onTestSearchInput = onTestSearchInput;
+
+function updateClearTestSearchBtn(query) {
+    const clearBtn = document.getElementById('clearTestSearchBtn');
+    if (!clearBtn) return;
+    const searchInput = document.getElementById('testSearchInput');
+    const val = (query !== undefined && query !== null) ? query : (searchInput ? searchInput.value : '');
+    const hasQuery = (typeof val === 'string' ? val.trim() : String(val).trim()).length > 0;
+    clearBtn.style.display = hasQuery ? 'inline-flex' : 'none';
+}
+window.updateClearTestSearchBtn = updateClearTestSearchBtn;
+
+function clearTestSearch() {
+    const searchInput = document.getElementById('testSearchInput');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('aura_test_search_query');
+    }
+    setFilterCookie('');
+    updateClearTestSearchBtn('');
+    applyInstantTestFilter('');
+    if (window.history && window.history.replaceState) {
+        try {
+            const url = new URL(window.location.href);
+            if (url.searchParams.has('q')) {
+                url.searchParams.delete('q');
+                window.history.replaceState({}, '', url.toString());
+            }
+        } catch (e) {}
+    }
+    if (window.htmx) {
+        htmx.ajax('GET', '/api/files/list', { target: '#yamlFileList', swap: 'innerHTML' });
+    }
+}
+window.clearTestSearch = clearTestSearch;
+
+function syncCheckboxesFromState() {
+    const fileContainers = document.querySelectorAll('.file-container');
+    
+    if (fileContainers.length > 0) {
+        fileContainers.forEach(container => {
+            const fileCb = container.querySelector('.file-select-cb');
+            if (!fileCb) return;
+            const file = fileCb.getAttribute('data-file');
+            if (!file) return;
+
+            const datasetCbs = container.querySelectorAll('.dataset-select-cb');
+            if (datasetCbs.length > 0) {
+                let allChecked = true;
+                let anyChecked = false;
+                datasetCbs.forEach(cb => {
+                    const id = cb.getAttribute('data-id');
+                    const selected = isDatasetSelected(file, id);
+                    cb.checked = selected;
+                    if (selected) anyChecked = true;
+                    else allChecked = false;
+                });
+                fileCb.checked = allChecked;
+                fileCb.indeterminate = (!allChecked && anyChecked);
+            } else {
+                const selectedForFile = selectedDatasets.filter(d => String(d.file) === String(file));
+                const cachedFile = (window.currentFilesListCached || []).find(f => String(f.file) === String(file));
+                const totalDatasets = (cachedFile && cachedFile.datasets) ? cachedFile.datasets.length : 0;
+
+                if (totalDatasets > 0) {
+                    const isAll = (selectedForFile.length === totalDatasets);
+                    const isSome = (selectedForFile.length > 0 && !isAll);
+                    fileCb.checked = isAll;
+                    fileCb.indeterminate = isSome;
+                } else {
+                    const isIndeterminateAttr = fileCb.getAttribute('data-indeterminate') === 'true';
+                    if (isIndeterminateAttr) {
+                        fileCb.checked = false;
+                        fileCb.indeterminate = true;
+                    } else {
+                        const isFileInQueue = selectedForFile.length > 0;
+                        fileCb.indeterminate = false;
+                        fileCb.checked = isFileInQueue;
+                    }
+                }
+            }
+        });
+    } else {
+        // Fallback for standalone checkboxes
+        document.querySelectorAll('.dataset-select-cb').forEach(cb => {
+            const file = cb.getAttribute('data-file');
+            const id = cb.getAttribute('data-id');
+            cb.checked = isDatasetSelected(file, id);
+        });
+        document.querySelectorAll('.file-select-cb').forEach(cb => {
+            const file = cb.getAttribute('data-file');
+            const isIndeterminateAttr = cb.getAttribute('data-indeterminate') === 'true';
+            if (isIndeterminateAttr) {
+                cb.checked = false;
+                cb.indeterminate = true;
+            } else {
+                cb.indeterminate = false;
+                cb.checked = selectedDatasets.some(d => String(d.file) === String(file));
+            }
+        });
+    }
+}
+window.syncCheckboxesFromState = syncCheckboxesFromState;
+
+function loadFilesList(files) {
+    syncCheckboxesFromState();
+    updateQueueList();
+}
+window.loadFilesList = loadFilesList;
+
+async function submitCreateTest() {
+    const nameInput = document.getElementById('newTestName');
+    if (!nameInput) return;
+    let name = nameInput.value.trim();
+    if (!name) return;
+
+    const fileTypeRadio = document.querySelector('input[name="newFileType"]:checked');
+    const fileType = fileTypeRadio ? fileTypeRadio.value : 'yaml';
+
+    if (fileType === 'steps' && !name.toLowerCase().endsWith('.steps')) {
+        name = name + '.steps';
+    } else if (fileType === 'yaml' && !name.toLowerCase().endsWith('.yaml') && !name.toLowerCase().endsWith('.yml')) {
+        name = name + '.yaml';
+    }
+
+    try {
+        const res = await fetch('/api/create', {
+            method: 'POST',
+            body: new URLSearchParams({ name })
+        });
+        const data = await res.json();
+        if (data.error) {
+            showToast("Error: " + data.error, "error");
+        } else {
+            nameInput.value = '';
+            const modal = document.getElementById('createTestModal');
+            if (modal) modal.style.display = 'none';
+            if (typeof htmx !== 'undefined') {
+                htmx.trigger(document.body, 'refreshFiles');
+            }
+            await openYamlEditor(data.file);
+        }
+    } catch (e) {
+        console.error("Failed to create file", e);
+    }
+}
+window.submitCreateTest = submitCreateTest;
+
+function openCreateModal(type) {
+    const modal = document.getElementById('createTestModal');
+    if (!modal) return;
+    const nameInput = document.getElementById('newTestName');
+    if (nameInput) {
+        nameInput.value = '';
+    }
+    const yamlRadio = document.querySelector('input[name="newFileType"][value="yaml"]');
+    const stepsRadio = document.querySelector('input[name="newFileType"][value="steps"]');
+    if (type === 'steps' && stepsRadio) {
+        stepsRadio.checked = true;
+        if (nameInput) nameInput.placeholder = 'e.g. fragments/login.steps';
+    } else if (yamlRadio) {
+        yamlRadio.checked = true;
+        if (nameInput) nameInput.placeholder = 'e.g. Add Product to Basket';
+    }
+    modal.style.display = 'flex';
+    if (nameInput) nameInput.focus();
+}
+window.openCreateModal = openCreateModal;
+
+let currentSidebarTab = 'tests';
+
+function switchSidebarTab(tab) {
+    currentSidebarTab = tab || 'tests';
+    const fileList = document.getElementById('yamlFileList');
+    if (fileList) {
+        fileList.setAttribute('data-active-tab', currentSidebarTab);
+    }
+    const testsContainer = document.getElementById('sidebarTestsContainer');
+    const fragmentsContainer = document.getElementById('sidebarFragmentsContainer');
+    const tabTestsBtn = document.getElementById('tabTestsBtn');
+    const tabFragmentsBtn = document.getElementById('tabFragmentsBtn');
+    const searchInput = document.getElementById('testSearchInput');
+
+    if (currentSidebarTab === 'fragments') {
+        if (testsContainer) testsContainer.style.display = 'none';
+        if (fragmentsContainer) fragmentsContainer.style.display = 'block';
+        if (tabTestsBtn) {
+            tabTestsBtn.classList.remove('active-tests');
+            tabTestsBtn.style.background = 'transparent';
+            tabTestsBtn.style.color = 'var(--text-secondary, #64748b)';
+        }
+        if (tabFragmentsBtn) {
+            tabFragmentsBtn.classList.add('active-fragments');
+        }
+        if (searchInput) searchInput.placeholder = 'Search step fragments...';
+    } else {
+        if (testsContainer) testsContainer.style.display = 'block';
+        if (fragmentsContainer) fragmentsContainer.style.display = 'none';
+        if (tabTestsBtn) {
+            tabTestsBtn.classList.add('active-tests');
+        }
+        if (tabFragmentsBtn) {
+            tabFragmentsBtn.classList.remove('active-fragments');
+            tabFragmentsBtn.style.background = 'transparent';
+            tabFragmentsBtn.style.color = 'var(--text-secondary, #64748b)';
+        }
+        if (searchInput) searchInput.placeholder = 'Search test cases...';
+    }
+}
+window.switchSidebarTab = switchSidebarTab;
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.body.addEventListener('htmx:afterSwap', function(evt) {
+        if (evt.detail && evt.detail.target && evt.detail.target.id === 'yamlFileList') {
+            switchSidebarTab(currentSidebarTab);
+        }
+    });
+});
+
+var consoleExpanded = false;
+
+function toggleConsoleSize() {
+    consoleExpanded = !consoleExpanded;
+    const icon = document.getElementById('consoleSizeIcon');
+    const btn = document.getElementById('toggleConsoleSizeBtn');
+    if (consoleExpanded) {
+        if (icon) icon.textContent = 'keyboard_arrow_down';
+        if (btn) btn.innerHTML = '<span class="material-symbols-outlined" id="consoleSizeIcon" aria-hidden="true">keyboard_arrow_down</span> Shrink';
+    } else {
+        if (icon) icon.textContent = 'keyboard_arrow_up';
+        if (btn) btn.innerHTML = '<span class="material-symbols-outlined" id="consoleSizeIcon" aria-hidden="true">keyboard_arrow_up</span> Expand';
+    }
+    updateCenterLayout();
+}
+window.toggleConsoleSize = toggleConsoleSize;
+
+function toggleConsoleCollapse() {
+    consoleCollapsed = !consoleCollapsed;
+    window.consoleCollapsed = consoleCollapsed;
+    updateCenterLayout();
+}
+window.toggleConsoleCollapse = toggleConsoleCollapse;
+
+function updateCenterLayout() {
+    const container = document.getElementById('auraTestManagerWorkspace') || document.getElementById('dashboardView');
+    if (!container) return;
+
+    if (container.dataset && container.dataset.running === 'true' && !window._serverRunningInitialized) {
+        window._serverRunningInitialized = true;
+        isRunning = true;
+        window.isRunning = true;
+        consoleCollapsed = false;
+        window.consoleCollapsed = false;
+    }
+
+    const hasEdit = (activeEditingFile !== null);
+
+    const runCurrentBtn = document.getElementById('runCurrentTestBtn');
+    if (runCurrentBtn) {
+        runCurrentBtn.style.display = hasEdit ? 'flex' : 'none';
+    }
+
+    if (hasEdit) {
+        document.body.classList.add('workspace-split-mode');
+        if (typeof switchState === 'function') switchState('editor');
+    } else {
+        document.body.classList.remove('workspace-split-mode');
+        if (typeof switchState === 'function') switchState('selection');
+    }
+
+    const consolePanel = document.getElementById('consolePanel');
+    const consoleResizer = document.getElementById('consoleResizer');
+    const closeConsoleBtn = document.getElementById('closeConsoleBtn');
+    const collapseIcon = document.getElementById('consoleCollapseIcon');
+    const collapseText = document.getElementById('consoleCollapseText');
+
+    if (closeConsoleBtn) {
+        closeConsoleBtn.style.display = isRunning ? 'none' : 'inline-block';
+    }
+
+    if (!consolePanel) return;
+
+    // Console panel is persistent (always present at bottom of workspace)
+    consolePanel.style.display = 'flex';
+    consolePanel.style.flexGrow = '0';
+
+    if (consoleCollapsed) {
+        consolePanel.classList.add('console-collapsed');
+        consolePanel.style.height = '38px';
+        if (consoleResizer) consoleResizer.style.display = 'none';
+        if (collapseIcon) collapseIcon.textContent = 'keyboard_arrow_up';
+        if (collapseText) collapseText.textContent = 'Expand';
+    } else {
+        consolePanel.classList.remove('console-collapsed');
+        if (consoleResizer) consoleResizer.style.display = 'block';
+        if (collapseIcon) collapseIcon.textContent = 'keyboard_arrow_down';
+        if (collapseText) collapseText.textContent = 'Collapse';
+
+        if (hasEdit) {
+            consolePanel.style.height = consoleExpanded ? '400px' : '200px';
+        } else {
+            consolePanel.style.height = consoleExpanded ? '550px' : '280px';
+        }
+    }
+}
+window.updateCenterLayout = updateCenterLayout;
+updateCenterLayout();
+document.addEventListener('DOMContentLoaded', updateCenterLayout);
+
+function closeConsole() {
+    consoleOpened = false;
+    consoleCollapsed = true;
+    window.consoleOpened = false;
+    window.consoleCollapsed = true;
+    updateCenterLayout();
+}
+window.closeConsole = closeConsole;
+
+function showUnsavedChangesPrompt(onConfirm, onCancel, filename, onSaveAndLeave) {
+    const fileToClose = filename || activeEditingFile || 'playbook';
+    let modal = document.getElementById('unsavedChangesModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.id = 'unsavedChangesModal';
+        modal.style.display = 'none';
+        modal.innerHTML = `
+            <div class="modal-card">
+                <div class="modal-header">Unsaved Changes</div>
+                <div class="modal-body">
+                    <p id="unsavedChangesModalMessage" style="margin: 0; font-size: 0.95rem; color: var(--text-color, inherit);">
+                        The file '${fileToClose}' has unsaved changes. What would you like to do?
+                    </p>
+                </div>
+                <div class="modal-footer" style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button type="button" class="btn-editor" id="unsavedChangesStayBtn">Cancel</button>
+                    <button type="button" class="btn-danger" id="unsavedChangesCloseBtn">Leave without saving</button>
+                    <button type="button" class="btn-primary" id="unsavedChangesSaveBtn">Save changes & leave</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    } else {
+        const msgEl = modal.querySelector('#unsavedChangesModalMessage');
+        if (msgEl) {
+            msgEl.textContent = `The file '${fileToClose}' has unsaved changes. What would you like to do?`;
+        }
+    }
+
+    const stayBtn = modal.querySelector('#unsavedChangesStayBtn');
+    const closeBtn = modal.querySelector('#unsavedChangesCloseBtn');
+    const saveBtn = modal.querySelector('#unsavedChangesSaveBtn');
+
+    if (stayBtn) {
+        stayBtn.onclick = function() {
+            modal.style.display = 'none';
+            if (typeof onCancel === 'function') onCancel();
+        };
+    }
+
+    if (closeBtn) {
+        closeBtn.onclick = function() {
+            modal.style.display = 'none';
+            if (typeof onConfirm === 'function') onConfirm();
+        };
+    }
+
+    if (saveBtn) {
+        saveBtn.onclick = async function() {
+            modal.style.display = 'none';
+            if (typeof onSaveAndLeave === 'function') {
+                await onSaveAndLeave();
+            } else {
+                if (typeof saveYamlFile === 'function') {
+                    await saveYamlFile();
+                }
+                if (typeof onConfirm === 'function') onConfirm();
+            }
+        };
+    }
+
+    modal.style.display = 'flex';
+}
+window.showUnsavedChangesPrompt = showUnsavedChangesPrompt;
+
+function openYamlEditor(filename, force = false) {
+    if (!force && activeEditingFile && activeEditingFile !== filename && typeof isEditorDirty === 'function' && isEditorDirty()) {
+        return new Promise((resolve) => {
+            showUnsavedChangesPrompt(
+                function() {
+                    openYamlEditor(filename, true).then(resolve);
+                },
+                function() {
+                    resolve();
+                },
+                activeEditingFile,
+                async function() {
+                    if (typeof saveYamlFile === 'function') {
+                        await saveYamlFile();
+                    }
+                    openYamlEditor(filename, true).then(resolve);
+                }
+            );
+        });
+    }
+    if (filename && window.history && window.history.pushState) {
+        const searchParams = new URLSearchParams(window.location.search);
+        if (searchParams.get('file') !== filename) {
+            const targetUrl = window.location.pathname + '?file=' + encodeURIComponent(filename);
+            window.history.pushState({ file: filename }, '', targetUrl);
+        }
+    }
+    initialEditorContent = '';
+    undoStack = [];
+    redoStack = [];
+    window.lastInitializedEditorFile = null;
+    if (typeof clearAllVariablePrompts === 'function') clearAllVariablePrompts();
+    if (typeof updateUndoRedoUI === 'function') updateUndoRedoUI();
+    if (typeof checkEditorDirtyStatus === 'function') checkEditorDirtyStatus();
+
+    // Immediately update file title in editor header if present
+    const fileSpan = document.getElementById('editorFileName');
+    if (fileSpan) {
+        fileSpan.textContent = filename;
+        fileSpan.setAttribute('data-file', filename);
+    }
+
+    // Immediately display loading indicator in steps container while fetching file content
+    const stepsList = document.getElementById('stepsList');
+    if (stepsList) {
+        stepsList.innerHTML = `
+            <div class="editor-loading-placeholder" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 16px; color: var(--text-secondary); gap: 12px;">
+                <span class="material-symbols-outlined spinner" style="font-size: 28px; color: var(--accent);">progress_activity</span>
+                <span style="font-size: 13px; font-weight: 500;">Loading ${escapeHtml(filename)}...</span>
+            </div>
+        `;
+    }
+    const beforeList = document.getElementById('beforeStepsList');
+    if (beforeList) beforeList.innerHTML = '';
+    const afterList = document.getElementById('afterStepsList');
+    if (afterList) afterList.innerHTML = '';
+    const rawYamlTextarea = document.getElementById('rawYamlTextarea');
+    if (rawYamlTextarea) {
+        rawYamlTextarea.value = `# Loading ${filename}...`;
+    }
+
+    return new Promise((resolve) => {
+        let resolved = false;
+        const done = () => {
+            if (!resolved) {
+                resolved = true;
+                resolve();
+            }
+        };
+        setTimeout(done, 1000);
+        activeEditingFile = filename;
+        window.activeEditingFile = activeEditingFile;
+        updateCenterLayout();
+        const listener = function(evt) {
+            if (evt.detail.target && evt.detail.target.id === 'editorPanel') {
+                document.removeEventListener('htmx:afterSwap', listener);
+                done();
+            }
+        };
+        document.addEventListener('htmx:afterSwap', listener);
+        htmx.ajax('GET', `/api/editor?file=${encodeURIComponent(filename)}`, { target: '#editorPanel', swap: 'outerHTML' });
+    });
+}
+window.openYamlEditor = openYamlEditor;
+
+/* HTMX save request listeners */
+document.addEventListener('htmx:configRequest', function(evt) {
+    if (evt.detail && evt.detail.elt && evt.detail.elt.id === 'saveYamlBtn') {
+        const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw') 
+            || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
+        let yaml;
+        if (isRaw) {
+            const rawTextarea = document.getElementById('rawYamlTextarea');
+            yaml = rawTextarea ? rawTextarea.value : '';
+        } else {
+            yaml = compilePlaybookToYaml(true);
+        }
+        const hiddenInput = document.getElementById('editorContent');
+        if (hiddenInput) {
+            hiddenInput.value = yaml;
+        }
+        if (evt.detail.parameters) {
+            evt.detail.parameters['content'] = yaml;
+            if (activeEditingFile) {
+                evt.detail.parameters['file'] = activeEditingFile;
+            }
+        }
+    }
+});
+
+document.addEventListener('htmx:afterRequest', function(evt) {
+    if (evt.detail && evt.detail.elt && evt.detail.elt.id === 'saveYamlBtn') {
+        if (evt.detail.successful) {
+            initialEditorContent = compilePlaybookToYaml();
+            checkEditorDirtyStatus();
+            showToast("💾 Saved playbook file successfully", "success");
+        }
+    }
+});
+
+async function saveYamlFile() {
+    if (!activeEditingFile) {
+        const fileEl = document.getElementById('editorFileName');
+        if (fileEl && fileEl.getAttribute('data-file')) {
+            activeEditingFile = fileEl.getAttribute('data-file');
+            window.activeEditingFile = activeEditingFile;
+        }
+    }
+    if (activeEditingFile && activeEditingFile.includes(',')) {
+        activeEditingFile = activeEditingFile.split(',')[0].trim();
+        window.activeEditingFile = activeEditingFile;
+    }
+    if (!activeEditingFile) return;
+
+    const unsavedIncludeCards = document.querySelectorAll('.include-tree-card.has-unsaved-changes');
+    for (const card of unsavedIncludeCards) {
+        const cardId = card.id ? card.id.replace(/^includeTreeCard_?/, '') : null;
+        if (cardId && typeof saveIncludeInline === 'function') {
+            await saveIncludeInline(cardId);
+        }
+    }
+
+    let yamlContent;
+    const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw') 
+        || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
+    if (isRaw) {
+        const rawTextarea = document.getElementById('rawYamlTextarea');
+        yamlContent = rawTextarea ? rawTextarea.value : '';
+    } else {
+        yamlContent = compilePlaybookToYaml();
+    }
+    initialEditorContent = yamlContent;
+    checkEditorDirtyStatus();
+
+    try {
+        const res = await fetch('/api/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `file=${encodeURIComponent(activeEditingFile)}&content=${encodeURIComponent(yamlContent)}`
+        });
+        const data = await res.json();
+        if (data.status === 'SUCCESS' || data.success) {
+            initialEditorContent = yamlContent;
+            checkEditorDirtyStatus();
+            showToast("💾 Saved playbook file successfully", "success");
+            loadFiles();
+            if (isRaw) {
+                openYamlEditor(activeEditingFile);
+            }
+        } else {
+            showToast("Error saving: " + (data.error || "Unknown error"), "error");
+        }
+    } catch (e) {
+        showToast("Error saving file: " + e.message, "error");
+    }
+}
+window.saveYamlFile = saveYamlFile;
+
+async function deleteYamlFile(targetFile) {
+    const fileToDelete = targetFile || activeEditingFile;
+    if (!fileToDelete) return;
+    const nameDisplay = document.getElementById('deleteFileNameDisplay') || document.getElementById('deleteTestNameDisplay');
+    const input = document.getElementById('deleteFileNameInput') || document.getElementById('deleteTestFileInput');
+    if (nameDisplay) nameDisplay.textContent = fileToDelete;
+    if (input) input.value = fileToDelete;
+    window.pendingDeleteFile = fileToDelete;
+    const modal = document.getElementById('deleteTestModal');
+    if (modal) modal.style.display = 'flex';
+}
+window.deleteYamlFile = deleteYamlFile;
+
+async function submitDeleteTest() {
+    const input = document.getElementById('deleteFileNameInput') || document.getElementById('deleteTestFileInput');
+    const targetFile = (input && input.value) ? input.value : (window.pendingDeleteFile || activeEditingFile);
+    if (!targetFile) return;
+    try {
+        const res = await fetch('/api/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `file=${encodeURIComponent(targetFile)}`
+        });
+        const data = await res.json();
+        if (data.status === 'SUCCESS') {
+            selectedDatasets = selectedDatasets.filter(d => d.file !== targetFile);
+            if (activeEditingFile === targetFile) {
+                closeEditor(true);
+            } else if (typeof loadFiles === 'function') {
+                await loadFiles();
+            }
+            const refreshBtn = document.getElementById('refreshFilesBtn');
+            if (refreshBtn) {
+                refreshBtn.click();
+            }
+            const modal = document.getElementById('deleteTestModal');
+            if (modal) modal.style.display = 'none';
+            showToast(`🗑️ ${targetFile} deleted successfully`, "success");
+        } else {
+            showToast("Error deleting: " + (data.error || "Failed to delete file"), "error");
+        }
+    } catch (e) {
+        showToast("Error deleting file: " + e.message, "error");
+    }
+}
+window.submitDeleteTest = submitDeleteTest;
+
+function openRenameModal(targetFile) {
+    const fileToRename = targetFile || activeEditingFile;
+    if (!fileToRename) return;
+    const nameDisplay = document.getElementById('renameOldFileNameDisplay');
+    const oldInput = document.getElementById('renameOldFileNameInput');
+    const newInput = document.getElementById('renameNewPathInput');
+    const errDiv = document.getElementById('renameTestError');
+
+    if (nameDisplay) nameDisplay.textContent = fileToRename;
+    if (oldInput) oldInput.value = fileToRename;
+    if (newInput) {
+        newInput.value = fileToRename;
+    }
+    if (errDiv) {
+        errDiv.textContent = '';
+        errDiv.style.display = 'none';
+    }
+    window.pendingRenameFile = fileToRename;
+    const modal = document.getElementById('renameTestModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        if (newInput) {
+            newInput.focus();
+            newInput.select();
+        }
+    }
+}
+window.openRenameModal = openRenameModal;
+
+async function submitRenameTest() {
+    const oldInput = document.getElementById('renameOldFileNameInput');
+    const newInput = document.getElementById('renameNewPathInput');
+    const errDiv = document.getElementById('renameTestError');
+
+    const oldFile = (oldInput && oldInput.value) ? oldInput.value : (window.pendingRenameFile || activeEditingFile);
+    const newPath = (newInput && newInput.value) ? newInput.value.trim() : '';
+
+    if (!oldFile || !newPath) {
+        if (errDiv) {
+            errDiv.textContent = "Please enter a valid target file path.";
+            errDiv.style.display = 'block';
+        }
+        return;
+    }
+
+    if (oldFile === newPath) {
+        const modal = document.getElementById('renameTestModal');
+        if (modal) modal.style.display = 'none';
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/rename', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `file=${encodeURIComponent(oldFile)}&newPath=${encodeURIComponent(newPath)}`
+        });
+        const data = await res.json();
+        if (data.status === 'SUCCESS') {
+            const actualNewFile = data.newFile || newPath;
+            selectedDatasets.forEach(d => {
+                if (d.file === oldFile) {
+                    d.file = actualNewFile;
+                }
+            });
+
+            const wasActive = (activeEditingFile === oldFile);
+            const modal = document.getElementById('renameTestModal');
+            if (modal) modal.style.display = 'none';
+
+            if (wasActive) {
+                await openYamlEditor(actualNewFile);
+            } else if (typeof loadFiles === 'function') {
+                await loadFiles();
+            }
+
+            const refreshBtn = document.getElementById('refreshFilesBtn');
+            if (refreshBtn) {
+                refreshBtn.click();
+            }
+
+            // For .steps fragment files: always show the "update references" dialog.
+            // For regular YAML test files: just show the rename toast immediately.
+            if (oldFile.toLowerCase().endsWith('.steps')) {
+                openUpdateFragmentRefsModal(oldFile, actualNewFile);
+            } else {
+                showToast(`✏️ Renamed/moved ${oldFile} → ${actualNewFile}`, "success");
+            }
+        } else {
+            if (errDiv) {
+                errDiv.textContent = data.error || "Failed to rename file.";
+                errDiv.style.display = 'block';
+            } else {
+                showToast("Error renaming file: " + (data.error || "Failed to rename file"), "error");
+            }
+        }
+    } catch (e) {
+        if (errDiv) {
+            errDiv.textContent = "Error renaming file: " + e.message;
+            errDiv.style.display = 'block';
+        } else {
+            showToast("Error renaming file: " + e.message, "error");
+        }
+    }
+}
+window.submitRenameTest = submitRenameTest;
+
+/**
+ * Opens the "Update Fragment References" modal after a .steps file was successfully
+ * moved or renamed. Stores the old/new paths for the subsequent API call.
+ *
+ * @param {string} oldPath - old relative fragment path (pre-move)
+ * @param {string} newPath - new relative fragment path (post-move)
+ */
+function openUpdateFragmentRefsModal(oldPath, newPath) {
+    // Persist paths so the submit/skip handlers can read them without DOM coupling.
+    window._pendingFragmentRefUpdate = { oldPath, newPath };
+
+    const oldEl = document.getElementById('fragmentRefOldPath');
+    const newEl = document.getElementById('fragmentRefNewPath');
+    const errEl = document.getElementById('updateFragmentRefsError');
+    const submitBtn = document.getElementById('submitFragmentRefsBtn');
+
+    if (oldEl) oldEl.textContent = oldPath;
+    if (newEl) newEl.textContent = newPath;
+    if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Update References'; }
+
+    const modal = document.getElementById('updateFragmentRefsModal');
+    if (modal) modal.style.display = 'flex';
+}
+window.openUpdateFragmentRefsModal = openUpdateFragmentRefsModal;
+
+/**
+ * Closes the "Update Fragment References" modal without calling the backend.
+ * Shows the standard rename success toast so the user still sees the result.
+ */
+function skipFragmentRefsUpdate() {
+    const modal = document.getElementById('updateFragmentRefsModal');
+    if (modal) modal.style.display = 'none';
+
+    const pending = window._pendingFragmentRefUpdate;
+    if (pending) {
+        showToast(`✏️ Renamed/moved ${pending.oldPath} → ${pending.newPath}`, "success");
+        window._pendingFragmentRefUpdate = null;
+    }
+}
+window.skipFragmentRefsUpdate = skipFragmentRefsUpdate;
+
+/**
+ * Calls POST /api/update-fragment-refs with the stored old/new fragment paths.
+ * Shows a spinner on the button while the request is in flight and logs the
+ * list of updated files to the browser console.
+ */
+async function submitUpdateFragmentRefs() {
+    const pending = window._pendingFragmentRefUpdate;
+    if (!pending) return;
+
+    const { oldPath, newPath } = pending;
+    const submitBtn = document.getElementById('submitFragmentRefsBtn');
+    const errEl = document.getElementById('updateFragmentRefsError');
+
+    // Enter loading state.
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '⏳ Updating…'; }
+    if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
+
+    try {
+        const res = await fetch('/api/update-fragment-refs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `oldPath=${encodeURIComponent(oldPath)}&newPath=${encodeURIComponent(newPath)}`
+        });
+        const data = await res.json();
+
+        if (data.status === 'SUCCESS') {
+            const count = data.updatedFileCount ?? 0;
+            const files = data.updatedFiles ?? [];
+            console.log('[Fragment Refs] Updated files:', files);
+
+            const modal = document.getElementById('updateFragmentRefsModal');
+            if (modal) modal.style.display = 'none';
+            window._pendingFragmentRefUpdate = null;
+
+            // Show rename toast and update count together.
+            showToast(
+                `✏️ Renamed/moved ${oldPath} → ${newPath}` +
+                (count > 0 ? ` · ✅ ${count} file(s) updated` : ' · ℹ️ No references found'),
+                "success"
+            );
+        } else {
+            // Restore button and show error inline.
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Update References'; }
+            if (errEl) {
+                errEl.textContent = data.error || 'Failed to update fragment references.';
+                errEl.style.display = 'block';
+            }
+        }
+    } catch (e) {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Update References'; }
+        if (errEl) {
+            errEl.textContent = 'Error: ' + e.message;
+            errEl.style.display = 'block';
+        }
+    }
+}
+window.submitUpdateFragmentRefs = submitUpdateFragmentRefs;
+
+function escapeEditorHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function openAddRootTagModal() {
+    const modal = document.getElementById('tagModal');
+    if (!modal) return;
+    const title = document.getElementById('tagModalTitle');
+    const typeInput = document.getElementById('tagModalTargetType');
+    const colInput = document.getElementById('tagModalTargetCol');
+    const keyInput = document.getElementById('tagModalKeyInput');
+    const valInput = document.getElementById('tagModalValueInput');
+    const errBox = document.getElementById('tagModalError');
+
+    if (title) title.textContent = 'Add Playbook Tag';
+    if (typeInput) typeInput.value = 'root';
+    if (colInput) colInput.value = '-1';
+    if (keyInput) keyInput.value = '';
+    if (valInput) valInput.value = '';
+    if (errBox) {
+        errBox.style.display = 'none';
+        errBox.textContent = '';
+    }
+    modal.style.display = 'flex';
+    if (keyInput) setTimeout(() => keyInput.focus(), 50);
+}
+window.openAddRootTagModal = openAddRootTagModal;
+
+function openAddDatasetTagModal(colIndex) {
+    const modal = document.getElementById('tagModal');
+    if (!modal) return;
+    const title = document.getElementById('tagModalTitle');
+    const typeInput = document.getElementById('tagModalTargetType');
+    const colInput = document.getElementById('tagModalTargetCol');
+    const keyInput = document.getElementById('tagModalKeyInput');
+    const valInput = document.getElementById('tagModalValueInput');
+    const errBox = document.getElementById('tagModalError');
+
+    if (title) title.textContent = `Add Dataset Tag (Iteration ${colIndex + 1})`;
+    if (typeInput) typeInput.value = 'dataset';
+    if (colInput) colInput.value = String(colIndex);
+    if (keyInput) keyInput.value = '';
+    if (valInput) valInput.value = '';
+    if (errBox) {
+        errBox.style.display = 'none';
+        errBox.textContent = '';
+    }
+    modal.style.display = 'flex';
+    if (keyInput) setTimeout(() => keyInput.focus(), 50);
+}
+window.openAddDatasetTagModal = openAddDatasetTagModal;
+
+function closeTagModal() {
+    const modal = document.getElementById('tagModal');
+    if (modal) modal.style.display = 'none';
+}
+window.closeTagModal = closeTagModal;
+
+function submitTagModal() {
+    const typeInput = document.getElementById('tagModalTargetType');
+    const colInput = document.getElementById('tagModalTargetCol');
+    const keyInput = document.getElementById('tagModalKeyInput');
+    const valInput = document.getElementById('tagModalValueInput');
+    const errBox = document.getElementById('tagModalError');
+
+    const key = keyInput ? keyInput.value.trim() : '';
+    const valRaw = valInput ? valInput.value.trim() : '';
+    const targetType = typeInput ? typeInput.value : 'root';
+    const colIndex = colInput ? parseInt(colInput.value, 10) : -1;
+
+    if (!key) {
+        if (errBox) {
+            errBox.textContent = 'Please enter a tag key/name.';
+            errBox.style.display = 'block';
+        }
+        return;
+    }
+    if (!/^[a-zA-Z0-9_.-]+$/.test(key)) {
+        if (errBox) {
+            errBox.textContent = 'Tag key must contain letters, numbers, hyphens, underscores, or dots.';
+            errBox.style.display = 'block';
+        }
+        return;
+    }
+    if (!valRaw) {
+        if (errBox) {
+            errBox.textContent = 'Please enter a tag value.';
+            errBox.style.display = 'block';
+        }
+        return;
+    }
+
+    const values = valRaw.split(',').map(s => s.trim()).filter(s => s.length > 0);
+    if (values.length === 0) {
+        if (errBox) {
+            errBox.textContent = 'Please enter at least one non-empty value.';
+            errBox.style.display = 'block';
+        }
+        return;
+    }
+
+    if (targetType === 'queue' || targetType === 'run') {
+        if (typeof window.submitQueueRunTag === 'function') {
+            window.submitQueueRunTag(key, values);
+        }
+        closeTagModal();
+        return;
+    }
+
+    if (targetType === 'root') {
+        const container = document.getElementById('editorTagsContainer');
+        const addBtn = document.getElementById('btnAddRootTag');
+        if (container) {
+            values.forEach(val => {
+                const chip = document.createElement('span');
+                chip.className = 'root-tag-chip';
+                chip.setAttribute('data-key', key);
+                chip.setAttribute('data-value', val);
+                chip.innerHTML = `
+                    <span class="material-symbols-outlined" style="font-size: 12px;">label</span>
+                    <span class="root-tag-text">${escapeEditorHtml(key + ': ' + val)}</span>
+                    <button type="button" class="btn-remove-root-tag" onclick="removeRootTagFromBtn(this)" title="Remove tag">
+                        <span class="material-symbols-outlined" style="font-size: 12px;">close</span>
+                    </button>
+                `;
+                if (addBtn) {
+                    container.insertBefore(chip, addBtn);
+                } else {
+                    container.appendChild(chip);
+                }
+            });
+        }
+    } else {
+        const cell = document.querySelector(`#matrixTagsRow td[data-col="${colIndex}"] .dataset-tags-wrapper`);
+        if (cell) {
+            const addBtn = cell.querySelector('.btn-add-dataset-tag');
+            values.forEach(val => {
+                const chip = document.createElement('span');
+                chip.className = 'dataset-tag-chip';
+                chip.setAttribute('data-key', key);
+                chip.setAttribute('data-value', val);
+                chip.innerHTML = `
+                    <span>${escapeEditorHtml(key + ': ' + val)}</span>
+                    <button type="button" class="btn-remove-ds-tag" onclick="removeDatasetTagFromBtn(this)" title="Remove tag">
+                        <span class="material-symbols-outlined" style="font-size: 11px;">close</span>
+                    </button>
+                `;
+                if (addBtn) {
+                    cell.insertBefore(chip, addBtn);
+                } else {
+                    cell.appendChild(chip);
+                }
+            });
+        }
+    }
+
+    closeTagModal();
+    compilePlaybookToYaml();
+    if (typeof debouncedPushSnapshot === 'function') {
+        debouncedPushSnapshot();
+    }
+    if (typeof checkEditorDirtyStatus === 'function') {
+        checkEditorDirtyStatus();
+    }
+}
+window.submitTagModal = submitTagModal;
+
+function removeRootTagFromBtn(btn) {
+    if (!btn) return;
+    const chip = btn.closest('.root-tag-chip');
+    if (chip) {
+        chip.remove();
+        compilePlaybookToYaml();
+        if (typeof debouncedPushSnapshot === 'function') {
+            debouncedPushSnapshot();
+        }
+        if (typeof checkEditorDirtyStatus === 'function') {
+            checkEditorDirtyStatus();
+        }
+    }
+}
+window.removeRootTagFromBtn = removeRootTagFromBtn;
+
+function removeDatasetTagFromBtn(btn) {
+    if (!btn) return;
+    const chip = btn.closest('.dataset-tag-chip');
+    if (chip) {
+        chip.remove();
+        compilePlaybookToYaml();
+        if (typeof debouncedPushSnapshot === 'function') {
+            debouncedPushSnapshot();
+        }
+        if (typeof checkEditorDirtyStatus === 'function') {
+            checkEditorDirtyStatus();
+        }
+    }
+}
+window.removeDatasetTagFromBtn = removeDatasetTagFromBtn;
+
+// Compatibility stubs
+function updateAreaTagUI() {}
+window.updateAreaTagUI = updateAreaTagUI;
+function openAssignAreaModal() { openAddRootTagModal(); }
+window.openAssignAreaModal = openAssignAreaModal;
+function closeAssignAreaModal() { closeTagModal(); }
+window.closeAssignAreaModal = closeAssignAreaModal;
+function submitAssignArea() { submitTagModal(); }
+window.submitAssignArea = submitAssignArea;
+function removeAreaTag(event) { if (event) { event.stopPropagation(); event.preventDefault(); } }
+window.removeAreaTag = removeAreaTag;
+
+
+
+function closeEditor(force = false) {
+    if (!force && typeof isEditorDirty === 'function' && isEditorDirty()) {
+        showUnsavedChangesPrompt(
+            function() {
+                closeEditor(true);
+            },
+            function() {
+                // Cancel: stay on page
+            },
+            activeEditingFile,
+            async function() {
+                if (typeof saveYamlFile === 'function') {
+                    await saveYamlFile();
+                }
+                closeEditor(true);
+            }
+        );
+        return;
+    }
+    if (window.history && window.history.pushState) {
+        const searchParams = new URLSearchParams(window.location.search);
+        if (searchParams.has('file')) {
+            window.history.pushState({}, '', window.location.pathname);
+        }
+    }
+    activeEditingFile = null;
+    window.activeEditingFile = null;
+    window.currentAreaTag = null;
+    updateAreaTagUI(null);
+    if (typeof clearAllVariablePrompts === 'function') clearAllVariablePrompts();
+    if (typeof initialEditorContent !== 'undefined') initialEditorContent = '';
+    if (typeof undoStack !== 'undefined') undoStack = [];
+    if (typeof redoStack !== 'undefined') redoStack = [];
+    if (typeof updateUndoRedoUI === 'function') updateUndoRedoUI();
+    if (typeof checkEditorDirtyStatus === 'function') checkEditorDirtyStatus();
+    const fileSpan = document.getElementById('editorFileName');
+    if (fileSpan) {
+        fileSpan.textContent = '';
+        fileSpan.removeAttribute('data-file');
+    }
+    updateCenterLayout();
+    if (window.htmx) {
+        htmx.ajax('POST', '/api/editor/close', { swap: 'none' });
+    }
+    if (typeof loadFiles === 'function') {
+        loadFiles();
+    }
+    const refreshBtn = document.getElementById('refreshFilesBtn');
+    if (refreshBtn) {
+        refreshBtn.click();
+    }
+}
+window.closeEditor = closeEditor;
+
+/* Global Navigation & Link Click Interceptor for Open File Editing */
+document.addEventListener('click', function(e) {
+    const activeFile = activeEditingFile || window.activeEditingFile;
+    if (!activeFile) return;
+
+    // Ignore clicks inside modal overlays, the editor itself, the Aura AI Assistant overlay/launcher, or execution/queue controls
+    if (e.target.closest('.modal-overlay, .modal-card, #editorPanel, #auraChatOverlay, .aura-chat-overlay, .aura-chat-launcher, #runControls, #configPanel, .run-controls-container, #runCurrentTestBtn, #runQueueBtn, #stopQueueBtn')) return;
+
+    const link = e.target.closest('a[href], [hx-get], [hx-post]');
+    if (!link) return;
+
+    // Do not intercept clicks originating from or targeting within the editor panel, AI Assistant, or execution run controls
+    if (link.closest('#editorPanel, #auraChatOverlay, .aura-chat-overlay, .aura-chat-launcher, #runControls, #configPanel, .run-controls-container')
+        || link.id === 'runCurrentTestBtn' || link.id === 'runQueueBtn' || link.id === 'stopQueueBtn') return;
+
+    const isCloseAction = link.id === 'closeEditorBtn' 
+        || link.getAttribute('onclick') === 'closeEditor()' 
+        || (link.closest('#editorPanel') && link.classList.contains('btn-editor') && link.textContent && link.textContent.trim().includes('Close'));
+    if (isCloseAction) return;
+
+    const href = link.getAttribute('href');
+    const hxGet = link.getAttribute('hx-get');
+    const hxPost = link.getAttribute('hx-post');
+
+    if (href && (href.startsWith('javascript:') || href === '#')) return;
+
+    if (href && href.includes('file=') && href.includes(encodeURIComponent(activeFile))) return;
+
+    const isDirty = (typeof isEditorDirty === 'function' && isEditorDirty());
+
+    if (isDirty) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+
+        const executeRedirect = () => {
+            closeEditor(true);
+            if (href) {
+                window.location.href = href;
+            } else if (hxGet && window.htmx) {
+                htmx.ajax('GET', hxGet, { target: link.getAttribute('hx-target') || '#mainViewContainer', swap: link.getAttribute('hx-swap') || 'innerHTML' });
+            } else if (hxPost && window.htmx) {
+                htmx.ajax('POST', hxPost, { target: link.getAttribute('hx-target') || '#mainViewContainer', swap: link.getAttribute('hx-swap') || 'innerHTML' });
+            }
+        };
+
+        showUnsavedChangesPrompt(
+            function() {
+                executeRedirect();
+            },
+            function() {
+                // Stay on page
+            },
+            activeFile,
+            async function() {
+                if (typeof saveYamlFile === 'function') {
+                    await saveYamlFile();
+                }
+                executeRedirect();
+            }
+        );
+    } else {
+        closeEditor(true);
+    }
+}, true);
+
+window.addEventListener('popstate', function(evt) {
+    const params = new URLSearchParams(window.location.search);
+    const fileParam = params.get('file');
+    if (fileParam) {
+        if (activeEditingFile !== fileParam) {
+            openYamlEditor(fileParam);
+        }
+    } else {
+        if (activeEditingFile !== null) {
+            closeEditor(true);
+        }
+    }
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    const fileSpan = document.getElementById('editorFileName');
+    if (fileSpan) {
+        let dataFile = fileSpan.getAttribute('data-file');
+        if (dataFile && dataFile.trim() !== '') {
+            if (dataFile.includes(',')) {
+                dataFile = dataFile.split(',')[0].trim();
+            }
+            activeEditingFile = dataFile.trim();
+            window.activeEditingFile = activeEditingFile;
+            if (typeof updateCenterLayout === 'function') {
+                updateCenterLayout();
+            }
+        }
+    }
+    initVisualPlaybookEditor();
+});
+
+function syncStateFromQueueContainer() {
+    const container = document.getElementById('queueListContainer');
+    if (!container) return;
+    const items = container.querySelectorAll('.queue-item');
+    selectedDatasets = [];
+    items.forEach(item => {
+        const file = item.getAttribute('data-file');
+        const id = item.getAttribute('data-id');
+        if (file && id) {
+            selectedDatasets.push({ file, id });
+        }
+    });
+    window.selectedDatasets = selectedDatasets;
+    
+    const statsQueueCount = document.getElementById('statsQueueCount');
+    if (statsQueueCount) {
+        statsQueueCount.innerText = `${selectedDatasets.length} Dataset${selectedDatasets.length === 1 ? '' : 's'}`;
+    }
+
+    const runQueueBtn = document.getElementById('runQueueBtn');
+    if (runQueueBtn) {
+        const countSpan = runQueueBtn.querySelector('.badge-count');
+        if (countSpan) {
+            countSpan.textContent = selectedDatasets.length;
+        }
+        if (selectedDatasets.length > 0) {
+            runQueueBtn.removeAttribute('disabled');
+            runQueueBtn.disabled = false;
+            runQueueBtn.style.opacity = '1';
+            runQueueBtn.style.cursor = 'pointer';
+            runQueueBtn.style.filter = 'none';
+        } else {
+            runQueueBtn.setAttribute('disabled', 'disabled');
+            runQueueBtn.disabled = true;
+            runQueueBtn.style.opacity = '0.5';
+            runQueueBtn.style.cursor = 'not-allowed';
+            runQueueBtn.style.filter = 'grayscale(1)';
+        }
+    }
+    if (typeof updateRunButtons === 'function') updateRunButtons();
+    syncCheckboxesFromState();
+}
+window.syncStateFromQueueContainer = syncStateFromQueueContainer;
+
+function updateQueueList() {
+    syncStateFromQueueContainer();
+}
+window.updateQueueList = updateQueueList;
+
+function moveQueueItem(index, direction) {
+    const queueEl = document.getElementById('queueListContainer');
+    if (!queueEl) return;
+    htmx.ajax('POST', '/api/queue/move?index=' + index + '&direction=' + (direction === -1 ? 'up' : 'down'), { target: '#queueListContainer', swap: 'innerHTML' });
+}
+window.moveQueueItem = moveQueueItem;
+
+// ============================================================================
+// Visual Playbook Editor Interactivity Module & Raw Mode
+// ============================================================================
+
+let currentLineCount = 10;
+let activeLineNum = 1;
+let lastCaretOffset = 0;
+let currentEditorMode = 'visual';
+
+window.currentLineCount = currentLineCount;
+window.activeLineNum = activeLineNum;
+window.lastCaretOffset = lastCaretOffset;
+window.currentEditorMode = currentEditorMode;
+
+function setEditorMode(mode) {
+    const prevMode = currentEditorMode;
+    const editorPanel = document.getElementById('editorPanel');
+    const visualContainer = document.getElementById('visualEditorContainer');
+    const visualMain = document.getElementById('visualEditorMain');
+    const rawPanel = document.getElementById('rawEditorPanel');
+    const rawTextarea = document.getElementById('rawYamlTextarea');
+    const btnVisual = document.getElementById('btnModeVisual');
+    const btnRaw = document.getElementById('btnModeRaw');
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+    const reviewBtn = document.getElementById('reviewStepsBtn');
+    const aiReviewBtn = document.getElementById('aiReviewBtn');
+
+    if (mode === 'raw') {
+        if (rawPanel && visualContainer) {
+            if (visualContainer.style.display !== 'none') {
+                const compiled = compilePlaybookToYaml(true);
+                if (rawTextarea) {
+                    rawTextarea.value = compiled;
+                }
+            }
+            visualContainer.style.display = 'none';
+            rawPanel.style.display = 'flex';
+        }
+        currentEditorMode = 'raw';
+        window.currentEditorMode = 'raw';
+        if (editorPanel) {
+            editorPanel.setAttribute('data-mode', 'raw');
+        }
+        if (btnVisual) {
+            btnVisual.style.background = 'transparent';
+            btnVisual.style.color = 'var(--text-secondary)';
+            btnVisual.style.fontWeight = 'normal';
+            btnVisual.style.opacity = btnVisual.disabled ? '0.5' : '0.8';
+        }
+        if (btnRaw) {
+            btnRaw.style.background = 'var(--accent)';
+            btnRaw.style.color = '#fff';
+            btnRaw.style.fontWeight = '600';
+            btnRaw.style.opacity = '1';
+        }
+        if (prevMode !== 'raw' && typeof pushEditorSnapshot === 'function' && !isRestoringSnapshot) {
+            pushEditorSnapshot(false);
+        }
+        updateUndoRedoUI();
+        if (reviewBtn && (!editorPanel || editorPanel.getAttribute('data-has-error') !== 'true')) {
+            reviewBtn.disabled = false;
+        }
+        if (aiReviewBtn) {
+            aiReviewBtn.disabled = true;
+            aiReviewBtn.setAttribute('title', 'Switch to Visual Editor to run AI Review and interactively apply suggestions');
+        }
+    } else {
+        if (editorPanel && editorPanel.getAttribute('data-has-error') === 'true') {
+            showToast("Cannot switch to Visual Editor: file contains YAML syntax errors.", "error");
+            return;
+        }
+
+        // If raw textarea has been modified while in raw mode, re-sync visual editor via POST /api/editor
+        if (currentEditorMode === 'raw' && rawTextarea && initialEditorContent && rawTextarea.value !== initialEditorContent && activeEditingFile) {
+            const cleanFile = activeEditingFile.split(',')[0].trim();
+            htmx.ajax('POST', '/api/editor', {
+                target: '#editorPanel',
+                swap: 'outerHTML',
+                values: { file: cleanFile, content: rawTextarea.value }
+            });
+            return;
+        }
+
+        currentEditorMode = 'visual';
+        window.currentEditorMode = 'visual';
+        if (editorPanel) {
+            editorPanel.setAttribute('data-mode', 'visual');
+        }
+        if (rawPanel && visualContainer) {
+            rawPanel.style.display = 'none';
+            visualContainer.style.display = 'flex';
+        }
+        if (btnVisual) {
+            btnVisual.style.background = 'var(--accent)';
+            btnVisual.style.color = '#fff';
+            btnVisual.style.fontWeight = '600';
+            btnVisual.style.opacity = '1';
+        }
+        if (btnRaw) {
+            btnRaw.style.background = 'transparent';
+            btnRaw.style.color = 'var(--text-secondary)';
+            btnRaw.style.fontWeight = 'normal';
+            btnRaw.style.opacity = '0.8';
+        }
+        if (prevMode !== 'visual' && typeof pushEditorSnapshot === 'function' && !isRestoringSnapshot) {
+            pushEditorSnapshot(false);
+        }
+        if (rawTextarea) {
+            const val = rawTextarea.value || '';
+            const areaMatch = val.match(/(?:^|\r?\n)\s*#?\s*@([a-zA-Z0-9_-]+)/);
+            if (areaMatch) {
+                const tagIndex = areaMatch.index;
+                const stepsIdx = val.indexOf('steps:');
+                const beforeIdx = val.indexOf('before:');
+                const dataIdx = val.indexOf('data:');
+                let firstSectionIdx = Infinity;
+                if (stepsIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, stepsIdx);
+                if (beforeIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, beforeIdx);
+                if (dataIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, dataIdx);
+
+                if (tagIndex < firstSectionIdx) {
+                    updateAreaTagUI('@' + areaMatch[1]);
+                } else {
+                    updateAreaTagUI(null);
+                }
+            } else {
+                updateAreaTagUI(null);
+            }
+        }
+        updateUndoRedoUI();
+        if (reviewBtn && (!editorPanel || editorPanel.getAttribute('data-has-error') !== 'true')) {
+            reviewBtn.disabled = false;
+        }
+        if (aiReviewBtn && (!editorPanel || editorPanel.getAttribute('data-has-error') !== 'true')) {
+            aiReviewBtn.disabled = false;
+            aiReviewBtn.setAttribute('title', 'AI Review: Analyze playbook steps for ambiguity, missing assertions, and design best practices with PlaybookLinter');
+        }
+    }
+}
+window.setEditorMode = setEditorMode;
+
+function handleRawYamlInput(textarea) {
+    if (!textarea) return;
+    const hiddenInput = document.getElementById('editorContent');
+    if (hiddenInput) {
+        hiddenInput.value = textarea.value;
+    }
+    const val = textarea.value || '';
+    const areaMatch = val.match(/(?:^|\r?\n)\s*#?\s*@([a-zA-Z0-9_-]+)/);
+    if (areaMatch) {
+        const tagIndex = areaMatch.index;
+        const stepsIdx = val.indexOf('steps:');
+        const beforeIdx = val.indexOf('before:');
+        const dataIdx = val.indexOf('data:');
+        let firstSectionIdx = Infinity;
+        if (stepsIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, stepsIdx);
+        if (beforeIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, beforeIdx);
+        if (dataIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, dataIdx);
+
+        if (tagIndex < firstSectionIdx) {
+            updateAreaTagUI('@' + areaMatch[1]);
+        } else {
+            updateAreaTagUI(null);
+        }
+    } else {
+        updateAreaTagUI(null);
+    }
+    checkEditorDirtyStatus();
+    checkNewVariablePrompts();
+    debouncedPushSnapshot();
+    const undoBtn = document.getElementById('undoBtn');
+    if (undoBtn) undoBtn.disabled = false;
+}
+window.handleRawYamlInput = handleRawYamlInput;
+
+function findInlineCommentIndex(text) {
+    if (!text || typeof text !== 'string') return -1;
+    let inSingle = false;
+    let inDouble = false;
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        const prev = i > 0 ? text[i - 1] : '';
+        if (ch === '"' && prev !== '\\' && !inSingle) {
+            inDouble = !inDouble;
+        } else if (ch === "'" && prev !== '\\' && !inDouble) {
+            inSingle = !inSingle;
+        } else if (ch === '#' && !inSingle && !inDouble) {
+            if (i > 0 && (/\s/.test(prev) || prev === '"' || prev === "'")) {
+                return i;
+            }
+        }
+    }
+    return -1;
+}
+window.findInlineCommentIndex = findInlineCommentIndex;
+
+function getStepRawText(content) {
+    if (!content) return '';
+    const rawAttr = content.getAttribute('data-raw');
+    const isFocused = (document.activeElement === content || content.contains(document.activeElement));
+    
+    // When not actively focused, data-raw is the authoritative source of truth
+    if (!isFocused && rawAttr !== null && rawAttr !== undefined && rawAttr.trim().length > 0) {
+        return rawAttr;
+    }
+
+    const hasPills = content.querySelector('.var-pill, .unified-include-pill, .missing-include-pill, .invalid-include-pill, .hint-badge, .substep-folded-badge, .step-inline-comment, .material-symbols-outlined');
+    
+    // If no pills or icon tokens are present, return the live typed text
+    if (!hasPills) {
+        return (isFocused ? (content.innerText || '') : (rawAttr || content.innerText || ''));
+    }
+    
+    // When focused or if data-raw is missing, reconstruct cleanly from DOM without icon ligatures
+    const clone = content.cloneNode(true);
+    clone.querySelectorAll('.material-symbols-outlined').forEach(el => el.remove());
+    clone.querySelectorAll('.var-pill').forEach(el => {
+        const v = el.getAttribute('data-var') || el.textContent.trim();
+        el.replaceWith(document.createTextNode(`\${${v}}`));
+    });
+    clone.querySelectorAll('.unified-include-pill, .invalid-include-pill, .missing-include-pill').forEach(el => {
+        const r = el.getAttribute('data-raw');
+        if (r) {
+            el.replaceWith(document.createTextNode(r));
+        } else {
+            const txt = el.textContent.trim();
+            el.replaceWith(document.createTextNode(txt));
+        }
+    });
+    clone.querySelectorAll('.substep-folded-badge').forEach(el => {
+        el.replaceWith(document.createTextNode('>-'));
+    });
+    return clone.textContent || '';
+}
+window.getStepRawText = getStepRawText;
+
+function checkAndUpdateCommentRow(stepContentOrRow) {
+    if (typeof isRestoringSnapshot !== 'undefined' && isRestoringSnapshot) return;
+    if (!stepContentOrRow) return;
+    const row = stepContentOrRow.classList && stepContentOrRow.classList.contains('step-row') 
+        ? stepContentOrRow 
+        : stepContentOrRow.closest('.step-row');
+    if (!row) return;
+
+    const content = row.querySelector('.step-content');
+    if (!content) return;
+
+    const text = getStepRawText(content).replace(/\r?\n+/g, ' ').trim();
+    const isComment = text.startsWith('#');
+    const wasComment = row.classList.contains('step-row-comment');
+
+    if (isComment && !wasComment) {
+        row.classList.add('step-row-comment');
+        row.classList.remove('step-row-substep', 'substep-last');
+        content.style.color = 'var(--text-secondary, #64748b)';
+        content.style.fontStyle = 'italic';
+        updateAllLineNumbers();
+        refreshAllSubstepToggleBars();
+    } else if (isComment && wasComment) {
+        content.style.color = 'var(--text-secondary, #64748b)';
+        content.style.fontStyle = 'italic';
+        // If followed by substeps, update the group title without full rebuilding
+        const next = row.nextElementSibling;
+        if (next && next.classList.contains('substeps-toggle-bar')) {
+            const titleEl = next.querySelector('.substeps-title');
+            if (titleEl) {
+                const raw = text.replace(/^#\s*/, '').trim();
+                titleEl.textContent = raw || 'Sub-steps';
+            }
+        }
+    } else if (!isComment && wasComment) {
+        row.classList.remove('step-row-comment');
+        content.style.color = '';
+        content.style.fontStyle = '';
+        updateAllLineNumbers();
+        refreshAllSubstepToggleBars();
+    }
+
+    if (!isComment) {
+        const inlineCommentIdx = findInlineCommentIndex(text);
+        const existingInlineSpan = content.querySelector('.step-inline-comment');
+        if (inlineCommentIdx >= 0) {
+            const expectedComment = text.substring(inlineCommentIdx);
+            if (!existingInlineSpan || existingInlineSpan.textContent !== expectedComment) {
+                const caret = getCaretOffset(content);
+                const instruction = text.substring(0, inlineCommentIdx);
+                const safeInstruction = instruction.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const safeComment = expectedComment.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                content.innerHTML = safeInstruction + `<span class="step-inline-comment">${safeComment}</span>`;
+                setCaretOffset(content, caret);
+            }
+        } else if (existingInlineSpan) {
+            const caret = getCaretOffset(content);
+            content.innerText = text;
+            setCaretOffset(content, caret);
+        }
+
+        const isSubstepPrefix = text.startsWith('>-') || text.startsWith('- >-') || text.startsWith('->-') || text.startsWith('  - ');
+        const isCurrentlySubstep = row.classList.contains('step-row-substep');
+
+        if (isSubstepPrefix && !isCurrentlySubstep) {
+            row.classList.add('step-row-substep');
+            row.setAttribute('data-manual-substep', 'true');
+
+            // Strip the trigger prefix so it is not displayed in the sub-step line
+            let cleanText = text;
+            if (cleanText.startsWith('- >-')) cleanText = cleanText.substring(4).trim();
+            else if (cleanText.startsWith('->-')) cleanText = cleanText.substring(3).trim();
+            else if (cleanText.startsWith('>-')) cleanText = cleanText.substring(2).trim();
+            else if (cleanText.startsWith('  - ')) cleanText = cleanText.substring(4).trim();
+
+            const caret = getCaretOffset(content);
+            const prefixLen = text.length - cleanText.length;
+            const newCaret = Math.max(0, caret - prefixLen);
+
+            content.innerText = cleanText;
+            content.setAttribute('data-raw', cleanText);
+            setCaretOffset(content, newCaret);
+
+            updateAllLineNumbers();
+            refreshAllSubstepToggleBars();
+            compilePlaybookToYaml();
+        }
+    }
+}
+window.checkAndUpdateCommentRow = checkAndUpdateCommentRow;
+
+document.addEventListener('input', function(evt) {
+    const stepContent = evt.target && evt.target.closest ? evt.target.closest('.step-content') : null;
+    if (stepContent) {
+        checkAndUpdateCommentRow(stepContent);
+    }
+});
+
+function initVisualPlaybookEditor() {
+    const editorPanel = document.getElementById('editorPanel');
+    if (!editorPanel) return;
+
+    // Initialize area tag from data-area or raw textarea
+    const rawTextarea = document.getElementById('rawYamlTextarea');
+    let initialTag = editorPanel.getAttribute('data-area') || '';
+    if (!initialTag && rawTextarea && rawTextarea.value) {
+        const val = rawTextarea.value || '';
+        const areaMatch = val.match(/(?:^|\r?\n)\s*#?\s*@([a-zA-Z0-9_-]+)/);
+        if (areaMatch) {
+            const tagIndex = areaMatch.index;
+            const stepsIdx = val.indexOf('steps:');
+            const beforeIdx = val.indexOf('before:');
+            const dataIdx = val.indexOf('data:');
+            let firstSectionIdx = Infinity;
+            if (stepsIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, stepsIdx);
+            if (beforeIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, beforeIdx);
+            if (dataIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, dataIdx);
+
+            if (tagIndex < firstSectionIdx) {
+                initialTag = '@' + areaMatch[1];
+            }
+        }
+    }
+    updateAreaTagUI(initialTag);
+
+    const hasError = editorPanel.getAttribute('data-has-error') === 'true';
+    const initialMode = editorPanel.getAttribute('data-mode') || (hasError ? 'raw' : 'visual');
+
+    if (hasError || initialMode === 'raw') {
+        currentEditorMode = 'raw';
+        window.currentEditorMode = 'raw';
+        setEditorMode('raw');
+        const rawTextarea = document.getElementById('rawYamlTextarea');
+        if (rawTextarea) {
+            initialEditorContent = rawTextarea.value;
+            const hiddenInput = document.getElementById('editorContent');
+            if (hiddenInput) {
+                hiddenInput.value = rawTextarea.value;
+            }
+        }
+        window.lastInitializedEditorFile = activeEditingFile;
+        if (undoStack.length === 0 && typeof pushEditorSnapshot === 'function') {
+            pushEditorSnapshot(true);
+        }
+        updateUndoRedoUI();
+        checkEditorDirtyStatus();
+        return;
+    }
+
+    currentEditorMode = 'visual';
+    window.currentEditorMode = 'visual';
+    setEditorMode('visual');
+
+    const stepsList = document.getElementById('stepsList');
+    if (!stepsList) return;
+
+    if (stepsList.querySelectorAll(':scope > .step-row').length === 0) {
+        addStepToContainer('stepsList');
+    }
+
+    reindexSteps();
+
+    const rows = document.querySelectorAll('.step-row');
+    rows.forEach(row => {
+        formatStepToTokens(row);
+    });
+
+    updateFragmentVariablesList();
+    compilePlaybookToYaml(false);
+    updateAllLineNumbers();
+
+    // Live typing & editing delegation for full Undo/Redo tracking
+    const mainEditor = document.getElementById('visualEditorMain');
+    if (mainEditor && !mainEditor.dataset.undoBound) {
+        mainEditor.dataset.undoBound = 'true';
+        mainEditor.addEventListener('input', function(evt) {
+            const stepContent = evt.target.closest('.step-content');
+            if (stepContent) {
+                checkAndUpdateCommentRow(stepContent);
+                const hasPills = stepContent.querySelector('.var-pill, .unified-include-pill, .missing-include-pill, .hint-badge');
+                if (!hasPills) {
+                    stepContent.setAttribute('data-raw', stepContent.innerText);
+                } else {
+                    stepContent.setAttribute('data-raw', getStepRawText(stepContent));
+                }
+                updateFragmentVariablesList();
+                compilePlaybookToYaml(true);
+                checkEditorDirtyStatus();
+                debouncedPushSnapshot();
+                const undoBtn = document.getElementById('undoBtn');
+                if (undoBtn) undoBtn.disabled = false;
+            } else if (evt.target.classList.contains('var-key-input') || evt.target.classList.contains('cell-val')) {
+                compilePlaybookToYaml(true);
+                checkEditorDirtyStatus();
+                debouncedPushSnapshot();
+                const undoBtn = document.getElementById('undoBtn');
+                if (undoBtn) undoBtn.disabled = false;
+            }
+        });
+    }
+
+    // Record initial baseline content and initialize undo/redo snapshot stack
+    const currentYaml = compilePlaybookToYaml(false);
+    if (rawTextarea && (typeof currentEditorMode === 'undefined' || currentEditorMode !== 'raw')) {
+        rawTextarea.value = currentYaml;
+    }
+    const isNewFileInitialization = (window.lastInitializedEditorFile !== activeEditingFile);
+    if (isNewFileInitialization || !initialEditorContent || undoStack.length === 0) {
+        window.lastInitializedEditorFile = activeEditingFile;
+        initialEditorContent = currentYaml;
+        if (typeof pushEditorSnapshot === 'function') {
+            pushEditorSnapshot(true);
+        }
+    } else {
+        updateUndoRedoUI();
+    }
+}
+window.initVisualPlaybookEditor = initVisualPlaybookEditor;
+
+// Automatically init editor on initial DOM load or when editor fragment is swapped in
+document.addEventListener('DOMContentLoaded', function() {
+    initVisualPlaybookEditor();
+});
+document.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.target && evt.detail.target.id === 'editorPanel') {
+        initVisualPlaybookEditor();
+    }
+});
+
+function getExtractedFragmentVariables() {
+    const varsSet = new Set();
+    const regex = /\$\{([a-zA-Z0-9_.-]+)(?::[^}]*)?\}/g;
+    const containers = ['beforeStepsList', 'stepsList', 'afterStepsList'];
+    containers.forEach(id => {
+        const container = document.getElementById(id);
+        if (container) {
+            const rows = container.querySelectorAll('.step-row');
+            rows.forEach(row => {
+                const contentEl = row.querySelector('.step-content');
+                if (contentEl) {
+                    const text = getStepRawText(contentEl).trim();
+                    let match;
+                    regex.lastIndex = 0;
+                    while ((match = regex.exec(text)) !== null) {
+                        if (match[1]) {
+                            varsSet.add(match[1]);
+                        }
+                    }
+                }
+            });
+        }
+    });
+    return Array.from(varsSet);
+}
+window.getExtractedFragmentVariables = getExtractedFragmentVariables;
+
+function updateFragmentVariablesList() {
+    const panel = document.getElementById('fragmentVariablesPanel');
+    const container = document.getElementById('fragmentVariablesListContainer');
+    if (!container) return;
+
+    const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
+        || (panel && panel.style.display !== 'none');
+
+    if (!isFragmentFile) return;
+
+    if (!window.fragmentVarScopes) {
+        window.fragmentVarScopes = {};
+    }
+
+    const vars = getExtractedFragmentVariables();
+    if (vars.length === 0) {
+        container.innerHTML = `
+            <div class="empty-vars-msg" style="font-size: 12.5px; color: var(--text-secondary); padding: 14px; font-style: italic; background: rgba(0,0,0,0.03); border: 1px dashed var(--border); border-radius: 6px; text-align: center;">
+                <span class="material-symbols-outlined" style="font-size: 18px; vertical-align: middle; margin-right: 4px; color: #a855f7;">info</span>
+                No variables (\${variableName}) referenced in this fragment's steps.
+            </div>`;
+        return;
+    }
+
+    let html = '<div class="fragment-vars-list" style="display: flex; flex-direction: column; gap: 8px;">';
+    vars.forEach(v => {
+        const scope = window.fragmentVarScopes[v] || 'required';
+        const isDefined = (scope === 'defined');
+        html += `
+            <div class="fragment-var-item" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-main, rgba(255,255,255,0.02)); transition: all 0.15s ease;">
+                <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                    <span class="material-symbols-outlined" style="font-size: 18px; color: #a855f7;">data_object</span>
+                    <code class="var-badge" style="font-size: 13px; font-family: monospace; font-weight: 600; padding: 3px 8px; background: rgba(168, 85, 247, 0.12); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 6px;">\${${v}}</code>
+                    <span style="font-size: 11px; color: var(--text-secondary); font-style: italic;">(Uneditable - referenced in steps)</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <div class="var-scope-toggle-group" style="display: inline-flex; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 6px; padding: 2px;">
+                        <button type="button" class="btn-var-scope ${isDefined ? 'active-defined' : ''}" 
+                                onclick="toggleFragmentVarScope('${v}', 'defined')"
+                                style="${isDefined ? 'background: #059669; color: #ffffff; font-weight: 600;' : 'background: transparent; color: var(--text-secondary);'}"
+                                title="Variable is defined within this fragment">
+                            <span class="material-symbols-outlined" style="font-size: 13px; vertical-align: middle;">check_circle</span>
+                            Defined in fragment
+                        </button>
+                        <button type="button" class="btn-var-scope ${!isDefined ? 'active-required' : ''}" 
+                                onclick="toggleFragmentVarScope('${v}', 'required')"
+                                style="${!isDefined ? 'background: #d97706; color: #ffffff; font-weight: 600;' : 'background: transparent; color: var(--text-secondary);'}"
+                                title="Variable requires definition from test or caller fragment">
+                            <span class="material-symbols-outlined" style="font-size: 13px; vertical-align: middle;">input</span>
+                            Requires definition from test / caller
+                        </button>
+                    </div>
+                </div>
+            </div>`;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+    updateFragmentListItemInfoIcon();
+}
+window.updateFragmentVariablesList = updateFragmentVariablesList;
+
+function updateFragmentListItemInfoIcon() {
+    if (!window.activeEditingFile || !window.activeEditingFile.toLowerCase().endsWith('.steps')) return;
+    const currentVars = (typeof getExtractedFragmentVariables === 'function') ? getExtractedFragmentVariables() : [];
+    const reqVars = currentVars.filter(v => !(window.fragmentVarScopes && window.fragmentVarScopes[v] === 'defined'));
+    
+    const file = window.activeEditingFile;
+    const listContainers = document.querySelectorAll(`[data-file="${CSS.escape ? CSS.escape(file) : file}"]`);
+    
+    listContainers.forEach(container => {
+        const targetHeader = container.querySelector('.item-main') || container.querySelector('.include-title');
+        if (!targetHeader) return;
+        
+        let icon = targetHeader.querySelector('.fragment-req-vars-icon');
+        if (reqVars.length > 0) {
+            const reqText = reqVars.join(', ');
+            if (!icon) {
+                icon = document.createElement('span');
+                icon.className = 'material-symbols-outlined fragment-req-vars-icon';
+                icon.style.cssText = 'margin-right: 6px; font-size: 15px; color: #d97706; cursor: help; flex-shrink: 0;';
+                icon.innerText = 'info';
+                icon.onclick = function(e) { e.stopPropagation(); };
+
+                const extensionIcon = targetHeader.querySelector('.material-symbols-outlined');
+                if (extensionIcon && extensionIcon.nextSibling) {
+                    targetHeader.insertBefore(icon, extensionIcon.nextSibling);
+                } else {
+                    targetHeader.appendChild(icon);
+                }
+            }
+            icon.setAttribute('data-req-vars', reqText);
+            icon.style.display = 'inline-block';
+        } else if (icon) {
+            icon.remove();
+        }
+    });
+}
+window.updateFragmentListItemInfoIcon = updateFragmentListItemInfoIcon;
+
+document.addEventListener('mouseover', function(e) {
+    const target = e.target ? e.target.closest('.fragment-req-vars-icon') : null;
+    if (target) {
+        const text = target.getAttribute('data-req-vars');
+        if (!text) return;
+        
+        let tooltip = document.getElementById('auraGlobalTooltip');
+        if (!tooltip) {
+            tooltip = document.createElement('div');
+            tooltip.id = 'auraGlobalTooltip';
+            tooltip.className = 'aura-global-tooltip';
+            document.body.appendChild(tooltip);
+        }
+        
+        tooltip.innerText = text.startsWith('Required variables:') ? text : 'Required variables: ' + text;
+        const rect = target.getBoundingClientRect();
+        tooltip.style.left = Math.round(rect.left + rect.width / 2) + 'px';
+        tooltip.style.top = Math.round(rect.top - 6) + 'px';
+        tooltip.style.display = 'block';
+    }
+}, true);
+
+document.addEventListener('mouseout', function(e) {
+    const target = e.target ? e.target.closest('.fragment-req-vars-icon') : null;
+    if (target) {
+        const tooltip = document.getElementById('auraGlobalTooltip');
+        if (tooltip) {
+            tooltip.style.display = 'none';
+        }
+    }
+}, true);
+
+function toggleFragmentVarScope(varName, scope) {
+    if (!window.fragmentVarScopes) window.fragmentVarScopes = {};
+    window.fragmentVarScopes[varName] = scope;
+    updateFragmentVariablesList();
+    compilePlaybookToYaml();
+    if (typeof debouncedPushSnapshot === 'function') debouncedPushSnapshot();
+}
+window.toggleFragmentVarScope = toggleFragmentVarScope;
+
+function formatYamlTagValue(val) {
+    if (typeof val !== 'string') return `"${val}"`;
+    if (/^[a-zA-Z0-9_\-\.]+$/.test(val)) {
+        return val;
+    }
+    return JSON.stringify(val);
+}
+
+function compilePlaybookToYaml(syncToRaw = true) {
+    const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
+        || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
+
+    let yaml = "";
+
+    if (!isFragmentFile) {
+        const rootChips = document.querySelectorAll('#editorTagsContainer .root-tag-chip');
+        if (rootChips.length > 0) {
+            const rootTagsMap = {};
+            rootChips.forEach(chip => {
+                const k = chip.getAttribute('data-key');
+                const v = chip.getAttribute('data-value');
+                if (k && v) {
+                    if (!rootTagsMap[k]) rootTagsMap[k] = [];
+                    rootTagsMap[k].push(v);
+                }
+            });
+            const rootKeys = Object.keys(rootTagsMap);
+            if (rootKeys.length > 0) {
+                yaml += "tags:\n";
+                rootKeys.forEach(k => {
+                    const vals = rootTagsMap[k];
+                    if (vals.length === 1) {
+                        yaml += `  ${k}: ${formatYamlTagValue(vals[0])}\n`;
+                    } else {
+                        yaml += `  ${k}:\n`;
+                        vals.forEach(v => {
+                            yaml += `    - ${formatYamlTagValue(v)}\n`;
+                        });
+                    }
+                });
+                yaml += "\n";
+            }
+        }
+    }
+
+    yaml += "# Neodymium YAML Test Data File\n\n";
+
+    // _meta block preservation (Only for test playbooks)
+    if (!isFragmentFile) {
+        const metaInput = document.getElementById('editorMetaYaml');
+        const metaKeyEl = document.getElementById('editorMetaKey');
+        const metaKey = (metaKeyEl && metaKeyEl.value) ? metaKeyEl.value.trim() : '_meta';
+        if (metaInput && metaInput.value && metaInput.value.trim().length > 0) {
+            yaml += metaKey + ":\n";
+            const metaLines = metaInput.value.trim().split("\n");
+            metaLines.forEach(line => {
+                yaml += (line.trim().length === 0 ? "" : (line.startsWith("  ") ? line : "  " + line)) + "\n";
+            });
+            yaml += "\n";
+        }
+
+        const descInput = document.getElementById('editorDescription');
+        if (descInput && descInput.value && descInput.value.trim().length > 0) {
+            yaml += "description: " + JSON.stringify(descInput.value.trim()) + "\n\n";
+        }
+
+        const promptAddonInput = document.getElementById('editorPromptAddonYaml');
+        if (promptAddonInput && promptAddonInput.value && promptAddonInput.value.trim().length > 0) {
+            yaml += "promptAddon:\n";
+            const lines = promptAddonInput.value.trim().split("\n");
+            lines.forEach(line => {
+                yaml += (line.trim().length === 0 ? "" : (line.startsWith("  ") ? line : "  " + line)) + "\n";
+            });
+            yaml += "\n";
+        }
+    }
+
+    // properties block (Only for test playbooks, above steps)
+    if (!isFragmentFile) {
+        const propertiesPanel = document.getElementById('playbookPropertiesPanel');
+        if (propertiesPanel && propertiesPanel.style.display !== 'none') {
+            const propRows = document.querySelectorAll('#propertiesTableBody tr.property-row');
+            const validProps = [];
+            propRows.forEach(tr => {
+                const keyInput = tr.querySelector('.property-key-input');
+                const valInput = tr.querySelector('.property-val-input');
+                const k = keyInput ? keyInput.value.trim() : '';
+                const v = valInput ? valInput.value.trim() : '';
+                if (k) {
+                    validProps.push({ key: k, value: v });
+                }
+            });
+
+            if (validProps.length > 0) {
+                const propKeyEl = document.getElementById('editorPropertiesKey');
+                const propKey = (propKeyEl && propKeyEl.value) ? propKeyEl.value.trim() : '_properties';
+                yaml += propKey + ":\n";
+                validProps.forEach(p => {
+                    yaml += `  ${p.key}: ${p.value}\n`;
+                });
+                yaml += "\n";
+            }
+        }
+    }
+
+    function serializeStepRows(rows) {
+        let block = "";
+        let inSubstepsGroup = false;
+        rows.forEach(row => {
+            const content = row.querySelector('.step-content');
+            if (content) {
+                const text = getStepRawText(content).replace(/\r?\n+/g, ' ').trim();
+                if (!text) return;
+                if (row.classList.contains('step-row-comment') || text.startsWith('#')) {
+                    inSubstepsGroup = false;
+                    const comment = text.startsWith('#') ? text : `# ${text}`;
+                    block += `  ${comment}\n`;
+                } else if (row.classList.contains('step-row-substep') || text.startsWith('>-') || text.startsWith('- >-') || text.startsWith('->-') || text.startsWith('  - ')) {
+                    if (!inSubstepsGroup) {
+                        block += `  - >-\n`;
+                        inSubstepsGroup = true;
+                    }
+                    let subText = text;
+                    if (subText.startsWith('- >-')) subText = subText.substring(4).trim();
+                    else if (subText.startsWith('->-')) subText = subText.substring(3).trim();
+                    else if (subText.startsWith('>-')) subText = subText.substring(2).trim();
+                    else if (subText.startsWith('  - ')) subText = subText.substring(4).trim();
+                    else if (subText.startsWith('- ') || subText.startsWith('* ')) subText = subText.substring(2).trim();
+                    if (subText) {
+                        block += `    ${subText}\n`;
+                    }
+                } else {
+                    inSubstepsGroup = false;
+                    const cleanText = (text.startsWith('- ') || text.startsWith('* ')) ? text.substring(2).trim() : text;
+                    block += `  ${cleanText}\n`;
+                }
+            }
+        });
+        return block;
+    }
+
+    // before block
+    const beforeContainer = document.getElementById('beforeStepsList');
+    const beforePanel = document.getElementById('beforeCodePanel');
+    if (beforePanel && beforePanel.style.display !== 'none' && beforeContainer) {
+        const rows = beforeContainer.querySelectorAll(':scope > .step-row');
+        if (rows.length > 0) {
+            yaml += "before: |\n" + serializeStepRows(rows) + "\n";
+        }
+    }
+
+    // main steps block
+    const stepsContainer = document.getElementById('stepsList');
+    if (stepsContainer) {
+        const rows = stepsContainer.querySelectorAll(':scope > .step-row');
+        yaml += "steps: |\n" + serializeStepRows(rows) + "\n";
+    }
+
+    // after block
+    const afterContainer = document.getElementById('afterStepsList');
+    const afterPanel = document.getElementById('afterCodePanel');
+    if (afterPanel && afterPanel.style.display !== 'none' && afterContainer) {
+        const rows = afterContainer.querySelectorAll(':scope > .step-row');
+        if (rows.length > 0) {
+            yaml += "after: |\n" + serializeStepRows(rows) + "\n";
+        }
+    }
+
+    if (!isFragmentFile) {
+        // data matrix (Only for test playbooks)
+        const matrixTable = document.querySelector('#transposedGrid');
+        if (matrixTable) {
+            const headerCells = matrixTable.querySelectorAll('thead th');
+            const iterCount = headerCells.length - 2;
+            if (iterCount > 0) {
+                yaml += "data:\n";
+                for (let col = 0; col < iterCount; col++) {
+                    yaml += "  -\n";
+                    // Dataset tags
+                    const tagCell = matrixTable.querySelector(`#matrixTagsRow td[data-col="${col}"]`);
+                    if (tagCell) {
+                        const dsChips = tagCell.querySelectorAll('.dataset-tag-chip');
+                        if (dsChips.length > 0) {
+                            const dsTagsMap = {};
+                            dsChips.forEach(chip => {
+                                const k = chip.getAttribute('data-key');
+                                const v = chip.getAttribute('data-value');
+                                if (k && v) {
+                                    if (!dsTagsMap[k]) dsTagsMap[k] = [];
+                                    dsTagsMap[k].push(v);
+                                }
+                            });
+                            const dsKeys = Object.keys(dsTagsMap);
+                            if (dsKeys.length > 0) {
+                                yaml += "    tags:\n";
+                                dsKeys.forEach(k => {
+                                    const vals = dsTagsMap[k];
+                                    if (vals.length === 1) {
+                                        yaml += `      ${k}: ${formatYamlTagValue(vals[0])}\n`;
+                                    } else {
+                                        yaml += `      ${k}:\n`;
+                                        vals.forEach(v => {
+                                            yaml += `        - ${formatYamlTagValue(v)}\n`;
+                                        });
+                                    }
+                                });
+                            }
+                        }
+                    }
+
+                    const rows = matrixTable.querySelectorAll('tbody tr:not(#matrixTagsRow)');
+                    rows.forEach(row => {
+                        const keyInput = row.querySelector('.var-key-input');
+                        const key = keyInput ? keyInput.value.trim() : '';
+                        if (!key) return;
+                        const cellValInput = row.cells[col + 1]?.querySelector('.cell-val');
+                        const val = cellValInput ? cellValInput.value.trim() : '';
+                        yaml += `    ${key}: "${val}"\n`;
+                    });
+                }
+            }
+        }
+    } else {
+        // variables scope mapping for fragment files
+        const extractedVars = getExtractedFragmentVariables();
+        if (extractedVars.length > 0) {
+            yaml += "variables:\n";
+            extractedVars.forEach(v => {
+                const scope = (window.fragmentVarScopes && window.fragmentVarScopes[v]) ? window.fragmentVarScopes[v] : 'required';
+                yaml += `  ${v}: ${scope}\n`;
+            });
+        }
+    }
+
+    const hiddenInput = document.getElementById('editorContent');
+    if (hiddenInput) {
+        hiddenInput.value = yaml;
+    }
+    const rawTextarea = document.getElementById('rawYamlTextarea');
+    if (syncToRaw && rawTextarea && (typeof currentEditorMode === 'undefined' || currentEditorMode !== 'raw')) {
+        rawTextarea.value = yaml;
+    }
+    return yaml;
+}
+window.compilePlaybookToYaml = compilePlaybookToYaml;
+
+/* Line Numbering across all section containers */
+function updateAllLineNumbers() {
+    let currentLine = 1;
+    
+    const containers = ['#beforeStepsList', '#stepsList', '#afterStepsList'];
+    containers.forEach(containerSelector => {
+        const container = document.querySelector(containerSelector);
+        if (!container) return;
+        
+        const parentPanel = container.closest('.editor-code-panel');
+        if (parentPanel && parentPanel.style.display === 'none') return;
+
+        let lastMainStepLine = 1;
+        let substepIndex = 0;
+        const rootRows = container.querySelectorAll(':scope > .step-row');
+        rootRows.forEach(row => {
+            const rootLineNum = row.getAttribute('data-line');
+            const numSpan = row.querySelector('.step-number');
+            if (row.classList.contains('step-row-comment')) {
+                if (numSpan) numSpan.innerHTML = '<span class="comment-hash-badge">#</span>';
+                return;
+            }
+            if (row.classList.contains('step-row-substep')) {
+                substepIndex++;
+                if (numSpan) numSpan.innerText = `${lastMainStepLine}.${substepIndex}`;
+                return;
+            }
+            lastMainStepLine = currentLine;
+            substepIndex = 0;
+            if (numSpan) numSpan.innerText = currentLine;
+            currentLine++;
+
+            const treeCard = document.getElementById(`includeTreeCard_${rootLineNum}`) || document.getElementById(`includeTreeCard${rootLineNum}`);
+            if (treeCard && treeCard.style.display !== 'none') {
+                currentLine = assignIncludeTreeLineNumbers(treeCard, currentLine);
+            }
+        });
+    });
+
+    const statusTag = document.querySelector('.status-left span:last-child');
+    if (statusTag) {
+        statusTag.innerText = `${currentLine - 1} Total Steps`;
+    }
+}
+window.updateAllLineNumbers = updateAllLineNumbers;
+
+function assignIncludeTreeLineNumbers(treeCard, startLine) {
+    let line = startLine;
+    if (!treeCard) return line;
+
+    const innerContainer = treeCard.querySelector('[id^="includeInnerSteps_"]') || treeCard;
+    const items = Array.from(innerContainer.children);
+
+    for (let item of items) {
+        if (item.classList.contains('nested-editable-step')) {
+            const numSpan = item.querySelector('.sub-line-num');
+            if (numSpan) numSpan.innerText = line;
+            line++;
+            const nestedCard = item.querySelector('.include-tree-card');
+            if (nestedCard && nestedCard.style.display !== 'none' && getComputedStyle(nestedCard).display !== 'none') {
+                line = assignIncludeTreeLineNumbers(nestedCard, line);
+            }
+        } else if (item.classList.contains('include-tree-card')) {
+            if (item.style.display !== 'none' && getComputedStyle(item).display !== 'none') {
+                line = assignIncludeTreeLineNumbers(item, line);
+            }
+        } else if (item.classList.contains('nested-level-1')) {
+            const innerStep = item.querySelector('.nested-editable-step');
+            if (innerStep) {
+                const numSpan = innerStep.querySelector('.sub-line-num');
+                if (numSpan) numSpan.innerText = line;
+                line++;
+            }
+            const nestedCard = item.querySelector('.include-tree-card');
+            if (nestedCard && nestedCard.style.display !== 'none' && getComputedStyle(nestedCard).display !== 'none') {
+                line = assignIncludeTreeLineNumbers(nestedCard, line);
+            }
+        }
+    }
+    return line;
+}
+window.assignIncludeTreeLineNumbers = assignIncludeTreeLineNumbers;
+
+/* Automatically format tokens and update line numbers on HTMX swap */
+document.addEventListener('htmx:afterSwap', function(evt) {
+    const swapped = evt.detail ? evt.detail.target : null;
+    if (swapped) {
+        const cards = swapped.querySelectorAll ? swapped.querySelectorAll('.include-tree-card') : [];
+        cards.forEach(card => formatIncludeTreeCardTokens(card));
+        if (swapped.classList && swapped.classList.contains('include-tree-card')) {
+            formatIncludeTreeCardTokens(swapped);
+        }
+        if (swapped.nextElementSibling && swapped.nextElementSibling.classList && swapped.nextElementSibling.classList.contains('include-tree-card')) {
+            formatIncludeTreeCardTokens(swapped.nextElementSibling);
+        }
+    }
+    const allTreeCards = document.querySelectorAll('.include-tree-card');
+    allTreeCards.forEach(card => formatIncludeTreeCardTokens(card));
+    updateAllLineNumbers();
+});
+
+/* Optional Block Management */
+function addPropertyRow(key = '', value = '') {
+    const tbody = document.getElementById('propertiesTableBody');
+    if (!tbody) return;
+    const tr = document.createElement('tr');
+    tr.className = 'property-row';
+
+    const tdKey = document.createElement('td');
+    const inputKey = document.createElement('input');
+    inputKey.type = 'text';
+    inputKey.className = 'property-key-input';
+    inputKey.value = key || '';
+    inputKey.placeholder = 'e.g. skipReplay';
+    inputKey.setAttribute('list', 'propertyKeySuggestions');
+    inputKey.oninput = () => {
+        compilePlaybookToYaml(true);
+        checkEditorDirtyStatus();
+        debouncedPushSnapshot();
+        const undoBtn = document.getElementById('undoBtn');
+        if (undoBtn) undoBtn.disabled = false;
+    };
+    tdKey.appendChild(inputKey);
+
+    const tdVal = document.createElement('td');
+    const inputVal = document.createElement('input');
+    inputVal.type = 'text';
+    inputVal.className = 'property-val-input';
+    inputVal.value = value !== undefined && value !== null ? String(value) : '';
+    inputVal.placeholder = 'Value';
+    inputVal.oninput = () => {
+        compilePlaybookToYaml(true);
+        checkEditorDirtyStatus();
+        debouncedPushSnapshot();
+        const undoBtn = document.getElementById('undoBtn');
+        if (undoBtn) undoBtn.disabled = false;
+    };
+    tdVal.appendChild(inputVal);
+
+    const tdAction = document.createElement('td');
+    tdAction.className = 'property-action-col';
+    const btnRemove = document.createElement('button');
+    btnRemove.type = 'button';
+    btnRemove.className = 'btn-remove-property';
+    btnRemove.title = 'Remove Property';
+    btnRemove.onclick = function() { removePropertyRow(this); };
+    btnRemove.innerHTML = '<span class="material-symbols-outlined">delete</span>';
+    tdAction.appendChild(btnRemove);
+
+    tr.appendChild(tdKey);
+    tr.appendChild(tdVal);
+    tr.appendChild(tdAction);
+    tbody.appendChild(tr);
+
+    if (!isRestoringSnapshot) {
+        compilePlaybookToYaml(true);
+        debouncedPushSnapshot();
+    }
+    if (!key) {
+        inputKey.focus();
+    }
+}
+window.addPropertyRow = addPropertyRow;
+
+function removePropertyRow(btn) {
+    const tr = btn.closest('.property-row');
+    if (tr) {
+        tr.remove();
+        compilePlaybookToYaml(true);
+        debouncedPushSnapshot();
+    }
+}
+window.removePropertyRow = removePropertyRow;
+
+function addPropertiesBlock() {
+    const panel = document.getElementById('playbookPropertiesPanel');
+    const btnContainer = document.getElementById('addPropertiesBtnContainer');
+    const tbody = document.getElementById('propertiesTableBody');
+    if (!panel) return;
+
+    panel.style.display = 'flex';
+    if (btnContainer) btnContainer.style.display = 'none';
+
+    if (tbody && tbody.querySelectorAll('tr.property-row').length === 0) {
+        addPropertyRow('neodymium.ai.tokenBudget.input', '1500000');
+    } else {
+        compilePlaybookToYaml(true);
+        debouncedPushSnapshot();
+    }
+}
+window.addPropertiesBlock = addPropertiesBlock;
+
+function removePropertiesBlock() {
+    const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
+        || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
+    const panel = document.getElementById('playbookPropertiesPanel');
+    const btnContainer = document.getElementById('addPropertiesBtnContainer');
+    const tbody = document.getElementById('propertiesTableBody');
+    if (panel) panel.style.display = 'none';
+    if (btnContainer) btnContainer.style.display = isFragmentFile ? 'none' : 'block';
+    if (tbody) tbody.innerHTML = '';
+    compilePlaybookToYaml(true);
+    debouncedPushSnapshot();
+}
+window.removePropertiesBlock = removePropertiesBlock;
+
+function addBeforeBlock() {
+    const panel = document.getElementById('beforeCodePanel');
+    const btnContainer = document.getElementById('addBeforeBtnContainer');
+    const container = document.getElementById('beforeStepsList');
+    if (!panel || !container) return;
+
+    panel.style.display = 'flex';
+    if (btnContainer) btnContainer.style.display = 'none';
+
+    if (container.children.length === 0) {
+        currentLineCount++;
+        const lineId = currentLineCount;
+        const newRow = document.createElement('div');
+        newRow.className = 'step-row';
+        newRow.setAttribute('data-line', lineId);
+        newRow.innerHTML = `
+            <span class="step-number">1</span>
+            <div class="step-content" contenteditable="true" spellcheck="false" data-raw="" onkeydown="handleKeyDown(event, ${lineId})" onfocus="handleStepFocus(${lineId})" onblur="handleStepBlur(${lineId})"></div>
+            <div class="step-actions">
+                <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${lineId}, -1)" disabled><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${lineId}, 1)" disabled><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${lineId})"><span class="material-symbols-outlined">delete</span></button>
+            </div>
+        `;
+        container.appendChild(newRow);
+        formatStepToTokens(lineId);
+        
+        const newContent = newRow.querySelector('.step-content');
+        if (newContent) newContent.focus();
+    }
+    reindexSteps();
+}
+window.addBeforeBlock = addBeforeBlock;
+
+function removeBeforeBlock() {
+    const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
+        || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
+    const panel = document.getElementById('beforeCodePanel');
+    const btnContainer = document.getElementById('addBeforeBtnContainer');
+    const container = document.getElementById('beforeStepsList');
+    if (panel) panel.style.display = 'none';
+    if (btnContainer) btnContainer.style.display = isFragmentFile ? 'none' : 'block';
+    if (container) container.innerHTML = '';
+    reindexSteps();
+}
+window.removeBeforeBlock = removeBeforeBlock;
+
+function addAfterBlock() {
+    const panel = document.getElementById('afterCodePanel');
+    const btnContainer = document.getElementById('addAfterBtnContainer');
+    const container = document.getElementById('afterStepsList');
+    if (!panel || !container) return;
+
+    panel.style.display = 'flex';
+    if (btnContainer) btnContainer.style.display = 'none';
+
+    if (container.children.length === 0) {
+        currentLineCount++;
+        const lineId = currentLineCount;
+        const newRow = document.createElement('div');
+        newRow.className = 'step-row';
+        newRow.setAttribute('data-line', lineId);
+        newRow.innerHTML = `
+            <span class="step-number">1</span>
+            <div class="step-content" contenteditable="true" spellcheck="false" data-raw="" onkeydown="handleKeyDown(event, ${lineId})" onfocus="handleStepFocus(${lineId})" onblur="handleStepBlur(${lineId})"></div>
+            <div class="step-actions">
+                <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${lineId}, -1)" disabled><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${lineId}, 1)" disabled><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${lineId})"><span class="material-symbols-outlined">delete</span></button>
+            </div>
+        `;
+        container.appendChild(newRow);
+        formatStepToTokens(lineId);
+
+        const newContent = newRow.querySelector('.step-content');
+        if (newContent) newContent.focus();
+    }
+    reindexSteps();
+}
+window.addAfterBlock = addAfterBlock;
+
+function removeAfterBlock() {
+    const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
+        || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
+    const panel = document.getElementById('afterCodePanel');
+    const btnContainer = document.getElementById('addAfterBtnContainer');
+    const container = document.getElementById('afterStepsList');
+    if (panel) panel.style.display = 'none';
+    if (btnContainer) btnContainer.style.display = isFragmentFile ? 'none' : 'block';
+    if (container) container.innerHTML = '';
+    reindexSteps();
+}
+window.removeAfterBlock = removeAfterBlock;
+
+/* Caret Offset Measurement */
+function getCaretOffset(element) {
+    let caretOffset = 0;
+    const doc = element.ownerDocument || document;
+    const win = doc.defaultView || window;
+    const sel = win.getSelection();
+    if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        const preCaretRange = range.cloneRange();
+        preCaretRange.selectNodeContents(element);
+        preCaretRange.setEnd(range.endContainer, range.endOffset);
+        caretOffset = preCaretRange.toString().length;
+    }
+    return caretOffset;
+}
+window.getCaretOffset = getCaretOffset;
+
+function setCaretOffset(element, offset) {
+    const doc = element.ownerDocument || document;
+    const win = doc.defaultView || window;
+    const sel = win.getSelection();
+    if (!sel) return;
+
+    const range = doc.createRange();
+    let currentLen = 0;
+    let setSuccess = false;
+
+    function walkNodes(node) {
+        if (node.nodeType === 3) {
+            const len = node.nodeValue.length;
+            if (currentLen + len >= offset) {
+                range.setStart(node, offset - currentLen);
+                range.collapse(true);
+                setSuccess = true;
+                return true;
+            }
+            currentLen += len;
+        } else {
+            for (let child of node.childNodes) {
+                if (walkNodes(child)) return true;
+            }
+        }
+        return false;
+    }
+
+    walkNodes(element);
+
+    if (!setSuccess) {
+        if (!element.firstChild) {
+            range.selectNodeContents(element);
+            range.collapse(true);
+        } else {
+            let textNode = element.firstChild;
+            while (textNode && textNode.nodeType !== 3) {
+                textNode = textNode.firstChild;
+            }
+            if (!textNode) {
+                range.selectNodeContents(element);
+                range.collapse(true);
+            } else {
+                range.setStart(textNode, Math.min(offset, textNode.nodeValue.length));
+                range.collapse(true);
+            }
+        }
+    }
+
+    sel.removeAllRanges();
+    sel.addRange(range);
+}
+window.setCaretOffset = setCaretOffset;
+
+let isClickingIncludeArrow = false;
+window.isClickingIncludeArrow = false;
+
+function handleStepFocus(lineNumOrElement) {
+    if (typeof isRestoringSnapshot !== 'undefined' && isRestoringSnapshot) {
+        return;
+    }
+    if (window.isClickingIncludeArrow) {
+        return;
+    }
+
+    let row = null;
+    let lineNum = null;
+    if (typeof lineNumOrElement === 'object' && lineNumOrElement && lineNumOrElement.nodeType) {
+        row = lineNumOrElement.closest('.step-row') || lineNumOrElement;
+        lineNum = row ? row.getAttribute('data-line') : null;
+    } else {
+        lineNum = lineNumOrElement;
+        row = document.querySelector(`.step-row[data-line="${lineNum}"]`);
+    }
+
+    if (activeLineNum && activeLineNum !== lineNum) {
+        const prevRow = document.querySelector(`.step-row[data-line="${activeLineNum}"]`);
+        if (prevRow) prevRow.classList.remove('active-line');
+        if (activeLineNum) formatStepToTokens(activeLineNum);
+    }
+
+    activeLineNum = lineNum;
+    window.activeLineNum = activeLineNum;
+    if (!row) return;
+
+    row.classList.add('active-line');
+    const content = row.querySelector('.step-content');
+    if (!content) return;
+
+    const raw = content.getAttribute('data-raw');
+    if (raw !== null && raw !== undefined) {
+        const inlineCommentIdx = findInlineCommentIndex(raw);
+        if (inlineCommentIdx >= 0 && !row.classList.contains('step-row-comment')) {
+            const instruction = raw.substring(0, inlineCommentIdx);
+            const comment = raw.substring(inlineCommentIdx);
+            const safeInstruction = instruction.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const safeComment = comment.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            content.innerHTML = safeInstruction + `<span class="step-inline-comment">${safeComment}</span>`;
+        } else {
+            content.innerText = raw;
+        }
+    }
+
+    const statLine = document.getElementById('statLine');
+    if (statLine) {
+        const numSpan = row.querySelector('.step-number');
+        statLine.innerText = numSpan ? numSpan.innerText : (lineNum || '1');
+    }
+}
+window.handleStepFocus = handleStepFocus;
+
+function handleStepBlur(lineNumOrElement) {
+    if (typeof isRestoringSnapshot !== 'undefined' && isRestoringSnapshot) {
+        return;
+    }
+    let row = null;
+    let lineNum = null;
+    if (typeof lineNumOrElement === 'object' && lineNumOrElement && lineNumOrElement.nodeType) {
+        row = lineNumOrElement.closest('.step-row') || lineNumOrElement;
+        lineNum = row ? row.getAttribute('data-line') : null;
+    } else {
+        lineNum = lineNumOrElement;
+        row = document.querySelector(`.step-row[data-line="${lineNum}"]`);
+    }
+    if (!row) return;
+
+    const content = row.querySelector('.step-content');
+    if (!content) return;
+
+    const hasPills = content.querySelector('.var-pill, .unified-include-pill, .missing-include-pill, .hint-badge');
+    if (!hasPills) {
+        const currentText = content.innerText;
+        if (currentText !== undefined && currentText !== null) {
+            content.setAttribute('data-raw', currentText);
+        }
+    } else {
+        content.setAttribute('data-raw', getStepRawText(content));
+    }
+
+    // Auto-collapse check for empty optional sections
+    const parentContainer = content.closest('#beforeStepsList, #afterStepsList');
+    if (parentContainer) {
+        setTimeout(() => {
+            const activeEl = document.activeElement;
+            if (!parentContainer.contains(activeEl)) {
+                let allEmpty = true;
+                const rows = parentContainer.querySelectorAll('.step-row');
+                rows.forEach(r => {
+                    const c = r.querySelector('.step-content');
+                    if (c && (c.getAttribute('data-raw') || c.innerText).trim().length > 0) {
+                        allEmpty = false;
+                    }
+                });
+                if (allEmpty) {
+                    if (parentContainer.id === 'beforeStepsList') removeBeforeBlock();
+                    if (parentContainer.id === 'afterStepsList') removeAfterBlock();
+                }
+            }
+        }, 200);
+    }
+
+    setTimeout(() => {
+        const activeEl = document.activeElement;
+        if (!activeEl || !row.contains(activeEl)) {
+            formatStepToTokens(row);
+        }
+    }, 120);
+
+    compilePlaybookToYaml();
+    checkNewVariablePrompts();
+}
+window.handleStepBlur = handleStepBlur;
+
+/* Visual Row Traversal across Active Code Panels */
+function getAllVisibleStepRows() {
+    const containers = ['#beforeStepsList', '#stepsList', '#afterStepsList'];
+    const rows = [];
+    containers.forEach(selector => {
+        const container = document.querySelector(selector);
+        if (!container) return;
+        const panel = container.closest('.editor-code-panel');
+        if (panel && (panel.style.display === 'none' || getComputedStyle(panel).display === 'none')) return;
+        container.querySelectorAll(':scope > .step-row').forEach(r => rows.push(r));
+    });
+    return rows;
+}
+window.getAllVisibleStepRows = getAllVisibleStepRows;
+
+function getAdjacentStepRow(currentRow, direction) {
+    if (!currentRow) return null;
+    const allRows = getAllVisibleStepRows();
+    const idx = allRows.indexOf(currentRow);
+    if (idx === -1) return null;
+    const targetIdx = idx + direction;
+    if (targetIdx >= 0 && targetIdx < allRows.length) {
+        return allRows[targetIdx];
+    }
+    return null;
+}
+window.getAdjacentStepRow = getAdjacentStepRow;
+
+/* Keyboard Navigation & Caret Operations */
+function handleKeyDown(event, lineNum) {
+    const content = event.target;
+    const currentRow = content.closest('.step-row') || document.querySelector(`.step-row[data-line="${lineNum}"]`);
+    const currentOffset = getCaretOffset(content);
+    const raw = content.getAttribute('data-raw') || content.innerText || '';
+
+    // Alt+Up / Alt+Down: Move Step Line
+    if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+        event.preventDefault();
+        const dir = event.key === 'ArrowUp' ? -1 : 1;
+        moveStep(currentRow || lineNum, dir);
+        return;
+    }
+
+    if (event.key === 'ArrowUp') {
+        const prevRow = getAdjacentStepRow(currentRow, -1);
+        if (prevRow) {
+            event.preventDefault();
+            lastCaretOffset = currentOffset;
+            focusRow(prevRow, currentOffset);
+        }
+    } else if (event.key === 'ArrowDown') {
+        const nextRow = getAdjacentStepRow(currentRow, 1);
+        if (nextRow) {
+            event.preventDefault();
+            lastCaretOffset = currentOffset;
+            focusRow(nextRow, currentOffset);
+        }
+    } else if (event.key === 'Enter') {
+        event.preventDefault();
+        const contentEl = event.target;
+        const currentOffset = getCaretOffset(contentEl);
+        const raw = contentEl.getAttribute('data-raw') || contentEl.innerText || '';
+
+        if (undoDebounceTimer) {
+            clearTimeout(undoDebounceTimer);
+            undoDebounceTimer = null;
+            pushEditorSnapshot(false);
+        }
+
+        // If Enter is pressed in an empty sub-step line (e.g. second Enter in sub-steps area), exit the sub-steps area
+        if (currentRow && currentRow.classList.contains('step-row-substep') && raw.trim() === '') {
+            currentRow.classList.remove('step-row-substep', 'substep-last');
+            currentRow.removeAttribute('data-manual-substep');
+            updateAllLineNumbers();
+            refreshAllSubstepToggleBars();
+            compilePlaybookToYaml();
+            if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+            return;
+        }
+
+        const headText = raw.substring(0, currentOffset).replace(/[\r\n]+/g, ' ').trim();
+        const tailText = raw.substring(currentOffset).replace(/[\r\n]+/g, ' ').trim();
+
+        contentEl.setAttribute('data-raw', headText);
+        contentEl.innerText = headText;
+        formatStepToTokens(currentRow || lineNum);
+
+        const newRow = insertStepBelow(currentRow || lineNum, tailText);
+        if (newRow) {
+            formatStepToTokens(newRow);
+            const newContent = newRow.querySelector('.step-content');
+            if (newContent) {
+                newContent.focus();
+                setCaretOffset(newContent, 0);
+            }
+        }
+        compilePlaybookToYaml();
+        if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+    } else if (event.key === 'Backspace' && currentOffset === 0) {
+        if (currentRow.classList.contains('step-row-substep')) {
+            event.preventDefault();
+            if (undoDebounceTimer) {
+                clearTimeout(undoDebounceTimer);
+                undoDebounceTimer = null;
+                pushEditorSnapshot(false);
+            }
+            currentRow.classList.remove('step-row-substep', 'substep-last');
+            currentRow.removeAttribute('data-manual-substep');
+            updateAllLineNumbers();
+            refreshAllSubstepToggleBars();
+            compilePlaybookToYaml();
+            if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+            return;
+        }
+        const prevRow = getAdjacentStepRow(currentRow, -1);
+        if (prevRow) {
+            event.preventDefault();
+            if (undoDebounceTimer) {
+                clearTimeout(undoDebounceTimer);
+                undoDebounceTimer = null;
+                pushEditorSnapshot(false);
+            }
+            const prevContent = prevRow.querySelector('.step-content');
+            if (prevContent) {
+                const prevRaw = prevContent.getAttribute('data-raw') || prevContent.innerText || '';
+                const joinOffset = prevRaw.length;
+                const combined = prevRaw + (raw ? (prevRaw ? ' ' : '') + raw : '');
+                prevContent.setAttribute('data-raw', combined);
+                prevContent.innerText = combined;
+                formatStepToTokens(prevRow);
+                deleteStep(currentRow);
+                focusRow(prevRow, joinOffset);
+                compilePlaybookToYaml();
+                if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+            }
+        }
+    } else if (event.key === 'Delete' && currentOffset >= raw.length) {
+        const nextRow = getAdjacentStepRow(currentRow, 1);
+        if (nextRow) {
+            event.preventDefault();
+            if (undoDebounceTimer) {
+                clearTimeout(undoDebounceTimer);
+                undoDebounceTimer = null;
+                pushEditorSnapshot(false);
+            }
+            const nextContent = nextRow.querySelector('.step-content');
+            if (nextContent) {
+                const nextRaw = nextContent.getAttribute('data-raw') || nextContent.innerText || '';
+                const combined = raw + (nextRaw ? (raw ? ' ' : '') + nextRaw : '');
+                content.setAttribute('data-raw', combined);
+                content.innerText = combined;
+                formatStepToTokens(currentRow);
+                deleteStep(nextRow);
+                focusRow(currentRow, currentOffset);
+                compilePlaybookToYaml();
+                if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+            }
+        }
+    }
+}
+window.handleKeyDown = handleKeyDown;
+
+function focusRow(row, targetOffset = -1) {
+    if (!row) return;
+
+    const content = row.querySelector('.step-content');
+    if (!content) return;
+
+    const lineNum = row.getAttribute('data-line');
+    content.focus();
+    handleStepFocus(lineNum || row);
+
+    if (targetOffset >= 0) {
+        const raw = content.getAttribute('data-raw') || content.innerText || '';
+        const clampedOffset = Math.min(targetOffset, raw.length);
+        setCaretOffset(content, clampedOffset);
+        lastCaretOffset = clampedOffset;
+    }
+}
+window.focusRow = focusRow;
+
+function focusLine(lineNumOrElement, targetOffset = -1) {
+    let row = null;
+    if (typeof lineNumOrElement === 'object' && lineNumOrElement && lineNumOrElement.nodeType) {
+        row = lineNumOrElement.closest('.step-row') || lineNumOrElement;
+    } else {
+        row = document.querySelector(`.step-row[data-line="${lineNumOrElement}"]`);
+    }
+    focusRow(row, targetOffset);
+}
+window.focusLine = focusLine;
+
+/* Step Addition to Specific or Fallback Containers */
+function addStepToContainer(containerId = 'stepsList', initialText = '') {
+    const container = document.getElementById(containerId) || document.getElementById('stepsList');
+    if (!container) return null;
+
+    const placeholder = container.querySelector('.empty-steps-placeholder');
+    if (placeholder) {
+        placeholder.remove();
+    }
+
+    currentLineCount++;
+    const lineId = currentLineCount;
+    const newRow = document.createElement('div');
+    newRow.className = 'step-row';
+    newRow.setAttribute('data-line', lineId);
+
+    const safeInitial = (initialText || '').replace(/"/g, '&quot;');
+
+    newRow.innerHTML = `
+        <span class="step-number">${lineId}</span>
+        <div class="step-content" contenteditable="true" spellcheck="false" data-raw="${safeInitial}" onkeydown="handleKeyDown(event, ${lineId})" onfocus="handleStepFocus(${lineId})" onblur="handleStepBlur(${lineId})" oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);">${safeInitial}</div>
+        <div class="step-actions">
+            <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${lineId}, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+            <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${lineId}, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+            <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${lineId})"><span class="material-symbols-outlined">delete</span></button>
+        </div>
+    `;
+
+    container.appendChild(newRow);
+    reindexSteps();
+    if (initialText) {
+        formatStepToTokens(lineId);
+    }
+
+    const newContent = newRow.querySelector('.step-content');
+    if (newContent) {
+        newContent.focus();
+        if (initialText) {
+            setCaretOffset(newContent, initialText.length);
+        }
+    }
+    compilePlaybookToYaml();
+    if (typeof pushEditorSnapshot === 'function') {
+        pushEditorSnapshot(false);
+    }
+    return newRow;
+}
+window.addStepToContainer = addStepToContainer;
+
+function ensureEmptyPlaceholders() {
+    ['beforeStepsList', 'stepsList', 'afterStepsList'].forEach(id => {
+        const container = document.getElementById(id);
+        if (!container) return;
+        const panel = container.closest('.editor-code-panel');
+        if (panel && panel.style.display === 'none') return;
+
+        const rows = container.querySelectorAll(':scope > .step-row');
+        let placeholder = container.querySelector('.empty-steps-placeholder');
+
+        if (rows.length === 0) {
+            if (!placeholder) {
+                placeholder = document.createElement('div');
+                placeholder.className = 'empty-steps-placeholder';
+                placeholder.setAttribute('onclick', `addStepToContainer('${id}')`);
+                placeholder.innerHTML = `
+                    <span class="material-symbols-outlined" style="font-size: 20px; color: var(--accent, #2563eb);">add_circle</span>
+                    <span>No steps defined in this section. Click here or use '+ Add Step' to create one.</span>
+                `;
+                container.appendChild(placeholder);
+            }
+        } else {
+            if (placeholder) {
+                placeholder.remove();
+            }
+        }
+    });
+}
+window.ensureEmptyPlaceholders = ensureEmptyPlaceholders;
+
+function handleStepsContainerClick(event, containerEl) {
+    if (!containerEl) return;
+    const rows = containerEl.querySelectorAll(':scope > .step-row');
+    if (rows.length === 0) {
+        addStepToContainer(containerEl.id);
+    }
+}
+window.handleStepsContainerClick = handleStepsContainerClick;
+
+function insertStepBelow(lineNumOrElement, initialText = '') {
+    let targetRow = null;
+    if (typeof lineNumOrElement === 'object' && lineNumOrElement && lineNumOrElement.nodeType) {
+        targetRow = lineNumOrElement.closest('.step-row') || lineNumOrElement;
+    } else if (lineNumOrElement) {
+        targetRow = document.querySelector(`.step-row[data-line="${lineNumOrElement}"]`);
+    }
+    if (!targetRow) {
+        targetRow = document.querySelector('.step-row');
+    }
+    if (!targetRow) {
+        return addStepToContainer('stepsList', initialText);
+    }
+
+    currentLineCount++;
+    const newRow = document.createElement('div');
+    newRow.className = 'step-row';
+    newRow.setAttribute('data-line', currentLineCount);
+
+    if (targetRow && targetRow.classList.contains('step-row-substep')) {
+        newRow.classList.add('step-row-substep');
+        newRow.setAttribute('data-manual-substep', 'true');
+    }
+
+    const safeInitial = (initialText || '').replace(/"/g, '&quot;');
+
+    newRow.innerHTML = `
+        <span class="step-number">${currentLineCount}</span>
+        <div class="step-content" contenteditable="true" spellcheck="false" data-raw="${safeInitial}" onkeydown="handleKeyDown(event, ${currentLineCount})" onfocus="handleStepFocus(${currentLineCount})" onblur="handleStepBlur(${currentLineCount})" oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);">${safeInitial}</div>
+        <div class="step-actions">
+            <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${currentLineCount}, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+            <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${currentLineCount}, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+            <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${currentLineCount})"><span class="material-symbols-outlined">delete</span></button>
+        </div>
+    `;
+
+    const lineId = targetRow.getAttribute('data-line');
+    const treeCard = document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`);
+    let insertAfterRef = (treeCard && treeCard.parentElement === targetRow.parentElement) ? treeCard : targetRow;
+    while (insertAfterRef.nextElementSibling && insertAfterRef.nextElementSibling.classList.contains('review-suggestion-card')) {
+        insertAfterRef = insertAfterRef.nextElementSibling;
+    }
+    insertAfterRef.after(newRow);
+
+    reindexSteps();
+
+    const newContent = newRow.querySelector('.step-content');
+    if (newContent) newContent.focus();
+    return newRow;
+}
+window.insertStepBelow = insertStepBelow;
+
+function moveStep(lineNumOrElement, direction) {
+    let row = null;
+    if (typeof lineNumOrElement === 'number' || typeof lineNumOrElement === 'string') {
+        row = document.querySelector(`.step-row[data-line="${lineNumOrElement}"]`);
+    } else if (lineNumOrElement && lineNumOrElement.closest) {
+        row = lineNumOrElement.closest('.step-row');
+    }
+    if (!row) return;
+
+    const container = row.closest('.steps-container');
+    if (!container) return;
+
+    const lineId = row.getAttribute('data-line');
+    const treeCard = document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`);
+
+    const content = row.querySelector('.step-content');
+    const savedCaret = content ? getCaretOffset(content) : 0;
+
+    const allRows = Array.from(container.querySelectorAll(':scope > .step-row'));
+    const currentIndex = allRows.indexOf(row);
+    if (currentIndex === -1) return;
+
+    // Collect all suggestion cards belonging to this row (whether before or after treeCard)
+    const suggestionCards = [];
+    let curSibling = row.nextElementSibling;
+    while (curSibling && (curSibling === treeCard || curSibling.classList.contains('review-suggestion-card'))) {
+        if (curSibling.classList.contains('review-suggestion-card')) {
+            suggestionCards.push(curSibling);
+        }
+        curSibling = curSibling.nextElementSibling;
+    }
+
+    if (direction === -1) {
+        // Move Up
+        if (currentIndex > 0) {
+            const targetPrevRow = allRows[currentIndex - 1];
+            container.insertBefore(row, targetPrevRow);
+            let attachRef = row;
+            if (treeCard && treeCard.parentElement === container) {
+                attachRef.after(treeCard);
+                attachRef = treeCard;
+            }
+            for (const card of suggestionCards) {
+                attachRef.after(card);
+                attachRef = card;
+            }
+        } else {
+            return;
+        }
+    } else if (direction === 1) {
+        // Move Down
+        if (currentIndex < allRows.length - 1) {
+            const targetNextRow = allRows[currentIndex + 1];
+            const nextLineId = targetNextRow.getAttribute('data-line');
+            const nextTreeCard = document.getElementById(`includeTreeCard_${nextLineId}`) || document.getElementById(`includeTreeCard${nextLineId}`);
+            
+            let insertAfterRef = (nextTreeCard && nextTreeCard.parentElement === container) ? nextTreeCard : targetNextRow;
+            // Advance past all suggestion cards belonging to targetNextRow so row isn't interleaved
+            while (insertAfterRef.nextElementSibling && insertAfterRef.nextElementSibling.classList.contains('review-suggestion-card')) {
+                insertAfterRef = insertAfterRef.nextElementSibling;
+            }
+            insertAfterRef.after(row);
+            let attachRef = row;
+            if (treeCard && treeCard.parentElement === container) {
+                attachRef.after(treeCard);
+                attachRef = treeCard;
+            }
+            for (const card of suggestionCards) {
+                attachRef.after(card);
+                attachRef = card;
+            }
+        } else {
+            return;
+        }
+    }
+
+    reindexSteps();
+    if (content) {
+        content.focus();
+        if (savedCaret > 0) {
+            setCaretOffset(content, savedCaret);
+        }
+    }
+    if (typeof pushEditorSnapshot === 'function') {
+        pushEditorSnapshot(false);
+    }
+}
+window.moveStep = moveStep;
+
+function deleteStep(lineNumOrElement) {
+    let row = null;
+    if (typeof lineNumOrElement === 'number' || typeof lineNumOrElement === 'string') {
+        row = document.querySelector(`.step-row[data-line="${lineNumOrElement}"]`);
+    } else if (lineNumOrElement && lineNumOrElement.nodeType) {
+        row = lineNumOrElement.closest('.step-row') || lineNumOrElement;
+    }
+    if (!row) return;
+
+    const lineId = row.getAttribute('data-line');
+    const container = row.closest('.steps-container');
+
+    // If it's the last remaining row in the main steps list, clear its content instead of removing the row
+    if (container && container.id === 'stepsList' && container.querySelectorAll(':scope > .step-row').length === 1) {
+        const content = row.querySelector('.step-content');
+        if (content) {
+            content.setAttribute('data-raw', '');
+            content.innerText = '';
+            content.innerHTML = '';
+            content.focus();
+            formatStepToTokens(row);
+        }
+        const treeCard = document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`);
+        if (treeCard) treeCard.remove();
+        while (row.nextElementSibling && row.nextElementSibling.classList.contains('review-suggestion-card')) {
+            row.nextElementSibling.remove();
+        }
+
+        reindexSteps();
+        if (typeof pushEditorSnapshot === 'function') {
+            pushEditorSnapshot(false);
+        }
+        return;
+    }
+
+    const treeCard = document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`);
+    if (treeCard) treeCard.remove();
+    while (row.nextElementSibling && row.nextElementSibling.classList.contains('review-suggestion-card')) {
+        row.nextElementSibling.remove();
+    }
+
+    row.remove();
+    reindexSteps();
+    if (typeof pushEditorSnapshot === 'function') {
+        pushEditorSnapshot(false);
+    }
+}
+window.deleteStep = deleteStep;
+
+function reindexSteps() {
+    let globalLineCounter = 1;
+    const containers = ['#beforeStepsList', '#stepsList', '#afterStepsList'];
+    containers.forEach(containerSelector => {
+        const container = document.querySelector(containerSelector);
+        if (!container) return;
+        const rows = container.querySelectorAll(':scope > .step-row');
+        rows.forEach((row, idx) => {
+            const oldLineId = row.getAttribute('data-line');
+            const lNum = globalLineCounter++;
+            row.setAttribute('data-line', lNum);
+
+            // If an include tree card is associated with the old line id, update its ID
+            if (oldLineId && oldLineId !== String(lNum)) {
+                const treeCard = document.getElementById(`includeTreeCard_${oldLineId}`) || document.getElementById(`includeTreeCard${oldLineId}`);
+                if (treeCard) {
+                    treeCard.id = `includeTreeCard_${lNum}`;
+                }
+            }
+
+            const content = row.querySelector('.step-content');
+            if (content) {
+                content.setAttribute('onkeydown', `handleKeyDown(event, ${lNum})`);
+                content.setAttribute('onfocus', `handleStepFocus(${lNum})`);
+                content.setAttribute('onblur', `handleStepBlur(${lNum})`);
+                content.setAttribute('oninput', `if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);`);
+            }
+            const moveUpBtn = row.querySelector('.step-actions .btn-move-up');
+            if (moveUpBtn) {
+                moveUpBtn.setAttribute('onclick', `moveStep(${lNum}, -1)`);
+                moveUpBtn.disabled = (idx === 0);
+            }
+            const moveDownBtn = row.querySelector('.step-actions .btn-move-down');
+            if (moveDownBtn) {
+                moveDownBtn.setAttribute('onclick', `moveStep(${lNum}, 1)`);
+                moveDownBtn.disabled = (idx === rows.length - 1);
+            }
+            const delBtn = row.querySelector('.step-actions .btn-delete-step, .step-actions .icon-btn.danger');
+            if (delBtn) {
+                delBtn.setAttribute('onclick', `deleteStep(${lNum})`);
+            }
+        });
+    });
+    currentLineCount = Math.max(1, globalLineCounter - 1);
+    window.currentLineCount = currentLineCount;
+    updateAllLineNumbers();
+    ensureEmptyPlaceholders();
+    refreshAllSubstepToggleBars();
+    compilePlaybookToYaml();
+}
+window.reindexSteps = reindexSteps;
+
+function toggleSubsteps(toggleBar) {
+    if (!toggleBar) return;
+    toggleBar.classList.toggle('collapsed');
+    const isCollapsed = toggleBar.classList.contains('collapsed');
+    let next = toggleBar.nextElementSibling;
+    while (next && (next.classList.contains('step-row-substep') || next.classList.contains('review-suggestion-card'))) {
+        next.style.display = isCollapsed ? 'none' : 'flex';
+        next = next.nextElementSibling;
+    }
+}
+window.toggleSubsteps = toggleSubsteps;
+
+function handleSubstepTitleClick(event, el) {
+    if (event && document.activeElement === el) {
+        event.stopPropagation();
+    }
+}
+window.handleSubstepTitleClick = handleSubstepTitleClick;
+
+function handleSubstepTitleKeyDown(event, el) {
+    if (!el) return;
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        event.stopPropagation();
+        el.blur();
+        return;
+    }
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        el.blur();
+        return;
+    }
+    event.stopPropagation();
+}
+window.handleSubstepTitleKeyDown = handleSubstepTitleKeyDown;
+
+function handleSubstepTitleFocus(el) {
+    if (!el) return;
+    if (el.innerText.trim() === 'Sub-steps') {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const sel = window.getSelection();
+        if (sel) {
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+    }
+}
+window.handleSubstepTitleFocus = handleSubstepTitleFocus;
+
+function handleSubstepTitleInput(el) {
+    if (!el) return;
+    const toggleBar = el.closest('.substeps-toggle-bar');
+    if (!toggleBar) return;
+    const container = toggleBar.parentElement;
+    if (!container) return;
+
+    const raw = (el.innerText || '').trim();
+    const prev = toggleBar.previousElementSibling;
+    if (prev && prev.classList.contains('step-row-comment')) {
+        const commentContent = prev.querySelector('.step-content');
+        if (commentContent) {
+            const commentText = raw && raw !== 'Sub-steps' ? `# ${raw}` : '#';
+            commentContent.innerText = commentText;
+            commentContent.setAttribute('data-raw', commentText);
+        }
+    } else if (raw && raw !== 'Sub-steps') {
+        currentLineCount++;
+        const lineId = currentLineCount;
+        const newRow = document.createElement('div');
+        newRow.className = 'step-row step-row-comment';
+        newRow.setAttribute('data-line', lineId);
+        const commentText = `# ${raw}`;
+        newRow.innerHTML = `
+            <span class="step-number"><span class="comment-hash-badge">#</span></span>
+            <div class="step-content" contenteditable="true" spellcheck="false" data-raw="${commentText.replace(/"/g, '&quot;')}"
+                 style="color: var(--text-secondary, #64748b); font-style: italic;"
+                 onkeydown="handleKeyDown(event, ${lineId})"
+                 onfocus="handleStepFocus(${lineId})"
+                 onblur="handleStepBlur(${lineId})"
+                 oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);">${commentText}</div>
+            <div class="step-actions">
+                <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${lineId}, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${lineId}, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${lineId})"><span class="material-symbols-outlined">delete</span></button>
+            </div>
+        `;
+        container.insertBefore(newRow, toggleBar);
+        updateAllLineNumbers();
+    }
+    compilePlaybookToYaml();
+    checkEditorDirtyStatus();
+}
+window.handleSubstepTitleInput = handleSubstepTitleInput;
+
+function handleSubstepTitleBlur(el) {
+    if (!el) return;
+    const toggleBar = el.closest('.substeps-toggle-bar');
+    if (!toggleBar) return;
+    const container = toggleBar.parentElement;
+    if (!container) return;
+
+    const raw = (el.innerText || '').trim();
+    const prev = toggleBar.previousElementSibling;
+
+    if (!raw || raw === 'Sub-steps') {
+        el.innerText = 'Sub-steps';
+        if (prev && prev.classList.contains('step-row-comment')) {
+            const commentContent = prev.querySelector('.step-content');
+            const commentText = (commentContent ? (commentContent.innerText || '') : '').trim();
+            if (commentText === '#' || commentText === '' || commentText === '# Sub-steps') {
+                prev.remove();
+                updateAllLineNumbers();
+            }
+        }
+    } else {
+        if (prev && prev.classList.contains('step-row-comment')) {
+            const commentContent = prev.querySelector('.step-content');
+            if (commentContent) {
+                const commentText = `# ${raw}`;
+                commentContent.innerText = commentText;
+                commentContent.setAttribute('data-raw', commentText);
+            }
+        } else {
+            currentLineCount++;
+            const lineId = currentLineCount;
+            const newRow = document.createElement('div');
+            newRow.className = 'step-row step-row-comment';
+            newRow.setAttribute('data-line', lineId);
+            const commentText = `# ${raw}`;
+            newRow.innerHTML = `
+                <span class="step-number"><span class="comment-hash-badge">#</span></span>
+                <div class="step-content" contenteditable="true" spellcheck="false" data-raw="${commentText.replace(/"/g, '&quot;')}"
+                     style="color: var(--text-secondary, #64748b); font-style: italic;"
+                     onkeydown="handleKeyDown(event, ${lineId})"
+                     onfocus="handleStepFocus(${lineId})"
+                     onblur="handleStepBlur(${lineId})"
+                     oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);">${commentText}</div>
+                <div class="step-actions">
+                    <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${lineId}, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                    <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${lineId}, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                    <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${lineId})"><span class="material-symbols-outlined">delete</span></button>
+                </div>
+            `;
+            container.insertBefore(newRow, toggleBar);
+            updateAllLineNumbers();
+        }
+    }
+    compilePlaybookToYaml();
+    checkEditorDirtyStatus();
+    if (typeof debouncedPushSnapshot === 'function') {
+        debouncedPushSnapshot();
+    }
+}
+window.handleSubstepTitleBlur = handleSubstepTitleBlur;
+
+function refreshSubstepToggleBars(container) {
+    if (!container) return;
+
+    container.querySelectorAll('.substeps-toggle-bar').forEach(bar => bar.remove());
+    container.querySelectorAll('.step-row-substep').forEach(row => {
+        row.classList.remove('substep-last');
+    });
+
+    const children = Array.from(container.children);
+    let i = 0;
+    while (i < children.length) {
+        if (children[i].classList.contains('step-row-substep')) {
+            const startRow = children[i];
+            let count = 0;
+            let lastSubstep = startRow;
+
+            // Extract group title from preceding comment or step
+            let groupTitle = 'Sub-steps';
+            const prev = startRow.previousElementSibling;
+            if (prev && prev.classList.contains('step-row-comment')) {
+                const commentContent = prev.querySelector('.step-content');
+                if (commentContent) {
+                    const raw = commentContent.innerText.replace(/^#\s*/, '').trim();
+                    if (raw) {
+                        groupTitle = raw;
+                    }
+                }
+            }
+
+            while (i < children.length && (children[i].classList.contains('step-row-substep') || children[i].classList.contains('review-suggestion-card'))) {
+                if (children[i].classList.contains('step-row-substep')) {
+                    lastSubstep = children[i];
+                    count++;
+                }
+                i++;
+            }
+            if (lastSubstep) {
+                lastSubstep.classList.add('substep-last');
+            }
+            if (count > 0) {
+                const toggleBar = document.createElement('div');
+                toggleBar.className = 'substeps-toggle-bar substeps-group-header';
+                toggleBar.setAttribute('onclick', 'toggleSubsteps(this)');
+
+                const headerLeft = document.createElement('div');
+                headerLeft.className = 'substeps-header-left';
+
+                const chevron = document.createElement('span');
+                chevron.className = 'material-symbols-outlined toggle-chevron';
+                chevron.textContent = 'expand_more';
+
+                const titleSpan = document.createElement('span');
+                titleSpan.className = 'substeps-title';
+                titleSpan.contentEditable = 'true';
+                titleSpan.spellcheck = false;
+                titleSpan.title = 'Click to rename sub-steps block';
+                titleSpan.textContent = groupTitle;
+                titleSpan.setAttribute('onclick', 'handleSubstepTitleClick(event, this)');
+                titleSpan.setAttribute('onkeydown', 'handleSubstepTitleKeyDown(event, this)');
+                titleSpan.setAttribute('onfocus', 'handleSubstepTitleFocus(this)');
+                titleSpan.setAttribute('oninput', 'handleSubstepTitleInput(this)');
+                titleSpan.setAttribute('onblur', 'handleSubstepTitleBlur(this)');
+
+                headerLeft.appendChild(chevron);
+                headerLeft.appendChild(titleSpan);
+
+                const badge = document.createElement('span');
+                badge.className = 'substeps-count-badge';
+                badge.textContent = `${count} sub-step${count > 1 ? 's' : ''}`;
+
+                toggleBar.appendChild(headerLeft);
+                toggleBar.appendChild(badge);
+
+                container.insertBefore(toggleBar, startRow);
+            }
+        } else {
+            i++;
+        }
+    }
+}
+window.refreshSubstepToggleBars = refreshSubstepToggleBars;
+
+function refreshAllSubstepToggleBars() {
+    ['#beforeStepsList', '#stepsList', '#afterStepsList'].forEach(sel => {
+        const container = document.querySelector(sel);
+        if (container) {
+            refreshSubstepToggleBars(container);
+        }
+    });
+}
+window.refreshAllSubstepToggleBars = refreshAllSubstepToggleBars;
+
+/* Token Rendering Parser */
+function formatStepToTokens(lineNumOrElement) {
+    let row = null;
+    let lineNum = null;
+    if (typeof lineNumOrElement === 'object' && lineNumOrElement && lineNumOrElement.nodeType) {
+        row = lineNumOrElement.closest('.step-row') || lineNumOrElement;
+        lineNum = row ? row.getAttribute('data-line') : null;
+    } else {
+        lineNum = lineNumOrElement;
+        row = document.querySelector(`.step-row[data-line="${lineNum}"]`);
+    }
+    if (!row) return;
+    const content = row.querySelector('.step-content');
+    if (!content) return;
+
+    const rawText = getStepRawText(content);
+    if (!rawText) return;
+    content.setAttribute('data-raw', rawText);
+
+    checkAndUpdateCommentRow(row);
+
+    if (row.classList.contains('step-row-comment')) {
+        content.innerText = rawText;
+        return;
+    }
+
+    const inlineCommentIdx = findInlineCommentIndex(rawText);
+    const instructionPart = inlineCommentIdx >= 0 ? rawText.substring(0, inlineCommentIdx) : rawText;
+    const commentPart = inlineCommentIdx >= 0 ? rawText.substring(inlineCommentIdx) : '';
+
+    let safeText = instructionPart.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    if (row.classList.contains('step-row-substep')) {
+        safeText = safeText.replace(/^(?:-\s*)?&gt;-\s*/, '');
+    } else {
+        safeText = safeText.replace(/(^|\s)(?:-\s*)?&gt;-(?=\s|$)/g, '$1<span class="substep-folded-badge">&gt;-</span>');
+    }
+
+    safeText = safeText.replace(/(#[a-zA-Z0-9_\-]+)/g, '<span class="hint-badge">$1</span>');
+
+    safeText = safeText.replace(/(?:_include|include):\s*([a-zA-Z0-9_\/\.\-]*missing[a-zA-Z0-9_\/\.\-]*)/g, function(match, path) {
+        return `<span class="missing-include-pill" data-raw="${match.replace(/"/g, '&quot;')}" contenteditable="false"><span class="material-symbols-outlined pill-icon">error</span>Missing Include: ${path}</span>`;
+    });
+
+    safeText = safeText.replace(/(?:_include|include):\s*["']?([a-zA-Z0-9_\/\.\-]+)["']?/g, function(match, path) {
+        const cleanPath = path.replace(/^['"]|['"]$/g, '');
+        const filename = cleanPath.split('/').pop();
+        if (cleanPath.toLowerCase().endsWith('.yaml') || cleanPath.toLowerCase().endsWith('.yml')) {
+            return `<span class="invalid-include-pill" data-raw="${match.replace(/"/g, '&quot;')}" contenteditable="false" title="Invalid Include: Only .steps fragment files can be included in playbooks"><span class="material-symbols-outlined pill-icon">warning</span><span>Invalid Include: ${filename}</span></span>`;
+        }
+        return `<span class="unified-include-pill" data-raw="${match.replace(/"/g, '&quot;')}" contenteditable="false"><span class="material-symbols-outlined pill-icon">extension</span><span>include: ${filename}</span><span class="material-symbols-outlined hover-arrow" onmousedown="handleArrowMouseDown(event, '${lineNum}', '${cleanPath}')" title="Toggle steps for ${filename}">expand_more</span></span>`;
+    });
+
+    safeText = safeText.replace(/\$\{([a-zA-Z0-9_\.]+)\}/g, function(match, name) {
+        return `<span class="var-pill" data-var="${name}" contenteditable="false"><span class="material-symbols-outlined pill-icon">data_object</span>${name}</span>`;
+    });
+
+    if (inlineCommentIdx >= 0) {
+        const safeComment = commentPart.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        content.innerHTML = safeText + `<span class="step-inline-comment">${safeComment}</span>`;
+    } else {
+        content.innerHTML = safeText;
+    }
+
+    // Auto-load include tree card for top-level include steps if not yet attached
+    const includeMatch = rawText.match(/(?:_include|include):\s*["']?([a-zA-Z0-9_\/\.\-]+)["']?/);
+    if (includeMatch && row && !row.closest('.include-tree-card')) {
+        const cleanIncludePath = includeMatch[1].replace(/^['"]|['"]$/g, '');
+        if (!cleanIncludePath.toLowerCase().endsWith('.yaml') && !cleanIncludePath.toLowerCase().endsWith('.yml')) {
+            ensureIncludeTreeCardLoaded(lineNum, cleanIncludePath, row);
+        }
+    }
+}
+window.formatStepToTokens = formatStepToTokens;
+
+function ensureIncludeTreeCardLoaded(cardId, cleanFilePath, targetRow) {
+    if (!cleanFilePath) return;
+    let tree = (targetRow && targetRow.nextElementSibling && targetRow.nextElementSibling.classList && targetRow.nextElementSibling.classList.contains('include-tree-card'))
+        ? targetRow.nextElementSibling
+        : (document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`));
+
+    if (tree && tree.getAttribute('data-include-file') === cleanFilePath) {
+        tree.style.display = 'flex';
+        return;
+    }
+
+    if (tree && tree.getAttribute('data-include-file') !== cleanFilePath) {
+        tree.remove();
+        tree = null;
+    }
+
+    if (!tree) {
+        window.pendingIncludeRequests = window.pendingIncludeRequests || {};
+        if (window.pendingIncludeRequests[cardId]) return;
+        window.pendingIncludeRequests[cardId] = true;
+
+        fetch(`/api/editor/include-tree?file=${encodeURIComponent(cleanFilePath)}&cardId=${encodeURIComponent(cardId)}`)
+            .then(res => res.text())
+            .then(html => {
+                delete window.pendingIncludeRequests[cardId];
+                const liveTarget = document.querySelector(`.step-row[data-line="${cardId}"]`) || targetRow;
+                if (liveTarget && liveTarget.parentElement) {
+                    const existing = (liveTarget.nextElementSibling && liveTarget.nextElementSibling.classList && liveTarget.nextElementSibling.classList.contains('include-tree-card'))
+                        ? liveTarget.nextElementSibling
+                        : (document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`));
+                    if (!existing) {
+                        liveTarget.insertAdjacentHTML('afterend', html);
+                        const newlyInsertedTree = document.getElementById(`includeTreeCard_${cardId}`) || liveTarget.nextElementSibling;
+                        if (newlyInsertedTree) {
+                            formatIncludeTreeCardTokens(newlyInsertedTree);
+                        }
+                        updateAllLineNumbers();
+                    }
+                }
+            })
+            .catch(err => {
+                delete window.pendingIncludeRequests[cardId];
+                if (console && console.error) console.error("Failed to fetch include tree card", err);
+            });
+    }
+}
+window.ensureIncludeTreeCardLoaded = ensureIncludeTreeCardLoaded;
+
+window.pendingIncludeRequests = window.pendingIncludeRequests || {};
+
+function handleArrowMouseDown(event, cardId, filePath) {
+    window.isClickingIncludeArrow = true;
+    setTimeout(() => { window.isClickingIncludeArrow = false; }, 300);
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    
+    const cleanFilePath = filePath ? filePath.replace(/^['"]|['"]$/g, '').trim() : '';
+    const clickedEl = event ? (event.target ? event.target.closest('.hover-arrow') || event.target : null) : null;
+    let targetEl = null;
+    let effectiveCardId = cardId;
+
+    if (clickedEl) {
+        const stepRow = clickedEl.closest('.step-row');
+        const nestedStep = clickedEl.closest('.nested-editable-step');
+
+        if (stepRow) {
+            targetEl = stepRow;
+            effectiveCardId = stepRow.getAttribute('data-line') || cardId;
+        } else if (nestedStep) {
+            targetEl = nestedStep;
+            if (!nestedStep.getAttribute('data-nested-card-id')) {
+                nestedStep.setAttribute('data-nested-card-id', cardId || ('sub_' + Math.floor(Math.random() * 100000)));
+            }
+            effectiveCardId = nestedStep.getAttribute('data-nested-card-id');
+        }
+    }
+
+    if (!targetEl && effectiveCardId) {
+        targetEl = document.querySelector(`.step-row[data-line="${effectiveCardId}"]`) || document.querySelector(`.nested-editable-step[data-nested-card-id="${effectiveCardId}"]`) || document.getElementById(`includeTreeCard_${effectiveCardId}`);
+    }
+
+    let tree = null;
+    if (targetEl && targetEl.nextElementSibling && targetEl.nextElementSibling.classList && targetEl.nextElementSibling.classList.contains('include-tree-card')) {
+        tree = targetEl.nextElementSibling;
+    }
+    if (!tree && effectiveCardId) {
+        tree = document.getElementById(`includeTreeCard_${effectiveCardId}`) || document.getElementById(`includeTreeCard${effectiveCardId}`);
+    }
+
+    if (tree && tree.getAttribute('data-include-file') !== cleanFilePath) {
+        tree.remove();
+        tree = null;
+    }
+
+    if (!tree) {
+        if (window.pendingIncludeRequests[effectiveCardId]) {
+            return;
+        }
+        window.pendingIncludeRequests[effectiveCardId] = true;
+
+        fetch(`/api/editor/include-tree?file=${encodeURIComponent(cleanFilePath)}&cardId=${encodeURIComponent(effectiveCardId)}`)
+            .then(res => res.text())
+            .then(html => {
+                delete window.pendingIncludeRequests[effectiveCardId];
+                
+                let liveTarget = document.querySelector(`.step-row[data-line="${effectiveCardId}"]`)
+                    || document.querySelector(`.nested-editable-step[data-nested-card-id="${effectiveCardId}"]`)
+                    || (targetEl && document.contains(targetEl) ? targetEl : null);
+
+                if (liveTarget && liveTarget.parentElement) {
+                    liveTarget.insertAdjacentHTML('afterend', html);
+                    const newlyInsertedTree = document.getElementById(`includeTreeCard_${effectiveCardId}`) || liveTarget.nextElementSibling;
+                    if (newlyInsertedTree) {
+                        formatIncludeTreeCardTokens(newlyInsertedTree);
+                    }
+                    updateAllLineNumbers();
+                }
+            })
+            .catch(err => {
+                delete window.pendingIncludeRequests[effectiveCardId];
+                if (console && console.error) console.error("Failed to fetch include tree card", err);
+            });
+    } else {
+        tree.style.display = (tree.style.display === 'none') ? 'flex' : 'none';
+        updateAllLineNumbers();
+    }
+}
+window.handleArrowMouseDown = handleArrowMouseDown;
+
+document.addEventListener('htmx:targetError', function(evt) {
+    if (console && console.warn) console.warn('HTMX target error caught:', evt.detail);
+});
+document.addEventListener('htmx:swapError', function(evt) {
+    if (console && console.warn) console.warn('HTMX swap error caught:', evt.detail);
+});
+
+function getDirectNestedSteps(treeCard) {
+    if (!treeCard) return [];
+    return Array.from(treeCard.querySelectorAll('.nested-editable-step'))
+        .filter(step => step.closest('.include-tree-card') === treeCard);
+}
+
+function isParentIncludeEditing(treeCard) {
+    if (!treeCard || !treeCard.parentElement) return false;
+    const parentCard = treeCard.parentElement.closest('.include-tree-card');
+    if (!parentCard) return false;
+    if (parentCard.getAttribute('data-editing') === 'true') return true;
+    return isParentIncludeEditing(parentCard);
+}
+window.isParentIncludeEditing = isParentIncludeEditing;
+
+function formatIncludeTreeCardTokens(treeCard) {
+    if (!treeCard) return;
+    const cardId = treeCard.id ? treeCard.id.replace('includeTreeCard_', '').replace('includeTreeCard', '') : 'sub';
+    const isEditing = treeCard.getAttribute('data-editing') === 'true';
+    const parentEditing = isParentIncludeEditing(treeCard);
+
+    const btnEdit = treeCard.querySelector(`[id^="btnEditInclude_"]`);
+    const actions = treeCard.querySelector('.include-tree-actions');
+
+    if (parentEditing) {
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (actions) actions.style.display = 'none';
+    } else if (!isEditing) {
+        if (btnEdit) btnEdit.style.display = 'inline-flex';
+        if (actions) actions.style.display = 'flex';
+    }
+
+    const steps = getDirectNestedSteps(treeCard);
+    steps.forEach((stepEl, idx) => {
+        if (!stepEl.getAttribute('data-nested-card-id')) {
+            stepEl.setAttribute('data-nested-card-id', `${cardId}_nested_${idx}_${Math.floor(Math.random() * 1000)}`);
+        }
+
+        if (stepEl.contains(document.activeElement)) {
+            return;
+        }
+
+        const rawSpan = stepEl.querySelector('.raw-nested-text');
+        let text = rawSpan ? rawSpan.innerText : (stepEl.getAttribute('data-original') !== null ? stepEl.getAttribute('data-original') : stepEl.innerText);
+        if (text && text.startsWith('-')) text = text.replace(/^-\s*/, '');
+        stepEl.setAttribute('data-original', text || '');
+
+        const subLineSpan = stepEl.querySelector('.sub-line-num');
+        const lineNumText = subLineSpan ? subLineSpan.innerText : '-';
+        const stepCardId = stepEl.getAttribute('data-nested-card-id');
+
+        if (text && (text.includes('_include:') || text.includes('include:') || text.includes('${'))) {
+            let safeText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            safeText = safeText.replace(/(?:_include|include):\s*["']?([a-zA-Z0-9_\/\.\-]+)["']?/g, function(match, path) {
+                const cleanPath = path.replace(/^['"]|['"]$/g, '');
+                const filename = cleanPath.split('/').pop();
+                if (cleanPath.toLowerCase().endsWith('.yaml') || cleanPath.toLowerCase().endsWith('.yml')) {
+                    return `<span class="invalid-include-pill" data-raw="${match.replace(/"/g, '&quot;')}" contenteditable="false" title="Invalid Include: Only .steps fragment files can be included in playbooks"><span class="material-symbols-outlined pill-icon">warning</span><span>Invalid Include: ${filename}</span></span>`;
+                }
+                return `<span class="unified-include-pill" data-raw="${match.replace(/"/g, '&quot;')}" contenteditable="false"><span class="material-symbols-outlined pill-icon">extension</span><span>include: ${filename}</span><span class="material-symbols-outlined hover-arrow" onmousedown="handleArrowMouseDown(event, '${stepCardId}', '${cleanPath}')" title="Toggle steps for ${filename}">expand_more</span></span>`;
+            });
+            safeText = safeText.replace(/\$\{([a-zA-Z0-9_\.]+)\}/g, function(match, name) {
+                return `<span class="var-pill" data-var="${name}" contenteditable="false"><span class="material-symbols-outlined pill-icon">data_object</span>${name}</span>`;
+            });
+
+            stepEl.innerHTML = `<span class="sub-line-num">${lineNumText}</span><span class="step-token-content">${safeText}</span>`;
+            if (isEditing && !parentEditing) {
+                stepEl.onclick = function(evt) { handleNestedFocus(stepEl, evt); };
+            }
+        } else if (isEditing && !parentEditing) {
+            let safeRawText = (text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            stepEl.innerHTML = `<span class="sub-line-num" contenteditable="false">${lineNumText}</span><span class="raw-nested-text" style="outline: none;" contenteditable="true">${safeRawText}</span>`;
+            const newRawSpan = stepEl.querySelector('.raw-nested-text');
+            if (newRawSpan) {
+                newRawSpan.onkeydown = function(evt) { handleNestedKeyDown(evt, cardId); };
+                newRawSpan.onblur = function() { handleNestedBlur(stepEl, cardId); };
+                newRawSpan.oninput = function() { markIncludeUnsaved(cardId); };
+            }
+        } else {
+            let safeText = (text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            stepEl.innerHTML = `<span class="sub-line-num">${lineNumText}</span><span>${safeText}</span>`;
+        }
+    });
+}
+window.formatIncludeTreeCardTokens = formatIncludeTreeCardTokens;
+
+let activeNestedStep = null;
+
+function getOffsetFromPoint(containerEl, evt) {
+    if (!evt || typeof evt.clientX !== 'number') return null;
+    let range = null;
+    const doc = containerEl.ownerDocument || document;
+    if (doc.caretRangeFromPoint) {
+        range = doc.caretRangeFromPoint(evt.clientX, evt.clientY);
+    } else if (doc.caretPositionFromPoint) {
+        const pos = doc.caretPositionFromPoint(evt.clientX, evt.clientY);
+        if (pos) {
+            range = doc.createRange();
+            range.setStart(pos.offsetNode, pos.offset);
+            range.collapse(true);
+        }
+    }
+    if (range) {
+        const preRange = doc.createRange();
+        preRange.selectNodeContents(containerEl);
+        try {
+            preRange.setEnd(range.startContainer, range.startOffset);
+            return preRange.toString().length;
+        } catch (e) {
+            // fallback
+        }
+    }
+    return null;
+}
+
+function handleNestedFocus(el, evt, targetOffset) {
+    if (!el || window.isClickingIncludeArrow) return;
+    const treeCard = el.closest('.include-tree-card');
+    if (isParentIncludeEditing(treeCard)) {
+        return;
+    }
+
+    activeNestedStep = el;
+    const cardId = el.getAttribute('data-card-id') || (treeCard ? treeCard.id.replace('includeTreeCard_', '').replace('includeTreeCard', '') : '');
+
+    const existingRawSpan = el.querySelector('.raw-nested-text');
+    const isAlreadyEditingSpan = !!existingRawSpan;
+
+    if (isAlreadyEditingSpan) {
+        if (document.activeElement === existingRawSpan || existingRawSpan.contains(document.activeElement)) {
+            return;
+        }
+    }
+
+    let computedOffset = null;
+    const eventObj = evt || window.event;
+    if (eventObj && typeof eventObj.clientX === 'number') {
+        const measured = getOffsetFromPoint(el, eventObj);
+        if (measured !== null) {
+            const subLineSpan = el.querySelector('.sub-line-num');
+            const prefixLen = subLineSpan ? subLineSpan.innerText.length : 0;
+            computedOffset = Math.max(0, measured - prefixLen);
+        }
+    }
+
+    let text = el.getAttribute('data-original');
+    if (text === null || text === undefined) {
+        const rawSpan = el.querySelector('.raw-nested-text');
+        const textSpan = el.querySelector('span:last-child');
+        text = rawSpan ? rawSpan.innerText : (textSpan ? textSpan.innerText : el.innerText);
+    }
+    if (text && text.startsWith('-')) text = text.replace(/^-\s*/, '');
+    el.setAttribute('data-original', text || '');
+
+    const lineNumSpan = el.querySelector('.sub-line-num');
+    const lineNum = lineNumSpan ? lineNumSpan.innerText : '-';
+
+    const safeRawText = (text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    el.innerHTML = `<span class="sub-line-num" contenteditable="false">${lineNum}</span><span class="raw-nested-text" style="outline: none;" contenteditable="true">${safeRawText}</span>`;
+    let rawSpan = el.querySelector('.raw-nested-text');
+
+    el.setAttribute('contenteditable', 'false');
+    if (rawSpan) {
+        rawSpan.onkeydown = function(e) {
+            handleNestedKeyDown(e, cardId);
+        };
+        rawSpan.onblur = function() {
+            handleNestedBlur(el, cardId);
+        };
+        rawSpan.oninput = function() {
+            markIncludeUnsaved(cardId);
+        };
+        if (document.activeElement !== rawSpan) {
+            rawSpan.focus();
+        }
+
+        const maxLen = (rawSpan.innerText || '').length;
+        let finalOffset = 0;
+        if (targetOffset === 'end') {
+            finalOffset = maxLen;
+        } else if (typeof targetOffset === 'number') {
+            finalOffset = Math.min(Math.max(0, targetOffset), maxLen);
+        } else if (computedOffset !== null) {
+            finalOffset = Math.min(Math.max(0, computedOffset), maxLen);
+        } else if (eventObj && (eventObj.type === 'click' || eventObj.type === 'mousedown')) {
+            finalOffset = maxLen;
+        }
+        setCaretOffset(rawSpan, finalOffset);
+    }
+}
+window.handleNestedFocus = handleNestedFocus;
+
+function handleNestedBlur(el, cardId) {
+    if (!el) return;
+    const effectiveCardId = cardId || el.getAttribute('data-card-id');
+    const rawSpan = el.querySelector('.raw-nested-text');
+    const newText = rawSpan ? rawSpan.innerText : (el.getAttribute('data-original') || el.innerText);
+    const origText = el.getAttribute('data-original');
+
+    if (rawSpan) {
+        el.setAttribute('data-original', newText);
+    }
+
+    if (origText !== null && origText !== undefined && newText !== origText) {
+        if (effectiveCardId) {
+            markIncludeUnsaved(effectiveCardId);
+        }
+    }
+    const treeCard = el.closest('.include-tree-card');
+    if (treeCard) {
+        setTimeout(() => {
+            formatIncludeTreeCardTokens(treeCard);
+        }, 50);
+    }
+    updateAllLineNumbers();
+}
+window.handleNestedBlur = handleNestedBlur;
+
+function getNestedStepText(stepEl) {
+    if (!stepEl) return '';
+    const rawSpan = stepEl.querySelector('.raw-nested-text');
+    if (rawSpan) return rawSpan.innerText || '';
+    let text = stepEl.getAttribute('data-original');
+    if (text === null || text === undefined) {
+        const textSpan = stepEl.querySelector('span:last-child');
+        text = textSpan ? textSpan.innerText : stepEl.innerText;
+    }
+    if (text && text.startsWith('-')) text = text.replace(/^-\s*/, '');
+    return text || '';
+}
+
+function handleNestedKeyDown(event, cardId) {
+    const stepEl = event.target.closest('.nested-editable-step') || activeNestedStep;
+    if (!stepEl) return;
+
+    const rawSpan = stepEl.querySelector('.raw-nested-text') || stepEl;
+    const currentOffset = getCaretOffset(rawSpan);
+    const rawText = rawSpan.innerText || '';
+    const effectiveCardId = cardId || stepEl.getAttribute('data-card-id');
+
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const headText = rawText.substring(0, currentOffset);
+        const tailText = rawText.substring(currentOffset);
+
+        stepEl.setAttribute('data-original', headText);
+        if (rawSpan !== stepEl) {
+            rawSpan.innerText = headText;
+        } else {
+            stepEl.innerText = headText;
+        }
+
+        const newStep = document.createElement('div');
+        newStep.className = 'nested-editable-step';
+        newStep.setAttribute('contenteditable', 'false');
+        newStep.setAttribute('data-original', tailText);
+        if (effectiveCardId) {
+            newStep.setAttribute('data-card-id', effectiveCardId);
+        }
+        newStep.setAttribute('onfocus', 'handleNestedFocus(this, event)');
+        newStep.setAttribute('onblur', `handleNestedBlur(this, '${effectiveCardId || ''}')`);
+        newStep.setAttribute('oninput', `markIncludeUnsaved('${effectiveCardId || ''}')`);
+
+        const lineNumSpan = stepEl.querySelector('.sub-line-num');
+        const lineNumText = lineNumSpan ? lineNumSpan.innerText : '-';
+        newStep.innerHTML = `<span class="sub-line-num" contenteditable="false">${lineNumText}</span><span class="raw-nested-text" style="outline: none;" contenteditable="true">${tailText}</span>`;
+
+        stepEl.insertAdjacentElement('afterend', newStep);
+
+        if (effectiveCardId) {
+            markIncludeUnsaved(effectiveCardId);
+        }
+        updateAllLineNumbers();
+
+        handleNestedFocus(newStep, null, 0);
+        const newRawSpan = newStep.querySelector('.raw-nested-text');
+        if (newRawSpan) {
+            newRawSpan.focus();
+            setCaretOffset(newRawSpan, 0);
+        }
+
+    } else if (event.key === 'Backspace' && currentOffset === 0) {
+        let prevStep = stepEl.previousElementSibling;
+        while (prevStep && prevStep.classList.contains('include-tree-card')) {
+            prevStep = prevStep.previousElementSibling;
+        }
+        if (prevStep && prevStep.classList.contains('nested-editable-step')) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const prevText = getNestedStepText(prevStep);
+            const joinOffset = prevText.length;
+            const combinedText = prevText + rawText;
+
+            prevStep.setAttribute('data-original', combinedText);
+            handleNestedFocus(prevStep, null, joinOffset);
+            const updatedPrevRawSpan = prevStep.querySelector('.raw-nested-text') || prevStep;
+            updatedPrevRawSpan.innerText = combinedText;
+
+            stepEl.remove();
+
+            if (effectiveCardId) {
+                markIncludeUnsaved(effectiveCardId);
+            }
+            updateAllLineNumbers();
+
+            updatedPrevRawSpan.focus();
+            setCaretOffset(updatedPrevRawSpan, joinOffset);
+        }
+    } else if (event.key === 'Delete' && currentOffset >= rawText.length) {
+        let nextStep = stepEl.nextElementSibling;
+        while (nextStep && nextStep.classList.contains('include-tree-card')) {
+            nextStep = nextStep.nextElementSibling;
+        }
+        if (nextStep && nextStep.classList.contains('nested-editable-step')) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const nextText = getNestedStepText(nextStep);
+            const combinedText = rawText + nextText;
+
+            stepEl.setAttribute('data-original', combinedText);
+            if (rawSpan !== stepEl) {
+                rawSpan.innerText = combinedText;
+            }
+            nextStep.remove();
+
+            if (effectiveCardId) {
+                markIncludeUnsaved(effectiveCardId);
+            }
+            updateAllLineNumbers();
+
+            rawSpan.focus();
+            setCaretOffset(rawSpan, currentOffset);
+        }
+    } else if (event.key === 'ArrowUp') {
+        let prevStep = stepEl.previousElementSibling;
+        while (prevStep && prevStep.classList.contains('include-tree-card')) {
+            prevStep = prevStep.previousElementSibling;
+        }
+        if (prevStep && prevStep.classList.contains('nested-editable-step')) {
+            event.preventDefault();
+            const prevText = getNestedStepText(prevStep);
+            const targetPos = Math.min(currentOffset, prevText.length);
+            handleNestedFocus(prevStep, null, targetPos);
+            const prevRawSpan = prevStep.querySelector('.raw-nested-text') || prevStep;
+            prevRawSpan.focus();
+            setCaretOffset(prevRawSpan, targetPos);
+        }
+    } else if (event.key === 'ArrowDown') {
+        let nextStep = stepEl.nextElementSibling;
+        while (nextStep && nextStep.classList.contains('include-tree-card')) {
+            nextStep = nextStep.nextElementSibling;
+        }
+        if (nextStep && nextStep.classList.contains('nested-editable-step')) {
+            event.preventDefault();
+            const nextText = getNestedStepText(nextStep);
+            const targetPos = Math.min(currentOffset, nextText.length);
+            handleNestedFocus(nextStep, null, targetPos);
+            const nextRawSpan = nextStep.querySelector('.raw-nested-text') || nextStep;
+            nextRawSpan.focus();
+            setCaretOffset(nextRawSpan, targetPos);
+        }
+    }
+}
+window.handleNestedKeyDown = handleNestedKeyDown;
+
+function addNestedStep(cardId) {
+    const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
+    if (!treeCard) return;
+
+    const stepsContainer = document.getElementById(`includeInnerSteps_${cardId}`) || treeCard.querySelector('[id^="includeInnerSteps_"]');
+    if (!stepsContainer) return;
+
+    if (treeCard.getAttribute('data-editing') !== 'true') {
+        enableIncludeEdit(cardId);
+    }
+
+    const placeholder = stepsContainer.querySelector('.empty-steps-placeholder');
+    if (placeholder) {
+        placeholder.remove();
+    }
+
+    const newStep = document.createElement('div');
+    newStep.className = 'nested-editable-step';
+    newStep.setAttribute('contenteditable', 'false');
+    newStep.setAttribute('data-original', '');
+    newStep.setAttribute('data-card-id', cardId);
+    newStep.setAttribute('onfocus', 'handleNestedFocus(this, event)');
+    newStep.setAttribute('onblur', `handleNestedBlur(this, '${cardId}')`);
+    newStep.setAttribute('onkeydown', `handleNestedKeyDown(event, '${cardId}')`);
+    newStep.setAttribute('oninput', `markIncludeUnsaved('${cardId}')`);
+
+    const lineNumSpan = newStep.querySelector('.sub-line-num');
+    const lineNumText = lineNumSpan ? lineNumSpan.innerText : '-';
+    newStep.innerHTML = `<span class="sub-line-num" contenteditable="false">${lineNumText}</span><span class="raw-nested-text" style="outline: none;" contenteditable="true"></span>`;
+
+    stepsContainer.appendChild(newStep);
+    markIncludeUnsaved(cardId);
+    updateAllLineNumbers();
+
+    handleNestedFocus(newStep, null, 0);
+    const newRawSpan = newStep.querySelector('.raw-nested-text');
+    if (newRawSpan) {
+        newRawSpan.focus();
+    }
+}
+window.addNestedStep = addNestedStep;
+
+function enableIncludeEdit(cardId) {
+    const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
+    if (!treeCard) return;
+
+    if (isParentIncludeEditing(treeCard)) {
+        return;
+    }
+
+    treeCard.setAttribute('data-editing', 'true');
+
+    const btnEdit = document.getElementById(`btnEditInclude_${cardId}`);
+    const btnAdd = document.getElementById(`btnAddIncludeStep_${cardId}`);
+    const btnSave = document.getElementById(`btnSaveInclude_${cardId}`);
+    const btnDiscard = document.getElementById(`btnDiscardInclude_${cardId}`);
+
+    const steps = getDirectNestedSteps(treeCard);
+    if (!treeCard._initialStepsSnapshot) {
+        treeCard._initialStepsSnapshot = steps.map(step => {
+            let text = step.getAttribute('data-original');
+            if (text === null || text === undefined) {
+                const textSpan = step.querySelector('span:last-child');
+                text = textSpan ? textSpan.innerText : step.innerText;
+            }
+            if (text && text.startsWith('-')) text = text.replace(/^-\s*/, '');
+            return text || '';
+        });
+    }
+
+    steps.forEach(step => {
+        let text = step.getAttribute('data-original');
+        if (text === null || text === undefined) {
+            const rawSpan = step.querySelector('.raw-nested-text');
+            const textSpan = step.querySelector('span:last-child');
+            text = rawSpan ? rawSpan.innerText : (textSpan ? textSpan.innerText : step.innerText);
+        }
+        if (text && text.startsWith('-')) text = text.replace(/^-\s*/, '');
+        step.setAttribute('data-original', text || '');
+    });
+
+    if (btnEdit) btnEdit.style.display = 'none';
+    if (btnAdd) btnAdd.style.display = 'inline-flex';
+    if (btnSave) btnSave.style.display = 'inline-flex';
+    if (btnDiscard) btnDiscard.style.display = 'inline-flex';
+
+    formatIncludeTreeCardTokens(treeCard);
+
+    if (steps.length === 0) {
+        addNestedStep(cardId);
+    }
+}
+window.enableIncludeEdit = enableIncludeEdit;
+
+function markIncludeUnsaved(cardId) {
+    const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
+    const badge = document.getElementById(`unsavedBadge_${cardId}`);
+    const btnSave = document.getElementById(`btnSaveInclude_${cardId}`);
+    const btnDiscard = document.getElementById(`btnDiscardInclude_${cardId}`);
+    const btnEdit = document.getElementById(`btnEditInclude_${cardId}`);
+    const btnAdd = document.getElementById(`btnAddIncludeStep_${cardId}`);
+    if (treeCard) treeCard.classList.add('has-unsaved-changes');
+    if (badge) badge.style.display = 'inline-flex';
+    if (btnSave) btnSave.style.display = 'inline-flex';
+    if (btnDiscard) btnDiscard.style.display = 'inline-flex';
+    if (btnAdd) btnAdd.style.display = 'inline-flex';
+    if (btnEdit) btnEdit.style.display = 'none';
+    updateIncludeVarsDropdown(cardId);
+}
+window.markIncludeUnsaved = markIncludeUnsaved;
+
+function updateIncludeVarsDropdown(cardId) {
+    const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
+    if (!treeCard) return;
+
+    const dropdownBody = treeCard.querySelector('.include-vars-dropdown-body');
+    const countSpan = treeCard.querySelector(`[id^="btnVarsInclude_"] span:nth-child(2)`) || treeCard.querySelector(`.btn-include-vars span:nth-child(2)`);
+    if (!dropdownBody) return;
+
+    const steps = getDirectNestedSteps(treeCard);
+    const stepLines = [];
+    steps.forEach(step => {
+        const rawSpan = step.querySelector('.raw-nested-text');
+        const textSpan = step.querySelector('span:last-child');
+        let lineText = rawSpan ? rawSpan.innerText : (step.getAttribute('data-original') || (textSpan ? textSpan.innerText : step.innerText));
+        if (lineText) stepLines.push(lineText.trim());
+    });
+
+    const allVars = new Set();
+    const varRegex = /\$\{([a-zA-Z0-9_.-]+)(?::[^}]*)?\}/g;
+    stepLines.forEach(line => {
+        let match;
+        while ((match = varRegex.exec(line)) !== null) {
+            if (match[1]) allVars.add(match[1]);
+        }
+    });
+
+    if (treeCard._varScopes) {
+        Object.keys(treeCard._varScopes).forEach(v => allVars.add(v));
+    }
+
+    if (countSpan) {
+        countSpan.innerText = `Variables (${allVars.size})`;
+    }
+
+    if (allVars.size === 0) {
+        dropdownBody.innerHTML = '<div class="empty-include-vars">No variables used in this include.</div>';
+        return;
+    }
+
+    let html = '';
+    allVars.forEach(v => {
+        let scope = 'required';
+        if (treeCard._varScopes && treeCard._varScopes[v]) {
+            scope = treeCard._varScopes[v];
+        } else {
+            const selector = CSS && CSS.escape ? CSS.escape(v) : v;
+            const defBtn = treeCard.querySelector(`.include-var-row[data-var="${selector}"] .scope-defined.active-defined`);
+            if (defBtn) scope = 'defined';
+        }
+
+        const safeVar = (v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const isDefined = scope === 'defined';
+
+        html += `
+            <div class="include-var-row" data-var="${safeVar}">
+                <code class="var-badge">\${${safeVar}}</code>
+                <div class="var-scope-toggle-group">
+                    <button type="button" class="btn-var-scope scope-defined ${isDefined ? 'active-defined' : ''}"
+                            data-card-id="${cardId}"
+                            data-var="${safeVar}"
+                            onclick="toggleIncludeTreeVarScope('${cardId}', '${safeVar}', 'defined')"
+                            title="Variable is defined within this fragment">
+                        Defined in include
+                    </button>
+                    <button type="button" class="btn-var-scope scope-required ${!isDefined ? 'active-required' : ''}"
+                            data-card-id="${cardId}"
+                            data-var="${safeVar}"
+                            onclick="toggleIncludeTreeVarScope('${cardId}', '${safeVar}', 'required')"
+                            title="Variable requires definition from using file">
+                        Required from using file
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+    dropdownBody.innerHTML = html;
+}
+window.updateIncludeVarsDropdown = updateIncludeVarsDropdown;
+
+function toggleIncludeVarsDropdown(cardId) {
+    updateIncludeVarsDropdown(cardId);
+    const dropdown = document.getElementById(`varsDropdown_${cardId}`);
+    if (!dropdown) return;
+
+    const isVisible = dropdown.style.display !== 'none';
+    document.querySelectorAll('.include-vars-dropdown').forEach(d => {
+        d.style.display = 'none';
+    });
+
+    if (!isVisible) {
+        dropdown.style.display = 'flex';
+    }
+}
+window.toggleIncludeVarsDropdown = toggleIncludeVarsDropdown;
+
+
+function toggleIncludeTreeVarScope(cardId, varName, scope) {
+    const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
+    if (!treeCard) return;
+
+    if (!treeCard._varScopes) {
+        treeCard._varScopes = {};
+    }
+    treeCard._varScopes[varName] = scope;
+
+    const selector = CSS && CSS.escape ? CSS.escape(varName) : varName;
+    const row = treeCard.querySelector(`.include-var-row[data-var="${selector}"]`);
+    if (row) {
+        const defBtn = row.querySelector('.scope-defined');
+        const reqBtn = row.querySelector('.scope-required');
+        if (scope === 'defined') {
+            if (defBtn) defBtn.classList.add('active-defined');
+            if (reqBtn) reqBtn.classList.remove('active-required');
+        } else {
+            if (defBtn) defBtn.classList.remove('active-defined');
+            if (reqBtn) reqBtn.classList.add('active-required');
+        }
+    }
+
+    markIncludeUnsaved(cardId);
+    if (typeof checkEditorDirtyStatus === 'function') {
+        checkEditorDirtyStatus();
+    }
+}
+window.toggleIncludeTreeVarScope = toggleIncludeTreeVarScope;
+
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.include-vars-dropdown-wrapper')) {
+        document.querySelectorAll('.include-vars-dropdown').forEach(d => {
+            d.style.display = 'none';
+        });
+    }
+});
+
+async function saveIncludeInline(cardId) {
+    const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
+    if (!treeCard) return false;
+
+    const filePath = treeCard.getAttribute('data-include-file');
+    const steps = getDirectNestedSteps(treeCard);
+    
+    const stepLines = [];
+    steps.forEach(step => {
+        const rawSpan = step.querySelector('.raw-nested-text');
+        const textSpan = step.querySelector('span:last-child');
+        let lineText = rawSpan ? rawSpan.innerText : (step.getAttribute('data-original') || (textSpan ? textSpan.innerText : step.innerText));
+        if (lineText) {
+            lineText = lineText.trim();
+            if (!lineText.startsWith('variables:') && !lineText.match(/^[a-zA-Z0-9_.-]+:\s*(defined|required)$/)) {
+                if (lineText.startsWith('-')) lineText = lineText.substring(1).trim();
+                if (lineText) stepLines.push(lineText);
+            }
+        }
+    });
+
+    let content = 'steps:\n';
+    stepLines.forEach(lineText => {
+        content += `  - ${lineText}\n`;
+    });
+
+    const allVars = new Set();
+    const varRegex = /\$\{([a-zA-Z0-9_.-]+)(?::[^}]*)?\}/g;
+    stepLines.forEach(line => {
+        let match;
+        while ((match = varRegex.exec(line)) !== null) {
+            if (match[1]) allVars.add(match[1]);
+        }
+    });
+    if (treeCard._varScopes) {
+        Object.keys(treeCard._varScopes).forEach(v => allVars.add(v));
+    }
+    const varRows = treeCard.querySelectorAll('.include-var-row');
+    varRows.forEach(row => {
+        const v = row.getAttribute('data-var');
+        if (v) allVars.add(v);
+    });
+
+    if (allVars.size > 0) {
+        content += '\nvariables:\n';
+        allVars.forEach(v => {
+            let scope = 'required';
+            if (treeCard._varScopes && treeCard._varScopes[v]) {
+                scope = treeCard._varScopes[v];
+            } else {
+                const selector = CSS && CSS.escape ? CSS.escape(v) : v;
+                const defBtn = treeCard.querySelector(`.include-var-row[data-var="${selector}"] .scope-defined.active-defined`);
+                if (defBtn) scope = 'defined';
+            }
+            content += `  ${v}: ${scope}\n`;
+        });
+    }
+
+    if (filePath) {
+        try {
+            const res = await fetch('/api/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `file=${encodeURIComponent(filePath)}&content=${encodeURIComponent(content)}`
+            });
+            const data = await res.json();
+            if (data.status === 'SUCCESS' || data.success) {
+                showToast(`💾 Saved included file ${filePath}`, "success");
+                loadFiles();
+
+                const warningBanner = treeCard.querySelector('.include-warning-banner');
+                if (warningBanner) {
+                    warningBanner.remove();
+                }
+
+                const cleanFilePath = filePath.replace(/^['"]|['"]$/g, '').trim();
+                const cleanActiveFile = (window.activeEditingFile || '').replace(/^['"]|['"]$/g, '').trim();
+                if (cleanActiveFile && (cleanActiveFile === cleanFilePath || cleanActiveFile.endsWith(cleanFilePath))) {
+                    if (!window.fragmentVarScopes) window.fragmentVarScopes = {};
+                    allVars.forEach(v => {
+                        const scope = (treeCard._varScopes && treeCard._varScopes[v]) ? treeCard._varScopes[v] : (treeCard.querySelector(`.include-var-row[data-var="${CSS.escape ? CSS.escape(v) : v}"] .scope-defined.active-defined`) ? 'defined' : 'required');
+                        window.fragmentVarScopes[v] = scope;
+                    });
+                    if (typeof updateFragmentVariablesList === 'function') updateFragmentVariablesList();
+                }
+            } else {
+                showToast(`Error saving include file ${filePath}: ${data.error || "Unknown error"}`, "error");
+            }
+        } catch (err) {
+            showToast(`Error saving include file: ${err.message}`, "error");
+        }
+    }
+
+    treeCard.removeAttribute('data-editing');
+
+    const badge = document.getElementById(`unsavedBadge_${cardId}`);
+    const btnEdit = document.getElementById(`btnEditInclude_${cardId}`);
+    const btnAdd = document.getElementById(`btnAddIncludeStep_${cardId}`);
+    const btnSave = document.getElementById(`btnSaveInclude_${cardId}`);
+    const btnDiscard = document.getElementById(`btnDiscardInclude_${cardId}`);
+
+    steps.forEach(step => {
+        step.setAttribute('contenteditable', 'false');
+        const rawSpan = step.querySelector('.raw-nested-text');
+        const textSpan = step.querySelector('span:last-child');
+        const text = rawSpan ? rawSpan.innerText : (step.getAttribute('data-original') || (textSpan ? textSpan.innerText : step.innerText));
+        step.setAttribute('data-original', text);
+    });
+
+    if (steps.length === 0) {
+        const stepsContainer = document.getElementById(`includeInnerSteps_${cardId}`) || treeCard.querySelector('[id^="includeInnerSteps_"]');
+        if (stepsContainer) {
+            const safeCardId = CSS && CSS.escape ? CSS.escape(cardId) : cardId;
+            stepsContainer.innerHTML = `
+                <div class="empty-steps-placeholder" data-card-id="${safeCardId}" onclick="addNestedStep(this.getAttribute('data-card-id'))">
+                    <span class="material-symbols-outlined" style="font-size: 20px; color: var(--accent, #2563eb);">add_circle</span>
+                    <span>No steps defined in this include. Click here to add a step.</span>
+                </div>`;
+        }
+    }
+
+    delete treeCard._initialStepsSnapshot;
+
+    formatIncludeTreeCardTokens(treeCard);
+
+    treeCard.classList.remove('has-unsaved-changes');
+    if (badge) badge.style.display = 'none';
+    if (btnEdit) btnEdit.style.display = 'inline-flex';
+    if (btnAdd) btnAdd.style.display = 'none';
+    if (btnSave) btnSave.style.display = 'none';
+    if (btnDiscard) btnDiscard.style.display = 'none';
+    return true;
+}
+window.saveIncludeInline = saveIncludeInline;
+
+function discardIncludeInline(cardId) {
+    const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
+    if (!treeCard) return;
+
+    treeCard.removeAttribute('data-editing');
+
+    const badge = document.getElementById(`unsavedBadge_${cardId}`);
+    const btnEdit = document.getElementById(`btnEditInclude_${cardId}`);
+    const btnAdd = document.getElementById(`btnAddIncludeStep_${cardId}`);
+    const btnSave = document.getElementById(`btnSaveInclude_${cardId}`);
+    const btnDiscard = document.getElementById(`btnDiscardInclude_${cardId}`);
+
+    const stepsContainer = document.getElementById(`includeInnerSteps_${cardId}`) || treeCard.querySelector('[id^="includeInnerSteps_"]');
+    const snapshot = treeCard._initialStepsSnapshot;
+
+    if (stepsContainer && Array.isArray(snapshot)) {
+        stepsContainer.innerHTML = '';
+        if (snapshot.length === 0) {
+            const safeCardId = CSS && CSS.escape ? CSS.escape(cardId) : cardId;
+            stepsContainer.innerHTML = `
+                <div class="empty-steps-placeholder" data-card-id="${safeCardId}" onclick="addNestedStep(this.getAttribute('data-card-id'))">
+                    <span class="material-symbols-outlined" style="font-size: 20px; color: var(--accent, #2563eb);">add_circle</span>
+                    <span>No steps defined in this include. Click here to add a step.</span>
+                </div>`;
+        } else {
+            snapshot.forEach(origText => {
+                const stepDiv = document.createElement('div');
+                stepDiv.className = 'nested-editable-step';
+                stepDiv.setAttribute('contenteditable', 'false');
+                stepDiv.setAttribute('data-original', origText);
+                stepDiv.setAttribute('data-card-id', cardId);
+                stepDiv.setAttribute('onfocus', 'handleNestedFocus(this, event)');
+                stepDiv.setAttribute('onblur', `handleNestedBlur(this, '${cardId}')`);
+                stepDiv.setAttribute('onkeydown', `handleNestedKeyDown(event, '${cardId}')`);
+                stepDiv.setAttribute('oninput', `markIncludeUnsaved('${cardId}')`);
+
+                const safeText = origText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                stepDiv.innerHTML = `<span class="sub-line-num">-</span><span>${safeText}</span>`;
+                stepsContainer.appendChild(stepDiv);
+            });
+        }
+        delete treeCard._initialStepsSnapshot;
+    } else {
+        const steps = getDirectNestedSteps(treeCard);
+        steps.forEach(step => {
+            step.setAttribute('contenteditable', 'false');
+            const orig = step.getAttribute('data-original');
+            if (orig !== null && orig !== undefined) {
+                const rawSpan = step.querySelector('.raw-nested-text');
+                const textSpan = step.querySelector('span:last-child');
+                if (rawSpan) rawSpan.innerText = orig;
+                else if (textSpan) textSpan.innerText = orig;
+                else step.innerText = orig;
+            }
+        });
+    }
+
+    formatIncludeTreeCardTokens(treeCard);
+    updateAllLineNumbers();
+
+    treeCard.classList.remove('has-unsaved-changes');
+    if (badge) badge.style.display = 'none';
+    if (btnEdit) btnEdit.style.display = 'inline-flex';
+    if (btnAdd) btnAdd.style.display = 'none';
+    if (btnSave) btnSave.style.display = 'none';
+    if (btnDiscard) btnDiscard.style.display = 'none';
+}
+window.discardIncludeInline = discardIncludeInline;
+
+// Track Caret Offset Position
+document.addEventListener('selectionchange', () => {
+    const activeEl = document.activeElement;
+    if (activeEl && (activeEl.classList.contains('step-content') || activeEl.classList.contains('raw-nested-text'))) {
+        lastCaretOffset = getCaretOffset(activeEl);
+        window.lastCaretOffset = lastCaretOffset;
+        const statLine = document.getElementById('statLine');
+        const statCol = document.getElementById('statCol');
+        if (statLine) statLine.innerText = activeLineNum;
+        if (statCol) statCol.innerText = lastCaretOffset + 1;
+    }
+});
+
+function insertVariableFromInput(varName) {
+    if (!varName) return;
+    const activeEl = document.activeElement;
+    let nestedStep = (activeEl && activeEl.closest('.nested-editable-step')) ? activeEl.closest('.nested-editable-step') : activeNestedStep;
+    if (!nestedStep && document.querySelector('.include-tree-card[data-editing="true"]')) {
+        const editingCard = document.querySelector('.include-tree-card[data-editing="true"]');
+        const steps = getDirectNestedSteps(editingCard);
+        if (steps.length > 0) {
+            nestedStep = steps[steps.length - 1];
+        }
+    }
+
+    if (nestedStep && document.contains(nestedStep)) {
+        const treeCard = nestedStep.closest('.include-tree-card');
+        let rawSpan = nestedStep.querySelector('.raw-nested-text');
+        if (!rawSpan) {
+            handleNestedFocus(nestedStep, null, 'end');
+            rawSpan = nestedStep.querySelector('.raw-nested-text') || nestedStep;
+        }
+        let raw = rawSpan.innerText || '';
+        const insertText = `\${${varName}}`;
+
+        if (lastCaretOffset >= 0 && lastCaretOffset <= raw.length) {
+            raw = raw.slice(0, lastCaretOffset) + insertText + raw.slice(lastCaretOffset);
+            lastCaretOffset += insertText.length;
+        } else {
+            raw += (raw.length > 0 && !raw.endsWith(' ') ? ' ' : '') + insertText;
+            lastCaretOffset = raw.length;
+        }
+
+        if (rawSpan !== nestedStep) {
+            rawSpan.innerText = raw;
+        } else {
+            nestedStep.innerText = raw;
+        }
+
+        if (treeCard) {
+            const safeCardId = treeCard.getAttribute('data-card-id') || treeCard.id.replace('includeTreeCard_', '').replace('includeTreeCard', '');
+            markIncludeUnsaved(safeCardId);
+            updateIncludeVarsDropdown(safeCardId);
+        }
+        if (rawSpan && typeof rawSpan.focus === 'function') {
+            rawSpan.focus();
+            setCaretOffset(rawSpan, lastCaretOffset);
+        }
+        return;
+    }
+
+    const activeRow = document.querySelector(`.step-row[data-line="${activeLineNum}"]`);
+    if (activeRow) {
+        const content = activeRow.querySelector('.step-content');
+        if (content) {
+            let raw = content.getAttribute('data-raw') || content.innerText;
+            const insertText = `\${${varName}}`;
+            if (lastCaretOffset >= 0 && lastCaretOffset <= raw.length) {
+                raw = raw.slice(0, lastCaretOffset) + insertText + raw.slice(lastCaretOffset);
+                lastCaretOffset += insertText.length;
+            } else {
+                raw += ` ${insertText}`;
+                lastCaretOffset = raw.length;
+            }
+            content.setAttribute('data-raw', raw);
+            content.innerText = raw;
+            formatStepToTokens(activeLineNum);
+            content.focus();
+            setCaretOffset(content, lastCaretOffset);
+            if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+        }
+    }
+}
+window.insertVariableFromInput = insertVariableFromInput;
+
+
+function insertSnippetWithCaret(templateText, caretOffset = -1) {
+    const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw')
+        || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
+
+    if (isRaw) {
+        const rawTextarea = document.getElementById('rawYamlTextarea');
+        if (rawTextarea) {
+            const start = rawTextarea.selectionStart != null ? rawTextarea.selectionStart : rawTextarea.value.length;
+            const end = rawTextarea.selectionEnd != null ? rawTextarea.selectionEnd : rawTextarea.value.length;
+            const val = rawTextarea.value;
+            rawTextarea.value = val.substring(0, start) + templateText + val.substring(end);
+            const targetPos = (caretOffset >= 0) ? (start + caretOffset) : (start + templateText.length);
+            rawTextarea.setSelectionRange(targetPos, targetPos);
+            rawTextarea.focus();
+            const hiddenInput = document.getElementById('editorContent');
+            if (hiddenInput) {
+                hiddenInput.value = rawTextarea.value;
+            }
+            checkEditorDirtyStatus();
+            if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+        }
+        return;
+    }
+
+    const activeEl = document.activeElement;
+    const nestedStep = (activeEl && activeEl.closest('.nested-editable-step')) ? activeEl.closest('.nested-editable-step') : activeNestedStep;
+
+    if (nestedStep && document.contains(nestedStep)) {
+        const rawSpan = nestedStep.querySelector('.raw-nested-text') || nestedStep.querySelector('span:last-child') || nestedStep;
+        let text = rawSpan.innerText || '';
+        text += (text.length > 0 ? ' ' : '') + templateText;
+        if (rawSpan !== nestedStep) rawSpan.innerText = text;
+        else nestedStep.innerText = text;
+        const card = nestedStep.closest('.include-tree-card');
+        if (card) {
+            formatIncludeTreeCardTokens(card);
+            const cardId = card.getAttribute('data-card-id') || card.id.replace('includeTreeCard_', '').replace('includeTreeCard', '');
+            markIncludeUnsaved(cardId);
+        }
+        compilePlaybookToYaml();
+        checkEditorDirtyStatus();
+        if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+        return;
+    }
+
+    let activeRow = document.querySelector(`.step-row[data-line="${activeLineNum}"]`);
+    if (!activeRow) {
+        activeRow = document.querySelector(`.step-row[data-line="1"]`) || document.querySelector('.step-row');
+    }
+    if (!activeRow) {
+        activeRow = addStepToContainer('stepsList');
+        if (activeRow) {
+            activeLineNum = parseInt(activeRow.getAttribute('data-line'), 10) || 1;
+        }
+    }
+    if (!activeRow) return;
+
+    const content = activeRow.querySelector('.step-content');
+    if (!content) return;
+
+    let raw = content.getAttribute('data-raw');
+    if (raw === null || raw === undefined) raw = content.innerText || '';
+
+    if (lastCaretOffset >= 0 && lastCaretOffset <= raw.length) {
+        const needsSpace = (lastCaretOffset > 0 && !/\s$/.test(raw.slice(0, lastCaretOffset)) && templateText.startsWith('('));
+        const prefix = needsSpace ? ' ' : '';
+        raw = raw.slice(0, lastCaretOffset) + prefix + templateText + raw.slice(lastCaretOffset);
+        if (caretOffset >= 0) {
+            lastCaretOffset += prefix.length + caretOffset;
+        } else {
+            lastCaretOffset += prefix.length + templateText.length;
+        }
+    } else {
+        const needsSpace = (raw.length > 0 && !/\s$/.test(raw) && templateText.startsWith('('));
+        raw += (needsSpace ? ' ' : (raw.length > 0 ? ' ' : '')) + templateText;
+        lastCaretOffset = raw.length;
+    }
+
+    content.setAttribute('data-raw', raw);
+    content.innerText = raw;
+    formatStepToTokens(activeLineNum || activeRow.getAttribute('data-line'));
+    content.focus();
+    setCaretOffset(content, lastCaretOffset);
+    compilePlaybookToYaml();
+    checkEditorDirtyStatus();
+    if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+    if (typeof compilePlaybookToYaml === 'function') compilePlaybookToYaml();
+    if (typeof checkEditorDirtyStatus === 'function') checkEditorDirtyStatus();
+}
+window.insertSnippetWithCaret = insertSnippetWithCaret;
+
+function insertSubstepRow(initialText = '') {
+    const activeEl = document.activeElement;
+    let targetRow = null;
+    if (activeEl && activeEl.closest('.step-row')) {
+        targetRow = activeEl.closest('.step-row');
+    } else if (activeLineNum) {
+        targetRow = document.querySelector(`.step-row[data-line="${activeLineNum}"]`);
+    }
+    if (!targetRow) {
+        targetRow = document.querySelector('.step-row:last-child') || document.querySelector('.step-row');
+    }
+    if (!targetRow) {
+        targetRow = addStepToContainer('stepsList');
+    }
+    if (!targetRow) return null;
+
+    const contentEl = targetRow.querySelector('.step-content');
+    const rawText = contentEl ? (contentEl.getAttribute('data-raw') || contentEl.innerText || '').trim() : '';
+
+    // If the currently active row is completely empty, turn it into a substep directly
+    if (rawText === '' && !targetRow.classList.contains('step-row-substep')) {
+        targetRow.classList.add('step-row-substep');
+        targetRow.setAttribute('data-manual-substep', 'true');
+        if (initialText) {
+            contentEl.setAttribute('data-raw', initialText);
+            contentEl.innerText = initialText;
+            formatStepToTokens(targetRow);
+        }
+        updateAllLineNumbers();
+        refreshAllSubstepToggleBars();
+        contentEl.focus();
+        setCaretOffset(contentEl, (initialText || '').length);
+        if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+        if (typeof compilePlaybookToYaml === 'function') compilePlaybookToYaml();
+        if (typeof checkEditorDirtyStatus === 'function') checkEditorDirtyStatus();
+        return targetRow;
+    }
+
+    // Otherwise, create a new row immediately below targetRow and mark as substep
+    currentLineCount++;
+    const newRow = document.createElement('div');
+    newRow.className = 'step-row step-row-substep';
+    newRow.setAttribute('data-line', currentLineCount);
+    newRow.setAttribute('data-manual-substep', 'true');
+
+    const safeInitial = (initialText || '').replace(/"/g, '&quot;');
+    newRow.innerHTML = `
+        <span class="step-number">${currentLineCount}</span>
+        <div class="step-content" contenteditable="true" spellcheck="false" data-raw="${safeInitial}" onkeydown="handleKeyDown(event, ${currentLineCount})" onfocus="handleStepFocus(${currentLineCount})" onblur="handleStepBlur(${currentLineCount})" oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);">${safeInitial}</div>
+        <div class="step-actions">
+            <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${currentLineCount}, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+            <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${currentLineCount}, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+            <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${currentLineCount})"><span class="material-symbols-outlined">delete</span></button>
+        </div>
+    `;
+
+    const lineId = targetRow.getAttribute('data-line');
+    const treeCard = document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`);
+    let insertAfterRef = (treeCard && treeCard.parentElement === targetRow.parentElement) ? treeCard : targetRow;
+    while (insertAfterRef.nextElementSibling && insertAfterRef.nextElementSibling.classList.contains('review-suggestion-card')) {
+        insertAfterRef = insertAfterRef.nextElementSibling;
+    }
+    insertAfterRef.after(newRow);
+
+    reindexSteps();
+    updateAllLineNumbers();
+    refreshAllSubstepToggleBars();
+
+    const newContent = newRow.querySelector('.step-content');
+    if (newContent) {
+        newContent.focus();
+        setCaretOffset(newContent, 0);
+        activeLineNum = parseInt(newRow.getAttribute('data-line'), 10) || currentLineCount;
+        window.activeLineNum = activeLineNum;
+    }
+
+    if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+    if (typeof compilePlaybookToYaml === 'function') compilePlaybookToYaml();
+    if (typeof checkEditorDirtyStatus === 'function') checkEditorDirtyStatus();
+
+    return newRow;
+}
+window.insertSubstepRow = insertSubstepRow;
+
+function insertIncludePill(filePath) {
+    const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw')
+        || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
+
+    if (isRaw) {
+        const rawTextarea = document.getElementById('rawYamlTextarea');
+        if (rawTextarea) {
+            const start = rawTextarea.selectionStart != null ? rawTextarea.selectionStart : rawTextarea.value.length;
+            const end = rawTextarea.selectionEnd != null ? rawTextarea.selectionEnd : rawTextarea.value.length;
+            const val = rawTextarea.value;
+            const textToInsert = `_include: ${filePath}`;
+            rawTextarea.value = val.substring(0, start) + textToInsert + val.substring(end);
+            const targetPos = start + textToInsert.length;
+            rawTextarea.setSelectionRange(targetPos, targetPos);
+            rawTextarea.focus();
+            const hiddenInput = document.getElementById('editorContent');
+            if (hiddenInput) {
+                hiddenInput.value = rawTextarea.value;
+            }
+            checkEditorDirtyStatus();
+            if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+        }
+        return;
+    }
+
+    const activeEl = document.activeElement;
+    const nestedStep = (activeEl && activeEl.closest('.nested-editable-step')) ? activeEl.closest('.nested-editable-step') : activeNestedStep;
+
+    if (nestedStep && document.contains(nestedStep)) {
+        const treeCard = nestedStep.closest('.include-tree-card');
+        const rawSpan = nestedStep.querySelector('.raw-nested-text') || nestedStep.querySelector('span:last-child') || nestedStep;
+        let text = rawSpan.innerText ? rawSpan.innerText.trim() : '';
+
+        if (!text) {
+            text = `_include: ${filePath}`;
+        } else {
+            text += ` _include: ${filePath}`;
+        }
+        if (rawSpan !== nestedStep) rawSpan.innerText = text;
+        else nestedStep.innerText = text;
+
+        if (treeCard) {
+            formatIncludeTreeCardTokens(treeCard);
+            const cardId = treeCard.getAttribute('data-card-id') || treeCard.id.replace('includeTreeCard_', '').replace('includeTreeCard', '');
+            markIncludeUnsaved(cardId);
+        }
+        compilePlaybookToYaml();
+        checkEditorDirtyStatus();
+        if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+        return;
+    }
+
+    let targetLine = activeLineNum || 1;
+    let targetRow = document.querySelector(`.step-row[data-line="${targetLine}"]`) || document.querySelector('.step-row');
+
+    if (!targetRow) {
+        targetRow = addStepToContainer('stepsList');
+        if (targetRow) {
+            targetLine = parseInt(targetRow.getAttribute('data-line'), 10) || 1;
+        }
+    }
+
+    if (targetRow) {
+        const content = targetRow.querySelector('.step-content');
+        const currentRaw = content ? (content.getAttribute('data-raw') || content.innerText || '').trim() : '';
+
+        if (!currentRaw) {
+            if (content) {
+                content.setAttribute('data-raw', `_include: ${filePath}`);
+                formatStepToTokens(targetLine);
+                content.focus();
+            }
+        } else {
+            const newRow = insertStepBelow(targetLine, `_include: ${filePath}`);
+            if (newRow) {
+                const reindexedLine = parseInt(newRow.getAttribute('data-line'), 10) || (targetLine + 1);
+                formatStepToTokens(reindexedLine);
+                const newContent = newRow.querySelector('.step-content');
+                if (newContent) newContent.focus();
+            }
+        }
+        compilePlaybookToYaml();
+        if (typeof pushEditorSnapshot === 'function') {
+            pushEditorSnapshot(false);
+        }
+    }
+}
+window.insertIncludePill = insertIncludePill;
+
+function filterFragmentPaletteCards(query) {
+    const term = (query || '').toLowerCase().trim();
+    const container = document.getElementById('fragmentCardsContainer') || document.querySelector('.sidebar-palette-right');
+    if (!container) return;
+
+    const cards = container.querySelectorAll('.include-card');
+    let visibleCount = 0;
+
+    cards.forEach(card => {
+        const file = (card.getAttribute('data-file') || card.innerText || '').toLowerCase();
+        if (!term || file.includes(term)) {
+            card.style.display = '';
+            visibleCount++;
+        } else {
+            card.style.display = 'none';
+        }
+    });
+
+    // Handle Tree Folder visibility during search filtering
+    const treeFolders = Array.from(container.querySelectorAll('.tree-folder-group')).reverse();
+    treeFolders.forEach(folder => {
+        const hasVisibleChild = Array.from(folder.querySelectorAll('.include-card, .tree-folder-group')).some(child => {
+            return child.style.display !== 'none';
+        });
+        if (hasVisibleChild) {
+            folder.style.display = '';
+            if (term.length > 0) {
+                folder.classList.remove('is-collapsed');
+                const arrowEl = folder.querySelector('.tree-folder-arrow');
+                const iconEl = folder.querySelector('.tree-folder-icon');
+                if (arrowEl) arrowEl.textContent = 'keyboard_arrow_down';
+                if (iconEl) iconEl.textContent = 'folder_open';
+            }
+        } else {
+            folder.style.display = 'none';
+        }
+    });
+
+    const noMatchMsg = document.getElementById('noMatchingFragmentsMsg');
+    if (noMatchMsg) {
+        if (cards.length > 0 && visibleCount === 0 && term.length > 0) {
+            noMatchMsg.style.display = 'block';
+        } else {
+            noMatchMsg.style.display = 'none';
+        }
+    }
+}
+window.filterFragmentPaletteCards = filterFragmentPaletteCards;
+
+function addMatrixRowInlineEmpty() {
+    const tbody = document.querySelector('#transposedGrid tbody');
+    if (!tbody) return;
+    const colCount = document.querySelectorAll('#transposedGrid thead th').length - 2;
+
+    const existingVarInputs = tbody.querySelectorAll('.var-key-input');
+    let maxIndex = 0;
+    existingVarInputs.forEach(inp => {
+        const m = (inp.value || '').match(/newVariable_(\d+)/);
+        if (m) {
+            maxIndex = Math.max(maxIndex, parseInt(m[1], 10));
+        }
+    });
+    const newVarName = `newVariable_${maxIndex + 1}`;
+    
+    const tr = document.createElement('tr');
+    let html = `
+        <td>
+            <div class="var-key-cell">
+                <input type="text" class="var-key-input" value="${newVarName}">
+                <button class="btn-insert-var-chip" data-key="${newVarName}" onclick="insertVariableFromInput(this.getAttribute('data-key') || this.previousElementSibling.value)">+ Insert</button>
+                <button type="button" class="btn-remove-var" title="Remove Variable" onclick="removeMatrixRow(this)">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">close</span>
+                </button>
+            </div>
+        </td>
+    `;
+    for (let i = 0; i < colCount; i++) {
+        html += `<td><input type="text" class="cell-val" value="" placeholder="empty" oninput="compilePlaybookToYaml()"></td>`;
+    }
+    html += `<td></td>`;
+    tr.innerHTML = html;
+
+    const matrixTagsRow = tbody.querySelector('#matrixTagsRow');
+    if (matrixTagsRow) {
+        matrixTagsRow.after(tr);
+    } else {
+        tbody.prepend(tr);
+    }
+    compilePlaybookToYaml();
+}
+window.addMatrixRowInlineEmpty = addMatrixRowInlineEmpty;
+
+function addMatrixColumnInline() {
+    const headerRow = document.getElementById('matrixHeaderRow');
+    if (!headerRow) return;
+    const colCount = headerRow.cells.length - 1;
+    
+    const th = document.createElement('th');
+    th.id = `iterHeader_${colCount}`;
+    th.className = 'iter-col-header';
+    th.innerHTML = `
+        <div class="iter-header-content">
+            <span>Iteration ${colCount}</span>
+            <button type="button" class="btn-remove-iteration" title="Remove Data Set" onclick="removeMatrixColumn(this)">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+    `;
+    
+    headerRow.insertBefore(th, headerRow.cells[headerRow.cells.length - 1]);
+
+    const tbodyRows = document.querySelectorAll('#transposedGrid tbody tr');
+    tbodyRows.forEach((tr) => {
+        const td = document.createElement('td');
+        if (tr.id === 'matrixTagsRow') {
+            td.className = 'dataset-tags-cell';
+            const newColIdx = colCount - 1;
+            td.setAttribute('data-col', String(newColIdx));
+            td.innerHTML = `
+                <div class="dataset-tags-wrapper" style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-height: 26px;">
+                    <button type="button" class="btn-add-dataset-tag" onclick="openAddDatasetTagModal(${newColIdx})" title="Add tag to dataset" style="background: transparent; border: 1px dashed var(--border); border-radius: 10px; color: var(--text-secondary); cursor: pointer; padding: 1px 6px; font-size: 10.5px; display: inline-flex; align-items: center; gap: 2px;">
+                        <span class="material-symbols-outlined" style="font-size: 12px;">add</span>
+                        <span>Tag</span>
+                    </button>
+                </div>
+            `;
+        } else {
+            const varRows = document.querySelectorAll('#transposedGrid tbody tr:not(#matrixTagsRow)');
+            const isFirstVarRow = (tr === varRows[0]);
+            if (isFirstVarRow) {
+                td.innerHTML = `<input type="text" class="cell-val" value="custom_${colCount}" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();">`;
+            } else {
+                td.innerHTML = '<input type="text" class="cell-val" value="" placeholder="empty" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();">';
+            }
+        }
+        tr.insertBefore(td, tr.cells[tr.cells.length - 1]);
+    });
+    compilePlaybookToYaml();
+    if (typeof debouncedPushSnapshot === 'function') {
+        debouncedPushSnapshot();
+    }
+    if (typeof checkEditorDirtyStatus === 'function') {
+        checkEditorDirtyStatus();
+    }
+}
+window.addMatrixColumnInline = addMatrixColumnInline;
+
+function showRemoveConfirmationModal(title, message, onConfirm, onCancel) {
+    let modal = document.getElementById('removeConfirmationModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.id = 'removeConfirmationModal';
+        modal.style.display = 'none';
+        modal.innerHTML = `
+            <div class="modal-card">
+                <div class="modal-header" id="removeConfirmationModalTitle">${title || 'Remove Item'}</div>
+                <div class="modal-body">
+                    <p id="removeConfirmationModalMessage" style="margin: 0; font-size: 0.95rem; color: var(--text-color, inherit);">
+                        ${message || 'Are you sure you want to remove this item?'}
+                    </p>
+                </div>
+                <div class="modal-footer" style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button type="button" class="btn-editor" id="removeConfirmationCancelBtn">Cancel</button>
+                    <button type="button" class="btn-danger" id="removeConfirmationConfirmBtn">Remove</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    } else {
+        const titleEl = modal.querySelector('#removeConfirmationModalTitle');
+        if (titleEl) {
+            titleEl.textContent = title || 'Remove Item';
+        }
+        const msgEl = modal.querySelector('#removeConfirmationModalMessage');
+        if (msgEl) {
+            msgEl.textContent = message || 'Are you sure you want to remove this item?';
+        }
+    }
+
+    const cancelBtn = modal.querySelector('#removeConfirmationCancelBtn');
+    const confirmBtn = modal.querySelector('#removeConfirmationConfirmBtn');
+
+    if (cancelBtn) {
+        cancelBtn.onclick = function() {
+            modal.style.display = 'none';
+            if (typeof onCancel === 'function') onCancel();
+        };
+    }
+
+    if (confirmBtn) {
+        confirmBtn.onclick = function() {
+            modal.style.display = 'none';
+            if (typeof onConfirm === 'function') onConfirm();
+        };
+    }
+
+    modal.style.display = 'flex';
+}
+window.showRemoveConfirmationModal = showRemoveConfirmationModal;
+
+function removeMatrixColumn(btn) {
+    if (!btn) return;
+    const th = btn.closest('th');
+    if (!th) return;
+    const headerRow = th.parentElement;
+    if (!headerRow) return;
+
+    const colIndex = th.cellIndex;
+    if (colIndex <= 0 || colIndex >= headerRow.cells.length - 1) {
+        return;
+    }
+
+    const iterSpan = th.querySelector('.iter-header-content span') || th.querySelector('span');
+    const iterName = iterSpan ? iterSpan.innerText.trim() : `Iteration ${colIndex}`;
+
+    showRemoveConfirmationModal(
+        'Remove Data Set',
+        `Are you sure you want to remove ${iterName}?`,
+        function() {
+            headerRow.deleteCell(colIndex);
+
+            const tbodyRows = document.querySelectorAll('#transposedGrid tbody tr');
+            tbodyRows.forEach(tr => {
+                if (tr.cells.length > colIndex) {
+                    tr.deleteCell(colIndex);
+                }
+            });
+
+            // Re-index dataset tags cells
+            const tagCells = document.querySelectorAll('#matrixTagsRow td.dataset-tags-cell');
+            tagCells.forEach((cell, idx) => {
+                cell.setAttribute('data-col', String(idx));
+                const addBtn = cell.querySelector('.btn-add-dataset-tag');
+                if (addBtn) {
+                    addBtn.setAttribute('onclick', `openAddDatasetTagModal(${idx})`);
+                }
+            });
+
+            compilePlaybookToYaml();
+            if (typeof debouncedPushSnapshot === 'function') {
+                debouncedPushSnapshot();
+            }
+            if (typeof checkEditorDirtyStatus === 'function') {
+                checkEditorDirtyStatus();
+            }
+        }
+    );
+}
+window.removeMatrixColumn = removeMatrixColumn;
+
+function removeMatrixRow(btn) {
+    if (!btn) return;
+    const tr = btn.closest('tr');
+    if (!tr) return;
+
+    const keyInput = tr.querySelector('.var-key-input');
+    const varName = keyInput ? keyInput.value.trim() : 'variable';
+
+    showRemoveConfirmationModal(
+        'Remove Variable',
+        `Are you sure you want to remove variable '${varName}'?`,
+        function() {
+            tr.remove();
+
+            compilePlaybookToYaml();
+            if (typeof debouncedPushSnapshot === 'function') {
+                debouncedPushSnapshot();
+            }
+            if (typeof checkEditorDirtyStatus === 'function') {
+                checkEditorDirtyStatus();
+            }
+        }
+    );
+}
+window.removeMatrixRow = removeMatrixRow;
+
+/* Variable Prompt & Matrix Management */
+if (!window.promptedVariablesSet) {
+    window.promptedVariablesSet = new Set();
+}
+
+function clearAllVariablePrompts() {
+    window.promptedVariablesSet = new Set();
+    const container = document.getElementById('varPromptContainer');
+    if (container) {
+        container.innerHTML = '';
+    }
+}
+window.clearAllVariablePrompts = clearAllVariablePrompts;
+
+function addMatrixVariableRow(varName, defaultValue = '') {
+    if (!varName) return;
+    const tbody = document.querySelector('#transposedGrid tbody');
+    if (!tbody) return;
+
+    // Check if key already exists
+    const existingInputs = tbody.querySelectorAll('.var-key-input');
+    for (const input of existingInputs) {
+        if (input.value.trim() === varName) {
+            return; // Already present in matrix
+        }
+    }
+
+    const colCount = document.querySelectorAll('#transposedGrid thead th').length - 2;
+    const tr = document.createElement('tr');
+    let html = `
+        <td>
+            <div class="var-key-cell">
+                <input type="text" class="var-key-input" value="${varName}" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();">
+                <button class="btn-insert-var-chip" onclick="insertVariableFromInput('${varName}')">+ Insert</button>
+                <button type="button" class="btn-remove-var" title="Remove Variable" onclick="removeMatrixRow(this)">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">close</span>
+                </button>
+            </div>
+        </td>
+    `;
+    for (let i = 0; i < colCount; i++) {
+        const val = (i === 0 && defaultValue) ? defaultValue : '';
+        html += `<td><input type="text" class="cell-val" value="${val}" placeholder="empty" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();"></td>`;
+    }
+    html += `<td></td>`;
+    tr.innerHTML = html;
+    tbody.appendChild(tr);
+
+    compilePlaybookToYaml();
+    if (typeof debouncedPushSnapshot === 'function') {
+        debouncedPushSnapshot();
+    }
+    if (typeof checkEditorDirtyStatus === 'function') {
+        checkEditorDirtyStatus();
+    }
+}
+window.addMatrixVariableRow = addMatrixVariableRow;
+
+function checkNewVariablePrompts() {
+    if (!window.activeEditingFile) return;
+    const isFragmentFile = window.activeEditingFile.toLowerCase().endsWith('.steps');
+    if (isFragmentFile) return;
+
+    const foundVars = new Set();
+    const regex = /\$\{([a-zA-Z0-9_.-]+)(?::[^}]*)?\}/g;
+
+    const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw') 
+        || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
+
+    if (isRaw) {
+        const rawTextarea = document.getElementById('rawYamlTextarea');
+        if (rawTextarea && rawTextarea.value) {
+            let match;
+            regex.lastIndex = 0;
+            while ((match = regex.exec(rawTextarea.value)) !== null) {
+                if (match[1]) foundVars.add(match[1]);
+            }
+        }
+    } else {
+        const containers = ['beforeStepsList', 'stepsList', 'afterStepsList'];
+        containers.forEach(id => {
+            const container = document.getElementById(id);
+            if (container) {
+                const rows = container.querySelectorAll('.step-row');
+                rows.forEach(row => {
+                    const contentEl = row.querySelector('.step-content');
+                    if (contentEl) {
+                        const text = contentEl.getAttribute('data-raw') || contentEl.innerText.trim();
+                        let match;
+                        regex.lastIndex = 0;
+                        while ((match = regex.exec(text)) !== null) {
+                            if (match[1]) foundVars.add(match[1]);
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    const existingMatrixKeys = new Set();
+    const tbody = document.querySelector('#transposedGrid tbody');
+    if (tbody) {
+        const keyInputs = tbody.querySelectorAll('.var-key-input');
+        keyInputs.forEach(input => {
+            const val = input.value.trim();
+            if (val) existingMatrixKeys.add(val);
+        });
+    }
+
+    foundVars.forEach(varName => {
+        if (!existingMatrixKeys.has(varName) && !window.promptedVariablesSet.has(varName)) {
+            window.promptedVariablesSet.add(varName);
+            showNewVariablePrompt(varName);
+        }
+    });
+}
+window.checkNewVariablePrompts = checkNewVariablePrompts;
+
+function showNewVariablePrompt(varName) {
+    if (!varName) return;
+    let container = document.getElementById('varPromptContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'varPromptContainer';
+        container.className = 'var-prompt-container';
+        const panel = document.getElementById('editorPanel') || document.body;
+        panel.appendChild(container);
+    }
+
+    const existingCard = container.querySelector(`.var-prompt-card[data-var="${varName}"]`);
+    if (existingCard) return;
+
+    const card = document.createElement('div');
+    card.className = 'var-prompt-card';
+    card.setAttribute('data-var', varName);
+    card.innerHTML = `
+        <div class="var-prompt-header">
+            <span class="material-symbols-outlined">help</span>
+            <span>Add Variable to Test Data?</span>
+        </div>
+        <div class="var-prompt-body">
+            Variable <code class="var-name-chip">\${${varName}}</code> was referenced in test steps. Would you like to define it in the Test Data Matrix?
+        </div>
+        <div class="var-prompt-actions">
+            <button type="button" class="btn-prompt-cancel" onclick="dismissVariablePrompt(this, '${varName}')">No, Skip</button>
+            <button type="button" class="btn-prompt-confirm" onclick="acceptVariablePrompt(this, '${varName}')">
+                <span class="material-symbols-outlined" style="font-size: 14px;">add</span> Yes, Add to Test Data
+            </button>
+        </div>
+    `;
+    container.appendChild(card);
+}
+window.showNewVariablePrompt = showNewVariablePrompt;
+
+function acceptVariablePrompt(btnOrElement, varName) {
+    addMatrixVariableRow(varName);
+    closeVariablePromptCard(btnOrElement);
+}
+window.acceptVariablePrompt = acceptVariablePrompt;
+
+function dismissVariablePrompt(btnOrElement, varName) {
+    closeVariablePromptCard(btnOrElement);
+}
+window.dismissVariablePrompt = dismissVariablePrompt;
+
+function closeVariablePromptCard(btnOrElement) {
+    if (!btnOrElement) return;
+    const card = btnOrElement.closest ? btnOrElement.closest('.var-prompt-card') : null;
+    if (card) {
+        card.classList.add('closing');
+        setTimeout(() => {
+            if (card && card.parentElement) {
+                card.remove();
+            }
+        }, 200);
+    }
+}
+window.closeVariablePromptCard = closeVariablePromptCard;
+
+/* Undo/Redo & Unsaved State Management */
+let undoStack = [];
+let redoStack = [];
+let initialEditorContent = '';
+let undoDebounceTimer = null;
+let isRestoringSnapshot = false;
+
+function normalizeYamlForDirtyComparison(yamlStr) {
+    if (yamlStr == null) return '';
+    return yamlStr.replace(/\r\n/g, '\n').trim();
+}
+
+function isEditorDirty() {
+    if (!activeEditingFile) return false;
+    const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw') 
+        || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
+    if (isRaw) {
+        const rawTextarea = document.getElementById('rawYamlTextarea');
+        if (rawTextarea && initialEditorContent != null) {
+            return normalizeYamlForDirtyComparison(rawTextarea.value) !== normalizeYamlForDirtyComparison(initialEditorContent);
+        }
+        return false;
+    }
+    const currentYaml = compilePlaybookToYaml();
+    if (initialEditorContent && normalizeYamlForDirtyComparison(currentYaml) !== normalizeYamlForDirtyComparison(initialEditorContent)) {
+        return true;
+    }
+    const unsavedIncludes = document.querySelectorAll('.include-tree-card.has-unsaved-changes');
+    return unsavedIncludes.length > 0;
+}
+window.isEditorDirty = isEditorDirty;
+
+function checkEditorDirtyStatus() {
+    const dirty = isEditorDirty();
+    const badge = document.getElementById('editorUnsavedBadge');
+    if (badge) {
+        badge.style.display = dirty ? 'inline-flex' : 'none';
+    }
+}
+window.checkEditorDirtyStatus = checkEditorDirtyStatus;
+
+function updateUndoRedoUI() {
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+    if (undoBtn) undoBtn.disabled = (undoStack.length <= 1);
+    if (redoBtn) redoBtn.disabled = (redoStack.length === 0);
+}
+window.updateUndoRedoUI = updateUndoRedoUI;
+
+function isSnapshotContentEqual(snapA, snapB) {
+    if (!snapA || !snapB) return false;
+    if (snapA.mode !== snapB.mode) return false;
+    if (snapA.mode === 'raw') {
+        return (snapA.rawYaml || '') === (snapB.rawYaml || '');
+    }
+    return snapA.hasProperties === snapB.hasProperties &&
+           snapA.hasBefore === snapB.hasBefore &&
+           snapA.hasAfter === snapB.hasAfter &&
+           JSON.stringify(snapA.propertyRows || []) === JSON.stringify(snapB.propertyRows || []) &&
+           JSON.stringify(snapA.beforeSteps || []) === JSON.stringify(snapB.beforeSteps || []) &&
+           JSON.stringify(snapA.steps || []) === JSON.stringify(snapB.steps || []) &&
+           JSON.stringify(snapA.afterSteps || []) === JSON.stringify(snapB.afterSteps || []) &&
+           JSON.stringify(snapA.matrixData || []) === JSON.stringify(snapB.matrixData || []) &&
+           JSON.stringify(snapA.matrixHeaders || []) === JSON.stringify(snapB.matrixHeaders || []);
+}
+window.isSnapshotContentEqual = isSnapshotContentEqual;
+
+function getEditorSnapshot() {
+    const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw') 
+        || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
+
+    const rawTextarea = document.getElementById('rawYamlTextarea');
+    const rawYaml = rawTextarea ? rawTextarea.value : '';
+    const rawSelectionStart = rawTextarea ? rawTextarea.selectionStart : 0;
+    const rawSelectionEnd = rawTextarea ? rawTextarea.selectionEnd : 0;
+
+    const captureBlock = (containerId) => {
+        const container = document.getElementById(containerId);
+        if (!container) return [];
+        const rows = container.querySelectorAll(':scope > .step-row');
+        const list = [];
+        rows.forEach(row => {
+            const content = row.querySelector('.step-content');
+            if (content) {
+                list.push({
+                    text: content.getAttribute('data-raw') || content.innerText.trim(),
+                    isSubstep: row.classList.contains('step-row-substep'),
+                    isManualSubstep: row.getAttribute('data-manual-substep') === 'true',
+                    isComment: row.classList.contains('step-row-comment')
+                });
+            }
+        });
+        return list;
+    };
+
+    let activeLine = null;
+    let activeCaret = 0;
+    const activeEl = document.activeElement;
+    if (activeEl && activeEl.classList.contains('step-content')) {
+        const row = activeEl.closest('.step-row');
+        if (row) {
+            activeLine = row.getAttribute('data-line');
+            if (typeof getCaretOffset === 'function') {
+                activeCaret = getCaretOffset(activeEl);
+            }
+        }
+    } else if (window.activeLineNum) {
+        activeLine = String(window.activeLineNum);
+        activeCaret = window.lastCaretOffset || 0;
+    }
+
+    const propertiesPanel = document.getElementById('playbookPropertiesPanel');
+    const hasProperties = propertiesPanel && propertiesPanel.style.display !== 'none';
+    const propertyRows = [];
+    const propRows = document.querySelectorAll('#propertiesTableBody tr.property-row');
+    propRows.forEach(tr => {
+        const keyInput = tr.querySelector('.property-key-input');
+        const valInput = tr.querySelector('.property-val-input');
+        if (keyInput && valInput) {
+            propertyRows.push({ key: keyInput.value, value: valInput.value });
+        }
+    });
+
+    const beforePanel = document.getElementById('beforeCodePanel');
+    const hasBefore = beforePanel && beforePanel.style.display !== 'none';
+    const afterPanel = document.getElementById('afterCodePanel');
+    const hasAfter = afterPanel && afterPanel.style.display !== 'none';
+
+    const matrixTable = document.querySelector('#transposedGrid');
+    const matrixData = [];
+    const matrixHeaders = [];
+    if (matrixTable) {
+        const headerCells = matrixTable.querySelectorAll('thead th');
+        for (let i = 1; i < headerCells.length - 1; i++) {
+            const span = headerCells[i].querySelector('.iter-header-content span') || headerCells[i].querySelector('span');
+            matrixHeaders.push(span ? span.innerText.trim() : `Iteration ${i}`);
+        }
+        const rows = matrixTable.querySelectorAll('tbody tr');
+        rows.forEach(row => {
+            const keyInput = row.querySelector('.var-key-input');
+            const key = keyInput ? keyInput.value : '';
+            const cellValInputs = row.querySelectorAll('.cell-val');
+            const vals = Array.from(cellValInputs).map(i => i.value);
+            matrixData.push({ key, vals });
+        });
+    }
+
+    return {
+        mode: isRaw ? 'raw' : 'visual',
+        rawYaml,
+        rawSelectionStart,
+        rawSelectionEnd,
+        hasProperties,
+        propertyRows,
+        hasBefore,
+        hasAfter,
+        beforeSteps: captureBlock('beforeStepsList'),
+        steps: captureBlock('stepsList'),
+        afterSteps: captureBlock('afterStepsList'),
+        matrixData,
+        matrixHeaders,
+        activeLine,
+        activeCaret
+    };
+}
+window.getEditorSnapshot = getEditorSnapshot;
+
+function pushEditorSnapshot(isInitial = false) {
+    if (isRestoringSnapshot) return;
+    const currentSnap = getEditorSnapshot();
+    if (!isInitial && undoStack.length > 0) {
+        const lastSnap = undoStack[undoStack.length - 1];
+        if (isSnapshotContentEqual(lastSnap, currentSnap)) {
+            return;
+        }
+    }
+    if (isInitial) {
+        undoStack = [currentSnap];
+        redoStack = [];
+    } else {
+        undoStack.push(currentSnap);
+        redoStack = [];
+        if (undoStack.length > 50) undoStack.shift();
+    }
+    updateUndoRedoUI();
+    checkEditorDirtyStatus();
+}
+window.pushEditorSnapshot = pushEditorSnapshot;
+
+function debouncedPushSnapshot() {
+    if (isRestoringSnapshot) return;
+    clearTimeout(undoDebounceTimer);
+    undoDebounceTimer = setTimeout(() => {
+        pushEditorSnapshot(false);
+    }, 350);
+}
+window.debouncedPushSnapshot = debouncedPushSnapshot;
+
+function restoreEditorSnapshot(snap) {
+    if (!snap) return;
+    isRestoringSnapshot = true;
+    try {
+        const visualContainer = document.getElementById('visualEditorContainer');
+        const visualMain = document.getElementById('visualEditorMain');
+        const rawPanel = document.getElementById('rawEditorPanel');
+        const editorPanel = document.getElementById('editorPanel');
+        const btnVisual = document.getElementById('btnModeVisual');
+        const btnRaw = document.getElementById('btnModeRaw');
+
+        if (snap.mode === 'raw') {
+            if (rawPanel && visualContainer) {
+                visualContainer.style.display = 'none';
+                rawPanel.style.display = 'flex';
+            }
+            currentEditorMode = 'raw';
+            window.currentEditorMode = 'raw';
+            if (editorPanel) {
+                editorPanel.setAttribute('data-mode', 'raw');
+            }
+            if (btnVisual) {
+                btnVisual.style.background = 'transparent';
+                btnVisual.style.color = 'var(--text-secondary)';
+                btnVisual.style.fontWeight = 'normal';
+                btnVisual.style.opacity = btnVisual.disabled ? '0.5' : '0.8';
+            }
+            if (btnRaw) {
+                btnRaw.style.background = 'var(--accent)';
+                btnRaw.style.color = '#fff';
+                btnRaw.style.fontWeight = '600';
+                btnRaw.style.opacity = '1';
+            }
+            const rawTextarea = document.getElementById('rawYamlTextarea');
+            if (rawTextarea) {
+                rawTextarea.value = snap.rawYaml || '';
+                const hiddenInput = document.getElementById('editorContent');
+                if (hiddenInput) {
+                    hiddenInput.value = snap.rawYaml || '';
+                }
+                if (typeof snap.rawSelectionStart === 'number' && typeof snap.rawSelectionEnd === 'number') {
+                    rawTextarea.setSelectionRange(snap.rawSelectionStart, snap.rawSelectionEnd);
+                    rawTextarea.focus();
+                }
+            }
+        } else {
+            if (rawPanel && visualContainer) {
+                rawPanel.style.display = 'none';
+                visualContainer.style.display = 'flex';
+            }
+            currentEditorMode = 'visual';
+            window.currentEditorMode = 'visual';
+            if (editorPanel) {
+                editorPanel.setAttribute('data-mode', 'visual');
+            }
+            if (btnVisual) {
+                btnVisual.style.background = 'var(--accent)';
+                btnVisual.style.color = '#fff';
+                btnVisual.style.fontWeight = '600';
+                btnVisual.style.opacity = '1';
+            }
+            if (btnRaw) {
+                btnRaw.style.background = 'transparent';
+                btnRaw.style.color = 'var(--text-secondary)';
+                btnRaw.style.fontWeight = 'normal';
+                btnRaw.style.opacity = '0.8';
+            }
+
+            const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
+                || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
+
+            const propertiesPanel = document.getElementById('playbookPropertiesPanel');
+            const addPropertiesBtn = document.getElementById('addPropertiesBtnContainer');
+            const tbody = document.getElementById('propertiesTableBody');
+            if (propertiesPanel && addPropertiesBtn) {
+                propertiesPanel.style.display = (snap.hasProperties && !isFragmentFile) ? 'flex' : 'none';
+                addPropertiesBtn.style.display = (isFragmentFile || snap.hasProperties) ? 'none' : 'block';
+                if (tbody && Array.isArray(snap.propertyRows)) {
+                    tbody.innerHTML = '';
+                    snap.propertyRows.forEach(p => {
+                        addPropertyRow(p.key, p.value);
+                    });
+                }
+            }
+
+            const beforePanel = document.getElementById('beforeCodePanel');
+            const addBeforeBtn = document.getElementById('addBeforeBtnContainer');
+            if (beforePanel && addBeforeBtn) {
+                beforePanel.style.display = snap.hasBefore ? 'flex' : 'none';
+                addBeforeBtn.style.display = (isFragmentFile || snap.hasBefore) ? 'none' : 'block';
+            }
+
+            const afterPanel = document.getElementById('afterCodePanel');
+            const addAfterBtn = document.getElementById('addAfterBtnContainer');
+            if (afterPanel && addAfterBtn) {
+                afterPanel.style.display = snap.hasAfter ? 'flex' : 'none';
+                addAfterBtn.style.display = (isFragmentFile || snap.hasAfter) ? 'none' : 'block';
+            }
+
+            const restoreBlock = (containerId, stepArray) => {
+                const container = document.getElementById(containerId);
+                if (!container) return;
+                const items = stepArray || [];
+                const existingRows = Array.from(container.querySelectorAll(':scope > .step-row'));
+
+                if (existingRows.length === items.length) {
+                    existingRows.forEach((row, idx) => {
+                        const stepItem = items[idx];
+                        const stepText = (typeof stepItem === 'object' && stepItem !== null) ? (stepItem.text || '') : (stepItem || '');
+                        const isSubstep = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isSubstep) : false;
+                        const isManualSubstep = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isManualSubstep) : false;
+                        const isComment = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isComment) : false;
+
+                        row.classList.toggle('step-row-substep', isSubstep);
+                        row.classList.toggle('step-row-comment', isComment);
+                        if (isManualSubstep) {
+                            row.setAttribute('data-manual-substep', 'true');
+                        } else {
+                            row.removeAttribute('data-manual-substep');
+                        }
+                        const content = row.querySelector('.step-content');
+                        if (content) {
+                            content.setAttribute('data-raw', stepText);
+                            content.innerText = stepText;
+                        }
+                    });
+                } else {
+                    container.innerHTML = '';
+                    items.forEach((stepItem) => {
+                        const stepText = (typeof stepItem === 'object' && stepItem !== null) ? (stepItem.text || '') : (stepItem || '');
+                        const isSubstep = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isSubstep) : false;
+                        const isManualSubstep = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isManualSubstep) : false;
+                        const isComment = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isComment) : false;
+
+                        const row = document.createElement('div');
+                        row.className = 'step-row' + (isSubstep ? ' step-row-substep' : '') + (isComment ? ' step-row-comment' : '');
+                        if (isManualSubstep) {
+                            row.setAttribute('data-manual-substep', 'true');
+                        }
+                        const safeText = (typeof escapeHtml === 'function') ? escapeHtml(stepText) : stepText.replace(/"/g, '&quot;');
+                        row.innerHTML = `
+                            <span class="step-number">1</span>
+                            <div class="step-content" contenteditable="true" spellcheck="false"
+                                 data-raw="${safeText}"
+                                 onkeydown="handleKeyDown(event, this)"
+                                 onfocus="handleStepFocus(this)"
+                                 onblur="handleStepBlur(this)"
+                                 oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);">${safeText}</div>
+                            <div class="step-actions">
+                                <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(this, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                                <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(this, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                                <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(this)"><span class="material-symbols-outlined">delete</span></button>
+                            </div>
+                        `;
+                        container.appendChild(row);
+                    });
+                }
+            };
+
+            restoreBlock('beforeStepsList', snap.beforeSteps);
+            restoreBlock('stepsList', snap.steps);
+            restoreBlock('afterStepsList', snap.afterSteps);
+
+            const matrixHeaderRow = document.getElementById('matrixHeaderRow');
+            if (matrixHeaderRow && snap.matrixHeaders) {
+                while (matrixHeaderRow.cells.length > 2) {
+                    matrixHeaderRow.deleteCell(1);
+                }
+                snap.matrixHeaders.forEach((headerTitle, idx) => {
+                    const th = document.createElement('th');
+                    th.id = `iterHeader_${idx + 1}`;
+                    th.className = 'iter-col-header';
+                    th.innerHTML = `
+                        <div class="iter-header-content">
+                            <span>${headerTitle}</span>
+                            <button type="button" class="btn-remove-iteration" title="Remove Data Set" onclick="removeMatrixColumn(this)">
+                                <span class="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+                    `;
+                    matrixHeaderRow.insertBefore(th, matrixHeaderRow.cells[matrixHeaderRow.cells.length - 1]);
+                });
+            }
+
+            const matrixTbody = document.querySelector('#transposedGrid tbody');
+            if (matrixTbody && snap.matrixData) {
+                matrixTbody.innerHTML = '';
+                snap.matrixData.forEach(row => {
+                    const tr = document.createElement('tr');
+                    let html = `
+                        <td>
+                            <div class="var-key-cell">
+                                <input type="text" class="var-key-input" value="${row.key}" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();">
+                                <button class="btn-insert-var-chip" onclick="insertVariableFromInput(this.previousElementSibling.value)">+ Insert</button>
+                                <button type="button" class="btn-remove-var" title="Remove Variable" onclick="removeMatrixRow(this)">
+                                    <span class="material-symbols-outlined" style="font-size: 14px;">close</span>
+                                </button>
+                            </div>
+                        </td>
+                    `;
+                    (row.vals || []).forEach(val => {
+                        html += `<td><input type="text" class="cell-val" value="${val}" placeholder="empty" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();"></td>`;
+                    });
+                    html += `<td></td>`;
+                    tr.innerHTML = html;
+                    matrixTbody.appendChild(tr);
+                });
+            }
+
+            reindexSteps();
+            refreshAllSubstepToggleBars();
+            updateFragmentVariablesList();
+            compilePlaybookToYaml();
+
+            const allRows = document.querySelectorAll('#beforeStepsList .step-row, #stepsList .step-row, #afterStepsList .step-row');
+            allRows.forEach(row => {
+                formatStepToTokens(row);
+            });
+
+            if (snap.activeLine) {
+                const row = document.querySelector(`.step-row[data-line="${snap.activeLine}"]`);
+                if (row) {
+                    const content = row.querySelector('.step-content');
+                    if (content) {
+                        content.focus();
+                        if (typeof setCaretOffset === 'function' && typeof snap.activeCaret === 'number') {
+                            setCaretOffset(content, snap.activeCaret);
+                        }
+                    }
+                }
+            }
+        }
+    } finally {
+        isRestoringSnapshot = false;
+        checkEditorDirtyStatus();
+        updateUndoRedoUI();
+    }
+}
+window.restoreEditorSnapshot = restoreEditorSnapshot;
+
+function editorUndo() {
+    if (undoDebounceTimer) {
+        clearTimeout(undoDebounceTimer);
+        undoDebounceTimer = null;
+        const currentSnap = getEditorSnapshot();
+        const topSnap = undoStack.length > 0 ? undoStack[undoStack.length - 1] : null;
+        if (!isSnapshotContentEqual(topSnap, currentSnap)) {
+            undoStack.push(currentSnap);
+            redoStack = [];
+            if (undoStack.length > 50) undoStack.shift();
+        }
+    }
+
+    if (undoStack.length <= 1) return;
+    const currentPopped = undoStack.pop();
+    redoStack.push(currentPopped);
+    const prevSnap = undoStack[undoStack.length - 1];
+    restoreEditorSnapshot(prevSnap);
+}
+window.editorUndo = editorUndo;
+
+function editorRedo() {
+    if (undoDebounceTimer) {
+        clearTimeout(undoDebounceTimer);
+        undoDebounceTimer = null;
+    }
+    if (redoStack.length === 0) return;
+    const nextSnap = redoStack.pop();
+    undoStack.push(nextSnap);
+    restoreEditorSnapshot(nextSnap);
+}
+window.editorRedo = editorRedo;
+
+// Global Keyboard Shortcuts
+document.addEventListener('keydown', function(evt) {
+    if (!window.activeEditingFile || !document.getElementById('visualEditorMain')) return;
+
+    const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+    const modKey = isMac ? evt.metaKey : evt.ctrlKey;
+
+    // Save: Ctrl+S / Cmd+S
+    if (modKey && evt.key.toLowerCase() === 's') {
+        evt.preventDefault();
+        saveYamlFile();
+        return;
+    }
+
+    // Close: Escape
+    if (evt.key === 'Escape') {
+        const visibleModals = Array.from(document.querySelectorAll('.modal-overlay, .image-lightbox-modal'))
+            .filter(function(m) {
+                return m.offsetWidth > 0 || m.offsetHeight > 0 || window.getComputedStyle(m).display !== 'none';
+            });
+        if (visibleModals.length > 0) {
+            evt.preventDefault();
+            evt.stopImmediatePropagation();
+            visibleModals.forEach(function(m) {
+                m.style.display = 'none';
+                if (m.classList.contains('active')) {
+                    m.classList.remove('active');
+                }
+            });
+            const nameInput = document.getElementById('newTestName');
+            if (nameInput) {
+                nameInput.value = '';
+            }
+            return;
+        }
+
+        evt.preventDefault();
+        closeEditor();
+        return;
+    }
+
+    // Undo: Ctrl+Z / Cmd+Z (without Shift)
+    if (modKey && evt.key.toLowerCase() === 'z' && !evt.shiftKey) {
+        evt.preventDefault();
+        editorUndo();
+        return;
+    }
+
+    // Redo: Ctrl+Y / Cmd+Y or Cmd+Shift+Z
+    if ((modKey && evt.key.toLowerCase() === 'y') || (modKey && evt.shiftKey && evt.key.toLowerCase() === 'z')) {
+        evt.preventDefault();
+        editorRedo();
+        return;
+    }
+});
+
+// Plain Text & Multi-Line Step Paste Handler
+document.addEventListener('paste', function(evt) {
+    if (!window.activeEditingFile || !document.getElementById('visualEditorMain')) return;
+
+    // Do not intercept paste in the Raw YAML code editor panel (preserve original formatting and newlines)
+    const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw')
+        || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
+    if (isRaw || (evt.target && (evt.target.id === 'rawYamlTextarea' || (evt.target.closest && evt.target.closest('#rawEditorPanel'))))) {
+        return;
+    }
+
+    const stepContent = evt.target.closest ? evt.target.closest('.step-content') : null;
+    if (stepContent) {
+        evt.preventDefault();
+
+        const rawPastedText = (evt.clipboardData || window.clipboardData).getData('text/plain') || '';
+        if (!rawPastedText) return;
+
+        const normalizedText = rawPastedText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        const lines = normalizedText.split('\n');
+
+        const stepRow = stepContent.closest('.step-row');
+        if (!stepRow) return;
+        const lineNum = parseInt(stepRow.getAttribute('data-line'), 10);
+
+        const currentOffset = getCaretOffset(stepContent);
+        const existingRaw = stepContent.getAttribute('data-raw') || stepContent.innerText || '';
+
+        const headText = existingRaw.substring(0, currentOffset);
+        const tailText = existingRaw.substring(currentOffset);
+
+        if (lines.length === 1) {
+            const combined = headText + lines[0] + tailText;
+            stepContent.setAttribute('data-raw', combined);
+            stepContent.innerText = combined;
+
+            formatStepToTokens(lineNum);
+
+            const newCaretOffset = headText.length + lines[0].length;
+            setCaretOffset(stepContent, newCaretOffset);
+            lastCaretOffset = newCaretOffset;
+        } else {
+            const firstLineText = headText + lines[0];
+            stepContent.setAttribute('data-raw', firstLineText);
+            stepContent.innerText = firstLineText;
+            formatStepToTokens(lineNum);
+
+            let currentRefRow = stepRow;
+            let lastInsertedContent = null;
+
+            for (let i = 1; i < lines.length; i++) {
+                let lineText = lines[i];
+                if (i === lines.length - 1) {
+                    lineText = lineText + tailText;
+                }
+
+                const insertedRow = insertStepBelow(currentRefRow, lineText);
+                if (insertedRow) {
+                    currentRefRow = insertedRow;
+                    formatStepToTokens(insertedRow);
+                    lastInsertedContent = insertedRow.querySelector('.step-content');
+                }
+            }
+
+            if (lastInsertedContent) {
+                lastInsertedContent.focus();
+                const targetCaret = lines[lines.length - 1].length;
+                setCaretOffset(lastInsertedContent, targetCaret);
+                lastCaretOffset = targetCaret;
+            }
+        }
+
+        compilePlaybookToYaml();
+        if (typeof debouncedPushSnapshot === 'function') {
+            debouncedPushSnapshot();
+        }
+    } else if (evt.target.getAttribute && (evt.target.getAttribute('contenteditable') === 'true' || evt.target.tagName === 'INPUT')) {
+        evt.preventDefault();
+        const plainText = (evt.clipboardData || window.clipboardData).getData('text/plain') || '';
+        const singleLineText = plainText.replace(/[\r\n]+/g, ' ');
+
+        if (document.queryCommandSupported && document.queryCommandSupported('insertText')) {
+            document.execCommand('insertText', false, singleLineText);
+        } else {
+            const sel = window.getSelection();
+            if (sel && sel.rangeCount) {
+                const range = sel.getRangeAt(0);
+                range.deleteContents();
+                range.insertNode(document.createTextNode(singleLineText));
+            }
+        }
+
+        compilePlaybookToYaml();
+        if (typeof debouncedPushSnapshot === 'function') {
+            debouncedPushSnapshot();
+        }
+    }
+});
+
+/* File Validation Integration */
+function runValidateFile() {
+    const reviewBtn = document.getElementById('reviewStepsBtn');
+    if (reviewBtn) {
+        reviewBtn.innerHTML = '<span class="material-symbols-outlined spinner">sync</span> Validating...';
+        reviewBtn.disabled = true;
+    }
+
+    // Gather the current compiled YAML content
+    const hiddenContent = document.getElementById('editorContent');
+    const rawTextarea = document.getElementById('rawYamlTextarea');
+    const editorPanel = document.getElementById('editorPanel');
+    const isRawMode = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw')
+        || (editorPanel && editorPanel.getAttribute('data-mode') === 'raw');
+    let content = '';
+    if (isRawMode && rawTextarea) {
+        content = rawTextarea.value;
+    } else {
+        if (typeof compilePlaybookToYaml === 'function') {
+            content = compilePlaybookToYaml();
+        }
+        if (!content && hiddenContent) {
+            content = hiddenContent.value;
+        }
+    }
+
+    const file = window.activeEditingFile || '';
+
+    fetch('/api/editor/validate-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file: file, content: content })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (reviewBtn) {
+            reviewBtn.innerHTML = '<span class="material-symbols-outlined">verified</span> Validate File';
+            reviewBtn.disabled = false;
+        }
+
+        const issues = data.issues || [];
+        showValidationResultDialog(issues);
+    })
+    .catch(err => {
+        console.error('Failed to run file validation:', err);
+        if (reviewBtn) {
+            reviewBtn.innerHTML = '<span class="material-symbols-outlined">verified</span> Validate File';
+            reviewBtn.disabled = false;
+        }
+        showToast('⚠️ Validation request failed. Check the console for details.', 'error');
+    });
+}
+window.runValidateFile = runValidateFile;
+
+function showValidationResultDialog(issues) {
+    let container = document.getElementById('varPromptContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'varPromptContainer';
+        container.className = 'var-prompt-container';
+        const panel = document.getElementById('editorPanel') || document.body;
+        panel.appendChild(container);
+    }
+
+    // Filter out INFO severity issues
+    const filteredIssues = (issues || []).filter(i => i.severity !== 'INFO');
+    const errorCount = filteredIssues.filter(i => i.severity === 'ERROR').length;
+    const warningCount = filteredIssues.filter(i => i.severity === 'WARNING').length;
+
+    // Remove any existing validation prompt card first
+    const existingCard = container.querySelector('.var-prompt-card[data-type="validation-report"]');
+    if (existingCard) {
+        existingCard.remove();
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    const card = document.createElement('div');
+    card.className = 'var-prompt-card';
+    card.setAttribute('data-type', 'validation-report');
+
+    let headerIcon = 'verified';
+    let headerTitle = 'File Validation';
+    let borderColor = 'var(--success, #10b981)';
+
+    if (errorCount > 0) {
+        headerIcon = 'error';
+        headerTitle = `Validation Failed (${errorCount} Error${errorCount > 1 ? 's' : ''}${warningCount > 0 ? `, ${warningCount} Warning${warningCount > 1 ? 's' : ''}` : ''})`;
+        borderColor = 'var(--danger, #ef4444)';
+    } else if (warningCount > 0) {
+        headerIcon = 'warning';
+        headerTitle = `Validation Warnings (${warningCount} Warning${warningCount > 1 ? 's' : ''})`;
+        borderColor = '#f59e0b';
+    }
+
+    card.style.borderLeftColor = borderColor;
+
+    let bodyHtml = '';
+    if (filteredIssues.length === 0) {
+        bodyHtml = `
+            <div style="font-size: 12.5px; color: var(--text-primary, #0f172a); display: flex; align-items: center; gap: 6px;">
+                <span class="material-symbols-outlined" style="font-size: 18px; color: var(--success, #10b981);">check_circle</span>
+                <span>File is valid — no issues found.</span>
+            </div>
+        `;
+    } else {
+        const itemsHtml = filteredIssues.map(issue => {
+            const sev = (issue.severity || 'WARNING').toLowerCase();
+            let iconName = issue.severity === 'ERROR' ? 'error' : 'warning';
+            const contextTag = issue.context ? `<span class="validation-issue-context">${escapeHtml(issue.context)}</span>` : '';
+            const lineInfo = issue.line ? `<span class="validation-issue-line">Line ${issue.line}</span>` : '';
+
+            return `
+                <div class="validation-issue-item ${sev}">
+                    <div class="validation-issue-header">
+                        <span class="material-symbols-outlined issue-icon">${iconName}</span>
+                        <span class="validation-issue-badge ${sev}">${escapeHtml(issue.severity)}</span>
+                        ${lineInfo}
+                        ${contextTag}
+                    </div>
+                    <div class="validation-issue-msg">${escapeHtml(issue.message)}</div>
+                </div>
+            `;
+        }).join('');
+
+        bodyHtml = `<div class="validation-issue-list" style="max-height: 250px; overflow-y: auto;">${itemsHtml}</div>`;
+    }
+
+    card.innerHTML = `
+        <div class="var-prompt-header">
+            <span class="material-symbols-outlined" style="color: ${borderColor};">${headerIcon}</span>
+            <span>${headerTitle}</span>
+        </div>
+        <div class="var-prompt-body">
+            ${bodyHtml}
+        </div>
+        <div class="var-prompt-actions">
+            <button type="button" class="btn-prompt-confirm" onclick="closeValidationPromptCard(this)">OK</button>
+        </div>
+    `;
+
+    container.appendChild(card);
+}
+window.showValidationResultDialog = showValidationResultDialog;
+
+function closeValidationPromptCard(btnOrElement) {
+    if (typeof closeVariablePromptCard === 'function') {
+        closeVariablePromptCard(btnOrElement);
+    } else if (btnOrElement) {
+        const card = btnOrElement.closest('.var-prompt-card');
+        if (card) card.remove();
+    }
+}
+window.closeValidationPromptCard = closeValidationPromptCard;
+
+
+
+
+
+
+function dismissSuggestionCard(btn) {
+    const card = btn.closest('.review-suggestion-card');
+    if (card) {
+        card.remove();
+    }
+}
+window.dismissSuggestionCard = dismissSuggestionCard;
+
+function applySuggestionRewrite(btnOrLine, newInstruction) {
+    let row = null;
+    let card = null;
+
+    if (btnOrLine && typeof btnOrLine === 'object' && btnOrLine.nodeType) {
+        card = btnOrLine.closest('.review-suggestion-card');
+        if (card) {
+            let prev = card.previousElementSibling;
+            while (prev && !prev.classList.contains('step-row')) {
+                prev = prev.previousElementSibling;
+            }
+            row = prev;
+        }
+        if (!newInstruction && btnOrLine.hasAttribute && btnOrLine.hasAttribute('data-rewrite')) {
+            newInstruction = btnOrLine.getAttribute('data-rewrite');
+        }
+    } else if (typeof btnOrLine === 'number' || typeof btnOrLine === 'string') {
+        row = document.querySelector(`.step-row[data-line="${btnOrLine}"]`);
+        if (row) {
+            let sib = row.nextElementSibling;
+            while (sib && !sib.classList.contains('step-row')) {
+                if (sib.classList.contains('review-suggestion-card')) {
+                    card = sib;
+                    break;
+                }
+                sib = sib.nextElementSibling;
+            }
+        }
+    }
+
+    if (row && newInstruction != null) {
+        const contentEl = row.querySelector('.step-content');
+        if (contentEl) {
+            contentEl.setAttribute('data-raw', newInstruction);
+            contentEl.innerText = newInstruction;
+            if (typeof formatStepToTokens === 'function') {
+                formatStepToTokens(row);
+            }
+            if (typeof compilePlaybookToYaml === 'function') {
+                compilePlaybookToYaml();
+            }
+            if (typeof checkEditorDirtyStatus === 'function') {
+                checkEditorDirtyStatus();
+            }
+            if (typeof debouncedPushSnapshot === 'function') {
+                debouncedPushSnapshot();
+            }
+        }
+        if (card && card.classList.contains('review-suggestion-card')) {
+            card.remove();
+        }
+    }
+}
+window.applySuggestionRewrite = applySuggestionRewrite;
+
+function runAiReview() {
+    const aiBtn = document.getElementById('aiReviewBtn');
+    const editorFileNameEl = document.getElementById('editorFileName');
+    const file = (editorFileNameEl ? editorFileNameEl.getAttribute('data-file') : null) || window.activeEditingFile || '';
+
+    // Gather current YAML content
+    const hiddenContent = document.getElementById('editorContent');
+    const rawTextarea = document.getElementById('rawYamlTextarea');
+    const editorPanel = document.getElementById('editorPanel');
+    const isRawMode = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw')
+        || (editorPanel && editorPanel.getAttribute('data-mode') === 'raw');
+    let content = '';
+    if (isRawMode && rawTextarea) {
+        content = rawTextarea.value;
+    } else {
+        if (typeof compilePlaybookToYaml === 'function') {
+            content = compilePlaybookToYaml();
+        }
+        if (!content && hiddenContent) {
+            content = hiddenContent.value;
+        }
+    }
+
+    if (aiBtn) {
+        aiBtn.innerHTML = '<span class="material-symbols-outlined spinner">sync</span> Analyzing...';
+        aiBtn.disabled = true;
+    }
+
+    // Clean up existing suggestion cards
+    document.querySelectorAll('.review-suggestion-card').forEach(card => card.remove());
+
+    fetch('/api/editor/ai-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file: file, content: content })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (aiBtn) {
+            aiBtn.innerHTML = '<span class="material-symbols-outlined">auto_awesome</span> AI Review';
+            aiBtn.disabled = false;
+        }
+
+        const editorFileNameEl = document.getElementById('editorFileName');
+        const activeFileNow = (editorFileNameEl ? editorFileNameEl.getAttribute('data-file') : null) || window.activeEditingFile || '';
+        if (file && activeFileNow && file !== activeFileNow) {
+            console.debug('Discarding AI review findings for superseded file:', file, 'active file:', activeFileNow);
+            return;
+        }
+
+        // Clean up any existing unanchored / raw mode findings dialog from prior runs
+        document.querySelectorAll('.var-prompt-card[data-type="ai-review-report"]').forEach(card => card.remove());
+
+        if (data.status === 'SYNTAX_ERROR' || data.status === 'VALIDATION_ERROR') {
+            if (typeof showValidationResultDialog === 'function') {
+                showValidationResultDialog(data.issues || []);
+            }
+            if (typeof showToast === 'function') {
+                showToast(data.message || (data.status === 'SYNTAX_ERROR' ? '⚠️ Syntax errors found. Fix syntax before running AI Review.' : '⚠️ Validation errors found. Fix validation before running AI Review.'), 'warning');
+            }
+            return;
+        }
+
+        if (data.status === 'ERROR') {
+            if (typeof showToast === 'function') {
+                showToast(data.error || '⚠️ AI Review failed.', 'error');
+            }
+            return;
+        }
+
+        const findings = data.findings || [];
+        if (findings.length === 0) {
+            if (typeof showToast === 'function') {
+                showToast('✨ AI Review: No issues found — playbook steps look clear and complete.', 'success');
+            }
+            return;
+        }
+
+        const currentPanel = document.getElementById('editorPanel');
+        const currentIsRawMode = currentPanel && currentPanel.getAttribute('data-mode') === 'raw';
+
+        if (currentIsRawMode) {
+            showRawModeFindingsDialog(findings);
+        } else {
+            renderStepSuggestionCards(findings);
+            if (typeof showToast === 'function') {
+                showToast(`✨ AI Review: Found ${findings.length} actionable suggestion${findings.length > 1 ? 's' : ''}.`, 'info');
+            }
+        }
+    })
+    .catch(err => {
+        console.error('Failed to run AI review:', err);
+        if (aiBtn) {
+            aiBtn.innerHTML = '<span class="material-symbols-outlined">auto_awesome</span> AI Review';
+            aiBtn.disabled = false;
+        }
+
+        const editorFileNameEl = document.getElementById('editorFileName');
+        const activeFileNow = (editorFileNameEl ? editorFileNameEl.getAttribute('data-file') : null) || window.activeEditingFile || '';
+        if (file && activeFileNow && file !== activeFileNow) {
+            console.debug('Discarding AI review findings for superseded file:', file, 'active file:', activeFileNow);
+            return;
+        }
+
+        // Clean up any existing unanchored / raw mode findings dialog from prior runs
+        document.querySelectorAll('.var-prompt-card[data-type="ai-review-report"]').forEach(card => card.remove());
+        if (typeof showToast === 'function') {
+            showToast('⚠️ AI Review request failed. Check the console for details.', 'error');
+        }
+    });
+}
+window.runAiReview = runAiReview;
+
+function renderStepSuggestionCards(findings) {
+    if (!Array.isArray(findings)) return;
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    const unanchoredFindings = [];
+
+    findings.forEach(f => {
+        let targetRow = null;
+        const allRows = Array.from(document.querySelectorAll('#beforeStepsList .step-row:not(.step-row-comment), #stepsList .step-row:not(.step-row-comment), #afterStepsList .step-row:not(.step-row-comment)'));
+
+        // 1. Content matching with occurrence resolution
+        if (f.rawInstruction && f.rawInstruction.trim()) {
+            const rawTarget = f.rawInstruction.trim();
+            let matchingRows = allRows.filter(r => {
+                const c = r.querySelector('.step-content');
+                return c && ((c.getAttribute('data-raw') || '').trim() === rawTarget || (c.innerText || '').trim() === rawTarget);
+            });
+            // Fallback for composite milestone steps with nested sub-steps
+            if (matchingRows.length === 0 && rawTarget.includes('\n')) {
+                const parentLine = rawTarget.split('\n')[0].replace(/:$/, '').trim();
+                matchingRows = allRows.filter(r => {
+                    const c = r.querySelector('.step-content');
+                    const text = (c ? (c.getAttribute('data-raw') || c.innerText || '') : '').replace(/:$/, '').trim();
+                    return text === parentLine;
+                });
+            }
+            if (matchingRows.length === 1) {
+                targetRow = matchingRows[0];
+            } else if (matchingRows.length > 1) {
+                // If multiple identical steps exist, match the one closest to stepIndex
+                let bestMatch = matchingRows[0];
+                let minDiff = Infinity;
+                for (const r of matchingRows) {
+                    const rIdx = allRows.indexOf(r) + 1;
+                    const diff = Math.abs(rIdx - f.stepIndex);
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        bestMatch = r;
+                    }
+                }
+                targetRow = bestMatch;
+            }
+        }
+
+        // 2. Unanchored fallback: If rawInstruction is not present in the current caller DOM
+        // (e.g. findings belonging to an included fragment), route to unanchored dialog
+        // instead of blindly overwriting an unrelated step by stepIndex.
+        if (!targetRow) {
+            unanchoredFindings.push(f);
+            return;
+        }
+
+        // If targetRow is inside a collapsed sub-step group, auto-expand it so suggestions are immediately visible
+        if (targetRow.classList.contains('step-row-substep') || targetRow.style.display === 'none') {
+            let prev = targetRow.previousElementSibling;
+            while (prev && !prev.classList.contains('substeps-toggle-bar')) {
+                prev = prev.previousElementSibling;
+            }
+            if (prev && prev.classList.contains('collapsed')) {
+                toggleSubsteps(prev);
+            }
+        }
+
+        const sevClass = (f.severity || 'WARNING').toLowerCase();
+        const card = document.createElement('div');
+        card.className = `review-suggestion-card ${sevClass}`;
+
+        const categoryLabel = f.category ? f.category.replace(/_/g, ' ') : 'Advisory';
+
+        let rewriteHtml = '';
+        if (f.suggestedRewrite && f.suggestedRewrite.trim().length > 0) {
+            const safeRewrite = escapeHtml(f.suggestedRewrite);
+            rewriteHtml = `
+                <button type="button" class="btn-apply-suggestion"
+                        data-rewrite="${safeRewrite}"
+                        onclick="applySuggestionRewrite(this)"
+                        title="Replace step instruction with suggested rewrite: &quot;${safeRewrite}&quot;">
+                    Apply Rewrite
+                </button>
+            `;
+        }
+
+        card.innerHTML = `
+            <div class="suggestion-left">
+                <span class="material-symbols-outlined" style="font-size: 16px; color: var(--accent-purple, #a855f7);">auto_awesome</span>
+                <span class="suggestion-badge ${sevClass}">${escapeHtml(f.severity || 'WARNING')}</span>
+                <span style="font-weight: 600; font-size: 11.5px; opacity: 0.9;">${escapeHtml(categoryLabel)}:</span>
+                <span>${escapeHtml(f.message)}</span>
+            </div>
+            <div class="suggestion-actions">
+                ${rewriteHtml}
+                <button type="button" class="btn-dismiss-suggestion" onclick="dismissSuggestionCard(this)" title="Dismiss suggestion">✕</button>
+            </div>
+        `;
+
+        const lineId = targetRow.getAttribute('data-line');
+        const treeCard = lineId ? (document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`)) : null;
+        let insertAfterEl = (treeCard && treeCard.parentElement === targetRow.parentElement) ? treeCard : targetRow;
+        while (insertAfterEl.nextElementSibling && insertAfterEl.nextElementSibling.classList.contains('review-suggestion-card')) {
+            insertAfterEl = insertAfterEl.nextElementSibling;
+        }
+        insertAfterEl.parentNode.insertBefore(card, insertAfterEl.nextSibling);
+    });
+
+    if (unanchoredFindings.length > 0) {
+        showRawModeFindingsDialog(unanchoredFindings);
+    }
+}
+window.renderStepSuggestionCards = renderStepSuggestionCards;
+
+function showRawModeFindingsDialog(findings) {
+    let container = document.getElementById('varPromptContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'varPromptContainer';
+        container.className = 'var-prompt-container';
+        const panel = document.getElementById('editorPanel') || document.body;
+        panel.appendChild(container);
+    }
+
+    const existingCard = container.querySelector('.var-prompt-card[data-type="ai-review-report"]');
+    if (existingCard) {
+        existingCard.remove();
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    const card = document.createElement('div');
+    card.className = 'var-prompt-card';
+    card.setAttribute('data-type', 'ai-review-report');
+    card.style.borderLeftColor = 'var(--accent-purple, #a855f7)';
+
+    const editorFileNameEl = document.getElementById('editorFileName');
+    const activeFileNow = (editorFileNameEl ? editorFileNameEl.getAttribute('data-file') : null) || window.activeEditingFile || '';
+
+    const itemsHtml = (findings || []).map(f => {
+        const sev = (f.severity || 'WARNING').toLowerCase();
+        const lineInfo = f.lineNumber > 0 ? `<span class="validation-issue-line">Line ${f.lineNumber}</span>` : (f.stepIndex > 0 ? `<span class="validation-issue-line">Step #${f.stepIndex}</span>` : '');
+        const catInfo = f.category ? `<span class="validation-issue-context">${escapeHtml(f.category.replace(/_/g, ' '))}</span>` : '';
+        const isExternalFragment = f.sourceFile && f.sourceFile !== 'inline.yaml' && f.sourceFile !== activeFileNow;
+        const sourceInfo = isExternalFragment ? `<span class="validation-issue-context" style="background: rgba(168, 85, 247, 0.12); color: var(--accent-purple, #a855f7); font-weight: 500;">📄 ${escapeHtml(f.sourceFile)}</span>` : '';
+        const rewriteBlock = f.suggestedRewrite ? `<div style="margin-top: 4px; font-size: 11px; color: var(--accent-purple, #a855f7); background: rgba(168, 85, 247, 0.08); padding: 4px 8px; border-radius: 4px;">💡 <b>Suggested:</b> ${escapeHtml(f.suggestedRewrite)}${isExternalFragment ? ` <span style="opacity: 0.8;">(apply directly in ${escapeHtml(f.sourceFile)})</span>` : ''}</div>` : '';
+
+        return `
+            <div class="validation-issue-item ${sev}">
+                <div class="validation-issue-header">
+                    <span class="material-symbols-outlined issue-icon" style="color: var(--accent-purple, #a855f7);">auto_awesome</span>
+                    <span class="validation-issue-badge ${sev}">${escapeHtml(f.severity || 'WARNING')}</span>
+                    ${sourceInfo}
+                    ${lineInfo}
+                    ${catInfo}
+                </div>
+                <div class="validation-issue-msg">${escapeHtml(f.message)}</div>
+                ${rewriteBlock}
+            </div>
+        `;
+    }).join('');
+
+    card.innerHTML = `
+        <div class="var-prompt-header">
+            <span class="material-symbols-outlined" style="color: var(--accent-purple, #a855f7);">auto_awesome</span>
+            <span>AI Review Findings (${findings.length})</span>
+        </div>
+        <div class="var-prompt-body">
+            <div class="validation-issue-list" style="max-height: 280px; overflow-y: auto;">
+                ${itemsHtml}
+            </div>
+        </div>
+        <div class="var-prompt-actions">
+            <button type="button" class="btn-prompt-confirm" onclick="closeAiReviewPromptCard(this)">OK</button>
+        </div>
+    `;
+
+    container.appendChild(card);
+}
+window.showRawModeFindingsDialog = showRawModeFindingsDialog;
+
+function closeAiReviewPromptCard(btnOrElement) {
+    if (btnOrElement) {
+        const card = btnOrElement.closest('.var-prompt-card');
+        if (card) card.remove();
+    }
+}
+window.closeAiReviewPromptCard = closeAiReviewPromptCard;
+
+
+

@@ -1,0 +1,51 @@
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 48px; align-items: flex-start; background: var(--apoc-bg-surface); border: 1px solid var(--apoc-border); border-radius: 12px; padding: 40px;">
+    <!-- Media Presentation -->
+    <div style="background: var(--apoc-bg-elevated); border: 1px solid var(--apoc-border); border-radius: 8px; padding: 40px; display: flex; align-items: center; justify-content: center; position: relative; min-height: 420px;">
+        <svg viewBox="0 0 100 100" style="width: 260px; height: 260px; color: var(--apoc-gold); filter: drop-shadow(0 12px 24px rgba(0,0,0,0.6));">
+            ${product_svg_content}
+        </svg>
+        ${product_badge_html}
+    </div>
+
+    <!-- Product Details & Add to Bag -->
+    <div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; color: var(--apoc-gold);">${product_category_name}</span>
+            <span style="color: var(--apoc-text-muted);">&bull;</span>
+            <span style="font-size: 11px; color: var(--apoc-text-muted);">SKU: ${product_id}</span>
+        </div>
+
+        <h1 class="product-title" style="font-family: var(--apoc-font-serif); font-size: 32px; font-weight: 700; color: #FFFFFF; line-height: 1.2; margin-bottom: 12px;">
+            ${product_name}
+        </h1>
+
+        <div class="product-price" style="font-size: 24px; font-weight: 800; color: var(--apoc-gold); margin-bottom: 20px;">
+            ${product_price_html}
+        </div>
+
+        <p style="color: var(--apoc-text-secondary); font-size: 14px; line-height: 1.7; margin-bottom: 28px; border-bottom: 1px solid var(--apoc-border); padding-bottom: 20px;">
+            ${product_desc}
+        </p>
+
+        <!-- Dynamic Stock Badge with CLS Shift -->
+        <div style="margin-bottom: 20px; font-size: 12px; color: var(--apoc-success); display: flex; align-items: center; gap: 6px;">
+            <span>●</span> <span class="ps-txt ps-txt-in-stock"></span>
+        </div>
+
+        <!-- Add to Cart Form -->
+        <form action="api/cart/add" method="POST" id="apoc-pdp-add-form" onsubmit="event.preventDefault(); submitApocalypsePdpAdd(this);" style="display: flex; flex-direction: column; gap: 20px;">
+            <input type="hidden" name="productId" id="apoc-pdp-product-id" value="${product_id}">
+
+            <!-- Size Selector -->
+            ${product_sizes_html}
+
+            <!-- Add to Cart Button -->
+            <div style="display: flex; gap: 16px; align-items: center; max-width: 360px; margin-top: 10px;">
+                <button type="submit" class="apoc-btn-gold product-add-to-cart-btn" id="apoc-pdp-add-btn" data-interactive="true" style="flex: 1; padding: 14px 28px;">
+                    <span class="ps-txt ps-txt-add-to-bag"></span>
+                    <span class="hydration-indicator"></span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>

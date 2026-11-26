@@ -1,0 +1,116 @@
+<div id="checkout-form-container" class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
+    <h1 class="mb-8 font-serif text-3xl sm:text-4xl font-bold text-espresso">${lang_checkout}</h1>
+
+    <form hx-post="api/checkout/purchase" hx-target="#checkout-form-container" hx-swap="outerHTML show:window:top">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+            
+            <!-- Left Panel: Guest & Shipping Information -->
+            <div class="lg:col-span-7 space-y-8">
+                
+                <!-- Contact Details -->
+                <div class="p-6 bg-sand-50 rounded-2xl border border-sand-200">
+                    <h3 class="font-serif text-lg font-bold text-espresso mb-4">${lang_contactInfo}</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label for="firstName" class="block text-xs font-bold uppercase tracking-wider mb-2 text-ink">${lang_firstName}</label>
+                            <input type="text" id="firstName" name="firstName" required value="${input_firstName}" class="w-full px-4 py-3 rounded-lg border border-sand-200 bg-white text-xs outline-none focus:border-terracotta-500">
+                            <div class="mt-1 text-xs font-semibold text-danger" id="err-firstName">${err_firstName}</div>
+                        </div>
+                        <div>
+                            <label for="lastName" class="block text-xs font-bold uppercase tracking-wider mb-2 text-ink">${lang_lastName}</label>
+                            <input type="text" id="lastName" name="lastName" required value="${input_lastName}" class="w-full px-4 py-3 rounded-lg border border-sand-200 bg-white text-xs outline-none focus:border-terracotta-500">
+                            <div class="mt-1 text-xs font-semibold text-danger" id="err-lastName">${err_lastName}</div>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="email" class="block text-xs font-bold uppercase tracking-wider mb-2 text-ink">${lang_emailAddress}</label>
+                        <input type="email" id="email" name="email" required value="${input_email}" class="w-full px-4 py-3 rounded-lg border border-sand-200 bg-white text-xs outline-none focus:border-terracotta-500">
+                        <div class="mt-1 text-xs font-semibold text-danger" id="err-email">${err_email}</div>
+                    </div>
+                </div>
+
+                <!-- Shipping Address -->
+                <div class="p-6 bg-sand-50 rounded-2xl border border-sand-200">
+                    <h3 class="font-serif text-lg font-bold text-espresso mb-4">${lang_shippingAddress}</h3>
+                    <div class="mb-4">
+                        <label for="shipping-country" class="block text-xs font-bold uppercase tracking-wider mb-2 text-ink">${lang_country}</label>
+                        <select id="shipping-country" name="country" required class="w-full px-4 py-3 rounded-lg border border-sand-200 bg-white text-xs outline-none focus:border-terracotta-500"
+                                hx-get="api/address-form" hx-target="#shipping-address-fields" hx-trigger="change">
+                            ${country_options_html}
+                        </select>
+                    </div>
+                    <div id="shipping-address-fields">
+                        ${address_fields_html}
+                    </div>
+                </div>
+
+                <!-- Payment Details -->
+                <div class="p-6 bg-sand-50 rounded-2xl border border-sand-200">
+                    <h3 class="font-serif text-lg font-bold text-espresso mb-4">${lang_paymentDetails}</h3>
+                    <div class="mb-4">
+                        <label for="cardType" class="block text-xs font-bold uppercase tracking-wider mb-2 text-ink">${lang_cardType}</label>
+                        <select id="cardType" name="cardType" required class="w-full px-4 py-3 rounded-lg border border-sand-200 bg-white text-xs outline-none focus:border-terracotta-500">
+                            <option value="Visa" ${card_visa_selected}>Visa</option>
+                            <option value="Mastercard" ${card_mastercard_selected}>Mastercard</option>
+                            <option value="American Express" ${card_amex_selected}>American Express</option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label for="cardNumber" class="block text-xs font-bold uppercase tracking-wider mb-2 text-ink">${lang_cardNum}</label>
+                        <input type="text" id="cardNumber" name="cardNumber" required value="${input_cardNumber}" placeholder="1234 5678 1234 5100" class="w-full px-4 py-3 rounded-lg border border-sand-200 bg-white text-xs outline-none focus:border-terracotta-500">
+                        <div class="mt-1 text-xs font-semibold text-danger" id="err-cardNumber">${err_cardNumber}</div>
+                        <p class="mt-1 text-[11px] text-muted">${lang_testingNote}</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="cardExpiry" class="block text-xs font-bold uppercase tracking-wider mb-2 text-ink">${lang_expiry}</label>
+                            <input type="text" id="cardExpiry" name="cardExpiry" required value="${input_cardExpiry}" placeholder="12/28" class="w-full px-4 py-3 rounded-lg border border-sand-200 bg-white text-xs outline-none focus:border-terracotta-500">
+                            <div class="mt-1 text-xs font-semibold text-danger" id="err-cardExpiry">${err_cardExpiry}</div>
+                        </div>
+                        <div>
+                            <label for="cardCvv" class="block text-xs font-bold uppercase tracking-wider mb-2 text-ink">${lang_cvv}</label>
+                            <input type="text" id="cardCvv" name="cardCvv" required value="${input_cardCvv}" placeholder="123" class="w-full px-4 py-3 rounded-lg border border-sand-200 bg-white text-xs outline-none focus:border-terracotta-500">
+                            <div class="mt-1 text-xs font-semibold text-danger" id="err-cardCvv">${err_cardCvv}</div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Panel: Order Summary & Place Order Button -->
+            <div class="lg:col-span-5 bg-sand-50 rounded-2xl border border-sand-200 p-6 space-y-6 lg:sticky lg:top-24">
+                <h3 class="font-serif text-lg font-bold text-espresso pb-3 border-b border-sand-200">${lang_orderSummary}</h3>
+                
+                <div class="max-h-60 overflow-y-auto divide-y divide-sand-200">
+                    ${checkout_items_summary}
+                </div>
+
+                <div class="space-y-2 pt-4 border-t border-sand-200 text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-muted">${lang_subtotal}</span>
+                        <span class="font-bold text-ink">${checkout_subtotal}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-muted">${lang_shipping}</span>
+                        <span class="font-bold text-ink">${checkout_shipping}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-muted">${lang_tax}</span>
+                        <span class="font-bold text-ink">${checkout_tax}</span>
+                    </div>
+                    ${checkout_discount_row}
+                    <div class="flex justify-between text-base font-bold text-espresso pt-3 border-t border-sand-200">
+                        <span>${lang_total}</span>
+                        <span class="text-terracotta-600">${checkout_total}</span>
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full py-4 bg-terracotta-500 hover:bg-terracotta-600 text-white font-bold text-xs uppercase tracking-[0.1em] rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4"><use xlink:href="#icon-check"></use></svg>
+                    <span>${lang_placeOrder}</span>
+                </button>
+            </div>
+
+        </div>
+    </form>
+</div>

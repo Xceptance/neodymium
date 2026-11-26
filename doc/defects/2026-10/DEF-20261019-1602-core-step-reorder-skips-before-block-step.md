@@ -1,0 +1,18 @@
+# [DEF-20261019-1602] Reordering Core Step While Paused in Before Block Skips Active Before Step
+
+- **Status:** `Resolved`
+- **Opened:** 2026-10-19 15:45
+- **Closed:** 2026-10-19 16:15
+- **Component:** `neodymium-core`
+- **Scope:** `Framework`
+- **Symptom:** When running in interactive mode with a playbook containing a `before` lifecycle block, if the user reorders a step within the core `steps` block (for example, moving a core step to index 0 of `steps`) while execution is paused at a step in `before`, the active `before` step is skipped and never executed when the user confirms execution (`RUN`).
+- **Root Cause:** In `InteractiveConsoleListener.java`, `handleReorderStep` assumed all operations occurred within the core `steps` block, evaluating `isToBeforeOrAtCurrent = "steps".equals(toBlock) && adjustedToIndex <= currentIdx`. When `currentStep` was in `before` at relative index `0` (or `currentIdx == 0`), moving any core step to index `0` of `steps` matched `0 <= 0`, setting `isRescheduleNeeded = true` and setting `KEY_STEP_RESCHEDULED = true` on `ExecutionContext`. In `ExecuteActionsStep.java`, seeing `KEY_STEP_RESCHEDULED` caused an immediate early return without executing the paused `before` step. Furthermore, `rescheduleRemainingSteps` unconditionally retrieved `playbook.steps` and cleared `context.runStack`, destroying the active `before` steps stack and pushing core steps in their place. A similar block-insensitivity bug existed in `handleAddStep` (`isInsertBeforeOrAtCurrent = "steps".equals(blockName) && targetIndex >= 0 && targetIndex <= currentIdx`) and `handleUserAction` (`EDIT`), and `updateFlatSteps` omitted `before` and `after` blocks when updating `ExecutionContext.KEY_PLAYBOOK`.
+- **Detection Gap ("What did we miss?"):** Prior interactive reordering and editing tests in `InteractiveConsoleListenerTest` only evaluated reordering within the main `steps` block while paused inside `steps`. No test paused execution within a `before` block and issued mutations targeting downstream lifecycle blocks (`steps` or `after`).
+- **Resolution:**
+  1. Updated `InteractiveConsoleListener.java` with block resolution (`resolveStepBlock` and `resolveActiveBlock`), ensuring `handleReorderStep`, `handleAddStep`, and `EDIT` actions only trigger execution reschedule (`isRescheduleNeeded = true`, `KEY_STEP_RESCHEDULED = true`) if the mutation directly targets or modifies the currently active lifecycle block. Modifying downstream blocks updates their in-memory list without disrupting the active block's `runStack`.
+  2. Maintained updated step lists across all lifecycle blocks (`beforeSteps`, `steps`, `afterSteps`) when steps are reordered, inserted, or moved across blocks, ensuring block tags on moved steps and their sub-steps are correctly updated.
+  3. Made `rescheduleRemainingSteps` block-aware so that when rescheduling is required, it repopulates `runStack` with the remaining steps belonging strictly to the currently active lifecycle block.
+  4. Updated `updateFlatSteps` to preserve `before`, `steps`, and `after` blocks while maintaining consistent global flattening in `ExecutionContext.KEY_PLAYBOOK`.
+  5. Added `peekStep()` to `ExecutionContext.java` to inspect the top pipeline step without popping it from `runStack`.
+  6. Added automated regression tests to `InteractiveConsoleListenerTest.java`.
+- **Safety Net Added:** Added `@Test` `InteractiveConsoleListenerTest.testReorderCoreStepToFirstPlaceWhilePausedInBeforeBlockDoesNotSkipBeforeStep`, `testAddCoreStepAtFirstPlaceWhilePausedInBeforeBlockDoesNotSkipBeforeStep`, and `testReorderWithinBeforeBlockReschedulesExecutionStack`.

@@ -1,0 +1,3 @@
+steps: |
+  Handle cookies banner:
+    Click (hint: #btn-accept)

@@ -1,0 +1,59 @@
+<!-- Hero Section -->
+<section class="hero-section flex items-center justify-between gap-10 py-14 px-8 md:px-12 bg-gradient-to-br from-sand-50 to-white rounded-lg mb-14 relative overflow-hidden border border-sand-200">
+    <div class="flex-1 max-w-xl z-10">
+        <span class="text-xs uppercase tracking-widest text-terracotta-500 font-semibold mb-4 block">${lang_summerEssentials}</span>
+        <h1 class="font-serif text-4xl md:text-5xl font-semibold leading-tight mb-6 text-neutral-900">${lang_heroTitle}</h1>
+        <p class="text-neutral-600 text-base mb-8 leading-relaxed">${lang_heroDescription}</p>
+        <a href="c/tops.html" class="btn-primary">${lang_shopCollection}</a>
+    </div>
+    <div class="flex-1 flex justify-center items-center relative z-10">
+        <!-- Curated Premium silhouette display SVG -->
+        <svg viewBox="0 0 100 100" class="w-full max-w-xs text-terracotta-500 transition-transform duration-300 hover:scale-105">
+            <defs>
+                <linearGradient id="terracotta-glow" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#F4ECE7"/>
+                    <stop offset="100%" stop-color="#E8DCD5"/>
+                </linearGradient>
+            </defs>
+            <circle cx="50" cy="50" r="45" fill="url(#terracotta-glow)"/>
+            <path d="M25 25 C30 18, 70 18, 75 25 L82 45 L72 48 L68 35 L68 85 L32 85 L32 35 L28 48 L18 45 Z" fill="currentColor" opacity="0.85"/>
+        </svg>
+    </div>
+    <!-- Background glow -->
+    <div class="absolute -top-12 -right-12 w-72 h-72 rounded-full bg-terracotta-100/50 blur-3xl pointer-events-none"></div>
+</section>
+
+<!-- Featured Categories -->
+<section class="mb-14">
+    <h2 class="font-serif text-2xl md:text-3xl font-semibold text-center mb-10 text-neutral-900">${lang_featuredCategories}</h2>
+    <div class="featured-categories-grid">
+        <a href="c/tops.html" class="bg-sand-50 border border-sand-200 rounded-lg p-8 text-center transition-all duration-300 hover:border-terracotta-500 hover:shadow-md block group">
+            <div class="text-3xl mb-3 transform group-hover:scale-110 transition-transform">👕</div>
+            <div class="font-semibold text-sm text-neutral-900 group-hover:text-terracotta-600 transition-colors">${lang_tops}</div>
+        </a>
+        <a href="c/bottoms.html" class="bg-sand-50 border border-sand-200 rounded-lg p-8 text-center transition-all duration-300 hover:border-terracotta-500 hover:shadow-md block group">
+            <div class="text-3xl mb-3 transform group-hover:scale-110 transition-transform">👖</div>
+            <div class="font-semibold text-sm text-neutral-900 group-hover:text-terracotta-600 transition-colors">${lang_bottoms}</div>
+        </a>
+        <a href="c/outerwear.html" class="bg-sand-50 border border-sand-200 rounded-lg p-8 text-center transition-all duration-300 hover:border-terracotta-500 hover:shadow-md block group">
+            <div class="text-3xl mb-3 transform group-hover:scale-110 transition-transform">🧥</div>
+            <div class="font-semibold text-sm text-neutral-900 group-hover:text-terracotta-600 transition-colors">${lang_outerwear}</div>
+        </a>
+        <a href="c/footwear.html" class="bg-sand-50 border border-sand-200 rounded-lg p-8 text-center transition-all duration-300 hover:border-terracotta-500 hover:shadow-md block group">
+            <div class="text-3xl mb-3 transform group-hover:scale-110 transition-transform">👟</div>
+            <div class="font-semibold text-sm text-neutral-900 group-hover:text-terracotta-600 transition-colors">${lang_footwear}</div>
+        </a>
+        <a href="c/accessories.html" class="bg-sand-50 border border-sand-200 rounded-lg p-8 text-center transition-all duration-300 hover:border-terracotta-500 hover:shadow-md block group">
+            <div class="text-3xl mb-3 transform group-hover:scale-110 transition-transform">👜</div>
+            <div class="font-semibold text-sm text-neutral-900 group-hover:text-terracotta-600 transition-colors">${lang_accessories}</div>
+        </a>
+    </div>
+</section>
+
+<!-- Featured Products Grid -->
+<section class="mb-10">
+    <h2 class="font-serif text-2xl md:text-3xl font-semibold text-center mb-10 text-neutral-900">${lang_featuredEssentials}</h2>
+    <div class="products-grid">
+        ${featured_products}
+    </div>
+</section>

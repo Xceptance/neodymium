@@ -1,0 +1,28 @@
+<div id="login-wrapper" class="auth-card" style="max-width: 440px; margin: 40px auto; padding: 32px; border: 1px solid var(--color-border); border-radius: 6px; background: #FAF9F6;">
+    <h2 style="font-family: var(--font-family-serif); font-size: 26px; font-weight: 700; text-align: center; margin-bottom: 20px; color: #005699;">${lang_login}</h2>
+    
+    <!-- Inline login error display -->
+    <div class="error-message" style="margin-bottom: 16px; text-align: center; font-weight: 600; color: var(--color-error);">${auth_error}</div>
+
+    <form hx-post="api/auth/login" hx-target="#login-wrapper" hx-swap="outerHTML">
+        <div style="margin-bottom: 16px;">
+            <label for="email" style="display:block; font-size:12px; font-weight:700; text-transform:uppercase; margin-bottom:6px; color:#444;">${lang_email}</label>
+            <input type="email" id="email" name="email" style="width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:4px; font-size:14px; background:#fff;" placeholder="johndoe@example.com" required value="${input_email}">
+            <div style="color:var(--color-error); font-size:12px; margin-top:4px;">${err_email}</div>
+        </div>
+        
+        <div style="margin-bottom: 24px;">
+            <label for="password" style="display:block; font-size:12px; font-weight:700; text-transform:uppercase; margin-bottom:6px; color:#444;">${lang_password}</label>
+            <input type="password" id="password" name="password" style="width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:4px; font-size:14px; background:#fff;" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" required>
+            <div style="color:var(--color-error); font-size:12px; margin-top:4px;">${err_password}</div>
+        </div>
+
+        <button type="submit" class="btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-size: 13px; margin-bottom: 16px; background: #005699;">
+            ${lang_login}
+        </button>
+
+        <p style="text-align: center; font-size: 13px; color: #666;">
+            ${lang_noAccount} <a href="register.html" style="color: #005699; font-weight: 700;">${lang_register}</a>
+        </p>
+    </form>
+</div>

@@ -1,0 +1,302 @@
+/*
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package com.xceptance.aura.test.controller;
+
+import com.xceptance.neodymium.aura.AuraFileService;
+import com.xceptance.neodymium.aura.AuraInteractiveService;
+import com.xceptance.neodymium.aura.AuraSettingsService;
+import com.xceptance.neodymium.aura.dto.YamlFileDto;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.CookieValue;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
+
+/**
+ * Controller rendering the main Aura Test Manager Dashboard view integrated into Aura Report Manager.
+ *
+ * @author AI-generated: Antigravity
+ * @author Xceptance GmbH 2026
+ */
+@Controller
+public class AuraTestDashboardController
+{
+    private final AuraInteractiveService interactiveService;
+    private final AuraFileService fileService;
+    private final AuraTestQueueController queueController;
+    private final AuraSettingsService settingsService;
+
+    public AuraTestDashboardController(final AuraInteractiveService interactiveService,
+                                        final AuraFileService fileService,
+                                        final AuraTestQueueController queueController)
+    {
+        this(interactiveService, fileService, queueController, null);
+    }
+
+    @Autowired
+    public AuraTestDashboardController(final AuraInteractiveService interactiveService,
+                                        final AuraFileService fileService,
+                                        final AuraTestQueueController queueController,
+                                        @Autowired(required = false) final AuraSettingsService settingsService)
+    {
+        this.interactiveService = interactiveService;
+        this.fileService = fileService;
+        this.queueController = queueController;
+        this.settingsService = settingsService != null ? settingsService : new AuraSettingsService();
+    }
+
+    @GetMapping(
+    {
+      "/playbooks", "/manager", "/aura-test-manager", "/dashboard"
+    })
+    public String renderDashboard(
+        @RequestHeader(value = "HX-Request", required = false) final String hxRequest,
+        @RequestParam(value = "file", required = false) final String file,
+        @RequestParam(value = "q", required = false) final String query,
+        @CookieValue(value = "aura_test_search_query", required = false) final String cookieQuery,
+        final Model model)
+    {
+        final String effectiveQuery;
+        if (query != null && !query.isBlank())
+        {
+            effectiveQuery = query.trim();
+        }
+        else if (query == null && cookieQuery != null && !cookieQuery.isBlank())
+        {
+            effectiveQuery = decodeCookieQuery(cookieQuery);
+        }
+        else
+        {
+            effectiveQuery = null;
+        }
+
+        final List<YamlFileDto> testFiles;
+        final List<String> stepsFiles;
+        if (effectiveQuery != null && !effectiveQuery.isBlank())
+        {
+            testFiles = fileService.getFilteredYamlFilesList(effectiveQuery);
+            stepsFiles = fileService.getFilteredStepsFilesList(effectiveQuery);
+            model.addAttribute("q", effectiveQuery);
+        }
+        else
+        {
+            testFiles = fileService.getYamlFilesList();
+            stepsFiles = fileService.getStepsFilesList();
+        }
+
+        model.addAttribute("pageTitle", "Neodymium AI Manager Dashboard");
+        model.addAttribute("activeTab", "AuraTestManager");
+        model.addAttribute("activeView", "workspace");
+        model.addAttribute("viewFragment", "fragments/aura-test-manager :: auraTestManager");
+
+        model.addAttribute("theme", interactiveService != null ? interactiveService.getActiveTheme() : "dark");
+        model.addAttribute("files", testFiles);
+        model.addAttribute("testFiles", testFiles);
+        model.addAttribute("stepsFiles", stepsFiles);
+        model.addAttribute("fragmentRequiredVarsMap", fileService.getFragmentRequiredVariablesMap());
+        model.addAttribute("expandedFiles", fileService.getExpandedFiles());
+        model.addAttribute("queue", queueController.getSelectedQueue());
+        model.addAttribute("runQueue", queueController.getSelectedQueue());
+        model.addAttribute("selectedKeys", queueController.getSelectedQueueKeys());
+        model.addAttribute("selectedFileKeys", queueController.getFullySelectedFileKeys(testFiles));
+        model.addAttribute("partiallySelectedFileKeys", queueController.getPartiallySelectedFileKeys(testFiles));
+        model.addAttribute("availableTags", AuraFileService.extractAvailableTestTags(testFiles));
+        model.addAttribute("folderSelectionStatesJson", queueController.getFolderSelectionStatesJson());
+        model.addAttribute("folderTotalDatasetsJson", queueController.getFolderTotalDatasetsJson());
+        model.addAttribute("selectedBrowser", queueController.getSelectedBrowser());
+        model.addAttribute("headless", queueController.isHeadless());
+        model.addAttribute("video", queueController.isVideo());
+        model.addAttribute("executionMode", queueController.getExecutionMode());
+        model.addAttribute("interactive", queueController.isInteractive());
+
+        model.addAttribute("availableBrowserProfiles", queueController.getAvailableBrowserProfiles());
+        model.addAttribute("globalBrowserProfiles", queueController.getGlobalBrowserProfiles());
+        model.addAttribute("browserGroups", queueController.getGroupedBrowserProfiles(queueController.getGlobalBrowserProfiles()));
+        model.addAttribute("totalRuns", queueController.getTotalExecutionRuns());
+        model.addAttribute("queueController", queueController);
+        model.addAttribute("runTags", queueController.getRunTags());
+
+        final boolean running = queueController.isRunning();
+        model.addAttribute("running", running);
+        model.addAttribute("executionInProgress", running);
+        model.addAttribute("total", queueController.getGlobalTestsRun());
+        model.addAttribute("passed", queueController.getGlobalPassed());
+        model.addAttribute("failed", queueController.getGlobalFailed());
+        model.addAttribute("skipped", queueController.getGlobalSkipped());
+
+        final long durationMs;
+        if (running && queueController.getRunStartTimeMs() > 0)
+        {
+            durationMs = Math.max(0, System.currentTimeMillis() - queueController.getRunStartTimeMs());
+        }
+        else
+        {
+            durationMs = queueController.getLastRunDurationMs();
+        }
+        model.addAttribute("durationMs", durationMs);
+        model.addAttribute("formattedDuration", AuraTestQueueController.formatDuration(durationMs));
+
+        final String rawFile = (file != null && !file.isBlank()) ? file : fileService.getActiveEditingFile();
+        final String activeFileToUse = (rawFile != null && rawFile.contains(",")) ? rawFile.split(",")[0].trim() : rawFile;
+        if (activeFileToUse != null && !activeFileToUse.isBlank())
+        {
+            fileService.setActiveEditingFile(activeFileToUse);
+            String content = "";
+            try
+            {
+                content = fileService.readYamlFileContent(activeFileToUse);
+            }
+            catch (final Exception ignored)
+            {
+            }
+            final boolean isFragment = activeFileToUse.toLowerCase().endsWith(".steps");
+            model.addAttribute("activeEditingFile", activeFileToUse);
+            model.addAttribute("editingFileContent", content);
+            model.addAttribute("currentTestFile", activeFileToUse);
+            model.addAttribute("fileContent", content);
+            model.addAttribute("isFragment", isFragment);
+
+            final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+            final boolean hasParseError = Boolean.TRUE.equals(sections.get("hasError"));
+            final String parseErrorMessage = (String) sections.get("error");
+            model.addAttribute("hasParseError", hasParseError);
+            model.addAttribute("parseErrorMessage", parseErrorMessage != null ? parseErrorMessage : "");
+            model.addAttribute("editorMode", hasParseError ? "raw" : "visual");
+            model.addAttribute("beforeSteps", sections.get("beforeSteps"));
+            model.addAttribute("mainSteps", sections.get("mainSteps"));
+            model.addAttribute("afterSteps", sections.get("afterSteps"));
+            model.addAttribute("dataMatrix", sections.get("dataMatrix"));
+            model.addAttribute("varKeys", sections.get("varKeys"));
+            model.addAttribute("fragmentVarScopes", sections.get("fragmentVarScopes"));
+            model.addAttribute("propertiesKey", sections.get("propertiesKey") != null ? sections.get("propertiesKey") : "_properties");
+            model.addAttribute("propertiesYaml", sections.get("propertiesYaml") != null ? sections.get("propertiesYaml") : "");
+            model.addAttribute("propertiesList", sections.get("propertiesList") != null ? sections.get("propertiesList") : List.of());
+            model.addAttribute("metaKey", sections.get("metaKey") != null ? sections.get("metaKey") : "_meta");
+            model.addAttribute("metaYaml", sections.get("metaYaml") != null ? sections.get("metaYaml") : "");
+            model.addAttribute("description", sections.get("description") != null ? sections.get("description") : "");
+            model.addAttribute("promptAddonYaml", sections.get("promptAddonYaml") != null ? sections.get("promptAddonYaml") : "");
+            model.addAttribute("rootVariables", sections.get("rootVariables") != null ? sections.get("rootVariables") : Map.of());
+            model.addAttribute("yamlFiles", testFiles);
+        }
+        else
+        {
+            model.addAttribute("activeEditingFile", "");
+            model.addAttribute("editingFileContent", "");
+            model.addAttribute("currentTestFile", "");
+            model.addAttribute("fileContent", "");
+            model.addAttribute("isFragment", false);
+            model.addAttribute("beforeSteps", List.of());
+            model.addAttribute("mainSteps", List.of());
+            model.addAttribute("afterSteps", List.of());
+            model.addAttribute("dataMatrix", List.of());
+            model.addAttribute("varKeys", List.of());
+            model.addAttribute("fragmentVarScopes", Map.of());
+            model.addAttribute("propertiesKey", "_properties");
+            model.addAttribute("propertiesYaml", "");
+            model.addAttribute("propertiesList", List.of());
+            model.addAttribute("metaKey", "_meta");
+            model.addAttribute("metaYaml", "");
+            model.addAttribute("description", "");
+            model.addAttribute("promptAddonYaml", "");
+            model.addAttribute("rootVariables", Map.of());
+            model.addAttribute("yamlFiles", testFiles);
+        }
+
+        if (!model.containsAttribute("activeRunId") || (model.getAttribute("activeRunId") != null && ((String) model.getAttribute("activeRunId")).isEmpty()))
+        {
+            final String activeRunId = queueController.getCurrentRunId();
+            model.addAttribute("activeRunId", activeRunId != null ? activeRunId : "");
+            model.addAttribute("activeRunStatus", running ? "running" : "finished");
+            model.addAttribute("activeRunReportUrl", (activeRunId != null && !activeRunId.isEmpty()) ? "/run-report?runId=" + activeRunId : "/");
+        }
+
+        if (running)
+        {
+            final LocalDateTime ldt = LocalDateTime.now();
+            final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            model.addAttribute("runningStartTime", ldt.format(formatter));
+        }
+
+        if (settingsService != null)
+        {
+            model.addAttribute("hasApiKey", settingsService.hasConfiguredApiKey());
+            model.addAttribute("apiKeyWarningIgnored", settingsService.isApiKeyWarningIgnored());
+            model.addAttribute("projectId", settingsService.getProjectId());
+        }
+
+        if ("true".equals(hxRequest))
+        {
+            return "fragments/aura-test-manager :: auraTestManager";
+        }
+        return "index";
+    }
+
+    public String renderDashboard(final String hxRequest, final String file, final String query, final Model model)
+    {
+        return renderDashboard(hxRequest, file, query, null, model);
+    }
+
+    public String renderDashboard(final String hxRequest, final String file, final Model model)
+    {
+        return renderDashboard(hxRequest, file, null, null, model);
+    }
+
+    static String decodeCookieQuery(final String rawCookie)
+    {
+        if (rawCookie == null || rawCookie.isBlank())
+        {
+            return null;
+        }
+        try
+        {
+            final String decoded = URLDecoder.decode(rawCookie.trim(), StandardCharsets.UTF_8).trim();
+            return decoded.isBlank() ? null : decoded;
+        }
+        catch (final Exception e)
+        {
+            final String trimmed = rawCookie.trim();
+            return trimmed.isBlank() ? null : trimmed;
+        }
+    }
+
+    @PostMapping("/api/theme")
+    public String changeTheme(@RequestParam(value = "theme", required = false, defaultValue = "dark") final String theme, final Model model)
+    {
+        if (interactiveService != null)
+        {
+            interactiveService.setActiveTheme(theme);
+        }
+        model.addAttribute("theme", theme);
+        return "fragments/header :: themeContainer";
+    }
+}

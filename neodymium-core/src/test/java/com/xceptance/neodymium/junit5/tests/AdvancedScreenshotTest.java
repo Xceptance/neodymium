@@ -1,0 +1,194 @@
+/*
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package com.xceptance.neodymium.junit5.tests;
+
+import static com.xceptance.neodymium.junit5.tests.AbstractNeodymiumTest.tempFiles;
+import static com.xceptance.neodymium.junit5.tests.AbstractNeodymiumTest.writeMapToPropertiesFile;
+
+import java.awt.image.BufferedImage;
+import java.awt.image.DataBuffer;
+import java.awt.image.DataBufferByte;
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+
+import javax.imageio.ImageIO;
+
+import org.aeonbits.owner.ConfigFactory;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
+
+import com.codeborne.selenide.Selenide;
+import org.neodymium.common.ScreenshotWriter;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.junit5.NeodymiumTest;
+import org.neodymium.util.Neodymium;
+
+import io.qameta.allure.Allure;
+import io.qameta.allure.AllureLifecycle;
+import io.qameta.allure.model.Attachment;
+import io.qameta.allure.model.ExecutableItem;
+import io.qameta.allure.model.StepResult;
+
+@Browser("Chrome_1024x768")
+public class AdvancedScreenshotTest
+{
+    @BeforeAll
+    public static void setUpNeodymiumConfiguration() throws IOException
+    {
+        // set up a temp-neodymium.properties
+        final String fileLocation = "config/temp-AdvancedScreenshotTest-neodymium.properties";
+        File tempConfigFile = new File("./" + fileLocation);
+
+        tempFiles.add(tempConfigFile);
+
+        Map<String, String> properties = new HashMap<>();
+
+        properties.put("neodymium.screenshots.enableAdvancedScreenshots", "true");
+        properties.put("neodymium.screenshots.fullpagecapture.enable", "true");
+        properties.put("neodymium.screenshots.viewport.enable", "false");
+
+        // set the new properties
+        for (String key : properties.keySet())
+        {
+            Neodymium.configuration().setProperty(key, properties.get(key));
+        }
+
+        writeMapToPropertiesFile(properties, tempConfigFile);
+        ConfigFactory.setProperty(Neodymium.TEMPORARY_CONFIG_FILE_PROPERTY_NAME, "file:" + fileLocation);
+    }
+
+    @NeodymiumTest
+    public void testFullPageScreenshot() throws IOException
+    {
+        Selenide.open("https://www.xceptance.com/en/");
+
+        // take not blurred screenshot
+        Allure.step("test", () -> ScreenshotWriter.doScreenshot("notblurredScreenshot"));
+
+        // take blurred screenshot
+        Neodymium.configuration().setProperty("neodymium.screenshots.blurFullPageScreenshot", "true");
+        Allure.step("test", () -> ScreenshotWriter.doScreenshot("blurredScreenshot"));
+
+        // compare them
+        List<Attachment> attachments = getAllureResultAttachments();
+
+        File file1 = new File("allure-results/" + attachments.get(0).getSource());
+        if (!file1.exists())
+        {
+            file1 = new File("target/allure-results/" + attachments.get(0).getSource());
+        }
+        File file2 = new File("allure-results/" + attachments.get(1).getSource());
+        if (!file2.exists())
+        {
+            file2 = new File("target/allure-results/" + attachments.get(1).getSource());
+        }
+
+        Assertions.assertFalse(compareImage(file1, file2),
+                               "blurred and not blurred images should not be the same");
+    }
+
+    private static List<Attachment> getAllureResultAttachments()
+    {
+        List<Attachment> attachments = new LinkedList<>();
+
+        AllureLifecycle lifecycle = Allure.getLifecycle();
+
+        // parse all steps and get the attachments
+        lifecycle.updateTestCase((result) -> {
+            getAttachmentsFromResult(result, attachments);
+        });
+
+        return attachments;
+    }
+
+    private static void getAttachmentsFromResult(ExecutableItem result, List<Attachment> attachments)
+    {
+        List<Attachment> customAttachments = result.getAttachments();
+        attachments.addAll(customAttachments);
+
+        var steps = result.getSteps();
+
+        for (var step : steps)
+        {
+            attachments.addAll(traverseSteps(step));
+        }
+    }
+
+    private static List<Attachment> traverseSteps(StepResult step)
+    {
+        List<Attachment> attachments = new ArrayList<>();
+        Deque<StepResult> stepDeque = new ArrayDeque<>();
+        stepDeque.add(step);
+
+        // process all steps
+        while (!stepDeque.isEmpty())
+        {
+            // process the current step
+            StepResult currentStep = stepDeque.poll();
+            // get the attachments
+            attachments.addAll(currentStep.getAttachments());
+
+            // add all sibling steps
+            currentStep.getSteps().forEach(stepDeque::push);
+        }
+        return attachments;
+    }
+
+    private static boolean compareImage(File actual, File expected) throws IOException
+    {
+        BufferedImage actualBuffered = ImageIO.read(actual);
+        BufferedImage expectedBuffered = ImageIO.read(expected);
+
+        DataBuffer dbActual = actualBuffered.getRaster().getDataBuffer();
+        DataBuffer dbExpected = expectedBuffered.getRaster().getDataBuffer();
+
+        DataBufferByte actualBufferedByte = (DataBufferByte) dbActual;
+        DataBufferByte expectedBufferedByte = (DataBufferByte) dbExpected;
+
+        boolean equal = true;
+        for (int bank = 0; bank < actualBufferedByte.getNumBanks(); bank++)
+        {
+            byte[] actualArray = actualBufferedByte.getData(bank);
+            byte[] expectedArray = expectedBufferedByte.getData(bank);
+
+            // this line may vary depending on your test framework
+            equal = Arrays.equals(actualArray, expectedArray);
+
+            if (!equal)
+            {
+                break;
+            }
+        }
+
+        return equal;
+    }
+}

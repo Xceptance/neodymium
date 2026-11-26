@@ -1,0 +1,11 @@
+# @author AI-generated: Gemini 2.5 Pro
+# @author Xceptance GmbH 2026
+
+steps: |
+  _include: playbooks/integration/includes/verla_open_homepage.yaml
+  Locate the search input field and type '${searchTerm}' into it
+  Press enter to submit search
+
+data:
+  - testId: "default"
+    searchTerm: "Minimalist"

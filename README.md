@@ -1,114 +1,234 @@
-[![Maven Central](https://img.shields.io/maven-central/v/com.xceptance/neodymium-library
-)](https://mvnrepository.com/artifact/com.xceptance/neodymium-library) 
+[![Maven Central](https://img.shields.io/maven-central/v/com.xceptance/neodymium-core)](https://central.sonatype.com/artifact/com.xceptance/neodymium-core)
 
 # Neodymium
 
-Neodymium tries to solve your typical and most pressing UI test automation problems by combining JUnit, WebDriver, BDD/Cucumber, and proper reporting. It gives you ready to use templates, assembles well-known open source projects, and enhances this all with additional functionality that is often missing.
+**Neodymium** solves modern web test automation challenges by assembling state-of-the-art open-source libraries — **JUnit 5 / JUnit 4**, **Selenium WebDriver**, **Selenide**, **BDD/Cucumber**, and **Allure Reporting** — into a cohesive, rock-solid framework with the missing glue code built right in.
 
-Neodymium is basically the combination of state of the art open source test libraries with additional glue to make it stick reliably together.
+Instead of hand-crafting brittle browser drivers, boilerplate waits, or disconnected reporting scripts, Neodymium provides ready-to-run project templates, intelligent abstractions, and seamless multi-browser execution matrices out of the box.
 
 **Note**: We are in the process of migrating the documentation to https://docs.xceptance.com/neodymium with a base repository at https://github.com/Xceptance/xlt-documentation.
 
-## Included Projects
-We combine and use several open source frameworks. Here are some honorable mentions:
+Today, Neodymium offers two complementary ways to build and run test automation:
 
-* [**JUnit**](https://github.com/junit-team/junit4): It is the base test framework because JUnit support can be found everywhere, so it is the perfect base for easy integration and comprehensive IDE support. Right now it is on version 4, but as soon as version 5 features are high in demand, version 5 support will be added.
-* [**WebDriver**](https://github.com/SeleniumHQ/selenium): Of course WebDriver is the core, because it is the only way to communicate with browsers consistently without using proprietary technologies.
-* [**Selenide**](https://github.com/codeborne/selenide): There are plenty of UI automation libraries available that are built on top of WebDriver. Selenide is one of the most popular approaches that is compact, fluent, and solves a lot of the basic challenges, hence we included it.
-* [**Allure**](https://github.com/allure-framework/allure2): The Allure Framework is a flexible lightweight multi-language test report tool that not only shows a very concise representation of what has been tested in a neat web report form, but allows everyone participating in the development process to extract the maximum of useful information from daily test execution.
-* [**BDD/Cucumber**](https://github.com/cucumber/cucumber-jvm): Neodymium supports BDD. If you prefer this testing style, you can organize your tests using Cucumber. See our example projects for more information.
-* [**Owner**](https://github.com/lviggiano/owner): Organize and implement configurations throughout the different stages of test projects.
+1. **Neodymium Classic (Zero AI)**: Pure, reliable, code-first test automation in Java under the permissive MIT license.
+2. **Neodymium AI**: Next-generation multimodal AI test automation, natural language playbooks, autonomous self-healing, and a standalone No-Code Web UI.
 
-## Quicklinks
-If you already know what you want to do, you can pick one of the demo test suites or our test suite template. If you are new to Neodymium, please read on. 
+📚 [**Official Documentation**](https://docs.xceptance.com/neodymium) • 📋 [**Changelog & Migration Guide**](CHANGELOG.md) • 💬 [**Commercial Support**](mailto:support@xceptance.com)
 
-* [Neodymium Template](https://github.com/Xceptance/neodymium-template): A template to start a new test automation suite quickly either as Cucumber or as pure Java. 
-* [Neodymium Pure Java Example](https://github.com/Xceptance/neodymium-example): A demo test suite against the Xceptance
-  reference demo store [Posters](https://github.com/Xceptance/neodymium/wiki/Posters-demo-store) as pure Java version.
-* [Neodymium Cucumber Example](https://github.com/Xceptance/neodymium-cucumber-example): For the fans of BDD/Cucumber, this is almost the same test suite as before but driven by BDD syntax.
-* [Neodymium Showcase](https://github.com/Xceptance/neodymium-showcase): This repository contains different showcases. Each of them demonstrates and comments on the usage of a single feature of Neodymium. Feel free to request more examples by creating an issue.
+---
 
-## Neodymium in the Media
-* [Neodymium – An Open Source Framework for Web Testing](https://blog.xceptance.com/2019/02/26/neodymium-an-open-source-framework-for-web-testing/): An article about our motivation to start Neodymium and its most important features
-* [Neodymium 5.0.0](https://blog.xceptance.com/2024/06/26/a-new-magnetic-force-neodymium-5-0-0-release/): An article about new things in version 5.0
-* [Web Testing mit Neodymium](https://www.youtube.com/watch?v=hn-juzcXrZg): A recorded talk (in German) about testing with Neodymium. It also gives recommendations and shows best practises. Recorded during a J́UG Thüringen Meetup in 2019.
-* [Neodymium 5.1 – Get more done faster](https://blog.xceptance.com/2025/02/11/neodymium-5-1-get-more-done-faster/): Neodymium 5.1 has been released with a host of impressive new features. These include full-page screenshots in reports, enhanced control over JSON assertions, accessibility testing via Google Lighthouse, and simplified session handling and URL validation.
-* [Automated Accessibility Testing with Google Lighthouse and Neodymium](https://blog.xceptance.com/2025/03/06/automated-accessibility-testing-with-google-lighthouse-and-neodymium/): One valuable tool for checking WCAG compliance is Google Lighthouse. It can help identify accessibility issues during development. And when integrated into your test automation project with tools like Neodymium, it can significantly streamline your accessibility testing and monitoring process.
+## 🏛️ Ecosystem & Subproject Directory
 
-## Additional Features
-These are our **additions** to make test automation nicer, quicker, and less painful. 
+Neodymium is organized as a multi-module Maven monorepo. Each subproject is self-contained and documented with its own dedicated guide:
 
-* **Multi Browser Support**: Simple setup and use of different browsers including remote browsers. Annotation per test case defines what browsers are supported by this very test case. Automatic execution of the test case per browser.
-* **Page and Component Concept**: Our example test suites demonstrate a page and component concept for easier test design. (Structural guidance)
-* **Test Data**: Externalized test data for Java test cases including automatic execution per test data set.
-* **Localization**: Simple concept to run localized test cases in conjunction with test data management.
-* **Concurrent Execution**: Concurrent execution of tests with Maven.
+| Subproject | Directory | Role & Key Capabilities | Paradigm | License |
+| :--- | :--- | :--- | :--- | :--- |
+| **Neodymium Archetype** | [`neodymium-archetype/`](neodymium-archetype/README.md) | Turnkey Maven starter template to bootstrap ready-to-run projects in seconds. | Quickstart | GNU AGPLv3 + Commercial |
+| **Neodymium Classic** | [`neodymium-classic/`](neodymium-classic/README.md) | Mature, code-first Java automation (Selenide, JUnit 4/5, Page Objects, BDD). | Traditional (No AI) | MIT License |
+| **Neodymium Core** | [`neodymium-core/`](neodymium-core/README.md) | AI engine, Java AI tests, natural language playbooks, UPM, and self-healing. | AI-Powered | GNU AGPLv3 + Commercial |
+| **Neodymium AI Manager** | [`aura-manager/`](aura-manager/README.md) | Interactive local Web UI for visual playbook authoring, live runner, and reporting. | No-Code UI | GNU AGPLv3 + Commercial |
+| **Neodymium Test Server** | [`neodymium-test-server/`](neodymium-test-server/README.md) | Embedded Javalin server hosting the VÉRLA demo store and AI Glance sandbox. | Test Fixtures | GNU AGPLv3 + Commercial |
+| **Neodymium E2E Tests** | [`neodymium-e2e-tests/`](neodymium-e2e-tests/README.md) | Comprehensive integration suites, SUT benchmarks, and Maven test profiles. | Test Harness | GNU AGPLv3 + Commercial |
 
-## Getting Started
-We recommend starting with our template instead of writing a suite from scratch. If you need more guidance, you can also start from one of our full demo test suites.
+---
 
-Please hop over to the [Wiki](https://github.com/Xceptance/neodymium/wiki/) for a full tour of Neodymium and a Getting
-Started guide.
+## 🚀 Choose Your Approach
 
-If you are still impatient, here is the quickest way to get Neodymium added to your project. Don't forget to update the version number if you prefer a particular version.
+### Path A: Bootstrap a New Project (Turnkey)
+
+The fastest way to get started is by generating a fresh test suite with `neodymium-archetype`:
+
+```bash
+mvn archetype:generate \
+  -DarchetypeGroupId=com.xceptance \
+  -DarchetypeArtifactId=neodymium-archetype \
+  -DarchetypeVersion=6.0.0-BETA \
+  -DgroupId=com.example \
+  -DartifactId=my-test-suite \
+  -DinteractiveMode=false
+```
+
+The generated project comes pre-configured with dependencies, sample playbooks, JUnit test runners, configuration files, and the bundled No-Code UI startup scripts.
+
+👉 *Read more in the [Neodymium Archetype Guide](neodymium-archetype/README.md).*
+
+---
+
+### Path B: Traditional Java Testing (Zero AI)
+
+If your team wants proven, programmatic test automation in Java without any LLM APIs, tokens, or AI dependencies, use **Neodymium Classic**:
 
 ```xml
 <dependency>
     <groupId>com.xceptance</groupId>
-    <artifactId>neodymium-library</artifactId>
-    <version>INSERT_LATEST_VERSION_HERE</version>
+    <artifactId>neodymium-classic</artifactId>
+    <version>6.0.0-BETA</version>
+    <scope>test</scope>
 </dependency>
 ```
-To write a simple unit test:
-
-Add the `@NeodymiumTest` annotation to your test method. This enables test execution with Neodymium.
 
 ```java
-public class MyTests
+import static com.codeborne.selenide.Condition.visible;
+import static com.codeborne.selenide.Selenide.$;
+import static com.codeborne.selenide.Selenide.open;
+
+import com.xceptance.neodymium.common.browser.Browser;
+import com.xceptance.neodymium.junit5.NeodymiumTest;
+
+@Browser("Chrome_1024x768")
+public class StorefrontClassicTest
 {
-    @NeodymiumTest 
-    public void testMethod()
+    @NeodymiumTest
+    public void testHomepage()
     {
-        // test code
+        open("https://www.xceptance.com");
+        $("#navigation").shouldBe(visible);
     }
 }
-
 ```
 
-Please be aware that Neodymium (starting at version 5.0.0) is using JUnit5. If you want to run your tests with JUnit4
-Neodymium still supports this and you can have a look [here](https://github.com/Xceptance/neodymium/wiki/).
+👉 *Read more in the [Neodymium Classic Guide](neodymium-classic/README.md).*
 
-If your project is already driven by Neodymium but you want to update to the latest version, please, check
-the [migration notes](https://github.com/Xceptance/neodymium/wiki/Migrate-to-Neodymium-5)
+---
 
-And now is the time to dive into the features we added to make the most out of
-it. [Please head over to our Wiki](https://github.com/Xceptance/neodymium/wiki/).
+### Path C: AI-Powered Automation (Playbooks & Java AI)
 
-## Client and Customers
+If you want to author tests in plain natural language or combine Java with AI perception, use **Neodymium Core**. The AI records resilient element locators and visual baselines once; subsequent CI/CD runs replay in milliseconds with **zero LLM API calls** and automatically heal when the UI drifts:
 
-If you are a customer and want to be mentioned here, please let us know. We will be happy to extend your web reach by placing a link and short description here. You can also just send us a pull request with a change, if you like.
+```mermaid
+flowchart TD
+    subgraph Phase1["1. Record (AI Engine)"]
+        A["YAML Playbook / Java Test<br/>(Natural Language)"] -->|FORCE_RECORDING| B["Multimodal LLM + UPM Engine"]
+        B -->|Extract Actions & SSIM Baselines| C["Companion JSON Recording<br/>(Structured Actions & Hashes)"]
+    end
 
-## License
+    subgraph Phase2["2. CI/CD Replay (Native Speed)"]
+        C -->|REPLAY_STRICT| D["Selenide / Selenium Target"]
+        D -->|Instant Replay| E["✅ 0 LLM Calls • Millisecond Execution"]
+    end
 
-Neodymium is licensed under different licenses depending on which module or features you are utilizing:
+    subgraph Phase3["3. Autonomous Healing (On Drift)"]
+        D -->|Selector Drift / 404| F["LocatorCascadeResolver<br/>(5-Tier Fallback)"]
+        F -->|Tier 4: Spatial Proximity| D
+        F -->|Tier 5 / Mismatch| G["Multimodal Self-Healing<br/>(REPLAY_WITH_HEALING)"]
+        G -->|Update Recording| C
+    end
+```
 
-### 1. Neodymium Classic (Core Framework)
-The core, non-AI test automation framework (**Neodymium Classic**) remains fully open-source and licensed under the permissive **[MIT License](LICENSE#section-a-mit-license-neodymium-classic)**. You are free to use, modify, distribute, and commercially host Neodymium Classic without restriction.
+```java
+@NeodymiumAiTest
+public class StorefrontQuickstartTest
+{
+    @AiMode(ExecutionMode.REPLAY_WITH_HEALING)
+    @AiInlinePlaybook("""
+        steps: |
+          Open ${baseUrl}/store/index.html in the browser
+          Type "${query}" into the search bar and press enter
+          Click on the first product card in the results
+          Click the "Add to Cart" button
+          Verify that the cart badge displays "1"
+        data:
+          - baseUrl: "https://demo.neodymium.org"
+            query: "Minimalist Watch"
+        """)
+    public void testAddToCart(final AiSession session)
+    {
+        // NeodymiumAiRunner executes the playbook automatically!
+    }
+}
+```
 
-### 2. Neodymium Aura AI (AI Integration Module)
-The advanced AI-powered automation integration (**Neodymium Aura AI**) is dual-licensed to support both the open-source community and enterprise environments:
+👉 *Read more in the [Neodymium Core Guide](neodymium-core/README.md).*
 
-- **Community Edition:** Free to use for development, testing, and internal applications under the terms of the **[GNU Affero General Public License (AGPLv3)](LICENSE#section-b-gnu-affero-general-public-license-neodymium-aura-ai)**. So, if you just test your own applications, you are free to do whatever you want. If you want to sell services for Neodymium Aura AI or bundle Neodymium Aura AI or just parts, the next line is yours.
-- **Commercial Edition:** If you wish to offer Neodymium Aura AI as a hosted service, bundle it in a commercial SaaS offering, or use it without the AGPLv3 copyleft/network-disclosure requirements, you must purchase a **Commercial License**.
-- **Commercial Support:** If you want to support others in using Neodymium Aura AI or you need changes, features, or any other help, you are encouraged to purchase commercial support. This will support this project, its continuous maintenance, and keep it thriving. There is no free fixing of Neodymium Aura AI unless you are another open source project. We will address problems at our own discretion.
-- Your fixes and pull requests are always welcomed under all licenses and agreements.
+---
 
-For commercial inquiries, licensing options, or custom agreements, please contact us at **[support@xceptance.com](mailto:support@xceptance.com)**. If you have any questions about licensing, especially if your usage is affected, please reach out to us as well. We are also open to discussing custom license modifications or tailored agreements to fit your specific business or technical requirements.
+### Path D: No-Code Web UI (Neodymium AI Manager)
 
+For visual playbook authoring, drag-and-drop step assembly, streaming execution logs, and interactive Allure reporting without touching code, launch the local Web UI:
 
-## Who Are We
-We are [Xceptance](https://www.xceptance.com/en/). A software testing company with strong commerce knowledge and projects with customers from all around the world. Besides Neodymium, we have developed [Xceptance Load Test (XLT)](https://github.com/Xceptance/XLT), a load and performance test tool that is open source too (APL 2.0). It provides an extensive range of awesome features to make the tester's and developer's life easier.
+```bash
+# Linux / macOS
+./run-neodymium.sh
 
-If you are looking for test automation that also covers the performance side of life, take a look at XLT. You can write and run load tests with real browsers including access to data from the [Web Performance Timing API](http://w3c.github.io/perf-timing-primer/). In case browsers are too heavy, XLT has other modes of load testing to offer as well. 
+# Windows
+run-neodymium.bat
+```
 
-We offer professional support for Neodymium and XLT as well as implementation and training services.
+Open your browser at `http://localhost:8080/` to access the interactive dashboard.
+
+👉 *Read more in the [Neodymium AI Manager Guide](aura-manager/README.md).*
+
+---
+
+## 🏗️ Monorepo Developer & Build Guide
+
+### Prerequisites
+* **Java Development Kit**: JDK 21 or higher
+* **Apache Maven**: Version 3.9+
+
+### Reactor Build Commands
+
+* **Compile the entire monorepo:**
+  ```bash
+  mvn clean compile
+  ```
+* **Install all modules locally (skip tests & javadocs):**
+  ```bash
+  mvn clean install -DskipTests -Dmaven.javadoc.skip=true
+  ```
+* **Target a specific subproject (and required dependencies):**
+  ```bash
+  # Core AI engine
+  mvn test -pl neodymium-core
+
+  # Classic framework
+  mvn test -pl neodymium-classic
+
+  # Run standalone test server
+  mvn exec:java -pl neodymium-test-server
+
+  # Run AI Manager
+  mvn spring-boot:run -pl aura-manager
+  ```
+
+### Contributor Test Execution
+
+When contributing to Neodymium or testing local engine modifications:
+* Run fast in-memory unit tests: `mvn test -pl neodymium-core -Punit-tests`
+* For the full suite of internal integration and regression profiles, see the [Neodymium E2E Tests Guide](neodymium-e2e-tests/README.md).
+
+---
+
+## 🔗 Quicklinks & Demos
+
+* [**Documentation Portal**](https://docs.xceptance.com/neodymium): Complete user guide and migration notes.
+* [**Neodymium Template**](https://github.com/Xceptance/neodymium-template): Quickstart project template for Java and Cucumber.
+* [**Neodymium Pure Java Example**](https://github.com/Xceptance/neodymium-example): Reference test suite against the Posters demo store.
+* [**Neodymium Cucumber Example**](https://github.com/Xceptance/neodymium-cucumber-example): BDD-driven test suite.
+* [**Neodymium Showcase**](https://github.com/Xceptance/neodymium-showcase): Code snippets demonstrating individual features.
+* [**Neodymium Wiki**](https://github.com/Xceptance/neodymium/wiki/): Classic wiki and historical documentation.
+
+---
+
+## 📄 License
+
+Neodymium operates under a dual-licensing model based on module boundaries:
+
+### 1. Neodymium Classic — MIT License
+The classic test automation framework ([`neodymium-classic`](neodymium-classic/README.md)) is fully open-source and licensed under the permissive **[MIT License](LICENSE)** (Section A). You are free to use, modify, distribute, and commercially host Neodymium Classic without restriction.
+
+### 2. Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
+The next-generation AI automation framework ([`neodymium-core`](neodymium-core/README.md), [`aura-manager`](aura-manager/README.md), [`neodymium-test-server`](neodymium-test-server/README.md), [`neodymium-e2e-tests`](neodymium-e2e-tests/README.md), and [`neodymium-archetype`](neodymium-archetype/README.md)) is **dual-licensed** to support both open-source developers and enterprise deployments:
+- **Community Edition (GNU AGPLv3):** Free for development, testing, and internal applications under the **[GNU Affero General Public License (AGPLv3)](LICENSE)** (Section B).
+- **Commercial Edition:** For hosted SaaS offerings, commercial bundling, proprietary integrations, or enterprise usage without AGPLv3 copyleft/network-disclosure terms, a **[Commercial License](LICENSE)** (Section C) is required.
+- **Commercial Support & Inquiries:** Contact **[support@xceptance.com](mailto:support@xceptance.com)**.
+
+---
+
+## 🏢 About Xceptance
+
+We are [Xceptance](https://www.xceptance.com/en/) — software testing experts specializing in digital commerce and test automation. We also develop [Xceptance Load Test (XLT)](https://github.com/Xceptance/XLT), an open-source performance testing tool.
+
+---
+
+*This document was generated with the assistance of AI and reviewed by Xceptance experts.*

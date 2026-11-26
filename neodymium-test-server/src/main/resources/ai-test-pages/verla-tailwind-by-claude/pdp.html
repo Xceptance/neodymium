@@ -1,0 +1,54 @@
+<div class="mb-6 text-[13px] uppercase tracking-[0.05em] text-muted">
+    <a href="index.html" class="transition-colors hover:text-terracotta-500">${lang_home}</a> &middot;
+    <a href="c/${product_category}.html" class="transition-colors hover:text-terracotta-500">${product_category_name}</a> &middot;
+    <span class="font-medium text-ink">${product_name}</span>
+</div>
+
+<div class="mb-15 flex flex-col flex-wrap items-stretch gap-7.5 md:flex-row md:items-start md:gap-15">
+    <!-- Product Image (Large SVG Silhouette) -->
+    <div class="relative flex min-w-80 flex-[1.2] items-center justify-center rounded-lg border border-sand-200 bg-sand-50 p-7.5 md:p-15">
+        ${product_badge_html}
+        <svg viewBox="0 0 100 100" class="h-auto w-full max-w-80 text-terracotta-500">
+            ${product_svg_content}
+        </svg>
+    </div>
+
+    <!-- Product Info Details -->
+    <div class="min-w-75 flex-1">
+        <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.1em] text-muted">${product_subcategory_name}</span>
+        <h1 class="mb-4 font-serif text-4xl font-semibold leading-[1.2] text-ink">${product_name}</h1>
+
+        <!-- Local Price Display -->
+        <div class="mb-6 text-[22px] font-semibold text-ink">
+            ${product_price_html}
+        </div>
+
+        <p class="mb-7.5 border-t border-sand-200 pt-6 leading-[1.7] text-muted">
+            ${product_desc}
+        </p>
+
+        <!-- Add to Cart Form (HTMX Dynamic badge update) -->
+        <form hx-post="api/cart/add" hx-target="#cart-btn-wrapper" hx-swap="outerHTML" class="border-t border-sand-200 pt-6" data-pdp-form>
+            <input type="hidden" name="productId" value="${product_id}">
+
+            <div class="mb-6 flex flex-wrap items-center gap-6">
+                ${product_sizes_html}
+
+                <div class="flex items-center gap-3">
+                    <label for="quantity" class="text-[13px] font-semibold uppercase tracking-[0.05em]">${lang_quantity}:</label>
+                    <select name="quantity" id="quantity" class="cursor-pointer rounded-lg border border-sand-200 bg-white px-4 py-2.5 outline-none focus:border-terracotta-500">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                    </select>
+                </div>
+            </div>
+
+            <button type="submit" data-state="idle" class="flex w-full items-center justify-center gap-2.5 rounded-lg bg-terracotta-500 p-4 text-sm font-semibold uppercase tracking-[0.05em] text-white transition-colors hover:bg-terracotta-700 data-[state=adding]:cursor-not-allowed data-[state=adding]:bg-sand-50 data-[state=adding]:text-muted data-[state=added]:bg-success data-[state=added]:text-white">
+                <svg class="h-4.5 w-4.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="13" rx="2" ry="2"></rect><path d="M16 8a4 4 0 0 0-8 0"></path></svg> ${lang_addToCart}
+            </button>
+        </form>
+    </div>
+</div>

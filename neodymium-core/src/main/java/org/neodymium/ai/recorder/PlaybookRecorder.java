@@ -1,0 +1,259 @@
+/*
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package org.neodymium.ai.recorder;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Set;
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.event.ExecutionEvent;
+import org.neodymium.ai.event.ExecutionListener;
+import org.neodymium.ai.event.structural.PlaybookRecordingFlushEvent;
+import org.neodymium.ai.event.structural.SessionFinishedEvent;
+import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.SessionData;
+import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.prompt.DefaultActionSanitizer;
+import org.neodymium.ai.resources.PlaybookResourceManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Event listener that monitors execution event dispatches, compiles executed actions,
+ * and writes the final parameterized recording as a JSON file through a resource manager
+ * only upon successful session completion when updates occurred.
+ *
+ * @author AI-generated: Gemini 3.6 Flash
+ * @author Xceptance GmbH 2026
+ */
+public final class PlaybookRecorder implements ExecutionListener
+{
+    private static final Logger LOGGER = LoggerFactory.getLogger(PlaybookRecorder.class);
+
+    private final PlaybookResourceManager resourceManager;
+    private final String recordingPath;
+    private final List<PlaybookStep> playbookSteps;
+    private final ExecutionMode executionMode;
+
+    /**
+     * Constructs a PlaybookRecorder with default recording mode.
+     */
+    public PlaybookRecorder(
+        final PlaybookResourceManager resourceManager,
+        final String recordingPath,
+        final List<PlaybookStep> playbookSteps
+    )
+    {
+        this(resourceManager, recordingPath, playbookSteps, ExecutionMode.LLM_RECORDING);
+    }
+
+    /**
+     * Constructs a PlaybookRecorder with explicit execution mode.
+     */
+    public PlaybookRecorder(
+        final PlaybookResourceManager resourceManager,
+        final String recordingPath,
+        final List<PlaybookStep> playbookSteps,
+        final ExecutionMode executionMode
+    )
+    {
+        this.resourceManager = resourceManager;
+        this.recordingPath = recordingPath;
+        this.playbookSteps = playbookSteps;
+        this.executionMode = executionMode != null ? executionMode : ExecutionMode.LLM_RECORDING;
+    }
+
+    @Override
+    public void onEvent(final ExecutionEvent event)
+    {
+        if (event instanceof final PlaybookRecordingFlushEvent flushEvent)
+        {
+            writeRecording(flushEvent.getExecutionContext());
+            return;
+        }
+
+        if (event instanceof SessionFinishedEvent)
+        {
+            final SessionFinishedEvent sessionFinishedEvent = (SessionFinishedEvent) event;
+            if (!this.executionMode.persistsRecording())
+            {
+                LOGGER.debug("Execution mode {} does not persist recordings. Skipping playbook recording write to {}", this.executionMode, this.recordingPath);
+                return;
+            }
+            if (!sessionFinishedEvent.isSuccess())
+            {
+                LOGGER.info("Session finished with failure. Skipping playbook recording write to {}", this.recordingPath);
+                if (this.executionMode == ExecutionMode.FORCE_RECORDING)
+                {
+                    try
+                    {
+                        this.resourceManager.delete(this.recordingPath);
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
+                return;
+            }
+
+            writeRecording(ExecutionContext.getActiveContext());
+        }
+    }
+
+    /**
+     * Persists the current executed steps as a candidate recording if the execution mode supports recording persistence.
+     *
+     * @param activeCtx the active execution context containing dynamic executed steps
+     */
+    public void writeRecording(final ExecutionContext activeCtx)
+    {
+        if (!this.executionMode.persistsRecording())
+        {
+            LOGGER.debug("Execution mode {} does not persist recordings. Skipping playbook recording write to {}", this.executionMode, this.recordingPath);
+            return;
+        }
+
+        try
+        {
+            List<PlaybookStep> stepsToWrite = this.playbookSteps;
+            if (activeCtx != null)
+            {
+                @SuppressWarnings("unchecked")
+                final List<PlaybookStep> flatSteps = (List<PlaybookStep>) activeCtx.getTransientData().get("playbook.flatSteps");
+                if (flatSteps != null && !flatSteps.isEmpty())
+                {
+                    // flatSteps holds leaf steps only: a composite step (e.g. a folded ">-" block) is represented by
+                    // its children, which carry a parent reference. Record the root of each step so a composite is
+                    // written once, together with its sub-steps, instead of being dropped.
+                    final Set<PlaybookStep> seenRoots = Collections.newSetFromMap(new IdentityHashMap<>());
+                    final List<PlaybookStep> topLevel = new ArrayList<>();
+                    for (final PlaybookStep s : flatSteps)
+                    {
+                        if (s == null)
+                        {
+                            continue;
+                        }
+                        final PlaybookStep root = s.getRootStep();
+                        if (seenRoots.add(root))
+                        {
+                            topLevel.add(root);
+                        }
+                    }
+                    if (!topLevel.isEmpty())
+                    {
+                        stepsToWrite = topLevel;
+                    }
+                }
+            }
+
+            if (activeCtx != null && activeCtx.getSessionData() != null)
+            {
+                sanitizePlaybookSteps(stepsToWrite, activeCtx.getSessionData());
+            }
+
+            final ObjectMapper mapper = new ObjectMapper();
+            mapper.enable(SerializationFeature.INDENT_OUTPUT);
+            final String candidateJson = mapper.writeValueAsString(stepsToWrite);
+
+            final String existingJson = readAsString(this.recordingPath);
+            if (existingJson != null && normalizeJson(existingJson).equals(normalizeJson(candidateJson)))
+            {
+                LOGGER.info("Session finished with success and 0 step changes. Skipping playbook recording write to {}", this.recordingPath);
+                return;
+            }
+            if (!this.executionMode.isRecording() && existingJson != null)
+            {
+                LOGGER.info("Session finished with success and healed step updates. Overwriting playbook recording at {}", this.recordingPath);
+            }
+
+            LOGGER.info("Writing candidate playbook recording to {}", this.recordingPath);
+            this.resourceManager.write(this.recordingPath, candidateJson);
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("Failed to write playbook recording to {}", this.recordingPath, e);
+        }
+    }
+
+    private String readAsString(final String path)
+    {
+        try (final java.io.InputStream in = this.resourceManager.read(path))
+        {
+            if (in == null)
+            {
+                return null;
+            }
+            return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+        catch (final Exception e)
+        {
+            return null;
+        }
+    }
+
+    private void sanitizePlaybookSteps(final List<PlaybookStep> steps, final SessionData sessionData)
+    {
+        if (steps == null || sessionData == null)
+        {
+            return;
+        }
+        final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+        for (final PlaybookStep step : steps)
+        {
+            if (step == null)
+            {
+                continue;
+            }
+            if (step.getReasoning() != null)
+            {
+                step.setReasoning(sanitizer.sanitizeText(step.getReasoning(), sessionData));
+            }
+            if (!step.getReasonings().isEmpty())
+            {
+                final List<String> sanitizedReasonings = new ArrayList<>();
+                for (final String r : step.getReasonings())
+                {
+                    sanitizedReasonings.add(r != null ? sanitizer.sanitizeText(r, sessionData) : null);
+                }
+                step.setReasonings(sanitizedReasonings);
+            }
+            if (step.hasSubSteps())
+            {
+                sanitizePlaybookSteps(step.getSubSteps(), sessionData);
+            }
+        }
+    }
+
+    private static String normalizeJson(final String json)
+    {
+        return json == null ? "" : json.replaceAll("\\r\\n", "\n").trim();
+    }
+}
+
+
+

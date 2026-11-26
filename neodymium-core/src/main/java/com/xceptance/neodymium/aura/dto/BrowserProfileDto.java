@@ -1,0 +1,98 @@
+/*
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package com.xceptance.neodymium.aura.dto;
+
+/**
+ * Data transfer object representing a browser profile discovered from browser configuration.
+ *
+ * @author AI-generated: Antigravity
+ * @author Xceptance GmbH 2026
+ */
+public final class BrowserProfileDto
+{
+    public String id;
+    public String name;
+    public String browser;
+    public String res;
+    public boolean headless;
+    public boolean available = true;
+    public String unavailableReason;
+
+    public BrowserProfileDto()
+    {
+    }
+
+    public BrowserProfileDto(final String id, final String name, final String browser, final String res, final boolean headless)
+    {
+        this(id, name, browser, res, headless, true, null);
+    }
+
+    public BrowserProfileDto(final String id, final String name, final String browser, final String res, final boolean headless,
+                             final boolean available, final String unavailableReason)
+    {
+        this.id = id;
+        this.name = name;
+        this.browser = browser;
+        this.res = res;
+        this.headless = headless;
+        this.available = available;
+        this.unavailableReason = unavailableReason;
+    }
+
+    public String getId()
+    {
+        return this.id;
+    }
+
+    public String getName()
+    {
+        return this.name;
+    }
+
+    public String getBrowser()
+    {
+        return this.browser;
+    }
+
+    public String getRes()
+    {
+        return this.res;
+    }
+
+    public boolean isHeadless()
+    {
+        return this.headless;
+    }
+
+    public boolean isAvailable()
+    {
+        return this.available;
+    }
+
+    public String getUnavailableReason()
+    {
+        return this.unavailableReason;
+    }
+}
+

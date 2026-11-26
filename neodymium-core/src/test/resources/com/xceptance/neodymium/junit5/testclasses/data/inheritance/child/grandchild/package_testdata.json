@@ -1,0 +1,6 @@
+[
+	{
+		"pkgInherited":"grandChild",
+		"grandChildKey":"grandChildValue"
+	}
+]

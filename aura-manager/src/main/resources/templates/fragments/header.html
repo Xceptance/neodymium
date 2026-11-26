@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head></head>
+<body>
+
+<!-- Shared Neodymium AI Launcher Button Fragment -->
+<th:block th:fragment="chatLauncherBtn">
+    <button type="button" id="auraChatLauncher" class="aura-chat-launcher" onclick="toggleAuraChat()" title="Open Neodymium AI Assistant">
+        <span class="aura-chat-launcher-icon">
+            <span class="material-symbols-outlined">auto_awesome</span>
+        </span>
+        <span class="aura-chat-launcher-label">Neodymium AI</span>
+        <span class="aura-chat-launcher-badge" id="chatBadgeDot"></span>
+    </button>
+</th:block>
+
+<!-- Top Header Fragment -->
+<header th:fragment="header" id="appHeader">
+    <!-- Test Manager Section Header Content -->
+    <th:block th:if="${activeTab == 'AuraTestManager'}">
+        <div class="header-title-area">
+            <div class="header-title" id="pageTitle">
+                <span class="material-symbols-outlined text-accent">auto_awesome</span>
+                <span th:text="${pageTitle ?: 'Neodymium AI Manager Dashboard'}">Neodymium AI Manager Dashboard</span>
+            </div>
+        </div>
+
+        <div class="header-actions d-flex align-items-center gap-2">
+            <button class="btn-edit btn-secondary" id="btnInteractiveConsole" onclick="openInteractiveConsoleViewLive('/interactive_console.html')" title="Switch to Interactive Console" style="display: none; padding: 0.35rem 0.75rem; font-size: 0.85rem; align-items: center; gap: 0.35rem;" th:style="${running and (interactive != null and interactive) ? 'display: inline-flex; padding: 0.35rem 0.75rem; font-size: 0.85rem; align-items: center; gap: 0.35rem;' : 'display: none; padding: 0.35rem 0.75rem; font-size: 0.85rem; align-items: center; gap: 0.35rem;'}">
+                <span class="material-symbols-outlined text-accent" style="font-size: 1.1rem;">terminal</span> Interactive Console
+            </button>
+            <th:block th:replace="~{fragments/header :: chatLauncherBtn}"></th:block>
+            <button class="btn-edit btn-secondary" id="settingsBtn" onclick="openSettingsModal()" title="Settings" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 0.35rem;">
+                <span class="material-symbols-outlined" style="font-size: 1.1rem;">settings</span> Settings
+            </button>
+            <div class="d-flex align-items-center gap-1" id="themeContainer" th:fragment="themeContainer" style="background: var(--bg-main); padding: 2px; border-radius: 6px; border: 1px solid var(--border-color);">
+                <button class="btn-edit" id="themeLight" onclick="changeTheme('light')" title="Light Mode" style="padding: 2px 6px; border: none; background: transparent;"><span class="material-symbols-outlined" style="font-size: 1rem;">light_mode</span></button>
+                <button class="btn-edit" id="themeDark" onclick="changeTheme('dark')" title="Dark Mode" style="padding: 2px 6px; border: none; background: transparent;"><span class="material-symbols-outlined" style="font-size: 1rem;">dark_mode</span></button>
+                <button class="btn-edit" id="themeSystem" onclick="changeTheme('system')" title="System Theme" style="padding: 2px 6px; border: none; background: transparent;"><span class="material-symbols-outlined" style="font-size: 1rem;">desktop_windows</span></button>
+            </div>
+        </div>
+    </th:block>
+
+    <!-- Report Manager Section Header Content -->
+    <th:block th:unless="${activeTab == 'AuraTestManager'}">
+        <div class="header-title-area">
+            <div class="header-title" id="pageTitle">
+                <span class="material-symbols-outlined text-accent" th:text="${pageTitle == 'Group overview' ? 'grid_view' : (pageTitle == 'Runs overview' ? 'format_list_bulleted' : (groupType == 'environment' ? 'dns' : (groupType == 'locale' ? 'public' : (groupType == 'browser' ? 'web' : (groupType == 'area' ? 'category' : (groupType != null and groupType != '' and groupType != 'all' ? 'sell' : (activeTab == 'TestBase' ? 'database' : (activeTab == 'RunReport' ? 'science' : 'trending_up'))))))))}">fact_check</span>
+                <span th:text="${pageTitle ?: 'Runs overview'}">Runs overview</span>
+            </div>
+            <div class="breadcrumb" id="headerBreadcrumb" style="display: none;">
+                <span>/</span> <a href="/" style="cursor: pointer; text-decoration: none; font-weight: 600;">Known Batches</a> <span id="breadcrumbTrail"></span>
+            </div>
+        </div>
+
+        <div class="header-actions d-flex align-items-center gap-2">
+            <button class="btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" 
+                    hx-post="/runs/refresh" 
+                    hx-target="#mainViewContainer" 
+                    hx-swap="innerHTML" 
+                    title="Analyze storage report folders, generate run.json files, and refresh views">
+                <span class="material-symbols-outlined">sync</span> Resync Storage
+            </button>
+
+            <button class="btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" 
+                    hx-post="/runs/refresh" 
+                    hx-target="#mainViewContainer" 
+                    hx-swap="innerHTML"
+                    title="Refresh reports and re-sync database">
+                <span class="material-symbols-outlined">refresh</span> Refresh
+            </button>
+            <th:block th:replace="~{fragments/header :: chatLauncherBtn}"></th:block>
+            <div class="d-flex align-items-center gap-1" id="themeContainer" th:fragment="themeContainer" style="background: var(--bg-main); padding: 2px; border-radius: 6px; border: 1px solid var(--border-color);">
+                <button class="btn-edit" id="themeLight" onclick="changeTheme('light')" title="Light Mode" style="padding: 2px 6px; border: none; background: transparent;"><span class="material-symbols-outlined" style="font-size: 1rem;">light_mode</span></button>
+                <button class="btn-edit" id="themeDark" onclick="changeTheme('dark')" title="Dark Mode" style="padding: 2px 6px; border: none; background: transparent;"><span class="material-symbols-outlined" style="font-size: 1rem;">dark_mode</span></button>
+                <button class="btn-edit" id="themeSystem" onclick="changeTheme('system')" title="System Theme" style="padding: 2px 6px; border: none; background: transparent;"><span class="material-symbols-outlined" style="font-size: 1rem;">desktop_windows</span></button>
+            </div>
+            <span id="resyncToast" style="font-size: 0.8rem; color: #22c55e; margin-left: 0.5rem; font-weight: 500;"></span>
+        </div>
+    </th:block>
+</header>
+
+</body>
+</html>

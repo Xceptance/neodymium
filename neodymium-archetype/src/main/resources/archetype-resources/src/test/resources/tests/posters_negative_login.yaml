@@ -1,0 +1,45 @@
+# Neodymium YAML Test Data File
+
+tags:
+  area: Account
+  feature: Login
+  type:
+    - Regression
+    - Negative
+  severity: Major
+
+before: |
+  Open https://posters.xceptance.io:8443/
+  _include: fragments/cookie_consent.steps
+
+steps: |
+  Click the user account menu
+  Click 'Sign In'
+  Verify the page heading contains 'Sign-In'
+  Type '${invalidEmail}' into the Email Address input field
+  Type '${invalidPassword}' into the Password input field
+  Click the 'Sign In' button
+  Verify the error alert message contains 'The email address or password is wrong. Please try again.'
+  Verify the error alert banner has a reddish background indicating an error (visual)
+  Verify the text inside the error alert banner is dark red (visual)
+  Verify the email input field is still displayed
+
+data:
+  -
+    testId: "invalid_password"
+    invalidEmail: "peter.peterson@varmail.de"
+    invalidPassword: "IncorrectPassword999!"
+    tags:
+      errorType: wrong_password
+  -
+    testId: "invalid_mail"
+    invalidEmail: "peter.peterson@varmail.net"
+    invalidPassword: "topsecret"
+    tags:
+      errorType: wrong_domain
+  -
+    testId: "invalid_account"
+    invalidEmail: "peter.peterson@varmail.net"
+    invalidPassword: "IncorrectPassword999!"
+    tags:
+      errorType: nonexistent_user

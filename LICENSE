@@ -5,18 +5,19 @@
 Neodymium is licensed under different licenses depending on which module
 or feature set you are using:
 
-1. Neodymium Classic (Core Framework)
+1. Neodymium Classic (Module: neodymium-classic)
    - Licensed under the permissive MIT License (see SECTION A below).
    - Free to use, modify, distribute, and host for both commercial
      and non-commercial purposes without restriction.
 
-2. Neodymium Aura AI (AI Integration Module)
+2. Neodymium AI (Modules: neodymium-core, aura-manager, neodymium-test-server, neodymium-e2e-tests, neodymium-archetype)
    - Dual-licensed under:
      a) GNU Affero General Public License (AGPLv3) (see SECTION B below).
         Free for development, testing, and internal applications.
      b) A Commercial License for hosters, SaaS providers, or teams 
         wishing to use the AI features commercially without AGPLv3 
-        network disclosure requirements. Contact support@xceptance.com.
+        network disclosure requirements. See SECTION C below or
+        contact support@xceptance.com.
 
 ========================================================================
 SECTION A: MIT LICENSE (Neodymium Classic)
@@ -45,7 +46,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ========================================================================
-SECTION B: GNU AFFERO GENERAL PUBLIC LICENSE (Neodymium Aura AI)
+SECTION B: GNU AFFERO GENERAL PUBLIC LICENSE (Neodymium AI)
 ========================================================================
 
                     GNU AFFERO GENERAL PUBLIC LICENSE
@@ -709,3 +710,19 @@ specific requirements.
 if any, to sign a "copyright disclaimer" for the program, if necessary.
 For more information on this, and how to apply and follow the GNU AGPL, see
 <https://www.gnu.org/licenses/>.
+
+========================================================================
+SECTION C: COMMERCIAL LICENSE (Neodymium AI)
+========================================================================
+
+Commercial licensing is available for customers who require proprietary
+usage rights, closed-source integration, SaaS hosting, or commercial support
+without the copyleft obligations of the GNU Affero General Public License (AGPLv3).
+
+For commercial licensing terms, pricing, custom agreements, or inquiries,
+please contact:
+
+Xceptance Software Technologies GmbH
+Email: support@xceptance.com / info@xceptance.com
+Website: https://www.xceptance.com/
+

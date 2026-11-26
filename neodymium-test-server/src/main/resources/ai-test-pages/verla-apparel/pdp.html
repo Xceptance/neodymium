@@ -1,0 +1,107 @@
+<div class="mbf-pdp-container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Breadcrumbs -->
+    <div class="mb-6 text-xs uppercase tracking-[0.08em] text-muted flex items-center gap-2">
+        <a href="index.html" class="hover:text-terracotta-500 transition-colors">${lang_home}</a>
+        <span>&bull;</span>
+        <a href="c/${product_category}.html" class="hover:text-terracotta-500 transition-colors">${product_category_name}</a>
+        <span>&bull;</span>
+        <span class="font-bold text-ink">${product_name}</span>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 items-start">
+        
+        <!-- Product Image Gallery (Large Silhouette with Swatch Viewer) -->
+        <div class="lg:col-span-7 space-y-4">
+            <div class="relative w-full aspect-square bg-sand-50 rounded-2xl border border-sand-200 flex items-center justify-center p-12 overflow-hidden shadow-sm">
+                ${product_badge_html}
+                <svg viewBox="0 0 100 100" class="w-4/5 h-4/5 text-terracotta-500 transition-transform duration-500 hover:scale-105">
+                    ${product_svg_content}
+                </svg>
+            </div>
+            <!-- Multi-angle thumbnails -->
+            <div class="flex items-center gap-3">
+                <button type="button" class="w-16 h-16 rounded-xl bg-sand-50 border-2 border-terracotta-500 flex items-center justify-center p-2">
+                    <svg viewBox="0 0 100 100" class="w-full h-full text-terracotta-500">${product_svg_content}</svg>
+                </button>
+                <button type="button" class="w-16 h-16 rounded-xl bg-sand-50 border border-sand-200 flex items-center justify-center p-2 opacity-70 hover:opacity-100">
+                    <svg viewBox="0 0 100 100" class="w-full h-full text-espresso">${product_svg_content}</svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Product Details & Add to Cart Form -->
+        <div class="lg:col-span-5 space-y-6">
+            <div>
+                <span class="text-[11px] font-bold uppercase tracking-[0.15em] text-terracotta-500">${product_subcategory_name}</span>
+                <h1 class="font-serif text-3xl sm:text-4xl font-bold text-espresso mt-1">${product_name}</h1>
+                <div class="mt-3 text-2xl font-bold text-ink flex items-center gap-3">
+                    ${product_price_html}
+                </div>
+            </div>
+
+            <!-- 4+1 Bundle Promo Callout -->
+            <div class="p-3.5 bg-terracotta-50 rounded-xl border border-terracotta-200 flex items-center justify-between text-xs font-semibold text-espresso">
+                <span>Special Offer: Buy 4, 5th is FREE</span>
+                <span class="text-terracotta-600 uppercase tracking-wider font-bold">Auto-applied</span>
+            </div>
+
+            <p class="text-xs text-muted leading-relaxed border-t border-sand-200 pt-4">
+                ${product_desc}
+            </p>
+
+            <!-- Add to Cart Form (HTMX Dynamic Badge Update) -->
+            <form hx-post="api/cart/add" hx-target="#cart-btn-wrapper" hx-swap="outerHTML" class="space-y-6 border-t border-sand-200 pt-6" data-pdp-form>
+                <input type="hidden" name="productId" value="${product_id}">
+
+                <!-- Size Picker + Size Guide Link -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between text-xs font-bold">
+                        <label for="size" class="uppercase tracking-wider text-ink">${lang_size}:</label>
+                        <button type="button" onclick="openSizeGuideModal()" class="text-terracotta-500 hover:underline flex items-center gap-1 font-semibold cursor-pointer">
+                            <span>Size Guide &amp; Fit Matrix</span>
+                        </button>
+                    </div>
+                    ${product_sizes_html}
+                </div>
+
+                <!-- Quantity -->
+                <div class="flex items-center gap-4">
+                    <label for="quantity" class="text-xs font-bold uppercase tracking-wider text-ink">${lang_quantity}:</label>
+                    <select name="quantity" id="quantity" class="px-4 py-2 rounded-lg border border-sand-200 bg-white text-xs font-bold outline-none focus:border-terracotta-500 cursor-pointer">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                    </select>
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" data-state="idle" class="w-full py-4 bg-terracotta-500 hover:bg-terracotta-600 text-white font-bold text-xs uppercase tracking-[0.1em] rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer">
+                    <svg class="w-4 h-4"><use xlink:href="#icon-bag"></use></svg>
+                    <span>${lang_addToCart}</span>
+                </button>
+            </form>
+
+            <!-- Accordion Details (Care, Composition, Delivery) -->
+            <div class="border-t border-sand-200 pt-6 divide-y divide-sand-200 text-xs">
+                <details class="py-3 group">
+                    <summary class="font-bold uppercase tracking-wider cursor-pointer list-none flex items-center justify-between text-espresso">
+                        <span>Composition &amp; Care</span>
+                        <span class="group-open:rotate-180 transition-transform">&darr;</span>
+                    </summary>
+                    <p class="pt-2 text-muted leading-relaxed">88% Recycled Polyamide, 12% Elastane. Machine wash delicate at 30&deg;C in wash bag. Do not tumble dry.</p>
+                </details>
+                <details class="py-3 group">
+                    <summary class="font-bold uppercase tracking-wider cursor-pointer list-none flex items-center justify-between text-espresso">
+                        <span>Delivery &amp; Free In-Store Returns</span>
+                        <span class="group-open:rotate-180 transition-transform">&darr;</span>
+                    </summary>
+                    <p class="pt-2 text-muted leading-relaxed">Complimentary delivery on orders above threshold. Free returns within 30 days online or in boutique.</p>
+                </details>
+            </div>
+
+        </div>
+
+    </div>
+</div>

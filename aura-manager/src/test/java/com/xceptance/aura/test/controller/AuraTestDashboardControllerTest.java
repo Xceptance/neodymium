@@ -1,0 +1,242 @@
+/*
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package com.xceptance.aura.test.controller;
+
+import com.xceptance.neodymium.aura.AuraFileService;
+import com.xceptance.neodymium.aura.AuraInteractiveService;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.ui.ConcurrentModel;
+import org.springframework.ui.Model;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
+
+/**
+ * Unit tests for AuraTestDashboardController.
+ *
+ * @author AI-generated: Antigravity
+ * @author Xceptance GmbH 2026
+ */
+public class AuraTestDashboardControllerTest
+{
+    private AuraInteractiveService interactiveService;
+    private AuraFileService fileService;
+    private AuraTestQueueController queueController;
+    private AuraTestDashboardController controller;
+
+    @BeforeEach
+    public void setUp()
+    {
+        interactiveService = Mockito.mock(AuraInteractiveService.class);
+        fileService = Mockito.mock(AuraFileService.class);
+        queueController = Mockito.mock(AuraTestQueueController.class);
+
+        Mockito.when(fileService.getYamlFilesList()).thenReturn(List.of());
+        Mockito.when(interactiveService.getActiveTheme()).thenReturn("dark");
+
+        controller = new AuraTestDashboardController(
+            interactiveService,
+            fileService,
+            queueController
+        );
+    }
+
+    @Test
+    public void testRenderDashboardFullPage()
+    {
+        final Model model = new ConcurrentModel();
+        Mockito.when(queueController.getFolderSelectionStatesJson()).thenReturn("{\"tests\":\"indeterminate\"}");
+        Mockito.when(queueController.getFolderTotalDatasetsJson()).thenReturn("{\"tests\":10}");
+
+        final String view = controller.renderDashboard("false", null, model);
+
+        Assertions.assertEquals("index", view);
+        Assertions.assertEquals("AuraTestManager", model.getAttribute("activeTab"));
+        Assertions.assertEquals("Neodymium AI Manager Dashboard", model.getAttribute("pageTitle"));
+        Assertions.assertEquals("fragments/aura-test-manager :: auraTestManager", model.getAttribute("viewFragment"));
+        Assertions.assertEquals("{\"tests\":\"indeterminate\"}", model.getAttribute("folderSelectionStatesJson"));
+        Assertions.assertEquals("{\"tests\":10}", model.getAttribute("folderTotalDatasetsJson"));
+    }
+
+    @Test
+    public void testRenderDashboardWithSearchQuery()
+    {
+        final Model model = new ConcurrentModel();
+        Mockito.when(fileService.getFilteredYamlFilesList("login")).thenReturn(List.of());
+        Mockito.when(fileService.getFilteredStepsFilesList("login")).thenReturn(List.of());
+
+        final String view = controller.renderDashboard("false", null, "login", model);
+
+        Assertions.assertEquals("index", view);
+        Assertions.assertEquals("login", model.getAttribute("q"));
+        Mockito.verify(fileService).getFilteredYamlFilesList("login");
+        Mockito.verify(fileService).getFilteredStepsFilesList("login");
+    }
+
+    @Test
+    public void testRenderDashboardWithCookieFallback()
+    {
+        final Model model = new ConcurrentModel();
+        Mockito.when(fileService.getFilteredYamlFilesList("checkout")).thenReturn(List.of());
+        Mockito.when(fileService.getFilteredStepsFilesList("checkout")).thenReturn(List.of());
+
+        final String view = controller.renderDashboard("false", null, null, "checkout", model);
+
+        Assertions.assertEquals("index", view);
+        Assertions.assertEquals("checkout", model.getAttribute("q"));
+        Mockito.verify(fileService).getFilteredYamlFilesList("checkout");
+        Mockito.verify(fileService).getFilteredStepsFilesList("checkout");
+    }
+
+    @Test
+    public void testRenderDashboardWithEncodedCookieFallback()
+    {
+        final Model model = new ConcurrentModel();
+        Mockito.when(fileService.getFilteredYamlFilesList("login test")).thenReturn(List.of());
+        Mockito.when(fileService.getFilteredStepsFilesList("login test")).thenReturn(List.of());
+
+        final String view = controller.renderDashboard("false", null, null, "login%20test", model);
+
+        Assertions.assertEquals("index", view);
+        Assertions.assertEquals("login test", model.getAttribute("q"));
+        Mockito.verify(fileService).getFilteredYamlFilesList("login test");
+        Mockito.verify(fileService).getFilteredStepsFilesList("login test");
+    }
+
+    @Test
+    public void testRenderDashboardHtmx()
+    {
+        final Model model = new ConcurrentModel();
+        final String view = controller.renderDashboard("true", null, model);
+
+        Assertions.assertEquals("fragments/aura-test-manager :: auraTestManager", view);
+        Assertions.assertEquals("AuraTestManager", model.getAttribute("activeTab"));
+        Assertions.assertEquals("Neodymium AI Manager Dashboard", model.getAttribute("pageTitle"));
+    }
+
+    @Test
+    public void testChangeThemeReturnsHeaderFragment()
+    {
+        final Model model = new ConcurrentModel();
+        final String view = controller.changeTheme("light", model);
+
+        Assertions.assertEquals("fragments/header :: themeContainer", view);
+        Assertions.assertEquals("light", model.getAttribute("theme"));
+        Mockito.verify(interactiveService).setActiveTheme("light");
+    }
+
+    @Test
+    public void testRenderDashboardPopulatesInteractiveAndRunningState()
+    {
+        final Model model = new ConcurrentModel();
+        Mockito.when(queueController.isInteractive()).thenReturn(true);
+        Mockito.when(queueController.isRunning()).thenReturn(false);
+
+        final String view = controller.renderDashboard("true", null, model);
+
+        Assertions.assertEquals("fragments/aura-test-manager :: auraTestManager", view);
+        Assertions.assertEquals(Boolean.TRUE, model.getAttribute("interactive"));
+        Assertions.assertEquals(Boolean.FALSE, model.getAttribute("running"));
+    }
+
+    @Test
+    public void testRenderDashboardPopulatesInteractiveAndRunningStateTrue()
+    {
+        final Model model = new ConcurrentModel();
+        Mockito.when(queueController.isInteractive()).thenReturn(true);
+        Mockito.when(queueController.isRunning()).thenReturn(true);
+
+        final String view = controller.renderDashboard("false", null, model);
+
+        Assertions.assertEquals("index", view);
+        Assertions.assertEquals(Boolean.TRUE, model.getAttribute("interactive"));
+        Assertions.assertEquals(Boolean.TRUE, model.getAttribute("running"));
+    }
+
+    @Test
+    public void testRenderDashboardWithFileParameter() throws Exception
+    {
+        final Model model = new ConcurrentModel();
+        Mockito.when(fileService.readYamlFileContent("Freiwohl.yaml")).thenReturn("steps:\n  - Open url");
+        Mockito.when(fileService.parsePlaybookSections("steps:\n  - Open url")).thenReturn(Map.of("mainSteps", List.of("Open url")));
+
+        final String view = controller.renderDashboard("false", "Freiwohl.yaml", model);
+
+        Assertions.assertEquals("index", view);
+        Assertions.assertEquals("Freiwohl.yaml", model.getAttribute("activeEditingFile"));
+        Assertions.assertEquals("Freiwohl.yaml", model.getAttribute("currentTestFile"));
+        Assertions.assertEquals("steps:\n  - Open url", model.getAttribute("editingFileContent"));
+        Mockito.verify(fileService).setActiveEditingFile("Freiwohl.yaml");
+    }
+
+    @Test
+    public void testPlaybooksRouteMapping() throws Exception
+    {
+        final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+        mockMvc.perform(get("/playbooks"))
+            .andExpect(status().isOk())
+            .andExpect(view().name("index"))
+            .andExpect(model().attribute("activeTab", "AuraTestManager"));
+    }
+
+    @Test
+    public void testRootRouteNotMappedToDashboardController() throws Exception
+    {
+        final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+        mockMvc.perform(get("/"))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    public void testIndexTemplateIncludesCacheBustingVersionsForDashboardScripts() throws Exception
+    {
+        final Path indexPath = Files.exists(Paths.get("src/main/resources/templates/index.html"))
+                ? Paths.get("src/main/resources/templates/index.html")
+                : Paths.get("aura-manager/src/main/resources/templates/index.html");
+        final String html = Files.readString(indexPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(html.contains("dashboard-styles.css?v=1.2.8"),
+                "dashboard-styles.css must carry the updated ?v=1.2.8 cache-busting query parameter in index.html");
+        Assertions.assertTrue(html.contains("dashboard-core.js?v="),
+                "dashboard-core.js must carry a ?v= cache-busting query parameter in index.html");
+        Assertions.assertTrue(html.contains("dashboard-chat.js?v="),
+                "dashboard-chat.js must carry a ?v= cache-busting query parameter in index.html");
+        Assertions.assertTrue(html.contains("dashboard-runner.js?v="),
+                "dashboard-runner.js must carry a ?v= cache-busting query parameter in index.html");
+        Assertions.assertTrue(html.contains("dashboard-settings.js?v="),
+                "dashboard-settings.js must carry a ?v= cache-busting query parameter in index.html");
+    }
+}

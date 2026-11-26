@@ -1,0 +1,76 @@
+/*
+ * VÉRLA — Tailwind CSS v4 source for the /verla-tailwind-by-claude/ storefront.
+ *
+ * This is the ONLY stylesheet input. Everything else is utility classes in the
+ * markup. Build it with build.sh, which emits ../shared/verla-tailwind.css.
+ *
+ * Design tokens mirror the verla-normal palette so both SUTs render the same
+ * brand, but here they are Tailwind theme variables rather than loose CSS
+ * custom properties, so they generate real utilities (bg-terracotta-500,
+ * text-muted, font-serif, ...).
+ */
+@import "tailwindcss";
+
+/* The markup lives in .html templates next to this file, plus the fragments
+   that EmbeddedHtmlServer renders from Java string literals. Both are scanned
+   so server-generated classes survive the production build. */
+@source "./*.html";
+@source "../../../java/org/neodymium/ai/util/EmbeddedHtmlServer.java";
+
+@theme {
+    /* Terracotta — brand accent */
+    --color-terracotta-50: #FAF6F3;
+    --color-terracotta-100: #F4ECE7;
+    --color-terracotta-200: #E8D5CA;
+    --color-terracotta-300: #D9B9A6;
+    --color-terracotta-400: #D09776;
+    --color-terracotta-500: #C87A53;
+    --color-terracotta-600: #B66A45;
+    --color-terracotta-700: #A65A35;
+    --color-terracotta-800: #8A4829;
+    --color-terracotta-900: #6F371E;
+
+    /* Sand — neutral surfaces and borders */
+    --color-sand-50: #FAF9F6;
+    --color-sand-100: #F5F3ED;
+    --color-sand-200: #E6E2DA;
+    --color-sand-300: #D4CFC4;
+
+    /* Semantic text/state colors */
+    --color-ink: #1A1A1A;
+    --color-muted: #666666;
+    --color-success: #5F8766;
+    --color-danger: #C85353;
+
+    --font-sans: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+    --font-serif: 'Playfair Display', Georgia, ui-serif, serif;
+
+    --animate-fade-in: fade-in 0.5s ease-out;
+    --animate-slide-up: slide-up 0.5s ease-out;
+
+    @keyframes fade-in {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes slide-up {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+}
+
+/* Tailwind v4 defaults border-color to currentColor. The storefront draws every
+   hairline in sand-200, so make that the default and drop it from the markup. */
+@layer base {
+    *,
+    ::after,
+    ::before {
+        border-color: var(--color-sand-200);
+    }
+
+    body {
+        font-family: var(--font-sans);
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+    }
+}

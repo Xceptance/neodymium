@@ -1,0 +1,212 @@
+/*
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package org.neodymium.ai.report;
+
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+/**
+ * Tests for {@link MarkdownReportGenerator} ensuring generated markdown reports properly
+ * include step associations, sequential turn counters, and semantic phases in the LLM interactions table.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
+ */
+public class MarkdownReportGeneratorTest
+{
+    @Test
+    @DisplayName("Verify Markdown report LLM Interactions table formats step references, sequential turns, and capabilities")
+    public void testMarkdownLlmInteractionsTable()
+    {
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestClass("CheckoutTest");
+        report.setTestName("testGuestCheckout");
+        report.setExecutionMode("LIVE");
+
+        final TestExecutionReport.ReportStepEntry step0 = new TestExecutionReport.ReportStepEntry(0, "Enter shipping details");
+        step0.setStatus("SUCCESS");
+        final TestExecutionReport.ReportStepEntry step1 = new TestExecutionReport.ReportStepEntry(1, "Select payment method");
+        step1.setStatus("SUCCESS");
+
+        report.addStep(step0);
+        report.addStep(step1);
+
+        // Pre-Flight LINTER Call: stepIndex -1
+        final TestExecutionReport.ReportLlmCallEntry linterCall = new TestExecutionReport.ReportLlmCallEntry();
+        linterCall.setStepIndex(-1);
+        linterCall.setCapability("LINTER");
+        linterCall.setModelName("gemini-2.5-flash");
+        linterCall.setDurationMs(1500);
+        linterCall.setInputTokens(1500);
+        linterCall.setOutputTokens(200);
+        report.addLlmCall(linterCall);
+
+        // Step 0 Call 1: Quality Judge
+        final TestExecutionReport.ReportLlmCallEntry call1 = new TestExecutionReport.ReportLlmCallEntry();
+        call1.setStepIndex(0);
+        call1.setCapability("JUDGE");
+        call1.setModelName("gemini-2.5-flash");
+        call1.setDurationMs(200);
+        call1.setInputTokens(1000);
+        call1.setOutputTokens(20);
+        report.addLlmCall(call1);
+
+        // Step 0 Call 2: Turn 1 (Text)
+        final TestExecutionReport.ReportLlmCallEntry call2 = new TestExecutionReport.ReportLlmCallEntry();
+        call2.setStepIndex(0);
+        call2.setCapability("TEXT_ONLY");
+        call2.setModelName("gemini-2.5-flash");
+        call2.setDurationMs(300);
+        call2.setInputTokens(2000);
+        call2.setOutputTokens(30);
+        report.addLlmCall(call2);
+
+        // Step 0 Call 3: Turn 2 (Text)
+        final TestExecutionReport.ReportLlmCallEntry call3 = new TestExecutionReport.ReportLlmCallEntry();
+        call3.setStepIndex(0);
+        call3.setCapability("TEXT_ONLY");
+        call3.setModelName("gemini-2.5-flash");
+        call3.setDurationMs(250);
+        call3.setInputTokens(2500);
+        call3.setOutputTokens(25);
+        report.addLlmCall(call3);
+
+        // Step 1 Call 4: Turn 1 (Vision)
+        final TestExecutionReport.ReportLlmCallEntry call4 = new TestExecutionReport.ReportLlmCallEntry();
+        call4.setStepIndex(1);
+        call4.setCapability("VISION");
+        call4.setModelName("gemini-2.5-flash");
+        call4.setDurationMs(600);
+        call4.setInputTokens(3000);
+        call4.setOutputTokens(40);
+        report.addLlmCall(call4);
+
+        final MarkdownReportGenerator generator = new MarkdownReportGenerator();
+        final String md = generator.generate(report);
+
+        Assertions.assertNotNull(md);
+        Assertions.assertTrue(md.contains("## LLM Interactions"));
+        Assertions.assertTrue(md.contains("| # | Step | Phase / Role | Model | Duration | In Tokens | Out Tokens | Cached | Cost |"));
+        Assertions.assertTrue(md.contains("Pre-Flight"));
+        Assertions.assertTrue(md.contains("Playbook Linter"));
+        Assertions.assertTrue(md.contains("Step #1"));
+        Assertions.assertTrue(md.contains("↳ Step #1"));
+        Assertions.assertTrue(md.contains("Quality Judge"));
+        Assertions.assertTrue(md.contains("Turn 1 (Text)"));
+        Assertions.assertTrue(md.contains("Turn 2 (Text)"));
+        Assertions.assertTrue(md.contains("Step #2"));
+        Assertions.assertTrue(md.contains("Turn 1 (Vision 📸)"));
+    }
+
+    @Test
+    @DisplayName("Verify Markdown report Overview table omits tags for compact layout")
+    public void testMarkdownReportOmitsTagsFromOverview()
+    {
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestClass("org.neodymium.ai.integration.verla.search.judge.SearchJudgeTest");
+        report.setTestMethod("liveAllDataSets");
+        report.addTag("integration");
+        report.addTag("mode:judge");
+
+        final MarkdownReportGenerator generator = new MarkdownReportGenerator();
+        final String md = generator.generate(report);
+
+        Assertions.assertNotNull(md);
+        Assertions.assertFalse(md.contains("| **Tags** |"),
+            "Markdown Overview table must omit tags for compact overview layout");
+    }
+
+    @Test
+    @DisplayName("Verify Markdown report displays visual marker tag next to mode and step mode on steps")
+    public void testVisualMarkerAndStepModeInMarkdown()
+    {
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestClass("VisualMarkersTest");
+        report.setTestName("testMarkers");
+        report.setExecutionMode("LIVE");
+
+        final TestExecutionReport.ReportStepEntry step0 = new TestExecutionReport.ReportStepEntry(0, "Click marked element");
+        step0.setStatus("PASSED");
+        step0.setMarker(true);
+        final TestExecutionReport.ReportLlmCallEntry llmCall = new TestExecutionReport.ReportLlmCallEntry();
+        llmCall.setStepIndex(0);
+        llmCall.setCapability("VISION");
+        step0.addLlmCall(llmCall);
+        report.addStep(step0);
+
+        final TestExecutionReport.ReportStepEntry step1 = new TestExecutionReport.ReportStepEntry(1, "Replay element click");
+        step1.setStatus("PASSED");
+        final TestExecutionReport.ReportActionEntry action = new TestExecutionReport.ReportActionEntry(
+            "CLICK", "button#submit", null, "Click submit", "Replay", true);
+        step1.addAction(action);
+        report.addStep(step1);
+
+        final MarkdownReportGenerator generator = new MarkdownReportGenerator();
+        final String md = generator.generate(report);
+
+        Assertions.assertNotNull(md);
+        Assertions.assertTrue(md.contains("| **Execution Mode** | `LIVE` 🎯 `MARKER` |"),
+            "Markdown execution mode row must display marker badge when report has visual marker steps");
+        Assertions.assertTrue(md.contains("- **Step Mode:** `LLM`"),
+            "Step 0 must display LLM step mode");
+        Assertions.assertTrue(md.contains("- **Visual Marker Step:** `🎯 true`"),
+            "Step 0 must display visual marker step flag");
+        Assertions.assertTrue(md.contains("- **Step Mode:** `REPLAY`"),
+            "Step 1 must display REPLAY step mode");
+    }
+
+    @Test
+    public void testActivePropertiesRenderedInMarkdown()
+    {
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestName("Markdown Properties Test");
+        report.setStatus("PASSED");
+        report.setSuccess(true);
+        report.addActiveProperty("neodymium.browser", "Chrome_1500x1000");
+        report.addActiveProperty("neodymium.url", "https://example.com");
+
+        final MarkdownReportGenerator generator = new MarkdownReportGenerator();
+        final String md = generator.generate(report);
+
+        Assertions.assertTrue(md.contains("## ⚙️ Active Properties"), "Markdown must have Active Properties section");
+        Assertions.assertTrue(md.contains("| `neodymium.browser` | `Chrome_1500x1000` |"), "Markdown must contain browser property row");
+        Assertions.assertTrue(md.contains("| `neodymium.url` | `https://example.com` |"), "Markdown must contain url property row");
+    }
+
+    @Test
+    public void testActivePropertiesEmptyStateInMarkdown()
+    {
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestName("Empty Markdown Test");
+        report.setStatus("PASSED");
+        report.setSuccess(true);
+
+        final MarkdownReportGenerator generator = new MarkdownReportGenerator();
+        final String md = generator.generate(report);
+
+        Assertions.assertTrue(md.contains("## ⚙️ Active Properties"), "Markdown must have Active Properties section");
+        Assertions.assertTrue(md.contains("_No active properties recorded._"), "Markdown must display empty message");
+    }
+}

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Visually Hidden Checkable Inputs Test</title>
+    <style>
+        .hidden-input {
+            display: none;
+        }
+        .zero-input {
+            width: 0px;
+            height: 0px;
+            opacity: 0;
+            overflow: hidden;
+        }
+        .visible-label {
+            cursor: pointer;
+            padding: 10px;
+            background: #eee;
+        }
+    </style>
+</head>
+<body>
+    <form>
+        <!-- Wrapping label with display: none input -->
+        <label class="visible-label" id="label-subscribe">
+            <input type="checkbox" id="subscribe-hidden" class="hidden-input" name="subscribe" value="yes" checked />
+            Subscribe to Newsletter
+        </label>
+
+        <!-- Sibling label for="id" with 0px width/height input -->
+        <input type="radio" id="gender-hidden" class="zero-input" name="gender" value="male" checked />
+        <label for="gender-hidden" class="visible-label" id="label-gender">
+            Male Option
+        </label>
+    </form>
+</body>
+</html>

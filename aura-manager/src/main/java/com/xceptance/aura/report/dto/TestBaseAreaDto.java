@@ -1,0 +1,122 @@
+/*
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package com.xceptance.aura.report.dto;
+
+import java.util.List;
+
+/**
+ * DTO representing a test area tab, icon, class count, and grouped test classes in Test Base.
+ *
+ * @author Xceptance GmbH 2026
+ */
+public final class TestBaseAreaDto
+{
+    private final String areaName;
+    private final String areaPaneId;
+    private final String tabBtnId;
+    private final String icon;
+    private final int classCount;
+    private final List<TestBaseClassDto> testClasses;
+    private final List<TestBaseSubAreaDto> subAreas;
+
+    public TestBaseAreaDto(
+        final String areaName,
+        final String areaPaneId,
+        final String tabBtnId,
+        final String icon,
+        final int classCount,
+        final List<TestBaseClassDto> testClasses,
+        final List<TestBaseSubAreaDto> subAreas)
+    {
+        this.areaName = areaName;
+        this.areaPaneId = areaPaneId;
+        this.tabBtnId = tabBtnId;
+        this.icon = icon;
+        this.classCount = classCount;
+        this.testClasses = testClasses;
+        this.subAreas = subAreas != null ? subAreas : List.of();
+    }
+
+    public TestBaseAreaDto(
+        final String areaName,
+        final String areaPaneId,
+        final String tabBtnId,
+        final String icon,
+        final int classCount,
+        final List<TestBaseClassDto> testClasses)
+    {
+        this(areaName, areaPaneId, tabBtnId, icon, classCount, testClasses, List.of());
+    }
+
+    public String getAreaName()
+    {
+        return areaName;
+    }
+
+    public String getAreaPaneId()
+    {
+        return areaPaneId;
+    }
+
+    public String getTabBtnId()
+    {
+        return tabBtnId;
+    }
+
+    public String getIcon()
+    {
+        return icon;
+    }
+
+    public int getClassCount()
+    {
+        return classCount;
+    }
+
+    public List<TestBaseClassDto> getTestClasses()
+    {
+        return testClasses;
+    }
+
+    public List<TestBaseSubAreaDto> getSubAreas()
+    {
+        return subAreas;
+    }
+
+    public boolean hasSubAreas()
+    {
+        return subAreas != null && !subAreas.isEmpty();
+    }
+
+    public int getTotalVariationsCount()
+    {
+        if (testClasses == null)
+        {
+            return 0;
+        }
+        return testClasses.stream()
+            .mapToInt(TestBaseClassDto::getVariationCount)
+            .sum();
+    }
+}

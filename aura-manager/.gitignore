@@ -1,0 +1,35 @@
+target/
+data/
+storage/
+storage1/
+storage2/
+storage_was/
+.allure/
+allure-results/
+*.db
+chat-history/
+*.class
+bin/
+!.mvn/wrapper/maven-wrapper.jar
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### Eclipse ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### VS Code ###
+.vscode/
+
+### OS ###
+.DS_Store
+Thumbs.db

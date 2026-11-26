@@ -7,23 +7,37 @@ fi
 
 INPUT="$1"
 
-# Function to find project root (directory containing pom.xml)
+# Function to find reactor root (outermost contiguous directory containing pom.xml)
 find_project_root() {
   local DIR="$1"
+  local FOUND=""
   while [ "$DIR" != "/" ]; do
     if [ -f "$DIR/pom.xml" ]; then
-      echo "$DIR"
-      return 0
+      FOUND="$DIR"
+    elif [ -n "$FOUND" ]; then
+      break
     fi
     DIR=$(dirname "$DIR")
   done
+  if [ -n "$FOUND" ]; then
+    echo "$FOUND"
+    return 0
+  fi
   # Fallback to current directory if no pom.xml is found
   pwd
 }
 
+resolve_abs_path() {
+  if command -v realpath >/dev/null 2>&1; then
+    realpath "$1"
+  else
+    (cd "$(dirname "$1")" && echo "$(pwd)/$(basename "$1")")
+  fi
+}
+
 if [ -f "$INPUT" ]; then
   # Input is an existing file, get absolute path
-  ABS_PATH=$(realpath "$INPUT")
+  ABS_PATH=$(resolve_abs_path "$INPUT")
   echo "Running Neodymium tests with data file: $ABS_PATH"
   
   # Find the project root from the file's location
@@ -31,7 +45,15 @@ if [ -f "$INPUT" ]; then
   cd "$PROJECT_DIR" || exit 1
   echo "Project directory resolved to: $PROJECT_DIR"
   
-  mvn test -Dneodymium.testFileFilter="$ABS_PATH" "${@:2}"
+  TARGET_MODULE="neodymium-core"
+  if [[ "$ABS_PATH" == *"/neodymium-e2e-tests/"* ]]; then
+    TARGET_MODULE="neodymium-e2e-tests"
+  fi
+  if [ -n "$NEO_MODULE" ]; then
+    TARGET_MODULE="$NEO_MODULE"
+  fi
+  
+  mvn test -pl "$TARGET_MODULE" -Dneodymium.testFileFilter="$ABS_PATH" "${@:2}"
 else
   # Assume it's a test ID
   echo "Running Neodymium tests with testId: $INPUT"
@@ -41,5 +63,7 @@ else
   cd "$PROJECT_DIR" || exit 1
   echo "Project directory resolved to: $PROJECT_DIR"
   
-  mvn test -Dneodymium.testIdFilter="$INPUT" "${@:2}"
+  TARGET_MODULE="${NEO_MODULE:-neodymium-core}"
+  
+  mvn test -pl "$TARGET_MODULE" -Dneodymium.testIdFilter="$INPUT" "${@:2}"
 fi

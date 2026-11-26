@@ -1,0 +1,18 @@
+# [DEF-20261023-0925] Run Deletion Triggers Full Database Variation Recalculation and Breaks SVG Trend Charts
+
+- **Status:** `Resolved`
+- **Opened:** 2026-10-23 09:25
+- **Closed:** 2026-10-23 09:30
+- **Component:** `aura-manager`
+- **Scope:** `Framework`
+- **Symptom:** Deleting a test run from the Batch History overview or Test Base takes excessive time (several seconds to minutes) due to massive recalculations of all historical runs, and upon completion the history trend chart SVG renders as empty/broken (paths unrendered with `d=""` and displaying an isolated dot at default coordinates `cx=50, cy=70`) until an explicit browser page refresh.
+- **Root Cause:** In `AuraReportDataService.removeRunFromHistory`, `localRunJsonStorageService.deleteRunJson(cleanRunId)` and `clearCache()` were executed before `getRunReport(cleanRunId)` was queried to identify affected variations. Because the deleted run's report was already deleted from disk and evicted from memory, `getRunReport(cleanRunId)` returned an empty report with 0 executions, causing `affectedVarIds` to be empty. The logic subsequently fell back to `variationRepository.findAll()`, pulling every variation in the entire system database. Combined with `clearCache()` having dumped the entire in-memory run report cache for all historical runs, `getVariationHistory` executed synchronous disk I/O and Jackson JSON deserialization for every candidate run across every variation in the database ($N \times M$ complexity). Furthermore, in `report-manager.js`, `deleteRunFromHistory` swapped the returned HTML into `#mainViewContainer` using native `fetch` without dispatching `htmx:afterSwap` or calling `bindGlobalListeners()`, leaving `mainTrendSvg` and area trend charts uncalculated and unrendered until a manual page refresh.
+- **Detection Gap ("What did we miss?"):** `AuraReportRunRemovalTest` mocked `variationRepository.findAll()` directly instead of `findAllById(affectedVarIds)` and omitted mocking `storageService.readRunJson` for the deleted run, masking the inverted execution order and cache wipe. Frontend tests did not assert that chart paths were recalculated after a fetch-based run deletion.
+- **Resolution:**
+  1. Updated `AuraReportDataService.removeRunFromHistory` to query `getRunReport(cleanRunId)` first, identifying affected variation IDs before deleting disk storage or evicting cache.
+  2. Evicted only `cleanRunId` from cache (`runReportCache.remove(cleanRunId)`) rather than purging the entire cache via `clearCache()`, keeping all remaining historical runs warm in memory.
+  3. Restricted variation updates strictly to `variationRepository.findAllById(affectedVarIds)`, eliminating full database scans and returning an empty list when a run has no executions.
+  4. Synchronized `lastExecutedAt` inside `getVariationHistory` alongside `lastStatus`, `healed`, and `mode`, and eliminated the redundant duplicate save in `removeRunFromHistory`.
+  5. Forwarded active query parameters (`excludeRuns`, `olderThanDate`) in `AuraReportViewController.deleteRun` to maintain view filter state upon reload.
+  6. Updated `report-manager.js`'s `deleteRunFromHistory` to call `bindGlobalListeners()` immediately after DOM replacement, ensuring `renderDynamicTrendChart` and `renderDynamicAreaTrendCharts` execute without requiring a page refresh.
+- **Safety Net Added:** `AuraReportRunRemovalTest.testRemoveRunFromHistoryUpdatesVariationWhenDeletedRunWasLastRun` and `testRemoveRunFromHistoryPrunesEmptyVariationWhenAllRunsDeleted` updated to verify selective variation processing without full cache clears or redundant save invocations.

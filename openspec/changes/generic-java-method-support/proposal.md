@@ -1,3 +1,6 @@
+> [!WARNING]
+> **SUPERSEDED**: This change is superseded by [`unified-tooling-architecture`](../unified-tooling-architecture/).
+
 ## Why
 
 The current `JAVA_METHOD` AI action plugin only supports calling void methods that accept 0 or 1 String parameters. This requires test developers to write verbose custom boilerplate void assertion wrappers on their test classes or utility classes for every minor utility function they want to call (e.g., string formatting, localized price parsing). Allowing more generic method execution, multi-argument support, and variable assignment directly within the AI steps reduces boilerplate and makes AI test cases more compact, clean, and reusable.

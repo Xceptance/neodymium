@@ -1,0 +1,46 @@
+# Neodymium YAML Test Data File
+
+tags:
+  area: Account
+  feature: Registration
+  type:
+    - Smoke
+    - Regression
+    - E2E
+  severity: Critical
+
+before: |
+  Open https://posters.xceptance.io:8443/
+  _include: fragments/cookie_consent.steps
+
+steps: |
+  Click the user account menu
+  Click 'Create Account'
+  Verify the page heading is 'Create an Account'
+  Type '${firstName}' into the First Name input field
+  Type '${lastName}' into the Last Name input field
+  Type a unique random email ending with '@varmail.de' into the Email input field and store it as 'registeredEmail'
+  Type '${password}' into the Password input field
+  Type '${password}' into the Confirm Password input field
+  Click the 'Create Account' button
+  Verify the alert message contains 'Your account has been created'
+  Verify the success alert message background is green (visual)
+
+after: |
+  Open https://posters.xceptance.io:8443/en-US/login
+  Type '${registeredEmail}' into the Email input field
+  Type '${password}' into the Password input field
+  Click 'Sign In'
+  Open https://posters.xceptance.io:8443/en-US/settingOverview
+  Click 'Delete Your Account'
+  Type '${password}' into the Password input field
+  Click the 'Delete' button
+  Verify the alert message contains 'Your account has been deleted'
+  Verify the success alert message background is green (visual)
+
+data:
+  -
+    testId: "register_new_customer"
+    firstName: "Neo"
+    lastName: "Tester"
+    password: "Password123!"

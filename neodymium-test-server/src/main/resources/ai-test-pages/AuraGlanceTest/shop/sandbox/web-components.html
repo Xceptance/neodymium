@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Components Portal Challenge - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+</head>
+<body class="aura-theme-dark">
+    <div class="aura-container">
+        <header class="aura-header">
+            <div class="aura-logo">Aura AI <span>Sandbox</span></div>
+            <nav class="aura-nav">
+                <a href="index.html">← Back to Sandbox Playground</a>
+            </nav>
+        </header>
+
+        <main class="aura-main">
+            <section class="aura-card" style="max-width: 720px; margin: 0 auto;">
+                <h1>Web Components &amp; Shadow DOM Challenge</h1>
+                <p class="aura-desc">
+                    This portal application is built entirely with custom Web Components using multi-level open Shadow DOM boundaries.
+                    Standard light DOM scrapers without deep shadow traversal will only see unexpanded custom tags.
+                </p>
+
+                <!-- Top-Level Web Component Host -->
+                <aura-portal-app id="portal-app">
+                    <span slot="app-title">Secure Enterprise Portal</span>
+                </aura-portal-app>
+
+                <div class="aura-status-box" style="margin-top: 2rem; padding: 1.25rem; background: rgba(0,0,0,0.3); border-radius: 8px; text-align: center;">
+                    Portal Status: <span id="portal-status" style="font-weight: bold; color: #00ffcc;">Ready for authentication</span>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        // -------------------------------------------------------------
+        // 1. <aura-input-field>: Shadow-encapsulated form input component
+        // -------------------------------------------------------------
+        class AuraInputField extends HTMLElement {
+            constructor() {
+                super();
+                this.attachShadow({ mode: 'open' });
+            }
+
+            static get observedAttributes() {
+                return ['label', 'type', 'name', 'placeholder'];
+            }
+
+            connectedCallback() {
+                this.render();
+            }
+
+            attributeChangedCallback(name, oldVal, newVal) {
+                if (oldVal !== newVal && this.shadowRoot && this.shadowRoot.innerHTML) {
+                    this.render();
+                }
+            }
+
+            get value() {
+                const inp = this.shadowRoot ? this.shadowRoot.querySelector('input') : null;
+                return inp ? inp.value : (this.getAttribute('value') || '');
+            }
+
+            set value(val) {
+                const inp = this.shadowRoot ? this.shadowRoot.querySelector('input') : null;
+                if (inp) inp.value = val;
+                this.setAttribute('value', val);
+            }
+
+            render() {
+                const label = this.getAttribute('label') || '';
+                const type = this.getAttribute('type') || 'text';
+                const name = this.getAttribute('name') || '';
+                const placeholder = this.getAttribute('placeholder') || '';
+                const currentVal = this.getAttribute('value') || '';
+
+                this.shadowRoot.innerHTML = `
+                    <style>
+                        :host {
+                            display: flex;
+                            flex-direction: column;
+                            gap: 0.35rem;
+                            margin-bottom: 1rem;
+                            width: 100%;
+                            box-sizing: border-box;
+                        }
+                        label {
+                            font-size: 0.85rem;
+                            font-weight: 600;
+                            color: #cbd5e1;
+                            letter-spacing: 0.02em;
+                        }
+                        .input-wrap {
+                            position: relative;
+                            display: flex;
+                            align-items: center;
+                        }
+                        input {
+                            width: 100%;
+                            padding: 0.75rem 1rem;
+                            background: rgba(15, 23, 42, 0.6);
+                            border: 1px solid rgba(148, 163, 184, 0.25);
+                            border-radius: 6px;
+                            color: #f8fafc;
+                            font-size: 0.95rem;
+                            font-family: inherit;
+                            box-sizing: border-box;
+                            transition: border-color 0.2s, box-shadow 0.2s;
+                        }
+                        input:focus {
+                            outline: none;
+                            border-color: #00ffcc;
+                            box-shadow: 0 0 0 3px rgba(0, 255, 204, 0.15);
+                        }
+                    </style>
+                    <label for="field-input">${label}</label>
+                    <div class="input-wrap">
+                        <input id="field-input" type="${type}" name="${name}" placeholder="${placeholder}" value="${currentVal}">
+                    </div>
+                `;
+            }
+        }
+        customElements.define('aura-input-field', AuraInputField);
+
+        // -------------------------------------------------------------
+        // 2. <aura-toggle-switch>: Shadow-encapsulated toggle switch
+        // -------------------------------------------------------------
+        class AuraToggleSwitch extends HTMLElement {
+            constructor() {
+                super();
+                this.attachShadow({ mode: 'open' });
+            }
+
+            connectedCallback() {
+                this.render();
+            }
+
+            get checked() {
+                const chk = this.shadowRoot ? this.shadowRoot.querySelector('input') : null;
+                return chk ? chk.checked : this.hasAttribute('checked');
+            }
+
+            set checked(val) {
+                if (val) {
+                    this.setAttribute('checked', '');
+                } else {
+                    this.removeAttribute('checked');
+                }
+                const chk = this.shadowRoot ? this.shadowRoot.querySelector('input') : null;
+                if (chk) chk.checked = !!val;
+            }
+
+            render() {
+                const label = this.getAttribute('label') || 'Enable Option';
+                const name = this.getAttribute('name') || '';
+                const isChecked = this.hasAttribute('checked');
+
+                this.shadowRoot.innerHTML = `
+                    <style>
+                        :host {
+                            display: inline-flex;
+                            align-items: center;
+                            gap: 0.75rem;
+                            margin-bottom: 1.25rem;
+                            cursor: pointer;
+                            user-select: none;
+                        }
+                        .switch-label {
+                            font-size: 0.88rem;
+                            color: #cbd5e1;
+                            cursor: pointer;
+                        }
+                        .toggle-box {
+                            position: relative;
+                            display: inline-block;
+                            width: 44px;
+                            height: 24px;
+                        }
+                        input {
+                            opacity: 0;
+                            width: 0;
+                            height: 0;
+                        }
+                        .slider {
+                            position: absolute;
+                            cursor: pointer;
+                            top: 0; left: 0; right: 0; bottom: 0;
+                            background-color: rgba(148, 163, 184, 0.3);
+                            transition: 0.3s;
+                            border-radius: 24px;
+                            border: 1px solid rgba(255, 255, 255, 0.15);
+                        }
+                        .slider:before {
+                            position: absolute;
+                            content: "";
+                            height: 16px;
+                            width: 16px;
+                            left: 3px;
+                            bottom: 3px;
+                            background-color: #f8fafc;
+                            transition: 0.3s;
+                            border-radius: 50%;
+                        }
+                        input:checked + .slider {
+                            background-color: #00ffcc;
+                            border-color: #00d4aa;
+                        }
+                        input:checked + .slider:before {
+                            transform: translateX(20px);
+                            background-color: #0f172a;
+                        }
+                    </style>
+                    <label class="toggle-box">
+                        <input type="checkbox" id="switch-input" name="${name}" ${isChecked ? 'checked' : ''}>
+                        <span class="slider"></span>
+                    </label>
+                    <span class="switch-label">${label}</span>
+                `;
+
+                const chk = this.shadowRoot.querySelector('input');
+                chk.addEventListener('change', () => {
+                    if (chk.checked) {
+                        this.setAttribute('checked', '');
+                    } else {
+                        this.removeAttribute('checked');
+                    }
+                });
+            }
+        }
+        customElements.define('aura-toggle-switch', AuraToggleSwitch);
+
+        // -------------------------------------------------------------
+        // 3. <aura-action-button>: Shadow-encapsulated action button
+        // -------------------------------------------------------------
+        class AuraActionButton extends HTMLElement {
+            constructor() {
+                super();
+                this.attachShadow({ mode: 'open' });
+            }
+
+            connectedCallback() {
+                this.render();
+            }
+
+            render() {
+                const variant = this.getAttribute('variant') || 'primary';
+                const type = this.getAttribute('type') || 'button';
+
+                this.shadowRoot.innerHTML = `
+                    <style>
+                        :host {
+                            display: inline-block;
+                        }
+                        button {
+                            display: inline-flex;
+                            align-items: center;
+                            justify-content: center;
+                            padding: 0.75rem 1.5rem;
+                            font-size: 0.95rem;
+                            font-weight: 600;
+                            border-radius: 6px;
+                            border: none;
+                            cursor: pointer;
+                            font-family: inherit;
+                            transition: all 0.2s ease;
+                        }
+                        .primary {
+                            background: #00ffcc;
+                            color: #0b1329;
+                            box-shadow: 0 0 12px rgba(0, 255, 204, 0.3);
+                        }
+                        .primary:hover {
+                            background: #00d4aa;
+                            transform: translateY(-1px);
+                        }
+                        .success {
+                            background: #10b981;
+                            color: #ffffff;
+                            box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
+                        }
+                        .success:hover {
+                            background: #059669;
+                            transform: translateY(-1px);
+                        }
+                    </style>
+                    <button type="${type}" class="${variant}"><slot></slot></button>
+                `;
+
+                // Delegate button clicks outward
+                this.shadowRoot.querySelector('button').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.dispatchEvent(new CustomEvent('click', { bubbles: true, composed: true }));
+                });
+            }
+        }
+        customElements.define('aura-action-button', AuraActionButton);
+
+        // -------------------------------------------------------------
+        // 4. <aura-account-card>: Shadow-encapsulated profile dashboard
+        // -------------------------------------------------------------
+        class AuraAccountCard extends HTMLElement {
+            constructor() {
+                super();
+                this.attachShadow({ mode: 'open' });
+            }
+
+            connectedCallback() {
+                this.render();
+            }
+
+            render() {
+                const email = this.getAttribute('user-email') || 'alex.chen@acme-corp.com';
+                this.shadowRoot.innerHTML = `
+                    <style>
+                        :host {
+                            display: block;
+                            padding: 1.5rem;
+                            background: rgba(255, 255, 255, 0.05);
+                            border: 1px solid rgba(0, 255, 204, 0.3);
+                            border-radius: 8px;
+                            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+                        }
+                        .badge {
+                            display: inline-block;
+                            padding: 0.25rem 0.6rem;
+                            font-size: 0.75rem;
+                            font-weight: 700;
+                            text-transform: uppercase;
+                            background: rgba(16, 185, 129, 0.2);
+                            color: #10b981;
+                            border: 1px solid rgba(16, 185, 129, 0.4);
+                            border-radius: 4px;
+                            margin-bottom: 0.75rem;
+                        }
+                        h2 {
+                            margin: 0 0 0.5rem 0;
+                            font-size: 1.35rem;
+                            color: #f8fafc;
+                        }
+                        p {
+                            margin: 0.25rem 0;
+                            color: #94a3b8;
+                            font-size: 0.9rem;
+                        }
+                    </style>
+                    <span class="badge">Authenticated Session</span>
+                    <h2 class="welcome-banner">Welcome back, ${email}</h2>
+                    <p class="role-desc">Role: Security Administrator &bull; Status: Active</p>
+                    <p class="device-desc">Device: Trusted Workstation &bull; Encrypted Session</p>
+                `;
+            }
+        }
+        customElements.define('aura-account-card', AuraAccountCard);
+
+        // -------------------------------------------------------------
+        // 5. <aura-auth-stepper>: Multi-step state machine inside Shadow DOM
+        // -------------------------------------------------------------
+        class AuraAuthStepper extends HTMLElement {
+            constructor() {
+                super();
+                this.attachShadow({ mode: 'open' });
+                this.step = 1;
+                this.userEmail = '';
+                this.rememberMe = false;
+            }
+
+            connectedCallback() {
+                this.render();
+            }
+
+            render() {
+                if (this.step === 1) {
+                    this.shadowRoot.innerHTML = `
+                        <style>
+                            :host {
+                                display: block;
+                                padding: 1rem 0;
+                            }
+                            .step-indicator {
+                                font-size: 0.8rem;
+                                text-transform: uppercase;
+                                letter-spacing: 0.05em;
+                                color: #94a3b8;
+                                margin-bottom: 0.5rem;
+                            }
+                            .form-container {
+                                display: flex;
+                                flex-direction: column;
+                            }
+                            .button-bar {
+                                margin-top: 0.5rem;
+                            }
+                        </style>
+                        <div class="step-indicator">Step 1 of 2: Identity Verification</div>
+                        <div class="form-container">
+                            <aura-input-field id="email-field" name="email" label="Email Address" type="email" placeholder="name@example.com"></aura-input-field>
+                            <div class="button-bar">
+                                <aura-action-button id="btn-step-continue" class="btn-continue" variant="primary">Continue</aura-action-button>
+                            </div>
+                        </div>
+                    `;
+
+                    const continueBtn = this.shadowRoot.querySelector('#btn-step-continue');
+                    continueBtn.addEventListener('click', () => {
+                        const emailInput = this.shadowRoot.querySelector('#email-field');
+                        const emailVal = emailInput ? emailInput.value.trim() : '';
+                        if (emailVal) {
+                            this.userEmail = emailVal;
+                            this.step = 2;
+                            this.render();
+                        }
+                    });
+                } else if (this.step === 2) {
+                    this.shadowRoot.innerHTML = `
+                        <style>
+                            :host {
+                                display: block;
+                                padding: 1rem 0;
+                            }
+                            .step-indicator {
+                                font-size: 0.8rem;
+                                text-transform: uppercase;
+                                letter-spacing: 0.05em;
+                                color: #00ffcc;
+                                margin-bottom: 0.5rem;
+                            }
+                            .user-tag {
+                                padding: 0.5rem 0.75rem;
+                                background: rgba(0, 255, 204, 0.08);
+                                border-left: 3px solid #00ffcc;
+                                border-radius: 4px;
+                                margin-bottom: 1.25rem;
+                                font-size: 0.9rem;
+                                color: #f8fafc;
+                            }
+                            .form-container {
+                                display: flex;
+                                flex-direction: column;
+                            }
+                            .button-bar {
+                                margin-top: 0.5rem;
+                            }
+                        </style>
+                        <div class="step-indicator">Step 2 of 2: Security &amp; Preferences</div>
+                        <div class="user-tag">Authenticating as: <strong>${this.userEmail}</strong></div>
+                        <div class="form-container">
+                            <aura-input-field id="password-field" name="password" label="Password" type="password" placeholder="Enter security passphrase"></aura-input-field>
+                            <aura-toggle-switch id="remember-switch" name="rememberMe" label="Remember this device" class="remember-switch"></aura-toggle-switch>
+                            <div class="button-bar">
+                                <aura-action-button id="btn-step-signin" class="btn-signin" variant="success">Sign In</aura-action-button>
+                            </div>
+                        </div>
+                    `;
+
+                    const signinBtn = this.shadowRoot.querySelector('#btn-step-signin');
+                    signinBtn.addEventListener('click', () => {
+                        const passInput = this.shadowRoot.querySelector('#password-field');
+                        const passVal = passInput ? passInput.value.trim() : '';
+                        const rememberSwitch = this.shadowRoot.querySelector('#remember-switch');
+                        this.rememberMe = rememberSwitch ? rememberSwitch.checked : false;
+
+                        if (passVal) {
+                            this.step = 3;
+                            this.render();
+                            const statusElem = document.getElementById('portal-status');
+                            if (statusElem) {
+                                statusElem.innerText = `Welcome back, ${this.userEmail}`;
+                                statusElem.style.color = '#00ffcc';
+                            }
+                        }
+                    });
+                } else if (this.step === 3) {
+                    this.shadowRoot.innerHTML = `
+                        <style>
+                            :host {
+                                display: block;
+                                padding: 1rem 0;
+                            }
+                        </style>
+                        <aura-account-card user-email="${this.userEmail}"></aura-account-card>
+                    `;
+                }
+            }
+        }
+        customElements.define('aura-auth-stepper', AuraAuthStepper);
+
+        // -------------------------------------------------------------
+        // 6. <aura-portal-app>: Outer application container with slots
+        // -------------------------------------------------------------
+        class AuraPortalApp extends HTMLElement {
+            constructor() {
+                super();
+                this.attachShadow({ mode: 'open' });
+            }
+
+            connectedCallback() {
+                this.render();
+            }
+
+            render() {
+                this.shadowRoot.innerHTML = `
+                    <style>
+                        :host {
+                            display: block;
+                            margin: 1.5rem 0;
+                            padding: 1.5rem;
+                            background: rgba(30, 41, 59, 0.4);
+                            border: 1px solid rgba(255, 255, 255, 0.1);
+                            border-radius: 12px;
+                            backdrop-filter: blur(10px);
+                        }
+                        .header-row {
+                            display: flex;
+                            align-items: center;
+                            justify-content: space-between;
+                            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                            padding-bottom: 1rem;
+                            margin-bottom: 1rem;
+                        }
+                        .title-slot {
+                            font-size: 1.15rem;
+                            font-weight: 700;
+                            color: #f8fafc;
+                        }
+                    </style>
+                    <div class="header-row">
+                        <div class="title-slot">
+                            <slot name="app-title">Portal App</slot>
+                        </div>
+                    </div>
+                    <aura-auth-stepper id="auth-stepper"></aura-auth-stepper>
+                `;
+            }
+        }
+        customElements.define('aura-portal-app', AuraPortalApp);
+    </script>
+    <script src="../../shared/controls.js"></script>
+</body>
+</html>

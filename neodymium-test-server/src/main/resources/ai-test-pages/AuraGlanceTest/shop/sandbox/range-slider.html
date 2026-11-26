@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Range Sliders &amp; Drag Gestures - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+    <style>
+        .drag-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            transition: all 0.2s ease;
+        }
+        .drag-card:hover {
+            border-color: rgba(0, 255, 204, 0.3);
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .card-title {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 0.5rem;
+        }
+        .card-desc {
+            color: var(--text-secondary, #a0aec0);
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+        .status-badge {
+            margin-top: 1rem;
+            padding: 0.75rem 1rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            border-left: 3px solid #00ffcc;
+            font-size: 0.95rem;
+            color: #e2e8f0;
+        }
+
+        /* Dual Thumb Slider Styling */
+        .slider-wrapper {
+            padding: 2rem 1rem 1rem 1rem;
+            max-width: 440px;
+        }
+        .slider-track-container {
+            position: relative;
+            height: 8px;
+            background: #2d3748;
+            border-radius: 4px;
+            width: 300px;
+            margin: 0 auto;
+            user-select: none;
+        }
+        .slider-range-bar {
+            position: absolute;
+            height: 100%;
+            background: linear-gradient(90deg, #00ffcc, #3b82f6);
+            border-radius: 4px;
+            pointer-events: none;
+        }
+        .slider-thumb {
+            position: absolute;
+            top: 50%;
+            width: 24px;
+            height: 24px;
+            background: #ffffff;
+            border: 3px solid #00ffcc;
+            border-radius: 50%;
+            cursor: grab;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+            transition: box-shadow 0.15s ease, transform 0.1s ease;
+            touch-action: none;
+            z-index: 2;
+        }
+        .slider-thumb:active, .slider-thumb.dragging {
+            cursor: grabbing;
+            box-shadow: 0 0 0 6px rgba(0, 255, 204, 0.25);
+            transform: translate(-50%, -50%) scale(1.1);
+        }
+        .slider-labels {
+            display: flex;
+            justify-content: space-between;
+            width: 300px;
+            margin: 1.5rem auto 0 auto;
+            font-size: 0.9rem;
+            color: var(--text-secondary, #a0aec0);
+        }
+        .price-val {
+            font-weight: 600;
+            color: #00ffcc;
+        }
+
+        /* Reorderable List Styling */
+        .reorder-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            max-width: 440px;
+        }
+        .reorder-item {
+            display: flex;
+            align-items: center;
+            padding: 0.85rem 1rem;
+            margin-bottom: 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            cursor: grab;
+            transition: background 0.2s, border-color 0.2s, transform 0.15s;
+            user-select: none;
+        }
+        .reorder-item.dragging {
+            opacity: 0.5;
+            background: rgba(0, 255, 204, 0.1);
+            border-color: #00ffcc;
+        }
+        .reorder-item.drag-over {
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.15);
+            transform: translateY(2px);
+        }
+        .item-handle {
+            margin-right: 0.75rem;
+            color: #718096;
+            cursor: grab;
+            font-size: 1.1rem;
+        }
+        .item-text {
+            flex-grow: 1;
+            font-size: 0.95rem;
+            color: #f7fafc;
+        }
+    </style>
+</head>
+<body class="aura-theme">
+    <header class="sandbox-header">
+        <div class="header-container">
+            <a href="index.html" class="back-link">&larr; Back to Challenges</a>
+            <h1>Dual-Thumb Range Sliders &amp; Drag Gestures</h1>
+            <p class="subtitle">Challenge 16: Coordinate-based mouse and pointer dragging for dual-thumb continuous sliders and reorderable lists.</p>
+        </div>
+    </header>
+
+    <main class="sandbox-main">
+        <section class="challenge-section">
+            <h2>Interactive Gestures Test Bench</h2>
+            <p style="color: var(--text-secondary, #a0aec0); margin-bottom: 1.5rem;">
+                Test dragging slider thumbs by relative pixel offsets using <code>browser_drag</code> and reordering items using <code>browser_drag_to</code>.
+            </p>
+
+            <!-- 1. Dual-Thumb Price Slider -->
+            <div class="drag-card">
+                <div class="card-title">1. Dual-Thumb Price Range Filter</div>
+                <div class="card-desc">Drag the min or max handle horizontally along the track to adjust the budget range ($0 to $500).</div>
+                
+                <div class="slider-wrapper">
+                    <div id="price-slider-track" class="slider-track-container">
+                        <div id="price-slider-range" class="slider-range-bar"></div>
+                        <div id="price-min-thumb" class="slider-thumb" role="slider" aria-label="Minimum Price" aria-valuemin="0" aria-valuemax="500" aria-valuenow="50" tabindex="0"></div>
+                        <div id="price-max-thumb" class="slider-thumb" role="slider" aria-label="Maximum Price" aria-valuemin="0" aria-valuemax="500" aria-valuenow="400" tabindex="0"></div>
+                    </div>
+                    <div class="slider-labels">
+                        <div>Min: <span id="price-min-val" class="price-val">$50</span></div>
+                        <div id="price-range-display" style="font-weight: 600; color: #fff;">$50 - $400</div>
+                        <div>Max: <span id="price-max-val" class="price-val">$400</span></div>
+                    </div>
+                </div>
+
+                <div id="slider-status" class="status-badge">Price filter active: $50 - $400</div>
+            </div>
+
+            <!-- 2. Reorderable Drag-and-Drop List -->
+            <div class="drag-card">
+                <div class="card-title">2. Priority Reorderable List</div>
+                <div class="card-desc">Drag an item by its handle or card and drop it onto another position to update project priorities.</div>
+
+                <ul id="reorderable-list" class="reorder-list">
+                    <li id="item-1" class="reorder-item" draggable="true" data-id="1">
+                        <span class="item-handle">&#x2630;</span>
+                        <span class="item-text">Requirements Analysis</span>
+                    </li>
+                    <li id="item-2" class="reorder-item" draggable="true" data-id="2">
+                        <span class="item-handle">&#x2630;</span>
+                        <span class="item-text">Architectural Design</span>
+                    </li>
+                    <li id="item-3" class="reorder-item" draggable="true" data-id="3">
+                        <span class="item-handle">&#x2630;</span>
+                        <span class="item-text">Automated Testing</span>
+                    </li>
+                    <li id="item-4" class="reorder-item" draggable="true" data-id="4">
+                        <span class="item-handle">&#x2630;</span>
+                        <span class="item-text">Production Deployment</span>
+                    </li>
+                </ul>
+
+                <div id="reorder-status" class="status-badge">Current order: Requirements Analysis, Architectural Design, Automated Testing, Production Deployment</div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // --- Dual Thumb Slider Logic ---
+        (function initSlider() {
+            const track = document.getElementById('price-slider-track');
+            const rangeBar = document.getElementById('price-slider-range');
+            const minThumb = document.getElementById('price-min-thumb');
+            const maxThumb = document.getElementById('price-max-thumb');
+            const minValEl = document.getElementById('price-min-val');
+            const maxValEl = document.getElementById('price-max-val');
+            const rangeDisplayEl = document.getElementById('price-range-display');
+            const statusEl = document.getElementById('slider-status');
+
+            const MIN_PRICE = 0;
+            const MAX_PRICE = 500;
+            const TRACK_WIDTH = 300;
+
+            let minVal = 50;
+            let maxVal = 400;
+
+            function updateUI() {
+                const minPct = (minVal - MIN_PRICE) / (MAX_PRICE - MIN_PRICE);
+                const maxPct = (maxVal - MIN_PRICE) / (MAX_PRICE - MIN_PRICE);
+
+                const minPx = minPct * TRACK_WIDTH;
+                const maxPx = maxPct * TRACK_WIDTH;
+
+                minThumb.style.left = minPx + 'px';
+                maxThumb.style.left = maxPx + 'px';
+
+                rangeBar.style.left = minPx + 'px';
+                rangeBar.style.width = (maxPx - minPx) + 'px';
+
+                minThumb.setAttribute('aria-valuenow', minVal);
+                maxThumb.setAttribute('aria-valuenow', maxVal);
+
+                minValEl.textContent = '$' + minVal;
+                maxValEl.textContent = '$' + maxVal;
+                rangeDisplayEl.textContent = '$' + minVal + ' - $' + maxVal;
+                statusEl.textContent = 'Price filter active: $' + minVal + ' - $' + maxVal;
+            }
+
+            function setupThumbDrag(thumb, isMin) {
+                let startX = 0;
+                let startVal = 0;
+                let isDragging = false;
+
+                function onPointerDown(e) {
+                    isDragging = true;
+                    thumb.classList.add('dragging');
+                    startX = e.clientX || (e.touches && e.touches[0].clientX) || 0;
+                    startVal = isMin ? minVal : maxVal;
+
+                    window.addEventListener('pointermove', onPointerMove);
+                    window.addEventListener('mousemove', onPointerMove);
+                    window.addEventListener('pointerup', onPointerUp);
+                    window.addEventListener('mouseup', onPointerUp);
+                    e.preventDefault();
+                }
+
+                function onPointerMove(e) {
+                    if (!isDragging) return;
+                    const clientX = e.clientX || (e.touches && e.touches[0].clientX) || 0;
+                    const deltaX = clientX - startX;
+                    const deltaVal = Math.round((deltaX / TRACK_WIDTH) * (MAX_PRICE - MIN_PRICE));
+
+                    if (isMin) {
+                        minVal = Math.max(MIN_PRICE, Math.min(maxVal - 10, startVal + deltaVal));
+                    } else {
+                        maxVal = Math.min(MAX_PRICE, Math.max(minVal + 10, startVal + deltaVal));
+                    }
+                    updateUI();
+                }
+
+                function onPointerUp() {
+                    if (!isDragging) return;
+                    isDragging = false;
+                    thumb.classList.remove('dragging');
+                    window.removeEventListener('pointermove', onPointerMove);
+                    window.removeEventListener('mousemove', onPointerMove);
+                    window.removeEventListener('pointerup', onPointerUp);
+                    window.removeEventListener('mouseup', onPointerUp);
+                }
+
+                thumb.addEventListener('pointerdown', onPointerDown);
+                thumb.addEventListener('mousedown', onPointerDown);
+            }
+
+            setupThumbDrag(minThumb, true);
+            setupThumbDrag(maxThumb, false);
+            updateUI();
+        })();
+
+        // --- Reorderable List Logic ---
+        (function initReorderableList() {
+            const list = document.getElementById('reorderable-list');
+            const statusEl = document.getElementById('reorder-status');
+            let draggedItem = null;
+
+            function updateStatus() {
+                const items = list.querySelectorAll('.reorder-item .item-text');
+                const titles = Array.from(items).map(el => el.textContent.trim());
+                statusEl.textContent = 'Current order: ' + titles.join(', ');
+            }
+
+            // HTML5 Drag and Drop Handlers
+            list.addEventListener('dragstart', (e) => {
+                const item = e.target.closest('.reorder-item');
+                if (!item) return;
+                draggedItem = item;
+                item.classList.add('dragging');
+                if (e.dataTransfer) {
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', item.id);
+                }
+            });
+
+            list.addEventListener('dragend', (e) => {
+                const item = e.target.closest('.reorder-item');
+                if (item) {
+                    item.classList.remove('dragging');
+                }
+                document.querySelectorAll('.reorder-item').forEach(el => el.classList.remove('drag-over'));
+                draggedItem = null;
+                updateStatus();
+            });
+
+            list.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                if (e.dataTransfer) {
+                    e.dataTransfer.dropEffect = 'move';
+                }
+                const targetItem = e.target.closest('.reorder-item');
+                if (targetItem && targetItem !== draggedItem) {
+                    document.querySelectorAll('.reorder-item').forEach(el => el.classList.remove('drag-over'));
+                    targetItem.classList.add('drag-over');
+                }
+            });
+
+            list.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const targetItem = e.target.closest('.reorder-item');
+                if (targetItem && draggedItem && targetItem !== draggedItem) {
+                    const allItems = Array.from(list.children);
+                    const draggedIdx = allItems.indexOf(draggedItem);
+                    const targetIdx = allItems.indexOf(targetItem);
+
+                    if (draggedIdx < targetIdx) {
+                        list.insertBefore(draggedItem, targetItem.nextSibling);
+                    } else {
+                        list.insertBefore(draggedItem, targetItem);
+                    }
+                }
+                document.querySelectorAll('.reorder-item').forEach(el => el.classList.remove('drag-over'));
+                updateStatus();
+            });
+
+            // Pointer / Mouse Drag Simulation for Actions
+            let activePointerDrag = null;
+
+            function handleStart(e) {
+                const item = e.target.closest('.reorder-item');
+                if (!item) return;
+                activePointerDrag = item;
+            }
+
+            function handleEnd(e) {
+                if (!activePointerDrag) return;
+                const dropTarget = (e.target && e.target.closest) ? e.target.closest('.reorder-item') : null;
+                const clientTarget = (e.clientX && e.clientY) ? document.elementFromPoint(e.clientX, e.clientY)?.closest('.reorder-item') : null;
+                const finalTarget = (dropTarget && dropTarget !== activePointerDrag) ? dropTarget : clientTarget;
+
+                if (finalTarget && finalTarget !== activePointerDrag && list.contains(finalTarget)) {
+                    const allItems = Array.from(list.children);
+                    const draggedIdx = allItems.indexOf(activePointerDrag);
+                    const targetIdx = allItems.indexOf(finalTarget);
+
+                    if (draggedIdx < targetIdx) {
+                        list.insertBefore(activePointerDrag, finalTarget.nextSibling);
+                    } else {
+                        list.insertBefore(activePointerDrag, finalTarget);
+                    }
+                    updateStatus();
+                }
+                activePointerDrag = null;
+            }
+
+            list.addEventListener('pointerdown', handleStart);
+            list.addEventListener('mousedown', handleStart);
+            window.addEventListener('pointerup', handleEnd);
+            window.addEventListener('mouseup', handleEnd);
+
+            // Direct Swap Helper for script/fallback invocation
+            window.reorderItems = function(sourceId, targetId) {
+                const src = document.getElementById(sourceId);
+                const tgt = document.getElementById(targetId);
+                if (src && tgt && src !== tgt) {
+                    const allItems = Array.from(list.children);
+                    const srcIdx = allItems.indexOf(src);
+                    const tgtIdx = allItems.indexOf(tgt);
+                    if (srcIdx < tgtIdx) {
+                        list.insertBefore(src, tgt.nextSibling);
+                    } else {
+                        list.insertBefore(src, tgt);
+                    }
+                    updateStatus();
+                }
+            };
+        })();
+    </script>
+</body>
+</html>

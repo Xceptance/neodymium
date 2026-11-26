@@ -1,0 +1,8 @@
+data:
+  - testId: dataset1
+    param: value1
+  - testId: dataset2
+    param: value2
+steps: |
+  Step 1
+  Step 2

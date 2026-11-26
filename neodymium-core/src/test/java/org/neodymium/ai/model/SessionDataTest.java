@@ -1,0 +1,594 @@
+/*
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package org.neodymium.ai.model;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.HashMap;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+import org.neodymium.util.Neodymium;
+
+/**
+ * TDD test suite validating the {@link SessionData} layered data hierarchy,
+ * lookup precedence, snapshot rollback, and sensitive parameter masking.
+ *
+ * @author AI-generated: Gemini 3.5 Flash
+ * @author Xceptance GmbH 2026
+ */
+public final class SessionDataTest
+{
+    /**
+     * Constructs a default test instance.
+     */
+    public SessionDataTest()
+    {
+    }
+
+    /**
+     * Verifies that modifying the original map passed to the constructor does not
+     * affect the SessionData's static data (defensive copy check).
+     */
+    @Test
+    public void testStaticDataImmutability()
+    {
+        final Map<String, SessionData.DataEntry> staticMap = new HashMap<>();
+        staticMap.put("host", new SessionData.DataEntry("localhost", false));
+
+        final SessionData session = new SessionData(staticMap);
+
+        // Modify the original map
+        staticMap.put("host", new SessionData.DataEntry("remote", false));
+        staticMap.put("port", new SessionData.DataEntry(8080, false));
+
+        // Session data must remain unaffected
+        assertEquals("localhost", session.get("host"));
+        assertNull(session.get("port"));
+    }
+
+    /**
+     * Verifies that dynamic variables take precedence over static variables during lookups.
+     */
+    @Test
+    public void testLookupPrecedence()
+    {
+        final Map<String, SessionData.DataEntry> staticMap = new HashMap<>();
+        staticMap.put("username", new SessionData.DataEntry("alice", false));
+        staticMap.put("role", new SessionData.DataEntry("admin", false));
+
+        final SessionData session = new SessionData(staticMap);
+
+        // Put overriding dynamic variable
+        session.putDynamic("username", "bob", false);
+
+        // Precedence check: username should be bob (dynamic), role should remain admin (static fallback)
+        assertEquals("bob", session.get("username"));
+        assertEquals("admin", session.get("role"));
+    }
+
+    /**
+     * Verifies that snapshots of dynamic states are captured and correctly rolled back.
+     */
+    @Test
+    public void testSnapshotAndRollback()
+    {
+        final SessionData session = new SessionData(new HashMap<>());
+
+        session.putDynamic("var1", "value1", false);
+        
+        // 1. Capture snapshot at step 1
+        session.captureSnapshot(1);
+
+        // 2. Modify state during step 1 execution
+        session.putDynamic("var1", "value1-modified", false);
+        session.putDynamic("var2", "value2", false);
+
+        assertEquals("value1-modified", session.get("var1"));
+        assertEquals("value2", session.get("var2"));
+
+        // 3. Rollback to step 1
+        session.rollbackToStep(1);
+
+        // var1 should revert to value1, and var2 (added after snapshot) should be discarded
+        assertEquals("value1", session.get("var1"));
+        assertNull(session.get("var2"));
+    }
+
+    /**
+     * Verifies that sensitive variables are correctly masked with the placeholder in the guarded map.
+     */
+    @Test
+    public void testGuardedDataMapMasking()
+    {
+        final Map<String, SessionData.DataEntry> staticMap = new HashMap<>();
+        staticMap.put("publicVar", new SessionData.DataEntry("public", false));
+        staticMap.put("password", new SessionData.DataEntry("secretPassword", true));
+
+        final SessionData session = new SessionData(staticMap);
+        session.putDynamic("token", "secretToken", true);
+        session.putDynamic("dynamicPublic", "publicDynamicVal", false);
+
+        final Map<String, Object> guardedMap = session.getGuardedDataMap();
+
+        // Non-sensitive variables must preserve their raw values
+        assertEquals("public", guardedMap.get("publicVar"));
+        assertEquals("publicDynamicVal", guardedMap.get("dynamicPublic"));
+
+        // Sensitive variables must be replaced with the standard masking placeholder
+        assertEquals("[SENSITIVE_VALUE]", guardedMap.get("password"));
+        assertEquals("[SENSITIVE_VALUE]", guardedMap.get("token"));
+    }
+
+    /**
+     * Verifies that resolveVariables falls back to Neodymium.getData() when not in SessionData.
+     */
+    @Test
+    public void testResolveVariablesFallbackToNeodymiumData()
+    {
+        com.xceptance.neodymium.util.Neodymium.getData().put("globalUrl", "http://localhost:8080");
+        final SessionData session = new SessionData();
+
+        final String resolved = session.resolveVariables("Open ${globalUrl}/home");
+        assertEquals("Open http://localhost:8080/home", resolved);
+    }
+
+    /**
+     * Verifies that resolveVariables fails hard with IllegalArgumentException when a placeholder cannot be resolved.
+     */
+    @Test
+    public void testResolveVariablesFailsHardOnUnresolvablePlaceholder()
+    {
+        final SessionData session = new SessionData();
+        final IllegalArgumentException ex = org.junit.jupiter.api.Assertions.assertThrows(
+            IllegalArgumentException.class,
+            () -> session.resolveVariables("Open ${unresolvableVariable}/home")
+        );
+
+        org.junit.jupiter.api.Assertions.assertTrue(
+            ex.getMessage().contains("Unresolvable variable placeholder '${unresolvableVariable}'"),
+            "Exception message should mention the missing variable name"
+        );
+    }
+
+    /**
+     * Verifies that dot-notation path navigation resolves nested Map values in static and dynamic layers.
+     */
+    @Test
+    public void testNestedMapDotNotationResolution()
+    {
+        final Map<String, Object> innerMap = new HashMap<>();
+        innerMap.put("Part1", "hello");
+        innerMap.put("Part2", "world");
+
+        final Map<String, Object> addressMap = new HashMap<>();
+        addressMap.put("city", "Jena");
+        addressMap.put("zip", "07745");
+
+        final Map<String, Object> userMap = new HashMap<>();
+        userMap.put("name", "John");
+        userMap.put("address", addressMap);
+
+        final Map<String, SessionData.DataEntry> staticMap = new HashMap<>();
+        staticMap.put("phrase", new SessionData.DataEntry(innerMap, false));
+        staticMap.put("user", new SessionData.DataEntry(userMap, false));
+
+        final SessionData session = new SessionData(staticMap);
+
+        assertEquals("hello", session.get("phrase.Part1"));
+        assertEquals("world", session.get("phrase.Part2"));
+        assertEquals("John", session.get("user.name"));
+        assertEquals("Jena", session.get("user.address.city"));
+        assertEquals("07745", session.get("user.address.zip"));
+
+        // Resolution in string template placeholders
+        final String resolved = session.resolveVariables("Greeting: ${phrase.Part1} ${phrase.Part2} from ${user.address.city}!");
+        assertEquals("Greeting: hello world from Jena!", resolved);
+
+        // Overriding nested value dynamically
+        final Map<String, Object> dynamicUser = new HashMap<>();
+        dynamicUser.put("name", "Alice");
+        session.putDynamic("user", dynamicUser, false);
+
+        assertEquals("Alice", session.get("user.name"));
+    }
+
+    /**
+     * Verifies that getAllVariables flattens nested maps into dot-separated keys.
+     */
+    @Test
+    public void testNestedMapGetAllVariables()
+    {
+        final Map<String, Object> innerMap = new HashMap<>();
+        innerMap.put("host", "example.com");
+        innerMap.put("port", "8080");
+
+        final Map<String, SessionData.DataEntry> staticMap = new HashMap<>();
+        staticMap.put("server", new SessionData.DataEntry(innerMap, false));
+
+        final SessionData session = new SessionData(staticMap);
+        final Map<String, String> allVars = session.getAllVariables();
+
+        assertEquals("example.com", allVars.get("server.host"));
+        assertEquals("8080", allVars.get("server.port"));
+    }
+
+    /**
+     * Verifies that get and resolveVariables fall back to case-insensitive match
+     * when an exact key match is not found.
+     */
+    @Test
+    public void testCaseInsensitiveFallback()
+    {
+        final Map<String, SessionData.DataEntry> staticMap = new HashMap<>();
+        staticMap.put("apiKey", new SessionData.DataEntry("secret-123", true));
+        final SessionData session = new SessionData(staticMap);
+
+        session.putDynamic("lineItemCount", 5, false);
+
+        // Dynamic lookup with differing casing
+        assertEquals(5, session.get("lineitemCount"));
+        assertEquals(5, session.get("LINEITEMCOUNT"));
+        assertEquals("Count is 5", session.resolveVariables("Count is ${lineitemCount}"));
+
+        // Static lookup with differing casing
+        assertEquals("secret-123", session.get("APIKEY"));
+        assertEquals("Key: secret-123", session.resolveVariables("Key: ${apikey}"));
+    }
+
+    /**
+     * Verifies that resolveVariables throws UnresolvableVariableException with typed accessors.
+     */
+    @Test
+    public void testResolveVariablesThrowsUnresolvableVariableException()
+    {
+        final SessionData session = new SessionData();
+        final String template = "Open ${missingVar}/home";
+        final UnresolvableVariableException ex = assertThrows(
+            UnresolvableVariableException.class,
+            () -> session.resolveVariables(template)
+        );
+
+        assertEquals("missingVar", ex.getVariableName());
+        assertEquals(template, ex.getTemplate());
+        assertTrue(ex.getMessage().contains("Unresolvable variable placeholder '${missingVar}'"));
+    }
+
+    /**
+     * Verifies that resolveAvailableVariables partially resolves known variables and leaves unknown ones intact.
+     */
+    @Test
+    public void testResolveAvailableVariablesPartialResolution()
+    {
+        final SessionData session = new SessionData();
+        session.set("testId", "normal");
+        session.set("user", "alice");
+
+        final String template = "Verify test '${testId}' for user '${user}' has count > ${lineItemCount}.";
+        final String result = session.resolveAvailableVariables(template);
+
+        assertEquals("Verify test 'normal' for user 'alice' has count > ${lineItemCount}.", result);
+    }
+
+    /**
+     * Verifies that resolveAvailableVariables supports nested resolution of available variables.
+     */
+    @Test
+    public void testResolveAvailableVariablesNestedResolution()
+    {
+        final SessionData session = new SessionData();
+        session.set("baseUrl", "http://${host}:${port}");
+        session.set("host", "localhost");
+        session.set("port", "8080");
+
+        final String template = "Navigate to ${baseUrl}/checkout?token=${futureToken}";
+        final String result = session.resolveAvailableVariables(template);
+
+        assertEquals("Navigate to http://localhost:8080/checkout?token=${futureToken}", result);
+    }
+
+    /**
+     * Verifies that getStaticDataVariables reflects dynamic overrides and runtime test data.
+     */
+    @Test
+    public void testGetStaticDataVariablesReflectsDynamicOverrides()
+    {
+        final Map<String, SessionData.DataEntry> staticMap = new HashMap<>();
+        staticMap.put("searchTerm", new SessionData.DataEntry("initialBoots", false));
+        staticMap.put("category", new SessionData.DataEntry("shoes", false));
+
+        final SessionData session = new SessionData(staticMap);
+        assertEquals("initialBoots", session.getStaticDataVariables().get("searchTerm"));
+
+        // Dynamically override searchTerm
+        session.set("searchTerm", "updatedSneakers");
+        assertEquals("updatedSneakers", session.getStaticDataVariables().get("searchTerm"));
+        assertEquals("shoes", session.getStaticDataVariables().get("category"));
+    }
+
+    /**
+     * Verifies that get(key) automatically resolves variable placeholders leniently,
+     * get(key, true) resolves strictly, and getRaw(key) preserves the raw template.
+     */
+    @Test
+    public void testGetResolvesPlaceholdersAndPreservesRaw()
+    {
+        final Map<String, SessionData.DataEntry> staticMap = new HashMap<>();
+        staticMap.put("email", new SessionData.DataEntry("user${random}@example.org", false));
+        staticMap.put("siteUrl", new SessionData.DataEntry("https://${host}:${port}/app", false));
+        staticMap.put("unresolved", new SessionData.DataEntry("prefix_${missing}_suffix", false));
+
+        final SessionData session = new SessionData(staticMap);
+        session.set("random", "12345");
+        session.set("host", "example.org");
+        session.set("port", 8443);
+
+        // Standard get() resolves available variables
+        assertEquals("user12345@example.org", session.get("email"));
+        assertEquals("https://example.org:8443/app", session.get("siteUrl"));
+
+        // Raw get preserves un-substituted template
+        assertEquals("user${random}@example.org", session.getRaw("email"));
+        assertEquals("https://${host}:${port}/app", session.getRaw("siteUrl"));
+
+        // Unresolved variable in lenient mode leaves placeholder intact
+        assertEquals("prefix_${missing}_suffix", session.get("unresolved"));
+
+        // Strict mode throws UnresolvableVariableException when missing placeholder exists
+        assertThrows(UnresolvableVariableException.class, () -> session.get("unresolved", true));
+
+        // Strict mode succeeds when all placeholders resolve
+        assertEquals("user12345@example.org", session.get("email", true));
+    }
+
+    /**
+     * Verifies circular reference protection and maximum depth guarding in get() and resolveVariables().
+     */
+    @Test
+    public void testGetResolvesNestedAndGuardsCircularPlaceholders()
+    {
+        final SessionData session = new SessionData();
+        session.set("varA", "${varB}");
+        session.set("varB", "${varA}");
+
+        // Lenient mode terminates safely at depth 10 without StackOverflowError
+        final Object result = session.get("varA");
+        assertTrue(result.toString().contains("${varA}") || result.toString().contains("${varB}"));
+
+        // Strict mode throws IllegalStateException on circular reference depth limit exceeded
+        assertThrows(IllegalStateException.class, () -> session.get("varA", true));
+    }
+
+    /**
+     * Verifies that null keys are handled safely without NullPointerException.
+     */
+    @Test
+    public void testGetNullKeyHandling()
+    {
+        final SessionData session = new SessionData();
+        assertNull(session.get(null));
+        assertNull(session.getRaw(null));
+        assertNull(session.getEntry(null));
+    }
+
+    /**
+     * Verifies that non-string objects (Integers, Booleans, Maps) are preserved without string conversion.
+     */
+    @Test
+    public void testGetNonStringObjectPreservation()
+    {
+        final SessionData session = new SessionData();
+        session.set("intVal", 42);
+        session.set("boolVal", true);
+
+        final Map<String, Object> mapVal = new HashMap<>();
+        mapVal.put("leaf", "val");
+        session.set("mapVal", mapVal);
+
+        assertEquals(42, session.get("intVal"));
+        assertEquals(true, session.get("boolVal"));
+        assertEquals(mapVal, session.get("mapVal"));
+    }
+
+    /**
+     * Verifies that resolveNonSensitiveVariables expands non-sensitive placeholders
+     * while keeping sensitive placeholders intact across mixed templates.
+     */
+    @Test
+    public void testResolveNonSensitiveVariablesRetainsSensitivePlaceholdersAndExpandsNonSensitive()
+    {
+        final SessionData session = new SessionData();
+        session.putDynamic("user.name", "alice", false);
+        session.putDynamic("user.password", "secretPassword123", true);
+
+        final String resolved = session.resolveNonSensitiveVariables("${user.name}:${user.password}");
+        assertEquals("alice:${user.password}", resolved);
+        assertEquals("alice:secretPassword123", session.resolveVariables("${user.name}:${user.password}"));
+        assertThrows(UnresolvableVariableException.class, () -> session.resolveNonSensitiveVariables("${user.password}:${missingVar}"));
+        assertEquals("alice:${user.password}:${missingVar}", session.resolveAvailableNonSensitiveVariables("${user.name}:${user.password}:${missingVar}"));
+    }
+
+    /**
+     * Verifies that transitive references from non-sensitive variables to sensitive variables
+     * keep the sensitive placeholder unexpanded and terminate cleanly.
+     */
+    @Test
+    public void testResolveNonSensitiveVariablesRetainsTransitiveSensitiveReferences()
+    {
+        final SessionData session = new SessionData();
+        session.putDynamic("api.token", "tok-999", true);
+        session.putDynamic("authHeader", "Bearer ${api.token}", false);
+
+        final String resolved = session.resolveNonSensitiveVariables("${authHeader}");
+        assertEquals("Bearer ${api.token}", resolved);
+    }
+
+    /**
+     * Verifies that nested sensitive Map entries are retained as placeholders by
+     * resolveNonSensitiveVariables and flattened by getRawSensitiveData.
+     */
+    @Test
+    public void testResolveNonSensitiveVariablesRetainsNestedSensitiveMapPlaceholderAndFlattensSensitiveData()
+    {
+        final Map<String, Object> credsMap = new HashMap<>();
+        credsMap.put("password", "secret123");
+        final Map<String, SessionData.DataEntry> staticMap = new HashMap<>();
+        staticMap.put("creds", new SessionData.DataEntry(credsMap, true));
+
+        final SessionData session = new SessionData(staticMap);
+
+        assertEquals("${creds.password}", session.resolveNonSensitiveVariables("${creds.password}"));
+        assertEquals("secret123", session.getRawSensitiveData().get("creds.password"));
+    }
+
+    /**
+     * Verifies that when Neodymium.getData() mirrors static dataset entries (as NeodymiumAiRunner does),
+     * sensitive static String variables retain sensitivity and remain unexpanded in resolveNonSensitiveVariables.
+     */
+    @Test
+    public void testNeodymiumDataMirrorRetainsStaticSensitivityInGetEntryAndResolveNonSensitive()
+    {
+        final String key = "user.password";
+        final String prev = Neodymium.getData().get(key);
+        try
+        {
+            final Map<String, SessionData.DataEntry> staticMap = new HashMap<>();
+            staticMap.put(key, new SessionData.DataEntry("secretPassword123", true));
+            staticMap.put("user.name", new SessionData.DataEntry("alice", false));
+            Neodymium.getData().put(key, "secretPassword123");
+
+            final SessionData session = new SessionData(staticMap);
+            final SessionData.DataEntry entry = session.getEntry(key);
+            assertNotNull(entry);
+            assertTrue(entry.sensitive(), "Sensitive flag from staticData must be preserved when mirrored in Neodymium.getData()");
+            assertEquals("secretPassword123", entry.value());
+            assertEquals("alice:${user.password}", session.resolveNonSensitiveVariables("${user.name}:${user.password}"));
+            assertEquals("alice:secretPassword123", session.resolveVariables("${user.name}:${user.password}"));
+        }
+        finally
+        {
+            if (prev == null)
+            {
+                Neodymium.getData().remove(key);
+            }
+            else
+            {
+                Neodymium.getData().put(key, prev);
+            }
+        }
+    }
+
+    /**
+     * Verifies that runtime overrides of a sensitive static key via Neodymium.getData() preserve sensitivity
+     * and propagate the overridden secret into getRawSensitiveData() for downstream sanitizers.
+     */
+    @Test
+    public void testNeodymiumDataOverrideOfSensitiveKeyPreservesSensitivityAndUpdatesRawSensitiveData()
+    {
+        final String key = "user.password";
+        final String prev = Neodymium.getData().get(key);
+        try
+        {
+            final Map<String, SessionData.DataEntry> staticMap = new HashMap<>();
+            staticMap.put(key, new SessionData.DataEntry("initialSecret", true));
+            Neodymium.getData().put(key, "runtimeOverrideSecret");
+
+            final SessionData session = new SessionData(staticMap);
+            final SessionData.DataEntry entry = session.getEntry(key);
+            assertNotNull(entry);
+            assertTrue(entry.sensitive(), "Overridden sensitive key must remain sensitive");
+            assertEquals("runtimeOverrideSecret", entry.value());
+            assertEquals("${user.password}", session.resolveNonSensitiveVariables("${user.password}"));
+            assertEquals("runtimeOverrideSecret", session.resolveVariables("${user.password}"));
+            assertEquals("runtimeOverrideSecret", session.getRawSensitiveData().get(key));
+        }
+        finally
+        {
+            if (prev == null)
+            {
+                Neodymium.getData().remove(key);
+            }
+            else
+            {
+                Neodymium.getData().put(key, prev);
+            }
+        }
+    }
+
+    /**
+     * Verifies that nested sensitive Map entries keep flattened sensitivity and raw secret mapping even when
+     * Neodymium.getData() mirrors the map's string representation or overrides a nested leaf key.
+     */
+    @Test
+    public void testNeodymiumDataWithNestedSensitiveMapPreservesFlattenedSensitivity()
+    {
+        final String mapKey = "creds";
+        final String leafKey = "creds.password";
+        final String prevMap = Neodymium.getData().get(mapKey);
+        final String prevLeaf = Neodymium.getData().get(leafKey);
+        try
+        {
+            final Map<String, Object> credsMap = new HashMap<>();
+            credsMap.put("password", "secret123");
+            final Map<String, SessionData.DataEntry> staticMap = new HashMap<>();
+            staticMap.put(mapKey, new SessionData.DataEntry(credsMap, true));
+
+            Neodymium.getData().put(mapKey, String.valueOf(credsMap));
+
+            final SessionData session = new SessionData(staticMap);
+            assertEquals("${creds.password}", session.resolveNonSensitiveVariables("${creds.password}"));
+            assertEquals("secret123", session.getRawSensitiveData().get(leafKey));
+
+            Neodymium.getData().put(leafKey, "nestedOverrideSecret");
+            final SessionData.DataEntry overriddenLeaf = session.getEntry(leafKey);
+            assertNotNull(overriddenLeaf);
+            assertTrue(overriddenLeaf.sensitive(), "Nested sensitive leaf overridden in Neodymium.getData() must remain sensitive");
+            assertEquals("nestedOverrideSecret", overriddenLeaf.value());
+            assertEquals("${creds.password}", session.resolveNonSensitiveVariables("${creds.password}"));
+            assertEquals("nestedOverrideSecret", session.getRawSensitiveData().get(leafKey));
+        }
+        finally
+        {
+            if (prevMap == null)
+            {
+                Neodymium.getData().remove(mapKey);
+            }
+            else
+            {
+                Neodymium.getData().put(mapKey, prevMap);
+            }
+            if (prevLeaf == null)
+            {
+                Neodymium.getData().remove(leafKey);
+            }
+            else
+            {
+                Neodymium.getData().put(leafKey, prevLeaf);
+            }
+        }
+    }
+}

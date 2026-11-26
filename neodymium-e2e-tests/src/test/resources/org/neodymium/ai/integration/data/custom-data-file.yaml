@@ -1,0 +1,9 @@
+promptAddon:
+  special: "Custom addon."
+
+steps:
+  - Another step that must be ignored!
+
+data:
+  - testId: "custom-one"
+    customKey: "customValue"

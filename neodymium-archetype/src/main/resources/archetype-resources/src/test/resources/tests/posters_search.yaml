@@ -1,0 +1,41 @@
+# Neodymium YAML Test Data File
+
+tags:
+  area: Storefront
+  feature: Search
+  type: Regression
+  severity: Normal
+
+before: |
+  Open https://posters.xceptance.io:8443/
+  _include: fragments/cookie_consent.steps
+
+steps: |
+  Type '${searchTerm}' into the search input field
+  Click the search button
+  Verify the search result header contains '${searchTerm}'
+  Verify at least one product tile is displayed
+  Verify the product tiles are aligned in a 3-column grid (visual)
+  Verify each displayed product tile shows a title and a price
+
+data:
+  -
+    testId: "search_modern_posters"
+    searchTerm: "Modern"
+    tags:
+      category: art
+  -
+    testId: "search_nature_posters"
+    searchTerm: "Nature"
+    tags:
+      category: nature
+  -
+    testId: "search_bear_posters"
+    searchTerm: "Bear"
+    tags:
+      category: nature
+  -
+    testId: "search_truck_posters"
+    searchTerm: "truck"
+    tags:
+      category: vehicles

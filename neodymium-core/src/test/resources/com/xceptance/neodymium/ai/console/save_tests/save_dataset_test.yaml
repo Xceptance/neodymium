@@ -1,0 +1,9 @@
+steps: |
+  Open https://www.wikipedia.org/
+  Click the element that contains the text "${language}" (optional).
+  Assert that the current URL contains "${expectedUrlPart}".
+data:
+- language: English
+  expectedUrlPart: en.wikipedia.org
+- language: Deutsch
+  expectedUrlPart: de.wikipedia.org

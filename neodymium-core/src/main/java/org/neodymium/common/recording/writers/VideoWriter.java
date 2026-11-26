@@ -1,0 +1,310 @@
+/*
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package org.neodymium.common.recording.writers;
+
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.lang.ProcessBuilder.Redirect;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
+import java.util.Date;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+
+import javax.imageio.ImageIO;
+import javax.imageio.stream.ImageInputStream;
+
+import org.apache.commons.lang3.math.Fraction;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.codeborne.selenide.Selenide;
+import org.neodymium.common.recording.config.RecordingConfigurations;
+import org.neodymium.common.recording.config.VideoRecordingConfigurations;
+import org.neodymium.util.AllureAddons;
+
+/**
+ * Writer to create a video using FFmpeg
+ * 
+ * @author olha
+ */
+public class VideoWriter implements Writer
+{
+    private static final Logger LOGGER = LoggerFactory.getLogger(VideoWriter.class);
+
+    private VideoRecordingConfigurations recordingConfigurations;
+
+    private int screenshots;
+
+    private long testDuration;
+
+    private String videoFileName;
+
+    private ProcessBuilder pb;
+
+    private OutputStream ffmpegInput;
+
+    private Process p;
+
+    /**
+     * Returns the underlying {@link ProcessBuilder} configured for FFmpeg execution.
+     *
+     * @return the configured ProcessBuilder
+     */
+    ProcessBuilder getProcessBuilder()
+    {
+        return pb;
+    }
+
+    /**
+     * Required to instantiate the object in the {@link Writer#instantiate(Class, RecordingConfigurations, String)}
+     * method.
+     * <p>
+     * Prepares the FFmpeg command with {@link ProcessBuilder}.
+     * 
+     * @param recordingConfigurations
+     *            {@link VideoRecordingConfigurations} for the writer
+     * @param videoFileName
+     *            {@link String} video file name ( including the path)
+     * @throws FileNotFoundException
+     */
+    protected VideoWriter(RecordingConfigurations recordingConfigurations, String videoFileName) throws FileNotFoundException
+    {
+        // check if ffmpeg binary is found
+        this.recordingConfigurations = ((VideoRecordingConfigurations) recordingConfigurations);
+        String ffmpegBinary = this.recordingConfigurations.ffmpegBinaryPath();
+        try
+        {
+            p = new ProcessBuilder(ffmpegBinary, "-h").start();
+        }
+        catch (Exception e)
+        {
+            throw (FileNotFoundException) new FileNotFoundException("FFmpeg binary not found at " + ffmpegBinary
+                                                                    + ", please install FFmpeg and add it to the PATH or enter the correct FFmpeg binary location. ").initCause(e);
+        }
+
+        double framerate = 1 / ((double) recordingConfigurations.oneImagePerMilliseconds() / 1000);
+
+        this.videoFileName = videoFileName;
+        pb = new ProcessBuilder(((VideoRecordingConfigurations) recordingConfigurations).ffmpegBinaryPath(), "-y", "-f", "image2pipe", "-r", Fraction.getFraction(framerate)
+                                                                                                                                                     .toString(), "-i", "pipe:0", "-c:v", "libx264", "-strict", "-2", "-preset", "slow", "-pix_fmt", "yuv420p", "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-movflags", "+faststart", "-f", "mp4", videoFileName);
+        pb.redirectErrorStream(true);
+        pb.redirectOutput(Redirect.appendTo(new File((this.recordingConfigurations).ffmpegLogFile())));
+    }
+
+    /**
+     * Starts FFmpeg video generation.
+     * 
+     * @throws IOException
+     *             to stop screenshots loop on {@link TakeScreenshotsThread} in case of start failure
+     */
+    @Override
+    public void start() throws IOException
+    {
+        p = pb.start();
+        ffmpegInput = p.getOutputStream();
+    }
+
+    /**
+     * Writes {@link File} into the FFmpeg {@link Process}
+     */
+    @Override
+    public void write(File image, long duration)
+    {
+        byte[] imageBytes;
+        imageBytes = new byte[(int) image.length()];
+        try (FileInputStream fileInputStream = new FileInputStream(image))
+        {
+            fileInputStream.read(imageBytes);
+
+            ImageInputStream iis = ImageIO.createImageInputStream(new ByteArrayInputStream(imageBytes));
+            BufferedImage img = ImageIO.read(iis);
+            ImageIO.write(img, "PNG", ffmpegInput);
+            screenshots++;
+            testDuration += duration;
+        }
+        catch (IOException e)
+        {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Flushes and closes the input stream of the FFmpeg {@link Process} to make it start processing the video. Waits
+     * until the video processing is done and logs to the allure report the time required for the processing
+     */
+    @Override
+    public void stop()
+    {
+        try
+        {
+            if (ffmpegInput != null)
+            {
+                ffmpegInput.flush();
+                ffmpegInput.close();
+            }
+        }
+        catch (final IOException e)
+        {
+            LOGGER.warn("Exception closing FFmpeg output stream: {}", e.getMessage());
+        }
+
+        final long videoProcessingStart = new Date().getTime();
+        while (p.isAlive())
+        {
+            if (new Date().getTime() - videoProcessingStart > 200000)
+            {
+                LOGGER.error("FFmpeg recording process timed out after 200s; terminating process.");
+                p.destroyForcibly();
+                try
+                {
+                    p.waitFor(5, TimeUnit.SECONDS);
+                }
+                catch (final InterruptedException e)
+                {
+                    Thread.currentThread().interrupt();
+                }
+                final File partialFile = new File(videoFileName);
+                if (partialFile.exists())
+                {
+                    partialFile.delete();
+                }
+                return;
+            }
+            Selenide.sleep(200);
+        }
+
+        final File srcFile = new File(videoFileName);
+        if (!srcFile.exists() || screenshots == 0 || testDuration <= 0)
+        {
+            LOGGER.warn("Video file '{}' does not exist or contains no captured frames; discarding empty video.", videoFileName);
+            if (srcFile.exists())
+            {
+                srcFile.delete();
+            }
+            return;
+        }
+
+        final File tempFolder = new File(recordingConfigurations.tempFolderToStoreRecording());
+        if (!tempFolder.exists())
+        {
+            tempFolder.mkdirs();
+        }
+
+        final File tempFile = new File(tempFolder, "temp-" + UUID.randomUUID() + ".mp4");
+        try
+        {
+            Files.move(srcFile.toPath(), tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("Failed to relocate video file for framerate adjustment", e);
+            return;
+        }
+
+        boolean adjustmentSucceeded = false;
+        try
+        {
+            double actualFramerate = screenshots / ((double) testDuration / 1000.0);
+            if (Double.isNaN(actualFramerate) || Double.isInfinite(actualFramerate) || actualFramerate <= 0.0)
+            {
+                actualFramerate = 1.0;
+            }
+
+            pb = new ProcessBuilder(
+                recordingConfigurations.ffmpegBinaryPath(),
+                "-y",
+                "-r", String.valueOf(actualFramerate),
+                "-i", tempFile.getPath(),
+                "-c:v", "libx264",
+                "-pix_fmt", "yuv420p",
+                "-movflags", "+faststart",
+                videoFileName
+            );
+
+            pb.redirectErrorStream(true);
+            pb.redirectOutput(Redirect.appendTo(new File((this.recordingConfigurations).ffmpegLogFile())));
+
+            p = pb.start();
+
+            final long adjustmentStart = new Date().getTime();
+            while (p.isAlive())
+            {
+                if (new Date().getTime() - adjustmentStart > 200000)
+                {
+                    LOGGER.error("FFmpeg framerate adjustment process timed out; terminating process.");
+                    p.destroyForcibly();
+                    try
+                    {
+                        p.waitFor(5, TimeUnit.SECONDS);
+                    }
+                    catch (final InterruptedException e)
+                    {
+                        Thread.currentThread().interrupt();
+                    }
+                    break;
+                }
+                Selenide.sleep(200);
+            }
+
+            final int exitCode = p.isAlive() ? -1 : p.exitValue();
+            adjustmentSucceeded = (exitCode == 0) && new File(videoFileName).exists() && new File(videoFileName).length() > 0;
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("Framerate adjustment encountered an exception", e);
+            adjustmentSucceeded = false;
+        }
+        finally
+        {
+            if (!adjustmentSucceeded && tempFile.exists())
+            {
+                LOGGER.warn("Framerate adjustment failed; restoring original video file: {}", videoFileName);
+                try
+                {
+                    Files.move(tempFile.toPath(), new File(videoFileName).toPath(), StandardCopyOption.REPLACE_EXISTING);
+                }
+                catch (final Exception restoreEx)
+                {
+                    LOGGER.error("Failed to restore original video from temp file: {}", tempFile, restoreEx);
+                    tempFile.delete();
+                }
+            }
+            else
+            {
+                tempFile.delete();
+            }
+        }
+
+        if (recordingConfigurations.logInformationAboutRecording())
+        {
+            AllureAddons.addToReport("video processing took " + (new Date().getTime() - videoProcessingStart + " ms"), "");
+        }
+    }
+}

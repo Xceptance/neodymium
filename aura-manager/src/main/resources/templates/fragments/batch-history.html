@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head></head>
+<body>
+
+<!-- Batch History Fragment -->
+<div th:fragment="batchHistory" class="d-flex flex-column gap-4" id="pageBatchHistoryOverview" th:attr="data-batch-name=${batchName}, data-group-type=${groupType}, data-group-value=${groupValue}, data-scope-title=${scopeTitle}">
+
+    <!-- LIST OF ALL RUNS -->
+    <div class="panel">
+        <div class="panel-header">
+            <div>
+                <div class="panel-title"><span class="material-symbols-outlined text-accent">history</span> <span th:text="${currentLimit != null && currentLimit < totalRunsCount ? 'List of Runs (Showing Last ' + showingRunsCount + ' of ' + totalRunsCount + ')' : 'List of All Runs (' + (totalRunsCount ?: 0) + ' Runs)'}">List of All Runs</span></div>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="aura-table">
+                <thead>
+                    <tr>
+                        <th>Run ID</th>
+                        <th>Tags</th>
+                        <th>Total</th>
+                        <th class="col-status-breakdown">Status Breakdown</th>
+                        <th class="col-pass-rate">Pass Rate</th>
+                        <th>Timestamp</th>
+                        <th class="col-action">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="batchRunsHistoryTableBody">
+                    <tr th:each="run, iterStat : ${runs}" class="clickable-row run-history-row"
+                        th:attr="hx-get='/run-report?runId=' + ${run.id}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true"
+                        th:data-run-id="${run.id}"
+                        th:data-env="${run.environment}"
+                        th:data-locales="${run.localesCsv}"
+                        th:data-browsers="${run.browsersCsv}"
+                        th:data-areas="${runAreasMap != null ? runAreasMap.get(run.id) : ''}"
+                        th:data-batch="${run.batchName ?: 'Default'}"
+                        th:data-tags="${run.tagsJson}"
+                        th:data-pass="${run.passedCount}"
+                        th:data-fixed="${run.succeededFixedCount}"
+                        th:data-known="${run.failedKnownCount}"
+                        th:data-unknown="${run.failedUnknownCount}"
+                        th:data-ignored="${run.ignoredCount}"
+                        th:data-pass-healed="${run.passedHealedCountSafe}"
+                        th:data-fixed-healed="${run.fixedHealedCountSafe}"
+                        th:data-known-healed="${run.knownHealedCountSafe}"
+                        th:data-unknown-healed="${run.unknownHealedCountSafe}"
+                        th:data-pass-ai="${run.passedAiCountSafe}"
+                        th:data-fixed-ai="${run.fixedAiCountSafe}"
+                        th:data-known-ai="${run.knownAiCountSafe}"
+                        th:data-unknown-ai="${run.unknownAiCountSafe}"
+                        th:data-rate="${(run.passRate != null ? #numbers.formatDecimal(run.passRate, 1, 0) : '0') + '% Pass'}"
+                        th:data-total="${run.totalTests != null ? run.totalTests : 0}"
+                        th:data-time="${run.timestampLabel}">
+                        <td><a class="text-mono run-id-link" style="text-decoration: none; font-weight: 700; color: var(--text-main);" th:href="'/run-report?runId=' + ${run.id}" th:attr="hx-get='/run-report?runId=' + ${run.id}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" onclick="event.stopPropagation();" th:title="'Open report for run #' + ${run.id}" th:text="'#' + ${run.id}">#RUN_ID</a></td>
+                        <td>
+                            <div class="table-cell-chips cell-tags" th:if="${run.tags != null and !run.tags.isEmpty()}">
+                                <th:block th:each="t : ${run.tags}">
+                                    <a th:if="${t.tagKey != null and (t.tagKey.equalsIgnoreCase('suite') or t.tagKey.equalsIgnoreCase('batch'))}" 
+                                       class="tag-chip tag-batch" 
+                                       th:href="@{/batch-history(batchName=${t.tagValue})}"
+                                       th:attr="hx-get=@{/batch-history(batchName=${t.tagValue})}" 
+                                       hx-target="#mainViewContainer" 
+                                       hx-swap="innerHTML" 
+                                       hx-push-url="true" 
+                                       onclick="event.stopPropagation();" 
+                                       style="cursor: pointer; text-decoration: none;" 
+                                       th:title="'Open history for batch ' + ${t.tagValue}">
+                                        <span class="text-muted">Suite:</span> <span th:text="${t.tagValue}">Default</span>
+                                    </a>
+                                    <span th:unless="${t.tagKey != null and (t.tagKey.equalsIgnoreCase('suite') or t.tagKey.equalsIgnoreCase('batch'))}" 
+                                          class="tag-chip"
+                                          th:title="${t.tagKey} + ': ' + ${t.tagValue}">
+                                        <span class="text-muted" th:text="${t.tagKey} + ':'">Tag:</span> <span th:text="${t.tagValue}">Val</span>
+                                    </span>
+                                </th:block>
+                            </div>
+                            <div class="table-cell-chips cell-tags" th:if="${run.tags == null or run.tags.isEmpty()}">
+                                <a class="tag-chip tag-batch" 
+                                   th:href="@{/batch-history(batchName=${run.batchName ?: 'Default'})}"
+                                   th:attr="hx-get=@{/batch-history(batchName=${run.batchName ?: 'Default'})}" 
+                                   hx-target="#mainViewContainer" 
+                                   hx-swap="innerHTML" 
+                                   hx-push-url="true" 
+                                   onclick="event.stopPropagation();" 
+                                   style="cursor: pointer; text-decoration: none;" 
+                                   th:title="'Open history for batch ' + ${run.batchName ?: 'Default'}">
+                                    <span class="text-muted">Suite:</span> <span th:text="${run.batchName ?: 'Default'}">Default</span>
+                                </a>
+                            </div>
+                        </td>
+                        <td class="text-mono" th:text="${run.totalTests}">0</td>
+                        <td class="col-status-breakdown">
+                            <div class="status-stacked-bar">
+                                <div th:if="${run.passedCleanCount > 0}" class="status-bar-seg seg-pass" th:style="'width:' + ${#numbers.formatDecimal(run.passedCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.passedCleanTooltip}" th:text="${run.passedCleanLabel}">3</div>
+                                <div th:if="${run.passedHealedCountSafe > 0}" class="status-bar-seg seg-pass-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(run.passedHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.passedHealedTooltip}" th:text="${run.passedHealedLabel}">0</div>
+                                <div th:if="${run.passedAiCountSafe > 0}" class="status-bar-seg seg-pass seg-ai-print" th:style="'width:' + ${#numbers.formatDecimal(run.passedAiPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.passedAiTooltip}" th:text="${run.passedAiLabel}">0</div>
+                                <div th:if="${run.fixedCleanCount > 0}" class="status-bar-seg seg-fixed" th:style="'width:' + ${#numbers.formatDecimal(run.fixedCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.fixedCleanTooltip}" th:text="${run.fixedCleanLabel}">2</div>
+                                <div th:if="${run.fixedHealedCountSafe > 0}" class="status-bar-seg seg-fixed-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(run.fixedHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.fixedHealedTooltip}" th:text="${run.fixedHealedLabel}">0</div>
+                                <div th:if="${run.fixedAiCountSafe > 0}" class="status-bar-seg seg-fixed seg-ai-print" th:style="'width:' + ${#numbers.formatDecimal(run.fixedAiPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.fixedAiTooltip}" th:text="${run.fixedAiLabel}">0</div>
+                                <div th:if="${run.knownCleanCount > 0}" class="status-bar-seg seg-known" th:style="'width:' + ${#numbers.formatDecimal(run.knownCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.knownCleanTooltip}" th:text="${run.knownCleanLabel}">1</div>
+                                <div th:if="${run.knownHealedCountSafe > 0}" class="status-bar-seg seg-known-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(run.knownHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.knownHealedTooltip}" th:text="${run.knownHealedLabel}">0</div>
+                                <div th:if="${run.knownAiCountSafe > 0}" class="status-bar-seg seg-known seg-ai-print" th:style="'width:' + ${#numbers.formatDecimal(run.knownAiPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.knownAiTooltip}" th:text="${run.knownAiLabel}">0</div>
+                                <div th:if="${run.unknownCleanCount > 0}" class="status-bar-seg seg-unknown" th:style="'width:' + ${#numbers.formatDecimal(run.unknownCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.unknownCleanTooltip}" th:text="${run.unknownCleanLabel}">1</div>
+                                <div th:if="${run.unknownHealedCountSafe > 0}" class="status-bar-seg seg-unknown-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(run.unknownHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.unknownHealedTooltip}" th:text="${run.unknownHealedLabel}">0</div>
+                                <div th:if="${run.unknownAiCountSafe > 0}" class="status-bar-seg seg-unknown seg-ai-print" th:style="'width:' + ${#numbers.formatDecimal(run.unknownAiPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.unknownAiTooltip}" th:text="${run.unknownAiLabel}">0</div>
+                                <div th:if="${run.runningCountSafe > 0}" class="status-bar-seg seg-running" th:style="'width:' + ${#numbers.formatDecimal(run.runningPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.runningTooltip}" th:text="${run.runningLabel}">0</div>
+                                <div th:if="${run.ignoredCount > 0}" class="status-bar-seg seg-ignored" th:style="'width:' + ${#numbers.formatDecimal(run.ignoredPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.ignoredTooltip}" th:text="${run.ignoredLabel}">1</div>
+                            </div>
+                        </td>
+                        <td class="col-pass-rate">
+                            <span th:if="${run.status == 'IN_PROGRESS'}" class="badge-status badge-running"><span class="material-symbols-outlined spin" style="font-size: 0.85rem; vertical-align: middle;">sync</span> RUNNING</span>
+                            <span th:unless="${run.status == 'IN_PROGRESS'}" class="badge-status badge-pass" th:text="${(run.passRate != null ? #numbers.formatDecimal(run.passRate, 1, 0) : '0') + '% Pass'}">37.5% Pass</span>
+                        </td>
+                        <td class="text-muted js-format-timestamp" th:data-timestamp-ms="${run.startTimeMs}" th:text="${run.timestampLabel}">Recently</td>
+                        <td class="col-action">
+                            <div class="table-cell-actions">
+                                <a class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.25rem;" th:href="'/run-report?runId=' + ${run.id}" th:attr="hx-get='/run-report?runId=' + ${run.id}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" onclick="event.stopPropagation();" th:title="'Inspect run #' + ${run.id}">
+                                    <span class="material-symbols-outlined" style="font-size: 0.875rem;">visibility</span> Inspect
+                                </a>
+                                <button class="btn-danger-subtle" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" th:title="'Remove run #' + ${run.id} + ' from history'" th:attr="onclick='deleteRunFromHistory(\'' + ${run.id} + '\', event)'">
+                                    <span class="material-symbols-outlined" style="font-size: 0.875rem;">delete</span>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(runs)}">
+                        <td colspan="7" class="text-center py-4 text-muted">
+                            No test runs found for this batch.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- OUT-OF-BAND SIDEBAR CONTEXT CARD SYNC -->
+    <th:block th:if="${isHxRequest == true}">
+        <th:block th:replace="~{fragments/sidebar :: sidebarContextCard}"></th:block>
+    </th:block>
+</div>
+
+</body>
+</html>

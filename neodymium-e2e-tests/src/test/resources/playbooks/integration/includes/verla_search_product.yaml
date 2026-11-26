@@ -1,0 +1,6 @@
+# @author AI-generated: Gemini 2.5 Pro
+# @author Xceptance GmbH 2026
+
+steps: |
+  Locate the search input field and type '${searchTerm}' into it
+  Press enter to submit search

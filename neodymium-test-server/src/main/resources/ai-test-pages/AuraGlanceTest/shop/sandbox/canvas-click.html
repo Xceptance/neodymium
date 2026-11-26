@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Canvas Coordinate Challenge - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+</head>
+<body class="aura-theme-dark">
+    <div class="aura-container">
+        <header class="aura-header">
+            <div class="aura-logo">Aura AI <span>Sandbox</span></div>
+            <nav class="aura-nav">
+                <a href="../index.html">← Back to Storefront</a>
+            </nav>
+        </header>
+
+        <main class="aura-main">
+            <section class="aura-card">
+                <h1>Canvas Interactive Hotspots</h1>
+                <p class="aura-desc">
+                    This canvas element renders "Discard" and "Confirm" buttons purely as 2D pixel bitmap content.
+                    Since there are no individual DOM nodes or text elements representing these controls, the AI agent
+                    must escalate to visual context and use coordinate-based interaction to click the intended button.
+                </p>
+
+                <div style="display: flex; justify-content: center; margin: 3rem 0;">
+                    <!-- Single Neutral Canvas Stage -->
+                    <canvas id="canvas-stage" width="400" height="150" style="border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; background: #1a1a2e; cursor: pointer;"></canvas>
+                </div>
+
+                <div class="aura-status-box" style="margin-top: 2rem; padding: 1.5rem; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
+                    Status: <span id="canvas-status" style="font-weight: bold; color: #00ffcc;">No click registered yet</span>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const stage = document.getElementById('canvas-stage');
+        const status = document.getElementById('canvas-status');
+        const ctx = stage.getContext('2d');
+
+        function renderButtons() {
+            ctx.clearRect(0, 0, stage.width, stage.height);
+
+            // 1. Draw Discard button (Left: x=30..170, y=45..105)
+            ctx.fillStyle = 'rgba(255, 51, 102, 0.2)';
+            ctx.strokeStyle = '#ff3366';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(30, 45, 140, 60, 8);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#ff3366';
+            ctx.font = 'bold 18px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Discard', 100, 75);
+
+            // 2. Draw Confirm button (Right: x=230..370, y=45..105)
+            ctx.fillStyle = 'rgba(6, 182, 212, 0.2)';
+            ctx.strokeStyle = '#06b6d4';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(230, 45, 140, 60, 8);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#06b6d4';
+            ctx.font = 'bold 18px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Confirm', 300, 75);
+        }
+
+        renderButtons();
+
+        // Coordinate hit-testing on click
+        stage.addEventListener('click', function(e) {
+            const rect = stage.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (x >= 30 && x <= 170 && y >= 45 && y <= 105) {
+                status.innerText = 'Discard Clicked';
+                status.style.color = '#ff3366';
+            } else if (x >= 230 && x <= 370 && y >= 45 && y <= 105) {
+                status.innerText = 'Confirm Clicked';
+                status.style.color = '#06b6d4';
+            }
+        });
+    </script>
+    <script src="../../shared/controls.js"></script>
+</body>
+</html>

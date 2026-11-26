@@ -1,0 +1,88 @@
+<div class="mbf-plp-container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+    <div class="flex flex-col lg:flex-row items-start gap-8">
+        
+        <!-- Refinements / Facet Filters Sidebar -->
+        <aside class="w-full lg:w-64 shrink-0 bg-sand-50 border border-sand-200 rounded-2xl p-6 lg:sticky lg:top-24">
+            <div class="flex items-center justify-between pb-4 border-b border-sand-200 mb-6">
+                <h3 class="font-serif text-lg font-bold text-espresso">${lang_refinements}</h3>
+                <span class="text-[10px] uppercase font-bold text-terracotta-500 tracking-wider">Filters</span>
+            </div>
+
+            <!-- Category Links -->
+            <div class="mb-6">
+                <h4 class="text-[11px] font-bold uppercase tracking-[0.1em] text-muted mb-3">${lang_categories}</h4>
+                <ul class="flex flex-col gap-2 text-xs font-semibold">
+                    <li><a href="plp.html" class="hover:text-terracotta-500 transition-colors ${all_active_class}">${lang_all}</a></li>
+                    <li><a href="c/tops.html" class="hover:text-terracotta-500 transition-colors ${tops_active_class}">${lang_tops}</a></li>
+                    <li><a href="c/bottoms.html" class="hover:text-terracotta-500 transition-colors ${bottoms_active_class}">${lang_bottoms}</a></li>
+                    <li><a href="c/outerwear.html" class="hover:text-terracotta-500 transition-colors ${outerwear_active_class}">${lang_outerwear}</a></li>
+                    <li><a href="c/footwear.html" class="hover:text-terracotta-500 transition-colors ${footwear_active_class}">${lang_footwear}</a></li>
+                    <li><a href="c/accessories.html" class="hover:text-terracotta-500 transition-colors ${accessories_active_class}">${lang_accessories}</a></li>
+                </ul>
+            </div>
+
+            <!-- Facet Form (HTMX filter) -->
+            <form id="refinement-form" hx-get="${filter_url}" hx-target="#plp-product-grid" hx-trigger="change" hx-include="#sort-select" class="space-y-6">
+                
+                <!-- Color Facet -->
+                <div class="pt-4 border-t border-sand-200">
+                    <h4 class="text-[11px] font-bold uppercase tracking-[0.1em] text-muted mb-3">Color Palette</h4>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="color" value="off-white" class="accent-terracotta-500" ${color_off_white_checked}> Off-White</label>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="color" value="charcoal" class="accent-terracotta-500" ${color_charcoal_checked}> Charcoal</label>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="color" value="olive" class="accent-terracotta-500" ${color_olive_checked}> Olive</label>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="color" value="sand" class="accent-terracotta-500" ${color_sand_checked}> Sand</label>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="color" value="navy" class="accent-terracotta-500" ${color_navy_checked}> Navy</label>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="color" value="taupe" class="accent-terracotta-500" ${color_taupe_checked}> Taupe</label>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="color" value="sage" class="accent-terracotta-500" ${color_sage_checked}> Sage</label>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="color" value="terracotta" class="accent-terracotta-500" ${color_terracotta_checked}> Terracotta</label>
+                    </div>
+                </div>
+
+                <!-- Price Facet -->
+                <div class="pt-4 border-t border-sand-200">
+                    <h4 class="text-[11px] font-bold uppercase tracking-[0.1em] text-muted mb-3">${lang_price}</h4>
+                    <div class="flex flex-col gap-2 text-xs">
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="price" value="0-50" class="accent-terracotta-500" ${price_0_50_checked}> ${lang_under50}</label>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="price" value="50-100" class="accent-terracotta-500" ${price_50_100_checked}> ${lang_range50to100}</label>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="price" value="100-200" class="accent-terracotta-500" ${price_100_200_checked}> ${lang_over100}</label>
+                    </div>
+                </div>
+
+                <!-- Special Offers Facet -->
+                <div class="pt-4 border-t border-sand-200">
+                    <h4 class="text-[11px] font-bold uppercase tracking-[0.1em] text-muted mb-3">Special Deals</h4>
+                    <label class="flex items-center gap-2 text-xs font-semibold text-promo cursor-pointer">
+                        <input type="checkbox" name="sale" value="true" class="accent-promo" ${sale_checked}> 4+1 Multi-Buy &amp; Sale
+                    </label>
+                </div>
+
+            </form>
+        </aside>
+
+        <!-- Product Listing Grid -->
+        <div class="flex-1 min-w-0">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-sand-200">
+                <div>
+                    <h1 class="font-serif text-3xl font-bold text-espresso">${plp_heading}</h1>
+                    <span class="text-xs text-muted" id="product-count-display">${total_products_count} ${lang_products}</span>
+                </div>
+                <!-- Sort Select -->
+                <div class="flex items-center gap-2">
+                    <label for="sort-select" class="text-xs font-semibold text-muted uppercase tracking-wider">${lang_sort}:</label>
+                    <select name="sort" id="sort-select" class="px-3 py-2 rounded-lg border border-sand-200 bg-white text-xs font-semibold outline-none focus:border-terracotta-500"
+                            hx-get="${filter_url}" hx-target="#plp-product-grid" hx-include="#refinement-form, #sort-select">
+                        <option value="default" ${sort_default_selected}>${lang_sortDefault}</option>
+                        <option value="price-asc" ${sort_asc_selected}>${lang_priceLowHigh}</option>
+                        <option value="price-desc" ${sort_desc_selected}>${lang_priceHighLow}</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="plp-product-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+                ${plp_products}
+            </div>
+        </div>
+
+    </div>
+</div>

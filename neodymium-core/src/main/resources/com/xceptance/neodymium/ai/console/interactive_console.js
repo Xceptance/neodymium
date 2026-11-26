@@ -1,0 +1,4127 @@
+// State variables
+let currentState = null;
+let currentPauseId = null;
+let currentRunId = null;
+let isAutoMode = false;
+let isStructuralActionInFlight = false;
+let structuralActionPauseId = null;
+let isRunActionInFlight = false;
+let runActionPauseId = null;
+let pendingRunAfterSync = false;
+let pendingSkipAfterSync = false;
+let eventSource = null;
+let helpOverlayClicked = false;
+let selectedStepIndexForDetails = null;
+let selectedSubStepIndex = null;
+const expandedSubStepsTrees = new Set();
+const collapsedSubStepsTrees = new Set();
+let autoStartStepIndex = null;
+let allStepIndices = [];
+
+// Watchdog safety net for structural action sync (auto-recovers if SSE event is missed)
+let structuralSyncWatchdogTimer = null;
+
+function startStructuralSyncWatchdog() {
+    clearStructuralSyncWatchdog();
+    structuralSyncWatchdogTimer = setTimeout(() => {
+        if (isStructuralActionInFlight) {
+            console.warn('[InteractiveConsole] Structural action timed out after 5s without server state event. Resetting sync lock.');
+            isStructuralActionInFlight = false;
+            structuralActionPauseId = null;
+            pendingRunAfterSync = false;
+            setButtonsEnabled(true);
+        }
+    }, 5000);
+}
+
+function clearStructuralSyncWatchdog() {
+    if (structuralSyncWatchdogTimer) {
+        clearTimeout(structuralSyncWatchdogTimer);
+        structuralSyncWatchdogTimer = null;
+    }
+}
+
+// -------------------------------------------------------------------------
+// SSE Connection
+// -------------------------------------------------------------------------
+function connectSSE() {
+    if (eventSource) eventSource.close();
+    eventSource = new EventSource('/api/console/events');
+
+    eventSource.addEventListener('state', (e) => {
+        const data = JSON.parse(e.data);
+        if (data && data.pauseId) {
+            if (structuralActionPauseId) {
+                if (data.pauseId !== structuralActionPauseId) {
+                    isStructuralActionInFlight = false;
+                    structuralActionPauseId = null;
+                    clearStructuralSyncWatchdog();
+                }
+            } else {
+                isStructuralActionInFlight = false;
+                clearStructuralSyncWatchdog();
+            }
+            if (runActionPauseId) {
+                if (data.pauseId !== runActionPauseId) {
+                    isRunActionInFlight = false;
+                    runActionPauseId = null;
+                } else {
+                    data.pauseId = null;
+                }
+            } else {
+                isRunActionInFlight = false;
+            }
+        }
+        applyState(data);
+    });
+
+    eventSource.addEventListener('fixSuggestion', (e) => {
+        try {
+            const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+            if (data) {
+                isStructuralActionInFlight = false;
+                structuralActionPauseId = null;
+                clearStructuralSyncWatchdog();
+                if (data.pauseId) {
+                    currentPauseId = data.pauseId;
+                    window.currentPauseId = currentPauseId;
+                    if (currentState) {
+                        currentState.pauseId = data.pauseId;
+                    }
+                }
+                handleFixSuggestionReceived(data);
+            }
+        } catch (err) {
+            console.error('Error handling fixSuggestion event:', err);
+        }
+    });
+
+    eventSource.addEventListener('pause', (e) => {
+        const data = JSON.parse(e.data);
+        if (runActionPauseId && data.pauseId === runActionPauseId) {
+            return;
+        }
+        if (runActionPauseId && data.pauseId !== runActionPauseId) {
+            isRunActionInFlight = false;
+            runActionPauseId = null;
+        } else if (!runActionPauseId) {
+            isRunActionInFlight = false;
+        }
+        currentPauseId = data.pauseId;
+        window.currentPauseId = currentPauseId;
+        if (structuralActionPauseId && data.pauseId !== structuralActionPauseId) {
+            isStructuralActionInFlight = false;
+            structuralActionPauseId = null;
+            clearStructuralSyncWatchdog();
+        } else if (!structuralActionPauseId) {
+            isStructuralActionInFlight = false;
+            clearStructuralSyncWatchdog();
+        }
+        // Mirror into currentState so local re-renders (toggleBp, handleStepClick, …)
+        // that call applyState(currentState) pick up the token via the 'pauseId' in state guard.
+        if (currentState) {
+            currentState.pauseId = data.pauseId;
+        }
+        if (currentRunId && data.runId !== currentRunId) {
+            isAutoMode = false;
+            autoStartStepIndex = null;
+            syncAutoButton();
+            showStaleBanner(data.runId);
+        } else {
+            currentRunId = data.runId;
+            if (currentState) {
+                applyState(currentState);
+            } else {
+                dismissInitialLoadingOverlay();
+                setButtonsEnabled(true);
+                checkActionApprovals();
+            }
+            if (pendingSkipAfterSync) {
+                pendingSkipAfterSync = false;
+                sendAction('SKIP');
+            } else if (pendingRunAfterSync) {
+                pendingRunAfterSync = false;
+                sendAction('RUN');
+            }
+            if (currentPauseId && currentPauseId.startsWith('pause-final-')) {
+                isAutoMode = false;
+                autoStartStepIndex = null;
+                syncAutoButton();
+                const finalSaveOverlay = document.getElementById('finalSaveOverlay');
+                const finalSaveTitle = document.getElementById('finalSaveTitle');
+                const finalSaveText = document.getElementById('finalSaveText');
+                const finalSaveButtons = document.getElementById('finalSaveButtons');
+                if (finalSaveOverlay) {
+                    const isFailed = currentState && currentState.status === 'failed';
+                    if (finalSaveTitle) {
+                        if (isFailed) {
+                            finalSaveTitle.innerHTML = '<span class="material-symbols-outlined">cancel</span> Test Finished';
+                            finalSaveTitle.classList.add('failed');
+                        } else {
+                            finalSaveTitle.innerHTML = '<span class="material-symbols-outlined">check_circle</span> Test Finished';
+                            finalSaveTitle.classList.remove('failed');
+                        }
+                    }
+                    const editsMade = currentState && (currentState.interactivePromptChanged === true || currentState.hudPromptChanged === true);
+                    const saveScopeContainer = document.getElementById('saveScopeContainer');
+                    if (saveScopeContainer) {
+                        saveScopeContainer.style.display = editsMade ? 'block' : 'none';
+                        const saveScopeSelect = document.getElementById('saveScopeSelect');
+                        if (saveScopeSelect && currentState && currentState.yamlScope) {
+                            saveScopeSelect.value = currentState.yamlScope;
+                        }
+                    }
+                    if (finalSaveText) {
+                        if (editsMade) {
+                            let files = [];
+                            const pbPath = currentState.playbookFile || currentState.yamlSource;
+                            if (pbPath) {
+                                files.push(pbPath);
+                            }
+                            if (currentState.playbookRecordingFile) {
+                                files.push(currentState.playbookRecordingFile);
+                            }
+                            let filesHtml = files.length > 0 ? "<div style='margin: 10px 0; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 4px;'><ul style='margin: 0; padding-left: 20px; text-align: left;'>" + files.map(f => "<li style='word-break: break-all;'><code>" + escHtml(f) + "</code></li>").join("") + "</ul></div>" : "";
+                            finalSaveText.innerHTML = "You have made changes to the test steps during execution. " + (filesHtml ? "The following files will be updated: " + filesHtml + " " : "") + "Would you like to save these changes?";
+                        } else {
+                            finalSaveText.innerHTML = isFailed ? "Test execution finished with failure." : "Test execution finished successfully!";
+                        }
+                    }
+                    if (finalSaveButtons) {
+                        finalSaveButtons.innerHTML = editsMade
+                            ? `<button class="btn btn-primary" onclick="sendAction('SAVE_EXIT', { saveScope: document.getElementById('saveScopeSelect')?.value || 'local' })">Save Changes</button>
+                               <button class="btn btn-danger" onclick="sendAction('DISCARD')">Discard</button>`
+                            : `<button class="btn btn-primary" onclick="sendAction('DISCARD')">Close</button>`;
+                    }
+                    finalSaveOverlay.classList.add('active');
+                }
+            } else if (isAutoMode) {
+                triggerAutoRunCheck();
+            }
+        }
+    });
+
+    eventSource.addEventListener('dumpReady', (e) => {
+        const data = JSON.parse(e.data);
+        showDumpPopup(data);
+    });
+
+    eventSource.onopen = () => setConnectionState('connected');
+    eventSource.onerror = () => {
+        setConnectionState('error');
+        setTimeout(connectSSE, 3000); // Retry in 3 seconds
+    };
+}
+
+// -------------------------------------------------------------------------
+// Static JSON Fallback Load
+// -------------------------------------------------------------------------
+function tryStaticLoad() {
+    const params = new URLSearchParams(window.location.search);
+    const dataUrl = params.get('dataUrl') || params.get('data') || '/run_data.json';
+
+    // Extract history run ID if loaded from history
+    if (dataUrl.includes('/api/reporting/report/')) {
+        const parts = dataUrl.split('/');
+        // /api/reporting/report/<runId>/...
+        if (parts.length > 4) {
+            window.historyRunId = parts[4];
+        }
+    }
+
+    fetch(dataUrl)
+        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(data => {
+            applyState(data);
+            setConnectionState('connected');
+            setButtonsEnabled(false);
+            const reasoningEl = document.getElementById('reasoningText');
+            if (reasoningEl) reasoningEl.textContent = '(Offline view — no live updates)';
+        })
+        .catch(() => {
+            // Only try run_example.json if explicitly requested as fallback demo
+            if (dataUrl === 'run_example.json' || dataUrl === '/run_example.json') {
+                fetch('run_example.json')
+                    .then(r => r.ok ? r.json() : Promise.reject(r.status))
+                    .then(data => {
+                        applyState(data);
+                        setConnectionState('connected');
+                        setButtonsEnabled(false);
+                        const reasoningEl = document.getElementById('reasoningText');
+                        if (reasoningEl) reasoningEl.textContent = '(Offline view — no live updates)';
+                    })
+                    .catch(() => {
+                        setConnectionState('error');
+                        const reasoningEl = document.getElementById('reasoningText');
+                        if (reasoningEl) reasoningEl.textContent = 'Could not load run data. Pass ?data=path/to/run.json';
+                    });
+            } else {
+                setConnectionState('error');
+                const reasoningEl = document.getElementById('reasoningText');
+                if (reasoningEl) reasoningEl.textContent = 'Could not load run data. Pass ?data=path/to/run.json';
+            }
+        });
+}
+
+// Detect connection method on load
+window.addEventListener('DOMContentLoaded', () => {
+    const params = new URLSearchParams(window.location.search);
+
+    // ── Touch capability / Mobile detection ──────────────────────────────────
+    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
+    if (isTouchDevice) {
+        document.body.classList.add('has-touch');
+    } else {
+        document.body.classList.add('no-touch');
+    }
+
+    // ── Mode detection ───────────────────────────────────────────────────────
+    // Two mutually-exclusive display modes alter what the console shows:
+    //
+    //  mode-results   → loaded from history (/api/reporting/report/…); read-only.
+    //                   Hides: add-step buttons, bottom action bar, progress
+    //                   pill/bar, shortcuts & info icon.
+    //  mode-embedded  → running inside an iframe (window.parent !== window).
+    //                   Hides: status dot, settings button, theme toggle,
+    //                   mobile-QR button (all owned by the parent dashboard).
+    //
+    const dataUrl = params.get('dataUrl') || params.get('data') || '';
+    if (dataUrl.includes('/api/reporting/report/')) {
+        document.body.classList.add('mode-results');
+    }
+    if (window.parent !== window) {
+        document.body.classList.add('mode-embedded');
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
+    if (params.has('dataUrl') || params.has('data')) {
+        tryStaticLoad();
+    } else {
+        connectSSE();
+    }
+
+    // Initialize help tooltip hover
+    const btnHelp = document.getElementById('btnHelp');
+    const helpOverlay = document.getElementById('helpOverlay');
+    if (btnHelp && helpOverlay) {
+        const container = btnHelp.closest('.help-hover-container');
+        if (container) {
+            container.addEventListener('mouseenter', () => {
+                helpOverlay.style.display = 'flex';
+            });
+            container.addEventListener('mouseleave', () => {
+                if (!helpOverlayClicked) {
+                    helpOverlay.style.display = 'none';
+                }
+            });
+        }
+    }
+
+    // Load settings from localStorage
+    const savedTheme = localStorage.getItem('aura_theme') || localStorage.getItem('neodymium.hud.theme') || 'system';
+    const savedZoom = localStorage.getItem('neodymium.hud.zoom') || '100';
+
+    const themeSelect = document.getElementById('themeSelect');
+    if (themeSelect) themeSelect.value = savedTheme;
+    applyTheme(savedTheme);
+
+    const zoomInput = document.getElementById('zoomInput');
+    if (zoomInput) zoomInput.value = savedZoom;
+    const zoom = parseInt(savedZoom, 10);
+    if (!isNaN(zoom)) {
+        const factor = zoom / 100;
+        document.body.style.zoom = factor;
+        document.body.style.height = (100 / factor) + 'dvh';
+    }
+
+    // Listen for system theme media query changes
+    window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+        const themeSelect = document.getElementById('themeSelect');
+        if (themeSelect && themeSelect.value === 'system') {
+            applyTheme('system');
+        }
+    });
+
+    // Listen for theme sync messages from parent window
+    window.addEventListener('message', (event) => {
+        if (event.data && (event.data.type === 'aura-theme-change' || event.data.type === 'theme-change')) {
+            const theme = event.data.theme;
+            const themeSelect = document.getElementById('themeSelect');
+            if (themeSelect) themeSelect.value = theme;
+            applyTheme(theme);
+        }
+    });
+
+    // Listen for storage changes from parent window or other tabs
+    window.addEventListener('storage', (event) => {
+        if (event.key === 'aura_theme' || event.key === 'neodymium.hud.theme') {
+            if (event.newValue) {
+                const themeSelect = document.getElementById('themeSelect');
+                if (themeSelect) themeSelect.value = event.newValue;
+                applyTheme(event.newValue);
+            }
+        }
+    });
+
+    // Viewport drag/zoom event handlers
+    const viewport = document.getElementById('screenshotViewport');
+    if (viewport) {
+        viewport.addEventListener('mousedown', (e) => {
+            isPanning = true;
+            viewport.style.cursor = 'grabbing';
+            startX = e.clientX - panX;
+            startY = e.clientY - panY;
+            e.preventDefault();
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isPanning) return;
+            panX = e.clientX - startX;
+            panY = e.clientY - startY;
+            updateScreenshotTransform();
+        });
+
+        window.addEventListener('mouseup', () => {
+            isPanning = false;
+            if (viewport) viewport.style.cursor = 'grab';
+        });
+
+        viewport.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const factor = e.deltaY < 0 ? 1.15 : 0.85;
+            zoomScreenshot(factor);
+        }, { passive: false });
+
+        // Mobile touch support
+        viewport.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                isPanning = true;
+                startX = e.touches[0].clientX - panX;
+                startY = e.touches[0].clientY - panY;
+            }
+        });
+        viewport.addEventListener('touchmove', (e) => {
+            if (!isPanning || e.touches.length !== 1) return;
+            panX = e.touches[0].clientX - startX;
+            panY = e.touches[0].clientY - startY;
+            updateScreenshotTransform();
+        });
+        viewport.addEventListener('touchend', () => {
+            isPanning = false;
+        });
+    }
+});
+
+// -------------------------------------------------------------------------
+// State application / Dynamic rendering
+// -------------------------------------------------------------------------
+
+window.testErrors = [];
+const oldError = console.error;
+console.error = function(...args) {
+    window.testErrors.push(args.join(' '));
+    oldError.apply(console, args);
+};
+
+function dismissInitialLoadingOverlay() {
+    const overlay = document.getElementById('initialLoadingOverlay');
+    if (overlay) {
+        overlay.style.opacity = '0';
+        setTimeout(() => {
+            overlay.style.visibility = 'hidden';
+            overlay.style.display = 'none';
+        }, 300);
+    }
+}
+
+const activeBreakpoints = new Set();
+
+function applyState(state) {
+    if (!state || Object.keys(state).length === 0) return;
+
+    // Capture editing state to prevent mid-flight re-renders from wiping out user input
+    let activeEditStepIdx = null;
+    let activeEditText = null;
+    const editingCard = document.querySelector('.step-card.editing');
+    if (editingCard) {
+        activeEditStepIdx = parseInt(editingCard.getAttribute('data-step-idx'), 10);
+        const ta = editingCard.querySelector('.inline-edit-textarea');
+        if (ta) activeEditText = ta.value;
+
+        // Preserve locally modified data bindings mid-edit
+        if (currentState?.dataBindings && state?.dataBindings) {
+            Object.assign(state.dataBindings, currentState.dataBindings);
+        }
+        if (currentState?.localDataBindings && state?.localDataBindings) {
+            Object.assign(state.localDataBindings, currentState.localDataBindings);
+        }
+    }
+    window.currentlyEditingStepIndex = activeEditStepIdx;
+    window.currentEditText = activeEditText;
+
+    const isFirstLoad = currentState === null;
+
+    if (isFirstLoad) {
+        dismissInitialLoadingOverlay();
+    }
+
+    if (state.pauseId && runActionPauseId && state.pauseId === runActionPauseId) {
+        state.pauseId = null;
+    }
+
+    if (state.pauseId) {
+        if (runActionPauseId && state.pauseId !== runActionPauseId) {
+            isRunActionInFlight = false;
+            runActionPauseId = null;
+        }
+        currentPauseId = state.pauseId;
+        window.currentPauseId = currentPauseId;
+        if (pendingSkipAfterSync) {
+            pendingSkipAfterSync = false;
+            sendAction('SKIP');
+        }
+    } else {
+        currentPauseId = null;
+        window.currentPauseId = null;
+    }
+
+    // On a new test run, clear the selected step to fall back to default behavior
+    if (currentState && currentState.runId !== state.runId) {
+        selectedStepIndexForDetails = null;
+    }
+
+    // If a structural action or run/edit action is currently in-flight, preserve our optimistic blocks
+    // so stale in-flight state events from the server do not revert the UI before the
+    // rotated pause token is received.
+    const isStaleRunActionState = isRunActionInFlight && runActionPauseId && (state.pauseId === runActionPauseId || (state.status === 'paused' && state.pauseId === null));
+    if ((isStructuralActionInFlight || isStaleRunActionState) && currentState && currentState.blocks && state && state.blocks) {
+        state.blocks = currentState.blocks;
+    } else if (currentState && currentState.blocks && state && state.blocks) {
+        // Preserve local temporary/pending steps when applying a new state from the server
+        for (const blockName of ['before', 'steps', 'after']) {
+            const oldList = currentState.blocks[blockName] || [];
+            const newList = state.blocks[blockName] || [];
+            const pendingSteps = oldList.filter(s => s.isTempAdd || s.isPendingAdd);
+            for (const pendingStep of pendingSteps) {
+                const alreadyInNewList = newList.some(s =>
+                    s.index === pendingStep.index ||
+                    (!s.isTempAdd && !s.isPendingAdd && (
+                        (s.instruction && pendingStep.instruction && s.instruction.trim() === pendingStep.instruction.trim()) ||
+                        (s.rawInstruction && pendingStep.rawInstruction && s.rawInstruction.trim() === pendingStep.rawInstruction.trim()) ||
+                        (s.instruction && pendingStep.rawInstruction && s.instruction.trim() === pendingStep.rawInstruction.trim())
+                    ))
+                );
+                if (!alreadyInNewList) {
+                    const originalIdx = (typeof pendingStep.targetInsertIndex === 'number' && pendingStep.targetInsertIndex >= 0)
+                        ? pendingStep.targetInsertIndex
+                        : oldList.indexOf(pendingStep);
+                    const insertPos = (originalIdx >= 0 && originalIdx <= newList.length)
+                        ? originalIdx
+                        : newList.length;
+                    newList.splice(insertPos, 0, pendingStep);
+                }
+            }
+            state.blocks[blockName] = newList;
+        }
+    }
+
+    currentState = state;
+    window.currentState = currentState; // Expose to Selenium
+    currentRunId = state.runId;
+
+    if (state && state.fixSuggestion) {
+        const overlay = document.getElementById('suggestionOverlay');
+        const loading = document.getElementById('suggestionLoading');
+        if (overlay && overlay.classList.contains('active') && loading && loading.style.display !== 'none') {
+            handleFixSuggestionReceived(state.fixSuggestion);
+        }
+    }
+
+    let hasFailedStep = false;
+    let failedIdx = null;
+    if (state && state.blocks) {
+        for (const bKey of ['before', 'steps', 'after']) {
+            const list = state.blocks[bKey] || [];
+            for (const step of list) {
+                if (step.status === 'failed' || step.failed === true) {
+                    hasFailedStep = true;
+                    failedIdx = step.index;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (failedIdx !== null && failedIdx !== lastFailedStepIndex) {
+        userEditedFailedStep = false;
+        lastFailedStepIndex = failedIdx;
+    } else if (failedIdx === null) {
+        lastFailedStepIndex = null;
+    }
+
+    if (hasFailedStep && !userEditedFailedStep) {
+        isErrorMode = true;
+        isAutoMode = false;
+        autoStartStepIndex = null;
+        pendingRunAfterSync = false;
+        syncAutoButton();
+    } else {
+        isErrorMode = false;
+    }
+    updateToolbarControls(true);
+
+    // Header info
+    setTextIfChanged('testNameDisplay', state.testName || '—');
+    setTextIfChanged('testIdDisplay', state.testId ? `(ID: ${state.testId})` : '');
+
+    // Set Browser Icon
+    const browserLower = (state.browser || '').toLowerCase();
+    const browserIcon = document.getElementById('browserIcon');
+    if (browserIcon) {
+        browserIcon.innerHTML = '<span class="material-symbols-outlined">language</span>';
+    }
+
+    // Reasoning panel
+    const panel = document.getElementById('reasoningPanel');
+    const icon = document.getElementById('reasoningIcon');
+    const text = document.getElementById('reasoningText');
+    const timer = document.getElementById('reasoningTimer');
+    const newReasoning = state.reasoning || '';
+    if (text && text.textContent !== newReasoning) {
+        text.textContent = newReasoning;
+        const isFailed = !!state.reasoningFailed;
+        const isThinking = !newReasoning && !isFailed;
+        panel.className = 'current-reasoning-panel' +
+            (isFailed ? ' failed' : '') +
+            (isThinking ? ' idle' : '');
+        icon.className = 'material-symbols-outlined reasoning-icon';
+        icon.textContent = isFailed ? 'warning' : 'psychology';
+        // Show timer only while AI is actively thinking (has reasoning, not failed, not idle)
+        if (timer) timer.style.display = (!isThinking && !isFailed) ? '' : 'none';
+    }
+
+    const beforeSteps = state.blocks?.before || [];
+    const mainSteps = state.blocks?.steps || state.steps || [];
+    const afterSteps = state.blocks?.after || [];
+
+    // Update progress pill (desktop) and mobile bar.
+    // currentStep = doneSteps + 1 when a step is actively running; otherwise = doneSteps.
+    const allStepsForProgress = [
+        ...beforeSteps,
+        ...mainSteps,
+        ...afterSteps
+    ];
+    const totalSteps = allStepsForProgress.length;
+    const doneSteps = allStepsForProgress.filter(s => s.status === 'passed' || s.status === 'skipped' || s.status === 'failed' || s.status === 'aborted').length;
+    const hasRunning = allStepsForProgress.some(s => s.status === 'running');
+    const currentStep = doneSteps + (hasRunning ? 1 : 0);
+    const pill = document.getElementById('progressPill');
+    const pLabel = document.getElementById('progressLabel');
+    const pFill = document.getElementById('progressBarFill');
+    if (pill && totalSteps > 0) {
+        pill.style.display = '';
+        pLabel.textContent = `Step ${currentStep} / ${totalSteps}`;
+        pFill.style.width = Math.round((currentStep / totalSteps) * 100) + '%';
+    }
+    // Mobile progress
+    const mLabel = document.getElementById('progressLabelMobile');
+    const mFill = document.getElementById('progressBarMobileFill');
+    if (mLabel && totalSteps > 0) {
+        mLabel.textContent = `Step ${currentStep} of ${totalSteps}`;
+        mFill.style.width = Math.round((currentStep / totalSteps) * 100) + '%';
+    }
+    // Rebuild the flat step index list and all steps collection
+    const allSteps = [
+        ...beforeSteps,
+        ...mainSteps,
+        ...afterSteps
+    ];
+    allStepIndices = allSteps.map(s => s.index);
+
+    // Auto-advance: always track the currently relevant step.
+    // Priority: running/failed step first, then next pending after the last passed one.
+    if (state && allSteps.length > 0) {
+        const steps = allSteps;
+        const activeStep = steps.find(s => s.status === 'running' || s.status === 'failed');
+        const selStep = (selectedStepIndexForDetails !== null) ? steps.find(s => s.index === selectedStepIndexForDetails) : null;
+        const lastPassedIdx = steps.findLastIndex(s => s.status === 'passed');
+
+        if (selStep && (selStep.status === 'passed' || selStep.status === 'skipped' || selStep.status === 'healed')) {
+            // If the currently selected step has completed, jump forward to active or next pending step
+            if (activeStep) {
+                selectedStepIndexForDetails = activeStep.index;
+            } else if (lastPassedIdx !== -1 && lastPassedIdx < steps.length - 1) {
+                selectedStepIndexForDetails = steps[lastPassedIdx + 1].index;
+            } else {
+                selectedStepIndexForDetails = steps[0].index;
+            }
+        } else if (currentPauseId !== null && selStep) {
+            // Keep user's explicit selection during pause if it is not completed
+        } else if (activeStep) {
+            selectedStepIndexForDetails = activeStep.index;
+        } else {
+            if (lastPassedIdx !== -1 && lastPassedIdx < steps.length - 1) {
+                selectedStepIndexForDetails = steps[lastPassedIdx + 1].index;
+            } else if (selectedStepIndexForDetails === null || !selStep) {
+                selectedStepIndexForDetails = steps[0].index;
+            }
+        }
+
+        // Auto-advance selected sub-step if target step has sub-steps
+        if (selectedStepIndexForDetails !== null) {
+            const targetStep = steps.find(s => s.index === selectedStepIndexForDetails);
+            if (targetStep && Array.isArray(targetStep.subSteps) && targetStep.subSteps.length > 0) {
+                const runningSub = targetStep.subSteps.find(s => s.status === 'running');
+                if (runningSub) {
+                    const selSub = selectedSubStepIndex !== null
+                        ? targetStep.subSteps.find(s => (s.index || s.stepIndex) === selectedSubStepIndex)
+                        : null;
+                    if (selectedSubStepIndex === null || (selSub && (selSub.status === 'passed' || selSub.status === 'success' || selSub.status === 'skipped'))) {
+                        selectedSubStepIndex = runningSub.index || (targetStep.subSteps.indexOf(runningSub) + 1);
+                    }
+                }
+            }
+        }
+    }
+
+    // Handle default/latest screenshot display
+    let activeScreenshot = null;
+    const activeStepForShot = allSteps.find(s => s.status === 'running' || s.status === 'failed');
+    if (activeStepForShot && activeStepForShot.screenshot) {
+        activeScreenshot = activeStepForShot.screenshot;
+    } else {
+        const passedSteps = allSteps.filter(s => s.status === 'passed' && s.screenshot);
+        if (passedSteps.length > 0) {
+            activeScreenshot = passedSteps[passedSteps.length - 1].screenshot;
+        }
+    }
+    if (activeScreenshot) {
+        showScreenshot(activeScreenshot);
+    }
+
+    // Test source files (Java + YAML + Playbook)
+    const topTestSource = document.getElementById('topTestSource');
+    if (topTestSource) {
+        const files = [];
+        if (state.testFile) files.push({ label: 'Java Test', value: state.testFile, icon: 'code' });
+        const pbFile = state.playbookFile || state.yamlSource;
+        if (pbFile) files.push({ label: 'Playbook', value: pbFile, icon: 'description' });
+        if (state.playbookRecordingFile) files.push({ label: 'Playbook Recording', value: state.playbookRecordingFile, icon: 'album' });
+
+        if (files.length > 0) {
+            const formatPath = (p) => {
+                if (!p) return '';
+                const parts = p.split(/[/\\]/);
+                if (parts.length > 2) return '&hellip;/' + parts.slice(-2).join('/');
+                return p;
+            };
+            topTestSource.innerHTML = files.map(f => `
+                        <div style="margin-bottom:8px;" title="${escAttr(f.value)}">
+                            <span style="color:var(--text-muted);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:2px;">
+                                <span class="material-symbols-outlined" style="margin-right:4px;">${f.icon}</span>${f.label}
+                            </span>
+                            <div style="font-size:11px; color:var(--text-secondary); font-family:var(--font-mono); word-break:break-all;">${formatPath(f.value)}</div>
+                        </div>
+                    `).join('');
+            topTestSource.style.display = '';
+        } else {
+            topTestSource.innerHTML = '';
+            topTestSource.style.display = 'none';
+        }
+    }
+    // Stored Variables: only show the column when state.storedVariables has entries
+    const topLiveVarsCol = document.getElementById('topLiveVarsCol');
+    const topLiveVarsBody = document.getElementById('topLiveVarsBody');
+    const storedVars = state.storedVariables || {};
+    const storedKeys = Object.keys(storedVars);
+    if (topLiveVarsCol) topLiveVarsCol.style.display = (storedKeys.length > 0) ? 'block' : 'none';
+    if (topLiveVarsBody) {
+        if (storedKeys.length > 0) {
+            topLiveVarsBody.innerHTML = storedKeys
+                .map(k => `<tr style="border-bottom:1px solid rgba(255,255,255,0.03);"><td style="padding:5px 8px;font-family:var(--font-mono);font-weight:600;color:var(--text-secondary);">${escHtml(k)}</td><td style="padding:5px 8px;font-family:var(--font-mono);color:var(--text-main);">${escHtml(storedVars[k])}</td></tr>`)
+                .join('');
+        } else {
+            topLiveVarsBody.innerHTML = '';
+        }
+    }
+
+    if (['passed', 'failed'].includes(state.status)) {
+        isAutoMode = false;
+        autoStartStepIndex = null;
+    } else if (isFirstLoad) {
+        isAutoMode = state.autoRun || false;
+    }
+    syncAutoButton();
+
+    // Render block groups
+    renderBlock('before', beforeSteps);
+    renderBlock('steps', mainSteps);
+    renderBlock('after', afterSteps);
+
+    // Auto-scroll active card into view
+    const activeCardEl = document.querySelector('.step-card.active') || document.querySelector('.step-card.selected-details');
+    if (activeCardEl) {
+        activeCardEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // Render Data Bindings Table
+    const tbody = document.getElementById('dataBindingsTableBody');
+    if (tbody) {
+        const bindings = state.dataBindings || {};
+        const keys = Object.keys(bindings);
+        if (keys.length > 0) {
+            tbody.innerHTML = keys.map(k => `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td class="binding-key" onclick="insertVarInActiveTextarea('${escAttr(k)}')" style="padding: 6px 8px; font-family: var(--font-mono); font-weight: 600; color: var(--text-secondary);">${escHtml(k)}</td>
+                            <td style="padding: 6px 8px; font-family: var(--font-mono); color: var(--text-main);">${escHtml(bindings[k])}</td>
+                        </tr>
+                    `).join('');
+        } else {
+            tbody.innerHTML = `<tr><td colspan="2" style="padding: 12px; text-align: center; color: var(--text-muted);">No active variables.</td></tr>`;
+        }
+    }
+
+    // JUnit tags & Test Data key-value table
+    const topTags = document.getElementById('topJunitTags');
+    if (topTags && state.junitTags) {
+        topTags.innerHTML = state.junitTags.map(t => `<span style="background:rgba(59,130,246,0.15); color:var(--accent-primary); border:1px solid rgba(59,130,246,0.2); padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700;">${escHtml(t)}</span>`).join('');
+    }
+    const topTestDataBody = document.getElementById('topTestDataBody');
+    if (topTestDataBody && state.dataBindings) {
+        const usedKeysSet = getUsedVariableKeys(state);
+        const excludedKeys = ['steps', 'neodymium.stepLineNumbers', 'before', 'after', 'neodymium.classpathResourcePath', 'raw_steps', 'neodymium.testdata.index'];
+        const keys = Object.keys(state.dataBindings).filter(k => !excludedKeys.includes(k) && usedKeysSet.has(k));
+        if (keys.length > 0) {
+            topTestDataBody.innerHTML = keys.map(k => `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding: 5px 8px; font-family: var(--font-mono); font-weight: 600; color: var(--text-secondary);">${escHtml(k)}</td>
+                            <td style="padding: 5px 8px; font-family: var(--font-mono); color: var(--text-main);">${escHtml(state.dataBindings[k])}</td>
+                        </tr>
+                    `).join('');
+        } else {
+            topTestDataBody.innerHTML = `<tr><td colspan="2" style="padding: 12px; text-align: center; color: var(--text-muted);">No initial test data used in this test case.</td></tr>`;
+        }
+    }
+
+    restoreFocus();
+
+    if (!currentPauseId || state.status === 'running' || isRunActionInFlight) {
+        setButtonsEnabled(false);
+    } else {
+        setButtonsEnabled(true);
+        checkActionApprovals();
+    }
+
+    // Update details block for big screens
+    updateBigScreenDetails();
+
+    // On the very first state load: open the active step's accordion on mobile
+    // (on desktop the right panel handles it; on mobile the accordion is the only detail view)
+    if (isFirstLoad) {
+        requestAnimationFrame(() => {
+            const activeCard = document.querySelector('.step-card.active');
+            if (activeCard) {
+                const acc = activeCard.querySelector('.step-accordion-details');
+                if (acc) acc.classList.add('open');
+                activeCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
+    }
+}
+
+function checkActionApprovals() {
+    const runBtn = document.getElementById('btnRun');
+    const allSteps = [
+        ...(currentState?.blocks?.before || []),
+        ...(currentState?.blocks?.steps || []),
+        ...(currentState?.blocks?.after || [])
+    ];
+    const isExecuting = !currentPauseId || (currentState && currentState.status === 'running') || isStructuralActionInFlight || isRunActionInFlight || isAutoMode;
+    if (isExecuting) {
+        if (runBtn) {
+            runBtn.disabled = true;
+            runBtn.setAttribute('disabled', 'true');
+        }
+        return;
+    }
+    const activeCard = document.querySelector('.step-card.active');
+    const targetCard = activeCard || (currentPauseId ? document.querySelector('.step-card.selected-details') : null);
+    if (!targetCard) {
+        if (runBtn) {
+            runBtn.disabled = true;
+            runBtn.setAttribute('disabled', 'true');
+        }
+        return;
+    }
+    const idx = parseInt(targetCard.getAttribute('data-step-idx'), 10);
+    const blockName = targetCard.getAttribute('data-step-block');
+    const s = (blockName && currentState?.blocks?.[blockName])
+        ? currentState.blocks[blockName].find(st => st.index === idx)
+        : allSteps.find(st => st.index === idx);
+    if (s && (s.status === 'passed' || s.status === 'skipped' || s.status === 'healed' || s.status === 'aborted')) {
+        if (runBtn) {
+            runBtn.disabled = true;
+            runBtn.setAttribute('disabled', 'true');
+        }
+        return;
+    }
+    const isTopThinking = currentState && typeof currentState.reasoning === 'string' && currentState.reasoning.toLowerCase().includes('thinking');
+    const isStepThinking = s && typeof s.reasoning === 'string' && s.reasoning.toLowerCase().includes('thinking');
+    const hasPlannedActions = s && Array.isArray(s.actions) && s.actions.length > 0;
+    const isFailedStep = isErrorMode || (s && (s.status === 'failed' || s.failed));
+    const isThinking = (!isFailedStep && (s && !s.reasoning && !hasPlannedActions && !isStructuralActionInFlight)) || isTopThinking || isStepThinking;
+
+    if (runBtn) {
+        if (isThinking || isExecuting || isRunActionInFlight) {
+            runBtn.disabled = true;
+            runBtn.setAttribute('disabled', 'true');
+        } else {
+            runBtn.disabled = false;
+            runBtn.removeAttribute('disabled');
+        }
+    }
+
+    // Handle toolbar Back button disabled if first step or auto is on
+    const isFirstStep = s && ((allStepIndices.length > 0 && s.index === allStepIndices[0]) || (s.blockIndex === 0 && (s.block === 'before' || (!currentState?.blocks?.before?.length && s.block === 'steps'))));
+    const backBtn = document.getElementById('btnBack');
+    if (backBtn) {
+        if (isFirstStep || isAutoMode) {
+            backBtn.disabled = true;
+            backBtn.setAttribute('disabled', 'true');
+        } else {
+            backBtn.disabled = false;
+            backBtn.removeAttribute('disabled');
+        }
+    }
+}
+
+function renderBlock(blockName, steps) {
+    const container = document.getElementById(blockName + 'Steps');
+    const group = document.getElementById(blockName + 'Group');
+    if (!container || !group) return;
+
+    // Enhanced signature to include selection, sub-step selection, breakpoints, and other UI state
+    const sig = JSON.stringify({
+        steps: steps.map(s => `${s.index}|${s.status}|${s.instruction}|${s.source || ''}|${s.reasoning ? s.reasoning.length : 0}|${s.actions ? s.actions.length : 0}|${(s.failureReason || s.errorMessage || s.error || '').length}|${s.llmCalls ? s.llmCalls.length : 0}|${Array.isArray(s.subSteps) ? s.subSteps.map(c => `${c.index}:${c.status}:${c.durationMs || 0}`).join(',') : ''}`),
+        selected: selectedStepIndexForDetails,
+        selectedSubStep: selectedSubStepIndex,
+        expandedSubSteps: Array.from(expandedSubStepsTrees),
+        collapsedSubSteps: Array.from(collapsedSubStepsTrees),
+        breakpoints: Array.from(activeBreakpoints),
+        paused: currentPauseId !== null,
+        bindings: currentState?.dataBindings
+    });
+    if (container.dataset.sig === sig) return;
+    container.dataset.sig = sig;
+
+    if (steps.length === 0) {
+        // In results/read-only mode: hide the block entirely — there are no steps
+        // to display and no drag target is needed.
+        // In interactive mode: show a drop zone so steps can be dragged into it.
+        if (document.body.classList.contains('mode-results')) {
+            group.style.display = 'none';
+            return;
+        }
+        // Interactive mode — show empty drop zone
+        container.innerHTML = `<div class="drop-target-area empty-block-zone" data-block="${blockName}" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, -1, 'after', '${blockName}')">
+                    <span style="opacity: 0.5; font-size: 12px;">Drop steps here</span>
+                </div>`;
+        group.style.display = 'flex';
+        return;
+    }
+
+    group.style.display = 'flex';
+    container.innerHTML = steps.map(s => renderStepCard(s, blockName)).join('');
+
+    // In interactive mode, append a final drop zone to each block so items can be dropped at the end.
+    if (!document.body.classList.contains('mode-results')) {
+        container.innerHTML += `<div class="drop-target-area final-drop-zone" data-block="${blockName}" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, -1, 'after', '${blockName}')"></div>`;
+    }
+}
+
+function buildStepDetailsHtml(step, isActiveStep) {
+    const isSkipped = step.status === 'skipped';
+    const isFailed = step.status === 'failed';
+    const isPassed = step.status === 'passed';
+
+    // ---- Actions: compact one-line chips ----
+    const actionsList = Array.isArray(step.actions) ? step.actions : [];
+    const isLlmProcessing = step.isLlmProcessing || (step.status === 'running' && actionsList.length === 0 && !step.reasoning);
+    const actionsHtml = isLlmProcessing
+        ? `<div style="display:flex; align-items:center; gap:8px; padding:10px 0; color:var(--text-secondary); font-size:12px;">
+                <span class="material-symbols-outlined spinner" style="color:var(--accent-primary);" aria-hidden="true">progress_activity</span>
+                <span>Processing step with LLM...</span>
+           </div>`
+        : actionsList.length > 0
+            ? actionsList.map((a) => {
+                const parts = [];
+                const actTarget = a.resolvedTarget || a.target || '';
+                const actVal = a.resolvedValue || a.value || '';
+                if (actTarget) parts.push(`<span style="color:var(--text-main);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px;">${escHtml(actTarget)}</span>`);
+                if (actVal) parts.push(`<span style="color:var(--text-secondary);font-size:11px;">= <code style="background:rgba(255,255,255,0.06);padding:0 4px;border-radius:3px;">${escHtml(actVal)}</code></span>`);
+                const origTarget = a.expectedTarget || a.originalTarget || a.healedFrom || (a.healed && a.target && a.target !== actTarget ? a.target : null);
+                if (origTarget && origTarget !== actTarget) {
+                    parts.push(`<span class="action-healed-from" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#c084fc;"><span>🧬 Healed from:</span><span style="padding:1px 5px;background:rgba(192,132,252,0.15);border:1px solid rgba(192,132,252,0.4);border-radius:3px;text-decoration:line-through;font-family:monospace;">${escHtml(origTarget)}</span></span>`);
+                }
+                if (a.durationMs) parts.push(`<span style="color:var(--text-muted);font-size:10px;margin-left:auto;white-space:nowrap;"><span class="material-symbols-outlined" style="color:var(--accent-warning);">bolt</span> ${(a.durationMs / 1000).toFixed(2)}s</span>`);
+                return `<div class="acc-action-row" style="flex-wrap:wrap;gap:6px;">
+                            <span class="acc-action-type-badge" data-type="${escAttr(a.type || 'unknown')}">${escHtml(a.type || 'unknown')}</span>
+                            ${parts.join('')}
+                        </div>`;
+            }).join('')
+            : '<div style="color:var(--text-muted); font-size:12px; padding:8px 0;">No actions recorded yet.</div>';
+
+    const isActivelyExecuting = step.status === 'running' && (currentPauseId === null || (currentState && currentState.status === 'running'));
+    const actionsLabel = isActivelyExecuting
+        ? `<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--accent-primary);margin-bottom:6px;"><span class="material-symbols-outlined spinner" style="color:var(--accent-primary);font-size:13px;vertical-align:middle;margin-right:4px;">progress_activity</span> Executing Actions...</div>`
+        : (isActiveStep || isLlmProcessing)
+            ? `<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--text-secondary);margin-bottom:6px;"><span class="material-symbols-outlined" style="color:var(--accent-primary);">checklist</span> Proposed Actions</div>`
+            : `<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--text-secondary);margin-bottom:6px;"><span class="material-symbols-outlined">checklist</span> Actions performed</div>`;
+
+    const actionListBlock = isSkipped ? '' : `<div class="llm-action-list">${actionsLabel}${actionsHtml}</div>`;
+
+    const errorText = step.failureReason || step.errorMessage || step.error;
+    const errorBox = errorText ? `
+                <div class="error-message-box" style="margin-bottom:12px;">
+                    <span id="err-text-detail-${step.index}">${escHtml(errorText)}</span>
+                    <button class="copy-btn" onclick="copyError('err-text-detail-${step.index}')" title="Copy to clipboard"><span class="material-symbols-outlined" aria-hidden="true">content_copy</span></button>
+                </div>` : '';
+
+    // When a sub-step fails, remind the user that individual sub-steps inside an
+    // include block cannot be skipped — the entire include block must be managed as a unit.
+    const hasMultipleActions = Array.isArray(step.actions) && step.actions.length > 1;
+    const isSubstep = Boolean(step.isSubStep || step.includeFile || (Array.isArray(step.includeChain) && step.includeChain.length > 0) || hasMultipleActions);
+    const warningMessage = (step.includeFile || (Array.isArray(step.includeChain) && step.includeChain.length > 0))
+        ? 'Sub-steps cannot be skipped individually. Skip the parent include to skip this step.'
+        : 'Sub-steps cannot be skipped individually.';
+    const substepWarning = (isFailed && isSubstep)
+        ? `<div class="substep-warning-info" style="font-size:11px;padding:6px 10px;border-radius:6px;background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.25);color:var(--accent-warning);"><span class="material-symbols-outlined" aria-hidden="true">warning</span> ${warningMessage}</div>`
+        : '';
+
+    // Right-column panel compact reasoning (not shown for active steps; the card has the bubble)
+    const hasPlannedActions = Array.isArray(step.actions) && step.actions.length > 0;
+    const isThinking = step.status === 'running' && !step.reasoning && !hasPlannedActions && currentPauseId === null && !isStructuralActionInFlight;
+    const reasoningText = !isActiveStep && (isThinking || step.reasoning)
+        ? (isThinking
+            ? `<div class="acc-reasoning" style="margin-bottom:12px;"><span class="material-symbols-outlined spinner" style="color:var(--accent-purple)" aria-hidden="true">progress_activity</span> AI is thinking...</div>`
+            : `<div class="acc-reasoning" style="margin-bottom:12px; ${isFailed ? 'color:var(--accent-danger)' : ''}">
+                        <span class="material-symbols-outlined" style="margin-right:8px;" aria-hidden="true">${isFailed ? 'warning' : 'psychology'}</span>${escHtml(step.reasoning)}</div>`)
+        : '';
+
+    // Timing meta — only show execution time for steps that have finished
+    const thinkingTimeBlock = (step.thinkingTimeMs !== undefined && step.thinkingTimeMs > 0)
+        ? `<span class="acc-timing-detail" title="Thinking duration"><span class="material-symbols-outlined" style="color:var(--accent-purple);" aria-hidden="true">hourglass_empty</span> Thinking: ${(step.thinkingTimeMs / 1000).toFixed(1)}s</span>`
+        : '';
+    const durationBlock = (isPassed || isFailed || isSkipped) && step.durationMs
+        ? `<span title="Execution duration"><span class="material-symbols-outlined" style="color:var(--accent-warning);" aria-hidden="true">bolt</span> ${(step.durationMs / 1000).toFixed(1)}s</span>`
+        : '';
+    const tokenBlock = (step.inputTokens || step.outputTokens)
+        ? `<span title="Tokens (Input / Output)"><span class="material-symbols-outlined" style="color:var(--text-muted);" aria-hidden="true">calculate</span> Tokens: ${step.inputTokens || 0} in / ${step.outputTokens || 0} out</span>`
+        : '';
+    const timingRow = (thinkingTimeBlock || durationBlock || tokenBlock)
+        ? `<div style="display:flex;gap:12px;align-items:center;font-size:11px;color:var(--text-secondary);flex-wrap:wrap;justify-content:flex-end;">${thinkingTimeBlock}${durationBlock}${tokenBlock}</div>`
+        : '';
+
+    const domBlock = step.simplifiedDom
+        ? `<div class="acc-dom" style="font-size:12px;"><span class="material-symbols-outlined" aria-hidden="true">code</span> DOM: <a href="#" onclick="openDomOverlay(event, \`${escAttr(step.simplifiedDom)}\`)" style="color:var(--accent-primary);text-decoration:underline;">View Content</a></div>`
+        : '';
+    let screenshotUrl = step.screenshot;
+    const effRunId = window.historyRunId || currentRunId;
+    if (screenshotUrl && screenshotUrl.includes('/api/console/screenshot') && effRunId) {
+        screenshotUrl += (screenshotUrl.includes('?') ? '&' : '?') + 'runId=' + encodeURIComponent(effRunId);
+    }
+    const screenshotBlock = screenshotUrl
+        ? `<div class="acc-screenshot-block" style="margin-top:12px;">
+                       <div class="screenshot-header" style="font-size:12px;"><span class="material-symbols-outlined" aria-hidden="true">image</span> Screenshot: <a href="#" class="screenshot-overlay-link" onclick="openScreenshotOverlay(event,'${escAttr(screenshotUrl)}')" style="color:var(--accent-primary);text-decoration:underline;">View Fullscreen</a></div>
+                       <img class="acc-screenshot" src="${escAttr(screenshotUrl)}" alt="Step screenshot"
+                            onerror="handleScreenshotError(this)"
+                            onclick="openScreenshotOverlay(event,'${escAttr(screenshotUrl)}')" style="cursor:pointer;margin-top:8px;max-height:200px;width:100%;object-fit:cover;border-radius:8px;">
+                   </div>`
+        : '';
+    // Breadcrumb block (include file / chain)
+    const includeChain = Array.isArray(step.includeChain) ? step.includeChain : [];
+    const breadcrumbBlock = step.includeFile || (includeChain.length > 0)
+        ? (() => {
+            if (includeChain.length > 0) {
+                const ct = includeChain.join(' > ');
+                return `<div class="include-breadcrumb" title="${escAttr(ct)}"><span class="material-symbols-outlined" aria-hidden="true">folder_open</span> ${escHtml(ct)}</div>`;
+            }
+            return `<div class="include-breadcrumb"><span class="material-symbols-outlined" aria-hidden="true">folder_open</span> ${escHtml(step.includeFile)}</div>`;
+        })()
+        : '';
+
+    const llmCommsHtml = buildLlmCallsHtml(step);
+    const hasSecondary = timingRow || domBlock || screenshotBlock || breadcrumbBlock || llmCommsHtml;
+
+    if (isActiveStep) {
+        // Active step: primary (actions) always open;
+        // secondary (timing/DOM/screenshot/breadcrumb/LLM) behind a More details toggle.
+        const secondaryHtml = hasSecondary ? `
+                    <button class="step-more-details-btn" onclick="toggleStepSecondary(event, this)" aria-expanded="false">
+                        <span class="material-symbols-outlined" style="font-size:14px;transition:transform 0.2s;">chevron_right</span>
+                        <span class="toggle-label"> More details</span>
+                    </button>
+                    <div class="step-secondary-details">
+                        ${breadcrumbBlock}
+                        ${timingRow}
+                        ${domBlock}
+                        ${screenshotBlock}
+                        ${llmCommsHtml}
+                    </div>` : '';
+
+        return `<div class="step-details-wrapper" style="display:flex;flex-direction:column;gap:10px;">
+                    ${actionListBlock}
+                    ${secondaryHtml}
+                </div>`;
+    }
+
+    // Non-active (passed / failed / skipped): full layout
+    // Top header row: breadcrumb left, timings right
+    const headerRow = (breadcrumbBlock || timingRow)
+        ? `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+                       <div>${breadcrumbBlock}</div>
+                       <div style="margin-left:auto;">${timingRow}</div>
+                   </div>`
+        : '';
+    // Indent content below breadcrumb header
+    const bodyIndent = headerRow ? 'padding-left:12px;border-left:2px solid rgba(255,255,255,0.07);' : '';
+
+    return `<div class="step-details-wrapper" style="display:flex;flex-direction:column;gap:10px;">
+                ${headerRow}
+                <div style="${bodyIndent}display:flex;flex-direction:column;gap:10px;">
+                    ${actionListBlock}
+                    ${reasoningText}
+                    ${errorBox}
+                    ${substepWarning}
+                    <div style="display:flex;gap:12px;flex-wrap:wrap;">${domBlock}</div>
+                    ${screenshotBlock}
+                    ${llmCommsHtml}
+                </div>
+            </div>`;
+}
+
+function toggleLlmCallCard(headerEl) {
+    const card = headerEl.closest('.llm-call-card');
+    if (card) {
+        card.classList.toggle('expanded');
+    }
+}
+
+function toggleLlmSubsection(headerEl) {
+    const card = headerEl.closest('.llm-subsection-card');
+    if (card) {
+        card.classList.toggle('expanded');
+    }
+}
+
+window.applyState = applyState;
+window.toggleLlmCallCard = toggleLlmCallCard;
+window.toggleLlmSubsection = toggleLlmSubsection;
+
+function buildLlmCallsHtml(step) {
+    let calls = Array.isArray(step.llmCalls) ? step.llmCalls : [];
+    if (calls.length === 0 && currentState && Array.isArray(currentState.llmCalls)) {
+        const stepBlock = (step.block || 'steps').toLowerCase();
+        calls = currentState.llmCalls.filter(c => {
+            if (!c) return false;
+            const callBlock = (c.block || 'steps').toLowerCase();
+            if (callBlock !== stepBlock) return false;
+            const targetBlockIdx = (step.blockIndex !== undefined && step.blockIndex !== null) ? step.blockIndex : (step.index - 1);
+            return c.stepIndex === targetBlockIdx || c.stepIndex === step.index;
+        });
+    }
+
+    if (calls.length > 0) {
+        const callsHtml = calls.map((call, idx) => {
+            const cap = (call.capability || 'TEXT').toUpperCase();
+            let capClass = 'text';
+            let capLabel = '';
+            if (cap === 'VERIFICATION') {
+                capClass = 'verification';
+                capLabel = 'Verification';
+            } else if (cap === 'JUDGE' || cap === 'JUDGE_DISCUSSION') {
+                capClass = 'judge';
+                capLabel = 'Quality Judge';
+            } else if (cap === 'VISUAL_RCA') {
+                capClass = 'rca';
+                capLabel = 'Visual RCA';
+            } else if (cap === 'LINTER' || cap === 'POST_FLIGHT_LINTER') {
+                capClass = 'linter';
+                capLabel = 'Linter';
+            } else if (cap === 'VISION') {
+                capClass = 'vision';
+                capLabel = 'Vision 📸';
+            }
+            const capBadge = capLabel ? `<span class="llm-cap-badge ${capClass}">${capLabel}</span>` : '';
+
+            const modelStr = escHtml(call.modelName || 'default');
+            const inTok = call.inputTokens || 0;
+            const outTok = call.outputTokens || 0;
+            const totalTok = call.totalTokens || (inTok + outTok);
+
+            const costVal = (call.estimatedCostUsd !== undefined && call.estimatedCostUsd !== null && call.estimatedCostUsd > 0)
+                ? call.estimatedCostUsd
+                : (call.costUsd !== undefined && call.costUsd !== null && call.costUsd > 0)
+                    ? call.costUsd
+                    : null;
+            const costStr = (costVal !== null) ? `$${costVal.toFixed(4)}` : '';
+
+            let durStr = '';
+            if (call.durationMs !== undefined && call.durationMs !== null) {
+                const totalSec = Math.round(call.durationMs / 1000);
+                const mins = Math.floor(totalSec / 60);
+                const secs = totalSec % 60;
+                durStr = `${mins} min ${secs} s`;
+            }
+
+            const metaParts = [];
+            if (totalTok > 0) metaParts.push(`Tokens: ${totalTok.toLocaleString()}`);
+            if (costStr) metaParts.push(`Cost: ${costStr}`);
+            if (durStr) metaParts.push(`Duration: ${durStr}`);
+            const metaStr = metaParts.join(' | ');
+
+            const sysPrompt = call.systemPrompt;
+            const userPrompt = call.userPrompt;
+            const respContent = call.responseContent || call.rawResponse;
+            const tools = Array.isArray(call.availableTools) ? call.availableTools : [];
+
+            const sysBlock = sysPrompt ? `
+                <div class="llm-subsection-card">
+                    <div class="llm-subsection-header" onclick="event.stopPropagation(); toggleLlmSubsection(this)">
+                        <div class="llm-subsection-title">
+                            <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
+                            <span class="material-symbols-outlined" style="font-size:0.9rem;color:var(--accent-primary);">tune</span>
+                            <span>System Prompt</span>
+                        </div>
+                        <span class="llm-subsection-tag">Instruction &amp; Persona</span>
+                    </div>
+                    <div class="llm-subsection-body">${escHtml(sysPrompt)}</div>
+                </div>` : '';
+
+            const toolsBlock = tools.length > 0 ? `
+                <div class="llm-subsection-card">
+                    <div class="llm-subsection-header" onclick="event.stopPropagation(); toggleLlmSubsection(this)">
+                        <div class="llm-subsection-title">
+                            <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
+                            <span class="material-symbols-outlined" style="font-size:0.9rem;color:var(--accent-warning);">build</span>
+                            <span>Available Native Tools (${tools.length})</span>
+                        </div>
+                        <span class="llm-subsection-tag">Tool Definitions</span>
+                    </div>
+                    <div class="llm-subsection-body">${escHtml(tools.join('\n'))}</div>
+                </div>` : '';
+
+            const userBlock = userPrompt ? `
+                <div class="llm-subsection-card">
+                    <div class="llm-subsection-header" onclick="event.stopPropagation(); toggleLlmSubsection(this)">
+                        <div class="llm-subsection-title">
+                            <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
+                            <span class="material-symbols-outlined" style="font-size:0.9rem;color:var(--accent-warning);">code</span>
+                            <span>User Prompt &amp; DOM Context (Plain Text)</span>
+                        </div>
+                        <span class="llm-subsection-tag">User Query &amp; Page Snapshot</span>
+                    </div>
+                    <div class="llm-subsection-body">${escHtml(userPrompt)}</div>
+                </div>` : '';
+
+            const respBlock = respContent ? `
+                <div class="llm-subsection-card">
+                    <div class="llm-subsection-header" onclick="event.stopPropagation(); toggleLlmSubsection(this)">
+                        <div class="llm-subsection-title">
+                            <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
+                            <span class="material-symbols-outlined" style="font-size:0.9rem;color:var(--accent-success);">terminal</span>
+                            <span>Raw Model Response</span>
+                        </div>
+                        <span class="llm-subsection-tag">AI Completion Payload</span>
+                    </div>
+                    <div class="llm-subsection-body">${escHtml(respContent)}</div>
+                </div>` : '';
+
+            return `
+                <div class="llm-call-card expanded" style="margin-top:6px;">
+                    <div class="llm-call-header" onclick="event.stopPropagation(); toggleLlmCallCard(this)">
+                        <div style="display:flex;align-items:center;gap:6px;font-weight:700;font-size:12px;color:var(--text-main);">
+                            <span class="material-symbols-outlined llm-subsection-chevron" style="font-size:0.9rem;">chevron_right</span>
+                            <span class="material-symbols-outlined" style="font-size:1rem;color:var(--accent-purple);">smart_toy</span>
+                            <span>Call #${idx + 1}: ${modelStr}</span>
+                            ${capBadge}
+                        </div>
+                        <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);">${metaStr}</span>
+                    </div>
+                    <div class="llm-call-body" style="padding:8px;display:flex;flex-direction:column;gap:6px;">
+                        ${sysBlock}
+                        ${toolsBlock}
+                        ${userBlock}
+                        ${respBlock}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <div class="llm-communications-section" style="margin-top:10px;">
+                <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--text-secondary);margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+                    <span class="material-symbols-outlined" style="color:var(--accent-purple);font-size:16px;">forum</span>
+                    <span>LLM Communications (${calls.length} call${calls.length > 1 ? 's' : ''})</span>
+                </div>
+                ${callsHtml}
+            </div>
+        `;
+    }
+
+    // Fallback: direct properties on step object if prompt / response exist
+    const promptSnippet = step.userPrompt || step.prompt || step.llmPrompt;
+    const responseSnippet = step.responseContent || step.rawResponse || step.llmResponse;
+    const systemSnippet = step.systemPrompt;
+
+    if (promptSnippet || responseSnippet || systemSnippet) {
+        const sysBlock = systemSnippet ? `
+            <div class="llm-subsection-card">
+                <div class="llm-subsection-header" onclick="event.stopPropagation(); toggleLlmSubsection(this)">
+                    <div class="llm-subsection-title">
+                        <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
+                        <span class="material-symbols-outlined" style="font-size:0.9rem;color:var(--accent-primary);">tune</span>
+                        <span>System Prompt</span>
+                    </div>
+                    <span class="llm-subsection-tag">Instruction &amp; Persona</span>
+                </div>
+                <div class="llm-subsection-body">${escHtml(systemSnippet)}</div>
+            </div>` : '';
+
+        const userBlock = promptSnippet ? `
+            <div class="llm-subsection-card">
+                <div class="llm-subsection-header" onclick="event.stopPropagation(); toggleLlmSubsection(this)">
+                    <div class="llm-subsection-title">
+                        <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
+                        <span class="material-symbols-outlined" style="font-size:0.9rem;color:var(--accent-warning);">code</span>
+                        <span>User Prompt &amp; DOM Context (Plain Text)</span>
+                    </div>
+                    <span class="llm-subsection-tag">User Query &amp; Page Snapshot</span>
+                </div>
+                <div class="llm-subsection-body">${escHtml(promptSnippet)}</div>
+            </div>` : '';
+
+        const respBlock = responseSnippet ? `
+            <div class="llm-subsection-card">
+                <div class="llm-subsection-header" onclick="event.stopPropagation(); toggleLlmSubsection(this)">
+                    <div class="llm-subsection-title">
+                        <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
+                        <span class="material-symbols-outlined" style="font-size:0.9rem;color:var(--accent-success);">terminal</span>
+                        <span>Raw Model Response</span>
+                    </div>
+                    <span class="llm-subsection-tag">AI Completion Payload</span>
+                </div>
+                <div class="llm-subsection-body">${escHtml(responseSnippet)}</div>
+            </div>` : '';
+
+        return `
+            <div class="llm-communications-section" style="margin-top:10px;">
+                <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--text-secondary);margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+                    <span class="material-symbols-outlined" style="color:var(--accent-purple);font-size:16px;">forum</span>
+                    <span>LLM Prompt &amp; Response</span>
+                </div>
+                <div class="llm-call-card expanded">
+                    <div class="llm-call-body" style="padding:8px;display:flex;flex-direction:column;gap:6px;">
+                        ${sysBlock}
+                        ${userBlock}
+                        ${respBlock}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    return '';
+}
+
+function getUsedVariableKeys(state) {
+    const usedKeys = new Set();
+    const excludedKeys = ['steps', 'neodymium.stepLineNumbers', 'before', 'after', 'neodymium.classpathResourcePath', 'raw_steps', 'neodymium.testdata.index'];
+
+    if (!state) return usedKeys;
+
+    // 1. Local dataset bindings from YAML data section
+    const localBindings = state.localDataBindings !== undefined ? state.localDataBindings : (state.dataBindings || {});
+    if (localBindings) {
+        Object.keys(localBindings).forEach(k => {
+            if (!excludedKeys.includes(k)) {
+                usedKeys.add(k);
+            }
+        });
+    }
+
+    // 2. Scan all step instructions across before, steps, and after blocks for ${varName}
+    if (state.blocks) {
+        ['before', 'steps', 'after'].forEach(blockName => {
+            const steps = state.blocks[blockName] || [];
+            steps.forEach(step => {
+                const text = (step.rawInstruction || step.instruction || '');
+                const varRegex = /\$\{([^}]+)\}/g;
+                let match;
+                while ((match = varRegex.exec(text)) !== null) {
+                    const varName = match[1].trim();
+                    if (!excludedKeys.includes(varName)) {
+                        usedKeys.add(varName);
+                    }
+                }
+            });
+        });
+    }
+
+    return usedKeys;
+}
+
+function generateEditableBindingsTable(bindings, textareaIdOrClass) {
+    const excludedKeys = ['steps', 'neodymium.stepLineNumbers', 'before', 'after', 'neodymium.classpathResourcePath', 'raw_steps', 'neodymium.testdata.index'];
+    const allKeys = Object.keys(bindings || {}).filter(k => !excludedKeys.includes(k));
+    if (allKeys.length === 0) {
+        return '<div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 8px;">No variables available.</div>';
+    }
+
+    const localDataBindings = currentState?.localDataBindings !== undefined ? currentState.localDataBindings : (currentState?.dataBindings || {});
+    const usedKeysSet = getUsedVariableKeys(currentState);
+
+    // Categorize keys
+    const localKeys = allKeys.filter(k => Object.prototype.hasOwnProperty.call(localDataBindings, k));
+    const usedKeys = allKeys.filter(k => !localKeys.includes(k) && usedKeysSet.has(k));
+    const otherKeys = allKeys.filter(k => !localKeys.includes(k) && !usedKeys.includes(k));
+
+    const renderRow = (k, tagLabel, tagStyle) => `
+        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+            <td class="editable-binding-key binding-badge" onclick="insertVarAtTarget('${escAttr(k)}', '${escAttr(textareaIdOrClass)}')" style="cursor: pointer; padding: 6px 8px; font-family: var(--font-mono); font-weight: 600; color: var(--accent-primary);" title="Click to insert \${${escHtml(k)}}">
+                ${escHtml(k)}
+                ${tagLabel ? `<span class="badge-tag" style="${tagStyle}">${tagLabel}</span>` : ''}
+            </td>
+            <td style="padding: 4px 8px;">
+                <input type="text" value="${escAttr(bindings[k] || '')}" oninput="updateDataBinding('${escAttr(k)}', this.value)" style="width: 100%; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); color: var(--text-main); padding: 4px 8px; border-radius: 4px; font-family: var(--font-mono); font-size: 12px;" aria-label="Value for variable ${escHtml(k)}" />
+            </td>
+        </tr>
+    `;
+
+    const localTagStyle = 'background: rgba(59,130,246,0.15); color: var(--accent-primary); border: 1px solid rgba(59,130,246,0.3); font-size: 9px; padding: 1px 4px; border-radius: 3px; margin-left: 6px; font-weight: 500; display: inline-block; vertical-align: middle;';
+    const usedTagStyle = 'background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3); font-size: 9px; padding: 1px 4px; border-radius: 3px; margin-left: 6px; font-weight: 500; display: inline-block; vertical-align: middle;';
+
+    const localRows = localKeys.map(k => renderRow(k, 'Local', localTagStyle)).join('');
+    const usedRows = usedKeys.map(k => renderRow(k, 'Used', usedTagStyle)).join('');
+    const otherRows = otherKeys.map(k => renderRow(k, null, '')).join('');
+
+    const hasPrimaryRows = localKeys.length > 0 || usedKeys.length > 0;
+
+    let moreHtml = '';
+    if (otherKeys.length > 0) {
+        moreHtml = `
+            <div style="margin-top: 6px;">
+                <button type="button" class="btn btn-sm btn-more-props" onclick="toggleMoreProperties(this)" data-count="${otherKeys.length}" style="font-size: 11px; padding: 3px 8px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">expand_more</span>
+                    <span class="more-btn-text">More (${otherKeys.length} properties)</span>
+                </button>
+                <div class="more-props-container" style="display: none; margin-top: 6px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; background: rgba(0,0,0,0.15);">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border-color); background: rgba(255,255,255,0.02); text-align: left;">
+                                <th style="padding: 6px 8px; color: var(--text-secondary); font-weight: 600;">All Other Properties</th>
+                                <th style="padding: 6px 8px; color: var(--text-secondary); font-weight: 600; width: 60%;">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${otherRows}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+
+    if (!hasPrimaryRows) {
+        return `
+            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 6px;">Insert/Edit Variables:</div>
+            <div style="font-size: 12px; color: var(--text-muted); padding: 4px 0 6px 0;">No local or used variables in this test case.</div>
+            ${moreHtml}
+        `;
+    }
+
+    return `
+        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 6px;">Insert/Edit Variables:</div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; background: rgba(0,0,0,0.15);">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--border-color); background: rgba(255,255,255,0.02); text-align: left;">
+                    <th style="padding: 6px 8px; color: var(--text-secondary); font-weight: 600;">Variable Name (click to insert)</th>
+                    <th style="padding: 6px 8px; color: var(--text-secondary); font-weight: 600; width: 60%;">Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${localRows}
+                ${usedRows}
+            </tbody>
+        </table>
+        ${moreHtml}
+    `;
+}
+
+function toggleMoreProperties(btn) {
+    const parent = btn.parentElement;
+    const moreContainer = parent ? parent.querySelector('.more-props-container') : null;
+    if (moreContainer) {
+        const isHidden = moreContainer.style.display === 'none' || !moreContainer.style.display;
+        moreContainer.style.display = isHidden ? 'block' : 'none';
+        const icon = btn.querySelector('.material-symbols-outlined');
+        const textSpan = btn.querySelector('.more-btn-text');
+        const count = btn.getAttribute('data-count') || '';
+        if (icon) icon.innerText = isHidden ? 'expand_less' : 'expand_more';
+        if (textSpan) {
+            textSpan.innerText = isHidden ? 'Show Less' : `More (${count} properties)`;
+        }
+    }
+}
+
+function updateDataBinding(key, val) {
+    if (currentState) {
+        if (!currentState.dataBindings) {
+            currentState.dataBindings = {};
+        }
+        currentState.dataBindings[key] = val;
+        if (currentState.localDataBindings && Object.prototype.hasOwnProperty.call(currentState.localDataBindings, key)) {
+            currentState.localDataBindings[key] = val;
+        }
+
+        // Also update top test data body if visible
+        const topTestDataBody = document.getElementById('topTestDataBody');
+        if (topTestDataBody) {
+            const usedKeysSet = getUsedVariableKeys(currentState);
+            const excludedKeys = ['steps', 'neodymium.stepLineNumbers', 'before', 'after', 'neodymium.classpathResourcePath', 'raw_steps', 'neodymium.testdata.index'];
+            const keys = Object.keys(currentState.dataBindings).filter(k => !excludedKeys.includes(k) && usedKeysSet.has(k));
+            if (keys.length > 0) {
+                topTestDataBody.innerHTML = keys.map(k => `
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                <td style="padding: 6px 8px; font-family: var(--font-mono); font-weight: 600; color: var(--text-secondary);">${escHtml(k)}</td>
+                                <td style="padding: 6px 8px; font-family: var(--font-mono); color: var(--text-main);">${escHtml(currentState.dataBindings[k])}</td>
+                            </tr>
+                        `).join('');
+            } else {
+                topTestDataBody.innerHTML = `<tr><td colspan="2" style="padding: 12px; text-align: center; color: var(--text-muted);">No initial test data used in this test case.</td></tr>`;
+            }
+        }
+    }
+}
+
+function insertVarAtTarget(varName, targetSelector) {
+    let textarea = null;
+    if (targetSelector.startsWith('#')) {
+        textarea = document.getElementById(targetSelector.substring(1));
+    } else {
+        const activeEditCard = document.querySelector('.step-card.editing');
+        if (activeEditCard) {
+            textarea = activeEditCard.querySelector(targetSelector);
+        }
+    }
+    if (textarea) {
+        insertAtCursor(textarea, `\${${varName}}`);
+    }
+}
+
+function resolveVariables(text, bindings) {
+    if (!text || !bindings) return text || '';
+    let result = text;
+    for (let pass = 0; pass < 5; pass++) {
+        let changed = false;
+        for (const key in bindings) {
+            const placeholder = `\${${key}}`;
+            if (result.includes(placeholder)) {
+                result = result.replaceAll(placeholder, bindings[key]);
+                changed = true;
+            }
+        }
+        if (!changed || !result.includes('${')) break;
+    }
+    return result;
+}
+
+function renderStepCard(step, blockName = 'steps') {
+    if (!step) return '';
+    const status = step.status || 'pending';
+    const isSkipped = status === 'skipped';
+    const isPassed = status === 'passed';
+    const isActive = status === 'running' || status === 'failed';
+    const isFailed = status === 'failed' || step.failed === true;
+    const isEditing = window.currentlyEditingStepIndex === step.index;
+
+    const includeLevel = typeof step.includeLevel === 'number' ? step.includeLevel : 0;
+    const lvlClass = includeLevel > 0 ? ` include-lvl-${Math.min(includeLevel, 4)}` : '';
+    const skippedClass = isSkipped ? ' skipped' : '';
+    const passedClass = isPassed ? ' passed-step' : '';
+    const editingClass = isEditing ? ' editing' : '';
+    const isAborted = status === 'aborted';
+    const abortedClass = isAborted ? ' aborted' : '';
+
+    // Determine whether this step has any displayable information.
+    // Used both to conditionally render the accordion and to guard against
+    // selecting future steps that have nothing to show yet.
+    const actionsList = Array.isArray(step.actions) ? step.actions : [];
+    const hasDetails = (actionsList.length > 0)
+        || step.errorMessage
+        || step.failureReason
+        || step.error
+        || step.durationMs
+        || step.screenshot
+        || step.thinkingTimeMs
+        || step.simplifiedDom
+        || step.reasoning
+        || (Array.isArray(step.llmCalls) && step.llmCalls.length > 0)
+        || step.userPrompt || step.prompt || step.llmPrompt || step.responseContent || step.rawResponse;
+    const isPendingNoDetails = (status === 'pending') && !hasDetails;
+    const noDetailsPendingClass = isPendingNoDetails ? ' no-details-pending' : '';
+
+    const isSelected = step.index == selectedStepIndexForDetails;
+    const selectedClass = isSelected ? ' selected-details' : '';
+    const activeClass = isActive ? (isFailed ? ' active failed' : ' active') : '';
+
+    const bpActive = activeBreakpoints.has(step.index);
+    let statusIconMarkup = '';
+
+    if (step.status === 'passed') {
+        statusIconMarkup = `<span class="material-symbols-outlined" style="color:var(--accent-success)" aria-label="Passed">check_circle</span>`;
+    } else if (step.status === 'failed') {
+        statusIconMarkup = `<span class="material-symbols-outlined" style="color:var(--accent-danger)" aria-label="Failed">cancel</span>`;
+    } else if (step.status === 'skipped') {
+        statusIconMarkup = `<span class="material-symbols-outlined" style="color:var(--text-secondary)" aria-label="Skipped">do_not_disturb_on</span>`;
+    } else if (step.status === 'aborted') {
+        statusIconMarkup = `<span class="material-symbols-outlined" style="color:var(--text-muted)" aria-label="Aborted">stop_circle</span>`;
+    } else if (step.status === 'running' && (currentPauseId === null || (currentState && currentState.status === 'running'))) {
+        statusIconMarkup = `<span class="material-symbols-outlined spinner" style="color:var(--accent-primary)" aria-label="Running">progress_activity</span>`;
+    } else if (step.status === 'running') {
+        statusIconMarkup = `<span class="material-symbols-outlined" style="color:var(--accent-primary)" aria-label="Paused">pause_circle</span>`;
+    } else {
+        // Pending, or Running but Paused/waiting for input
+        if (bpActive) {
+            const bpColor = 'var(--accent-danger)';
+            statusIconMarkup = `
+                        <svg class="bp-svg active" viewBox="0 0 100 100" style="fill: ${bpColor};" aria-label="Breakpoint active" title="Breakpoint active (Click to remove)">
+                            <polygon points="30,5 70,5 95,30 95,70 70,95 30,95 5,70 5,30" />
+                        </svg>
+                    `;
+        } else {
+            statusIconMarkup = `
+                        <span class="material-symbols-outlined pending-placeholder-icon" style="color:var(--text-muted)" aria-label="Step pending" title="Step Pending">radio_button_unchecked</span>
+                        <svg class="bp-svg hover-only" viewBox="0 0 100 100" aria-label="Toggle breakpoint" title="Toggle Breakpoint">
+                            <polygon points="30,5 70,5 95,30 95,70 70,95 30,95 5,70 5,30" />
+                        </svg>
+                    `;
+        }
+    }
+
+    // Execution engine tags
+    const isRecordingStep = step.source === 'recording';
+    const sourceTag = isRecordingStep
+        ? `<div class="type-tag type-playbook"><span class="material-symbols-outlined" aria-hidden="true">album</span> Recording</div>`
+        : step.source === 'healed'
+            ? `<div class="type-tag type-healed"><span class="material-symbols-outlined" aria-hidden="true">monitor_heart</span> Healed</div>`
+            : `<div class="type-tag type-llm"><span class="material-symbols-outlined" aria-hidden="true">smart_toy</span> LLM Agent</div>`;
+
+    // Thinking-time badge — always visible in the step card header so that the
+    // CSS rule hiding accordions on wide screens does not obscure it.
+    const thinkingBadge = (step.thinkingTimeMs !== undefined && step.thinkingTimeMs > 0)
+        ? `<span class="acc-thinking-time" title="AI thinking time" style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(139,92,246,0.12);color:var(--accent-purple);margin-left:4px;"><span class="material-symbols-outlined" aria-hidden="true">hourglass_empty</span> Thinking: ${(step.thinkingTimeMs / 1000).toFixed(1)}s</span>`
+        : '';
+
+    // Build breadcrumb string but do NOT put it in the tag-row;
+    // it will appear in the secondary details section.
+    let includeBreadcrumb = '';
+    const includeChain = Array.isArray(step.includeChain) ? step.includeChain : [];
+    if (includeChain.length > 0) {
+        const chainText = includeChain.join(' > ');
+        includeBreadcrumb = `<div class="include-breadcrumb" title="${escAttr(chainText)}"><span class="material-symbols-outlined" aria-hidden="true">folder_open</span> ${escHtml(chainText)}</div>`;
+    } else if (step.includeFile) {
+        includeBreadcrumb = `<div class="include-breadcrumb"><span class="material-symbols-outlined" aria-hidden="true">folder_open</span> ${escHtml(step.includeFile)}</div>`;
+    }
+
+    const isPausedRunning = step.status === 'running' && currentPauseId !== null && (currentState ? currentState.status !== 'running' : false);
+    const isPendingOrPausedRunning = !step.status || step.status === 'pending' || isPausedRunning;
+    // hasDetails is declared above (needed for noDetailsPendingClass) — do not redeclare here.
+
+    const isSyncing = isStructuralActionInFlight;
+    const syncDisabledAttr = isSyncing ? ' disabled="true"' : '';
+    const syncDisabledClass = isSyncing ? ' disabled' : '';
+
+    const showEdit = step.status !== 'passed' && step.status !== 'skipped';
+    const editBtnHtml = showEdit
+        ? `<button class="step-edit-btn${syncDisabledClass}" onclick="enableEdit(this)" title="Edit Step (Alt+E)" aria-label="Edit step instruction (Alt+E)"${syncDisabledAttr}><span class="material-symbols-outlined" aria-hidden="true">edit</span></button>`
+        : '';
+    const addBtnHtml = !step.isTempAdd
+        ? `<button class="step-add-after-btn${syncDisabledClass}" onclick="addStepAfter(event, ${step.index}, '${blockName}')" title="Add step after this" aria-label="Add step after this"${syncDisabledAttr}><span class="material-symbols-outlined" aria-hidden="true">add_circle</span></button>`
+        : '';
+
+    // Rewind button: only available for steps that have already passed
+    const hasPassed = (status === 'passed' || status === 'healed');
+    const rewindBtnHtml = hasPassed && !step.isTempAdd
+        ? `<button class="step-rewind-btn${syncDisabledClass}" onclick="triggerRewind(event, ${step.index})" title="Rewind execution back here" aria-label="Rewind execution back here"${syncDisabledAttr}><span class="material-symbols-outlined" aria-hidden="true">undo</span></button>`
+        : '';
+
+    // Reorder system overhaul: Drag handle only in controls
+    const isPaused = currentPauseId !== null;
+    const showReorder = step.status !== 'passed' && step.status !== 'skipped';
+    let reorderHandleHtml = '';
+    if (showReorder) {
+        if (isPaused) {
+            reorderHandleHtml = `
+                    <div class="step-reorder-controls">
+                        <div class="step-reorder-handle" draggable="true"
+                             ondragstart="handleDragStart(event, ${step.index}, '${blockName}')"
+                             ondragend="handleDragEnd(event)"
+                             title="Drag handle to reorder step" aria-label="Drag handle to reorder step">
+                             <span class="material-symbols-outlined">drag_indicator</span>
+                        </div>
+                    </div>`;
+        } else {
+            reorderHandleHtml = `
+                    <div class="step-reorder-controls">
+                        <div class="step-reorder-handle reorder-disabled" draggable="false"
+                             title="Execution in progress — pause test to reorder steps" aria-label="Execution in progress — pause test to reorder steps">
+                             <span class="material-symbols-outlined">drag_indicator</span>
+                        </div>
+                    </div>`;
+        }
+    }
+
+    const statusIconContainerClass = isPendingOrPausedRunning ? 'step-status-icon pending-step' : 'step-status-icon';
+    const statusClickAttr = isPendingOrPausedRunning ? `onclick="toggleBp(event, ${step.index})"` : '';
+
+    const detailsHtml = hasDetails ? buildStepDetailsHtml(step, isActive) : '';
+    const accordionOpen = isActive ? ' open' : '';
+
+    const selectedArrowMarkup = isSelected ? `<div class="selected-arrow big-screen-only" style="margin-left: 8px; color: var(--accent-purple); display: flex; align-items: center;"><span class="material-symbols-outlined">chevron_right</span></div>` : '';
+
+    const resolvedInstruction = resolveVariables(step.instruction, currentState?.dataBindings);
+
+    // Build Failure Reason bubble if step failed
+    let failureReasonHtml = '';
+    const failureReasonText = step.failureReason || step.errorMessage || step.error || (currentState && currentState.error && isFailed ? currentState.error : '');
+    if (isFailed && failureReasonText) {
+        const failId = `failure-${step.index}`;
+        const escaped = escHtml(failureReasonText);
+        const isLong = failureReasonText.length > 220;
+        const preview = isLong ? escHtml(failureReasonText.substring(0, 220)) + '…' : escaped;
+        failureReasonHtml = `<div class="inline-reasoning-bubble failed" style="margin-top:8px;">
+                    <div class="inline-reasoning-label"><span class="material-symbols-outlined" aria-hidden="true">error</span> Failure Reason</div>
+                    <div class="reasoning-body">
+                        <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+                        <span style="flex:1; word-break:break-word;">
+                            <span id="${failId}-preview">${preview}</span>
+                            ${isLong ? `<span id="${failId}-full" style="display:none;">${escaped}</span>
+                            <button onclick="toggleTextExpand(event,'${failId}')" class="step-more-details-btn" style="margin-top:4px;">
+                                <span class="material-symbols-outlined" style="font-size:14px;">chevron_right</span> Show more
+                            </button>` : ''}
+                        </span>
+                        <button class="copy-btn" onclick="copyError('${failId}-copy')" title="Copy failure reason to clipboard" style="margin-left:auto;align-self:flex-start;background:transparent;border:none;color:var(--accent-danger);cursor:pointer;padding:2px 4px;">
+                            <span class="material-symbols-outlined" style="font-size:16px;" aria-hidden="true">content_copy</span>
+                        </button>
+                        <span id="${failId}-copy" style="display:none;">${escaped}</span>
+                    </div>
+                </div>`;
+    }
+
+    // Build inline reasoning / playbook note for active step
+    let inlineReasoningHtml = '';
+    if (isActive) {
+        const hasPlannedActions = Array.isArray(step.actions) && step.actions.length > 0;
+        const isThinking = step.status === 'running' && !step.reasoning && !hasPlannedActions && currentPauseId === null && step.source !== 'recording' && !isStructuralActionInFlight;
+        if (isThinking) {
+            inlineReasoningHtml = `<div class="inline-reasoning-bubble inline-reasoning-thinking">
+                        <div class="inline-reasoning-label"><span class="material-symbols-outlined" aria-hidden="true">psychology</span> AI Thinking</div>
+                        <div class="reasoning-body">
+                            <span class="material-symbols-outlined spinner" aria-hidden="true">progress_activity</span>
+                            <span>The AI is analyzing the current page state, reading visible elements, and deciding what action to take next. This may take a few seconds depending on page complexity and model response time.</span>
+                        </div>
+                    </div>`;
+        } else if (step.reasoning) {
+            const reasoningId = `reasoning-${step.index}`;
+            const escaped = escHtml(step.reasoning);
+            const isLong = step.reasoning.length > 220;
+            const preview = isLong ? escHtml(step.reasoning.substring(0, 220)) + '…' : escaped;
+            inlineReasoningHtml = `<div class="inline-reasoning-bubble">
+                        <div class="inline-reasoning-label"><span class="material-symbols-outlined" aria-hidden="true">psychology</span> AI Reasoning</div>
+                        <div class="reasoning-body">
+                            <span class="material-symbols-outlined" aria-hidden="true">format_quote</span>
+                            <span>
+                                <span id="${reasoningId}-preview">${preview}</span>
+                                ${isLong ? `<span id="${reasoningId}-full" style="display:none;">${escaped}</span>
+                                <button onclick="toggleTextExpand(event,'${reasoningId}')" class="step-more-details-btn" style="margin-top:4px;">
+                                    <span class="material-symbols-outlined" style="font-size:14px;">chevron_right</span> Show more
+                                </button>` : ''}
+                            </span>
+                        </div>
+                    </div>`;
+        } else if (step.source === 'recording') {
+            inlineReasoningHtml = `<div class="inline-reasoning-bubble" style="background:rgba(99,102,241,0.07);border-left-color:rgba(99,102,241,0.5);">
+                        <div class="inline-reasoning-label" style="color:#818cf8;"><span class="material-symbols-outlined" aria-hidden="true">play_circle</span> Playbook Recording</div>
+                        <div class="reasoning-body">
+                            <span class="material-symbols-outlined" style="color:#818cf8;" aria-hidden="true">album</span>
+                            <span style="color:var(--text-secondary);">This step is replayed directly from the recorded companion file.</span>
+                        </div>
+                    </div>`;
+        }
+    }
+
+    // "▶ CURRENT" / "✕ FAILED" badge for the active step
+    const activeBadge = isActive
+        ? `<div class="active-step-badge">${isFailed ? '<span class="material-symbols-outlined">close</span> FAILED' : '<span class="material-symbols-outlined">play_arrow</span> CURRENT'}</div>`
+        : '';
+
+    // Truncate long step instructions in the card; user can expand.
+    const STEP_TRUNCATE = 140;
+    const instrFull = escHtml(resolvedInstruction);
+    const isInstrLong = resolvedInstruction.length > STEP_TRUNCATE;
+    const instrPreview = isInstrLong ? escHtml(resolvedInstruction.substring(0, STEP_TRUNCATE)) + '…' : instrFull;
+    const instrId = `instr-${step.index}`;
+    const stepTextContent = isInstrLong
+        ? `<span id="${instrId}-preview">${instrPreview}</span><span id="${instrId}-full" style="display:none;">${instrFull}</span>
+                   <button onclick="toggleTextExpand(event,'${instrId}')" class="step-more-details-btn" style="margin-top:4px;padding:2px 7px;font-size:10px;">
+                       <span class="material-symbols-outlined" style="font-size:12px;">keyboard_arrow_right</span> Show more
+                   </button>`
+        : instrFull;
+
+    // Standalone variable for step number badge to avoid nesting template literals deeply
+    let stepNumBadgeHtml = '';
+    if (!step.isTempAdd) {
+        const badgeNum = allStepIndices.indexOf(step.index) + 1;
+        stepNumBadgeHtml = `
+                    <div class="step-num-badge${isSyncing ? ' sync-disabled' : ''}">
+                        ${isSelected && isPaused ? `
+                            <input type="number" value="${badgeNum}"
+                                   min="1" max="${allStepIndices.length}"
+                                   ${isSyncing ? 'disabled readonly ' : ''}
+                                   onkeydown="handleStepInputKeyDown(event, ${step.index}, '${blockName}')"
+                                   oninput="handleStepInputInput(event, ${step.index}, '${blockName}')"
+                                   onchange="reorderStepDirect(event, ${step.index}, '${blockName}')"
+                                   onblur="reorderStepDirect(event, ${step.index}, '${blockName}')"
+                                   aria-label="Step position. Type a new number to move this step. Use Ctrl + Up/Down arrows to move.">
+                        ` : `#${badgeNum}`}
+                    </div>`;
+    }
+
+    // Sub-steps badge & tree generation (Option C)
+    let subStepsBadgeHtml = '';
+    let subStepsTreeHtml = '';
+    const subStepsList = Array.isArray(step.subSteps) ? step.subSteps : [];
+    if (subStepsList.length > 0) {
+        const totalSubs = subStepsList.length;
+        const completedSubs = subStepsList.filter(s => s.status && (s.status.toLowerCase() === 'passed' || s.status.toLowerCase() === 'success')).length;
+        const isAutoExpanded = isActive || isFailed;
+        const isExplicitlyExpanded = expandedSubStepsTrees.has(step.index);
+        const isExplicitlyCollapsed = collapsedSubStepsTrees.has(step.index);
+        const isTreeExpanded = isExplicitlyExpanded || (isAutoExpanded && !isExplicitlyCollapsed);
+
+        const chevronClass = isTreeExpanded ? 'substeps-toggle-chevron expanded' : 'substeps-toggle-chevron';
+        subStepsBadgeHtml = `
+            <span class="substeps-count-badge" onclick="toggleSubStepsTree(event, ${step.index})" title="${isTreeExpanded ? 'Collapse Sub-steps' : 'Expand Sub-steps'}" aria-label="Toggle Sub-steps (${completedSubs}/${totalSubs})">
+                <span class="material-symbols-outlined" aria-hidden="true">account_tree</span>
+                <span>${completedSubs}/${totalSubs} Sub-steps</span>
+                <span class="material-symbols-outlined ${chevronClass}" aria-hidden="true">chevron_right</span>
+            </span>`;
+
+        if (isTreeExpanded) {
+            const badgeNum = allStepIndices.indexOf(step.index) + 1;
+            const rowsHtml = subStepsList.map((sub, sIdx) => {
+                const subNum = sub.index || (sIdx + 1);
+                const subStatus = sub.status ? sub.status.toLowerCase() : 'pending';
+                let subStatusIcon = '';
+                let subStatusClass = subStatus;
+                if (subStatus === 'passed' || subStatus === 'success') {
+                    subStatusIcon = `<span class="material-symbols-outlined" style="color:var(--accent-success);font-size:15px;" aria-label="Passed">check_circle</span>`;
+                } else if (subStatus === 'failed') {
+                    subStatusIcon = `<span class="material-symbols-outlined" style="color:var(--accent-danger);font-size:15px;" aria-label="Failed">cancel</span>`;
+                } else if (subStatus === 'running') {
+                    if (currentPauseId !== null) {
+                        subStatusIcon = `<span class="material-symbols-outlined" style="color:var(--accent-primary);font-size:15px;" aria-label="Paused">pause_circle</span>`;
+                    } else {
+                        subStatusIcon = `<span class="material-symbols-outlined spinner" style="color:var(--accent-primary);font-size:15px;" aria-label="Running">progress_activity</span>`;
+                    }
+                } else if (subStatus === 'skipped') {
+                    subStatusIcon = `<span class="material-symbols-outlined" style="color:var(--text-secondary);font-size:15px;" aria-label="Skipped">do_not_disturb_on</span>`;
+                } else {
+                    subStatusIcon = `<span class="material-symbols-outlined" style="color:var(--text-muted);font-size:15px;" aria-label="Pending">radio_button_unchecked</span>`;
+                }
+
+                const isSubSelected = (selectedStepIndexForDetails == step.index) && (selectedSubStepIndex === subNum);
+                const selectedSubClass = isSubSelected ? ' selected-substep' : '';
+
+                const subDurationHtml = (sub.durationMs && sub.durationMs > 0)
+                    ? `<span class="substep-duration" title="Duration"><span class="material-symbols-outlined" style="color:var(--accent-warning);font-size:11px;" aria-hidden="true">bolt</span> ${(sub.durationMs / 1000).toFixed(2)}s</span>`
+                    : '';
+
+                const resolvedSubInstruction = resolveVariables(sub.instruction, currentState?.dataBindings);
+                const subErr = (subStatus === 'failed') ? (sub.failureReason || sub.errorMessage || sub.error) : null;
+                const subErrHtml = subErr ? `
+                    <div class="substep-failure-reason" style="margin-left:36px; margin-top:2px; margin-bottom:4px; font-size:11px; color:var(--accent-danger); display:flex; align-items:flex-start; gap:4px; word-break:break-word;">
+                        <span class="material-symbols-outlined" style="font-size:13px; margin-top:1px; flex-shrink:0;">warning</span>
+                        <span>${escHtml(subErr)}</span>
+                    </div>` : '';
+
+                return `
+                    <div class="substep-row ${subStatusClass}${selectedSubClass}" data-substep-idx="${subNum}"
+                         onclick="handleSubStepClick(event, ${step.index}, ${subNum})"
+                         title="Click to inspect sub-step details" role="button" tabindex="0">
+                        <span class="substep-tree-connector" aria-hidden="true"></span>
+                        <span class="substep-status-icon">${subStatusIcon}</span>
+                        <span class="substep-num">#${badgeNum}.${subNum}</span>
+                        <span class="substep-text">${escHtml(resolvedSubInstruction)}</span>
+                        ${subDurationHtml}
+                    </div>
+                    ${subErrHtml}`;
+            }).join('');
+
+            subStepsTreeHtml = `<div class="substeps-tree-container" id="substeps-tree-${step.index}">${rowsHtml}</div>`;
+        }
+    }
+
+    return `
+                <div class="drop-target-area" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, ${step.index}, 'before', '${blockName}')"></div>
+                <div class="step-card${activeClass}${selectedClass}${lvlClass}${skippedClass}${passedClass}${noDetailsPendingClass}${editingClass}${abortedClass}" data-step-idx="${step.index}" data-step-block="${blockName}" role="listitem" tabindex="0" aria-label="${step.isTempAdd ? 'New Step' : 'Step ' + (allStepIndices.indexOf(step.index) + 1)}: ${escHtml(resolvedInstruction)}"
+                     onclick="handleStepClick(event, ${step.index})" ondragend="handleDragEnd(event)">
+                ${activeBadge}
+                <div class="step-row">
+                    ${stepNumBadgeHtml}
+                    <div class="${statusIconContainerClass}" ${statusClickAttr}>${statusIconMarkup}</div>
+                    <div class="step-text-container">
+                        <div class="tag-row">${sourceTag}${subStepsBadgeHtml}${thinkingBadge}</div>
+                        <div class="step-text">${stepTextContent}</div>
+                        ${failureReasonHtml ? `<div style="margin-top:6px;">${failureReasonHtml}</div>` : ''}
+                        ${isFailed ? `<div style="margin-top:6px;"><button class="btn-suggest-fix" onclick="requestFixSuggestion(event, ${step.index})" title="Get AI Instruction Fix Suggestion"><span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span> Suggest Fix</button></div>` : ''}
+                        <div class="step-edit-form">
+                            <textarea class="inline-edit-textarea" aria-label="Edit step instruction text">${isEditing && window.currentEditText != null ? escHtml(window.currentEditText) : escHtml(step.rawInstruction || step.instruction)}</textarea>
+                            <div class="inline-edit-actions">
+                                <button class="btn" style="padding: 4px 10px; font-size: 11px;" onclick="cancelEdit(this)" aria-label="Cancel editing step">Cancel</button>
+                                <button class="btn btn-primary step-save-btn" style="padding: 4px 10px; font-size: 11px;" onclick="saveEdit(this)" aria-label="Save step instruction">Save</button>
+                            </div>
+                        </div>
+                        <div class="inline-edit-bindings" style="${isEditing ? 'display:flex; flex-direction:column; gap:6px; margin:8px 0;' : 'display:none;'}">${generateEditableBindingsTable(currentState?.dataBindings, '.inline-edit-textarea')}</div>
+                    </div>
+                    ${rewindBtnHtml}
+                    ${reorderHandleHtml}
+                    ${editBtnHtml}
+                    ${addBtnHtml}
+                    ${selectedArrowMarkup}
+                </div>
+                ${subStepsTreeHtml}
+                ${inlineReasoningHtml ? `<div style="padding-top:4px;">${inlineReasoningHtml}</div>` : ''}
+                ${hasDetails ? `<div class="step-accordion-details${accordionOpen}">${detailsHtml}</div>` : ''}
+            </div>`;
+}
+
+// -------------------------------------------------------------------------
+// Interactive Actions
+// -------------------------------------------------------------------------
+function toggleStepSecondary(event, btn) {
+    event.stopPropagation();
+    const secondary = btn.nextElementSibling;
+    if (!secondary) return;
+    const isOpen = secondary.classList.toggle('open');
+    btn.classList.toggle('open', isOpen);
+    btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    const chevron = btn.querySelector('i');
+    if (chevron) chevron.style.transform = isOpen ? 'rotate(90deg)' : '';
+    // Use the named span for safe text toggle (avoids whitespace text node issues)
+    const label = btn.querySelector('.toggle-label');
+    if (label) label.textContent = isOpen ? ' Less details' : ' More details';
+}
+
+function toggleTextExpand(event, id) {
+    event.stopPropagation();
+    const preview = document.getElementById(id + '-preview');
+    const full = document.getElementById(id + '-full');
+    const btn = event.currentTarget;
+    if (!preview || !full) return;
+    const expanding = full.style.display === 'none';
+    preview.style.display = expanding ? 'none' : '';
+    full.style.display = expanding ? '' : 'none';
+    const chevron = btn.querySelector('i');
+    if (chevron) chevron.style.transform = expanding ? 'rotate(90deg)' : '';
+    const textNode = [...btn.childNodes].find(n => n.nodeType === Node.TEXT_NODE);
+    if (textNode) textNode.textContent = expanding ? ' Show less' : ' Show more';
+}
+
+function isStructuralAction(action, extra) {
+    if (action === 'REORDER' || action === 'ADD' || action === 'DUMP' || action === 'SUGGEST_FIX' || action === 'TOGGLE_BREAKPOINT') {
+        return true;
+    }
+    if (action === 'EDIT' || action === 'UPDATE_STEP' || action === 'SAVE_STEP') {
+        if (extra && extra.isCurrentStep !== undefined) {
+            return !extra.isCurrentStep;
+        }
+        const activeCard = document.querySelector('.step-card.active');
+        const activeIdx = activeCard ? parseInt(activeCard.getAttribute('data-step-idx'), 10) : null;
+        if (extra && extra.index !== undefined && activeIdx !== null && extra.index !== activeIdx) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function sendAction(action, extra) {
+    if (action === 'RUN' || action === 'ABORT' || action === 'EDIT') {
+        pendingSkipAfterSync = false;
+        pendingRunAfterSync = false;
+    }
+    const token = (extra && extra.pauseId) || currentPauseId || window.currentPauseId || currentState?.pauseId;
+    if (!token || !currentRunId) {
+        if (action === 'SKIP' && currentRunId) {
+            pendingSkipAfterSync = true;
+            console.log('[InteractiveConsole] Skip armed; will skip upon next step pause.');
+        }
+        return;
+    }
+    if (!currentPauseId && token) {
+        currentPauseId = token;
+    }
+    if (action === 'SKIP') {
+        pendingSkipAfterSync = false;
+    }
+
+    if (isStructuralActionInFlight && (action === 'RUN' || action === 'SKIP' || action === 'HEAL')) {
+        if (action === 'RUN') {
+            pendingRunAfterSync = true;
+        }
+        return;
+    }
+
+    const finalSaveOverlay = document.getElementById('finalSaveOverlay');
+    if (finalSaveOverlay) finalSaveOverlay.classList.remove('active');
+
+    const structural = isStructuralAction(action, extra);
+    if (structural) {
+        isStructuralActionInFlight = true;
+        structuralActionPauseId = currentPauseId;
+        startStructuralSyncWatchdog();
+    }
+    if (action === 'RUN' || action === 'HEAL' || action === 'SKIP') {
+        isRunActionInFlight = true;
+        runActionPauseId = currentPauseId;
+    } else if (action === 'EDIT') {
+        isRunActionInFlight = true;
+        runActionPauseId = currentPauseId;
+    }
+
+    const payload = {
+        runId: currentRunId,
+        pauseId: currentPauseId,
+        action,
+        ...extra
+    };
+
+    setButtonsEnabled(false);
+
+    fetch('/api/console/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    }).then(r => r.json()).then(res => {
+        if (res.error === 'stale-tab') {
+            showStaleBanner(res.activeRunId);
+        }
+    }).catch(() => {
+        isStructuralActionInFlight = false;
+        structuralActionPauseId = null;
+        clearStructuralSyncWatchdog();
+        isRunActionInFlight = false;
+        runActionPauseId = null;
+        pendingRunAfterSync = false;
+        setButtonsEnabled(true);
+    });
+
+    if (!structural) {
+        currentPauseId = null;
+        window.currentPauseId = null;
+        // Keep currentState in sync so local re-renders see no active pause token.
+        if (currentState) {
+            currentState.pauseId = null;
+            if (action === 'RUN' || action === 'HEAL' || action === 'AUTO' || action === 'EDIT') {
+                currentState.status = 'running';
+                const allSteps = [
+                    ...(currentState.blocks?.before || []),
+                    ...(currentState.blocks?.steps || []),
+                    ...(currentState.blocks?.after || [])
+                ];
+                const activeCard = document.querySelector('.step-card.active') || document.querySelector('.step-card.selected-details');
+                const activeIdx = activeCard ? parseInt(activeCard.getAttribute('data-step-idx'), 10) : selectedStepIndexForDetails;
+                const activeStep = (activeIdx !== null ? allSteps.find(s => s.index === activeIdx) : null) || allSteps.find(s => s.status === 'running');
+                if (activeStep) {
+                    activeStep.status = 'running';
+                    if (Array.isArray(activeStep.subSteps)) {
+                        const runningSub = activeStep.subSteps.find(sub => sub.status === 'running')
+                            || activeStep.subSteps.find(sub => sub.status === 'pending');
+                        if (runningSub) {
+                            runningSub.status = 'running';
+                        }
+                    }
+                }
+                renderBlock('before', currentState.blocks?.before || []);
+                renderBlock('steps', currentState.blocks?.steps || []);
+                renderBlock('after', currentState.blocks?.after || []);
+                updateBigScreenDetails();
+            }
+        }
+    }
+}
+
+/**
+ * Triggers a debug dump of the current AI context.
+ *
+ * This sends the DUMP action through the normal action channel. The backend
+ * handler catches DUMP, performs the dump (screenshot + DOM + step history),
+ * then recursively re-pauses – so the test stays paused and the user can
+ * still click Run or Skip after the dump completes.
+ */
+function triggerDump() {
+    closeKebabMenu();
+    if (!currentPauseId || !currentRunId) return;
+    // DUMP goes through sendAction; the backend re-pauses immediately after.
+    sendAction('DUMP');
+    // Briefly restore the buttons since the backend will re-pause and send a
+    // new pauseId via SSE, which will re-enable them.
+    setTimeout(() => setButtonsEnabled(true), 800);
+}
+
+/**
+ * Toggles the kebab debug dropdown open or closed.
+ * Closes automatically when the user clicks anywhere outside.
+ */
+function toggleKebabMenu(event) {
+    event.stopPropagation();
+    const dropdown = document.getElementById('kebabDropdown');
+    const btn = document.getElementById('btnKebab');
+    if (!dropdown) return;
+    const isOpen = dropdown.classList.contains('open');
+    if (isOpen) {
+        closeKebabMenu();
+    } else {
+        dropdown.classList.add('open');
+        if (btn) btn.setAttribute('aria-expanded', 'true');
+        // Close on outside click
+        document.addEventListener('click', closeKebabMenu, { once: true });
+    }
+}
+
+function closeKebabMenu() {
+    const dropdown = document.getElementById('kebabDropdown');
+    const btn = document.getElementById('btnKebab');
+    if (dropdown) dropdown.classList.remove('open');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+}
+
+/**
+ * Formats a byte count into a human-readable string (e.g. "12.4 KB").
+ *
+ * @param {number} bytes - the byte count
+ * @returns {string} formatted string
+ */
+function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+/**
+ * Populates and shows the dumpReady popup overlay.
+ *
+ * Called automatically when the backend fires the {@code dumpReady} SSE event
+ * after {@link AiAgent#performDebugDump()} completes. The popup lists both
+ * captured files with their absolute paths and byte sizes.
+ *
+ * @param {{ txtFile: string, htmlFile: string, txtSize: number, htmlSize: number }} data
+ */
+function showDumpPopup(data) {
+    const overlay = document.getElementById('dumpReadyOverlay');
+    const container = document.getElementById('dumpReadyFiles');
+    if (!overlay || !container) return;
+
+    container.innerHTML = `
+        <div class="dump-file-entry">
+            <div class="dump-file-label">
+                <span class="dump-file-type-badge txt">TXT</span>
+                <span class="dump-file-desc">AI context &amp; step history — what the LLM sees</span>
+            </div>
+            <div class="dump-file-path">
+                <span>${escapeHtml(data.txtFile)}</span>
+                <span class="dump-file-size">${formatBytes(data.txtSize)}</span>
+            </div>
+        </div>
+        <div class="dump-file-entry">
+            <div class="dump-file-label">
+                <span class="dump-file-type-badge html">HTML</span>
+                <span class="dump-file-desc">Raw DOM snapshot — main page &amp; all iframes</span>
+            </div>
+            <div class="dump-file-path">
+                <span>${escapeHtml(data.htmlFile)}</span>
+                <span class="dump-file-size">${formatBytes(data.htmlSize)}</span>
+            </div>
+        </div>
+    `;
+
+    overlay.classList.add('active');
+    // Dismiss on Escape
+    const onKey = (ev) => {
+        if (ev.key === 'Escape') {
+            closeDumpPopup();
+            document.removeEventListener('keydown', onKey);
+        }
+    };
+    document.addEventListener('keydown', onKey);
+}
+
+function closeDumpPopup() {
+    const overlay = document.getElementById('dumpReadyOverlay');
+    if (overlay) overlay.classList.remove('active');
+}
+
+/** Escapes special HTML characters to prevent XSS in file paths. */
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function toggleAuto() {
+    if (isAutoMode) {
+        isAutoMode = false;
+        syncAutoButton();
+        autoStartStepIndex = null;
+        setButtonsEnabled(true);
+    } else {
+        // Arm auto-mode immediately even if the pause token hasn't arrived yet.
+        // triggerAutoRunCheck guards on currentPauseId internally; if the pause
+        // event arrives later it will call triggerAutoRunCheck() and fire then.
+        isAutoMode = true;
+        syncAutoButton();
+        setButtonsEnabled(true);
+        const allSteps = [
+            ...(currentState?.blocks?.before || []),
+            ...(currentState?.blocks?.steps || []),
+            ...(currentState?.blocks?.after || [])
+        ];
+        const activeRunningStep = allSteps.find(s => s.status === 'running');
+        autoStartStepIndex = activeRunningStep ? activeRunningStep.index : null;
+        triggerAutoRunCheck();
+    }
+}
+
+function triggerAutoRunCheck() {
+    if (!isAutoMode || !currentPauseId) return;
+    const allSteps = [
+        ...(currentState?.blocks?.before || []),
+        ...(currentState?.blocks?.steps || []),
+        ...(currentState?.blocks?.after || [])
+    ];
+
+    const hasFailedStep = allSteps.some(s => s.status === 'failed' || s.failed || s.errorMessage || s.failureReason || s.error);
+    const activeRunningStep = allSteps.find(s => s.status === 'running');
+
+    const hitBreakpoint = activeRunningStep &&
+        activeBreakpoints.has(activeRunningStep.index) &&
+        activeRunningStep.index !== autoStartStepIndex;
+
+    if (hasFailedStep || hitBreakpoint) {
+        isAutoMode = false;
+        autoStartStepIndex = null;
+        syncAutoButton();
+        setButtonsEnabled(true);
+        return;
+    }
+
+    setTimeout(() => {
+        if (isAutoMode && currentPauseId) {
+            sendAction('RUN');
+        }
+    }, 500);
+}
+
+// -------------------------------------------------------------------------
+// Event Handlers & Local UI helpers
+// -------------------------------------------------------------------------
+function handleStepClick(event, index) {
+    // Prevent toggling if clicking interactive controls, inputs, variable bindings, sub-step items, or the breakpoint status icon
+    if (event.target.closest('button') || event.target.closest('textarea') || event.target.closest('input') || event.target.closest('.step-status-icon') || event.target.closest('.inline-edit-bindings') || event.target.closest('.substeps-tree-container') || event.target.closest('.substeps-count-badge')) return;
+
+    // If switching to a different step, reset sub-step selection to Overview
+    if (selectedStepIndexForDetails !== index) {
+        selectedSubStepIndex = null;
+    }
+
+    // Single click always selects – no toggle-off; a step stays selected once clicked
+    selectedStepIndexForDetails = index;
+    lastFocusedStepIndex = index; // Store for restoreFocus()
+
+    if (currentState) {
+        renderBlock('before', currentState.blocks?.before || []);
+        renderBlock('steps', currentState.blocks?.steps || []);
+        renderBlock('after', currentState.blocks?.after || []);
+    }
+    updateBigScreenDetails();
+
+    if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ action: 'stepSelected' }, '*');
+    }
+
+    // Focus the input field (if rendered for the selected step)
+    restoreFocus();
+
+    // On mobile: open the accordion immediately on the first click
+    if (window.innerWidth <= 900) {
+        const card = document.querySelector(`.step-card[data-step-idx='${index}']`);
+        if (card) {
+            const acc = card.querySelector('.step-accordion-details');
+            if (acc && !acc.classList.contains('open')) acc.classList.add('open');
+        }
+    }
+}
+
+function handleSubStepClick(event, parentIndex, subIndex) {
+    if (event) event.stopPropagation();
+    selectedStepIndexForDetails = parentIndex;
+    selectedSubStepIndex = subIndex;
+    lastFocusedStepIndex = parentIndex;
+
+    if (currentState) {
+        renderBlock('before', currentState.blocks?.before || []);
+        renderBlock('steps', currentState.blocks?.steps || []);
+        renderBlock('after', currentState.blocks?.after || []);
+    }
+    updateBigScreenDetails();
+
+    if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ action: 'stepSelected' }, '*');
+    }
+}
+
+function selectSubStepTab(event, subIndex) {
+    if (event) event.stopPropagation();
+    selectedSubStepIndex = subIndex;
+
+    if (currentState) {
+        renderBlock('before', currentState.blocks?.before || []);
+        renderBlock('steps', currentState.blocks?.steps || []);
+        renderBlock('after', currentState.blocks?.after || []);
+    }
+    updateBigScreenDetails();
+}
+
+function toggleSubStepsTree(event, stepIndex) {
+    if (event) event.stopPropagation();
+    const allSteps = [
+        ...(currentState?.blocks?.before || []),
+        ...(currentState?.blocks?.steps || []),
+        ...(currentState?.blocks?.after || [])
+    ];
+    const step = allSteps.find(s => s.index === stepIndex);
+    const isActiveOrFailed = step && (step.status === 'running' || step.status === 'failed');
+
+    const isExplicitlyExpanded = expandedSubStepsTrees.has(stepIndex);
+    const isExplicitlyCollapsed = collapsedSubStepsTrees.has(stepIndex);
+    const currentlyExpanded = isExplicitlyExpanded || (isActiveOrFailed && !isExplicitlyCollapsed);
+
+    if (currentlyExpanded) {
+        expandedSubStepsTrees.delete(stepIndex);
+        collapsedSubStepsTrees.add(stepIndex);
+    } else {
+        collapsedSubStepsTrees.delete(stepIndex);
+        expandedSubStepsTrees.add(stepIndex);
+    }
+
+    if (currentState) {
+        renderBlock('before', currentState.blocks?.before || []);
+        renderBlock('steps', currentState.blocks?.steps || []);
+        renderBlock('after', currentState.blocks?.after || []);
+    }
+}
+
+function updateBigScreenDetails() {
+    const container = document.getElementById('bigScreenStepDetails');
+    const content = document.getElementById('bigScreenDetailsContent');
+    if (!container || !content) return;
+
+    if (currentState) {
+        const allSteps = [
+            ...(currentState.blocks?.before || []),
+            ...(currentState.blocks?.steps || []),
+            ...(currentState.blocks?.after || [])
+        ];
+        const activeStep = allSteps.find(s => s.status === 'running' || s.status === 'failed');
+        const selStep = (selectedStepIndexForDetails !== null) ? allSteps.find(s => s.index === selectedStepIndexForDetails) : null;
+        if (selectedStepIndexForDetails === null && activeStep) {
+            selectedStepIndexForDetails = activeStep.index;
+        } else if (selStep && (selStep.status === 'passed' || selStep.status === 'skipped' || selStep.status === 'healed') && activeStep) {
+            selectedStepIndexForDetails = activeStep.index;
+        } else if (selectedStepIndexForDetails !== null) {
+            const selStepExists = allSteps.some(s => s.index === selectedStepIndexForDetails);
+            if (!selStepExists && activeStep) {
+                selectedStepIndexForDetails = activeStep.index;
+            }
+        }
+    }
+
+    if (selectedStepIndexForDetails === null || !currentState) {
+        container.style.display = 'none';
+        return;
+    }
+
+    const allSteps = [
+        ...(currentState.blocks?.before || []),
+        ...(currentState.blocks?.steps || []),
+        ...(currentState.blocks?.after || [])
+    ];
+    const step = allSteps.find(s => s.index === selectedStepIndexForDetails);
+    if (!step) {
+        container.style.display = 'none';
+        return;
+    }
+
+    const badgeNum = allStepIndices.indexOf(step.index) >= 0 ? allStepIndices.indexOf(step.index) + 1 : step.index;
+    const subStepsList = Array.isArray(step.subSteps) ? step.subSteps : [];
+    let substepTabsBarHtml = '';
+    let targetSubStep = null;
+
+    if (subStepsList.length > 0) {
+        const runningSub = subStepsList.find(s => s.status === 'running');
+        if (selectedSubStepIndex !== null) {
+            targetSubStep = subStepsList.find(s => s.index === selectedSubStepIndex || s.stepIndex === selectedSubStepIndex || (s.stepIndex === (selectedSubStepIndex - 1)));
+            if (targetSubStep && (targetSubStep.status === 'success' || targetSubStep.status === 'passed') && runningSub) {
+                targetSubStep = runningSub;
+                selectedSubStepIndex = runningSub.index || (subStepsList.indexOf(runningSub) + 1);
+            }
+        } else if (runningSub) {
+            targetSubStep = runningSub;
+            selectedSubStepIndex = runningSub.index || (subStepsList.indexOf(runningSub) + 1);
+        }
+
+        substepTabsBarHtml = `
+            <div class="substep-tabs-bar" role="tablist" aria-label="Sub-step tabs">
+                <button class="substep-tab-btn ${selectedSubStepIndex === null ? 'active' : ''}"
+                        onclick="selectSubStepTab(event, null)" role="tab" aria-selected="${selectedSubStepIndex === null}">
+                    <span class="material-symbols-outlined" style="font-size:13px;" aria-hidden="true">dashboard</span>
+                    <span>Overview</span>
+                </button>
+                ${subStepsList.map((sub, sIdx) => {
+                    const subNum = sub.index || (sIdx + 1);
+                    const subStatus = sub.status ? sub.status.toLowerCase() : 'pending';
+                    const isPaused = currentPauseId !== null;
+                    const icon = (subStatus === 'success' || subStatus === 'passed') ? '✓'
+                               : subStatus === 'failed' ? '✕'
+                               : subStatus === 'running' ? (isPaused ? '⏸' : '▶') : '⭘';
+                    const isTabActive = selectedSubStepIndex === subNum;
+                    return `
+                        <button class="substep-tab-btn ${isTabActive ? 'active' : ''} ${subStatus}"
+                                onclick="selectSubStepTab(event, ${subNum})" role="tab" aria-selected="${isTabActive}">
+                            <span>#${badgeNum}.${subNum}</span>
+                            <span>${icon}</span>
+                        </button>`;
+                }).join('')}
+            </div>`;
+    }
+
+    const sourceTag = step.source === 'recording'
+        ? `<div class="type-tag type-playbook"><span class="material-symbols-outlined" aria-hidden="true">album</span> Recording</div>`
+        : step.source === 'healed'
+            ? `<div class="type-tag type-healed"><span class="material-symbols-outlined" aria-hidden="true">build</span> Healed</div>`
+            : `<div class="type-tag type-llm"><span class="material-symbols-outlined" aria-hidden="true">smart_toy</span> LLM Agent</div>`;
+
+    let includeBreadcrumb = '';
+    if (step.includeChain && step.includeChain.length > 0) {
+        const chainText = step.includeChain.join(' > ');
+        includeBreadcrumb = `<div class="include-breadcrumb" title="${escAttr(chainText)}"><span class="material-symbols-outlined" aria-hidden="true">folder_open</span> ${escHtml(chainText)}</div>`;
+    } else if (step.includeFile) {
+        includeBreadcrumb = `<div class="include-breadcrumb"><span class="material-symbols-outlined" aria-hidden="true">folder_open</span> ${escHtml(step.includeFile)}</div>`;
+    }
+
+    const resolvedDetailInstruction = resolveVariables(step.instruction, currentState?.dataBindings);
+    let detailStepToRender = step;
+    let detailTitle = `Step #${badgeNum}: ${escHtml(resolvedDetailInstruction)}`;
+    let subFileTag = '';
+
+    if (targetSubStep) {
+        const subNum = targetSubStep.index || (subStepsList.indexOf(targetSubStep) + 1);
+        const resolvedSubInstr = resolveVariables(targetSubStep.instruction, currentState?.dataBindings);
+        detailTitle = `Sub-step #${badgeNum}.${subNum}: ${escHtml(resolvedSubInstr)}`;
+
+        if (targetSubStep.file) {
+            const fileStr = targetSubStep.line ? `${targetSubStep.file}:${targetSubStep.line}` : targetSubStep.file;
+            subFileTag = `<div class="type-tag" style="background:rgba(99,102,241,0.1);color:var(--accent-primary);"><span class="material-symbols-outlined" aria-hidden="true">description</span> ${escHtml(fileStr)}</div>`;
+        }
+
+        // Scope actions to targetSubStep
+        const targetSubIdx = targetSubStep.stepIndex !== undefined ? targetSubStep.stepIndex : (targetSubStep.index - 1);
+        let scopedActions = [];
+        if (Array.isArray(targetSubStep.actions) && targetSubStep.actions.length > 0) {
+            scopedActions = targetSubStep.actions;
+        } else if (Array.isArray(step.actions)) {
+            scopedActions = step.actions.filter(a => a.subStepIndex === targetSubIdx || a.subStepIndex === targetSubStep.index);
+        }
+
+        // Scope LLM calls
+        let scopedLlmCalls = [];
+        if (Array.isArray(targetSubStep.llmCalls) && targetSubStep.llmCalls.length > 0) {
+            scopedLlmCalls = targetSubStep.llmCalls;
+        } else if (Array.isArray(step.llmCalls)) {
+            scopedLlmCalls = step.llmCalls.filter(c => c.subStepIndex === targetSubIdx || c.subStepIndex === targetSubStep.index);
+        }
+
+        // Scope screenshot
+        let scopedScreenshot = targetSubStep.screenshot;
+        if (!scopedScreenshot && Array.isArray(targetSubStep.screenshots) && targetSubStep.screenshots.length > 0) {
+            scopedScreenshot = targetSubStep.screenshots[0].url || targetSubStep.screenshots[0].path;
+        }
+        if (!scopedScreenshot && Array.isArray(step.screenshots)) {
+            const matchSc = step.screenshots.find(sc => sc.subStepIndex === targetSubIdx || sc.subStepIndex === targetSubStep.index);
+            if (matchSc) scopedScreenshot = matchSc.url || matchSc.path;
+        }
+        if (!scopedScreenshot) {
+            scopedScreenshot = step.screenshot;
+        }
+
+        detailStepToRender = {
+            ...targetSubStep,
+            index: `${badgeNum}.${subNum}`,
+            status: targetSubStep.status ? targetSubStep.status.toLowerCase() : 'pending',
+            instruction: targetSubStep.instruction,
+            actions: scopedActions,
+            errorMessage: targetSubStep.failureReason || targetSubStep.errorMessage || targetSubStep.error,
+            failureReason: targetSubStep.failureReason || targetSubStep.errorMessage || targetSubStep.error,
+            reasoning: targetSubStep.reasoning || (targetSubStep.status === 'running' ? 'AI is working on this sub-step...' : ''),
+            durationMs: targetSubStep.durationMs,
+            thinkingTimeMs: targetSubStep.thinkingTimeMs,
+            screenshot: scopedScreenshot,
+            llmCalls: scopedLlmCalls,
+            includeFile: targetSubStep.file || step.includeFile,
+            includeChain: step.includeChain
+        };
+    }
+
+    const isStepPaused = currentPauseId !== null && (step.status === 'running' || (targetSubStep && targetSubStep.status === 'running'));
+    const detailsHtml = buildStepDetailsHtml(detailStepToRender, isStepPaused);
+
+    content.innerHTML = `
+                ${substepTabsBarHtml}
+                <div style="font-weight: 600; font-size:14px; margin-bottom: 8px;">${detailTitle}</div>
+                <div style="margin-bottom:12px; display:flex; gap:6px; flex-wrap:wrap;">${sourceTag}${subFileTag}${includeBreadcrumb}</div>
+                ${detailsHtml}
+            `;
+    container.style.display = 'flex';
+}
+
+function triggerRewind(event, index) {
+    if (event) event.stopPropagation();
+    if (!currentPauseId || isStructuralActionInFlight) return;
+    selectedStepIndexForDetails = index;
+
+    let targetBlock = null;
+    let targetBlockIndex = null;
+    if (currentState && currentState.blocks) {
+        for (const bKey of ['before', 'steps', 'after']) {
+            const list = currentState.blocks[bKey];
+            if (list) {
+                const bIdx = list.findIndex(s => s.index === index);
+                if (bIdx !== -1) {
+                    targetBlock = bKey;
+                    targetBlockIndex = bIdx;
+                    break;
+                }
+            }
+        }
+    }
+
+    sendAction('REWIND', {
+        targetIndex: index,
+        block: targetBlock,
+        blockIndex: targetBlockIndex
+    });
+}
+
+function pasteBinding(el, key) {
+    const card = el.closest('.step-card');
+    const textarea = card ? card.querySelector('.inline-edit-textarea') : document.getElementById('newStepInstruction');
+    if (!textarea) return;
+    const val = `\${${key}}`;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    textarea.value = textarea.value.substring(0, start) + val + textarea.value.substring(end);
+    textarea.focus();
+    textarea.setSelectionRange(start + val.length, start + val.length);
+}
+
+function enableEdit(btnElement) {
+    if (isStructuralActionInFlight) return;
+    const card = btnElement.closest('.step-card');
+    card.classList.add('editing');
+
+    // Explicitly show the bindings panel (which is a sibling of .step-edit-form,
+    // not inside it). This makes .binding-badge elements visible to WebDriver
+    // getText() in headless mode, independent of any CSS class cascade.
+    const bindingsDiv = card.querySelector('.inline-edit-bindings');
+    if (bindingsDiv) {
+        bindingsDiv.style.display = 'flex';
+        bindingsDiv.style.flexDirection = 'column';
+        bindingsDiv.style.gap = '6px';
+        bindingsDiv.style.margin = '8px 0';
+        if (currentState?.dataBindings) {
+            // Re-populate in case bindings changed since the card was last rendered.
+            bindingsDiv.innerHTML = generateEditableBindingsTable(
+                currentState.dataBindings,
+                '.inline-edit-textarea'
+            );
+        }
+    }
+
+    const textarea = card.querySelector('.inline-edit-textarea');
+    const idx = parseInt(card.getAttribute('data-step-idx'), 10);
+    const cardBlock = card.getAttribute('data-step-block') || null;
+
+    let rawInstruction = '';
+    if (currentState && currentState.blocks) {
+        const blocksToSearch = cardBlock ? [cardBlock] : ['before', 'steps', 'after'];
+        for (const blockName of blocksToSearch) {
+            const stepObj = currentState.blocks[blockName]?.find(s => s.index === idx);
+            if (stepObj) {
+                rawInstruction = stepObj.rawInstruction || stepObj.instruction;
+                break;
+            }
+        }
+    }
+    textarea.value = rawInstruction;
+    textarea.focus();
+
+    const acc = card.querySelector('.step-accordion-details');
+    if (acc && !acc.classList.contains('open')) acc.classList.add('open');
+    setButtonsEnabled(true);
+}
+
+function cancelEdit(btnElement) {
+    const card = btnElement.closest('.step-card');
+    const idx = parseInt(card.getAttribute('data-step-idx'), 10);
+    const cardBlock = card.getAttribute('data-step-block') || null;
+    let removed = false;
+    if (currentState && currentState.blocks) {
+        const blocksToSearch = cardBlock ? [cardBlock] : ['before', 'steps', 'after'];
+        for (const blockName of blocksToSearch) {
+            const list = currentState.blocks[blockName];
+            if (list) {
+                const indexInList = list.findIndex(s => s.index === idx && s.isTempAdd);
+                if (indexInList !== -1) {
+                    list.splice(indexInList, 1);
+                    removed = true;
+                    break;
+                }
+            }
+        }
+    }
+    if (removed) {
+        applyState(currentState);
+    } else {
+        card.classList.remove('editing');
+        // Hide the bindings panel that was shown by enableEdit.
+        const bindingsDiv = card.querySelector('.inline-edit-bindings');
+        if (bindingsDiv) bindingsDiv.style.display = 'none';
+        setButtonsEnabled(true);
+    }
+}
+
+function saveEdit(btnElement) {
+    console.error('saveEdit called');
+    const card = btnElement.closest('.step-card');
+    const textarea = card.querySelector('.inline-edit-textarea');
+    const newVal = textarea.value.trim();
+
+    const idx = parseInt(card.getAttribute('data-step-idx'), 10);
+    const cardBlock = card.getAttribute('data-step-block') || null;
+    let isTemp = false;
+    let oldVal = '';
+    let blockName = cardBlock || 'steps';
+    let targetStep = null;
+
+    if (currentState && currentState.blocks) {
+        const blocksToSearch = cardBlock ? [cardBlock] : ['before', 'steps', 'after'];
+        for (const bKey of blocksToSearch) {
+            const list = currentState.blocks[bKey];
+            if (list) {
+                const found = list.find(s => s.index === idx);
+                if (found) {
+                    isTemp = !!found.isTempAdd;
+                    oldVal = found.instruction;
+                    blockName = bKey;
+                    targetStep = found;
+                    break;
+                }
+            }
+        }
+    }
+
+    const activePauseId = currentPauseId || window.currentPauseId || currentState?.pauseId;
+    if (isTemp) {
+        if (newVal && activePauseId) {
+            if (targetStep) {
+                targetStep.instruction = newVal;
+                targetStep.rawInstruction = newVal;
+                targetStep.status = 'pending';
+                delete targetStep.isTempAdd;
+                targetStep.isPendingAdd = true;
+                targetStep.isLlmProcessing = false;
+                targetStep.actions = [];
+                targetStep.reasoning = null;
+                targetStep.errorMessage = null;
+                delete targetStep.failureReason;
+                delete targetStep.error;
+                targetStep.failed = false;
+            }
+            const targetList = (currentState.blocks && currentState.blocks[blockName]) ? currentState.blocks[blockName] : [];
+            let targetRelIdx = (targetStep && typeof targetStep.targetInsertIndex === 'number' && targetStep.targetInsertIndex >= 0)
+                ? targetStep.targetInsertIndex
+                : (targetStep ? targetList.indexOf(targetStep) : -1);
+            if (targetRelIdx < 0 || targetRelIdx > targetList.length) {
+                targetRelIdx = targetList.length;
+            }
+            if (targetStep) {
+                targetStep.targetInsertIndex = targetRelIdx;
+            }
+            sendAction('ADD', { instruction: newVal, block: blockName, index: targetRelIdx });
+        } else {
+            cancelEdit(btnElement);
+            return;
+        }
+        window.currentlyEditingStepIndex = null;
+        window.currentEditText = null;
+        card.classList.remove('editing');
+        const bindingsDiv = card.querySelector('.inline-edit-bindings');
+        if (bindingsDiv) bindingsDiv.style.display = 'none';
+        selectedStepIndexForDetails = null;
+        applyState(currentState);
+    } else {
+        console.error('Found step in state blocks:', blockName, idx, 'oldVal:', oldVal, 'newVal:', newVal, 'activePauseId:', activePauseId);
+        const activeCard = document.querySelector('.step-card.active');
+        const activeIdx = activeCard ? parseInt(activeCard.getAttribute('data-step-idx'), 10) : null;
+        const activeBlock = activeCard ? activeCard.getAttribute('data-step-block') : null;
+        const isCurrentStep = card.classList.contains('active')
+            || (activeCard !== null && idx === activeIdx && (!activeBlock || activeBlock === blockName))
+            || (targetStep && (targetStep.status === 'running' || targetStep.status === 'failed'));
+
+        const blockList = (currentState?.blocks && currentState.blocks[blockName]) ? currentState.blocks[blockName] : [];
+        const blockIndex = targetStep ? blockList.indexOf(targetStep) : -1;
+        const allSteps = [
+            ...(currentState?.blocks?.before || []),
+            ...(currentState?.blocks?.steps || []),
+            ...(currentState?.blocks?.after || [])
+        ];
+        const flatIdx = targetStep ? allSteps.indexOf(targetStep) : allStepIndices.indexOf(idx);
+
+        if (isCurrentStep) {
+            if (targetStep && newVal) {
+                targetStep.instruction = newVal;
+                targetStep.rawInstruction = newVal;
+                targetStep.status = 'running';
+                targetStep.isLlmProcessing = true;
+                targetStep.actions = [];
+                targetStep.reasoning = null;
+                targetStep.errorMessage = null;
+                delete targetStep.failureReason;
+                delete targetStep.error;
+                targetStep.failed = false;
+            }
+            selectedStepIndexForDetails = idx;
+            window.currentlyEditingStepIndex = null;
+            window.currentEditText = null;
+
+            if (activePauseId) {
+                console.error('Sending EDIT action for current step');
+                userEditedFailedStep = true;
+                isErrorMode = false;
+                updateToolbarControls(true);
+                sendAction('EDIT', {
+                    index: blockIndex >= 0 ? blockIndex : (flatIdx >= 0 ? flatIdx : idx),
+                    blockIndex: blockIndex,
+                    flatIndex: flatIdx,
+                    rawIndex: idx,
+                    block: blockName,
+                    isCurrentStep: true,
+                    instruction: newVal,
+                    bindings: currentState?.dataBindings
+                });
+            }
+        } else {
+            if (targetStep && newVal) {
+                targetStep.instruction = newVal;
+                targetStep.rawInstruction = newVal;
+                // Preserve pending or existing status - do not mark running or LLM processing
+            }
+            selectedStepIndexForDetails = idx;
+            window.currentlyEditingStepIndex = null;
+            window.currentEditText = null;
+
+            if (activePauseId) {
+                console.error('Sending EDIT action for non-current step');
+                sendAction('EDIT', {
+                    index: blockIndex >= 0 ? blockIndex : (flatIdx >= 0 ? flatIdx : idx),
+                    blockIndex: blockIndex,
+                    flatIndex: flatIdx,
+                    rawIndex: idx,
+                    block: blockName,
+                    isCurrentStep: false,
+                    instruction: newVal,
+                    bindings: currentState?.dataBindings
+                });
+            }
+        }
+        card.classList.remove('editing');
+        const bindingsDiv = card.querySelector('.inline-edit-bindings');
+        if (bindingsDiv) bindingsDiv.style.display = 'none';
+        setButtonsEnabled(true);
+        applyState(currentState);
+    }
+}
+
+function toggleBp(event, index) {
+    event.stopPropagation();
+    if (activeBreakpoints.has(index)) {
+        activeBreakpoints.delete(index);
+    } else {
+        activeBreakpoints.add(index);
+    }
+    applyState(currentState);
+}
+
+function copyError(elementId) {
+    const text = document.getElementById(elementId).innerText;
+    navigator.clipboard.writeText(text).then(() => {
+        alert("Error message copied to clipboard!");
+    });
+}
+
+function showScreenshot(src) {
+    // No-op fallback since DOM Snapshot card is removed. Lightbox handles clicks.
+}
+
+let currentSuggestionStepIndex = null;
+
+function requestFixSuggestion(event, stepIndex) {
+    if (event) event.stopPropagation();
+    currentSuggestionStepIndex = stepIndex;
+
+    const overlay = document.getElementById('suggestionOverlay');
+    const loading = document.getElementById('suggestionLoading');
+    const body = document.getElementById('suggestionBody');
+    const actions = document.getElementById('suggestionActions');
+    const origText = document.getElementById('suggestionOriginalText');
+
+    if (!overlay) return;
+
+    openOverlay('suggestionOverlay');
+    if (loading) loading.style.display = 'block';
+    if (body) body.style.display = 'none';
+    if (actions) actions.style.display = 'none';
+
+    let stepInstruction = '';
+    let stepFailureReason = '';
+    let foundBlock = null;
+    let foundBlockIndex = -1;
+    if (currentState && currentState.blocks) {
+        for (const bKey of ['before', 'steps', 'after']) {
+            const list = currentState.blocks[bKey] || [];
+            const found = list.find(s => s.index == stepIndex);
+            if (found) {
+                stepInstruction = found.instruction || '';
+                stepFailureReason = found.failureReason || found.errorMessage || found.error || '';
+                foundBlock = bKey;
+                foundBlockIndex = found.blockIndex !== undefined ? found.blockIndex : -1;
+                break;
+            }
+        }
+    }
+    if (!stepFailureReason && currentState && currentState.error) {
+        stepFailureReason = currentState.error;
+    }
+
+    const failBox = document.getElementById('suggestionFailureBox');
+    const failText = document.getElementById('suggestionFailureText');
+    if (failBox && failText) {
+        if (stepFailureReason && stepFailureReason.trim()) {
+            failText.innerText = stepFailureReason.trim();
+            failBox.style.display = 'block';
+        } else {
+            failBox.style.display = 'none';
+        }
+    }
+
+    if (origText && (!origText.innerText || !origText.innerText.trim())) origText.innerText = stepInstruction;
+
+    const flatIdx = allStepIndices.indexOf(stepIndex);
+    sendAction('SUGGEST_FIX', {
+        index: foundBlockIndex >= 0 ? foundBlockIndex : (flatIdx >= 0 ? flatIdx : stepIndex),
+        blockIndex: foundBlockIndex,
+        flatIndex: flatIdx >= 0 ? flatIdx : (stepIndex > 0 ? stepIndex - 1 : 0),
+        rawIndex: stepIndex,
+        block: foundBlock,
+        instruction: stepInstruction
+    });
+}
+
+function handleFixSuggestionReceived(data) {
+    if (!data) return;
+    const loading = document.getElementById('suggestionLoading');
+    const body = document.getElementById('suggestionBody');
+    const actions = document.getElementById('suggestionActions');
+    const textarea = document.getElementById('suggestionTextarea');
+    const origText = document.getElementById('suggestionOriginalText');
+    const failBox = document.getElementById('suggestionFailureBox');
+    const failText = document.getElementById('suggestionFailureText');
+
+    if (loading) loading.style.display = 'none';
+    if (body) body.style.display = 'flex';
+    if (actions) actions.style.display = 'flex';
+
+    if (data.failureReason && failBox && failText) {
+        failText.innerText = data.failureReason.trim();
+        failBox.style.display = 'block';
+    }
+
+    if (data.originalInstruction && origText) {
+        origText.innerText = data.originalInstruction;
+    }
+
+    if (textarea) {
+        textarea.value = data.suggestedInstruction || data.suggestion || data.instruction || '';
+        textarea.focus();
+    }
+}
+
+function applySuggestionAndRun() {
+    executeApplySuggestion(true);
+}
+
+function applySuggestionOnly() {
+    executeApplySuggestion(false);
+}
+
+function executeApplySuggestion(autoConfirm) {
+    const textarea = document.getElementById('suggestionTextarea');
+    const newInstruction = textarea ? textarea.value.trim() : '';
+    const activePauseId = currentPauseId || window.currentPauseId || currentState?.pauseId;
+    if (currentSuggestionStepIndex != null && newInstruction && activePauseId) {
+        let targetStep = null;
+        let blockName = 'steps';
+        let foundBlockIndex = -1;
+
+        if (currentState && currentState.blocks) {
+            for (const bKey of ['before', 'steps', 'after']) {
+                const list = currentState.blocks[bKey] || [];
+                const found = list.find(s => s.index == currentSuggestionStepIndex);
+                if (found) {
+                    targetStep = found;
+                    blockName = bKey;
+                    foundBlockIndex = found.blockIndex !== undefined ? found.blockIndex : list.indexOf(found);
+                    break;
+                }
+                // Check if target is a nested sub-step
+                for (let i = 0; i < list.length; i++) {
+                    const parent = list[i];
+                    if (Array.isArray(parent.subSteps)) {
+                        const subFound = parent.subSteps.find(sub => sub.index == currentSuggestionStepIndex || `${parent.index}.${sub.index}` == currentSuggestionStepIndex);
+                        if (subFound) {
+                            targetStep = subFound;
+                            blockName = bKey;
+                            foundBlockIndex = parent.blockIndex !== undefined ? parent.blockIndex : i;
+                            break;
+                        }
+                    }
+                }
+                if (targetStep) break;
+            }
+        }
+
+        const blockList = (currentState?.blocks && currentState.blocks[blockName]) ? currentState.blocks[blockName] : [];
+        const blockIndex = targetStep ? blockList.indexOf(targetStep) : foundBlockIndex;
+        const allSteps = [
+            ...(currentState?.blocks?.before || []),
+            ...(currentState?.blocks?.steps || []),
+            ...(currentState?.blocks?.after || [])
+        ];
+        const flatIdx = targetStep ? allSteps.indexOf(targetStep) : allStepIndices.indexOf(currentSuggestionStepIndex);
+
+        if (targetStep) {
+            targetStep.instruction = newInstruction;
+            targetStep.rawInstruction = newInstruction;
+            targetStep.status = 'running';
+            targetStep.failed = false;
+            targetStep.isLlmProcessing = true;
+            targetStep.actions = [];
+            targetStep.reasoning = null;
+            targetStep.errorMessage = null;
+            delete targetStep.failureReason;
+        }
+
+        if (currentState) {
+            currentState.status = 'running';
+            currentState.pauseId = null;
+            delete currentState.error;
+            delete currentState.failureReason;
+            delete currentState.errorMessage;
+        }
+
+        userEditedFailedStep = true;
+        isErrorMode = false;
+        isAutoMode = false;
+        autoStartStepIndex = null;
+        pendingRunAfterSync = false;
+        syncAutoButton();
+        updateToolbarControls(true);
+
+        // Optimistically apply state to update UI step text and switch card from failed to running
+        applyState(currentState);
+
+        sendAction('EDIT', {
+            pauseId: activePauseId,
+            index: blockIndex >= 0 ? blockIndex : (flatIdx >= 0 ? flatIdx : currentSuggestionStepIndex),
+            blockIndex: blockIndex,
+            flatIndex: flatIdx,
+            rawIndex: currentSuggestionStepIndex,
+            block: blockName,
+            isCurrentStep: true,
+            autoConfirm: autoConfirm,
+            instruction: newInstruction,
+            bindings: currentState?.dataBindings
+        });
+    }
+    closeOverlay('suggestionOverlay');
+}
+
+let isErrorMode = false;
+let userEditedFailedStep = false;
+let lastFailedStepIndex = null;
+
+function handlePrimaryAction() {
+    const editingCard = document.querySelector('.step-card.editing');
+    if (editingCard) {
+        const saveBtn = editingCard.querySelector('.step-save-btn');
+        if (saveBtn) {
+            saveBtn.click();
+            return;
+        }
+    }
+    if (isErrorMode) {
+        sendAction('HEAL');
+    } else {
+        sendAction('RUN');
+    }
+}
+
+function updateToolbarControls(enabled) {
+    const runBtn = document.getElementById('btnRun');
+    const finishBtn = document.getElementById('btnFinish');
+    const isEditing = document.querySelector('.step-card.editing') !== null;
+
+    if (isErrorMode) {
+        if (runBtn) {
+            runBtn.className = 'btn btn-heal';
+            runBtn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span> <span>Heal</span>';
+            runBtn.title = 'Heal step using AI (Alt+R)';
+        }
+        if (finishBtn) {
+            finishBtn.style.display = '';
+            finishBtn.disabled = !enabled || isEditing;
+            if (!enabled || isEditing) finishBtn.setAttribute('disabled', 'true'); else finishBtn.removeAttribute('disabled');
+        }
+    } else {
+        if (runBtn) {
+            runBtn.className = 'btn btn-success';
+            runBtn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">play_arrow</span> <span>Run</span>';
+            runBtn.title = 'Run step (Alt+R / Ctrl+Enter)';
+        }
+        if (finishBtn) {
+            finishBtn.style.display = 'none';
+            finishBtn.disabled = true;
+        }
+    }
+}
+
+function setButtonsEnabled(enabled) {
+    const runBtn = document.getElementById('btnRun');
+    const skipBtn = document.getElementById('btnSkip');
+    const backBtn = document.getElementById('btnBack');
+    const autoBtn = document.getElementById('btnAuto');
+    const btnCancel = document.getElementById('btnCancel');
+    const isEditing = document.querySelector('.step-card.editing') !== null;
+    const isSyncing = isStructuralActionInFlight;
+
+    // Toggle sync indicator pill
+    const syncIndicator = document.getElementById('timelineSyncIndicator');
+    if (syncIndicator) {
+        syncIndicator.style.display = isSyncing ? 'flex' : 'none';
+    }
+
+    // Disable Drag/Drop if editing or syncing
+    const blocks = document.querySelectorAll('.steps-block-content');
+    blocks.forEach(block => {
+        if (isEditing || isSyncing) {
+            block.classList.add('drag-disabled');
+        } else {
+            block.classList.remove('drag-disabled');
+        }
+    });
+
+    // Control visibility and disabled state of Add Step buttons
+    const isTestFinished = currentState && (currentState.status === 'passed' || currentState.status === 'failed' || currentState.status === 'aborted');
+    const addStepBtns = document.querySelectorAll('.add-step-card-btn');
+    addStepBtns.forEach(btn => {
+        if (isTestFinished) {
+            btn.style.display = 'none';
+        } else {
+            btn.style.display = '';
+            const shouldDisable = !enabled || isEditing || isSyncing;
+            btn.disabled = shouldDisable;
+            if (shouldDisable) {
+                btn.classList.add('disabled');
+                btn.setAttribute('disabled', 'true');
+            } else {
+                btn.classList.remove('disabled');
+                btn.removeAttribute('disabled');
+            }
+        }
+    });
+
+    // Disable step badge inputs during sync or when disabled
+    const badgeInputs = document.querySelectorAll('.step-num-badge input');
+    badgeInputs.forEach(input => {
+        const shouldDisable = isSyncing || !enabled;
+        input.disabled = isSyncing || !enabled;
+        if (shouldDisable) {
+            input.setAttribute('disabled', 'true');
+            input.setAttribute('readonly', 'true');
+            if (isSyncing) input.blur();
+        } else {
+            input.removeAttribute('disabled');
+            input.removeAttribute('readonly');
+        }
+    });
+
+    const badges = document.querySelectorAll('.step-num-badge');
+    badges.forEach(badge => {
+        if (isSyncing || !enabled) {
+            badge.classList.add('sync-disabled');
+        } else {
+            badge.classList.remove('sync-disabled');
+        }
+    });
+
+    // Disable inline card action buttons during sync
+    const cardActionBtns = document.querySelectorAll('.step-edit-btn, .step-add-after-btn, .step-rewind-btn, .step-delete-btn');
+    cardActionBtns.forEach(btn => {
+        const shouldDisable = isSyncing || !enabled;
+        btn.disabled = shouldDisable;
+        if (shouldDisable) {
+            btn.classList.add('disabled');
+            btn.setAttribute('disabled', 'true');
+        } else {
+            btn.classList.remove('disabled');
+            btn.removeAttribute('disabled');
+        }
+    });
+
+
+    if (!enabled && isTestFinished) {
+        if (runBtn) runBtn.style.display = 'none';
+        if (skipBtn) skipBtn.style.display = 'none';
+        if (backBtn) backBtn.style.display = 'none';
+        if (autoBtn) autoBtn.style.display = 'none';
+        if (btnCancel) btnCancel.style.display = 'none';
+    } else {
+        if (runBtn) runBtn.style.display = '';
+        if (skipBtn) skipBtn.style.display = '';
+        if (backBtn) backBtn.style.display = '';
+        if (autoBtn) autoBtn.style.display = '';
+        if (btnCancel) btnCancel.style.display = '';
+
+        if (isAutoMode) {
+            if (runBtn) { runBtn.disabled = true; runBtn.setAttribute('disabled', 'true'); }
+            if (skipBtn) { skipBtn.disabled = isEditing; if (isEditing) skipBtn.setAttribute('disabled', 'true'); else skipBtn.removeAttribute('disabled'); }
+            if (backBtn) { backBtn.disabled = true; backBtn.setAttribute('disabled', 'true'); }
+            if (autoBtn) { autoBtn.disabled = isEditing; if (isEditing) autoBtn.setAttribute('disabled', 'true'); else autoBtn.removeAttribute('disabled'); }
+            if (btnCancel) { btnCancel.disabled = isEditing; if (isEditing) btnCancel.setAttribute('disabled', 'true'); else btnCancel.removeAttribute('disabled'); }
+        } else {
+            const isExecuting = (!currentPauseId) || (currentState && currentState.status === 'running') || isStructuralActionInFlight || isRunActionInFlight;
+            const runDisabled = !enabled || isEditing || isExecuting;
+            if (runBtn) { runBtn.disabled = runDisabled; if (runDisabled) runBtn.setAttribute('disabled', 'true'); else runBtn.removeAttribute('disabled'); }
+            if (skipBtn) { skipBtn.disabled = isEditing; if (isEditing) skipBtn.setAttribute('disabled', 'true'); else skipBtn.removeAttribute('disabled'); }
+            if (backBtn) { backBtn.disabled = !enabled || isEditing; if (!enabled || isEditing) backBtn.setAttribute('disabled', 'true'); else backBtn.removeAttribute('disabled'); }
+            if (autoBtn) { autoBtn.disabled = isEditing; if (isEditing) autoBtn.setAttribute('disabled', 'true'); else autoBtn.removeAttribute('disabled'); }
+            if (btnCancel) { btnCancel.disabled = isEditing; if (isEditing) btnCancel.setAttribute('disabled', 'true'); else btnCancel.removeAttribute('disabled'); }
+            const kebabBtn = document.getElementById('btnKebab');
+            if (kebabBtn) { kebabBtn.disabled = !enabled || isEditing; if (!enabled || isEditing) kebabBtn.setAttribute('disabled', 'true'); else kebabBtn.removeAttribute('disabled'); }
+            if (enabled && !isExecuting) {
+                checkActionApprovals();
+            }
+        }
+    }
+    updateToolbarControls(enabled);
+}
+
+
+function syncAutoButton() {
+    const btn = document.getElementById('btnAuto');
+    if (!btn) return;
+    if (isAutoMode) {
+        btn.classList.remove('btn-auto-blue');
+        btn.classList.add('btn-pause-orange');
+        btn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">pause</span> Pause';
+        btn.title = 'Pause Auto-run (Alt+S)';
+        btn.setAttribute('aria-label', 'Pause Auto-run (Alt+S)');
+    } else {
+        btn.classList.remove('btn-pause-orange');
+        btn.classList.add('btn-auto-blue');
+        btn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">fast_forward</span> Auto';
+        btn.title = 'Auto-run (Alt+S)';
+        btn.setAttribute('aria-label', 'Toggle Auto-run (Alt+S)');
+    }
+}
+
+function setConnectionState(state) {
+    const dot = document.getElementById('connectionDot');
+    if (dot) {
+        dot.className = '';
+        dot.classList.add(state);
+        dot.title = { connected: 'Loading', paused: 'Waiting for input', error: 'Disconnected' }[state] || state;
+    }
+
+    if (state === 'error' && currentState === null) {
+        const overlay = document.getElementById('initialLoadingOverlay');
+        if (overlay) {
+            const h2 = overlay.querySelector('h2');
+            const p = overlay.querySelector('p');
+            if (h2) h2.textContent = 'Connection Error';
+            if (p) p.textContent = 'Retrying connection...';
+            const icon = overlay.querySelector('i');
+            if (icon) {
+                icon.classList.remove('fa-circle-notch', 'fa-spin');
+                icon.classList.add('fa-triangle-exclamation');
+                icon.style.color = 'var(--accent-danger)';
+            }
+        }
+    } else if (state === 'connected' && currentState === null) {
+        const overlay = document.getElementById('initialLoadingOverlay');
+        if (overlay) {
+            const h2 = overlay.querySelector('h2');
+            const p = overlay.querySelector('p');
+            if (h2) h2.textContent = 'Loading';
+            if (p) p.textContent = 'Waiting for test data...';
+            const icon = overlay.querySelector('i');
+            if (icon) {
+                icon.classList.remove('fa-triangle-exclamation');
+                icon.classList.add('fa-circle-notch', 'fa-spin');
+                icon.style.color = 'var(--accent-primary)';
+            }
+        }
+    }
+}
+
+function showStaleBanner(activeRunId) {
+    const banner = document.getElementById('staleBanner');
+    const msg = document.getElementById('staleBannerMsg');
+    if (banner && msg) {
+        msg.textContent = `This tab is connected to run "${currentRunId || '?'}" but the active run is "${activeRunId}".`;
+        banner.style.display = 'flex';
+    }
+    setButtonsEnabled(false);
+}
+
+function refreshToCurrentRun() {
+    window.location.reload();
+}
+
+function showCancelWarning() {
+    document.getElementById('btnCancel').style.display = 'none';
+    document.getElementById('cancelWarning').style.display = 'flex';
+}
+
+document.getElementById('btnCancel').style.display = 'inline-flex';
+
+function hideCancelWarning() {
+    document.getElementById('cancelWarning').style.display = 'none';
+    document.getElementById('btnCancel').style.display = 'inline-flex';
+}
+
+function triggerSaveExit() {
+    sendAction('SAVE_EXIT', { bindings: currentState?.dataBindings });
+}
+
+function triggerStop() {
+    hideCancelWarning();
+    if (currentPauseId) {
+        sendAction('ABORT');
+    } else {
+        setButtonsEnabled(false);
+        fetch('/api/stop', {
+            method: 'POST'
+        }).catch(err => {
+            console.error('Stop request failed', err);
+        });
+    }
+}
+
+function toggleTheme() {
+    const themeSelect = document.getElementById('themeSelect');
+    if (themeSelect) {
+        if (themeSelect.value === 'dark') {
+            themeSelect.value = 'light';
+        } else if (themeSelect.value === 'light') {
+            themeSelect.value = 'system';
+        } else {
+            themeSelect.value = 'dark';
+        }
+        saveSettings();
+    }
+}
+
+function applyTheme(theme) {
+    const root = document.documentElement;
+    const body = document.body;
+    let effectiveTheme = theme;
+    if (effectiveTheme === 'system') {
+        effectiveTheme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    }
+    if (effectiveTheme === 'light') {
+        root.classList.add('force-light');
+        root.classList.remove('force-dark');
+        if (body) {
+            body.classList.add('force-light');
+            body.classList.remove('force-dark');
+        }
+    } else {
+        root.classList.add('force-dark');
+        root.classList.remove('force-light');
+        if (body) {
+            body.classList.add('force-dark');
+            body.classList.remove('force-light');
+        }
+    }
+}
+
+function setTextIfChanged(id, val) {
+    const el = document.getElementById(id);
+    if (el && el.textContent !== val) el.textContent = val;
+}
+
+function escHtml(str) {
+    if (!str) return '';
+
+    if (Array.isArray(str)) {
+        return str.map(escHtml);
+    }
+
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function escAttr(str) {
+    if (!str) return '';
+
+    if (Array.isArray(str)) {
+        return str.map(escAttr);
+    }
+
+    return str.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+}
+
+// -------------------------------------------------------------------------
+// Overlays & autocompletes
+// -------------------------------------------------------------------------
+function openOverlay(id) {
+    const overlay = document.getElementById(id);
+    if (overlay) {
+        overlay.style.display = 'flex';
+        overlay.classList.add('active');
+    }
+}
+function closeOverlay(id) {
+    const overlay = document.getElementById(id);
+    if (overlay) {
+        overlay.style.display = 'none';
+        overlay.classList.remove('active');
+    }
+    if (id === 'helpOverlay') {
+        helpOverlayClicked = false;
+    }
+}
+function toggleHelpOverlay() {
+    const overlay = document.getElementById('helpOverlay');
+    if (helpOverlayClicked) {
+        overlay.style.display = 'none';
+        helpOverlayClicked = false;
+    } else {
+        overlay.style.display = 'flex';
+        helpOverlayClicked = true;
+    }
+}
+function openDomOverlay(event, domContent) {
+    if (event) event.preventDefault();
+    document.getElementById('domPre').textContent = domContent;
+    openOverlay('domOverlay');
+}
+let zoomScale = 1.0;
+let panX = 0;
+let panY = 0;
+let isPanning = false;
+let startX = 0;
+let startY = 0;
+
+function handleScreenshotError(imgElement) {
+    if (imgElement) {
+        imgElement.style.display = 'none';
+        const container = imgElement.closest('.acc-screenshot-block');
+        if (container) {
+            const header = container.querySelector('.screenshot-header');
+            if (header) {
+                header.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">hide_image</span> No screenshot taken`;
+                header.style.color = 'var(--text-muted)';
+            }
+        }
+    }
+}
+
+function openScreenshotOverlay(event, src) {
+    if (event) event.preventDefault();
+    const img = document.getElementById('screenshotImg');
+    img.src = src;
+    resetScreenshotZoom();
+    openOverlay('screenshotOverlay');
+}
+
+function zoomScreenshot(factor) {
+    zoomScale = Math.max(0.5, Math.min(zoomScale * factor, 5.0));
+    updateScreenshotTransform();
+}
+
+function resetScreenshotZoom() {
+    zoomScale = 1.0;
+    panX = 0;
+    panY = 0;
+    updateScreenshotTransform();
+}
+
+function updateScreenshotTransform() {
+    const img = document.getElementById('screenshotImg');
+    if (img) {
+        img.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomScale})`;
+    }
+}
+function saveSettings() {
+    const theme = document.getElementById('themeSelect').value;
+    const zoom = parseInt(document.getElementById('zoomInput').value, 10);
+    localStorage.setItem('neodymium.hud.theme', theme);
+    localStorage.setItem('aura_theme', theme);
+    localStorage.setItem('neodymium.hud.zoom', zoom);
+    applyTheme(theme);
+    if (!isNaN(zoom)) {
+        const factor = zoom / 100;
+        document.body.style.zoom = factor;
+        document.body.style.height = (100 / factor) + 'dvh';
+    }
+    closeOverlay('settingsOverlay');
+}
+function toggleTopDetails() {
+    const panel = document.getElementById('topDetailsPanel');
+    const chevron = document.getElementById('detailsChevron');
+    if (!panel) return;
+    const isVisible = panel.classList.contains('visible-details');
+    if (!isVisible) {
+        panel.classList.remove('hidden-details');
+        panel.classList.add('visible-details');
+        if (chevron) chevron.style.transform = 'rotate(180deg)';
+    } else {
+        panel.classList.remove('visible-details');
+        panel.classList.add('hidden-details');
+        if (chevron) chevron.style.transform = 'rotate(0deg)';
+    }
+}
+function openAddStepOverlay(blockName, targetIndex) {
+    if (isStructuralActionInFlight) return;
+    const finalBlock = blockName || currentState?.activeBlock || 'steps';
+    if (!currentState) {
+        currentState = { activeBlock: 'steps', blocks: { before: [], steps: [], after: [] } };
+    }
+    if (!currentState.blocks) currentState.blocks = {};
+    if (!currentState.blocks[finalBlock]) currentState.blocks[finalBlock] = [];
+
+    const nextIdx = 1000 + Math.floor(Math.random() * 10000);
+    const targetList = currentState.blocks[finalBlock];
+    const resolvedTargetIndex = (typeof targetIndex === 'number' && targetIndex >= 0 && targetIndex <= targetList.length)
+        ? targetIndex
+        : targetList.length;
+
+    const tempStep = {
+        index: nextIdx,
+        instruction: '',
+        status: 'pending',
+        source: 'llm',
+        includeFile: null,
+        includeLevel: 0,
+        isTempAdd: true,
+        targetBlock: finalBlock,
+        targetInsertIndex: resolvedTargetIndex
+    };
+
+    targetList.splice(resolvedTargetIndex, 0, tempStep);
+    applyState(currentState);
+
+    const card = document.querySelector(`.step-card[data-step-idx='${nextIdx}']`);
+    if (card) {
+        enableEdit(card.querySelector('.step-edit-btn') || card);
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+}
+
+function addStepAfter(event, stepIndex, blockName) {
+    if (event) event.stopPropagation();
+    if (isStructuralActionInFlight || !currentState || !currentState.blocks) return;
+
+    // If blockName is provided, search that block first to prevent cross-block index collisions
+    if (blockName && currentState.blocks[blockName]) {
+        const arr = currentState.blocks[blockName];
+        const idx = arr.findIndex(s => s.index == stepIndex);
+        if (idx !== -1) {
+            openAddStepOverlay(blockName, idx + 1);
+            return;
+        }
+    }
+
+    // Fallback search across all blocks using loose equality
+    for (const bKey of ['before', 'steps', 'after']) {
+        const arr = currentState.blocks[bKey];
+        if (arr) {
+            const idx = arr.findIndex(s => s.index == stepIndex);
+            if (idx !== -1) {
+                openAddStepOverlay(bKey, idx + 1);
+                return;
+            }
+        }
+    }
+    openAddStepOverlay(blockName || 'steps');
+}
+
+let draggedStepIndex = null;
+let draggedBlockName = null;
+
+// -------------------------------------------------------------------------
+// Reorder System Overhaul Logic
+// -------------------------------------------------------------------------
+let lastFocusedStepIndex = null;
+let lastFocusedElementClass = null;
+
+function announceMove(message) {
+    const region = document.getElementById('ariaLiveRegion');
+    if (region) region.textContent = message;
+}
+
+function flashMovedRow(stepIndex) {
+    setTimeout(() => {
+        const card = document.querySelector(`.step-card[data-step-idx="${stepIndex}"]`);
+        if (card) {
+            card.classList.add('moved-row-flash');
+            setTimeout(() => card.classList.remove('moved-row-flash'), 2000);
+        }
+    }, 50);
+}
+
+function restoreFocus() {
+    if (isStructuralActionInFlight) return;
+    if (lastFocusedStepIndex !== null) {
+        const card = document.querySelector(`.step-card[data-step-idx="${lastFocusedStepIndex}"]`);
+        if (card) {
+            const input = card.querySelector('.step-num-badge input');
+            if (input && !input.disabled) input.focus();
+        }
+    }
+}
+
+function resolveBlock(targetFlatIdx) {
+    if (!currentState || !currentState.blocks) return null;
+    let currentFlat = 0;
+    for (const bKey of ['before', 'steps', 'after']) {
+        const arr = currentState.blocks[bKey] || [];
+        if (targetFlatIdx < currentFlat + arr.length) {
+            return { block: bKey, relIdx: targetFlatIdx - currentFlat };
+        }
+        currentFlat += arr.length;
+    }
+    // If it's the very end
+    return { block: 'after', relIdx: (currentState.blocks.after || []).length };
+}
+
+let stepInputDebounceTimer = null;
+
+function handleStepInputInput(event, stepIndex, blockName) {
+    if (stepInputDebounceTimer) {
+        clearTimeout(stepInputDebounceTimer);
+        stepInputDebounceTimer = null;
+    }
+    if (isStructuralActionInFlight || !currentPauseId) {
+        if (event && event.preventDefault) event.preventDefault();
+        return;
+    }
+    const val = parseInt(event.target.value, 10);
+    if (isNaN(val) || val < 1 || val > allStepIndices.length) return;
+    const currentPos = allStepIndices.indexOf(stepIndex) + 1;
+    if (val === currentPos) return;
+
+    stepInputDebounceTimer = setTimeout(() => {
+        stepInputDebounceTimer = null;
+        reorderStepDirect(event, stepIndex, blockName);
+    }, 450);
+}
+
+function reorderStepDirect(event, fromStepIndex, blockName) {
+    if (stepInputDebounceTimer) {
+        clearTimeout(stepInputDebounceTimer);
+        stepInputDebounceTimer = null;
+    }
+    if (isStructuralActionInFlight || !currentPauseId) return;
+    const input = event.target;
+    const newPos = parseInt(input.value, 10);
+    if (isNaN(newPos) || !currentState) return;
+
+    const totalCount = allStepIndices.length;
+    if (newPos < 1 || newPos > totalCount) {
+        input.value = allStepIndices.indexOf(fromStepIndex) + 1;
+        return;
+    }
+
+    const currentPos = allStepIndices.indexOf(fromStepIndex) + 1;
+    if (newPos === currentPos) return;
+
+    // Find source block and relative index
+    let fromBlock = blockName || null;
+    let fromRelIdx = -1;
+    if (fromBlock && currentState.blocks[fromBlock]) {
+        fromRelIdx = currentState.blocks[fromBlock].findIndex(s => s.index === fromStepIndex);
+    }
+    if (!fromBlock || fromRelIdx === -1) {
+        for (const bKey of ['before', 'steps', 'after']) {
+            const arr = currentState.blocks[bKey];
+            if (arr) {
+                const idx = arr.findIndex(s => s.index === fromStepIndex);
+                if (idx !== -1) { fromBlock = bKey; fromRelIdx = idx; break; }
+            }
+        }
+    }
+    if (!fromBlock || fromRelIdx === -1) return;
+
+    // Find target block and relative index
+    const targetFlatIdx = newPos - 1;
+    const target = resolveBlock(targetFlatIdx);
+    if (!target) return;
+
+    // Store focus intent and update selection to the moved step
+    lastFocusedStepIndex = fromStepIndex;
+    selectedStepIndexForDetails = fromStepIndex;
+
+    announceMove(`Moved step to position ${newPos} of ${totalCount}`);
+    flashMovedRow(fromStepIndex);
+
+    const item = currentState.blocks[fromBlock].splice(fromRelIdx, 1)[0];
+    let targetInsertIdx = target.relIdx;
+    if (targetInsertIdx > currentState.blocks[target.block].length) {
+        targetInsertIdx = currentState.blocks[target.block].length;
+    }
+    currentState.blocks[target.block].splice(targetInsertIdx, 0, item);
+    applyState(currentState);
+
+    sendAction('REORDER', {
+        fromBlock: fromBlock,
+        fromIndex: fromRelIdx,
+        toBlock: target.block,
+        toIndex: targetInsertIdx
+    });
+}
+
+function handleStepInputKeyDown(event, stepIndex, blockName) {
+    if (stepInputDebounceTimer) {
+        clearTimeout(stepInputDebounceTimer);
+        stepInputDebounceTimer = null;
+    }
+    if (!currentPauseId || isStructuralActionInFlight) {
+        event.preventDefault();
+        return;
+    }
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        reorderStepDirect(event, stepIndex, blockName);
+        return;
+    }
+
+    if (event.ctrlKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+        event.preventDefault();
+        const direction = event.key === 'ArrowUp' ? 'up' : 'down';
+        const currentPos = allStepIndices.indexOf(stepIndex) + 1;
+        const newPos = direction === 'up' ? currentPos - 1 : currentPos + 1;
+
+        if (newPos >= 1 && newPos <= allStepIndices.length) {
+            // Update input value and trigger move
+            event.target.value = newPos;
+            reorderStepDirect(event, stepIndex, blockName);
+        }
+    }
+}
+
+function reorderStep(event, stepIndex, direction, blockName) {
+    if (!currentPauseId || isStructuralActionInFlight) return;
+    const currentPos = allStepIndices.indexOf(stepIndex) + 1;
+    const newPos = direction === 'up' ? currentPos - 1 : currentPos + 1;
+    if (newPos >= 1 && newPos <= allStepIndices.length) {
+        // Try to find the actual input element to keep the UI in sync
+        const card = document.querySelector(`.step-card[data-step-idx="${stepIndex}"]`);
+        const input = card ? card.querySelector('.step-num-badge input') : null;
+        if (input) {
+            input.value = newPos;
+            reorderStepDirect({ target: input }, stepIndex, blockName);
+        } else {
+            // Fallback to mock target if input is not found
+            reorderStepDirect({ target: { value: newPos } }, stepIndex, blockName);
+        }
+    }
+}
+
+function handleDragStart(event, index, blockName) {
+    if (!currentPauseId || isStructuralActionInFlight || document.querySelector('.step-card.editing')) {
+        event.preventDefault();
+        return;
+    }
+    draggedStepIndex = index;
+    draggedBlockName = blockName || null;
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(index));
+    // Find the card from the handle
+    const card = event.currentTarget.closest('.step-card');
+    if (card) card.classList.add('dragging');
+    const sc = document.querySelector('.scrollable-content');
+    if (sc) sc.classList.add('dragging-active');
+}
+
+function handleDragEnd(event) {
+    if (event && event.stopPropagation) event.stopPropagation();
+    document.querySelectorAll('.step-card.dragging').forEach(c => c.classList.remove('dragging'));
+    const sc = document.querySelector('.scrollable-content');
+    if (sc) sc.classList.remove('dragging-active');
+    document.querySelectorAll('.drop-target-area').forEach(t => t.classList.remove('active'));
+    draggedStepIndex = null;
+    draggedBlockName = null;
+    stopAutoScroll();
+}
+
+function handleDragOver(event) {
+    event.preventDefault();
+    // Allow bubbling for container auto-scroll
+    event.dataTransfer.dropEffect = 'move';
+    const targetArea = event.currentTarget;
+    targetArea.classList.add('active');
+
+    if (draggedStepIndex !== null) {
+        const tempIndices = [...allStepIndices];
+        const oldIdx = tempIndices.indexOf(draggedStepIndex);
+        if (oldIdx === -1) return;
+
+        const dropZones = [...document.querySelectorAll('.drop-target-area')];
+        const zoneIdx = dropZones.indexOf(targetArea);
+        if (zoneIdx === -1) return;
+
+        // Move item in temp list to calculate new indices for preview
+        tempIndices.splice(oldIdx, 1);
+        let targetIdx = zoneIdx;
+        if (targetIdx > oldIdx) targetIdx--;
+        tempIndices.splice(targetIdx, 0, draggedStepIndex);
+
+        // Update all input fields to show what the new indices WOULD be
+        tempIndices.forEach((stepIdx, i) => {
+            const card = document.querySelector(`.step-card[data-step-idx="${stepIdx}"]`);
+            if (card) {
+                const input = card.querySelector('.step-num-badge input');
+                if (input) input.value = i + 1;
+            }
+        });
+    }
+}
+
+function handleDragLeave(event) {
+    event.stopPropagation();
+    event.currentTarget.classList.remove('active');
+}
+
+let autoScrollInterval = null;
+function handleContainerDragOver(event) {
+    event.preventDefault();
+    const sc = event.currentTarget;
+    const rect = sc.getBoundingClientRect();
+    const threshold = 60; // Distance from top/bottom to start scrolling
+    const maxSpeed = 20;
+
+    let speed = 0;
+    if (event.clientY < rect.top + threshold) {
+        speed = -maxSpeed * (1 - (event.clientY - rect.top) / threshold);
+    } else if (event.clientY > rect.bottom - threshold) {
+        speed = maxSpeed * (1 - (rect.bottom - event.clientY) / threshold);
+    }
+
+    if (speed !== 0) {
+        if (!autoScrollInterval) {
+            autoScrollInterval = setInterval(() => {
+                sc.scrollTop += speed;
+            }, 20);
+        }
+    } else {
+        stopAutoScroll();
+    }
+}
+
+function stopAutoScroll() {
+    if (autoScrollInterval) {
+        clearInterval(autoScrollInterval);
+        autoScrollInterval = null;
+    }
+}
+
+function handleDrop(event, targetStepIndex, position, targetBlockName) {
+    event.preventDefault();
+
+    if (isStructuralActionInFlight || !currentPauseId || draggedStepIndex === null) {
+        handleDragEnd();
+        return;
+    }
+
+    // Find source block and relative index
+    let fromBlock = draggedBlockName || null;
+    let fromRelIdx = -1;
+    if (fromBlock && currentState.blocks[fromBlock]) {
+        fromRelIdx = currentState.blocks[fromBlock].findIndex(s => s.index === draggedStepIndex);
+    }
+    if (!fromBlock || fromRelIdx === -1) {
+        for (const bKey of ['before', 'steps', 'after']) {
+            const arr = currentState.blocks[bKey];
+            if (arr) {
+                const idx = arr.findIndex(s => s.index === draggedStepIndex);
+                if (idx !== -1) { fromBlock = bKey; fromRelIdx = idx; break; }
+            }
+        }
+    }
+
+    if (!fromBlock || fromRelIdx === -1) {
+        handleDragEnd();
+        return;
+    }
+
+    // Find target block and relative index
+    let targetBlock = null;
+    let targetRelIdx = -1;
+
+    if (targetStepIndex === -1 && targetBlockName) {
+        // Final drop zone of a specific block
+        targetBlock = targetBlockName;
+        targetRelIdx = (currentState.blocks[targetBlock] || []).length;
+    } else {
+        // Drop on or before a specific step
+        if (targetBlockName && currentState.blocks[targetBlockName]) {
+            const arr = currentState.blocks[targetBlockName];
+            const tIdx = arr.findIndex(s => s.index === targetStepIndex);
+            if (tIdx !== -1) {
+                targetBlock = targetBlockName;
+                targetRelIdx = tIdx;
+                if (position === 'after') targetRelIdx++;
+            }
+        }
+        if (!targetBlock || targetRelIdx === -1) {
+            for (const bKey of ['before', 'steps', 'after']) {
+                const arr = currentState.blocks[bKey];
+                if (arr) {
+                    const tIdx = arr.findIndex(s => s.index === targetStepIndex);
+                    if (tIdx !== -1) {
+                        targetBlock = bKey;
+                        targetRelIdx = tIdx;
+                        if (position === 'after') targetRelIdx++;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    if (!currentPauseId || !targetBlock || targetRelIdx === -1) {
+        handleDragEnd();
+        return;
+    }
+
+    // Local reorder
+    const item = currentState.blocks[fromBlock].splice(fromRelIdx, 1)[0];
+    let adjustedToIdx = targetRelIdx;
+    if (fromBlock === targetBlock && adjustedToIdx > fromRelIdx) adjustedToIdx--;
+    if (adjustedToIdx > currentState.blocks[targetBlock].length) {
+        adjustedToIdx = currentState.blocks[targetBlock].length;
+    }
+    currentState.blocks[targetBlock].splice(adjustedToIdx, 0, item);
+    lastFocusedStepIndex = draggedStepIndex;
+    selectedStepIndexForDetails = draggedStepIndex;
+    applyState(currentState);
+    flashMovedRow(draggedStepIndex);
+
+    // Send to server
+    if (currentPauseId) {
+        sendAction('REORDER', {
+            fromBlock: fromBlock,
+            fromIndex: fromRelIdx,
+            toBlock: targetBlock,
+            toIndex: adjustedToIdx
+        });
+    }
+
+    handleDragEnd();
+}
+
+function moveStep(event, index, direction) {
+    // Deprecated in favor of Drag & Drop, but kept for internal logic if needed
+    if (event) event.stopPropagation();
+    if (isStructuralActionInFlight || !currentState || !currentState.blocks) return;
+
+    let blockName = null;
+    let list = null;
+    let relativeIndex = -1;
+
+    for (const bKey of ['before', 'steps', 'after']) {
+        const arr = currentState.blocks[bKey];
+        if (arr) {
+            const idx = arr.findIndex(s => s.index === index);
+            if (idx !== -1) {
+                blockName = bKey;
+                list = arr;
+                relativeIndex = idx;
+                break;
+            }
+        }
+    }
+
+    if (!list || relativeIndex === -1) return;
+
+    const targetRelativeIndex = relativeIndex + direction;
+    if (targetRelativeIndex < 0 || targetRelativeIndex >= list.length) return;
+
+    if (currentPauseId) {
+        sendAction('REORDER', { block: blockName, fromIndex: relativeIndex, toIndex: targetRelativeIndex });
+    } else {
+        const temp = list[relativeIndex];
+        list[relativeIndex] = list[targetRelativeIndex];
+        list[targetRelativeIndex] = temp;
+        applyState(currentState);
+    }
+}
+function insertVarInActiveTextarea(varName) {
+    const activeEditCard = document.querySelector('.step-card.editing');
+    if (activeEditCard) {
+        const textarea = activeEditCard.querySelector('.inline-edit-textarea');
+        if (textarea) {
+            insertAtCursor(textarea, `\${${varName}}`);
+        }
+    }
+}
+function insertAtCursor(inputElement, textToInsert) {
+    const start = inputElement.selectionStart;
+    const end = inputElement.selectionEnd;
+    const value = inputElement.value;
+    inputElement.value = value.substring(0, start) + textToInsert + value.substring(end);
+    inputElement.selectionStart = inputElement.selectionEnd = start + textToInsert.length;
+    inputElement.focus();
+}
+function submitAddStep() {
+    // Handled inline in saveEdit now
+}
+
+// Shortcuts keyboard listener
+document.addEventListener('keydown', function (e) {
+    if (e.repeat) return;
+    const key = e.key ? e.key.toLowerCase() : '';
+
+    if (e.key === 'Escape') {
+        ['settingsOverlay', 'helpOverlay', 'domOverlay', 'screenshotOverlay'].forEach(closeOverlay);
+        e.preventDefault();
+        return;
+    }
+    if (e.altKey && key === 'c') {
+        ['settingsOverlay', 'helpOverlay', 'domOverlay', 'screenshotOverlay'].forEach(closeOverlay);
+        e.preventDefault();
+        return;
+    }
+    if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
+        return;
+    }
+
+    if (e.altKey && key === 'r' || (e.ctrlKey && e.key === 'Enter')) {
+        e.preventDefault();
+        const runBtn = document.getElementById('btnRun');
+        if (runBtn && !runBtn.disabled) runBtn.click();
+    } else if (e.altKey && key === 'k') {
+        e.preventDefault();
+        const skipBtn = document.getElementById('btnSkip');
+        if (skipBtn && !skipBtn.disabled) skipBtn.click();
+    } else if (e.altKey && key === 's') {
+        e.preventDefault();
+        toggleAuto();
+    } else if (e.altKey && key === 'o') {
+        e.preventDefault();
+        const overlay = document.getElementById('settingsOverlay');
+        if (overlay.style.display === 'flex') {
+            closeOverlay('settingsOverlay');
+        } else {
+            openOverlay('settingsOverlay');
+        }
+    } else if (e.altKey && key === 'i') {
+        e.preventDefault();
+        toggleHelpOverlay();
+    } else if (e.altKey && (key === 'z' || key === 'y')) {
+        e.preventDefault();
+        const backBtn = document.getElementById('btnBack');
+        if (backBtn && !backBtn.disabled) backBtn.click();
+    } else if (e.altKey && key === 'n') {
+        e.preventDefault();
+        const runBtn = document.getElementById('btnRun');
+        if (runBtn && !runBtn.disabled && !isStructuralActionInFlight) {
+            openAddStepOverlay();
+        }
+    } else if (e.altKey && key === 'e') {
+        e.preventDefault();
+        if (isStructuralActionInFlight) return;
+        const activeCard = document.querySelector('.step-card.active');
+        if (activeCard) {
+            const editBtn = activeCard.querySelector('.step-edit-btn');
+            if (editBtn) editBtn.click();
+        }
+    } else if (e.ctrlKey && (key === 'arrowup' || key === 'arrowdown')) {
+        // Global reorder shortcut when a step is selected but input is not focused
+        if (selectedStepIndexForDetails !== null && !isStructuralActionInFlight) {
+            e.preventDefault();
+            reorderStep(e, selectedStepIndexForDetails, key === 'arrowup' ? 'up' : 'down');
+        }
+    }
+});
+
+// -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+// Mobile QR Code Overlay — uses qrcode-generator (loaded lazily from CDN)
+// -------------------------------------------------------------------------
+let _qrLoaded = false;
+
+function loadQrLib() {
+    if (_qrLoaded && window.qrcode) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        // qrcode-generator: tiny, stable, no bundler needed (plain UMD file, not npm)
+        s.src = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
+        s.onload = () => { _qrLoaded = true; resolve(); };
+        s.onerror = () => reject(new Error('cdn_fail'));
+        document.head.appendChild(s);
+    });
+}
+
+/**
+ * Use WebRTC ICE candidate discovery to find the machine's LAN IP address.
+ * This is the only browser-side way to get the actual network interface IP
+ * without a server-side API call. Works on all modern browsers.
+ * Returns null if no LAN IP can be found within 1.5 s.
+ */
+function getLanIp() {
+    return new Promise((resolve) => {
+        const found = new Set();
+        let pc;
+        try {
+            pc = new RTCPeerConnection({ iceServers: [] });
+            pc.createDataChannel('');
+            pc.createOffer()
+                .then(o => pc.setLocalDescription(o))
+                .catch(() => resolve(null));
+            pc.onicecandidate = (e) => {
+                if (!e || !e.candidate) {
+                    // ICE gathering complete
+                    pc.close();
+                    resolve(found.size ? [...found][0] : null);
+                    return;
+                }
+                // Extract IPv4 addresses from the SDP candidate line
+                const m = /(\d{1,3}(?:\.\d{1,3}){3})/.exec(e.candidate.candidate);
+                if (m && !m[1].startsWith('127.') && !m[1].startsWith('169.254.')) {
+                    found.add(m[1]);
+                }
+            };
+        } catch (err) { resolve(null); return; }
+        // Timeout after 1.5 s in case ICE gathering hangs
+        setTimeout(() => { try { pc.close(); } catch (e) { } resolve(found.size ? [...found][0] : null); }, 1500);
+    });
+}
+
+async function openMobileQr() {
+    openOverlay('mobileQrOverlay');
+    const urlEl = document.getElementById('mobileQrUrl');
+    const canvas = document.getElementById('mobileQrCanvas');
+    if (!canvas || !urlEl) return;
+
+    const hostname = window.location.hostname;
+    const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('127.');
+
+    let scanUrl = window.location.href;
+    if (window.parent !== window) {
+        // We are inside the manager (iframe) — ensure the path points directly to /interactive_console.html
+        scanUrl = window.location.origin + '/interactive_console.html';
+    }
+
+    // Show "Detecting LAN IP…" while we probe
+    urlEl.textContent = isLocal ? 'Detecting local network IP…' : scanUrl;
+    if (isLocal) {
+        // Prefer the LAN IP detected by the Java server if available (injected into currentState)
+        let lanIp = (currentState && currentState.lanIp && currentState.lanIp !== 'localhost') ? currentState.lanIp : null;
+
+        // Fallback to WebRTC probe if server-side detection failed
+        if (!lanIp) {
+            lanIp = await getLanIp();
+        }
+
+        if (lanIp && lanIp !== 'localhost' && !lanIp.startsWith('127.')) {
+            // Replace localhost/127.x.x.x with the discovered LAN IP
+            scanUrl = window.location.href.replace(hostname, lanIp);
+            urlEl.textContent = scanUrl;
+        } else {
+            // Could not detect — show raw URL with a note
+            scanUrl = window.location.href;
+            urlEl.textContent = scanUrl +
+                '\n\n⚠ Replace "' + hostname + '" with your machine\'s LAN IP before scanning.';
+        }
+    }
+
+    // Draw QR
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    try {
+        await loadQrLib();
+        // qrcode-generator API: qrcode(typeNumber, errorCorrectionLevel)
+        const qr = window.qrcode(0, 'M');
+        qr.addData(scanUrl);
+        qr.make();
+
+        const count = qr.getModuleCount();
+        const cellSize = Math.floor(canvas.width / (count + 2));
+        const offset = Math.floor((canvas.width - cellSize * count) / 2);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = '#000000';
+        for (let row = 0; row < count; row++) {
+            for (let col = 0; col < count; col++) {
+                if (qr.isDark(row, col)) {
+                    ctx.fillRect(offset + col * cellSize, offset + row * cellSize, cellSize, cellSize);
+                }
+            }
+        }
+    } catch (e) {
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#333';
+        ctx.font = '12px monospace';
+        ctx.fillText('QR unavailable', 10, 110);
+        urlEl.textContent += '\n(QR library could not be loaded — use the URL above directly)';
+    }
+}

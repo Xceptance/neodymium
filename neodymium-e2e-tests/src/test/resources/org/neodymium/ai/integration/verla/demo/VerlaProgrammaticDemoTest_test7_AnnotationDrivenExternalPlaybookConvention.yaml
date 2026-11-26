@@ -1,0 +1,12 @@
+# AI-generated: Gemini 3.6 Flash
+# @author AI-generated: Gemini 3.6 Flash
+# @author Xceptance GmbH 2026
+
+steps: |
+  Open ${verla.url}/verla-perfect/index.html in the browser
+  Locate the search input field and type '${searchTerm}' into it
+  Press enter to submit search
+
+data:
+  - testId: "default"
+    searchTerm: "Minimalist"

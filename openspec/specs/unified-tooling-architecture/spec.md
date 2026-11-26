@@ -1,0 +1,279 @@
+# Unified Tooling Architecture
+
+## Purpose
+
+Provides a unified in-process tooling architecture for Neodymium that models browser interactions, Java helper methods, assertions, and domain plugins as typed, schema-validated tools with deterministic playback recording.
+
+## Requirements
+
+### Requirement: Standard in-process tool contract
+The system SHALL define a standard tool contract where every executable capability exposes a unique name, a description, and an OpenAPI/JSON Schema defining its input parameters, and executes to produce a structured result containing text, data, and execution status.
+
+#### Scenario: Discover and inspect tool definition
+- **WHEN** a tool is registered in the tool registry
+- **THEN** the system provides its tool definition containing name, description, and valid JSON Schema describing expected parameters and required fields.
+
+### Requirement: Java tool schema generation and typed invocation
+The system SHALL reflectively inspect public Java methods annotated with tool annotations, automatically generate their parameter JSON Schema using standard types, deserialize incoming structured arguments into the target Java types, and execute the method.
+
+#### Scenario: Execute multi-argument Java tool with typed conversion
+- **WHEN** a tool call for an annotated Java method is received with structured arguments
+- **THEN** the system converts the arguments into the declared method parameter types and executes the method without requiring manual string parsing.
+
+### Requirement: Return value capture and context variable assignment
+The system SHALL capture the return value of an executed tool and, when a target variable name is configured, store the result in the active test execution session context.
+
+#### Scenario: Assign tool return value to session variable
+- **WHEN** a tool call specifies a target variable name and executes successfully
+- **THEN** the return value is saved into the session data context under the specified variable key for subsequent step resolution.
+
+### Requirement: Browser tools encapsulation
+The system SHALL expose standard browser automation operations (including click, type, navigate, select, hover, assert text, and execute script) as standard tools, isolating browser driver interactions behind the tool contract.
+
+#### Scenario: Execute browser action via tool contract
+- **WHEN** a browser click tool call is dispatched with a target element selector
+- **THEN** the system executes the click interaction on the matching element in the active browser session and returns a success status.
+
+### Requirement: Element metadata and offline similarity healing in playbooks
+The system SHALL record tool calls in the recorded JSON playbook and preserve target element metadata (including DOM feature vectors, candidate locators, and visual hashes) to enable deterministic offline execution and sub-millisecond similarity healing without invoking LLMs during replay.
+
+#### Scenario: Replay recorded browser tool call offline
+- **WHEN** a recorded playbook containing browser tool calls is executed in replay mode
+- **THEN** the system executes the recorded tool calls directly without LLM invocation, applying DOM feature vector similarity matching if the target selector has shifted.
+
+#### Scenario: Healed locator executes through native condition polling
+- **WHEN** a recorded tool call fails to find an element with the primary selector
+- **AND** similarity healing resolves a replacement element candidate from DOM feature vectors
+- **THEN** the system dispatches the interaction with the healed locator through native driver condition polling
+- **AND** marks the step complete only after the action execution succeeds.
+
+### Requirement: Composite plugin execution via tool context
+The system SHALL provide an execution context to tools allowing them to invoke other registered tools, access or set session variables, and attach structured artifacts to the test report without accessing global driver singletons.
+
+#### Scenario: Composite WCAG tool executes script and attaches report
+- **WHEN** a composite accessibility tool is executed
+- **THEN** it invokes the browser script execution tool via its tool context, evaluates compliance, and attaches the resulting report artifact to the test outcome.
+
+### Requirement: Active discovery tools
+The system SHALL provide interactive discovery tools (including `browser_query_dom`, `browser_inspect`, `browser_scroll`, and `browser_take_screenshot`) allowing the agent to actively inspect DOM elements, visibility, and layout on demand, eliminating passive context escalation ladders.
+
+#### Scenario: Agent queries DOM for element details
+- **WHEN** an agent issues a `browser_query_dom` call with search text and tag name
+- **THEN** the system returns matching element candidates, attributes, and viewport visibility states without restarting the pipeline step.
+
+### Requirement: Agent tool execution loop and stop criteria
+The system SHALL execute an iterative agentic loop (`Think` → `ToolCall` → `Observe` → `Finish`) using a native multi-turn message protocol where tools are provided as structured schemas, assistant outputs contain structured tool calls, and tool execution results are appended as structured tool messages, evaluating six explicit stop criteria:
+1. **Goal Completion**: Agent calls `complete_step` or requests no further tools (`SUCCESS`).
+2. **Assertion Failure**: An assertion tool fails with `AssertionError` (`FAILED`).
+3. **Thrashing / Stagnation**: Identical consecutive tool calls detected with no progress (`FAILED`).
+4. **Token Budget Limit**: Cumulative input/output tokens breach configured limits via `TokenBudgetGuard` (`FAILED`).
+5. **Liberal Wall-Clock Timeout**: Execution duration exceeds the configured liberal step timeout (default 180s) (`FAILED`).
+6. **Fatal Environment Failure**: Unrecoverable target crash or user abort (`FAILED`).
+
+#### Scenario: Agent completes step successfully
+- **WHEN** the agent performs browser interactions and calls `complete_step` within budget
+- **THEN** the loop terminates immediately and marks the step as `SUCCESS`.
+
+#### Scenario: Token budget guard halts runaway execution
+- **WHEN** cumulative token consumption for the step breaches the configured token ceiling
+- **THEN** the loop terminates immediately with a token budget exceeded failure without burning further tokens.
+
+#### Scenario: Agent fails immediately on assertion defect
+- **WHEN** an assertion tool is executed and detects a factual mismatch
+- **THEN** the loop terminates immediately with `FAILED` without retrying or context escalation.
+
+#### Scenario: Optional step exhausts up to 3 candidate options before skipping
+- **WHEN** a step marked with the optional flag does not resolve its target on the initial attempt
+- **THEN** the system explores up to 3 viable candidate options or locators to resolve the step
+- **AND** only logs a warning and marks the step as skipped after all 3 candidate options are exhausted without failing the overall test run.
+
+#### Scenario: Native tool call response and execution
+- **WHEN** the agent returns a structured tool call for an available tool
+- **THEN** the system executes the tool in-process and appends its structured result as a native tool role message to the conversation history without string parsing or markdown backtick extraction.
+
+### Requirement: Quality judge locator guard
+The system SHALL intercept proposed `browser_*` tool calls before browser dispatch to evaluate candidate locator stability, passing high-confidence locators through without latency and triggering deliberation when ambiguity is detected.
+
+#### Scenario: High-confidence locator bypasses judge deliberation
+- **WHEN** a proposed browser click specifies a candidate locator with confidence $\ge 0.95$
+- **THEN** the interceptor approves the tool call immediately without triggering multi-turn deliberation.
+
+### Requirement: Backward compatibility with legacy recorded playbooks
+The system SHALL transparently deserialize recorded JSON playbooks containing legacy `actions` arrays into equivalent `toolCalls` during playback, preserving existing recorded test suites without manual migration.
+
+#### Scenario: Load legacy JSON playbook containing actions
+- **WHEN** a recorded playbook JSON file containing an `actions` array is loaded
+- **THEN** the system maps each action to an equivalent `browser_*` tool call with preserved DOM feature vectors and candidate locators.
+
+### Requirement: Tool error feedback and agent self-correction
+The system SHALL capture non-fatal tool execution failures (such as element obscured, element not found in viewport, or invalid selection value) and return them as diagnostic error `ToolResult`s to the agent context, allowing the agent to self-correct in subsequent turns within the turn budget.
+
+#### Scenario: Agent self-corrects after obscured element error
+- **WHEN** a browser click fails because the element is outside the viewport or obscured
+- **THEN** the tool returns an error status with diagnostic guidance in `ToolResult`
+- **AND** the agent issues a `browser_scroll` tool call to bring the element into view on the next turn.
+
+### Requirement: Tool execution telemetry and event dispatch
+The system SHALL dispatch execution events to the active `ExecutionEventBus` upon tool start, success, and failure, allowing real-time consoles, preliminary reporting, and Allure listeners to record tool activity.
+
+#### Scenario: Tool execution dispatches event to session bus
+- **WHEN** any `AiTool` completes execution
+- **THEN** a tool executed event is dispatched to the session event bus containing tool name, parameters, execution duration, and success status.
+
+### Requirement: Journey fidelity and intent-based tool scoping
+The system SHALL dynamically constrain active tool definitions based on the step's semantic intent and enforce journey fidelity policies, preventing agents from bypassing realistic UI user flows via direct URL navigation or location scripts during interactive steps.
+
+#### Scenario: Interaction step excludes browser navigation tool
+- **WHEN** a playbook step has an interactive semantic intent such as click or type
+- **THEN** the system excludes `browser_navigate` from the tool definitions exposed to the agent.
+
+#### Scenario: Quality judge rejects direct navigation on interaction step
+- **WHEN** an agent emits a tool call or script that mutates the browser URL during an interactive step
+- **THEN** the quality judge interceptor rejects the tool call with a journey fidelity policy violation
+- **AND** instructs the agent to reach the destination via on-screen UI elements.
+
+### Requirement: Visual discovery and Set-of-Marks tools
+The system SHALL expose targeted visual inspection (`browser_inspect_visual`) and Set-of-Marks badge rendering (`browser_take_screenshot(mark_interactive=true)`), allowing the agent to visually inspect cropped bounding boxes or resolve ambiguous and non-DOM interactive candidates using visual numeric overlays.
+
+#### Scenario: Agent inspects targeted element visual crop
+- **WHEN** an agent issues a `browser_inspect_visual` call for a specific selector or container
+- **THEN** the system returns a cropped base64 thumbnail of the target bounding box with dimension metadata.
+
+#### Scenario: Agent captures screenshot with Set-of-Marks visual badges
+- **WHEN** an agent calls `browser_take_screenshot` with interactive marking enabled
+- **THEN** the system injects temporary visual numeric badges over interactive element candidate centers and returns the annotated screenshot.
+
+### Requirement: Visual coordinate re-anchoring to DOM
+The system SHALL intercept visual badge or coordinate-based interactions, resolve the underlying DOM element via `document.elementFromPoint`, extract its hierarchical selector and `DomFeatureVector`, and record them into the playbook step to ensure future test runs replay deterministically at native machine speed.
+
+#### Scenario: Visual coordinate click re-anchors to underlying DOM element
+- **WHEN** an interaction is performed using viewport coordinates or a Set-of-Marks badge
+- **THEN** the system resolves the underlying element at those coordinates via `document.elementFromPoint`
+- **AND** generates a resilient DOM selector and `DomFeatureVector` stored in the recorded playbook step.
+
+### Requirement: Tier 2 perceptual visual similarity matching
+The system SHALL evaluate perceptual visual dHash and tile SSIM similarity in `LocatorCascadeResolver` during offline replay when candidate elements lack distinct text or classes, resolving matching icon-only elements in $< 1\text{ms}$ on CPU without invoking LLMs.
+
+#### Scenario: Heal icon button via visual dHash when text is absent
+- **WHEN** a recorded button with an icon and no inner text cannot be located by its primary selector
+- **AND** candidate elements in the container match the recorded bounding box aspect ratio and perceptual visual dHash with similarity $\ge 0.85$
+- **THEN** the system heals the locator and passes the candidate element directly to native driver condition polling without LLM invocation.
+
+### Requirement: Turn-aware dynamic context resolution
+The system SHALL resolve the context provided to the LLM dynamically based on the current turn and operational objective, providing zero DOM elements for navigation and metadata operations, supplying pierced DOM Light on the initial turn of interactive operations, and feeding structured tool results directly into tool messages on subsequent turns without re-extracting the full DOM tree.
+
+#### Scenario: Zero DOM provided for navigation operations
+- **WHEN** an instruction with navigation or metadata intent is executed, or immediately after a `browser_navigate` tool call
+- **THEN** the system supplies only page URL and title metadata to the model without extracting or serializing DOM element trees.
+
+#### Scenario: DOM Light provided for interactive step initiation
+- **WHEN** an interactive instruction (such as click, type, select, or hover) initiates Turn 1
+- **THEN** the system supplies a compact DOM Light representation including pierced Shadow DOMs, custom elements, and unique automation IDs.
+
+#### Scenario: Intermediate turn receives tool result without full DOM re-dump
+- **WHEN** a mutating browser action completes during a multi-turn step
+- **THEN** the system returns the structured tool execution result in the tool message and updates page URL and title without re-dumping the full DOM tree.
+
+### Requirement: Internal loop milestones for compound instructions
+The system SHALL execute compound multi-action instructions within a single continuous tool loop conversation using an internal sequence of milestone sub-actions, preserving conversational context across turns and eliminating artificial external pipeline step splitting.
+
+#### Scenario: Compound instruction executes sequentially in single step
+- **WHEN** an instruction containing multiple distinct field entries or sequential actions is executed
+- **THEN** the agent executes each action sequentially across conversational turns in a single step
+- **AND** calls `complete_step` only after all milestone actions are accomplished
+- **AND** records all tool calls under the original playbook step.
+
+### Requirement: Protocol-level network traffic introspection
+The system SHALL capture failed HTTP network requests (status >= 400, network aborts, and CORS errors) from active browser sessions and expose a `browser_get_network_failures` tool allowing agents to inspect recent failures with optional status filtering and buffer draining.
+
+#### Scenario: Query HTTP 500 failures after asynchronous backend API error
+- **WHEN** an asynchronous `fetch` or `XHR` request fails with HTTP 500 during page execution
+- **AND** the agent calls `browser_get_network_failures`
+- **THEN** the system returns a structured list containing the failed request URL, HTTP status code 500, method, and failure description.
+
+#### Scenario: Query HTTP 404 failures on missing endpoints
+- **WHEN** a background request targets a non-existent endpoint returning HTTP 404
+- **AND** the agent calls `browser_get_network_failures` with `status_filter="4xx"`
+- **THEN** the system returns the 404 failure entries and excludes any 5xx entries.
+
+#### Scenario: Capture network-level aborts or CORS rejections
+- **WHEN** a browser network request is aborted or blocked by CORS policy without receiving an HTTP response code
+- **AND** the agent calls `browser_get_network_failures` with `status_filter="blocked"`
+- **THEN** the system returns the blocked entry indicating network abort or CORS failure.
+
+#### Scenario: Ignore benign network failures matching configured ignore regex
+- **WHEN** a network request to an analytics or tracking domain fails with an HTTP error
+- **AND** the URL matches the pattern in `neodymium.ai.network.ignorePattern`
+- **THEN** the system excludes the entry from the captured network failure buffer.
+
+#### Scenario: Filter network failures by status category
+- **WHEN** both 4xx and 5xx errors exist in the network buffer
+- **AND** the agent calls `browser_get_network_failures` with `status_filter="5xx"`
+- **THEN** the system returns only 5xx server failures and omits 4xx client errors.
+
+#### Scenario: Clear network failure buffer on demand
+- **WHEN** the agent calls `browser_get_network_failures` with `clear_buffer=true`
+- **THEN** the returned entries are drained from the buffer so subsequent calls only return new failures.
+
+### Requirement: Client-side JavaScript console error introspection
+The system SHALL capture unhandled JavaScript exceptions, runtime errors, and console warnings from the active browser session and expose a `browser_get_console_errors` tool allowing agents to inspect recent console entries filtered by severity.
+
+#### Scenario: Retrieve unhandled JavaScript runtime exceptions
+- **WHEN** an unhandled client-side `TypeError` or `ReferenceError` occurs during an interaction turn
+- **AND** the agent calls `browser_get_console_errors` with minimum severity `SEVERE`
+- **THEN** the system returns the error message, source script URL, line number, and stack trace snippet.
+
+#### Scenario: Filter console logs by minimum severity level
+- **WHEN** console warnings and informational messages exist alongside severe errors
+- **AND** the agent calls `browser_get_console_errors` with minimum severity `SEVERE`
+- **THEN** the system returns only `SEVERE` runtime exceptions and excludes `WARNING` or `INFO` messages.
+
+#### Scenario: Capture explicit console.error invocations
+- **WHEN** page JavaScript invokes `console.error(...)` with diagnostic context
+- **AND** the agent calls `browser_get_console_errors`
+- **THEN** the system captures and returns the logged error message and arguments.
+
+#### Scenario: Clear console error buffer on demand
+- **WHEN** the agent calls `browser_get_console_errors` with `clear_buffer=true`
+- **THEN** the captured logs are drained so subsequent calls only return new console events.
+
+### Requirement: Passive diagnostic enrichment on action failure
+The system SHALL buffer recent protocol-level network and console failures during agent tool execution and automatically append a concise diagnostic advisory into the conversational tool loop when actions fail repeatedly, preventing wasteful locator thrashing loops.
+
+#### Scenario: Inject diagnostic advisory when click fails due to 500 API response
+- **WHEN** an action or element assertion fails after retry attempts
+- **AND** an HTTP 5xx was captured during the interaction turn
+- **THEN** the system appends a diagnostic notice containing the failing endpoint and status to the conversation prompt.
+
+#### Scenario: Inject diagnostic advisory when action fails due to unhandled JS exception
+- **WHEN** an interaction fails to produce expected DOM changes
+- **AND** an unhandled JavaScript exception was captured during the turn
+- **THEN** the system appends a diagnostic alert containing the exception type and message to the conversation prompt.
+
+#### Scenario: Suppress passive alerts when no protocol failures occurred
+- **WHEN** an action fails due purely to an invalid element locator with zero protocol-level network or console errors
+- **THEN** the system does not append a network or console diagnostic advisory.
+
+#### Scenario: Stop locator thrashing loop upon passive error injection
+- **WHEN** the agent receives a passive diagnostic notice regarding an HTTP 500 failure
+- **THEN** the agent ceases alternate locator exploration and terminates the step with an informative backend defect verdict.
+
+### Requirement: Test fixture and sandbox challenge endpoints for protocol introspection
+The system SHALL provide dedicated test sandbox challenge pages and Javalin REST endpoints within `neodymium-test-server` to deterministically trigger, verify, and replay network failure and console error scenarios across mock and live test suites.
+
+#### Scenario: Embedded test server serves interactive protocol failure challenge page
+- **WHEN** a test navigates to `/AuraGlanceTest/shop/sandbox/protocol-introspection.html`
+- **THEN** the test server serves an interactive page equipped with controls to trigger HTTP 404, HTTP 500, network aborts, unhandled JS exceptions, and background tracking requests.
+
+#### Scenario: Embedded test server simulates configurable HTTP error endpoints on demand
+- **WHEN** a client issues requests to `/AuraGlanceTest/api/faulty-backend` or `/AuraGlanceTest/api/missing-endpoint`
+- **THEN** the test server returns HTTP 500 and HTTP 404 responses respectively with structured JSON error bodies.
+
+#### Scenario: Mock sandbox test exercises diagnostic discovery tools offline
+- **WHEN** `ProtocolIntrospectionSandboxMockTest` executes against the protocol introspection sandbox page
+- **THEN** the mock agent discovers the failure details via `browser_get_network_failures` and `browser_get_console_errors` without connecting to external LLMs.
+
+#### Scenario: Recorded playbooks containing introspection tools replay cleanly without network side effects
+- **WHEN** a recorded playbook containing introspection tool calls is replayed in `REPLAY_STRICT` mode
+- **THEN** the replayer treats introspection tools as non-mutating inspections and verifies all assertions successfully.
+

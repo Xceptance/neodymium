@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head></head>
+<body>
+
+<!-- Collapsible Sidebar Navigation Fragment -->
+<aside th:fragment="sidebar" id="mainSidebar">
+    <button class="sidebar-toggle-btn" id="sidebarToggleBtn" onclick="toggleSidebarCollapse()" title="Collapse / Expand Navigation Panel">
+        <span class="material-symbols-outlined">chevron_left</span>
+    </button>
+
+
+    <div class="sidebar-scrollable-content">
+        <div class="logo-container">
+            <div class="logo-icon"><span class="material-symbols-outlined">auto_awesome</span></div>
+            <div class="logo-text">
+                <span class="logo-brand">Neodymium</span>
+                <span class="logo-title">AI Manager</span>
+            </div>
+        </div>
+
+        <div class="nav-group-label">Workspace & Execution</div>
+        <nav>
+            <a class="nav-item-btn" id="navAuraManager" 
+               th:classappend="${activeTab == 'AuraTestManager'} ? ' active' : ''"
+               href="/playbooks" 
+               onclick="setActiveNavBtn(this)"
+               title="Playbooks & Test Queue">
+                <span class="material-symbols-outlined">play_circle</span> <span class="nav-label">Playbooks & Queue</span>
+            </a>
+        </nav>
+
+        <div class="nav-group-label d-flex align-items-center justify-content-between" style="margin-top: 1rem;">
+            <span>Dashboards</span>
+            <button type="button" class="btn-sidebar-add-page" onclick="openCreatePageModal(event)" title="Create New Dashboard Page">
+                <span class="material-symbols-outlined" style="font-size: 15px;">add</span>
+            </button>
+        </div>
+        <nav id="customPagesNav" th:fragment="customPagesNav" th:attr="hx-swap-oob=${isHxRequest == true ? 'true' : null}">
+            <th:block th:if="${(rootCustomPages != null and !rootCustomPages.isEmpty()) or (customPages != null and !customPages.isEmpty())}">
+                <th:block th:each="p : ${(rootCustomPages != null and !rootCustomPages.isEmpty()) ? rootCustomPages : customPages}">
+                    <th:block th:replace="~{fragments/sidebar :: renderCustomPageNav(page=${p}, level=1)}"></th:block>
+                </th:block>
+            </th:block>
+        </nav>
+
+        <a class="run-context-card" id="sidebarContextCard" 
+           th:fragment="sidebarContextCard"
+           th:attr="hx-swap-oob=${isHxRequest == true ? 'true' : null}"
+           th:style="${(activeRunId != null and !activeRunId.isEmpty()) ? 'text-decoration: none; cursor: pointer; display: flex;' : 'text-decoration: none; cursor: pointer; display: none;'}"
+           th:href="${(activeRunReportUrl != null and !activeRunReportUrl.isEmpty()) ? activeRunReportUrl : ((activeRunId != null and !activeRunId.isEmpty()) ? '/run-report?runId=' + activeRunId : '/')}" 
+           href="/" 
+           style="text-decoration: none; cursor: pointer; display: none;">
+            <div class="context-symbolic-icon" title="Active Context" id="sidebarContextSymbolicIcon">
+                <span class="material-symbols-outlined">science</span>
+                <span class="collapsed-fail-indicator" id="sidebarCollapsedFailIndicator" 
+                      th:style="${activeRunFailedCount != null and activeRunFailedCount > 0 ? 'display: block;' : 'display: none;'}"
+                      style="display: none;"></span>
+            </div>
+            <div class="context-full-details">
+                <div class="status-indicator">
+                    <div class="pulse-dot" id="sidebarContextPulseDot" th:style="${running == true ? 'display: inline-block;' : 'display: none;'}"></div>
+                    <span id="sidebarContextLabel">Active Run Context</span>
+                </div>
+                <div style="font-weight: 700; color: var(--text-main); margin-top: 0.2rem;" id="sidebarActiveBatchName" th:if="${activeBatchName != null and !activeBatchName.isEmpty()}" th:text="${activeBatchName}"></div>
+                <div style="font-size: 0.72rem; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between;">
+                    <span id="sidebarActiveRunId" th:text="${activeRunId != null and !activeRunId.isEmpty() ? (activeRunId.startsWith('#') ? activeRunId : '#' + activeRunId) : '#RUN_ID'}">#RUN_ID</span>
+                    <span class="tag-chip" id="sidebarActiveStatus" th:text="${activeRunStatus != null ? activeRunStatus : (activeEnv ?: 'Default')}">Default</span>
+                </div>
+                <div class="sidebar-runner-progress-box" id="sidebarActiveProgressContainer" 
+                     th:style="${activeRunProgress != null and !activeRunProgress.isEmpty() ? 'display: flex;' : 'display: none;'}"
+                     th:title="${activeRunProgress}">
+                    <div class="sidebar-progress-track" id="sidebarProgressTrack"
+                         th:classappend="${running == true and (activeRunScheduledCount == null or activeRunScheduledCount == 0) ? 'is-indeterminate' : ''}">
+                        <div class="sidebar-progress-seg seg-passed" id="sidebarProgressSegPassed" 
+                             th:style="${activeRunScheduledCount != null and activeRunScheduledCount > 0 and activeRunPassedCount != null and activeRunPassedCount > 0 ? 'width: ' + ((activeRunPassedCount * 100) / activeRunScheduledCount) + '%; display: block;' : 'width: 0%; display: none;'}"
+                             style="width: 0%; display: none;"></div>
+                        <div class="sidebar-progress-seg seg-failed" id="sidebarProgressSegFailed" 
+                             th:style="${activeRunScheduledCount != null and activeRunScheduledCount > 0 and activeRunFailedCount != null and activeRunFailedCount > 0 ? 'width: ' + ((activeRunFailedCount * 100) / activeRunScheduledCount) + '%; display: block;' : 'width: 0%; display: none;'}"
+                             style="width: 0%; display: none;"></div>
+                        <div class="sidebar-progress-seg seg-running" id="sidebarProgressSegRunning" 
+                             th:style="${activeRunScheduledCount != null and activeRunScheduledCount > 0 and activeRunRunningCount != null and activeRunRunningCount > 0 ? 'width: ' + (activeRunRunningCount * 100 / activeRunScheduledCount < 2 ? 2 : (activeRunRunningCount * 100 / activeRunScheduledCount)) + '%; display: block;' : 'width: 0%; display: none;'}"
+                             style="width: 0%; display: none;"></div>
+                    </div>
+                    <div class="sidebar-progress-metrics">
+                        <span class="sidebar-progress-counter" id="sidebarActiveProgress" th:text="${activeRunProgress ?: ''}"></span>
+                        <div class="sidebar-outcome-chips" id="sidebarOutcomeChips">
+                            <span class="sidebar-chip-passed" id="sidebarChipPassed" 
+                                  th:style="${activeRunPassedCount != null and activeRunPassedCount > 0 ? 'display: inline-flex;' : 'display: none;'}">
+                                <span class="chip-dot"></span><span class="chip-val" id="sidebarChipPassedVal" th:text="${activeRunPassedCount ?: 0}">0</span>
+                            </span>
+                            <span class="sidebar-chip-failed" id="sidebarChipFailed" 
+                                  th:style="${activeRunFailedCount != null and activeRunFailedCount > 0 ? 'display: inline-flex;' : 'display: none;'}">
+                                <span class="chip-dot"></span><span class="chip-val" id="sidebarChipFailedVal" th:text="${activeRunFailedCount ?: 0}">0</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+</aside>
+
+<!-- Recursive Navigation Item Fragment for Dashboards -->
+<th:block th:fragment="renderCustomPageNav(page, level)">
+    <th:block th:if="${page != null}">
+        <!-- Regular Page (not group parent) -->
+        <div th:if="${!page.isGroupParent}" 
+             class="sidebar-page-item"
+             th:classappend="${level > 1 ? ' sidebar-sub-page-item' : ''}">
+            <span class="sidebar-toggle-spacer" th:if="${level > 1}"></span>
+            <a class="nav-item-btn"
+               th:classappend="${(level > 1 ? ' sub-page-nav-btn' : '') + (activeCustomPageId == page.id or activeTab == 'Page_' + page.id ? ' active' : '')}"
+               th:id="'navPage_' + ${page.id}"
+               th:href="@{'/dashboard-pages/' + ${page.id}}"
+               onclick="setActiveNavBtn(this)"
+               th:title="${page.name}">
+                <span class="material-symbols-outlined" 
+                      th:style="${level > 1 ? 'font-size: 0.95rem;' : ''}"
+                      th:text="${level > 1 ? 'subdirectory_arrow_right' : 'space_dashboard'}">space_dashboard</span>
+                <span class="nav-label text-truncate" 
+                      th:text="${level > 1 and page.groupValue != null and !page.groupValue.isEmpty() ? page.groupValue : page.name}">Page Name</span>
+            </a>
+            <button type="button" 
+                    class="btn-sidebar-delete-page" 
+                    th:attr="onclick='deleteCustomPage(\'' + ${page.id} + '\', \'' + ${#strings.escapeJavaScript(page.name)} + '\', event)'" 
+                    title="Delete Page">
+                <span class="material-symbols-outlined" th:style="${level > 1 ? 'font-size: 13px;' : 'font-size: 14px;'}">close</span>
+            </button>
+        </div>
+
+        <!-- Group Parent Page (Collapsible, Collapsed by default) -->
+        <div th:if="${page.isGroupParent}" 
+             class="sidebar-page-group-container collapsed"
+             th:id="'sidebarGroup_' + ${page.id}">
+            <div class="sidebar-page-item"
+                 th:classappend="${level > 1 ? ' sidebar-sub-page-item' : ''}">
+                <button type="button" 
+                        class="btn-sidebar-group-toggle" 
+                        onclick="toggleSidebarGroup(this, event)"
+                        th:if="${page.subPages != null and !page.subPages.isEmpty()}"
+                        aria-expanded="false"
+                        title="Toggle Sub-dashboards">
+                    <span class="material-symbols-outlined group-chevron-icon">chevron_right</span>
+                </button>
+                <span class="sidebar-toggle-spacer" th:if="${page.subPages == null or page.subPages.isEmpty()}"></span>
+                <a class="nav-item-btn"
+                   th:classappend="${(level > 1 ? ' sub-page-nav-btn' : '') + (activeCustomPageId == page.id or activeTab == 'Page_' + page.id ? ' active' : '')}"
+                   th:id="'navPage_' + ${page.id}"
+                   th:href="@{'/dashboard-pages/' + ${page.id}}"
+                   onclick="setActiveNavBtn(this)"
+                   th:title="${page.name}">
+                    <span class="material-symbols-outlined" 
+                          th:style="${level > 1 ? 'font-size: 0.95rem;' : ''}">grid_view</span>
+                    <span class="nav-label text-truncate" 
+                          th:text="${level > 1 and page.groupValue != null and !page.groupValue.isEmpty() ? page.groupValue : page.name}">Group Name</span>
+                    <span class="badge-sub-count" 
+                          th:if="${page.subPages != null and !page.subPages.isEmpty()}" 
+                          th:text="${#lists.size(page.subPages)}" 
+                          style="margin-left: auto; font-size: 0.65rem; background: var(--bg-hover); padding: 1px 5px; border-radius: 999px; color: var(--text-muted); margin-right: 0.5rem;">0</span>
+                </a>
+                <button type="button" 
+                        class="btn-sidebar-delete-page" 
+                        th:attr="onclick='deleteCustomPage(\'' + ${page.id} + '\', \'' + ${#strings.escapeJavaScript(page.name)} + '\', event)'" 
+                        title="Delete Group and Sub-dashboards">
+                    <span class="material-symbols-outlined" th:style="${level > 1 ? 'font-size: 13px;' : 'font-size: 14px;'}">close</span>
+                </button>
+            </div>
+
+            <!-- Sub-dashboards nested under group parent (recursive) -->
+            <div class="sidebar-sub-pages-list" th:if="${page.subPages != null and !page.subPages.isEmpty()}">
+                <th:block th:each="child : ${page.subPages}">
+                    <th:block th:replace="~{fragments/sidebar :: renderCustomPageNav(page=${child}, level=${level + 1})}"></th:block>
+                </th:block>
+            </div>
+        </div>
+    </th:block>
+</th:block>
+
+</body>
+</html>

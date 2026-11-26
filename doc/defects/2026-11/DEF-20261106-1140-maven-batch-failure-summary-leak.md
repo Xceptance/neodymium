@@ -1,0 +1,14 @@
+# [DEF-20261106-1140] Maven batch failure summary leaking into passed test execution reports
+
+- **Status:** `Resolved`
+- **Opened:** 2026-11-06 11:40
+- **Closed:** 2026-11-06 12:05
+- **Component:** `neodymium-core`, `aura-manager`
+- **Scope:** `Framework`
+- **Symptom:** In test batches containing both passing and failing executions, the detail side panel of passing green tests unexpectedly rendered the top failure banner (`#sidePageErrorDisplayCard`) with a red `FAILED` tag chip and the full Maven Surefire batch execution failure trace (including stack traces of failing sibling tests).
+- **Root Cause:** In `AuraQueueService.updateExecutionSnapshotsAndFallbacks(...)`, when a batch run experienced a failure (`isFailedRun == true`), the fallback enrichment branch (`else if (isFailedRun && !objNode.has("failureReason") && extractedError != null)`) omitted verifying whether the execution was actually in a failure state. Because successful executions (`passed`, `healed`, `succeeded-fixed`) do not have a `failureReason`, the service erroneously injected the batch-wide failure message into the green execution's `console-execution-*.json`. Furthermore, `report-manager.js` lacked status checks guarding `#sidePageErrorDisplayCard` visibility, displaying the red failure banner whenever `renderErrorBoxContent(...)` returned non-empty HTML.
+- **Detection Gap ("What did we miss?"):** Existing `AuraQueueServiceTest` scenarios tested single-test failures and zero-execution fallback file creation, but lacked multi-test batch scenarios with mixed outcomes (passing and failing tests in the same run directory) where post-run snapshot fallback enrichment is executed.
+- **Resolution:**
+  1. In `AuraQueueService.updateExecutionSnapshotsAndFallbacks(...)`, protected finalized executions (`!isFinalStatus`) from being overwritten by setup failure fallbacks, and restricted fallback error injection exclusively to actual failures (`isActualFailure`) that lack a non-blank failure reason (`lacksFailureReason`), preventing pollution of passed, healed, or skipped tests.
+  2. In `report-manager.js`, guarded `#sidePageErrorDisplayCard` rendering at both initial row selection and asynchronous step rendering, ensuring the top error card is strictly hidden unless the execution status represents an actual failure (`FAILED`, `FAILED_UNKNOWN`, `FAILED_KNOWN`, `ERROR`).
+- **Safety Net Added:** `AuraQueueServiceTest.testUpdateExecutionSnapshotsAndFallbacksPreservesPassedExecutionWithoutInjectingBatchFailure`, `AuraQueueServiceTest.testUpdateExecutionSnapshotsAndFallbacksPreservesSkippedExecutionInFailedBatch`, `AuraQueueServiceTest.testUpdateExecutionSnapshotsAndFallbacksPreservesZeroStepPassedExecutionInFailedBatch`, and `AuraQueueServiceTest.testUpdateExecutionSnapshotsAndFallbacksEnrichesFailedExecutionWithNullFailureReason`.

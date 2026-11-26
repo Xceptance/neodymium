@@ -1,0 +1,868 @@
+/*
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package com.xceptance.aura.test.controller;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xceptance.neodymium.aura.AuraFileService;
+import com.xceptance.neodymium.aura.AuraFileService.IssueSeverity;
+import com.xceptance.neodymium.aura.AuraFileService.ValidationIssue;
+import jakarta.servlet.http.HttpServletRequest;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.neodymium.ai.model.Playbook;
+import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.playbook.YamlPlaybookParser;
+import org.neodymium.ai.playbook.linter.PlaybookLinter;
+import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
+import org.neodymium.ai.playbook.linter.PlaybookLinterResult;
+import org.neodymium.ai.resources.ClasspathResourceManager;
+import org.neodymium.ai.resources.PlaybookResourceManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+
+/**
+ * Controller for reading, editing, saving, and creating test playbook files.
+ *
+ * @author AI-generated: Antigravity
+ * @author Xceptance GmbH 2026
+ */
+@Controller
+public class AuraTestEditorController
+{
+    private static final Logger LOGGER = LoggerFactory.getLogger(AuraTestEditorController.class);
+    private static final Pattern VAR_PATTERN = Pattern.compile("\\$\\{([a-zA-Z0-9_.-]+)(?::[^}]*)?\\}");
+
+    private final AuraFileService fileService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final PlaybookLinter playbookLinter;
+
+    @Autowired
+    public AuraTestEditorController(final AuraFileService fileService)
+    {
+        this(fileService, new PlaybookLinter());
+    }
+
+    public AuraTestEditorController(final AuraFileService fileService, final PlaybookLinter playbookLinter)
+    {
+        this.fileService = fileService;
+        this.playbookLinter = playbookLinter;
+    }
+
+    @RequestMapping(value = "/api/editor", method = {RequestMethod.GET, RequestMethod.POST})
+    public String getEditorFragment(@RequestParam(value = "file", required = false) final String relativePath,
+                                   @RequestParam(value = "content", required = false) final String customContent,
+                                   final Model model)
+    {
+        model.addAttribute("stepsFiles", fileService.getStepsFilesList());
+        model.addAttribute("fragmentRequiredVarsMap", fileService.getFragmentRequiredVariablesMap());
+        final String effectivePath = (relativePath != null && relativePath.contains(","))
+                ? relativePath.split(",")[0].trim()
+                : relativePath;
+        if (effectivePath != null && !effectivePath.isBlank())
+        {
+            fileService.setActiveEditingFile(effectivePath);
+            String content = customContent != null ? customContent : "";
+            if (customContent == null)
+            {
+                try
+                {
+                    content = fileService.readYamlFileContent(effectivePath);
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
+            final boolean isFragment = effectivePath.toLowerCase().endsWith(".steps");
+            model.addAttribute("activeEditingFile", effectivePath);
+            model.addAttribute("editingFileContent", content);
+            model.addAttribute("currentTestFile", effectivePath);
+            model.addAttribute("fileContent", content);
+            model.addAttribute("isFragment", isFragment);
+
+            final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+            final boolean hasParseError = Boolean.TRUE.equals(sections.get("hasError"));
+            final String parseErrorMessage = (String) sections.get("error");
+            model.addAttribute("hasParseError", hasParseError);
+            model.addAttribute("parseErrorMessage", parseErrorMessage != null ? parseErrorMessage : "");
+            model.addAttribute("editorMode", hasParseError ? "raw" : "visual");
+            model.addAttribute("beforeSteps", sections.get("beforeSteps"));
+            model.addAttribute("mainSteps", sections.get("mainSteps"));
+            model.addAttribute("afterSteps", sections.get("afterSteps"));
+            model.addAttribute("dataMatrix", sections.get("dataMatrix"));
+            model.addAttribute("varKeys", sections.get("varKeys"));
+            final Object scopesObj = sections.get("fragmentVarScopes");
+            model.addAttribute("fragmentVarScopes", scopesObj != null ? scopesObj : Map.of());
+            final Object rootTagsObj = sections.get("rootTags");
+            model.addAttribute("rootTags", rootTagsObj != null ? rootTagsObj : Map.of());
+            final Object dsTagsObj = sections.get("datasetTagsList");
+            model.addAttribute("datasetTagsList", dsTagsObj != null ? dsTagsObj : List.of());
+            model.addAttribute("areaTag", sections.get("areaTag"));
+            model.addAttribute("propertiesKey", sections.get("propertiesKey") != null ? sections.get("propertiesKey") : "_properties");
+            model.addAttribute("propertiesYaml", sections.get("propertiesYaml") != null ? sections.get("propertiesYaml") : "");
+            model.addAttribute("propertiesList", sections.get("propertiesList") != null ? sections.get("propertiesList") : List.of());
+            model.addAttribute("metaKey", sections.get("metaKey") != null ? sections.get("metaKey") : "_meta");
+            model.addAttribute("metaYaml", sections.get("metaYaml") != null ? sections.get("metaYaml") : "");
+            model.addAttribute("description", sections.get("description") != null ? sections.get("description") : "");
+            model.addAttribute("promptAddonYaml", sections.get("promptAddonYaml") != null ? sections.get("promptAddonYaml") : "");
+            model.addAttribute("rootVariables", sections.get("rootVariables") != null ? sections.get("rootVariables") : Map.of());
+        }
+        else
+        {
+            fileService.setActiveEditingFile("");
+            model.addAttribute("activeEditingFile", "");
+            model.addAttribute("editingFileContent", "");
+            model.addAttribute("currentTestFile", "");
+            model.addAttribute("fileContent", "");
+            model.addAttribute("isFragment", false);
+            model.addAttribute("hasParseError", false);
+            model.addAttribute("parseErrorMessage", "");
+            model.addAttribute("editorMode", "visual");
+            model.addAttribute("beforeSteps", List.of());
+            model.addAttribute("mainSteps", List.of());
+            model.addAttribute("afterSteps", List.of());
+            model.addAttribute("dataMatrix", List.of());
+            model.addAttribute("varKeys", List.of());
+            model.addAttribute("fragmentVarScopes", Map.of());
+            model.addAttribute("rootTags", Map.of());
+            model.addAttribute("datasetTagsList", List.of());
+            model.addAttribute("areaTag", null);
+            model.addAttribute("propertiesKey", "_properties");
+            model.addAttribute("propertiesYaml", "");
+            model.addAttribute("propertiesList", List.of());
+            model.addAttribute("metaKey", "_meta");
+            model.addAttribute("metaYaml", "");
+            model.addAttribute("description", "");
+            model.addAttribute("promptAddonYaml", "");
+            model.addAttribute("rootVariables", Map.of());
+        }
+        return "fragments/editor :: editorPanelContent";
+    }
+
+    public String getEditorFragment(final String relativePath, final Model model)
+    {
+        return getEditorFragment(relativePath, null, model);
+    }
+
+    @GetMapping("/api/editor/steps-files")
+    @ResponseBody
+    public ResponseEntity<List<String>> getStepsFiles(@RequestParam(value = "q", required = false) final String query)
+    {
+        if (query != null && !query.isBlank())
+        {
+            return ResponseEntity.ok(fileService.getFilteredStepsFilesList(query));
+        }
+        return ResponseEntity.ok(fileService.getStepsFilesList());
+    }
+
+    @GetMapping("/api/editor/include-tree")
+    public String getIncludeTreeFragment(@RequestParam("file") final String relativePath,
+                                         @RequestParam("cardId") final String cardId,
+                                         final Model model)
+    {
+        final String cleanPath = relativePath != null ? relativePath.trim().replaceAll("^[\"']|[\"']$", "") : "";
+        String tempContent = null;
+        boolean tempFileExists = false;
+        try
+        {
+            tempContent = fileService.readYamlFileContent(cleanPath);
+            tempFileExists = (tempContent != null);
+        }
+        catch (final Exception ignored)
+        {
+        }
+        final String content = tempContent;
+        final boolean fileExists = tempFileExists;
+
+        final Map<String, Object> sections = fileService.parsePlaybookSections(content != null ? content : "");
+        @SuppressWarnings("unchecked")
+        final List<String> includeSteps = (List<String>) sections.getOrDefault("mainSteps", List.of());
+        @SuppressWarnings("unchecked")
+        final Map<String, String> fragmentVarScopes = (Map<String, String>) sections.getOrDefault("fragmentVarScopes", Map.of());
+
+        final Set<String> varSet = new LinkedHashSet<>();
+        if (content != null && !content.isBlank())
+        {
+            final Matcher matcher = VAR_PATTERN.matcher(content);
+            while (matcher.find())
+            {
+                if (matcher.group(1) != null)
+                {
+                    varSet.add(matcher.group(1));
+                }
+            }
+        }
+        final List<String> includeVars = new ArrayList<>(varSet);
+
+        model.addAttribute("cardId", cardId);
+        model.addAttribute("includeFile", cleanPath);
+        model.addAttribute("fileExists", fileExists);
+        model.addAttribute("includeSteps", includeSteps);
+        model.addAttribute("includeVars", includeVars);
+        model.addAttribute("includeVarScopes", fragmentVarScopes != null ? fragmentVarScopes : Map.of());
+
+        return "fragments/editor :: includeTreeCardFragment";
+    }
+
+    @GetMapping("/api/read")
+    @ResponseBody
+    public ResponseEntity<Map<String, String>> readFile(@RequestParam("file") final String relativePath)
+    {
+        final String effectivePath = (relativePath != null && relativePath.contains(","))
+                ? relativePath.split(",")[0].trim()
+                : relativePath;
+        String content = "";
+        try
+        {
+            if (effectivePath != null && !effectivePath.isBlank())
+            {
+                content = fileService.readYamlFileContent(effectivePath);
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+        final Map<String, String> response = new HashMap<>();
+        response.put("file", effectivePath != null ? effectivePath : "");
+        response.put("content", content);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/api/save")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> saveFile(@RequestParam("file") final String file,
+                                                       @RequestParam(value = "content", required = false) final String content)
+    {
+        final String effectiveFile = (file != null && file.contains(",")) ? file.split(",")[0].trim() : file;
+        boolean success = false;
+        if (effectiveFile != null && !effectiveFile.isBlank())
+        {
+            try
+            {
+                fileService.saveYamlFileContent(effectiveFile, content != null ? content : "");
+                success = true;
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+        final Map<String, Object> response = new HashMap<>();
+        response.put("status", success ? "SUCCESS" : "ERROR");
+        response.put("file", effectiveFile);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/api/create")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> createFile(@RequestParam(value = "name", required = false) final String name)
+    {
+        final Map<String, Object> response = new HashMap<>();
+        if (name == null || name.isBlank())
+        {
+            response.put("error", "File name must not be empty.");
+            return ResponseEntity.badRequest().body(response);
+        }
+        try
+        {
+            final String sanitizedName = (name.endsWith(".yaml") || name.endsWith(".yml") || name.endsWith(".steps"))
+                    ? name
+                    : name + ".yaml";
+            fileService.createYamlFile(name);
+            fileService.setActiveEditingFile(sanitizedName);
+            response.put("file", sanitizedName);
+            return ResponseEntity.ok(response);
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("Failed to create file '{}'", name, e);
+            response.put("error", "Failed to create file: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+
+    @PostMapping("/api/delete")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> deleteFile(
+            @RequestParam(value = "file", required = false) final String fileParam,
+            final HttpServletRequest request)
+    {
+        String relativePath = fileParam;
+        if ((relativePath == null || relativePath.isBlank()) && request != null)
+        {
+            relativePath = request.getParameter("file");
+        }
+        if ((relativePath == null || relativePath.isBlank()) && request != null && request.getContentType() != null && request.getContentType().contains("application/json"))
+        {
+            try
+            {
+                @SuppressWarnings("unchecked")
+                final Map<String, Object> body = objectMapper.readValue(request.getInputStream(), Map.class);
+                if (body != null && body.containsKey("file"))
+                {
+                    relativePath = String.valueOf(body.get("file"));
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.debug("Could not parse JSON payload for deleteFile", e);
+            }
+        }
+
+        boolean success = false;
+        if (relativePath != null && !relativePath.isBlank())
+        {
+            try
+            {
+                success = fileService.deleteYamlFile(relativePath);
+                if (relativePath.equals(fileService.getActiveEditingFile()))
+                {
+                    fileService.setActiveEditingFile("");
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.error("Failed to delete test file '{}'", relativePath, e);
+            }
+        }
+        final Map<String, Object> response = new HashMap<>();
+        response.put("status", success ? "SUCCESS" : "ERROR");
+        response.put("file", relativePath != null ? relativePath : "");
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/api/rename")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> renameFile(
+            @RequestParam(value = "file", required = false) final String fileParam,
+            @RequestParam(value = "newPath", required = false) final String newPathParam,
+            final HttpServletRequest request)
+    {
+        String oldPath = fileParam;
+        String newPath = newPathParam;
+
+        if ((oldPath == null || oldPath.isBlank()) && request != null)
+        {
+            oldPath = request.getParameter("file");
+        }
+        if ((newPath == null || newPath.isBlank()) && request != null)
+        {
+            newPath = request.getParameter("newPath");
+            if (newPath == null || newPath.isBlank())
+            {
+                newPath = request.getParameter("newName");
+            }
+        }
+
+        if ((oldPath == null || oldPath.isBlank() || newPath == null || newPath.isBlank()) && request != null && request.getContentType() != null && request.getContentType().contains("application/json"))
+        {
+            try
+            {
+                @SuppressWarnings("unchecked")
+                final Map<String, Object> body = objectMapper.readValue(request.getInputStream(), Map.class);
+                if (body != null)
+                {
+                    if (oldPath == null || oldPath.isBlank())
+                    {
+                        oldPath = String.valueOf(body.get("file"));
+                    }
+                    if (newPath == null || newPath.isBlank())
+                    {
+                        newPath = body.containsKey("newPath") ? String.valueOf(body.get("newPath")) : String.valueOf(body.get("newName"));
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.debug("Could not parse JSON payload for renameFile", e);
+            }
+        }
+
+        final Map<String, Object> response = new HashMap<>();
+        if (oldPath == null || oldPath.isBlank() || newPath == null || newPath.isBlank())
+        {
+            response.put("status", "ERROR");
+            response.put("error", "Both source file and target file path must be specified.");
+            return ResponseEntity.badRequest().body(response);
+        }
+
+        try
+        {
+            final boolean success = fileService.renameOrMoveFile(oldPath, newPath);
+            if (success)
+            {
+                response.put("status", "SUCCESS");
+                response.put("oldFile", oldPath);
+                response.put("newFile", fileService.getActiveEditingFile() != null && !fileService.getActiveEditingFile().isEmpty() ? fileService.getActiveEditingFile() : newPath);
+                return ResponseEntity.ok(response);
+            }
+            else
+            {
+                response.put("status", "ERROR");
+                response.put("error", "Source file does not exist or could not be renamed.");
+                return ResponseEntity.badRequest().body(response);
+            }
+        }
+        catch (final IllegalArgumentException e)
+        {
+            LOGGER.warn("Rename failed for '{}' -> '{}': {}", oldPath, newPath, e.getMessage());
+            response.put("status", "ERROR");
+            response.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
+        catch (final SecurityException e)
+        {
+            LOGGER.error("Access denied during rename operation '{}' -> '{}'", oldPath, newPath, e);
+            response.put("status", "ERROR");
+            response.put("error", e.getMessage());
+            return ResponseEntity.status(403).body(response);
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("Failed to rename file '{}' to '{}'", oldPath, newPath, e);
+            response.put("status", "ERROR");
+            response.put("error", "Failed to rename file: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+
+    /**
+     * Updates {@code _include:} references (and any other occurrences of the fragment path)
+     * in all YAML test files after a fragment has been moved or renamed.
+     *
+     * <p>The dialog is shown unconditionally on the frontend after every fragment move/rename;
+     * this endpoint is called only when the user chooses to update references.</p>
+     *
+     * @param oldPathParam the old (pre-move) relative fragment path
+     * @param newPathParam the new (post-move) relative fragment path
+     * @param request      raw HTTP request used as fallback for JSON body parsing
+     * @return JSON with {@code status}, {@code updatedFileCount}, and {@code updatedFiles}
+     */
+    @PostMapping("/api/update-fragment-refs")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> updateFragmentRefs(
+            @RequestParam(value = "oldPath", required = false) final String oldPathParam,
+            @RequestParam(value = "newPath", required = false) final String newPathParam,
+            final HttpServletRequest request)
+    {
+        String oldPath = oldPathParam;
+        String newPath = newPathParam;
+
+        // Fallback 1: raw servlet parameters
+        if ((oldPath == null || oldPath.isBlank()) && request != null)
+        {
+            oldPath = request.getParameter("oldPath");
+        }
+        if ((newPath == null || newPath.isBlank()) && request != null)
+        {
+            newPath = request.getParameter("newPath");
+        }
+
+        // Fallback 2: JSON body
+        if ((oldPath == null || oldPath.isBlank() || newPath == null || newPath.isBlank())
+                && request != null
+                && request.getContentType() != null
+                && request.getContentType().contains("application/json"))
+        {
+            try
+            {
+                @SuppressWarnings("unchecked")
+                final Map<String, Object> body = objectMapper.readValue(request.getInputStream(), Map.class);
+                if (body != null)
+                {
+                    if (oldPath == null || oldPath.isBlank())
+                    {
+                        oldPath = String.valueOf(body.get("oldPath"));
+                    }
+                    if (newPath == null || newPath.isBlank())
+                    {
+                        newPath = String.valueOf(body.get("newPath"));
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.debug("Could not parse JSON payload for updateFragmentRefs", e);
+            }
+        }
+
+        final Map<String, Object> response = new HashMap<>();
+        if (oldPath == null || oldPath.isBlank() || newPath == null || newPath.isBlank())
+        {
+            response.put("status", "ERROR");
+            response.put("error", "Both oldPath and newPath must be specified.");
+            return ResponseEntity.badRequest().body(response);
+        }
+
+        try
+        {
+            LOGGER.info("Fragment reference update requested: '{}' -> '{}'", oldPath, newPath);
+            final AuraFileService.UpdateFragmentRefsResult result =
+                    fileService.updateFragmentReferences(oldPath, newPath);
+            response.put("status", "SUCCESS");
+            response.put("updatedFileCount", result.updatedFileCount());
+            response.put("updatedFiles", result.updatedFiles());
+            return ResponseEntity.ok(response);
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("Failed to update fragment references '{}' -> '{}'", oldPath, newPath, e);
+            response.put("status", "ERROR");
+            response.put("error", "Failed to update fragment references: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+
+
+    /**
+     * Validates the currently-edited file content against YAML syntax, include file existence,
+     * and variable definition rules.
+     *
+     * <p>Accepts a JSON body with two fields:
+     * <ul>
+     *   <li>{@code file}    – the relative path of the file being edited</li>
+     *   <li>{@code content} – the current raw YAML content to validate</li>
+     * </ul>
+     *
+     * <p>Returns a JSON object with an {@code issues} array; each element has:
+     * <ul>
+     *   <li>{@code severity} – {@code "ERROR"}, {@code "WARNING"}, or {@code "INFO"}</li>
+     *   <li>{@code message}  – human-readable description of the finding</li>
+     *   <li>{@code context}  – optional short context string (may be {@code null})</li>
+     * </ul>
+     *
+     * @param request the raw HTTP request carrying the JSON body
+     * @return the validation result as JSON
+     */
+    @PostMapping("/api/editor/validate-file")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> validateFile(final HttpServletRequest request)
+    {
+        String file = null;
+        String content = null;
+
+        // Parse JSON body
+        if (request.getContentType() != null && request.getContentType().contains("application/json"))
+        {
+            try
+            {
+                @SuppressWarnings("unchecked")
+                final Map<String, Object> body = objectMapper.readValue(request.getInputStream(), Map.class);
+                if (body != null)
+                {
+                    file = body.get("file") != null ? String.valueOf(body.get("file")) : null;
+                    content = body.get("content") != null ? String.valueOf(body.get("content")) : null;
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.debug("Could not parse JSON payload for validateFile", e);
+            }
+        }
+
+        // Fallback to form params
+        if (file == null || file.isBlank())
+        {
+            file = request.getParameter("file");
+        }
+        if (content == null)
+        {
+            content = request.getParameter("content");
+        }
+
+        // Run validation
+        final List<ValidationIssue> issues = fileService.validateFileContent(
+                file != null ? file : "",
+                content != null ? content : "");
+
+        // Serialize issues to plain maps for JSON serialisation
+        final List<Map<String, Object>> issueList = new ArrayList<>();
+        boolean hasErrors = false;
+        boolean hasWarnings = false;
+        for (final ValidationIssue issue : issues)
+        {
+            final Map<String, Object> m = new HashMap<>();
+            m.put("severity", issue.severity().name());
+            m.put("message", issue.message());
+            m.put("context", issue.context());
+            issueList.add(m);
+            if (issue.severity() == IssueSeverity.ERROR)
+            {
+                hasErrors = true;
+            }
+            else if (issue.severity() == IssueSeverity.WARNING)
+            {
+                hasWarnings = true;
+            }
+        }
+
+        final Map<String, Object> response = new HashMap<>();
+        response.put("issues", issueList);
+        response.put("hasErrors", hasErrors);
+        response.put("hasWarnings", hasWarnings);
+        response.put("file", file != null ? file : "");
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Executes AI review on the currently-edited playbook content using {@link PlaybookLinter}.
+     *
+     * <p>Runs local structural and YAML validation first as an offline pre-gate to protect
+     * token quota and prevent sending malformed syntax to the model.</p>
+     *
+     * @param request the raw HTTP request carrying the JSON body or form parameters
+     * @return structured validation and findings response
+     */
+    @PostMapping("/api/editor/ai-review")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> aiReview(final HttpServletRequest request)
+    {
+        String file = null;
+        String content = null;
+
+        // Parse JSON body
+        if (request.getContentType() != null && request.getContentType().contains("application/json"))
+        {
+            try
+            {
+                @SuppressWarnings("unchecked")
+                final Map<String, Object> body = objectMapper.readValue(request.getInputStream(), Map.class);
+                if (body != null)
+                {
+                    file = body.get("file") != null ? String.valueOf(body.get("file")) : null;
+                    content = body.get("content") != null ? String.valueOf(body.get("content")) : null;
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.debug("Could not parse JSON payload for aiReview", e);
+            }
+        }
+
+        // Fallback to form params
+        if (file == null || file.isBlank())
+        {
+            file = request.getParameter("file");
+        }
+        if (content == null)
+        {
+            content = request.getParameter("content");
+        }
+
+        final Map<String, Object> response = new HashMap<>();
+
+        // Validation Pre-Gate: protect token quota if local syntax errors exist
+        final List<ValidationIssue> issues = fileService.validateFileContent(
+                file != null ? file : "",
+                content != null ? content : "");
+        boolean hasErrors = false;
+        boolean hasSyntaxError = false;
+        final List<Map<String, Object>> issueList = new ArrayList<>();
+        for (final ValidationIssue issue : issues)
+        {
+            final Map<String, Object> m = new HashMap<>();
+            m.put("severity", issue.severity().name());
+            m.put("message", issue.message());
+            m.put("context", issue.context());
+            issueList.add(m);
+            if (issue.severity() == IssueSeverity.ERROR)
+            {
+                hasErrors = true;
+                final boolean isNonSyntaxValidation = issue.message() != null
+                        && (issue.message().startsWith("Included file does not exist")
+                            || issue.message().startsWith("Undefined variable"));
+                if (!isNonSyntaxValidation)
+                {
+                    hasSyntaxError = true;
+                }
+            }
+        }
+
+        if (hasErrors)
+        {
+            final String status = hasSyntaxError ? "SYNTAX_ERROR" : "VALIDATION_ERROR";
+            final String message = hasSyntaxError
+                    ? "File has syntax errors. Please resolve syntax errors before running AI Review."
+                    : "File has validation errors (unresolved variables or missing includes). Please resolve them before running AI Review.";
+            response.put("status", status);
+            response.put("message", message);
+            response.put("issues", issueList);
+            response.put("findings", List.of());
+            return ResponseEntity.ok(response);
+        }
+
+        if (content == null || content.isBlank())
+        {
+            response.put("status", "OK");
+            response.put("findings", List.of());
+            return ResponseEntity.ok(response);
+        }
+
+        try
+        {
+            final PlaybookResourceManager resourceManager = new PlaybookResourceManager()
+            {
+                private final ClasspathResourceManager classpathManager = new ClasspathResourceManager();
+
+                @Override
+                public InputStream read(final String identifier) throws IOException
+                {
+                    if (fileService != null && identifier != null)
+                    {
+                        try
+                        {
+                            final String fileContent = fileService.readYamlFileContent(identifier);
+                            if (fileContent != null)
+                            {
+                                return new ByteArrayInputStream(fileContent.getBytes(StandardCharsets.UTF_8));
+                            }
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+                    return this.classpathManager.read(identifier);
+                }
+
+                @Override
+                public void write(final String identifier, final String content) throws IOException
+                {
+                    if (fileService != null && identifier != null)
+                    {
+                        fileService.saveYamlFileContent(identifier, content);
+                        return;
+                    }
+                    this.classpathManager.write(identifier, content);
+                }
+
+                @Override
+                public void delete(final String identifier) throws IOException
+                {
+                    if (fileService != null && identifier != null)
+                    {
+                        fileService.deleteYamlFile(identifier);
+                        return;
+                    }
+                    this.classpathManager.delete(identifier);
+                }
+
+                @Override
+                public String resolveInclude(final String parentIdentifier, final String relativePath)
+                {
+                    return this.classpathManager.resolveInclude(parentIdentifier, relativePath);
+                }
+            };
+
+            final YamlPlaybookParser parser = new YamlPlaybookParser();
+            final Playbook playbook = parser.parseString(content, resourceManager);
+            final List<PlaybookStep> steps = playbook != null ? playbook.getAllSteps() : List.of();
+            final String description = playbook != null ? playbook.getDescription() : null;
+
+            if (steps == null || steps.isEmpty())
+            {
+                response.put("status", "OK");
+                response.put("findings", List.of());
+                return ResponseEntity.ok(response);
+            }
+
+            final PlaybookLinter linter = this.playbookLinter != null
+                    ? this.playbookLinter
+                    : new PlaybookLinter();
+            final PlaybookLinterResult linterResult = linter.lintWithResult(steps, description);
+
+            if (!linterResult.successful())
+            {
+                response.put("status", "ERROR");
+                response.put("error", "AI Review unavailable: " + linterResult.errorMessage());
+                response.put("findings", List.of());
+                return ResponseEntity.ok(response);
+            }
+
+            final List<PlaybookLinterFinding> findings = linterResult.findings();
+
+            final List<Map<String, Object>> findingList = new ArrayList<>();
+            if (findings != null)
+            {
+                for (final PlaybookLinterFinding f : findings)
+                {
+                    final Map<String, Object> fm = new HashMap<>();
+                    fm.put("stepIndex", f.stepIndex());
+                    fm.put("lineNumber", f.lineNumber());
+                    final String rawSource = f.sourceFile();
+                    final String displaySource = ("inline.yaml".equals(rawSource) && file != null && !file.isBlank())
+                            ? file
+                            : rawSource;
+                    fm.put("sourceFile", displaySource);
+                    fm.put("rawInstruction", f.rawInstruction());
+                    fm.put("category", f.category() != null ? f.category().name() : "");
+                    fm.put("severity", f.severity() != null ? f.severity().name() : "WARNING");
+                    fm.put("message", f.message());
+                    fm.put("suggestedRewrite", f.suggestedRewrite());
+                    fm.put("scope", f.scope());
+                    findingList.add(fm);
+                }
+            }
+
+            response.put("status", "OK");
+            response.put("findings", findingList);
+            return ResponseEntity.ok(response);
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("AI Review encountered an error during playbook linting", e);
+            response.put("status", "ERROR");
+            response.put("error", "AI Review failed: " + e.getMessage());
+            response.put("findings", List.of());
+            return ResponseEntity.ok(response);
+        }
+    }
+
+    @PostMapping("/api/editor/close")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> closeEditor()
+    {
+        fileService.setActiveEditingFile("");
+        final Map<String, Object> response = new HashMap<>();
+        response.put("status", "SUCCESS");
+        return ResponseEntity.ok(response);
+    }
+}

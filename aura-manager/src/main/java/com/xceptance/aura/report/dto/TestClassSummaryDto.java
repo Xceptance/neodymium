@@ -1,0 +1,270 @@
+/*
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package com.xceptance.aura.report.dto;
+
+import java.util.List;
+
+/**
+ * Data transfer object representing test class summary statistics and executions.
+ *
+ * @author Xceptance GmbH 2026
+ */
+public final class TestClassSummaryDto
+{
+    private final String className;
+    private final String classContainer;
+    private final String folder;
+    private final int totalCount;
+    private final int passCount;
+    private final int fixedCount;
+    private final int knownCount;
+    private final int unknownCount;
+    private final int ignoredCount;
+    private final int runningCount;
+    private final List<TestExecutionDto> executions;
+
+    public TestClassSummaryDto(
+        final String className,
+        final String classContainer,
+        final String folder,
+        final int totalCount,
+        final int passCount,
+        final int fixedCount,
+        final int knownCount,
+        final int unknownCount,
+        final int ignoredCount,
+        final int runningCount,
+        final List<TestExecutionDto> executions)
+    {
+        this.className = className;
+        this.classContainer = classContainer;
+        this.folder = folder;
+        this.totalCount = totalCount;
+        this.passCount = passCount;
+        this.fixedCount = fixedCount;
+        this.knownCount = knownCount;
+        this.unknownCount = unknownCount;
+        this.ignoredCount = ignoredCount;
+        this.runningCount = runningCount;
+        this.executions = executions;
+    }
+
+    public TestClassSummaryDto(
+        final String className,
+        final String classContainer,
+        final String folder,
+        final int totalCount,
+        final int passCount,
+        final int fixedCount,
+        final int knownCount,
+        final int unknownCount,
+        final int ignoredCount,
+        final List<TestExecutionDto> executions)
+    {
+        this(className, classContainer, folder, totalCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, 0, executions);
+    }
+
+    public TestClassSummaryDto(
+        final String className,
+        final String classContainer,
+        final int totalCount,
+        final int passCount,
+        final int fixedCount,
+        final int knownCount,
+        final int unknownCount,
+        final int ignoredCount,
+        final List<TestExecutionDto> executions)
+    {
+        this(className, classContainer, "Browsing (default)", totalCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, 0, executions);
+    }
+
+    public String getClassName()
+    {
+        return className;
+    }
+
+    public String getClassContainer()
+    {
+        return classContainer;
+    }
+
+    public String getFolder()
+    {
+        return folder;
+    }
+
+    public int getTotalCount()
+    {
+        return totalCount;
+    }
+
+    public int getPassCount()
+    {
+        return passCount;
+    }
+
+    public int getFixedCount()
+    {
+        return fixedCount;
+    }
+
+    public int getSucceededFixedCount()
+    {
+        return fixedCount;
+    }
+
+    public int getKnownCount()
+    {
+        return knownCount;
+    }
+
+    public int getFailedKnownCount()
+    {
+        return knownCount;
+    }
+
+    public int getUnknownCount()
+    {
+        return unknownCount;
+    }
+
+    public int getFailedUnknownCount()
+    {
+        return unknownCount;
+    }
+
+    public int getIgnoredCount()
+    {
+        return ignoredCount;
+    }
+
+    public int getRunningCount()
+    {
+        return runningCount;
+    }
+
+    public List<TestExecutionDto> getExecutions()
+    {
+        return executions;
+    }
+
+    public int getFlakyCount()
+    {
+        if (executions != null)
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isFlaky).count();
+        }
+        return 0;
+    }
+
+    public int getPassedHealedCount()
+    {
+        if (executions != null)
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isPassedHealed).count();
+        }
+        return 0;
+    }
+
+    public int getPassHealedCount()
+    {
+        if (executions != null)
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isPassHealed).count();
+        }
+        return 0;
+    }
+
+    public int getFixedHealedCount()
+    {
+        if (executions != null)
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isFixedHealed).count();
+        }
+        return 0;
+    }
+
+    public int getFailedHealedCount()
+    {
+        if (executions != null)
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isFailedHealed).count();
+        }
+        return 0;
+    }
+
+    public int getKnownHealedCount()
+    {
+        if (executions != null)
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isKnownHealed).count();
+        }
+        return 0;
+    }
+
+    public int getUnknownHealedCount()
+    {
+        if (executions != null)
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isUnknownHealed).count();
+        }
+        return 0;
+    }
+
+    public int getPassAiCount()
+    {
+        if (executions != null)
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isPassAi).count();
+        }
+        return 0;
+    }
+
+    public int getFixedAiCount()
+    {
+        if (executions != null)
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isFixedAi).count();
+        }
+        return 0;
+    }
+
+    public int getKnownAiCount()
+    {
+        if (executions != null)
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isKnownAi).count();
+        }
+        return 0;
+    }
+
+    public int getUnknownAiCount()
+    {
+        if (executions != null)
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isUnknownAi).count();
+        }
+        return 0;
+    }
+}

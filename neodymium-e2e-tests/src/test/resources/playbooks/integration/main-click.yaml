@@ -1,0 +1,7 @@
+data:
+  - testId: datasetA
+    buttonName: Standard Button
+  - testId: datasetB
+    buttonName: Standard Button
+steps: |
+  Click the '${buttonName}' button

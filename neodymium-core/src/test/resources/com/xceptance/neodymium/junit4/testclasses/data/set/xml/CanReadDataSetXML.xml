@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<datafile>
+	<dataset>
+		<data key="testParam1">XML Value1</data>
+		<data key="testParam2">XML Value2</data>
+	</dataset>
+</datafile>

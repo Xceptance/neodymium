@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Autocomplete &amp; Floating Portals - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+    <style>
+        .portal-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            transition: all 0.2s ease;
+        }
+        .portal-card:hover {
+            border-color: rgba(0, 255, 204, 0.3);
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .card-title {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 0.5rem;
+        }
+        .card-desc {
+            color: var(--text-secondary, #a0aec0);
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+        .status-badge {
+            margin-top: 1rem;
+            padding: 0.75rem 1rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            border-left: 3px solid #00ffcc;
+            font-size: 0.95rem;
+            color: #e2e8f0;
+        }
+        .search-container {
+            position: relative;
+            max-width: 480px;
+            margin-top: 1rem;
+        }
+        .typeahead-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: #1a202c;
+            border: 1px solid #4a5568;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+            box-sizing: border-box;
+        }
+        .typeahead-input:focus {
+            border-color: #00ffcc;
+            box-shadow: 0 0 0 2px rgba(0, 255, 204, 0.2);
+        }
+        .loading-spinner {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: none;
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(0, 255, 204, 0.3);
+            border-top-color: #00ffcc;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: translateY(-50%) rotate(360deg); }
+        }
+
+        /* Floating Portal Dropdown (Appended to document.body) */
+        .autocomplete-portal {
+            position: absolute;
+            z-index: 99999;
+            background: #1a202c;
+            border: 1px solid #00ffcc;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5), 0 0 15px rgba(0, 255, 204, 0.2);
+            max-height: 260px;
+            overflow-y: auto;
+            display: none;
+            box-sizing: border-box;
+        }
+        .suggestion-item {
+            padding: 0.75rem 1rem;
+            color: #cbd5e0;
+            font-size: 0.95rem;
+            cursor: pointer;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            transition: background 0.15s, color 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+        .suggestion-item:hover,
+        .suggestion-item.active {
+            background: rgba(0, 255, 204, 0.15);
+            color: #00ffcc;
+            font-weight: 500;
+        }
+        .suggestion-code {
+            font-size: 0.8rem;
+            color: #718096;
+            background: rgba(255, 255, 255, 0.06);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        .suggestion-item:hover .suggestion-code,
+        .suggestion-item.active .suggestion-code {
+            color: #00ffcc;
+            background: rgba(0, 255, 204, 0.2);
+        }
+        .clear-btn {
+            background: transparent;
+            border: 1px solid #4a5568;
+            color: #cbd5e0;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+            transition: all 0.2s;
+        }
+        .clear-btn:hover {
+            border-color: #e53e3e;
+            color: #fc8181;
+        }
+    </style>
+</head>
+<body class="aura-body">
+    <header class="aura-header">
+        <div class="header-container">
+            <a href="../../index.html" class="brand">
+                <span class="brand-icon"></span>
+                <span>AURA SANDBOX</span>
+            </a>
+            <ul class="nav-links">
+                <li><a href="../../index.html">Hub Home</a></li>
+                <li><a href="index.html">Playground</a></li>
+                <li><a href="#" class="active">Autocomplete &amp; Portals</a></li>
+            </ul>
+        </div>
+    </header>
+
+    <main class="aura-container">
+        <div class="aura-hero">
+            <h1 class="glow-title">Autocomplete &amp; Floating Portals</h1>
+            <p class="subtitle">Stress-tests debounced typeahead search-as-you-type where suggestion menus dynamically render into detached floating portal containers appended directly to &lt;body&gt;.</p>
+        </div>
+
+        <!-- Autocomplete Card -->
+        <div class="portal-card">
+            <h2 class="card-title">Debounced Destination Search</h2>
+            <p class="card-desc">Type at least 2 characters (e.g. <code>Ber</code>, <code>Tok</code>, <code>Par</code>). Suggestions appear after a 250ms debounce delay in a detached portal container appended directly to the document body.</p>
+
+            <div class="search-container">
+                <input type="text"
+                       id="search-input"
+                       class="typeahead-input"
+                       placeholder="Search destination (e.g. Berlin, Tokyo, Paris)..."
+                       autocomplete="off"
+                       role="combobox"
+                       aria-autocomplete="list"
+                       aria-expanded="false"
+                       aria-controls="autocomplete-portal" />
+                <div id="search-spinner" class="loading-spinner"></div>
+            </div>
+
+            <div id="selection-result" class="status-badge" style="display: none;">
+                Selected: <span id="selected-destination" style="font-weight: 600; color: #00ffcc;">None</span>
+            </div>
+
+            <button id="clear-btn" class="clear-btn" style="display: none;" onclick="clearSelection()">Clear Selection</button>
+        </div>
+    </main>
+
+    <!-- Client Script for Debounced Floating Portal -->
+    <script>
+        const DESTINATIONS = [
+            { name: "Berlin, Germany", code: "BER" },
+            { name: "Bern, Switzerland", code: "BRN" },
+            { name: "Beirut, Lebanon", code: "BEY" },
+            { name: "Belgrade, Serbia", code: "BEG" },
+            { name: "Belfast, United Kingdom", code: "BFS" },
+            { name: "Tokyo, Japan", code: "NRT" },
+            { name: "Toronto, Canada", code: "YYZ" },
+            { name: "Toulouse, France", code: "TLS" },
+            { name: "Paris, France", code: "CDG" },
+            { name: "Prague, Czech Republic", code: "PRG" },
+            { name: "Porto, Portugal", code: "OPO" },
+            { name: "Rome, Italy", code: "FCO" },
+            { name: "Rotterdam, Netherlands", code: "RTM" },
+            { name: "Reykjavik, Iceland", code: "KEF" },
+            { name: "Sydney, Australia", code: "SYD" },
+            { name: "Singapore, Singapore", code: "SIN" }
+        ];
+
+        const searchInput = document.getElementById('search-input');
+        const spinner = document.getElementById('search-spinner');
+        const selectionResult = document.getElementById('selection-result');
+        const selectedDestination = document.getElementById('selected-destination');
+        const clearBtn = document.getElementById('clear-btn');
+
+        let debounceTimer = null;
+        let activeIndex = -1;
+        let currentMatches = [];
+
+        // Lazily create portal container and append directly to document.body
+        let portal = document.getElementById('autocomplete-portal');
+        if (!portal) {
+            portal = document.createElement('div');
+            portal.id = 'autocomplete-portal';
+            portal.className = 'autocomplete-portal';
+            portal.setAttribute('role', 'listbox');
+            portal.setAttribute('aria-label', 'Destination Suggestions');
+            document.body.appendChild(portal);
+        }
+
+        function positionPortal() {
+            if (!portal) return;
+            const rect = searchInput.getBoundingClientRect();
+            portal.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+            portal.style.left = (rect.left + window.scrollX) + 'px';
+            portal.style.width = rect.width + 'px';
+        }
+
+        window.addEventListener('resize', positionPortal);
+        window.addEventListener('scroll', positionPortal);
+
+        searchInput.addEventListener('input', function(e) {
+            const query = (this.value || '').trim().toLowerCase();
+            clearTimeout(debounceTimer);
+            activeIndex = -1;
+
+            if (query.length < 2) {
+                hidePortal();
+                spinner.style.display = 'none';
+                return;
+            }
+
+            spinner.style.display = 'block';
+
+            // 250ms debounce simulation
+            debounceTimer = setTimeout(() => {
+                spinner.style.display = 'none';
+                currentMatches = DESTINATIONS.filter(d =>
+                    d.name.toLowerCase().includes(query) || d.code.toLowerCase().includes(query)
+                );
+                renderPortal(currentMatches);
+            }, 250);
+        });
+
+        function renderPortal(matches) {
+            portal.innerHTML = '';
+            if (matches.length === 0) {
+                hidePortal();
+                return;
+            }
+
+            matches.forEach((item, index) => {
+                const row = document.createElement('div');
+                row.className = 'suggestion-item';
+                row.setAttribute('role', 'option');
+                row.setAttribute('id', 'suggestion-item-' + index);
+                row.setAttribute('data-value', item.name + ' (' + item.code + ')');
+                row.setAttribute('data-index', index);
+                row.tabIndex = -1;
+
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = item.name;
+                const codeSpan = document.createElement('span');
+                codeSpan.className = 'suggestion-code';
+                codeSpan.textContent = item.code;
+
+                row.appendChild(nameSpan);
+                row.appendChild(codeSpan);
+
+                row.addEventListener('mouseenter', () => {
+                    setActiveIndex(index);
+                });
+
+                row.addEventListener('mousedown', (e) => {
+                    e.preventDefault(); // Prevent input blur
+                    selectItem(item);
+                });
+
+                row.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    selectItem(item);
+                });
+
+                portal.appendChild(row);
+            });
+
+            positionPortal();
+            portal.style.display = 'block';
+            searchInput.setAttribute('aria-expanded', 'true');
+        }
+
+        function hidePortal() {
+            if (portal) {
+                portal.style.display = 'none';
+                portal.innerHTML = '';
+            }
+            searchInput.setAttribute('aria-expanded', 'false');
+            activeIndex = -1;
+        }
+
+        function setActiveIndex(index) {
+            const items = portal.querySelectorAll('.suggestion-item');
+            items.forEach((it, idx) => {
+                if (idx === index) {
+                    it.classList.add('active');
+                    it.setAttribute('aria-selected', 'true');
+                    it.scrollIntoView({ block: 'nearest' });
+                } else {
+                    it.classList.remove('active');
+                    it.removeAttribute('aria-selected');
+                }
+            });
+            activeIndex = index;
+        }
+
+        function selectItem(item) {
+            const displayValue = item.name + ' (' + item.code + ')';
+            searchInput.value = displayValue;
+            selectedDestination.textContent = displayValue;
+            selectionResult.style.display = 'block';
+            clearBtn.style.display = 'inline-block';
+            hidePortal();
+        }
+
+        function clearSelection() {
+            searchInput.value = '';
+            selectedDestination.textContent = 'None';
+            selectionResult.style.display = 'none';
+            clearBtn.style.display = 'none';
+            hidePortal();
+            searchInput.focus();
+        }
+
+        // Keyboard navigation
+        searchInput.addEventListener('keydown', function(e) {
+            if (!portal || portal.style.display !== 'block' || currentMatches.length === 0) {
+                if (e.key === 'ArrowDown' && (this.value || '').trim().length >= 2) {
+                    // Re-open if query is present
+                    renderPortal(currentMatches);
+                }
+                return;
+            }
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                const nextIndex = (activeIndex + 1) >= currentMatches.length ? 0 : (activeIndex + 1);
+                setActiveIndex(nextIndex);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                const prevIndex = (activeIndex - 1) < 0 ? (currentMatches.length - 1) : (activeIndex - 1);
+                setActiveIndex(prevIndex);
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (activeIndex >= 0 && activeIndex < currentMatches.length) {
+                    selectItem(currentMatches[activeIndex]);
+                } else if (currentMatches.length > 0) {
+                    selectItem(currentMatches[0]);
+                }
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                hidePortal();
+            }
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            if (e.target !== searchInput && !portal.contains(e.target)) {
+                hidePortal();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+# AI-generated: Gemini 3.6 Flash
+# @author AI-generated: Gemini 3.6 Flash
+# @author Xceptance GmbH 2026
+
+steps: |
+  Öffne ${verla.url}/verla-${quality}/index.html
+  Öffne die Länderauswahl.
+  Klicke Deutschland.
+  Prüfe ob die Flagge von Deutschland zu sehen ist.
+
+  Finde die erste Produktkarte und klicke auf die Schaltfläche 'Add to Cart'
+  # Bad interface design has no size
+  Wenn diese Zeichenkette '${quality}' nicht gleich 'bad' ist, klicke auf die Größen-Schaltfläche 'L'
+  Die Anzahl im Mini-Warenkorb ist jetzt 1.
+  Gehe über den Mini-Warenkorb zum Warenkorb.
+  Klicke auf 'Kasse'
+
+  Die Überschrift lautet nun 'Kasse'
+  Es gibt Dateneingabeformulare auf der linken Seite und einen Bestellübersichtsblock auf der rechten Seite (visual).
+  Wähle 'Deutschland' als Land aus.
+  Gib 'Mario' als Vorname, 'Meier' als Nachname und die E-Mail-Adresse 'foo@varmail.net' ein.
+  Gib 'Volksbadstr. 18' als Straße, 'Heilbad Heiligenstadt' als Stadt und '37308' als Postleitzahl ein.
+  Kartennummer ist '4111 1111 1111 1111', Ablaufdatum '12/29' und CVV ist '111'.
+  Klicke auf 'Kaufen'.
+  Warte bis der Text "Vielen Dank für Ihren Einkauf!" erscheint.
+  Eine Bestellnummer im Format 'V-[0-9]+-DE' wird angezeigt, der Gesamtbetrag ist angegeben und in Euro, die Postleitzahl lautet '37308' und der Text "Vielen Dank für Ihren Einkauf!" wird angezeigt.
+  Es befindet sich ein grünes Häkchen in der Mitte des Bildschirms (visual: full).
+
+data:
+  - testId: "perfect"
+    quality: "perfect"
+    email: "user-perfect@example.com"
+    guestEmail: "guest-perfect@example.com"
+  - testId: "normal"
+    quality: "normal"
+    email: "user-normal@example.com"
+    guestEmail: "guest-normal@example.com"

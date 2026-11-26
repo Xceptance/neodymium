@@ -1,0 +1,155 @@
+/*
+ * Neodymium AI — Dual-Licensed: GNU AGPLv3 + Commercial
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Alternatively, this program may be used under the terms of a commercial
+ * license agreement provided by Xceptance Software Technologies GmbH.
+ * For commercial licensing terms, please visit https://www.xceptance.com/
+ * or contact support@xceptance.com.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package org.neodymium.ai.client;
+
+import dev.langchain4j.exception.RetriableException;
+import java.io.IOException;
+import java.net.ConnectException;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
+import java.net.http.HttpTimeoutException;
+import java.util.concurrent.TimeoutException;
+import org.neodymium.ai.config.AiConfiguration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Utility helper executing LLM chat calls with configurable retries and exponential backoff
+ * on transient HTTP errors (e.g., 429 rate limits or 5xx server errors).
+ *
+ * @author AI-generated: Gemini 3.6 Flash
+ * @author Xceptance GmbH 2026
+ */
+public final class LlmRetryHelper
+{
+    private static final Logger LOGGER = LoggerFactory.getLogger(LlmRetryHelper.class);
+
+    /**
+     * Functional interface representing an LLM chat operation.
+     */
+    @FunctionalInterface
+    public interface LlmCallable
+    {
+        LlmResponse call() throws IOException;
+    }
+
+    private LlmRetryHelper()
+    {
+        // Prevent instantiation
+    }
+
+    /**
+     * Executes the given LLM callable with retries for transient errors.
+     *
+     * @param callable the LLM invocation callable
+     * @return the LlmResponse on success
+     * @throws IOException if all retries are exhausted or a non-transient error occurs
+     */
+    public static LlmResponse executeWithRetry(final LlmCallable callable) throws IOException
+    {
+        final AiConfiguration config = AiConfiguration.getInstance();
+        final int maxRetries = config.getLlmMaxRetries();
+        final long initialDelayMs = config.getLlmInitialRetryDelayMs();
+
+        int attempt = 0;
+        long currentDelayMs = initialDelayMs;
+
+        while (true)
+        {
+            attempt++;
+            try
+            {
+                return callable.call();
+            }
+            catch (final Exception e)
+            {
+                if (attempt >= maxRetries || !isTransientError(e))
+                {
+                    if (e instanceof IOException)
+                    {
+                        throw (IOException) e;
+                    }
+                    throw new IOException("LLM call failed after " + attempt + " attempts: " + e.getMessage(), e);
+                }
+
+                LOGGER.warn("LLM request attempt {} failed with transient error ({}). Retrying in {} ms...",
+                    attempt, e.getMessage(), currentDelayMs);
+
+                try
+                {
+                    Thread.sleep(currentDelayMs);
+                }
+                catch (final InterruptedException ie)
+                {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("Interrupted during LLM retry backoff", ie);
+                }
+
+                currentDelayMs *= 2;
+            }
+        }
+    }
+
+    /**
+     * Checks if the exception represents a transient failure eligible for retry.
+     *
+     * @param t the throwable to evaluate
+     * @return {@code true} if the exception is a transient error, {@code false} otherwise
+     */
+    public static boolean isTransientError(final Throwable t)
+    {
+        if (t == null)
+        {
+            return false;
+        }
+
+        if (t instanceof TimeoutException ||
+            t instanceof HttpTimeoutException ||
+            t instanceof SocketTimeoutException ||
+            t instanceof RetriableException ||
+            t instanceof ConnectException ||
+            t instanceof SocketException)
+        {
+            return true;
+        }
+
+        final String msg = t.getMessage();
+        if (msg != null)
+        {
+            final String lower = msg.toLowerCase();
+            if (lower.contains("429") || lower.contains("too many requests") ||
+                lower.contains("500") || lower.contains("502") ||
+                lower.contains("503") || lower.contains("504") ||
+                lower.contains("rate limit") || lower.contains("server error") ||
+                lower.contains("timeout") || lower.contains("timed out") ||
+                lower.contains("connection reset") || lower.contains("connection refused") ||
+                lower.contains("broken pipe") || lower.contains("temporarily unavailable"))
+            {
+                return true;
+            }
+        }
+
+        return t.getCause() != null && isTransientError(t.getCause());
+    }
+}

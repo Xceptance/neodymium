@@ -1,0 +1,156 @@
+<div class="mbf-account-container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10" id="account-page-container">
+    <div class="flex flex-col lg:flex-row items-start gap-10">
+        
+        <!-- Left Sidebar Tabs -->
+        <aside class="w-full lg:w-64 shrink-0 bg-sand-50 border border-sand-200 rounded-2xl p-6 lg:sticky lg:top-24">
+            <h3 class="font-serif text-xl font-bold text-espresso mb-6">Account Hub</h3>
+            <ul class="flex flex-col gap-2 text-xs font-semibold">
+                <li>
+                    <button onclick="showAccountTab('orders')" id="tab-btn-orders" data-account-tab data-active="true" class="w-full text-left py-2 px-3 rounded-lg flex items-center gap-2 text-muted hover:text-ink hover:bg-white transition-colors data-[active=true]:bg-white data-[active=true]:text-terracotta-500 data-[active=true]:font-bold data-[active=true]:shadow-xs">
+                        <span>${lang_orderHistory}</span>
+                    </button>
+                </li>
+                <li>
+                    <button onclick="showAccountTab('addresses')" id="tab-btn-addresses" data-account-tab data-active="false" class="w-full text-left py-2 px-3 rounded-lg flex items-center gap-2 text-muted hover:text-ink hover:bg-white transition-colors data-[active=true]:bg-white data-[active=true]:text-terracotta-500 data-[active=true]:font-bold data-[active=true]:shadow-xs">
+                        <span>${lang_manageAddresses}</span>
+                    </button>
+                </li>
+                <li>
+                    <button onclick="showAccountTab('cards')" id="tab-btn-cards" data-account-tab data-active="false" class="w-full text-left py-2 px-3 rounded-lg flex items-center gap-2 text-muted hover:text-ink hover:bg-white transition-colors data-[active=true]:bg-white data-[active=true]:text-terracotta-500 data-[active=true]:font-bold data-[active=true]:shadow-xs">
+                        <span>${lang_manageCards}</span>
+                    </button>
+                </li>
+                <li>
+                    <button onclick="showAccountTab('password')" id="tab-btn-password" data-account-tab data-active="false" class="w-full text-left py-2 px-3 rounded-lg flex items-center gap-2 text-muted hover:text-ink hover:bg-white transition-colors data-[active=true]:bg-white data-[active=true]:text-terracotta-500 data-[active=true]:font-bold data-[active=true]:shadow-xs">
+                        <span>${lang_changePassword}</span>
+                    </button>
+                </li>
+                <li class="pt-4 border-t border-sand-200 mt-2">
+                    <a href="api/auth/logout" class="block py-2 px-3 text-danger font-bold hover:underline">${lang_logout}</a>
+                </li>
+            </ul>
+        </aside>
+
+        <!-- Right Dashboard Content Panels -->
+        <div class="flex-1 min-w-0 space-y-8" id="account-dashboard-content">
+            
+            <!-- 1. Orders Panel -->
+            <div data-account-panel data-active="true" class="hidden data-[active=true]:block" id="tab-panel-orders">
+                <h2 class="font-serif text-2xl font-bold text-espresso mb-6">${lang_orderHistory}</h2>
+                <div class="space-y-4">
+                    ${account_orders_html}
+                </div>
+            </div>
+
+            <!-- 2. Address Book Panel -->
+            <div data-account-panel data-active="false" class="hidden data-[active=true]:block" id="tab-panel-addresses">
+                <h2 class="font-serif text-2xl font-bold text-espresso mb-6">${lang_manageAddresses}</h2>
+                <div id="address-list-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                    ${account_addresses_html}
+                </div>
+                <div class="max-w-md bg-sand-50 p-6 rounded-2xl border border-sand-200">
+                    <h3 class="font-serif text-base font-bold text-espresso mb-4">Add New Address</h3>
+                    <form hx-post="api/auth/address/add" hx-target="#account-page-container" hx-swap="outerHTML" class="space-y-4 text-xs">
+                        <div>
+                            <label for="address-country" class="block font-bold uppercase tracking-wider mb-2 text-ink">${lang_country}</label>
+                            <select id="address-country" name="country" required class="w-full px-3 py-2.5 rounded-lg border border-sand-200 bg-white"
+                                    hx-get="api/address-form" hx-target="#address-form-fields" hx-trigger="change">
+                                ${country_options_html}
+                            </select>
+                        </div>
+                        <div id="address-form-fields">
+                            ${address_fields_html}
+                        </div>
+                        <button type="submit" class="px-5 py-2.5 bg-terracotta-500 hover:bg-terracotta-600 text-white font-bold rounded-lg uppercase tracking-wider">
+                            ${lang_addAddress}
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 3. Credit Cards Panel -->
+            <div data-account-panel data-active="false" class="hidden data-[active=true]:block" id="tab-panel-cards">
+                <h2 class="font-serif text-2xl font-bold text-espresso mb-6">${lang_manageCards}</h2>
+                <div id="card-list-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                    ${account_cards_html}
+                </div>
+                <div class="max-w-md bg-sand-50 p-6 rounded-2xl border border-sand-200">
+                    <h3 class="font-serif text-base font-bold text-espresso mb-4">Add Credit Card</h3>
+                    <form hx-post="api/auth/card/add" hx-target="#account-page-container" hx-swap="outerHTML" class="space-y-4 text-xs">
+                        <div>
+                            <label for="cardType" class="block font-bold uppercase tracking-wider mb-2 text-ink">${lang_cardType}</label>
+                            <select id="cardType" name="cardType" required class="w-full px-3 py-2.5 rounded-lg border border-sand-200 bg-white">
+                                <option value="Visa">Visa</option>
+                                <option value="Mastercard">Mastercard</option>
+                                <option value="American Express">American Express</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="cardNumber" class="block font-bold uppercase tracking-wider mb-2 text-ink">${lang_cardNum}</label>
+                            <input type="text" id="cardNumber" name="cardNumber" required placeholder="1234 5678 1234 5100" class="w-full px-3 py-2.5 rounded-lg border border-sand-200 bg-white">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label for="cardExpiry" class="block font-bold uppercase tracking-wider mb-2 text-ink">${lang_expiry}</label>
+                                <input type="text" id="cardExpiry" name="cardExpiry" required placeholder="12/28" class="w-full px-3 py-2.5 rounded-lg border border-sand-200 bg-white">
+                            </div>
+                            <div>
+                                <label for="cardCvv" class="block font-bold uppercase tracking-wider mb-2 text-ink">${lang_cvv}</label>
+                                <input type="text" id="cardCvv" name="cardCvv" required placeholder="123" class="w-full px-3 py-2.5 rounded-lg border border-sand-200 bg-white">
+                            </div>
+                        </div>
+                        <button type="submit" class="px-5 py-2.5 bg-terracotta-500 hover:bg-terracotta-600 text-white font-bold rounded-lg uppercase tracking-wider">
+                            ${lang_addCard}
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 4. Password Panel -->
+            <div data-account-panel data-active="false" class="hidden data-[active=true]:block" id="tab-panel-password">
+                <h2 class="font-serif text-2xl font-bold text-espresso mb-6">${lang_changePassword}</h2>
+                <div class="max-w-md bg-sand-50 p-6 rounded-2xl border border-sand-200">
+                    <div id="password-status-message" class="mb-4 font-semibold text-success text-xs">${password_status}</div>
+                    <div id="password-error-message" class="mb-4 font-semibold text-danger text-xs">${password_error}</div>
+                    <form hx-post="api/auth/change-password" hx-target="#account-page-container" hx-swap="outerHTML" class="space-y-4 text-xs">
+                        <div>
+                            <label for="currentPassword" class="block font-bold uppercase tracking-wider mb-2 text-ink">Current Password</label>
+                            <input type="password" id="currentPassword" name="currentPassword" required class="w-full px-3 py-2.5 rounded-lg border border-sand-200 bg-white">
+                        </div>
+                        <div>
+                            <label for="newPassword" class="block font-bold uppercase tracking-wider mb-2 text-ink">New Password</label>
+                            <input type="password" id="newPassword" name="newPassword" required minlength="6" class="w-full px-3 py-2.5 rounded-lg border border-sand-200 bg-white">
+                        </div>
+                        <div>
+                            <label for="confirmNewPassword" class="block font-bold uppercase tracking-wider mb-2 text-ink">Confirm New Password</label>
+                            <input type="password" id="confirmNewPassword" name="confirmNewPassword" required minlength="6" class="w-full px-3 py-2.5 rounded-lg border border-sand-200 bg-white">
+                        </div>
+                        <button type="submit" class="px-5 py-2.5 bg-terracotta-500 hover:bg-terracotta-600 text-white font-bold rounded-lg uppercase tracking-wider">
+                            ${lang_save}
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    function showAccountTab(tabName) {
+        document.querySelectorAll('[data-account-panel]').forEach(p => {
+            p.dataset.active = (p.id === 'tab-panel-' + tabName) ? 'true' : 'false';
+        });
+        document.querySelectorAll('[data-account-tab]').forEach(btn => {
+            btn.dataset.active = (btn.id === 'tab-btn-' + tabName) ? 'true' : 'false';
+        });
+        localStorage.setItem('verla_apparel_account_tab', tabName);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        showAccountTab(localStorage.getItem('verla_apparel_account_tab') || 'orders');
+    });
+    document.addEventListener('htmx:afterSwap', () => {
+        showAccountTab(localStorage.getItem('verla_apparel_account_tab') || 'orders');
+    });
+</script>

@@ -1,0 +1,86 @@
+<!-- Hero Section with Luxury Glow -->
+<section style="background: linear-gradient(135deg, #14181F 0%, #0C0E12 100%); border: 1px solid var(--apoc-border); border-radius: 12px; padding: 48px; margin-bottom: 48px; position: relative; overflow: hidden;">
+    <div style="max-width: 600px; position: relative; z-index: 2;">
+        <span style="display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.2em; color: var(--apoc-gold); margin-bottom: 12px; border: 1px solid rgba(212,175,55,0.3); padding: 4px 10px; border-radius: 20px; background: rgba(212,175,55,0.05);">
+            Private Archive
+        </span>
+        <h1 style="font-family: var(--apoc-font-serif); font-size: 40px; font-weight: 700; line-height: 1.15; margin-bottom: 16px; color: #FFFFFF;">
+            ${lang_heroTitle}
+        </h1>
+        <p style="color: var(--apoc-text-secondary); font-size: 15px; line-height: 1.6; margin-bottom: 28px;">
+            ${lang_heroDescription}
+        </p>
+        <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+            <a href="c/tops.html" class="apoc-btn-gold" data-interactive="true">
+                <span class="ps-txt ps-txt-shop-now"></span>
+                <span class="hydration-indicator"></span>
+            </a>
+            <button type="button" class="apoc-btn-secondary" data-interactive="true" onclick="document.getElementById('apoc-spin-modal-overlay').classList.add('active')">
+                <span>VIP Experience</span>
+                <span class="hydration-indicator"></span>
+            </button>
+        </div>
+    </div>
+    <!-- Decorative background insignia -->
+    <div style="position: absolute; right: 40px; top: 50%; transform: translateY(-50%); opacity: 0.15; pointer-events: none;">
+        <svg viewBox="0 0 100 100" width="320" height="320" fill="none" stroke="currentColor" stroke-width="1.5" color="var(--apoc-gold)">
+            <circle cx="50" cy="50" r="45" />
+            <polygon points="50,15 80,75 20,75" />
+            <circle cx="50" cy="50" r="20" />
+        </svg>
+    </div>
+</section>
+
+<!-- Category Showcase Navigation -->
+<section style="margin-bottom: 48px;">
+    <h2 style="font-family: var(--apoc-font-serif); font-size: 24px; font-weight: 700; color: #FFFFFF; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between;">
+        <span>${lang_featuredCategories}</span>
+        <span style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--apoc-gold);">Vault Selection</span>
+    </h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+        <a href="c/tops.html" class="apoc-icon-btn" style="padding: 24px 16px; flex-direction: column; text-align: center; height: 100%; border-radius: 8px;">
+            <span style="font-size: 32px; margin-bottom: 8px;">✨</span>
+            <span style="font-family: var(--apoc-font-serif); font-size: 16px; font-weight: 700;">${lang_tops}</span>
+            <span style="font-size: 11px; color: var(--apoc-text-muted); margin-top: 4px;">Fine Fragrances</span>
+        </a>
+        <a href="c/bottoms.html" class="apoc-icon-btn" style="padding: 24px 16px; flex-direction: column; text-align: center; height: 100%; border-radius: 8px;">
+            <span style="font-size: 32px; margin-bottom: 8px;">🧴</span>
+            <span style="font-family: var(--apoc-font-serif); font-size: 16px; font-weight: 700;">${lang_bottoms}</span>
+            <span style="font-size: 11px; color: var(--apoc-text-muted); margin-top: 4px;">Artisanal Cleansers</span>
+        </a>
+        <a href="c/outerwear.html" class="apoc-icon-btn" style="padding: 24px 16px; flex-direction: column; text-align: center; height: 100%; border-radius: 8px;">
+            <span style="font-size: 32px; margin-bottom: 8px;">🕯️</span>
+            <span style="font-family: var(--apoc-font-serif); font-size: 16px; font-weight: 700;">${lang_outerwear}</span>
+            <span style="font-size: 11px; color: var(--apoc-text-muted); margin-top: 4px;">Scented Candles</span>
+        </a>
+        <a href="c/footwear.html" class="apoc-icon-btn" style="padding: 24px 16px; flex-direction: column; text-align: center; height: 100%; border-radius: 8px;">
+            <span style="font-size: 32px; margin-bottom: 8px;">👑</span>
+            <span style="font-family: var(--apoc-font-serif); font-size: 16px; font-weight: 700;">${lang_footwear}</span>
+            <span style="font-size: 11px; color: var(--apoc-text-muted); margin-top: 4px;">Limited Extraits</span>
+        </a>
+        <a href="c/accessories.html" class="apoc-icon-btn" style="padding: 24px 16px; flex-direction: column; text-align: center; height: 100%; border-radius: 8px;">
+            <span style="font-size: 32px; margin-bottom: 8px;">🎁</span>
+            <span style="font-family: var(--apoc-font-serif); font-size: 16px; font-weight: 700;">${lang_accessories}</span>
+            <span style="font-size: 11px; color: var(--apoc-text-muted); margin-top: 4px;">Bespoke Coffrets</span>
+        </a>
+    </div>
+</section>
+
+<!-- Featured Products Grid with Web Components & Pseudo Text -->
+<section>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid var(--apoc-border); padding-bottom: 12px;">
+        <div>
+            <h2 style="font-family: var(--apoc-font-serif); font-size: 24px; font-weight: 700; color: #FFFFFF;">
+                ${lang_featuredEssentials}
+            </h2>
+            <span style="font-size: 12px; color: var(--apoc-text-secondary);"><span class="ps-txt ps-txt-trending"></span></span>
+        </div>
+        <a href="plp.html" class="apoc-btn-secondary" style="padding: 6px 14px; font-size: 12px;">
+            Explore All Creations &rarr;
+        </a>
+    </div>
+
+    <div class="apoc-products-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 24px;">
+        ${featured_products}
+    </div>
+</section>

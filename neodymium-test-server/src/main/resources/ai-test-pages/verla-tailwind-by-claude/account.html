@@ -1,0 +1,155 @@
+<div class="flex flex-col flex-wrap items-stretch gap-10 md:flex-row md:items-start" id="account-page-container">
+    <!-- Left Navigation Sidebar -->
+    <aside class="w-full flex-1 rounded-lg border border-sand-200 bg-sand-50 p-6 md:sticky md:top-25 md:min-w-55">
+        <h3 class="mb-6 font-serif text-xl font-semibold">Dashboard</h3>
+
+        <ul class="flex flex-col gap-3 text-sm">
+            <li><button onclick="showAccountTab('orders')" id="tab-btn-orders" data-account-tab data-active="true" class="flex w-full cursor-pointer items-center gap-2 py-1 text-left font-normal text-muted transition-colors data-[active=true]:font-semibold data-[active=true]:text-terracotta-500"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg> ${lang_orderHistory}</button></li>
+            <li><button onclick="showAccountTab('addresses')" id="tab-btn-addresses" data-account-tab data-active="false" class="flex w-full cursor-pointer items-center gap-2 py-1 text-left font-normal text-muted transition-colors data-[active=true]:font-semibold data-[active=true]:text-terracotta-500"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg> ${lang_manageAddresses}</button></li>
+            <li><button onclick="showAccountTab('cards')" id="tab-btn-cards" data-account-tab data-active="false" class="flex w-full cursor-pointer items-center gap-2 py-1 text-left font-normal text-muted transition-colors data-[active=true]:font-semibold data-[active=true]:text-terracotta-500"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg> ${lang_manageCards}</button></li>
+            <li><button onclick="showAccountTab('password')" id="tab-btn-password" data-account-tab data-active="false" class="flex w-full cursor-pointer items-center gap-2 py-1 text-left font-normal text-muted transition-colors data-[active=true]:font-semibold data-[active=true]:text-terracotta-500"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg> ${lang_changePassword}</button></li>
+            <li class="mt-2 border-t border-sand-200 pt-3"><a href="api/auth/logout" class="flex items-center gap-2 font-medium text-danger transition-opacity hover:opacity-80"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg> ${lang_logout}</a></li>
+        </ul>
+    </aside>
+
+    <!-- Right Dashboard Area -->
+    <section class="min-w-80 flex-[3]" id="account-dashboard-content">
+        <!-- 1. Orders Tab -->
+        <div data-account-panel data-active="true" class="hidden data-[active=true]:block" id="tab-panel-orders">
+            <h2 class="mb-6 font-serif text-2xl font-semibold">${lang_orderHistory}</h2>
+            <div class="flex flex-col gap-5">
+                ${account_orders_html}
+            </div>
+        </div>
+
+        <!-- 2. Address Book Tab -->
+        <div data-account-panel data-active="false" class="hidden data-[active=true]:block" id="tab-panel-addresses">
+            <h2 class="mb-6 font-serif text-2xl font-semibold">${lang_manageAddresses}</h2>
+
+            <!-- Address listing -->
+            <div id="address-list-container" class="mb-7.5 grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-5">
+                ${account_addresses_html}
+            </div>
+
+            <!-- Add Address Form -->
+            <div class="max-w-[500px] rounded-lg border border-sand-200 bg-sand-50 p-6">
+                <h3 class="mb-4 font-serif text-lg font-semibold">Add New Address</h3>
+                <form hx-post="api/auth/address/add" hx-target="#account-page-container" hx-swap="outerHTML">
+                    <div class="mb-5">
+                        <label for="address-country" class="mb-2 block text-[13px] font-semibold uppercase tracking-[0.05em]">${lang_country}</label>
+                        <select id="address-country" name="country" class="w-full rounded-lg border border-sand-200 bg-sand-50 px-4 py-3 outline-none transition-colors focus:border-terracotta-500 focus:bg-white" required
+                                hx-get="api/address-form" hx-target="#address-form-fields" hx-trigger="change">
+                            ${country_options_html}
+                        </select>
+                    </div>
+
+                    <div id="address-form-fields">
+                        ${address_fields_html}
+                    </div>
+
+                    <button type="submit" class="mt-2.5 rounded-lg bg-terracotta-500 px-5 py-2.5 text-[13px] font-semibold uppercase tracking-[0.05em] text-white transition-colors hover:bg-terracotta-700">
+                        ${lang_addAddress}
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 3. Credit Cards Tab -->
+        <div data-account-panel data-active="false" class="hidden data-[active=true]:block" id="tab-panel-cards">
+            <h2 class="mb-6 font-serif text-2xl font-semibold">${lang_manageCards}</h2>
+
+            <!-- Card listing -->
+            <div id="card-list-container" class="mb-7.5 grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-5">
+                ${account_cards_html}
+            </div>
+
+            <!-- Add Card Form -->
+            <div class="max-w-[500px] rounded-lg border border-sand-200 bg-sand-50 p-6">
+                <h3 class="mb-4 font-serif text-lg font-semibold">Add Credit Card</h3>
+                <form hx-post="api/auth/card/add" hx-target="#account-page-container" hx-swap="outerHTML">
+                    <div class="mb-5">
+                        <label for="cardType" class="mb-2 block text-[13px] font-semibold uppercase tracking-[0.05em]">${lang_cardType}</label>
+                        <select id="cardType" name="cardType" class="w-full rounded-lg border border-sand-200 bg-sand-50 px-4 py-3 outline-none transition-colors focus:border-terracotta-500 focus:bg-white" required>
+                            <option value="Visa">Visa</option>
+                            <option value="Mastercard">Mastercard</option>
+                            <option value="American Express">American Express</option>
+                        </select>
+                    </div>
+                    <div class="mb-5">
+                        <label for="cardNumber" class="mb-2 block text-[13px] font-semibold uppercase tracking-[0.05em]">${lang_cardNum}</label>
+                        <input type="text" id="cardNumber" name="cardNumber" class="w-full rounded-lg border border-sand-200 bg-sand-50 px-4 py-3 outline-none transition-colors focus:border-terracotta-500 focus:bg-white" placeholder="1234 5678 1234 5100" required>
+                    </div>
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div class="mb-5">
+                            <label for="cardExpiry" class="mb-2 block text-[13px] font-semibold uppercase tracking-[0.05em]">${lang_expiry}</label>
+                            <input type="text" id="cardExpiry" name="cardExpiry" class="w-full rounded-lg border border-sand-200 bg-sand-50 px-4 py-3 outline-none transition-colors focus:border-terracotta-500 focus:bg-white" placeholder="12/28" required>
+                        </div>
+                        <div class="mb-5">
+                            <label for="cardCvv" class="mb-2 block text-[13px] font-semibold uppercase tracking-[0.05em]">${lang_cvv}</label>
+                            <input type="text" id="cardCvv" name="cardCvv" class="w-full rounded-lg border border-sand-200 bg-sand-50 px-4 py-3 outline-none transition-colors focus:border-terracotta-500 focus:bg-white" placeholder="123" required>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="mt-2.5 rounded-lg bg-terracotta-500 px-5 py-2.5 text-[13px] font-semibold uppercase tracking-[0.05em] text-white transition-colors hover:bg-terracotta-700">
+                        ${lang_addCard}
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 4. Change Password Tab -->
+        <div data-account-panel data-active="false" class="hidden data-[active=true]:block" id="tab-panel-password">
+            <h2 class="mb-6 font-serif text-2xl font-semibold">${lang_changePassword}</h2>
+
+            <div class="max-w-[500px] rounded-lg border border-sand-200 bg-sand-50 p-6">
+                <div id="password-status-message" class="mb-4 font-semibold text-success">${password_status}</div>
+                <div id="password-error-message" class="mb-4 font-semibold text-danger">${password_error}</div>
+
+                <form hx-post="api/auth/change-password" hx-target="#account-page-container" hx-swap="outerHTML">
+                    <div class="mb-5">
+                        <label for="currentPassword" class="mb-2 block text-[13px] font-semibold uppercase tracking-[0.05em]">Current Password</label>
+                        <input type="password" id="currentPassword" name="currentPassword" class="w-full rounded-lg border border-sand-200 bg-sand-50 px-4 py-3 outline-none transition-colors focus:border-terracotta-500 focus:bg-white" required minlength="6">
+                    </div>
+                    <div class="mb-5">
+                        <label for="newPassword" class="mb-2 block text-[13px] font-semibold uppercase tracking-[0.05em]">New Password</label>
+                        <input type="password" id="newPassword" name="newPassword" class="w-full rounded-lg border border-sand-200 bg-sand-50 px-4 py-3 outline-none transition-colors focus:border-terracotta-500 focus:bg-white" required minlength="6">
+                    </div>
+                    <div class="mb-6">
+                        <label for="confirmNewPassword" class="mb-2 block text-[13px] font-semibold uppercase tracking-[0.05em]">Confirm New Password</label>
+                        <input type="password" id="confirmNewPassword" name="confirmNewPassword" class="w-full rounded-lg border border-sand-200 bg-sand-50 px-4 py-3 outline-none transition-colors focus:border-terracotta-500 focus:bg-white" required minlength="6">
+                    </div>
+
+                    <button type="submit" class="rounded-lg bg-terracotta-500 px-5 py-2.5 text-[13px] font-semibold uppercase tracking-[0.05em] text-white transition-colors hover:bg-terracotta-700">
+                        ${lang_save}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </section>
+</div>
+
+<script>
+    // Tab state lives in data attributes so the visual rules stay in utilities
+    // (data-[active=true]:block / :text-terracotta-500) instead of inline styles.
+    function showAccountTab(tabName) {
+        document.querySelectorAll('[data-account-panel]').forEach(p => {
+            p.dataset.active = (p.id === 'tab-panel-' + tabName) ? 'true' : 'false';
+        });
+
+        document.querySelectorAll('[data-account-tab]').forEach(btn => {
+            btn.dataset.active = (btn.id === 'tab-btn-' + tabName) ? 'true' : 'false';
+        });
+
+        // Store active tab in localStorage to preserve tab on swaps
+        localStorage.setItem('verla_account_active_tab', tabName);
+    }
+
+    // Restore active tab on load/swap
+    document.addEventListener('DOMContentLoaded', () => {
+        showAccountTab(localStorage.getItem('verla_account_active_tab') || 'orders');
+    });
+
+    document.addEventListener('htmx:afterSwap', () => {
+        showAccountTab(localStorage.getItem('verla_account_active_tab') || 'orders');
+    });
+</script>

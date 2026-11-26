@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head></head>
+<body>
+
+<!-- Test Base Variation History Drawer Side Panel Fragment -->
+<div th:fragment="variationHistoryPanel" class="side-panel-drawer" id="variationHistoryDrawer">
+    <div class="side-panel-resizer" id="variationHistoryResizer"></div>
+    
+    <!-- Drawer Header -->
+    <div class="p-3 border-bottom d-flex align-items-start justify-content-between" style="background: var(--bg-card); color: var(--text-main);">
+        <div>
+            <div class="h6 mb-1 fw-bold font-size-lg" id="tbHistSidePanelTitle"></div>
+            <div class="font-size-sm text-muted" id="tbHistSidePanelSubtitle"></div>
+        </div>
+        <button type="button" class="btn-close js-close-side-panel" aria-label="Close"></button>
+    </div>
+
+    <!-- Drawer Body -->
+    <div class="p-3 overflow-auto flex-grow-1 d-flex flex-column gap-3">
+        <!-- Execution History Across All Batches Box -->
+        <div class="card card-custom p-3">
+            <div class="card-header bg-transparent fw-bold font-size-lg border-0 px-0 d-flex align-items-center justify-content-between">
+                <span><span class="material-symbols-outlined text-primary me-2">history</span> Execution History Across All Batches</span>
+            </div>
+
+            <!-- History Table -->
+            <div class="table-responsive">
+                <table class="table table-hover align-middle table-custom mb-0 history-table" style="table-layout: fixed; width: 100%; min-width: 850px;">
+                    <thead>
+                        <tr>
+                            <th onclick="sortVariationHistoryTable(0)" style="width: 28%; min-width: 225px; cursor: pointer; user-select: none;" title="Sort by Run ID">
+                                RUN ID <span class="material-symbols-outlined sort-icon" style="font-size: 0.8rem; vertical-align: middle;">unfold_more</span>
+                            </th>
+                            <th onclick="sortVariationHistoryTable(1)" style="width: 16%; min-width: 125px; cursor: pointer; user-select: none;" title="Sort by Batch Name">
+                                BATCH NAME <span class="material-symbols-outlined sort-icon" style="font-size: 0.8rem; vertical-align: middle;">unfold_more</span>
+                            </th>
+                            <th onclick="sortVariationHistoryTable(2)" style="width: 20%; min-width: 165px; cursor: pointer; user-select: none;" title="Sort by Mode">
+                                MODE <span class="material-symbols-outlined sort-icon" style="font-size: 0.8rem; vertical-align: middle;">unfold_more</span>
+                            </th>
+                            <th onclick="sortVariationHistoryTable(3)" style="width: 17%; min-width: 150px; cursor: pointer; user-select: none;" title="Sort by Timestamp">
+                                TIMESTAMP <span class="material-symbols-outlined sort-icon" style="font-size: 0.8rem; vertical-align: middle;">unfold_more</span>
+                            </th>
+                            <th onclick="sortVariationHistoryTable(4)" style="width: 19%; min-width: 170px; cursor: pointer; user-select: none;" title="Sort by Status">
+                                STATUS / BUGS <span class="material-symbols-outlined sort-icon" style="font-size: 0.8rem; vertical-align: middle;">unfold_more</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbVariationHistoryTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

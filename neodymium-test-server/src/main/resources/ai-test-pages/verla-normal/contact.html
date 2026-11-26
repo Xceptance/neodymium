@@ -1,0 +1,26 @@
+<section style="max-width: 800px; margin: 0 auto; padding: 20px 0;">
+    <h1 style="font-family: var(--font-family-serif); font-size: 36px; font-weight: 600; margin-bottom: 24px;">Contact Us</h1>
+    <p style="font-size: 16px; line-height: 1.8; margin-bottom: 30px; color: var(--color-text-secondary);">
+        If you have any questions regarding your order, shipping, returns, or simply want to chat, we are here for you. Fill out the details below or email hello@verla-apparel.com.
+    </p>
+
+    <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); padding: 32px; border-radius: var(--border-radius);">
+        <form action="#" method="POST" onsubmit="event.preventDefault(); alert('Message sent successfully!');">
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label class="form-label" for="contact-name">Name</label>
+                    <input type="text" id="contact-name" class="form-control" required placeholder="John Doe">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="contact-email">Email Address</label>
+                    <input type="email" id="contact-email" class="form-control" required placeholder="john@example.com">
+                </div>
+            </div>
+            <div class="form-group" style="margin-bottom: 24px;">
+                <label class="form-label" for="contact-message">Message</label>
+                <textarea id="contact-message" class="form-control" rows="5" required placeholder="How can we help?"></textarea>
+            </div>
+            <button type="submit" class="btn-primary" style="padding: 12px 24px;">Send Message</button>
+        </form>
+    </div>
+</section>

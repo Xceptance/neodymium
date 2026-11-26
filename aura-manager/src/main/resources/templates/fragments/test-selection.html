@@ -1,0 +1,291 @@
+<!--
+  Xceptance Aura Test Selection Panel Contents Fragment
+  @author AI-generated: Antigravity
+  Xceptance GmbH 2026
+-->
+<div class="panel" th:fragment="testSelectionContent">
+    <div class="panel-header" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 8px;">
+        <div class="sidebar-tabs" style="display: flex; gap: 4px; padding: 2px; background: rgba(0,0,0,0.15); border-radius: 8px;">
+            <button type="button" class="sidebar-tab-btn active-tests" id="tabTestsBtn" onclick="switchSidebarTab('tests')" style="display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;">
+                <span class="material-symbols-outlined" style="font-size: 14px;">checklist</span>
+                <span>Tests (.yaml)</span>
+            </button>
+            <button type="button" class="sidebar-tab-btn" id="tabFragmentsBtn" onclick="switchSidebarTab('fragments')" style="display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;">
+                <span class="material-symbols-outlined" style="font-size: 14px; color: #a855f7;">extension</span>
+                <span>Fragments (.steps)</span>
+            </button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 4px;">
+            <button type="button" class="btn-edit neo-u-8" id="toggleInlineTagsBtn" onclick="toggleInlineTagsMode()" title="Show Inline Tags" aria-pressed="false">
+                <span class="material-symbols-outlined" id="inlineTagsModeIcon" style="font-size: 16px;">sell</span>
+            </button>
+            <button type="button" class="btn-edit neo-u-8" id="toggleFileViewBtn" onclick="toggleFileViewMode()" title="Switch View Mode (Flat / Hierarchical)">
+                <span class="material-symbols-outlined" id="fileViewModeIcon" style="font-size: 16px;">view_list</span>
+            </button>
+            <button class="btn-edit neo-u-8" id="refreshFilesBtn" hx-get="/api/files/list" hx-include="#testSearchInput" hx-target="#yamlFileList" hx-swap="innerHTML" title="Refresh Files"><span class="material-symbols-outlined">sync</span></button>
+        </div>
+    </div>
+    <div class="search-container" style="position: relative; display: flex; align-items: center;">
+        <span class="material-symbols-outlined search-icon">search</span>
+        <input type="text" id="testSearchInput" name="q" placeholder="Search test cases or tags (e.g. tag:value)..."
+               th:value="${q}"
+               class="search-input"
+               style="padding-right: 28px;"
+               hx-get="/api/files/search" hx-trigger="keyup changed delay:200ms, search"
+               hx-target="#yamlFileList" hx-swap="innerHTML"
+               oninput="if(typeof onTestSearchInput==='function') onTestSearchInput(this.value);"/>
+        <button type="button" id="clearTestSearchBtn" class="clear-search-btn" onclick="clearTestSearch()" title="Clear filter"
+                th:style="${q != null and !q.isEmpty() ? 'display: inline-flex;' : 'display: none;'}">
+            <span class="material-symbols-outlined" style="font-size: 16px;">close</span>
+        </button>
+    </div>
+    <div class="content-scroll" id="yamlFileList" th:fragment="yamlFileList" hx-get="/api/files/list" hx-include="#testSearchInput" hx-trigger="refreshFiles from:body" hx-swap="innerHTML" data-active-tab="tests">
+        <div th:replace="~{fragments/test-selection :: yamlFileListContent}"></div>
+    </div>
+    <script>
+        (function() {
+            try {
+                var inp = document.getElementById('testSearchInput');
+                var s = (typeof sessionStorage !== 'undefined') ? sessionStorage.getItem('aura_test_search_query') : null;
+                var c = document.cookie.match(/(?:^|;\s*)aura_test_search_query=([^;]*)/);
+                var cookieQ = c ? decodeURIComponent(c[1]).trim() : '';
+                var q = (inp && inp.value && inp.value.trim()) ? inp.value.trim() : (cookieQ || (s && s.trim() ? s.trim() : ''));
+                if (q) {
+                    if (inp && !inp.value) inp.value = q;
+                    var btn = document.getElementById('clearTestSearchBtn');
+                    if (btn) btn.style.display = 'inline-flex';
+                    if (typeof applyInstantTestFilter === 'function') {
+                        applyInstantTestFilter(q);
+                    } else {
+                        var term = q.toLowerCase();
+                        var list = document.getElementById('yamlFileList');
+                        if (list) {
+                            var items = list.querySelectorAll('.file-container');
+                            for (var i = 0; i < items.length; i++) {
+                                var f = (items[i].getAttribute('data-file') || '').toLowerCase();
+                                var match = f.indexOf(term) !== -1;
+                                var datasets = items[i].querySelectorAll('.dataset-item');
+                                for (var j = 0; j < datasets.length; j++) {
+                                    var lbl = (datasets[j].textContent || '').toLowerCase();
+                                    var did = (datasets[j].getAttribute('data-id') || '').toLowerCase();
+                                    var dMatch = match || lbl.indexOf(term) !== -1 || did.indexOf(term) !== -1;
+                                    datasets[j].style.display = dMatch ? 'flex' : 'none';
+                                    if (dMatch) match = true;
+                                }
+                                items[i].style.display = match ? 'flex' : 'none';
+                            }
+                        }
+                    }
+                }
+            } catch (e) {}
+        })();
+    </script>
+    <div class="panel-footer" style="padding: 10px 12px; border-top: 1px solid var(--border); display: flex; gap: 8px;">
+        <button class="btn-edit" id="openModalBtn" onclick="openCreateModal('yaml')" style="flex: 1; justify-content: center; padding: 8px; font-weight: 500;" title="Create new runnable test playbook (.yaml)">
+            <span class="material-symbols-outlined">add</span> + Test (.yaml)
+        </button>
+        <button class="btn-edit" id="openModalFragmentBtn" onclick="openCreateModal('steps')" style="flex: 1; justify-content: center; padding: 8px; font-weight: 500; border-color: rgba(168, 85, 247, 0.4); color: #a855f7;" title="Create new reusable step fragment (.steps)">
+            <span class="material-symbols-outlined" style="color: #a855f7;">extension</span> + Fragment (.steps)
+        </button>
+    </div>
+</div>
+
+<th:block th:fragment="yamlFileListContent">
+    <!-- TAB 1: TESTS (.yaml) CONTAINER -->
+    <div id="sidebarTestsContainer" class="sidebar-tab-content" th:data-folder-states="${folderSelectionStatesJson}" th:data-folder-totals="${folderTotalDatasetsJson}">
+        <!-- If files is null or empty, display a message -->
+        <div th:if="${files == null or files.isEmpty()}" class="empty-state-card">
+            <span class="material-symbols-outlined">folder_open</span>
+            <div class="empty-title">No Test Files Found</div>
+            <div class="empty-desc">No YAML test files were found in src/test/resources.</div>
+        </div>
+
+        <!-- Otherwise, render the list using Thymeleaf loop -->
+        <th:block th:unless="${files == null or files.isEmpty()}">
+            <div class="file-container" th:each="item : ${files}" th:data-file="${item.file}" style="display: flex; flex-direction: column; margin-bottom: 6px;">
+                <div class="list-item" style="position: relative; padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; cursor: pointer;" tabindex="0"
+                     th:data-file="${item.file}"
+                     onclick="if(typeof toggleExpandFile==='function') toggleExpandFile(this.getAttribute('data-file'), this);">
+                    <div class="item-main" style="min-width: 0; overflow: hidden; display: flex; align-items: center; flex-grow: 1;">
+                        <span class="material-symbols-outlined" 
+                              th:text="${#sets.contains(expandedFiles, item.file) ? 'keyboard_arrow_down' : 'keyboard_arrow_right'}"
+                              style="margin-right: 8px; color: var(--text-secondary); font-size: 16px; width: 16px; text-align: center;"></span>
+                        <label class="custom-checkbox" onclick="event.stopPropagation();" th:if="${!item.hasError}">
+                            <input type="checkbox" class="file-select-cb" th:data-file="${item.file}" 
+                                   th:checked="${selectedFileKeys != null and selectedFileKeys.contains(item.file)}"
+                                   th:data-indeterminate="${partiallySelectedFileKeys != null and partiallySelectedFileKeys.contains(item.file)}"
+                                   onchange="if(typeof toggleFileCheckboxesInstant==='function') toggleFileCheckboxesInstant(this);"
+                                   th:hx-post="@{/api/queue/toggleAll(file=${item.file})}"
+                                   hx-target="#queueListContainer" hx-swap="innerHTML">
+                        </label>
+                        <span th:if="${item.hasError}" class="material-symbols-outlined" style="color: var(--danger, #ef4444); font-size: 16px; margin-right: 4px;" th:title="${'YAML Parse Error: ' + item.errorMessage}">error</span>
+                        <span class="file-name-label" style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 6px; flex: 1; min-width: 0;" th:styleappend="${item.hasError ? 'color: var(--danger, #ef4444);' : ''}" th:text="${item.file}" th:title="${item.file}">filename.yaml</span>
+                    </div>
+                    <div class="item-actions" style="display: flex; align-items: center; gap: 2px; flex-shrink: 0; margin-left: 6px;">
+                        <button type="button" class="tag-count-badge file-tag-count-badge" th:if="${item.totalTagCount > 0}"
+                                onclick="event.stopPropagation(); if(typeof toggleTagPopover==='function') toggleTagPopover(this, event);"
+                                onmouseenter="if(typeof scheduleTagPopoverOpen==='function') scheduleTagPopoverOpen(this);"
+                                onmouseleave="if(typeof scheduleTagPopoverClose==='function') scheduleTagPopoverClose();"
+                                th:title="'View ' + ${item.totalTagCount} + ' tags (click to inspect & filter)'"
+                                th:aria-label="'View ' + ${item.totalTagCount} + ' tags for ' + ${item.file}">
+                            <span class="material-symbols-outlined" aria-hidden="true">sell</span>
+                            <span th:text="${item.totalTagCount}">0</span>
+                        </button>
+                        <button type="button" class="playbook-marker-btn" th:if="${item.hasPlaybook}" th:data-file="${item.file}"
+                                onclick="event.stopPropagation(); if(typeof openPlaybookInspector==='function') openPlaybookInspector(this.getAttribute('data-file'), '');"
+                                style="padding: 2px 5px; font-size: 11px; border-radius: 4px; background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.4); cursor: pointer; display: inline-flex; align-items: center; gap: 3px;"
+                                title="View Recorded Companion JSON Playbook">
+                            <span class="material-symbols-outlined" style="font-size: 14px;">menu_book</span>
+                        </button>
+                        <button class="edit-icon-btn" th:data-file="${item.file}"
+                                onclick="event.stopPropagation(); if(typeof openRenameModal==='function') openRenameModal(this.getAttribute('data-file'));"
+                                style="padding: 4px 6px; color: var(--text-secondary);"
+                                th:title="'Rename or Move ' + ${item.file}" th:alt="'Rename or Move ' + ${item.file}" th:aria-label="'Rename or Move ' + ${item.file}">
+                            <span class="material-symbols-outlined" style="font-size: 15px;" aria-hidden="true">drive_file_rename_outline</span>
+                        </button>
+                        <button class="edit-icon-btn" th:data-file="${item.file}"
+                                onclick="event.stopPropagation(); if(typeof openYamlEditor==='function') openYamlEditor(this.getAttribute('data-file'));"
+                                style="padding: 4px 6px;"
+                                th:styleappend="${item.hasError ? 'color: var(--danger, #ef4444);' : 'color: var(--text-secondary);'}"
+                                th:title="${item.hasError ? 'Fix YAML Syntax in Raw Editor: ' + item.file : 'Edit YAML Steps for ' + item.file}" th:alt="'Edit YAML Steps for ' + ${item.file}" th:aria-label="'Edit YAML Steps for ' + ${item.file}">
+                            <span class="material-symbols-outlined" style="font-size: 16px;" aria-hidden="true" th:text="${item.hasError ? 'build' : 'edit'}">edit</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="file-tags-row" th:if="${item.totalTagCount > 0}">
+                    <th:block th:if="${item.rootTags != null and !item.rootTags.isEmpty()}">
+                        <span class="tag-group-chip" data-tag-scope="file" th:each="entry : ${item.rootTags.entrySet()}" th:data-key="${entry.key}">
+                            <span class="tag-group-key" th:text="${entry.key + ':'}">key:</span>
+                            <th:block th:each="val, iterStat : ${entry.value}">
+                                <span class="tag-val-sep" th:if="${!iterStat.first}" aria-hidden="true">&middot;</span>
+                                <button type="button" class="tag-chip test-tag-chip tag-group-val"
+                                        th:data-tag="${entry.key + ':' + val}"
+                                        th:data-key="${entry.key}"
+                                        th:data-value="${val}"
+                                        onclick="event.stopPropagation(); if(typeof filterTestsByTag==='function') filterTestsByTag(this.getAttribute('data-tag'));"
+                                        th:title="'Click to filter tests by ' + ${entry.key} + ':' + ${val}"
+                                        th:text="${val}">val</button>
+                            </th:block>
+                        </span>
+                    </th:block>
+                    <button type="button" class="tag-dataset-hint-chip" th:if="${item.datasetOnlyTagCount > 0}"
+                            onclick="event.stopPropagation(); if(typeof toggleTagPopover==='function') toggleTagPopover(this, event);"
+                            onmouseenter="if(typeof scheduleTagPopoverOpen==='function') scheduleTagPopoverOpen(this);"
+                            onmouseleave="if(typeof scheduleTagPopoverClose==='function') scheduleTagPopoverClose();"
+                            th:title="'Inspect ' + ${item.datasetOnlyTagCount} + ' dataset-level tags'">
+                        <span th:text="'+' + ${item.datasetOnlyTagCount} + ' dataset'">+1 dataset</span>
+                    </button>
+                    <div class="dataset-only-tags-data" th:if="${item.datasetOnlyTagCount > 0}" style="display: none;" aria-hidden="true">
+                        <span class="tag-group-chip" data-tag-scope="dataset" th:each="entry : ${item.datasetOnlyTags.entrySet()}" th:data-key="${entry.key}">
+                            <span class="tag-group-key" th:text="${entry.key + ':'}">key:</span>
+                            <th:block th:each="val : ${entry.value}">
+                                <button type="button" class="tag-chip dataset-only-tag-ref tag-group-val"
+                                        th:data-tag="${entry.key + ':' + val}"
+                                        th:data-key="${entry.key}"
+                                        th:data-value="${val}"
+                                        th:text="${val}">val</button>
+                            </th:block>
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="dataset-list" th:id="'datasets-' + ${item.file}" th:data-file="${item.file}" th:style="'display: ' + (${#sets.contains(expandedFiles, item.file) ? 'flex' : 'none'}) + '; flex-direction: column; padding-left: 24px; margin-top: 4px; gap: 4px;'">
+                    <div th:if="${item.hasError}" class="file-parse-error-box" style="padding: 8px 12px; border-radius: 6px; background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; font-size: 11px; color: #ef4444; word-break: break-word;">
+                        <div style="font-weight: 600; margin-bottom: 2px;">YAML Syntax Error</div>
+                        <div style="font-family: monospace; white-space: pre-wrap;" th:text="${item.errorMessage}">Parse error details</div>
+                        <div style="margin-top: 6px; color: var(--text-secondary); font-size: 11px;">Click the repair icon to edit the file in Raw YAML mode.</div>
+                    </div>
+                    <div th:unless="${item.hasError}" class="dataset-item" th:each="dataset : ${item.datasets}" style="display: flex; flex-direction: column; padding: 4px 8px; border-radius: 6px; font-size: 12px; cursor: pointer;" th:data-file="${item.file}" th:data-id="${dataset.id}" onclick="const cb = this.querySelector('.dataset-select-cb'); if (cb &amp;&amp; event.target !== cb &amp;&amp; !event.target.closest('.custom-checkbox') &amp;&amp; !event.target.closest('.playbook-marker-btn') &amp;&amp; !event.target.closest('.tag-count-badge') &amp;&amp; !event.target.closest('.dataset-tags-row')) { cb.click(); }">
+                        <div class="dataset-item-row" style="display: flex; align-items: center; justify-content: space-between; width: 100%; min-width: 0;">
+                            <div style="display: flex; align-items: center; min-width: 0; overflow: hidden; flex: 1;">
+                                <label class="custom-checkbox" onclick="event.stopPropagation();">
+                                    <input type="checkbox" class="dataset-select-cb" th:data-file="${item.file}" th:data-id="${dataset.id}" 
+                                           th:checked="${selectedKeys != null and selectedKeys.contains(item.file + '::' + dataset.id)}"
+                                           onchange="if(typeof toggleDatasetCheckboxInstant==='function') toggleDatasetCheckboxInstant(this);"
+                                           th:hx-post="@{/api/queue/toggle(file=${item.file},id=${dataset.id})}"
+                                           hx-target="#queueListContainer" hx-swap="innerHTML">
+                                </label>
+                                <span class="material-symbols-outlined" style="margin-left: 8px; margin-right: 6px; color: var(--accent); opacity: 0.7; flex-shrink: 0; font-size: 14px;">database</span>
+                                <span class="dataset-label-text" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 2px; flex: 1; min-width: 0;" th:text="${dataset.label}" th:title="${dataset.label}">dataset label</span>
+                            </div>
+                            <div class="item-actions" style="display: flex; align-items: center; gap: 3px; flex-shrink: 0; margin-left: 6px;">
+                                <button type="button" class="tag-count-badge dataset-tag-count-badge" th:if="${dataset.totalTagCount > 0}"
+                                        onclick="event.stopPropagation(); if(typeof toggleTagPopover==='function') toggleTagPopover(this, event);"
+                                        onmouseenter="if(typeof scheduleTagPopoverOpen==='function') scheduleTagPopoverOpen(this);"
+                                        onmouseleave="if(typeof scheduleTagPopoverClose==='function') scheduleTagPopoverClose();"
+                                        th:title="'View ' + ${dataset.totalTagCount} + ' dataset tags (click to inspect & filter)'"
+                                        th:aria-label="'View ' + ${dataset.totalTagCount} + ' tags for ' + ${dataset.label}">
+                                    <span class="material-symbols-outlined" aria-hidden="true">sell</span>
+                                    <span th:text="${dataset.totalTagCount}">0</span>
+                                </button>
+                                <button type="button" class="playbook-marker-btn" th:if="${dataset.hasPlaybook}" th:data-file="${item.file}" th:data-id="${dataset.id}"
+                                        onclick="event.stopPropagation(); if(typeof openPlaybookInspector==='function') openPlaybookInspector(this.getAttribute('data-file'), this.getAttribute('data-id'));"
+                                        style="padding: 2px 5px; font-size: 11px; border-radius: 4px; background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.4); cursor: pointer; display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;"
+                                        title="View Recorded Companion JSON Playbook">
+                                    <span class="material-symbols-outlined" style="font-size: 14px;">menu_book</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="dataset-tags-row" th:if="${dataset.totalTagCount > 0}">
+                            <span class="tag-group-chip dataset-tag-group-chip" data-tag-scope="dataset" th:each="entry : ${dataset.tags.entrySet()}" th:data-key="${entry.key}">
+                                <span class="tag-group-key" th:text="${entry.key + ':'}">key:</span>
+                                <th:block th:each="val, iterStat : ${entry.value}">
+                                    <span class="tag-val-sep" th:if="${!iterStat.first}" aria-hidden="true">&middot;</span>
+                                    <button type="button" class="tag-chip dataset-tag-chip tag-group-val"
+                                            th:data-tag="${entry.key + ':' + val}"
+                                            th:data-key="${entry.key}"
+                                            th:data-value="${val}"
+                                            onclick="event.stopPropagation(); if(typeof filterTestsByTag==='function') filterTestsByTag(this.getAttribute('data-tag'));"
+                                            th:title="'Click to filter tests by ' + ${entry.key} + ':' + ${val}"
+                                            th:text="${val}">val</button>
+                                </th:block>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </th:block>
+    </div>
+
+    <!-- TAB 2: STEP FRAGMENTS (.steps) CONTAINER -->
+    <div id="sidebarFragmentsContainer" class="sidebar-tab-content" style="display: none;">
+        <div th:if="${stepsFiles == null or stepsFiles.isEmpty()}" class="empty-state-card">
+            <span class="material-symbols-outlined" style="color: #a855f7;">extension</span>
+            <div class="empty-title">No Step Fragments Found</div>
+            <div class="empty-desc">No .steps fragment files were found in src/test/resources.</div>
+        </div>
+
+        <th:block th:unless="${stepsFiles == null or stepsFiles.isEmpty()}">
+            <div class="file-container" th:each="stepFile : ${stepsFiles}" th:data-file="${stepFile}" style="display: flex; flex-direction: column; margin-bottom: 4px;">
+                <div class="list-item" style="padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; cursor: pointer;" tabindex="0"
+                     th:data-file="${stepFile}"
+                     onclick="if(typeof openYamlEditor==='function') openYamlEditor(this.getAttribute('data-file'));">
+                    <div class="item-main" style="min-width: 0; display: flex; align-items: center; flex-grow: 1;">
+                        <span class="material-symbols-outlined" style="margin-right: 6px; color: #a855f7; font-size: 16px; flex-shrink: 0;">extension</span>
+                        <span th:if="${fragmentRequiredVarsMap != null and fragmentRequiredVarsMap.get(stepFile) != null}"
+                              class="material-symbols-outlined fragment-req-vars-icon"
+                              style="margin-right: 6px; font-size: 15px; color: #d97706; cursor: help; flex-shrink: 0;"
+                              th:data-req-vars="${fragmentRequiredVarsMap.get(stepFile)}"
+                              onclick="event.stopPropagation();">info</span>
+                        <span style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;" th:text="${stepFile}">fragment.steps</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 2px;">
+                        <button class="edit-icon-btn" th:data-file="${stepFile}"
+                                onclick="event.stopPropagation(); if(typeof openRenameModal==='function') openRenameModal(this.getAttribute('data-file'));"
+                                style="padding: 4px 6px; color: var(--text-secondary);"
+                                th:title="'Rename or Move Fragment ' + ${stepFile}" th:alt="'Rename or Move Fragment ' + ${stepFile}" th:aria-label="'Rename or Move Fragment ' + ${stepFile}">
+                            <span class="material-symbols-outlined" style="font-size: 15px;" aria-hidden="true">drive_file_rename_outline</span>
+                        </button>
+                        <button class="edit-icon-btn" th:data-file="${stepFile}"
+                                onclick="event.stopPropagation(); if(typeof openYamlEditor==='function') openYamlEditor(this.getAttribute('data-file'));"
+                                style="padding: 4px 6px; color: var(--text-secondary);" 
+                                th:title="'Edit Fragment ' + ${stepFile}" th:alt="'Edit Fragment ' + ${stepFile}" th:aria-label="'Edit Fragment ' + ${stepFile}">
+                            <span class="material-symbols-outlined" style="font-size: 16px;" aria-hidden="true">edit</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </th:block>
+    </div>
+</th:block>

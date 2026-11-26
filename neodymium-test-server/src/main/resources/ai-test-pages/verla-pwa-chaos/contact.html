@@ -1,0 +1,26 @@
+<section style="max-width: 800px; margin: 0 auto; padding: 20px 0;">
+    <h1 style="font-family: var(--font-family-serif); font-size: 36px; font-weight: 700; color: #005699; margin-bottom: 20px;">Contact Customer Care</h1>
+    <p style="font-size: 15px; line-height: 1.8; margin-bottom: 30px; color: #444;">
+        Have a question about an order, ingredient formulation, or promotional code? Reach out to our dedicated care team.
+    </p>
+
+    <div style="background: #FAF9F6; border: 1px solid var(--color-border); padding: 32px; border-radius: 6px;">
+        <form action="#" method="POST" onsubmit="event.preventDefault(); alert('Message submitted successfully!');">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                <div>
+                    <label style="display:block; font-size:12px; font-weight:700; text-transform:uppercase; margin-bottom:6px;">Your Name</label>
+                    <input type="text" style="width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:4px; font-size:14px; background:#fff;" required placeholder="Jane Doe">
+                </div>
+                <div>
+                    <label style="display:block; font-size:12px; font-weight:700; text-transform:uppercase; margin-bottom:6px;">Email Address</label>
+                    <input type="email" style="width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:4px; font-size:14px; background:#fff;" required placeholder="jane@example.com">
+                </div>
+            </div>
+            <div style="margin-bottom: 20px;">
+                <label style="display:block; font-size:12px; font-weight:700; text-transform:uppercase; margin-bottom:6px;">Message</label>
+                <textarea rows="5" style="width:100%; padding:10px 14px; border:1px solid var(--color-border); border-radius:4px; font-size:14px; background:#fff;" required placeholder="How can we assist you today?"></textarea>
+            </div>
+            <button type="submit" class="btn-primary" style="padding: 12px 28px; background: #005699;">Send Message</button>
+        </form>
+    </div>
+</section>
