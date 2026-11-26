@@ -24,6 +24,7 @@
 package org.neodymium.ai.model;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -31,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.neodymium.util.Neodymium;
 
 /**
  * TDD test suite validating the {@link SessionData} layered data hierarchy,
@@ -461,5 +463,132 @@ public final class SessionDataTest
 
         assertEquals("${creds.password}", session.resolveNonSensitiveVariables("${creds.password}"));
         assertEquals("secret123", session.getRawSensitiveData().get("creds.password"));
+    }
+
+    /**
+     * Verifies that when Neodymium.getData() mirrors static dataset entries (as NeodymiumAiRunner does),
+     * sensitive static String variables retain sensitivity and remain unexpanded in resolveNonSensitiveVariables.
+     */
+    @Test
+    public void testNeodymiumDataMirrorRetainsStaticSensitivityInGetEntryAndResolveNonSensitive()
+    {
+        final String key = "user.password";
+        final String prev = Neodymium.getData().get(key);
+        try
+        {
+            final Map<String, SessionData.DataEntry> staticMap = new HashMap<>();
+            staticMap.put(key, new SessionData.DataEntry("secretPassword123", true));
+            staticMap.put("user.name", new SessionData.DataEntry("alice", false));
+            Neodymium.getData().put(key, "secretPassword123");
+
+            final SessionData session = new SessionData(staticMap);
+            final SessionData.DataEntry entry = session.getEntry(key);
+            assertNotNull(entry);
+            assertTrue(entry.sensitive(), "Sensitive flag from staticData must be preserved when mirrored in Neodymium.getData()");
+            assertEquals("secretPassword123", entry.value());
+            assertEquals("alice:${user.password}", session.resolveNonSensitiveVariables("${user.name}:${user.password}"));
+            assertEquals("alice:secretPassword123", session.resolveVariables("${user.name}:${user.password}"));
+        }
+        finally
+        {
+            if (prev == null)
+            {
+                Neodymium.getData().remove(key);
+            }
+            else
+            {
+                Neodymium.getData().put(key, prev);
+            }
+        }
+    }
+
+    /**
+     * Verifies that runtime overrides of a sensitive static key via Neodymium.getData() preserve sensitivity
+     * and propagate the overridden secret into getRawSensitiveData() for downstream sanitizers.
+     */
+    @Test
+    public void testNeodymiumDataOverrideOfSensitiveKeyPreservesSensitivityAndUpdatesRawSensitiveData()
+    {
+        final String key = "user.password";
+        final String prev = Neodymium.getData().get(key);
+        try
+        {
+            final Map<String, SessionData.DataEntry> staticMap = new HashMap<>();
+            staticMap.put(key, new SessionData.DataEntry("initialSecret", true));
+            Neodymium.getData().put(key, "runtimeOverrideSecret");
+
+            final SessionData session = new SessionData(staticMap);
+            final SessionData.DataEntry entry = session.getEntry(key);
+            assertNotNull(entry);
+            assertTrue(entry.sensitive(), "Overridden sensitive key must remain sensitive");
+            assertEquals("runtimeOverrideSecret", entry.value());
+            assertEquals("${user.password}", session.resolveNonSensitiveVariables("${user.password}"));
+            assertEquals("runtimeOverrideSecret", session.resolveVariables("${user.password}"));
+            assertEquals("runtimeOverrideSecret", session.getRawSensitiveData().get(key));
+        }
+        finally
+        {
+            if (prev == null)
+            {
+                Neodymium.getData().remove(key);
+            }
+            else
+            {
+                Neodymium.getData().put(key, prev);
+            }
+        }
+    }
+
+    /**
+     * Verifies that nested sensitive Map entries keep flattened sensitivity and raw secret mapping even when
+     * Neodymium.getData() mirrors the map's string representation or overrides a nested leaf key.
+     */
+    @Test
+    public void testNeodymiumDataWithNestedSensitiveMapPreservesFlattenedSensitivity()
+    {
+        final String mapKey = "creds";
+        final String leafKey = "creds.password";
+        final String prevMap = Neodymium.getData().get(mapKey);
+        final String prevLeaf = Neodymium.getData().get(leafKey);
+        try
+        {
+            final Map<String, Object> credsMap = new HashMap<>();
+            credsMap.put("password", "secret123");
+            final Map<String, SessionData.DataEntry> staticMap = new HashMap<>();
+            staticMap.put(mapKey, new SessionData.DataEntry(credsMap, true));
+
+            Neodymium.getData().put(mapKey, String.valueOf(credsMap));
+
+            final SessionData session = new SessionData(staticMap);
+            assertEquals("${creds.password}", session.resolveNonSensitiveVariables("${creds.password}"));
+            assertEquals("secret123", session.getRawSensitiveData().get(leafKey));
+
+            Neodymium.getData().put(leafKey, "nestedOverrideSecret");
+            final SessionData.DataEntry overriddenLeaf = session.getEntry(leafKey);
+            assertNotNull(overriddenLeaf);
+            assertTrue(overriddenLeaf.sensitive(), "Nested sensitive leaf overridden in Neodymium.getData() must remain sensitive");
+            assertEquals("nestedOverrideSecret", overriddenLeaf.value());
+            assertEquals("${creds.password}", session.resolveNonSensitiveVariables("${creds.password}"));
+            assertEquals("nestedOverrideSecret", session.getRawSensitiveData().get(leafKey));
+        }
+        finally
+        {
+            if (prevMap == null)
+            {
+                Neodymium.getData().remove(mapKey);
+            }
+            else
+            {
+                Neodymium.getData().put(mapKey, prevMap);
+            }
+            if (prevLeaf == null)
+            {
+                Neodymium.getData().remove(leafKey);
+            }
+            else
+            {
+                Neodymium.getData().put(leafKey, prevLeaf);
+            }
+        }
     }
 }
