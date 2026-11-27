@@ -71,10 +71,13 @@
                                 
                                 <!-- STANDARD PROPERTY FILE CONTENTS -->
                                 <th:block th:if="${!group.devNeo}">
+                                    <div th:if="${#lists.isEmpty(group.sections)}" class="settings-section">
+                                        <div class="settings-entry-desc">No active properties configured in this file.</div>
+                                    </div>
                                     <div th:each="section : ${group.sections}" class="settings-section">
                                         <div class="settings-section-title" th:text="${section.name}">Section Title</div>
                                         
-                                        <div th:each="entry : ${section.entries}" class="settings-entry-row" th:data-key="${entry.key}" th:data-desc="${entry.description}">
+                                        <div th:each="entry : ${section.entries}" th:if="${entry.active}" class="settings-entry-row" th:data-key="${entry.key}" th:data-desc="${entry.description}">
                                             <div class="settings-entry-label-col">
                                                 <div class="settings-entry-key">
                                                     <span th:text="${entry.key}">neodymium.ai.generate</span>
@@ -98,8 +101,8 @@
                                                     <!-- Boolean Toggle Switch / Select -->
                                                     <th:block th:if="${entry.inputType == 'boolean'}">
                                                         <select class="modal-select" th:name="|prop--${group.fileName}--${entry.key}|">
-                                                            <option value="true" th:selected="${entry.value == 'true'}">true</option>
-                                                            <option value="false" th:selected="${entry.value == 'false' or entry.value == ''}">false</option>
+                                                            <option value="true" th:selected="${#strings.equalsIgnoreCase(entry.value, 'true')}">true</option>
+                                                            <option value="false" th:selected="${#strings.equalsIgnoreCase(entry.value, 'false') or entry.value == ''}">false</option>
                                                         </select>
                                                     </th:block>
 
@@ -202,7 +205,7 @@
                                 </div>
 
                                 <div class="settings-section" style="border-top: none;">
-                                    <div th:each="entry : ${section.entries}" class="settings-entry-row" th:data-key="${entry.key}" th:data-desc="${entry.description}">
+                                    <div th:each="entry : ${section.entries}" th:if="${entry.active}" class="settings-entry-row" th:data-key="${entry.key}" th:data-desc="${entry.description}">
                                         <div class="settings-entry-label-col">
                                             <div class="settings-entry-key">
                                                 <span th:text="${entry.key}">browserprofile.global.headless</span>
@@ -226,8 +229,8 @@
                                                 <!-- Boolean Toggle Switch / Select -->
                                                 <th:block th:if="${entry.inputType == 'boolean'}">
                                                     <select class="modal-select" th:name="|prop--browser.properties--${entry.key}|">
-                                                        <option value="true" th:selected="${entry.value == 'true'}">true</option>
-                                                        <option value="false" th:selected="${entry.value == 'false' or entry.value == ''}">false</option>
+                                                        <option value="true" th:selected="${#strings.equalsIgnoreCase(entry.value, 'true')}">true</option>
+                                                        <option value="false" th:selected="${#strings.equalsIgnoreCase(entry.value, 'false') or entry.value == ''}">false</option>
                                                     </select>
                                                 </th:block>
 

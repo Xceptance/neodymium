@@ -30,6 +30,9 @@ import com.xceptance.aura.mcp.tool.AuraMcpToolService;
 import com.xceptance.aura.mcp.tool.McpToolCatalogHelper;
 import com.xceptance.aura.mcp.tool.McpToolCatalogHelper.McpToolDescriptor;
 import com.xceptance.neodymium.aura.AuraSettingsService;
+import com.xceptance.neodymium.aura.AuraSettingsService.PropertyEntryDto;
+import com.xceptance.neodymium.aura.AuraSettingsService.PropertyGroupDto;
+import com.xceptance.neodymium.aura.AuraSettingsService.PropertySectionDto;
 import com.xceptance.neodymium.aura.AuraSettingsService.SettingsDataDto;
 import java.io.IOException;
 import java.net.URI;
@@ -245,17 +248,17 @@ public class AuraTestSettingsController implements ApplicationListener<WebServer
         final SettingsDataDto data = settingsService.loadSettingsData();
         if (data != null && data.getGeneralGroups() != null)
         {
-            for (final com.xceptance.neodymium.aura.AuraSettingsService.PropertyGroupDto group : data.getGeneralGroups())
+            for (final PropertyGroupDto group : data.getGeneralGroups())
             {
                 if (group.getSections() != null)
                 {
-                    for (final com.xceptance.neodymium.aura.AuraSettingsService.PropertySectionDto sec : group.getSections())
+                    for (final PropertySectionDto sec : group.getSections())
                     {
                         if (sec.getEntries() != null)
                         {
-                            for (final com.xceptance.neodymium.aura.AuraSettingsService.PropertyEntryDto entry : sec.getEntries())
+                            for (final PropertyEntryDto entry : sec.getEntries())
                             {
-                                if (entry.getKey() != null)
+                                if (entry.getKey() != null && entry.isActive())
                                 {
                                     map.put(entry.getKey(), entry.getValue() != null ? entry.getValue() : "");
                                 }
@@ -341,7 +344,10 @@ public class AuraTestSettingsController implements ApplicationListener<WebServer
                     settingsService.savePropertyFile(update.getKey(), update.getValue());
                 }
 
-                settingsService.saveDevNeoProperties(devNeoEntries);
+                if (formData.containsKey("devNeoKey"))
+                {
+                    settingsService.saveDevNeoProperties(devNeoEntries);
+                }
 
                 // Update runtime MCP properties if present in formData
                 if (formData.containsKey("mcpEnabled"))
