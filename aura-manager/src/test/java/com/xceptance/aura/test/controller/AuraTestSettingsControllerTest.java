@@ -29,8 +29,16 @@ import com.xceptance.aura.mcp.session.McpSubscriptionManager;
 import com.xceptance.aura.mcp.tool.AuraAnalyticsToolService;
 import com.xceptance.aura.mcp.tool.AuraMcpToolService;
 import com.xceptance.neodymium.aura.AuraSettingsService;
+import com.xceptance.neodymium.aura.AuraSettingsService.PropertyEntryDto;
+import com.xceptance.neodymium.aura.AuraSettingsService.PropertyGroupDto;
+import com.xceptance.neodymium.aura.AuraSettingsService.PropertySectionDto;
 import com.xceptance.neodymium.aura.AuraSettingsService.SettingsDataDto;
+import java.lang.reflect.Field;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -38,6 +46,7 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
@@ -48,6 +57,10 @@ import org.springframework.ui.ConcurrentModel;
 import org.springframework.ui.Model;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.thymeleaf.context.Context;
+import org.thymeleaf.spring6.SpringTemplateEngine;
+import org.thymeleaf.templatemode.TemplateMode;
+import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 
 /**
  * Unit tests for AuraTestSettingsController MCP status, session details, and self-test diagnostics.
@@ -133,7 +146,7 @@ public class AuraTestSettingsControllerTest
     public void testRunMcpSelfTestBuildsCorrectStatelessRequest() throws NoSuchFieldException, IllegalAccessException
     {
         mcpProperties.setEnabled(true);
-        final java.lang.reflect.Field protocolField = AuraTestSettingsController.class.getDeclaredField("serverProtocol");
+        final Field protocolField = AuraTestSettingsController.class.getDeclaredField("serverProtocol");
         protocolField.setAccessible(true);
         protocolField.set(controller, "STATELESS");
 
@@ -152,7 +165,7 @@ public class AuraTestSettingsControllerTest
     {
         mcpProperties.setEnabled(true);
         mcpProperties.getAuth().setToken("secret-12345");
-        final java.lang.reflect.Field protocolField = AuraTestSettingsController.class.getDeclaredField("serverProtocol");
+        final Field protocolField = AuraTestSettingsController.class.getDeclaredField("serverProtocol");
         protocolField.setAccessible(true);
         protocolField.set(controller, "STATELESS");
 
@@ -300,5 +313,164 @@ public class AuraTestSettingsControllerTest
         Assertions.assertEquals(true, response.getBody().get("warningIgnored"));
         Assertions.assertEquals("test-proj-12345", response.getBody().get("projectId"));
         Mockito.verify(settingsService).setApiKeyWarningIgnored(true);
+    }
+
+    @Test
+    public void testGetSettingsJsonExcludesInactiveEntries()
+    {
+        final PropertySectionDto section = new PropertySectionDto("General", List.of(
+                new PropertyEntryDto("active.key", "yes", "", true, false, "text"),
+                new PropertyEntryDto("inactive.key", "no", "", false, false, "text")
+        ));
+        final PropertyGroupDto group = new PropertyGroupDto("ai.properties", "ai.properties", true, false, false, List.of(section), List.of());
+        Mockito.when(settingsService.loadSettingsData()).thenReturn(new SettingsDataDto(List.of(group), null, List.of(), Set.of()));
+
+        final ResponseEntity<Map<String, String>> response = controller.getSettingsJson();
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        final Map<String, String> body = response.getBody();
+        Assertions.assertNotNull(body);
+        Assertions.assertEquals("yes", body.get("active.key"));
+        Assertions.assertFalse(body.containsKey("inactive.key"), "Inactive commented entries must not be exposed in settings JSON");
+    }
+
+    @Test
+    public void testSaveSettingsDoesNotInvokeSaveDevNeoWhenFormOmitsDevNeoKey() throws Exception
+    {
+        final MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
+        formData.add("activeTab", "general");
+        formData.add("prop--ai.properties--neodymium.ai.generate", "true");
+
+        final Model model = new ConcurrentModel();
+        final String view = controller.saveSettings(formData, model);
+
+        Assertions.assertEquals("fragments/settings-modal :: settingsModal", view);
+        Mockito.verify(settingsService).savePropertyFile("ai.properties", Map.of("neodymium.ai.generate", "true"));
+        Mockito.verify(settingsService, Mockito.never()).saveDevNeoProperties(Mockito.anyList());
+    }
+
+    @Test
+    public void testSaveSettingsInvokesSaveDevNeoWithEmptyListWhenUserClearsAllOverrides() throws Exception
+    {
+        final MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
+        formData.add("activeTab", "general");
+        formData.add("devNeoKey", "");
+        formData.add("devNeoValue", "");
+
+        final Model model = new ConcurrentModel();
+        final String view = controller.saveSettings(formData, model);
+
+        Assertions.assertEquals("fragments/settings-modal :: settingsModal", view);
+        Mockito.verify(settingsService).saveDevNeoProperties(List.of());
+    }
+
+    @Test
+    public void testSaveSettingsWithRealServicePreservesCommentsAndUntouchedFiles(@TempDir final Path tempDir) throws Exception
+    {
+        final String aiContent = """
+                # AI settings
+                neodymium.ai.generate = false
+                # neodymium.ai.executionMode = AUTO
+                """;
+        final String neoContent = """
+                # neodymium.url.excludeList = ^http://prod.example.com
+                neodymium.selenide.clickViaJs = true
+                """;
+
+        final Path aiPath = tempDir.resolve("ai.properties");
+        final Path neoPath = tempDir.resolve("neodymium.properties");
+        Files.writeString(aiPath, aiContent);
+        Files.writeString(neoPath, neoContent);
+        final FileTime olderTime = FileTime.from(Instant.now().minusSeconds(3600));
+        Files.setLastModifiedTime(neoPath, olderTime);
+
+        final AuraSettingsService realService = new AuraSettingsService(tempDir);
+        final AuraTestSettingsController realController = new AuraTestSettingsController(
+                realService, mcpProperties, subscriptionManager, toolService);
+
+        final MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
+        formData.add("activeTab", "general");
+        formData.add("prop--ai.properties--neodymium.ai.generate", "true");
+        formData.add("prop--neodymium.properties--neodymium.selenide.clickViaJs", "true");
+        formData.add("devNeoKey", "");
+        formData.add("devNeoValue", "");
+
+        final Model model = new ConcurrentModel();
+        final String view = realController.saveSettings(formData, model);
+
+        Assertions.assertEquals("fragments/settings-modal :: settingsModal", view);
+        Assertions.assertEquals("Settings saved successfully!", model.getAttribute("saveMessage"));
+        final String updatedAi = Files.readString(aiPath);
+        Assertions.assertTrue(updatedAi.contains("neodymium.ai.generate = true"));
+        Assertions.assertTrue(updatedAi.contains("# neodymium.ai.executionMode = AUTO"));
+        Assertions.assertEquals(olderTime, Files.getLastModifiedTime(neoPath));
+        Assertions.assertEquals(neoContent, Files.readString(neoPath));
+        Assertions.assertFalse(Files.exists(tempDir.resolve("dev-neodymium.properties")));
+    }
+
+    @Test
+    public void testSettingsModalTemplateRendersOnlyActiveEntriesAndCaseInsensitiveBooleans()
+    {
+        final SpringTemplateEngine engine = new SpringTemplateEngine();
+        final ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setPrefix("templates/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCharacterEncoding("UTF-8");
+        engine.setTemplateResolver(resolver);
+
+        final PropertySectionDto aiSection = new PropertySectionDto("General Configuration", List.of(
+                new PropertyEntryDto("neodymium.ai.generate", "False", "Enable AI", true, false, "boolean"),
+                new PropertyEntryDto("ghost.commented.key", "badExample", "Commented out", false, false, "text")
+        ));
+        final PropertyGroupDto aiGroup = new PropertyGroupDto("ai.properties", "ai.properties", true, false, false, List.of(aiSection), List.of());
+        final PropertyGroupDto emptyGroup = new PropertyGroupDto("empty.properties", "empty.properties", false, false, false, List.of(), List.of());
+
+        final PropertySectionDto browserSection = new PropertySectionDto("Global Browser Settings", "global", "tune", List.of(
+                new PropertyEntryDto("browserprofile.global.headless", "False", "Headless", true, false, "boolean"),
+                new PropertyEntryDto("browserprofile.global.ghost", "badExample", "Commented out", false, false, "text")
+        ), List.of());
+        final PropertyGroupDto browserGroup = new PropertyGroupDto("browser.properties", "Browser Profiles & Settings", true, false, true, List.of(browserSection), List.of());
+
+        final Context context = new Context();
+        context.setVariable("generalGroups", List.of(aiGroup, emptyGroup));
+        context.setVariable("browserGroup", browserGroup);
+        context.setVariable("autocompleteKeys", List.of("neodymium.ai.generate"));
+        context.setVariable("overriddenKeys", Set.of());
+        context.setVariable("activeTab", "general");
+        context.setVariable("isOpenModal", true);
+        context.setVariable("mcpEnabled", true);
+        context.setVariable("mcpProtocol", "SSE");
+        context.setVariable("mcpServerPort", 8080);
+        context.setVariable("mcpToolsCount", 0);
+        context.setVariable("mcpToolsList", List.of());
+        context.setVariable("mcpActiveSessionsCount", 0);
+        context.setVariable("mcpEndpointUrl", "http://localhost:8080/sse");
+        context.setVariable("mcpEndpointDesc", "SSE");
+        context.setVariable("mcpToken", "");
+        context.setVariable("mcpHeartbeat", 45);
+        context.setVariable("mcpClientConfigSnippet", "{}");
+
+        final String html = engine.process("fragments/settings-modal", Collections.singleton("settingsModal"), context);
+        Assertions.assertNotNull(html);
+        Assertions.assertTrue(html.contains("prop--ai.properties--neodymium.ai.generate"));
+        Assertions.assertFalse(html.contains("ghost.commented.key"), "Inactive entries must not render in general tab");
+        Assertions.assertFalse(html.contains("browserprofile.global.ghost"), "Inactive entries must not render in browser tab");
+        Assertions.assertTrue(html.contains("No active properties configured in this file."));
+
+        final String aiSelectFragment = html.substring(
+                html.indexOf("name=\"prop--ai.properties--neodymium.ai.generate\""),
+                html.indexOf("</select>", html.indexOf("name=\"prop--ai.properties--neodymium.ai.generate\"")));
+        Assertions.assertTrue(aiSelectFragment.contains("<option value=\"false\" selected=\"selected\">false</option>"),
+                "Mixed-case 'False' must select the 'false' option in general tab");
+        Assertions.assertFalse(aiSelectFragment.contains("<option value=\"true\" selected=\"selected\">"),
+                "Mixed-case 'False' must not select 'true' in general tab");
+
+        final String browserSelectFragment = html.substring(
+                html.indexOf("name=\"prop--browser.properties--browserprofile.global.headless\""),
+                html.indexOf("</select>", html.indexOf("name=\"prop--browser.properties--browserprofile.global.headless\"")));
+        Assertions.assertTrue(browserSelectFragment.contains("<option value=\"false\" selected=\"selected\">false</option>"),
+                "Mixed-case 'False' must select the 'false' option in browser tab");
+        Assertions.assertFalse(browserSelectFragment.contains("<option value=\"true\" selected=\"selected\">"),
+                "Mixed-case 'False' must not select 'true' in browser tab");
     }
 }

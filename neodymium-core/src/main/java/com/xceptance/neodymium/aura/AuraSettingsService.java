@@ -27,12 +27,12 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -57,7 +57,9 @@ public final class AuraSettingsService
     private static final String DEV_NEO_FILE = "dev-neodymium.properties";
     private static final String BROWSER_FILE = "browser.properties";
     private static final Pattern KEY_VALUE_PATTERN = Pattern.compile("^\\s*([a-zA-Z0-9_.-]+)\\s*[:=]\\s*(.*)$");
-    private static final Pattern COMMENTED_KEY_PATTERN = Pattern.compile("^\\s*[#!]\\s*([a-zA-Z0-9_.-]+)\\s*[:=]\\s*(.*)$");
+    // Used solely to reset buffered description comments across commented-out property examples
+    private static final Pattern COMMENTED_PROPERTY_EXAMPLE_PATTERN = Pattern.compile(
+            "^\\s*[#!]+\\s*(?:[a-zA-Z][a-zA-Z0-9_.-]*\\s*=|[a-zA-Z][a-zA-Z0-9_-]*(?:\\.[a-zA-Z0-9_-]+)+\\s*:).*$");
 
     private final Path configDirectory;
     private volatile boolean apiKeyWarningIgnored = false;
@@ -658,30 +660,25 @@ public final class AuraSettingsService
 
                 if (trimmed.isEmpty())
                 {
+                    currentCommentLines.clear();
                     continue;
                 }
 
                 if (trimmed.startsWith("#") || trimmed.startsWith("!"))
                 {
-                    final Matcher commentKeyMatcher = COMMENTED_KEY_PATTERN.matcher(line);
-                    if (commentKeyMatcher.find())
+                    if (COMMENTED_PROPERTY_EXAMPLE_PATTERN.matcher(line).matches())
                     {
-                        final String key = commentKeyMatcher.group(1).trim();
-                        final String value = commentKeyMatcher.group(2).trim();
-
-                        allKnownKeys.add(key);
-
-                        final String description = String.join("\n", currentCommentLines).trim();
                         currentCommentLines.clear();
-
-                        final boolean overridden = overriddenKeys.contains(key);
-                        final String inputType = determineInputType(key, value);
-
-                        currentEntries.add(new PropertyEntryDto(key, value, description, false, overridden, inputType));
                         continue;
                     }
 
                     final String commentText = trimmed.replaceAll("^[#!]+\\s*", "").replaceAll("\\s*[#!]+$", "").trim();
+                    if (commentText.isEmpty())
+                    {
+                        currentCommentLines.clear();
+                        continue;
+                    }
+
                     if (commentText.startsWith("===") || commentText.startsWith("###") || commentText.startsWith("---"))
                     {
                         continue;
@@ -697,7 +694,7 @@ public final class AuraSettingsService
                         currentSectionName = commentText;
                         currentCommentLines.clear();
                     }
-                    else if (!commentText.isEmpty())
+                    else
                     {
                         currentCommentLines.add(commentText);
                     }
@@ -764,15 +761,26 @@ public final class AuraSettingsService
 
                 if (trimmed.startsWith("#") || trimmed.startsWith("!"))
                 {
+                    if (COMMENTED_PROPERTY_EXAMPLE_PATTERN.matcher(line).matches())
+                    {
+                        currentCommentLines.clear();
+                        continue;
+                    }
+
                     final String commentText = trimmed.replaceAll("^[#!]+\\s*", "").replaceAll("\\s*[#!]+$", "").trim();
+                    if (commentText.isEmpty())
+                    {
+                        currentCommentLines.clear();
+                        continue;
+                    }
+
                     if (!commentText.startsWith("===") && !commentText.startsWith("###") && !commentText.startsWith("---")
                             && !commentText.toLowerCase().contains("see also")
                             && !commentText.toLowerCase().contains("a browser profile")
                             && !commentText.toLowerCase().contains("mandatory properties")
                             && !commentText.toLowerCase().contains("global properties")
                             && !commentText.toLowerCase().contains("optional properties")
-                            && !commentText.toLowerCase().contains("valid values")
-                            && !commentText.isEmpty())
+                            && !commentText.toLowerCase().contains("valid values"))
                     {
                         currentCommentLines.add(commentText);
                     }
@@ -967,45 +975,61 @@ public final class AuraSettingsService
 
     /**
      * Saves updated property values to a target property file while preserving original comments,
-     * section titles, and line structure.
+     * section titles, and unchanged active lines verbatim. Never uncomments commented lines and
+     * skips disk writes when no active values changed.
      */
     public synchronized void savePropertyFile(final String fileName, final Map<String, String> updatedProperties) throws IOException
     {
-        final Path path = configDirectory.resolve(fileName);
-        if (!Files.exists(path))
+        savePropertyFile(fileName, updatedProperties, false);
+    }
+
+    private void savePropertyFile(final String fileName, final Map<String, String> updatedProperties, final boolean appendMissingKeys) throws IOException
+    {
+        if (updatedProperties == null || updatedProperties.isEmpty())
         {
-            Files.createDirectories(configDirectory);
-            Files.createFile(path);
+            return;
         }
 
-        final List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
-        final List<String> newLines = new ArrayList<>();
+        final Path path = configDirectory.resolve(fileName);
+        final boolean fileExists = Files.exists(path);
+        if (!fileExists && !appendMissingKeys)
+        {
+            return;
+        }
+
+        final List<String> lines = fileExists ? Files.readAllLines(path, StandardCharsets.UTF_8) : List.of();
+        final List<String> newLines = new ArrayList<>(lines.size());
         final Set<String> processedKeys = new HashSet<>();
+        boolean modified = false;
 
         for (final String line : lines)
         {
+            final String trimmed = line.trim();
+            if (trimmed.isEmpty() || trimmed.startsWith("#") || trimmed.startsWith("!"))
+            {
+                newLines.add(line);
+                continue;
+            }
+
             final Matcher activeMatcher = KEY_VALUE_PATTERN.matcher(line);
             if (activeMatcher.find())
             {
                 final String key = activeMatcher.group(1).trim();
                 if (updatedProperties.containsKey(key))
                 {
-                    final String newValue = updatedProperties.get(key);
-                    newLines.add(key + " = " + (newValue != null ? newValue : ""));
                     processedKeys.add(key);
-                    continue;
-                }
-            }
-
-            final Matcher commentMatcher = COMMENTED_KEY_PATTERN.matcher(line);
-            if (commentMatcher.find())
-            {
-                final String key = commentMatcher.group(1).trim();
-                if (updatedProperties.containsKey(key) && updatedProperties.get(key) != null && !updatedProperties.get(key).trim().isEmpty())
-                {
-                    final String newValue = updatedProperties.get(key);
-                    newLines.add(key + " = " + newValue);
-                    processedKeys.add(key);
+                    final String currentValue = activeMatcher.group(2).trim();
+                    final String rawNewValue = updatedProperties.get(key);
+                    final String newValue = rawNewValue != null ? rawNewValue.trim() : "";
+                    if (currentValue.equals(newValue))
+                    {
+                        newLines.add(line);
+                    }
+                    else
+                    {
+                        newLines.add(key + " = " + newValue);
+                        modified = true;
+                    }
                     continue;
                 }
             }
@@ -1013,53 +1037,146 @@ public final class AuraSettingsService
             newLines.add(line);
         }
 
-        // Append any brand new keys that were not originally in the file
-        for (final Map.Entry<String, String> entry : updatedProperties.entrySet())
+        if (appendMissingKeys)
         {
-            final String key = entry.getKey();
-            if (!processedKeys.contains(key) && entry.getValue() != null && !entry.getValue().trim().isEmpty())
+            // Append newly added keys (e.g. via addBrowserProperty) without altering existing comment lines
+            for (final Map.Entry<String, String> entry : updatedProperties.entrySet())
             {
-                newLines.add(key + " = " + entry.getValue());
+                final String rawKey = entry.getKey();
+                final String rawValue = entry.getValue();
+                if (rawKey != null && !rawKey.trim().isEmpty()
+                        && !processedKeys.contains(rawKey.trim())
+                        && rawValue != null && !rawValue.trim().isEmpty())
+                {
+                    newLines.add(rawKey.trim() + " = " + rawValue.trim());
+                    modified = true;
+                }
             }
+        }
+
+        if (!modified)
+        {
+            return;
+        }
+
+        if (!fileExists)
+        {
+            Files.createDirectories(configDirectory);
         }
 
         Files.write(path, newLines, StandardCharsets.UTF_8);
 
         if ("ai.properties".equalsIgnoreCase(fileName))
         {
-            try
-            {
-                AiConfiguration.resetInstance();
-            }
-            catch (final Throwable ignored)
-            {
-            }
+            resetAiConfigurationQuietly();
         }
     }
 
     /**
-     * Saves dev-neodymium.properties with key-value entries.
+     * Saves dev-neodymium.properties with key-value entries while preserving all existing comments
+     * and unchanged active lines verbatim. Does not create an empty file when absent.
      */
     public synchronized void saveDevNeoProperties(final List<Map.Entry<String, String>> devNeoEntries) throws IOException
     {
-        final Path path = configDirectory.resolve(DEV_NEO_FILE);
-        Files.createDirectories(configDirectory);
-
-        final List<String> lines = new ArrayList<>();
-        lines.add("# Temporary local override properties (dev-neodymium.properties)");
-        lines.add("# These properties take precedence over all standard property files.");
-        lines.add("");
-
-        for (final Map.Entry<String, String> entry : devNeoEntries)
+        final Map<String, String> desiredEntries = new LinkedHashMap<>();
+        if (devNeoEntries != null)
         {
-            if (entry.getKey() != null && !entry.getKey().trim().isEmpty())
+            for (final Map.Entry<String, String> entry : devNeoEntries)
             {
-                lines.add(entry.getKey().trim() + "=" + (entry.getValue() != null ? entry.getValue().trim() : ""));
+                if (entry != null && entry.getKey() != null && !entry.getKey().trim().isEmpty())
+                {
+                    final String key = entry.getKey().trim();
+                    final String value = entry.getValue() != null ? entry.getValue().trim() : "";
+                    desiredEntries.put(key, value);
+                }
             }
         }
 
-        Files.write(path, lines, StandardCharsets.UTF_8);
+        final Path path = configDirectory.resolve(DEV_NEO_FILE);
+        if (!Files.exists(path))
+        {
+            if (desiredEntries.isEmpty())
+            {
+                return;
+            }
 
+            Files.createDirectories(configDirectory);
+            final List<String> lines = new ArrayList<>();
+            lines.add("# Temporary local override properties (dev-neodymium.properties)");
+            lines.add("# These properties take precedence over all standard property files.");
+            lines.add("");
+            for (final Map.Entry<String, String> entry : desiredEntries.entrySet())
+            {
+                lines.add(entry.getKey() + " = " + entry.getValue());
+            }
+
+            Files.write(path, lines, StandardCharsets.UTF_8);
+            resetAiConfigurationQuietly();
+            return;
+        }
+
+        final List<String> existingLines = Files.readAllLines(path, StandardCharsets.UTF_8);
+        final List<String> newLines = new ArrayList<>(existingLines.size());
+        final Set<String> processedKeys = new HashSet<>();
+        boolean modified = false;
+
+        for (final String line : existingLines)
+        {
+            final String trimmed = line.trim();
+            if (trimmed.isEmpty() || trimmed.startsWith("#") || trimmed.startsWith("!"))
+            {
+                newLines.add(line);
+                continue;
+            }
+
+            final Matcher activeMatcher = KEY_VALUE_PATTERN.matcher(line);
+            if (activeMatcher.find())
+            {
+                final String key = activeMatcher.group(1).trim();
+                if (!desiredEntries.containsKey(key) || processedKeys.contains(key))
+                {
+                    modified = true;
+                    continue;
+                }
+
+                processedKeys.add(key);
+                final String currentValue = activeMatcher.group(2).trim();
+                final String newValue = desiredEntries.get(key);
+                if (currentValue.equals(newValue))
+                {
+                    newLines.add(line);
+                }
+                else
+                {
+                    newLines.add(key + " = " + newValue);
+                    modified = true;
+                }
+                continue;
+            }
+
+            newLines.add(line);
+        }
+
+        for (final Map.Entry<String, String> entry : desiredEntries.entrySet())
+        {
+            if (!processedKeys.contains(entry.getKey()))
+            {
+                newLines.add(entry.getKey() + " = " + entry.getValue());
+                modified = true;
+            }
+        }
+
+        if (!modified)
+        {
+            return;
+        }
+
+        Files.write(path, newLines, StandardCharsets.UTF_8);
+        resetAiConfigurationQuietly();
+    }
+
+    private static void resetAiConfigurationQuietly()
+    {
         try
         {
             AiConfiguration.resetInstance();
@@ -1087,7 +1204,7 @@ public final class AuraSettingsService
 
         if (Files.exists(path))
         {
-            Files.write(path, newLines, StandardCharsets.UTF_8, java.nio.file.StandardOpenOption.APPEND);
+            Files.write(path, newLines, StandardCharsets.UTF_8, StandardOpenOption.APPEND);
         }
         else
         {
@@ -1100,14 +1217,13 @@ public final class AuraSettingsService
      */
     public synchronized void addBrowserProperty(final String profileTag, final String propertyName, final String propertyValue) throws IOException
     {
-        final Path path = configDirectory.resolve(BROWSER_FILE);
         final String cleanTag = profileTag.trim();
         final String cleanProp = propertyName.trim();
         final String fullKey = "browserprofile." + cleanTag + "." + cleanProp;
 
         final Map<String, String> map = new HashMap<>();
         map.put(fullKey, propertyValue != null ? propertyValue.trim() : "");
-        savePropertyFile(BROWSER_FILE, map);
+        savePropertyFile(BROWSER_FILE, map, true);
     }
 }
 
